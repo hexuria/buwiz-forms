@@ -1106,34 +1106,80 @@ HTML_STYLESHEET_FIXED_VALUES: dict[tuple[str, str], frozenset[str]] = {
     }),
     ("@page", "margin"): frozenset({"0"}),
 }
-# In document order: the band data runtime, the field runtime, and the field
-# debug overlay. All 53 bundles emit this exact tuple -- measured, not assumed.
+# In document order: the band data runtime, the field runtime, the field
+# debug overlay, and (new, T3+T4) the tab-walk debug viewer. All 53 bundles
+# emit this exact tuple -- measured, not assumed.
 #
 # The FIRST hash has never moved. It is the band data runtime, and its being
 # byte-identical across every re-pin is the standing evidence that none of the
 # field-layer work has reached into page scaffolding.
 #
-# The SECOND and THIRD moved at r14, and only those two, which is exactly the
-# claim the G11 fix makes about itself:
-#   * field runtime (e2b0b779 -> 1ed88b99). A comb compartment the source
-#     already filled in now emits its slot div with no <input> in it, so the
-#     NodeList a taxpayer tabs through is shorter than the compartment count.
-#     `move` and the paste handler used to index that list with the
-#     `data-slot-index` ATTRIBUTE, which would have stopped advancing at the
-#     first printed box; they now find the element's position in the list with
-#     `positionOf`. `data-slot-index` still means the compartment's number.
-#   * field debug overlay (877c6c01 -> 96754a6a). F172/G15: the corrected
-#     overlay had existed in emit.py and had simply never been regenerated into
-#     the corpus. `printed box with no input` now appears in 53 of 53 bundles
-#     and `no usable box` in none.
-# Re-pinned 2026-08-07 (r14). This pin is the reason r14's first full gate run
-# reported the comb referee UNEVALUABLE on five forms: it is a THIRD reviewed
-# emitter pin, separate from EXPECTED_HTML_STRUCTURE_SHA256 and from the
-# producer SHAs, and it is read only by the referee, which runs last.
+# The SECOND moved at r14 only. It has not moved since.
+#
+# The THIRD (field debug overlay) moved again here, T3+T4 (2026-08-11), and
+# for two measured reasons, not one:
+#   * F213's tone split: a rect is a wall candidate only when its own gray is
+#     at or below RULE_WALL_TINT_SPLIT_GRAY (0.70) or is the knockout
+#     sentinel (1.0) -- see that constant's own comment in emit.py for the
+#     eight-value tone census this is measured against. `over` (red) fell to
+#     0 or dropped on every one of the 53 forms measured before/after (the
+#     phantom "crosses a printed wall" reports a tint band invented); `vacant`
+#     (blue) fell on every form too, and never rose on any -- the phantom
+#     boxes a tint fragment used to close on its own are gone, while the real
+#     ones (F210's Schedule-1 squares, four blue boxes, unchanged shape,
+#     survive by construction: 0.251 sits below the split).
+#   * The vacant probe's own paint source: `paintAt()` now reads the RAW,
+#     unfiltered rect list, not `visibleRects()`'s output. Found live on
+#     1701-2018 p2 while proving the above: a same-as-paper white knockout
+#     (F210's own "write here" paint) that nothing wholly contains is
+#     invisible to `visibleRects()` (compared against paper, and paper is
+#     white too), so the probe was finding the tint UNDER it instead of the
+#     knockout ON TOP of it -- which would have reported F210's own real
+#     defect as decoration. `field_debug_paint_source_assertions()` proves
+#     this by running the SAME shipped `paintAt()` against both arguments.
+#   * field runtime (e2b0b779 -> 1ed88b99, r14). A comb compartment the
+#     source already filled in now emits its slot div with no <input> in it,
+#     so the NodeList a taxpayer tabs through is shorter than the
+#     compartment count. `move` and the paste handler used to index that
+#     list with the `data-slot-index` ATTRIBUTE, which would have stopped
+#     advancing at the first printed box; they now find the element's
+#     position in the list with `positionOf`. `data-slot-index` still means
+#     the compartment's number.
+#   * field debug overlay (877c6c01 -> 96754a6a, r14). F172/G15: the
+#     corrected overlay had existed in emit.py and had simply never been
+#     regenerated into the corpus. `printed box with no input` now appears in
+#     53 of 53 bundles and `no usable box` in none.
+#
+# The FOURTH is new: TAB_DEBUG_JS, the `?debug=tab` viewer (T3). It ships
+# behind its own `debug=tab` token, distinct from `debug=fields`, so the two
+# cannot be triggered by each other's query string, and follows the same four
+# barriers FIELD_DEBUG_JS does (tab_debug_assertions() proves them the same
+# way).
+#
+# Re-pinned 2026-08-11 (T3+T4). Read only by the referee, which runs last.
+#
+# The THIRD moved once more in the same session, for the vacant probe's
+# INTERIOR test only (operator review of T3+T4). `isTintTone` answers "can
+# this STROKE bound a box?" and keeps its 0.70 split, because 0.651 strokes
+# are checkbox outlines (94% of 0.651 rules are short box edges) and must go
+# on bounding boxes. A separate `isDecorPaint` answers "is this box's
+# INTERIOR a shading pad?" over the wider band (STRUCTURAL_MAX_GRAY, 1) --
+# 0.15 being the pipeline's own structural cutoff, not a new number. At a box
+# CENTRE only a slab can be present (a wall-tone stroke through the centre
+# would have closed a smaller box at itself), so grey there means decoration
+# whichever side of the stroke split its tone falls on. Measured: 0619-E's
+# twelve centavo-separator compartments -- each a gray 0.651 pad filling its
+# own box -- stop being reported as forgotten fields (12 -> 0), while F210's
+# Schedule-1 knockout squares stay blue. Corpus `vacant` 130 across 12 forms.
+# `field_debug_interior_decor_assertions()` runs the SHIPPED isTintTone and
+# isDecorPaint under node and requires them to DISAGREE about 0.651: if a
+# refactor ever collapses the two questions into one, that trips first.
+# The other three digests did not move; only FIELD_DEBUG_JS changed.
 HTML_RUNTIME_SCRIPT_SHA256 = (
     "ebe3dcc09eeb898fe0192ffd266a2e34a2c28301347fad5e8a50d3796d669f1e",
     "1ed88b99506a819cacf86e3020a2c73c6bac3e12c3d739327b385145d2d13147",
-    "96754a6ab1c7d406d040768c6f13d5da47da75d820ba8a04fe773f683504c004",
+    "5aade8e257f5cb86e77131d587d6a70634b5616def0a301507217d60a2a2da81",
+    "47a80c75dbd18ba85ef12623bd01867201962d6646ba267fe8efc9d988d396e0",
 )
 HTML_ROOT_ATTRIBUTES = frozenset({
     "data-form",
@@ -1564,60 +1610,94 @@ HTML_ALLOWED_TAGS = frozenset({
 #     `<div class="layer-cells">` per page was already grammatical --
 #     verified by feeding it a synthetic two-segment page before relying on
 #     it.
+# Re-pinned 2026-08-11 (T3+T4, F213). All 53 move, and only for the reason
+# below: the inline runtime script is IN every document, so growing
+# FIELD_DEBUG_JS (the tone split, F213) and adding a fourth script,
+# TAB_DEBUG_JS (`?debug=tab`, T3), changes every document's bytes by the same
+# fixed amount regardless of what the rest of the page contains.
+#
+#   * SCRIPT ONLY, MEASURED: `html_bytes` in every one of the 53
+#     `provenance.json` files grew by EXACTLY 13,346 -- 1701-2018 (1,668,376
+#     -> 1,681,722), 0605-1999 (214,922 -> 228,268), 2551q-2018 (543,764 ->
+#     557,110), 2553-1999 (249,003 -> 262,349), every other form the same
+#     delta -- and that number is independently reproduced by summing the two
+#     causes: `len(FIELD_DEBUG_JS.encode())` grew by 7,254 bytes (the tone
+#     split, `pageCensus`/`census`, the paint-source fix, the legend text),
+#     and the added `"<script>\n"+TAB_DEBUG_JS+"\n</script>\n"` is 6,092
+#     bytes; 7,254 + 6,092 = 13,346, exactly. A constant per-document delta
+#     is only possible if nothing else in the document changed size, which a
+#     variable-length change to cell markup, inputs or geometry could not do.
+#   * `HTML_RUNTIME_SCRIPT_SHA256` moves (see that pin's own comment): the
+#     band data runtime (first hash) and field runtime (second hash) do NOT
+#     move -- untouched by this package -- only the field debug overlay
+#     (third) and the new tab-walk viewer (fourth, new).
+#   * COMB CENSUSES, `inputs_over_printed_text`, `comb_slots_match_printed`
+#     and the corpus's own input count DO NOT MOVE: measured via
+#     `audit.py --assertions-only` against the regenerated corpus --
+#     4,587 subjects / 33 retained / 4,554 comb cells, `inputs_over_printed_
+#     text` 3 forms / 6, `comb_slots_match_printed` 10 forms / 19, 45,333
+#     inputs -- all unchanged from the T1/T2 baseline this package started
+#     from. Cell markup, field markup and band markup are produced by code
+#     this package never touches (`emit_page`'s `pages`/`cells` construction,
+#     `cell_markup`, `field_json`, `band_rects` -- reviewed by inspection: the
+#     only lines this package added to `emit_page` append two more entries,
+#     unconditionally, to the tail list that already carried
+#     `FIELD_DEBUG_JS`), and the corpus-wide invariants above are the
+#     measured proof that nothing downstream of them moved either.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "2911425a931792d03762cc8508d815fec905e7102ae2b2e7921ef9c92a110197",
-    "0619e-2018": "6cfbd8c3bb016f9e4100e535403a5984cbc878a0bf95ac1b302b61be6fa13ff0",
-    "0619f-2018": "229e4d558a153e9bb8434f79d4a9423389fd2d16d37ec1fcd81f9760f1849272",
-    "0620-2019": "e5cb5d197334d6f658d3d397fa6d60e604dfd5c85af0cd9abfed8a185c56be84",
-    "1600-pt-2018": "911c765fccc4edab5befa486494b62dd9878d671fa9e28e1feed3121dcbdcc1c",
-    "1600-vt-2018": "f951b9ace73251ede746b8edbd33a3fe141e3149f428d11a45e6c3e6943a1ee8",
-    "1600wp-2010": "fd90570e4c03a3b657dfe3c304078b5bcc645a6c748868b2ee1999e2c0e9e600",
-    "1601-fq-2020": "eb64cb53665a6aff51209b60405a3065f9f47369da2031ed72315efd9212179d",
-    "1601c-2018": "22a6a3e56322843706b9fab5116c9571d58b783b07c935f60552a1a8d6df1e39",
-    "1601eq-2019": "3872eb712f6b4efe220dbc9a8e34b60e3150a089da8041e01d9c9b8f2f002510",
-    "1602q-2019": "a85e14aef2491db4b1f498b8ec1bb984e6f165536e30729f1bc7da1a83837277",
-    "1603q-2018": "3801292f02d46fadcb198934e88023fcac641026226451ad9d767013f8219c13",
-    "1604c-2018": "a388d529b666adcd99a28b86b0c3c9b7a9e5b1d2679d0279763c0202cf82eeca",
-    "1604cf-2008": "3255aa24ef855af460ff89ae6e1abdf6fa12b5473675c1b22ebe7af33e9358e0",
-    "1604e-2018": "fdf43323cdd44eeff6361d4c633bdfa6301f4f66932a7ed362b8d528947b9ca7",
-    "1604f-2018": "8493cc0f5f133efa326e503fd0d62b9498d04e3356462099c8b558129de2b82f",
-    "1606-2018": "2b7312c34ed4e20506fdf3743c575d4b4827200398b9f89f0344cc9ac0880fe7",
-    "1621-2019": "5017b8c88a9494e309ca35fc974602cce70befa25ed17bf2cc482c0981d600f5",
-    "1700-2018": "79cabae1c35c1cf4559722a52c69fedd3d3a09df4fae1561c8e04788ea420286",
-    "1701-2018-attachment": "543b9c5e635fca051fc157743061b7ea21ed3b1fdd9ab4c66e0012e3c3665173",
-    "1701-2018-conso": "21df6d974641d4ad75bef265851aeb1457f5dc7f5dad07958f72b9507cdc2f6f",
-    "1701-2018": "4b4f0bccfe98d2f4e9e311294187bad67477fe3506a9ad501d72478e0cbccf06",
-    "1701a-2018": "e8521d7b00087f52709404c9da469d4d180b5b36986281c80706c14d47915fda",
-    "1701ms-2024": "a50c953b99c43641f8a284efd5d580048181db1c61d8d5d15c8b48b4b4e10461",
-    "1701q-2018": "9079a24efb3a216ae1bea8b49dc40ef713b80df49336fbf81d4fcc02e5ee6c8a",
-    "1702ex-2018": "4fc4d92caa23590cca6a947d9ec1f0d258e308f89dee251ee001167e372c0014",
-    "1702mx-2018c-attachment": "f43acc0240ed87c39316a5546b2c834d1262a5623e690491734e4865e91d4788",
-    "1702mx-2018c": "c0e1ac9d7d092e55b1277601733adca705a9ec3b5327e94220831840ab886f1c",
-    "1702q-2018": "eba52f9b60de91f5d0056f7f35a4444faabfbda3770acc13a003a451e72699af",
-    "1702rt-2018c": "311701280c3a03ce39ec0cee67336005e7d8f63d492673662d1d94a727cd4464",
-    "1706-2018": "651b71fc8550c682e114b6e73b5928986a21148e81492f1a7948dc0bf7d52fa4",
-    "1707-2021": "a90494773a7ca92f544c6d275c80cf645377367f12693b917cfa979f8a4ab337",
-    "1707a-2021": "e48e3ea23a6e8d43ba371c4bdab8f835f8c716917135328549937042be9c6adc",
-    "1709-2020": "67c689dac3e103ef7e006bde4896fedfe449b993c606b21be7c50cccaa4b6822",
-    "1800-2018": "55f1a3f6c6ed9c8634ce4c0479608de95814d140882377a9cbdde3ade4736e32",
-    "1801-2018": "043e1276e6dcc3bc9be8d31dc2d5aa86d838eb293457a04d52ff0fa29502dee0",
-    "2000-dst-2018": "ea859352e7c4fd833e8205b7a34591c18b2d3eca36778405628f936ac9b217b1",
-    "2000-ot-2018": "1ad2b6afda841faf797e59e8eeda1cbada02d1eb01fc0ae7569c36b890b83a78",
-    "2200a-2020": "5ea0c9e9c69a92e3b0f6dae77ef5b8e1a6da924b3f468f1fa0594933a88b4c91",
-    "2200an-2018": "9d7cb041aa5335beb0417d168d8aafbc07799b2a510018fa8a766e13e96d62a6",
-    "2200c-2018": "e0e570578b3ddd7286c1956c377520c10dde9988f50680d428a01d3bb7f6ae90",
-    "2200m-2018": "b8640f615c74906b53c800ccd353d0c0d48094d612c9deeb5a181789f9567383",
-    "2200p-2020": "219336e77c59130a9bbad537dbf91014346513e05cd98fcce95941afb69d526b",
-    "2200s-2018": "1a11982827a356d34dc44a29a0bde5199ab7a6d6ce2f2e4add5edca110f33bf1",
-    "2200t-2022": "c2d8556550699ce594c95828ce11c797e65854641bf7d1d0a3ceb5b14143965c",
-    "2316-2021": "5cdd66d888e11da734111fb1c40c60c604bf2beb8498d945b7437ef4ab243b02",
-    "2550-ds-2025": "c7c7416a3e32e5aafe047ce960ef1460a648980fff4ed01da2624e728406ada9",
-    "2550m-2007": "f03361136b0bd2026211ac7bbcfefa750c5f4d93ddf6323e25b7ee171bd3b23c",
-    "2550q-2024": "02738ce8cea4b9a68390fbb399613042a4eb89120c112efcb48d315d6ac923f6",
-    "2551m-2002": "bf9ce15d462ebc0f630990415c249787235a86e6cfad59006c147bd785471171",
-    "2551q-2018": "947490986a31380273cacc88586ffe0de6e0aabc3478f23eafbe816941ebb099",
-    "2552-2018": "bb52ddb82e8b5d3fcfcc3415233b6ba99c486ea1d9e297f35a3af915b8920140",
-    "2553-1999": "38a277197273a4e6779751f25c61af390c865cf055c23a1ed23ae667592fe176",
+    "0605-1999": "550073af226928384760ff05d8cc476731f8263f173d763f366d03d8c5796acd",
+    "0619e-2018": "a3de7c47fa22ae0fa6209163579413bb879e80d181e52f33932d1f3ff368ca4d",
+    "0619f-2018": "d634e211d0cc60cf490e0f9c4386dae2aba31a804d2de925d5fdc76d28b9b712",
+    "0620-2019": "ea00771c377cf90c04b68b30da835f44ccd8b793b8f7dbd72ec23be1b0a58aae",
+    "1600-pt-2018": "b919f2043d4f54e192e26375de7f53d80eb4e1d1c8900dfbcdce54f4913cb1d9",
+    "1600-vt-2018": "3744f8386e9158ec98a51b93e6b22b4fdd220739a724e509677ae4cd0d6e06c8",
+    "1600wp-2010": "9c34d3ec6b95173dc976431f3bdd81b4c72c7b3375fc005afa884d54e58d2932",
+    "1601-fq-2020": "c52d34fd7f178fb72edb9aa3ac0d45ddd4ce4054020ee81f4f5346bfca82321c",
+    "1601c-2018": "d235adfa42f744fef01ac61df56dc00989ef27cb86b3f2b1aa789728e7cc906f",
+    "1601eq-2019": "1b95af63debf651c3208a6ce19d555f55ea6a67a024db0d59e0fbd39dd9ea47e",
+    "1602q-2019": "50d31b721f3e46d13a858847817134650227e9bbab48b3dae797412023b2e7ce",
+    "1603q-2018": "29c69f8a7e96f746cd903dfce9f96d80b7fbe46d3ffb21d546bc08c6ca111dd2",
+    "1604c-2018": "c4706314243793d3facc3fa0560902b46c4a0e89072602ee1425d70a60c70dde",
+    "1604cf-2008": "0b592e5efba13286704c03cfedebdfd59b492a241c67b040a1c5cf912d0ef841",
+    "1604e-2018": "1ca1dce3445ac557222d89cc96c80bf731799c642caa394cc6187bb909a19b38",
+    "1604f-2018": "8fc6432abc1c431c849b03996dfb21c1a5398b72be032a74418dfa44bed79c12",
+    "1606-2018": "3e7eed9f6767ae092a682e8dff80c18d49137b127d05850653c8f31875351e2a",
+    "1621-2019": "3863daffd162c40f29eea072a6b02365ef7975ba8bc934ced6375f568049f7d1",
+    "1700-2018": "9d7de562e657757ebb846cb30e1f5022b8f19282cea99387954b18ecc212a222",
+    "1701-2018-attachment": "ab0537cea3acbddb0d1b42fe0a5e5458d40e90453a54fa7bca6bca0690922be5",
+    "1701-2018-conso": "7eaf82e2ea611b87beda84fb4b26d29bcf5ff82716563bb5edf01f4d277c4751",
+    "1701-2018": "1bb1653582a8d7be4c4c35a8438c3c20c72f47e7c49ebb7af4ac1e4092b38fa2",
+    "1701a-2018": "c6f0c7816d51529ba34a803dd8e29fdf18eda409c45909e194e428d22aeaba1e",
+    "1701ms-2024": "1ea6bf7d86ac4f459e501aa312a4f226b93da800de6742152940949563fa5164",
+    "1701q-2018": "41af264eab2ed2e817caaa0e52cc320f76bd47511bec2e14bac2c159296d6067",
+    "1702ex-2018": "0d758392e9a8accda4468875357bcb4625455fb8007d506ee241324ddc00d0fc",
+    "1702mx-2018c-attachment": "a9c349a22521875c711944ae9693f9d381af9503825de736ff6858720bbd9b79",
+    "1702mx-2018c": "5e98544db5ce5999fcf365cc137ce95444aa5f506c62dd275612532d2c17d7e0",
+    "1702q-2018": "5ddddaa29e80dc35e40077a5f45290397c228dff280403425a8fbf568a0373c1",
+    "1702rt-2018c": "093c40eb878ef7ba4e59342c443c0d5b06415f2ae1d84186db71ddfd3ef83d6a",
+    "1706-2018": "0ddb794d9656cd4aba19bd4050422c1224d74db7645d7611bf83eebab60a328d",
+    "1707-2021": "515de62f972a2c3b6ae414ef9ecf17bf589fb4da7c9c7a1698274a7569c02aca",
+    "1707a-2021": "dc821b0fbc3ef8a0b910bc40c074e157342f09b34e5d56a26afff4f6c1872a16",
+    "1709-2020": "cf142789e0b71cb481877ec92acec7c88e343736838cf0beb3945cbfb547a1f7",
+    "1800-2018": "582d8d8cb52f9e90dc353bffadba3b7a0a1cc48afeda9acbfe5ae34f489a93e2",
+    "1801-2018": "23e709a074ebce9b189319b0262d6ddbbaa7a404912093d7e40314cc2b303848",
+    "2000-dst-2018": "85037c1a4229e8bf67c5a4790d85292ac9dcdcd0d0145a01a8724e27f185bfa9",
+    "2000-ot-2018": "8321e8376ac2998316032ce0ba6b52d3a37dfe62ebccba48a4321b47826a73dd",
+    "2200a-2020": "297dbded80e6b755f7cd9b3e048ba6cce781f89c2d663930994dbbb3cd94f533",
+    "2200an-2018": "469d09c4e394102d7df3babae06a4387c621396bf7acdfae06e47e17976b34ce",
+    "2200c-2018": "c7c41dcc20eafe945a4fbac1824645d39e896c1f923a7ab24798c663b226275b",
+    "2200m-2018": "38ccb192c1687f5fafc270bafb6e06da5faacd90cce644b6a701b6498c56f325",
+    "2200p-2020": "9b70f5af888c451876c003b2145235a4a1d4e4f9f266aa8ab69c50d9481700db",
+    "2200s-2018": "5d46bf754bdbff677bf731bb90851dc903894df735551409e8110db46990155b",
+    "2200t-2022": "81bdd6294c0bd5c5bb09cfc47e52bb6ef558b4c2c539687ce1e7257a229d26da",
+    "2316-2021": "92af834534a1c3eadb3969ac40f6e6805f08e31b0f7bf95d2df2ab0f40d7f22f",
+    "2550-ds-2025": "927535b63cd4aea27ebbbaad67a5c4da9ded96acc513d78e35b45d0e242e98f4",
+    "2550m-2007": "548e0f1972a99a0ecb54c25a51c34f9da55d24e22fcc407a8b7f9bf2598e68d7",
+    "2550q-2024": "67e8ce3c83399a9cdfc725e829f746d11d2270a89405222adf0fdcea300b19ec",
+    "2551m-2002": "150696c0c449bdd6d83f51e05b8057e7e7901f8ac97796cf7767f570e43913e5",
+    "2551q-2018": "2c43f548cf67b5c96ce4d6e6e355d95648366f407dc3972e8870e5a5ec9af699",
+    "2552-2018": "1c24caa4a3b5063fb19a2d86d9b09e5afc4e67f8d5ff64c9455d1f93bdc6c466",
+    "2553-1999": "899ca0270c782ba290270d4afd2e5d8220e3ba12561f1b46dbfbc05e9708f4a8",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")

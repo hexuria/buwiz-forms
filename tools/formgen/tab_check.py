@@ -47,8 +47,12 @@ LIMITATION, stated here because it has to be stated somewhere plain: this
 walk can only judge inputs that EXIST. A place on the form where an input is
 MISSING cannot be red here, because there is nothing to be red -- it looks
 identical to correct paper. Missing-field detection is the job of the
-`?debug=fields` overlay's "printed box with no input" census and the findings
-ledger, not of tabbing.
+`?debug=fields` overlay's "printed box with no input" census -- which is why
+(T4-addendum) this module also calls that SAME census, `window.
+formgenFieldCensus()`, once per form after the walk, and burns its tone-aware
+"vacant" boxes into the same page-<N>.png as blue, alongside the green/red
+tab verdicts. One image answers both questions; nobody has to tab AND
+separately eyeball the sheet.
 
 Usage:
     python3 tools/formgen/tab_check.py                  # every form in forms/
@@ -62,6 +66,7 @@ import argparse
 import html
 import json
 import pathlib
+import re
 import sys
 import tempfile
 import time
@@ -73,19 +78,36 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import band_drive  # noqa: E402  - sibling module, imported not shelled out; bundle_dir() only
+import emit  # noqa: E402  - sibling module; only FIELD_DEBUG_JS, for the self-test fixture
 
-SCHEMA_VERSION = 1
+# Bumped for T4-addendum: `report["vacant"]` and `report["totals"]["vacant"]`
+# are new, burned from the SAME tone-aware census `?debug=fields` paints
+# (window.formgenFieldCensus(), emit.py), so a consumer holding schema 1
+# knows the field is not there rather than silently reading `None` as zero.
+SCHEMA_VERSION = 2
 
 LIMITATION = (
     "This walk can only judge inputs that EXIST. A place on the form where an "
     "input is MISSING cannot be red here, because there is nothing to be red "
     "-- it looks identical to correct paper. Missing-field detection is the "
     "job of the ?debug=fields overlay's \"printed box with no input\" census "
-    "and the findings ledger, not of tabbing."
+    "and the findings ledger, not of tabbing -- which is why this module also "
+    "burns that SAME census (window.formgenFieldCensus(), one source of "
+    "truth, not a second implementation) into every page-<N>.png as blue, "
+    "alongside the green/red tab verdicts."
 )
 
 GREEN = "#0a8a3e"
 RED = "#d32f2f"
+BLUE = "#1565c0"
+
+# The census FIELD_DEBUG_JS exposes unconditionally (before its own
+# ?debug=fields token gate -- see emit.py's FIELD_DEBUG_JS for why that is
+# safe: it only reads the document, never mutates it). Calling it needs no
+# query string on the page this module already loaded for the tab walk.
+CENSUS_JS = "() => window.formgenFieldCensus()"
+
+PAGE_ID_RE = re.compile(r"^page-(\d+)$")
 
 # ---------------------------------------------------------------------------
 # In-page probes
@@ -172,7 +194,9 @@ MARKER_LAYER_ID = "tab-check-markers"
 # Burns the verdict onto the page: a solid outline (not a hairline -- the
 # artifact is read on a phone), a translucent fill so the underlying ink is
 # still visible, and a filled label chip carrying the tab sequence number (or
-# "×" for a box no press ever reached).
+# "×" for a box no press ever reached). A vacant (blue) marker carries no
+# sequence number -- it is not an input at all -- so an empty/falsy label
+# skips the chip rather than painting an empty one.
 MARK_JS = r"""
 (spec) => {
   const pageEl = document.getElementById("page-" + spec.page);
@@ -187,13 +211,15 @@ MARK_JS = r"""
       + "width:" + m.w + "pt;height:" + m.h + "pt;box-sizing:border-box;"
       + "border:1.5pt solid " + m.color + ";background:" + m.color + "26";
     layer.appendChild(box);
-    const chip = document.createElement("div");
-    chip.textContent = m.label;
-    const chipTop = m.y > 7 ? m.y - 7 : m.y;
-    chip.style.cssText = "position:absolute;left:" + m.x + "pt;top:" + chipTop + "pt;"
-      + "background:" + m.color + ";color:#fff;font:bold 6.5pt/1.4 Arial,Helvetica,sans-serif;"
-      + "padding:0.5pt 2pt;border-radius:1.5pt;white-space:nowrap";
-    layer.appendChild(chip);
+    if (m.label) {
+      const chip = document.createElement("div");
+      chip.textContent = m.label;
+      const chipTop = m.y > 7 ? m.y - 7 : m.y;
+      chip.style.cssText = "position:absolute;left:" + m.x + "pt;top:" + chipTop + "pt;"
+        + "background:" + m.color + ";color:#fff;font:bold 6.5pt/1.4 Arial,Helvetica,sans-serif;"
+        + "padding:0.5pt 2pt;border-radius:1.5pt;white-space:nowrap";
+      layer.appendChild(chip);
+    }
   }
   pageEl.appendChild(layer);
 }
@@ -355,11 +381,42 @@ def compute_verdicts(expected_order: list[str], sequence: list[str]
 # ---------------------------------------------------------------------------
 
 
+def collect_vacant(census_pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The tone-aware `vacant` marks out of `window.formgenFieldCensus()`.
+
+    Read straight from the SAME computation `?debug=fields` paints blue --
+    `emit.py`'s `pageCensus()`, called once via `window.formgenFieldCensus()`
+    -- so a candidate box already excludes tint-band decoration (F213) before
+    this function ever sees it. This is a re-shaping of that result into
+    tab.json's page-relative-pt convention, not a second verdict.
+    """
+    vacant: list[dict[str, Any]] = []
+    for page_result in census_pages or ():
+        match = PAGE_ID_RE.match(str(page_result.get("page", "")))
+        if not match:
+            continue
+        page_index = int(match.group(1))
+        for mark in page_result.get("marks", ()):
+            if mark.get("state") != "vacant":
+                continue
+            vacant.append({
+                "page": page_index,
+                "x_pt": round(mark["L"], 2), "y_pt": round(mark["T"], 2),
+                "w_pt": round(mark["R"] - mark["L"], 2),
+                "h_pt": round(mark["B"] - mark["T"], 2),
+            })
+    return vacant
+
+
 def render_artifacts(tab: Any, slug: str, review_dir: pathlib.Path,
                      page_meta: dict[int, dict[str, float]],
                      input_meta: dict[str, dict[str, Any]],
-                     verdicts: dict[str, str], reached_at: dict[str, int]) -> list[int]:
-    """One `page-<N>.png` per page, the verdict burned into the pixels."""
+                     verdicts: dict[str, str], reached_at: dict[str, int],
+                     vacant: list[dict[str, Any]]) -> list[int]:
+    """One `page-<N>.png` per page, the verdict burned into the pixels --
+    green/red tab verdicts AND the blue tone-aware vacant census together, so
+    one image answers both "does tab order hold" and "is anything printed
+    still missing its input"."""
     tab.evaluate(BLUR_JS)  # a lingering :focus highlight is not a verdict
     # The Tab walk scrolls the focused input into view as it goes, so by the
     # time this runs the document is not sitting at its loaded scroll
@@ -377,6 +434,9 @@ def render_artifacts(tab: Any, slug: str, review_dir: pathlib.Path,
     by_page: dict[int, list[str]] = {}
     for input_id, meta in input_meta.items():
         by_page.setdefault(meta["page"], []).append(input_id)
+    vacant_by_page: dict[int, list[dict[str, Any]]] = {}
+    for entry in vacant:
+        vacant_by_page.setdefault(entry["page"], []).append(entry)
 
     written: list[int] = []
     for page_index in sorted(page_meta):
@@ -389,6 +449,10 @@ def render_artifacts(tab: Any, slug: str, review_dir: pathlib.Path,
             markers.append({"x": meta["x_pt"], "y": meta["y_pt"],
                             "w": meta["w_pt"], "h": meta["h_pt"],
                             "color": color, "label": label})
+        for entry in vacant_by_page.get(page_index, []):
+            markers.append({"x": entry["x_pt"], "y": entry["y_pt"],
+                            "w": entry["w_pt"], "h": entry["h_pt"],
+                            "color": BLUE, "label": ""})
         tab.evaluate(MARK_JS, {"page": page_index, "markers": markers})
         page_rect = tab.eval_on_selector(f"#page-{page_index}", "el => el.getBoundingClientRect()")
         out_path = out_dir / f"page-{page_index}.png"
@@ -416,7 +480,7 @@ def walk_form(tab: Any, slug: str, bundle: pathlib.Path, review_dir: pathlib.Pat
         return {
             "schema_version": SCHEMA_VERSION, "slug": slug, "limitation": LIMITATION,
             "ok": False, "failures": ["no .page elements found in the document"],
-            "totals": {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0},
+            "totals": {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0, "vacant": 0},
         }
 
     expected_order, input_meta, page_meta = build_expected(pages_raw)
@@ -427,13 +491,25 @@ def walk_form(tab: Any, slug: str, bundle: pathlib.Path, review_dir: pathlib.Pat
 
     verdicts, reached_at, duplicates, unexpected = compute_verdicts(expected_order, sequence)
 
-    pages_written = render_artifacts(tab, slug, review_dir, page_meta, input_meta, verdicts, reached_at)
+    # One evaluate, after the walk: the SAME census `?debug=fields` paints
+    # blue, called through the callable emit.py exposes for exactly this
+    # (window.formgenFieldCensus) -- not a second implementation of "what is
+    # a printed box with no input". Needs no query string: that callable is
+    # reachable on every generated form, walked or not.
+    census_pages = tab.evaluate(CENSUS_JS)
+    vacant = collect_vacant(census_pages)
+
+    pages_written = render_artifacts(tab, slug, review_dir, page_meta, input_meta,
+                                     verdicts, reached_at, vacant)
 
     counts = {"green": 0, "red-skipped": 0, "red-order": 0}
     per_page_counts = {p: {"green": 0, "red-skipped": 0, "red-order": 0} for p in page_meta}
     for input_id, verdict in verdicts.items():
         counts[verdict] += 1
         per_page_counts[input_meta[input_id]["page"]][verdict] += 1
+    vacant_by_page: dict[int, int] = {}
+    for entry in vacant:
+        vacant_by_page[entry["page"]] = vacant_by_page.get(entry["page"], 0) + 1
 
     inputs_out = []
     for input_id in expected_order:
@@ -448,7 +524,7 @@ def walk_form(tab: Any, slug: str, bundle: pathlib.Path, review_dir: pathlib.Pat
     pages_out = [
         {"index": p, "width_pt": page_meta[p]["width_pt"], "height_pt": page_meta[p]["height_pt"],
          "image": f"page-{p}.png" if p in pages_written else None,
-         **per_page_counts[p]}
+         **per_page_counts[p], "vacant": vacant_by_page.get(p, 0)}
         for p in sorted(page_meta)
     ]
 
@@ -469,7 +545,8 @@ def walk_form(tab: Any, slug: str, bundle: pathlib.Path, review_dir: pathlib.Pat
         },
         "pages": pages_out,
         "inputs": inputs_out,
-        "totals": {**counts, "total": input_count},
+        "vacant": vacant,
+        "totals": {**counts, "total": input_count, "vacant": len(vacant)},
         "page_errors": errors,
     }
 
@@ -516,7 +593,8 @@ def write_index_html(review_dir: pathlib.Path, reports: list[dict[str, Any]]) ->
                  f"(green = reached in expected order; red = skipped or reached out of order).</p>")
     for report in sorted(reports, key=lambda r: r["slug"]):
         slug = report["slug"]
-        totals = report.get("totals", {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0})
+        totals = report.get("totals", {"green": 0, "red-skipped": 0, "red-order": 0,
+                                       "total": 0, "vacant": 0})
         badge_ok = report.get("ok")
         badge = ("<span class=\"b g\">clean</span>" if badge_ok
                  else "<span class=\"b r2\">red</span>")
@@ -525,7 +603,8 @@ def write_index_html(review_dir: pathlib.Path, reports: list[dict[str, Any]]) ->
         parts.append(f'<div class="counts">green {totals.get("green", 0)} &middot; '
                      f'red-skipped {totals.get("red-skipped", 0)} &middot; '
                      f'red-order {totals.get("red-order", 0)} &middot; '
-                     f'total {totals.get("total", 0)}</div>')
+                     f'total {totals.get("total", 0)} &middot; '
+                     f'vacant (blue) {totals.get("vacant", 0)}</div>')
         for failure in report.get("failures") or ():
             parts.append(f'<div class="counts">{html.escape(str(failure))}</div>')
         parts.append('<div class="pages">')
@@ -536,7 +615,8 @@ def write_index_html(review_dir: pathlib.Path, reports: list[dict[str, Any]]) ->
             parts.append(
                 f'<a href="{href}"><img src="{href}" loading="lazy"></a>'
                 f'<div class="cap">p{page["index"]}: g{page.get("green", 0)} '
-                f'/ rs{page.get("red-skipped", 0)} / ro{page.get("red-order", 0)}</div>')
+                f'/ rs{page.get("red-skipped", 0)} / ro{page.get("red-order", 0)} '
+                f'/ vacant {page.get("vacant", 0)}</div>')
         parts.append("</div></div>")
     parts.append("</body></html>")
     review_dir.mkdir(parents=True, exist_ok=True)
@@ -555,7 +635,19 @@ def write_index_html(review_dir: pathlib.Path, reports: list[dict[str, Any]]) ->
 # something that reading order says should follow it). p1c1 and p1c3 must
 # grade green; p1c2, the one the walk reaches after something below it, must
 # grade red-order; nothing is red-skipped.
-SELF_TEST_HTML = """<!doctype html>
+#
+# The `.rl` block is the deliberate T4-addendum fixture: four black
+# (structural) rects closing a 20x20pt box at x 130..150 / y 130..150, no
+# input and no `.t` text inside it -- printed paper with nothing to write in.
+# It must come back from window.formgenFieldCensus() as exactly one vacant
+# mark, and that mark must reach report["vacant"] and get painted blue.
+# emit.FIELD_DEBUG_JS is embedded VERBATIM (not a hand-rolled duplicate of
+# its census logic) so this proves the real shipped bytes, the same as
+# emit.py's own field_debug_tone_mutation_assertions does for the JS side of
+# this. Its query-string gate means `census()` is the only thing reachable
+# here (this page carries no `?debug=fields`); that is the point -- it is
+# what T4-addendum needs to be true.
+SELF_TEST_HTML = ("""<!doctype html>
 <html><head><meta charset="utf-8"><style>
 * { margin:0; padding:0; box-sizing:border-box }
 .page { position:relative; background:#fff }
@@ -563,6 +655,14 @@ SELF_TEST_HTML = """<!doctype html>
 .fi { position:absolute; inset:0; border:0.5pt solid #999 }
 </style></head><body>
 <div class="page page-1" id="page-1" style="width:200pt;height:200pt">
+  <svg class="rl" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"
+       preserveAspectRatio="none"
+       style="position:absolute;left:0;top:0;width:200pt;height:200pt">
+    <rect x="129" y="129" width="1" height="22" fill="#000000"/>
+    <rect x="150" y="129" width="1" height="22" fill="#000000"/>
+    <rect x="129" y="129" width="22" height="1" fill="#000000"/>
+    <rect x="129" y="150" width="22" height="1" fill="#000000"/>
+  </svg>
   <div id="p1c1" class="c f" data-cell-kind="field" data-row="0" data-col="0"
        style="left:10pt;top:10pt;width:20pt;height:20pt"><input class="fi" id="p1c1-i"></div>
   <div id="p1c3" class="c f" data-cell-kind="field" data-row="1" data-col="0"
@@ -570,8 +670,11 @@ SELF_TEST_HTML = """<!doctype html>
   <div id="p1c2" class="c f" data-cell-kind="field" data-row="0" data-col="1"
        style="left:100pt;top:10pt;width:20pt;height:20pt"><input class="fi" id="p1c2-i"></div>
 </div>
+<script>
+""" + emit.FIELD_DEBUG_JS + """
+</script>
 </body></html>
-"""
+""")
 
 
 def self_test() -> int:
@@ -631,10 +734,48 @@ def self_test() -> int:
         failures += not ok
         print(f"  {'PASS' if ok else 'FAIL'}  tab.json written to {tab_json}", file=sys.stderr)
 
+        # T4-addendum: the deliberate vacant box (SVG rect, x/y 130..150)
+        # must come back as exactly one tone-aware "vacant" mark, distinct
+        # from the three tabbed inputs, at the geometry the fixture prints.
+        vacant = report.get("vacant") or []
+        ok = len(vacant) == 1
+        failures += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  exactly one vacant box census'd "
+              f"(got {len(vacant)}: {vacant})", file=sys.stderr)
+        if vacant:
+            entry = vacant[0]
+            geometry_ok = (entry["page"] == 1
+                          and abs(entry["x_pt"] - 130) < 0.1
+                          and abs(entry["y_pt"] - 130) < 0.1
+                          and abs(entry["w_pt"] - 20) < 0.1
+                          and abs(entry["h_pt"] - 20) < 0.1)
+            failures += not geometry_ok
+            print(f"  {'PASS' if geometry_ok else 'FAIL'}  the vacant box's "
+                  f"geometry matches the printed fixture (got {entry})",
+                  file=sys.stderr)
+        ok = report["totals"].get("vacant") == 1
+        failures += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  totals.vacant is 1 "
+              f"(got {report['totals'].get('vacant')})", file=sys.stderr)
+        ok = report["pages"] and report["pages"][0].get("vacant") == 1
+        failures += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  the page's own vacant count is 1 "
+              f"(got {report['pages'][0].get('vacant') if report['pages'] else None})",
+              file=sys.stderr)
+        ok = tab_json.is_file() and json.loads(
+            tab_json.read_text(encoding="utf-8")).get("vacant") == vacant
+        failures += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  tab.json on disk carries the "
+              f"same vacant list", file=sys.stderr)
+
         index_html = review_dir / "index.html"
         ok = index_html.is_file() and "red-order" in index_html.read_text(encoding="utf-8")
         failures += not ok
         print(f"  {'PASS' if ok else 'FAIL'}  forms/review/index.html generated", file=sys.stderr)
+        ok = index_html.is_file() and "vacant (blue) 1" in index_html.read_text(encoding="utf-8")
+        failures += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  the index page reports the vacant count too",
+              file=sys.stderr)
 
     print(f"self-test: {failures} failure(s)", file=sys.stderr)
     return 1 if failures else 0
@@ -690,7 +831,7 @@ def main(argv: list[str] | None = None) -> int:
                 reports.append({
                     "schema_version": SCHEMA_VERSION, "slug": slug, "limitation": LIMITATION,
                     "ok": False, "failures": ["no generated bundle"],
-                    "totals": {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0},
+                    "totals": {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0, "vacant": 0},
                 })
                 print(f"  {slug:<26} NO BUNDLE", file=sys.stderr)
                 continue

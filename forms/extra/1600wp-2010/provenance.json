@@ -62,7 +62,7 @@
       "1600WP Guide.pdf"
     ]
   },
-  "html_bytes": 244147,
+  "html_bytes": 258656,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -80,6 +80,8 @@ import math
 import operator
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import urllib.parse
@@ -4927,6 +4929,48 @@ RULE_POSITION_TOLERANCE_PT = 0.25
 # lands between, so the cut has no population sitting on it.
 RULE_WALL_COVERAGE = 0.9
 
+# TONE, THE DEFECT THIS SPLIT CLOSES (F213)
+#
+# Every rect the overlay reads was, until this constant existed, a wall
+# candidate purely because its fill differed from what was under it --
+# `visibleRects()` cannot and must not stop meaning that, because that
+# question ("did this rect paint something new") is also how the overlay
+# decides what tone sits under a candidate box. What is missing is a SECOND
+# question: paint something new is not the same as BOUND something. A page-
+# spanning row-band tint fragment differs from paper (so it is visible ink)
+# and can still be running straight through the middle of a checkbox, not
+# forming its edge -- 1701-2018 p2's Compensation-Earner checkbox has exactly
+# this shape: `h27`, a 0.8509-gray tint fragment 15.24pt wide, crosses it, and
+# the old code closed a false box on it and reported the correctly-placed
+# input `p2c21-i` as "crosses a printed wall" (F213).
+#
+# Corpus-wide, rule tone is quantised to exactly eight values (measured over
+# all 53 `build/ir/*.ir.json`, PLAN.md T3+T4): 0.0 structural; 0.251, 0.502,
+# 0.651 decorative and WALL -- mid-grey checkbox outlines, 100% and 94% short
+# box-edge runs respectively, neither with a single run >=100pt; 0.7489,
+# 0.7529, 0.8509 decorative and TINT -- 42-45% of their own ink is a run
+# >=100pt, i.e. dominated by page-spanning bands; 1.0 knockout (white). The
+# ONLY empty interval in that list is 0.651 -> 0.7489, corroborated
+# independently by the ink-morphology split above (short edges below it,
+# spanning bands at or above it), so `RULE_WALL_TINT_SPLIT_GRAY` sits inside
+# it. Placing the split anywhere at or below 0.651 would erase the checkbox
+# outlines the overlay is supposed to keep finding -- including the four
+# Schedule-1 squares F210 anchors, whose blue "vacant" marks must survive this
+# change -- which is the mistake an earlier draft of this plan made and
+# measurement refuted.
+#
+# Knockout (white, gray 1.0) is deliberately NOT folded into "tint": it was
+# never a page-spanning band to begin with (it is the source painting paper
+# back over a shaded box so a taxpayer can write there), no proven case shows
+# it acting as a phantom wall, and the corpus's own quantisation makes the
+# distinction free -- gray 1.0 is the sentinel above every real tint value
+# (the highest, 0.8509, is nowhere near it), so `gray < 1` in the overlay's
+# `isTintTone()` costs no second threshold. Knockout keeps acting exactly as
+# every other visible rect always did: eligible to bound a box wherever its
+# own edges happen to line up with one, decided by geometry, same as before
+# this constant existed.
+RULE_WALL_TINT_SPLIT_GRAY = 0.70
+
 FIELD_DEBUG_SCREEN_CSS = (
     '[data-fg-field]{outline-offset:0!important}'
     '[data-fg-field="fits"]{outline:1px dashed rgba(46,125,50,.85)!important}'
@@ -4984,18 +5028,18 @@ function requested(){
   }
   return false;
 }
-/* Nothing above this line has touched the document, and nothing below it runs
-   without the token. This is the byte-identical-render proof: a page loaded
-   without ?debug=fields creates no element, sets no attribute and registers no
-   listener, so its rendered layout is the layout it had before this script
-   existed. */
-if(!requested()){return;}
-var CSS=__FIELD_DEBUG_CSS__;
-/* Interpolated from the module constants so the overlay and the pipeline
+
+/* ---- pipeline constants: pure, no DOM ------------------------------------
+   Interpolated from the module constants so the overlay and the pipeline
    cannot drift apart or be relaxed independently. */
 var TOL=__RULE_POSITION_TOLERANCE_PT__;
 var WALL=__RULE_WALL_COVERAGE__;
 var MIN_BOX=__FIELD_MIN_SIZE_PT__;
+/* The wall/tint split (F213). See RULE_WALL_TINT_SPLIT_GRAY's own comment in
+   emit.py for the measured tone table and why 0.70 is the only interval on
+   the sheet with no rule tone sitting in it. */
+var TINT_SPLIT_GRAY=__RULE_WALL_TINT_SPLIT_GRAY__;
+var STRUCTURAL_MAX_GRAY=0.15;
 /* Sub-point arithmetic noise on coordinates that arrive as pt from a viewport
    measured in px. Never a tolerance: tolerances are TOL and the wall width. */
 var EPS=0.02;
@@ -5007,13 +5051,14 @@ var PROBE=0.5;
 var ROUNDS=8;
 var PAPER="rgb(255, 255, 255)";
 var ORDER=["fits","small","over","unboxed","vacant"];
-var LABELS={fits:"fill their printed box",
-            small:"smaller than their printed box",
-            over:"cross a printed wall",
-            unboxed:"no printed box at all",
-            vacant:"printed box with no input"};
 
-/* ---- the printed sheet, read from the rule layer only ------------------- */
+/* ---- the printed sheet, read from the rule layer only -------------------
+   Read-only DOM access below (getBoundingClientRect, getComputedStyle,
+   querySelectorAll): every one of these is what window.formgenFieldCensus
+   needs to compute its census, and none of it can change what the page
+   renders, so it is reachable below WITHOUT the ?debug=fields token -- see
+   that assignment's own comment, right before the gate, for the boundary
+   this crosses and why it is safe. */
 
 /* Every painted rectangle on one page, in page points, in PAINT ORDER.
    Rects only: an <image> or a filled <path> is ink, but its bounding box is
@@ -5034,6 +5079,62 @@ function ruleRects(page,frame,ptPerPx){
               fill:el.tagName.toLowerCase()==="rect"?style.fill:style.backgroundColor});
   }
   return out;
+}
+function ptRect(el,frame,ptPerPx){
+  var r=el.getBoundingClientRect();
+  return {id:el.id,x:(r.left-frame.left)*ptPerPx,y:(r.top-frame.top)*ptPerPx,
+          x1:(r.right-frame.left)*ptPerPx,y1:(r.bottom-frame.top)*ptPerPx};
+}
+/* ---- tone: separates paint that EXISTS from paint that BOUNDS a box ----- */
+/* PURE-GEOMETRY-BEGIN -- nothing between this line and its matching END
+   touches an element, the document or the window: every function here reads
+   only the plain {n,x,y,x1,y1,fill} objects ruleRects() already built. That
+   is what lets emit.py's self-test extract this exact span, verbatim, and run
+   it under node on a synthetic case -- proving RULE_WALL_TINT_SPLIT_GRAY is
+   load-bearing in the shipped bytes rather than merely present in them. */
+function toneGray(fill){
+  var m=/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(fill||"");
+  if(!m){return 0;}
+  return ((parseFloat(m[1])+parseFloat(m[2])+parseFloat(m[3]))/3)/255;
+}
+/* Tint: a page-spanning shading band, corpus-wide grays 0.7489/0.7529/0.8509
+   (F213's h27 among them). The upper bound is not a second threshold -- it is
+   exactly 1, the knockout sentinel, so white paint keeps bounding a box
+   exactly as it always did (RULE_WALL_TINT_SPLIT_GRAY's own comment says why
+   that is deliberate). Everything at or below the split, including 0.251's
+   checkbox outlines (F210), stays a wall candidate, unaffected. */
+function isTintTone(fill){
+  var gray=toneGray(fill);
+  return gray>TINT_SPLIT_GRAY&&gray<1;
+}
+/* The vacant probe's own, BROADER test. Strokes and interiors are different
+   questions: a 0.651 STROKE is a checkbox outline (a wall -- 94% of 0.651
+   rules are short box edges, so it sits below TINT_SPLIT_GRAY on purpose),
+   but a 0.651 FILL covering a box's interior is a shading pad (0619-E's
+   centavo-separator compartments are exactly this). At a box's CENTRE only a
+   slab can be present -- any wall-tone stroke through the centre would have
+   closed a smaller box at itself -- so grey paint at the centre means
+   decoration regardless of which side of the stroke split its tone falls on.
+   The band is (STRUCTURAL_MAX_GRAY, 1): neither printed black ink nor
+   knockout white nor bare paper. STRUCTURAL_MAX_GRAY mirrors the pipeline's
+   own structural cutoff (extract.classify_tone / lattice.tone_role), not a
+   new number. */
+function isDecorPaint(fill){
+  var gray=toneGray(fill);
+  return gray>STRUCTURAL_MAX_GRAY&&gray<1;
+}
+/* The colour actually showing at one point, searched back to front in PAINT
+   ORDER -- the same "innermost rect that matters here" question
+   visibleRects() asks about a whole rect, asked here about a point instead.
+   Used by the `vacant` probe to read what tone sits under a candidate box's
+   centre without ever consulting the field layer. */
+function paintAt(px,py,rects){
+  var i,r;
+  for(i=rects.length-1;i>=0;i--){
+    r=rects[i];
+    if(r.x-EPS<=px&&px<=r.x1+EPS&&r.y-EPS<=py&&py<=r.y1+EPS){return r.fill;}
+  }
+  return PAPER;
 }
 /* A rect delimits a region only where it changes the colour under it. The
    comparison is against the innermost EARLIER rect that WHOLLY CONTAINS this
@@ -5172,9 +5273,6 @@ function unionArea(list){
   }
   return total;
 }
-
-/* ---- one page ----------------------------------------------------------- */
-
 function boxKey(box){
   return [box.L,box.T,box.R,box.B].map(function(v){return v.toFixed(2);}).join("|");
 }
@@ -5211,18 +5309,39 @@ function allBoxes(vis){
   }
   return boxes;
 }
-function ptRect(el,frame,ptPerPx){
-  var r=el.getBoundingClientRect();
-  return {el:el,x:(r.left-frame.left)*ptPerPx,y:(r.top-frame.top)*ptPerPx,
-          x1:(r.right-frame.left)*ptPerPx,y1:(r.bottom-frame.top)*ptPerPx};
-}
-function pageRun(page,report){
+/* PURE-GEOMETRY-END */
+
+/* ---- one page --------------------------------------------------------- */
+
+/* The census, and ONLY the census: no element created, no attribute set, no
+   listener registered. This is what makes it safe to expose unconditionally,
+   below, before the token is even checked. */
+function pageCensus(page){
   var frame=page.getBoundingClientRect();
   var widthPt=parseFloat(page.style.width);
   if(!(widthPt>0)||!(frame.width>0)){return null;}
   var ptPerPx=widthPt/frame.width;
-  var vis=visibleRects(ruleRects(page,frame,ptPerPx));
-  var boxes=allBoxes(vis);
+  /* `rawRects`, not `vis`, is what the vacant probe below reads. `vis` marks
+     a rect invisible when it does not change the colour under it, and that
+     is a PER-RECT judgement against the nearest WHOLLY CONTAINING earlier
+     rect -- exactly right for wall-finding (an edge nobody could perceive
+     cannot be a wall), and exactly wrong for a point probe. 1701-2018 p2's
+     own Schedule-1 squares (F210) proved it: the white knockout that paints
+     "write here" over the grey band is the SAME colour as paper, and no
+     single earlier rect wholly contains its 31.44x10.8pt extent (only a
+     narrower tint fragment overlaps part of it), so visibleRects() drops it
+     -- correctly, nothing there needs to be perceived as an edge -- but
+     paintAt() then found the tint UNDER it instead of the knockout ON TOP
+     of it, and reported a real vacant box as tinted decoration. paintAt()
+     already does its own point-in-paint-order search, so it needs the full
+     paint stack, not the pre-filtered one. */
+  var rawRects=ruleRects(page,frame,ptPerPx);
+  var vis=visibleRects(rawRects);
+  /* Tint rects stop being wall candidates here (F213): they still PAINT --
+     the probe below still reads them, in `rawRects` -- but they can no
+     longer BOUND a box. */
+  var wallVis=vis.filter(function(r){return !isTintTone(r.fill);});
+  var boxes=allBoxes(wallVis);
   var inputs=[],nodes=page.querySelectorAll("input.fi"),i,key,box;
   for(i=0;i<nodes.length;i++){inputs.push(ptRect(nodes[i],frame,ptPerPx));}
   var texts=[],tnodes=page.querySelectorAll(".t");
@@ -5234,7 +5353,7 @@ function pageRun(page,report){
      would answer with the box next door. */
   var groups={},unboxed=[];
   for(i=0;i<inputs.length;i++){
-    box=boxAt((inputs[i].x+inputs[i].x1)/2,(inputs[i].y+inputs[i].y1)/2,vis);
+    box=boxAt((inputs[i].x+inputs[i].x1)/2,(inputs[i].y+inputs[i].y1)/2,wallVis);
     if(box===null){unboxed.push(inputs[i]);continue;}
     key=boxKey(box);
     if(!boxes[key]){boxes[key]=box;}
@@ -5242,12 +5361,11 @@ function pageRun(page,report){
     groups[key].push(inputs[i]);
   }
 
-  var counts={},marks=[],state;
+  var counts={},marks=[],inputStates=[],state;
   for(i=0;i<ORDER.length;i++){counts[ORDER[i]]=0;}
   counts.unboxed=unboxed.length;
   for(i=0;i<unboxed.length;i++){
-    unboxed[i].state="unboxed";
-    report.push({page:page.id,input:unboxed[i].el.id,state:"unboxed",unreached:null});
+    inputStates.push({id:unboxed[i].id,state:"unboxed",unreached:null});
   }
   for(key in groups){
     if(!Object.prototype.hasOwnProperty.call(groups,key)){continue;}
@@ -5287,20 +5405,28 @@ function pageRun(page,report){
     state=over>0?"over":(shortfall>EPS?"small":"fits");
     counts[state]+=members.length;
     for(m=0;m<members.length;m++){
-      members[m].state=state;
-      report.push({page:page.id,input:members[m].el.id,state:state,
-                   unreached:state==="small"?unreached:null});
+      inputStates.push({id:members[m].id,state:state,
+                        unreached:state==="small"?unreached:null});
     }
-    if(state!=="fits"){marks.push({box:box,state:state,unreached:unreached});}
+    if(state!=="fits"){
+      marks.push({state:state,L:box.L,T:box.T,R:box.R,B:box.B,unreached:unreached});
+    }
   }
 
   /* The state the previous overlay could not express, because it iterated over
      inputs and a missing input is not something an input iteration visits. A
      printed box counts as vacant only when it holds no input AND no printed
      text -- a box with a label in it is a label, not a field somebody forgot --
-     and only when it is big enough to write a character in. Boxes that contain
-     another found box are containers, not cells, and are not reported: the
-     sheet's outer frame encloses everything and is nobody's missing field. */
+     and only when it is big enough to write a character in, and only when its
+     own interior does not resolve to GREY paint (F213: a box sitting on shaded
+     decoration is not a forgotten field, and a box FILLED with a shading pad
+     -- 0619-E's centavo separators -- is the pad, not a field; see
+     isDecorPaint for why the interior band is wider than the stroke split.
+     Knockout white and bare paper both still pass, which is what keeps
+     F210's Schedule-1 squares blue). Boxes
+     that contain another found box are containers, not cells, and are not
+     reported: the sheet's outer frame encloses everything and is nobody's
+     missing field. */
   var keys=Object.keys(boxes),k,other,vacant=0;
   for(i=0;i<keys.length;i++){
     box=boxes[keys[i]];
@@ -5324,15 +5450,56 @@ function pageRun(page,report){
          other.R<=box.R+EPS&&other.B<=box.B+EPS){occupied=true;break;}
     }
     if(occupied){continue;}
+    if(isDecorPaint(paintAt((box.L+box.R)/2,(box.T+box.B)/2,rawRects))){continue;}
     vacant++;
-    marks.push({box:box,state:"vacant",unreached:1});
-    report.push({page:page.id,input:null,state:"vacant",unreached:1,
-                 at:[box.L.toFixed(1),box.T.toFixed(1),
-                     (box.R-box.L).toFixed(1),(box.B-box.T).toFixed(1)].join(" ")});
+    marks.push({state:"vacant",L:box.L,T:box.T,R:box.R,B:box.B,unreached:1});
   }
   counts.vacant=vacant;
-  return {counts:counts,inputs:inputs,marks:marks,boxes:keys.length,unboxed:unboxed};
+  return {page:page.id,counts:counts,inputs:inputStates,marks:marks,boxes:keys.length};
 }
+/* Every page's census, as one plain array of plain objects -- no DOM element
+   anywhere in the return value, which is what makes it safe to hand back
+   across Playwright's evaluate() boundary. This is the ONLY place the
+   box/verdict logic runs: the visual overlay below calls this exact function
+   too, so there is one source of truth for "what state is this input in" and
+   "which printed boxes are vacant", never two. */
+function census(){
+  var pages=document.querySelectorAll(".page"),out=[],i,result;
+  for(i=0;i<pages.length;i++){
+    result=pageCensus(pages[i]);
+    if(result!==null){out.push(result);}
+  }
+  return out;
+}
+/* Exposed BEFORE the token gate, deliberately: tab_check.py calls this on
+   every generated form, most of which are never loaded with ?debug=fields at
+   all. Everything it reaches (census -> pageCensus -> ruleRects/ptRect/the
+   pure geometry above) only READS the document -- getBoundingClientRect,
+   getComputedStyle, querySelectorAll -- so calling it changes nothing about
+   what the page renders, which is the actual guarantee the gate below exists
+   to protect. The gate itself still stands: nothing that can create an
+   element, set an attribute or register a listener is reachable without the
+   token, and the self-test asserts precisely that split rather than banning
+   "the document" outright, which would ban this deliberate exception too. */
+window.formgenFieldCensus=census;
+/* Nothing above this line can MUTATE the document or register a listener, and
+   nothing below it runs without the token. This is the byte-identical-render
+   proof, narrowed to what it actually needs to prove: a page loaded without
+   ?debug=fields, and never handed to window.formgenFieldCensus(), creates no
+   element, sets no attribute and registers no listener, so its rendered
+   layout is the layout it had before this script existed. */
+if(!requested()){return;}
+var CSS=__FIELD_DEBUG_CSS__;
+/* fits/small/over/unboxed each count INPUTS (an input judged individually, or
+   as part of a group sharing one printed box); vacant counts BOXES (a printed
+   box with no input at all has no input to count). The label states which,
+   because the two numbers answer different questions and the legend used to
+   read as though they were the same kind of thing. */
+var LABELS={fits:"input(s) fill their printed box",
+            small:"input(s) smaller than their printed box",
+            over:"input(s) cross a printed wall",
+            unboxed:"input(s) with no printed box at all",
+            vacant:"printed box(es) with no input, after tone filtering"};
 
 /* ---- painting ----------------------------------------------------------- */
 
@@ -5351,19 +5518,20 @@ function layerOf(page){
   return layer;
 }
 function paintPage(page,result){
-  var layer=layerOf(page),i,mark,node,box;
+  var layer=layerOf(page),i,mark,node,el;
   for(i=0;i<result.inputs.length;i++){
-    result.inputs[i].el.setAttribute("data-fg-field",result.inputs[i].state);
+    el=document.getElementById(result.inputs[i].id);
+    if(el){el.setAttribute("data-fg-field",result.inputs[i].state);}
   }
   for(i=0;i<result.marks.length;i++){
-    mark=result.marks[i];box=mark.box;
+    mark=result.marks[i];
     node=document.createElement("i");
     node.setAttribute("data-fg-box",mark.state);
     node.setAttribute("data-fg-unreached",Math.round(mark.unreached*100)+"%");
     node.title=mark.state+": "+Math.round(mark.unreached*100)+"% of this printed "
       +"box is unreached";
-    node.style.left=box.L+"pt";node.style.top=box.T+"pt";
-    node.style.width=(box.R-box.L)+"pt";node.style.height=(box.B-box.T)+"pt";
+    node.style.left=mark.L+"pt";node.style.top=mark.T+"pt";
+    node.style.width=(mark.R-mark.L)+"pt";node.style.height=(mark.B-mark.T)+"pt";
     layer.appendChild(node);
   }
   /* One legend per page, inside the page, so a reviewer photographing a single
@@ -5388,16 +5556,36 @@ function paintPage(page,result){
                                              +LABELS[ORDER[i]]));
     legend.appendChild(line);
   }
+  var orangeNote=document.createElement("b");
+  orangeNote.textContent="orange on a TIN comb is pre-printed constants plus "
+    +"the comb's own outer-edge insets -- expected, not a defect.";
+  legend.appendChild(orangeNote);
+  var blueNote=document.createElement("b");
+  blueNote.textContent="blue is a candidate missing input, after excluding "
+    +"grey tint bands from what counts as a printed wall.";
+  legend.appendChild(blueNote);
   layer.appendChild(legend);
 }
 function run(){
-  var pages=document.querySelectorAll(".page"),totals={},report=[],i,result;
+  var results=census(),totals={},report=[],i,s,j,k,result,page;
   for(i=0;i<ORDER.length;i++){totals[ORDER[i]]=0;}
-  for(i=0;i<pages.length;i++){
-    result=pageRun(pages[i],report);
-    if(result===null){continue;}
-    paintPage(pages[i],result);
-    for(var s=0;s<ORDER.length;s++){totals[ORDER[s]]+=result.counts[ORDER[s]];}
+  for(i=0;i<results.length;i++){
+    result=results[i];
+    page=document.getElementById(result.page);
+    if(!page){continue;}
+    paintPage(page,result);
+    for(s=0;s<ORDER.length;s++){totals[ORDER[s]]+=result.counts[ORDER[s]];}
+    for(j=0;j<result.inputs.length;j++){
+      report.push({page:result.page,input:result.inputs[j].id,
+                   state:result.inputs[j].state,unreached:result.inputs[j].unreached});
+    }
+    for(k=0;k<result.marks.length;k++){
+      if(result.marks[k].state!=="vacant"){continue;}
+      report.push({page:result.page,input:null,state:"vacant",unreached:1,
+                   at:[result.marks[k].L.toFixed(1),result.marks[k].T.toFixed(1),
+                       (result.marks[k].R-result.marks[k].L).toFixed(1),
+                       (result.marks[k].B-result.marks[k].T).toFixed(1)].join(" ")});
+    }
   }
   window.formgenFieldDebug.report=report;
   return totals;
@@ -5430,7 +5618,191 @@ window.formgenFieldDebug={refresh:run,boxAt:boxAt,report:[]};
 })();""".replace("__FIELD_DEBUG_CSS__", json.dumps(FIELD_DEBUG_CSS)) \
         .replace("__RULE_POSITION_TOLERANCE_PT__", fmt(RULE_POSITION_TOLERANCE_PT)) \
         .replace("__RULE_WALL_COVERAGE__", fmt(RULE_WALL_COVERAGE)) \
-        .replace("__FIELD_MIN_SIZE_PT__", fmt(FIELD_MIN_SIZE_PT))
+        .replace("__FIELD_MIN_SIZE_PT__", fmt(FIELD_MIN_SIZE_PT)) \
+        .replace("__RULE_WALL_TINT_SPLIT_GRAY__", fmt(RULE_WALL_TINT_SPLIT_GRAY))
+
+
+# ---------------------------------------------------------------------------
+# The tab-walk debug viewer (T3)
+# ---------------------------------------------------------------------------
+#
+# `?debug=tab` renders a T2 run's own artifact -- forms/review/<slug>/
+# tab.json -- back onto the live document: green/red boxes and the tab
+# sequence number, from the JSON's own recorded pt geometry. It reads NOTHING
+# from the field layer (no `.c`, `.s`, `.layer-cells`, no `closest(`), the
+# same independence rule FIELD_DEBUG_JS follows and for the same reason: an
+# overlay that derives its expectation from the thing it is checking cannot
+# fail. Here the "different producer" is tab_check.py's own recorded walk,
+# not the rule layer, but the discipline is identical.
+#
+# It ships behind its own token (`debug=tab`, not `debug=fields`) so the two
+# overlays cannot be requested by accident together or interfere with each
+# other's DOM, and it follows the same four barriers: gated before any DOM
+# access; CSS scoped to @media screen with an @media print neutraliser;
+# print removes and reloads its own marks; and it creates no `div`.
+#
+# `tab.json` is fetched by a RELATIVE path worked out from the document's own
+# location, because the served root moves: `forms/<slug>/index.html` needs
+# `../review/<slug>/tab.json`, `forms/extra/<slug>/index.html` needs
+# `../../review/<slug>/tab.json`, and both are on one server root only after
+# `review-serve` was re-rooted at `forms/` (T3). Two failure modes are
+# distinguished and each gets its own actionable hint, never a silent blank
+# page: `file://` (fetch cannot read local JSON in Chromium) says to run
+# `just review-serve`; a fetch that resolves but 404s says to run
+# `just tab-check <slug>` first.
+
+TAB_DEBUG_SCREEN_CSS = (
+    '[data-tabdbg-layer]{position:absolute;left:0;top:0;right:0;bottom:0;'
+    'pointer-events:none;z-index:2147483645}'
+    '[data-tabdbg-mark]{position:absolute;box-sizing:border-box;display:block}'
+    '[data-tabdbg-mark="green"]{outline:1.5px solid #0a8a3e;'
+    'background:rgba(10,138,62,.18)}'
+    '[data-tabdbg-mark="red"]{outline:1.5px solid #d32f2f;'
+    'background:rgba(211,47,47,.22)}'
+    '[data-tabdbg-mark] b{position:absolute;left:0;top:-7pt;color:#fff;'
+    'font:bold 6.5pt/1.4 Arial,Helvetica,sans-serif;padding:0.5pt 2pt;'
+    'border-radius:1.5pt;white-space:nowrap}'
+    '[data-tabdbg-mark="green"] b{background:#0a8a3e}'
+    '[data-tabdbg-mark="red"] b{background:#d32f2f}'
+    '[data-tabdbg-hint]{position:fixed;left:8px;top:8px;z-index:2147483647;'
+    'background:#fff3cd;color:#664d03;border:1px solid #664d03;'
+    'padding:8px 10px;font:12px/1.4 system-ui,-apple-system,sans-serif;'
+    'max-width:60ch;box-shadow:0 1px 4px rgba(0,0,0,.35)}'
+)
+TAB_DEBUG_PRINT_CSS = (
+    '[data-tabdbg-layer]{display:none!important}'
+    '[data-tabdbg-hint]{display:none!important}'
+)
+TAB_DEBUG_CSS = ("@media screen{" + TAB_DEBUG_SCREEN_CSS + "}"
+                 "@media print{" + TAB_DEBUG_PRINT_CSS + "}")
+
+TAB_DEBUG_JS = r"""(function(){
+"use strict";
+/* An exact token, not a substring, and a different one from ?debug=fields so
+   the two overlays are never both requested by one query string. */
+var TOKEN="debug=tab";
+function requested(){
+  var query=String(window.location.search||"");
+  if(query.charAt(0)==="?"){query=query.slice(1);}
+  var parts=query.split("&");
+  for(var i=0;i<parts.length;i++){
+    if(parts[i]===TOKEN){return true;}
+  }
+  return false;
+}
+/* Nothing above this line has touched the document, and nothing below it runs
+   without the token -- the same byte-identical-render proof FIELD_DEBUG_JS
+   makes, re-proved here for this script by tab_debug_assertions(). */
+if(!requested()){return;}
+var CSS=__TAB_DEBUG_CSS__;
+
+/* TAB-JSON-TARGET-BEGIN -- pure, no DOM but for the one location.pathname
+   read: emit.py's self-test extracts this exact span and runs it under node
+   against synthetic pathnames, proving the ../ vs ../../ split against both
+   shapes forms/ actually contains rather than merely describing it.
+   The slug and the tab.json path are read from the document's OWN location,
+   never hard-coded and never read from any element on the page: `forms/
+   <slug>/index.html` needs one `../`, `forms/extra/<slug>/index.html` needs
+   two, and the only reliable signal for which is the path itself -- the
+   directory literally named "extra" immediately above the slug. */
+function tabJsonTarget(){
+  var raw=String(window.location.pathname||"").split("/");
+  var segments=[];
+  for(var i=0;i<raw.length;i++){if(raw[i].length){segments.push(raw[i]);}}
+  if(segments.length&&/\.html?$/i.test(segments[segments.length-1])){
+    segments.pop();
+  }
+  var slug=segments.length?segments[segments.length-1]:"";
+  var extra=segments.length>=2&&segments[segments.length-2]==="extra";
+  return {slug:slug,path:(extra?"../../review/":"../review/")+slug+"/tab.json"};
+}
+/* TAB-JSON-TARGET-END */
+function layerOf(page){
+  var layer=page.querySelector("[data-tabdbg-layer]");
+  if(!layer){
+    layer=document.createElement("aside");
+    layer.setAttribute("data-tabdbg-layer","");
+    page.appendChild(layer);
+  }
+  return layer;
+}
+function hint(message){
+  var box=document.createElement("aside");
+  box.setAttribute("data-tabdbg-hint","");
+  box.textContent=message;
+  box.addEventListener("click",function(){box.style.display="none";});
+  document.body.appendChild(box);
+}
+/* Draws exactly what tab.json recorded: no field-layer read, no re-derived
+   geometry, no re-judged verdict. `inputs[i].verdict` is one of "green",
+   "red-skipped" or "red-order" (tab_check.py's own three states); anything
+   other than "green" paints red here, because a reviewer scanning for
+   trouble does not need the two red reasons told apart by colour. */
+function paint(report){
+  var byPage={},i,inp;
+  for(i=0;i<report.inputs.length;i++){
+    inp=report.inputs[i];
+    (byPage[inp.page]=byPage[inp.page]||[]).push(inp);
+  }
+  var pages=document.querySelectorAll(".page"),p,m,pageIndex,marks,node,chip;
+  for(p=0;p<pages.length;p++){
+    m=/^page-(\d+)$/.exec(pages[p].id||"");
+    if(!m){continue;}
+    pageIndex=parseInt(m[1],10);
+    marks=byPage[pageIndex]||[];
+    var layer=layerOf(pages[p]);
+    while(layer.firstChild){layer.removeChild(layer.firstChild);}
+    for(i=0;i<marks.length;i++){
+      inp=marks[i];
+      node=document.createElement("i");
+      node.setAttribute("data-tabdbg-mark",inp.verdict==="green"?"green":"red");
+      node.style.left=inp.x_pt+"pt";node.style.top=inp.y_pt+"pt";
+      node.style.width=inp.w_pt+"pt";node.style.height=inp.h_pt+"pt";
+      node.title=inp.id+": "+inp.verdict
+        +(inp.reached_at?(" (reached #"+inp.reached_at+")"):" (never reached)");
+      chip=document.createElement("b");
+      chip.textContent=inp.reached_at?String(inp.reached_at):"×";
+      node.appendChild(chip);
+      layer.appendChild(node);
+    }
+  }
+}
+function drop(){
+  var nodes=document.querySelectorAll("[data-tabdbg-layer]"),i;
+  for(i=0;i<nodes.length;i++){nodes[i].parentNode.removeChild(nodes[i]);}
+}
+function start(){
+  var style=document.createElement("style");
+  style.id="formgen-tab-debug";
+  style.textContent=CSS;
+  document.head.appendChild(style);
+  if(window.location.protocol==="file:"){
+    hint("?debug=tab needs a server -- fetch() cannot read tab.json over "
+      +"file://. Run: just review-serve, then reload this page from "
+      +"http://127.0.0.1:4190/.");
+    return;
+  }
+  var target=tabJsonTarget();
+  fetch(target.path).then(function(resp){
+    if(!resp.ok){
+      hint("no tab.json for \""+target.slug+"\" (fetch " + resp.status
+        +"). Run: just tab-check "+target.slug+", then reload.");
+      return null;
+    }
+    return resp.json();
+  }).then(function(report){
+    if(report){paint(report);}
+  }).catch(function(err){
+    hint("fetch of "+target.path+" failed ("+err+"). Run: just review-serve, "
+      +"then just tab-check "+target.slug+".");
+  });
+}
+window.addEventListener("beforeprint",drop);
+window.addEventListener("afterprint",start);
+if(document.readyState==="complete"){start();}
+else{window.addEventListener("load",start);}
+})();""".replace("__TAB_DEBUG_CSS__", json.dumps(TAB_DEBUG_CSS))
+
 
 
 class Options:
@@ -6042,6 +6414,11 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
         # barriers that keep it out of the printed and packaged page.
         "<script>",
         FIELD_DEBUG_JS,
+        "</script>",
+        # Also inert until asked for, behind its own token so the two
+        # overlays cannot collide: see TAB_DEBUG_JS's own comment.
+        "<script>",
+        TAB_DEBUG_JS,
         "</script>",
         "</body>",
         "</html>",
@@ -6971,6 +7348,7 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     comb_writing_rectangle_assertions(plan, failures)
     writing_box_assertions(plan, failures)
     field_debug_assertions(html, failures)
+    tab_debug_assertions(html, failures)
 
 
 def _synthetic_comb(cells: int, x0: float, pitch: float,
@@ -7491,11 +7869,233 @@ def field_surface_assertions(layout: dict[str, Any], plan: dict[str, Any],
            f"{len(live.collapsed)} of {live.comb_count}", failures)
 
 
+FIELD_DEBUG_PURE_BEGIN = "/* PURE-GEOMETRY-BEGIN"
+FIELD_DEBUG_PURE_END = "/* PURE-GEOMETRY-END */"
+
+
+def _field_debug_pure_geometry_source() -> str:
+    """The exact, unmodified span of FIELD_DEBUG_JS the self-test executes.
+
+    Sliced by the two marker comments the script itself carries, so this is
+    never a re-implementation of the tone/box-finding logic: it is the
+    shipped bytes, verbatim, between two exact anchors.
+    """
+    start = FIELD_DEBUG_JS.index(FIELD_DEBUG_PURE_BEGIN)
+    end = FIELD_DEBUG_JS.index(FIELD_DEBUG_PURE_END) + len(FIELD_DEBUG_PURE_END)
+    return FIELD_DEBUG_JS[start:end]
+
+
+def _field_debug_constant_lines() -> str:
+    """The exact `var NAME=...;` lines the pure block's free variables need,
+    extracted from the shipped script rather than reconstructed from the
+    Python constants, so a drift between the two would show up here too."""
+    lines = []
+    for name in ("TOL", "WALL", "MIN_BOX", "TINT_SPLIT_GRAY",
+                 "STRUCTURAL_MAX_GRAY", "EPS", "PROBE",
+                 "ROUNDS", "PAPER"):
+        match = re.search(rf"var {name}=[^;]+;", FIELD_DEBUG_JS)
+        if match is None:
+            raise SystemExit(f"field_debug self-test: no `var {name}=...;` "
+                             f"found in FIELD_DEBUG_JS")
+        lines.append(match.group(0))
+    return "\n".join(lines)
+
+
+# The proven shape (F213, 1701-2018 p2 item 3 "Filer's Spouse Type"): a real
+# black wall around a narrow field, and a short grey tint fragment crossing
+# it -- 15.24pt wide on the source (h27, gray 0.8509), here 20pt, wider than
+# the 11pt-wide field it crosses but a fraction of the field's own 51pt
+# height. That is exactly the shape that let the fragment satisfy
+# `wallsOf`'s 90% coverage test against the NARROW field while being, on the
+# row it actually belongs to, the page-spanning band it really is. Probing at
+# (5,35) -- inside the true box, below the tint line -- correct code must
+# find the wall's real top (T=0); code with the split mutated to swallow the
+# fragment into the wall bucket must find the tint's own y1 (T=25) instead:
+# the fragment closing a false, too-short box, which is F213 itself,
+# reproduced in miniature and mutated back into existence on purpose.
+_FIELD_DEBUG_TONE_FIXTURE_RECTS = [
+    {"n": 0, "x": -1, "y": 0, "x1": 0, "y1": 50, "fill": "rgb(0, 0, 0)"},
+    {"n": 1, "x": 10, "y": 0, "x1": 11, "y1": 50, "fill": "rgb(0, 0, 0)"},
+    {"n": 2, "x": -1, "y": -1, "x1": 11, "y1": 0, "fill": "rgb(0, 0, 0)"},
+    {"n": 3, "x": -1, "y": 50, "x1": 11, "y1": 51, "fill": "rgb(0, 0, 0)"},
+    {"n": 4, "x": -5, "y": 24.5, "x1": 15, "y1": 25, "fill": "rgb(217, 217, 217)"},
+]
+
+
+def _field_debug_tone_probe_script(split_override: float | None) -> str:
+    """The extracted pure geometry, plus the synthetic case above, run under
+    node.
+
+    `split_override`, when given, is a scratch-copy MUTATION: the shipped
+    `var TINT_SPLIT_GRAY=...;` line is replaced with a different value in a
+    COPY of the constant lines before the script runs, never edited in place.
+    That is what proves the split is load-bearing rather than merely
+    present: a check that cannot be made to fail on a mutated input is not
+    evidence (house style -- see this module's other FIELD_DEBUG assertions
+    and extract.py's SELF_TEST_MUTATIONS for the same pattern).
+    """
+    constants = _field_debug_constant_lines()
+    if split_override is not None:
+        mutated_line = f"var TINT_SPLIT_GRAY={fmt(split_override)};"
+        constants, count = re.subn(r"var TINT_SPLIT_GRAY=[^;]+;",
+                                   mutated_line, constants)
+        if count != 1 or mutated_line not in constants:
+            raise SystemExit("field_debug self-test: mutation did not take")
+    pure = _field_debug_pure_geometry_source()
+    rects = json.dumps(_FIELD_DEBUG_TONE_FIXTURE_RECTS)
+    return (
+        f"{constants}\n{pure}\n"
+        f"var rects={rects};\n"
+        "var vis=visibleRects(rects);\n"
+        "var wallVis=vis.filter(function(r){return !isTintTone(r.fill);});\n"
+        "var box=boxAt(5,35,wallVis);\n"
+        "process.stdout.write(JSON.stringify(box));\n"
+    )
+
+
+def _run_node(script: str) -> Any:
+    node = shutil.which("node")
+    if node is None:
+        raise SystemExit("field_debug self-test: node is not on PATH, and a "
+                         "check that cannot be evaluated is a failure")
+    done = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    if done.returncode != 0:
+        raise SystemExit(f"field_debug self-test: node failed: {done.stderr}")
+    return json.loads(done.stdout)
+
+
+def field_debug_tone_mutation_assertions(failures: list[str]) -> None:
+    """Run the SHIPPED tone-classification bytes under node, twice.
+
+    The real split must exclude 1701-2018 p2's proven tint fragment (h27's
+    shape) from wall candidacy, recovering the field's true top wall. A
+    scratch-copy mutation that raises the split just above the tint band's
+    own grey value must reproduce the original defect on the identical
+    synthetic input -- proving RULE_WALL_TINT_SPLIT_GRAY is load-bearing in
+    the bytes that ship, not merely present in them.
+    """
+    real = _run_node(_field_debug_tone_probe_script(None))
+    _check(real is not None and real.get("T") == 0,
+           "the real tone split recovers the field's true wall past a tint "
+           "fragment (the proven 1701-2018 p2 item-3 shape, synthetic)",
+           f"{real}", failures)
+    mutated = _run_node(_field_debug_tone_probe_script(0.9))
+    _check(mutated is not None and mutated.get("T") == 25,
+           "a scratch-copy mutation that swallows the tint band into the "
+           "wall bucket reproduces the original defect on the identical "
+           "input -- the check can fail, so it is evidence",
+           f"{mutated}", failures)
+    _check(real != mutated,
+           "the split is load-bearing: the real and mutated verdicts differ "
+           "on the same synthetic case",
+           f"real={real} mutated={mutated}", failures)
+
+
+# The proven shape (F210, 1701-2018 p2's Schedule-1 squares): a wide tint band
+# painted FIRST, and a taller white knockout painted AFTER it that does NOT
+# fit wholly inside the tint's extent (it sticks out top and bottom) -- the
+# exact geometry that makes visibleRects() call the knockout invisible (no
+# EARLIER rect wholly contains it, so it is compared to PAPER, and paper is
+# white too) even though it is the real, topmost paint at the probe point.
+# Found live on 1701-2018 p2 while proving this package's own acceptance
+# criteria: the first cut of paintAt() read `vis` (visibleRects' output) and
+# reported these real vacant boxes as tinted decoration, which would have
+# broken F210's own "stays blue" requirement silently.
+_FIELD_DEBUG_PAINT_FIXTURE_RECTS = [
+    {"n": 0, "x": -10, "y": 24, "x1": 30, "y1": 36, "fill": "rgb(217, 217, 217)"},
+    {"n": 1, "x": 0, "y": 20, "x1": 10, "y1": 40, "fill": "rgb(255, 255, 255)"},
+]
+
+
+def _field_debug_paint_probe_script(source: str) -> str:
+    """paintAt(5, 30, <source>) over the F210-shaped fixture above, `source`
+    being the literal JS expression naming which array to search."""
+    constants = _field_debug_constant_lines()
+    pure = _field_debug_pure_geometry_source()
+    rects = json.dumps(_FIELD_DEBUG_PAINT_FIXTURE_RECTS)
+    return (
+        f"{constants}\n{pure}\n"
+        f"var rawRects={rects};\n"
+        "var vis=visibleRects(rawRects);\n"
+        f"process.stdout.write(JSON.stringify(paintAt(5,30,{source})));\n"
+    )
+
+
+def field_debug_paint_source_assertions(failures: list[str]) -> None:
+    """The vacant probe must read raw paint, not visibleRects' filtered view.
+
+    Both calls below run the identical, real, shipped `paintAt()` -- no
+    mutation is needed because the bug is in which ARGUMENT is passed, and
+    both arguments are real. `rawRects` recovers the true topmost paint
+    (white, F210's knockout); `vis` reproduces the defect this package found
+    and fixed while proving its own acceptance criteria (grey, the tint
+    underneath) because visibleRects() dropped a same-as-paper rect nothing
+    wholly contains.
+    """
+    correct = _run_node(_field_debug_paint_probe_script("rawRects"))
+    _check(correct == "rgb(255, 255, 255)",
+           "paintAt() over the RAW paint stack finds the true topmost paint "
+           "(the F210 knockout, white) past a same-as-paper rect "
+           "visibleRects() would have dropped",
+           f"{correct}", failures)
+    wrong_argument = _run_node(_field_debug_paint_probe_script("vis"))
+    _check(wrong_argument == "rgb(217, 217, 217)",
+           "the SAME paintAt(), given visibleRects' filtered view instead, "
+           "reproduces the defect on the identical point -- proving the "
+           "choice of argument is load-bearing, not cosmetic",
+           f"{wrong_argument}", failures)
+    _check(correct != wrong_argument,
+           "rawRects and vis disagree on the same probe point: the "
+           "distinction this package's fix depends on is real",
+           f"rawRects={correct} vis={wrong_argument}", failures)
+
+
+def _field_debug_decor_probe_script() -> str:
+    """Run the SHIPPED isTintTone/isDecorPaint on the three interior paints
+    the vacant probe actually meets: a 0.651 shading pad (0619-E's
+    centavo-separator compartments, rgb(166,166,166)), F210's knockout white,
+    and a 0.8509 tint band (rgb(217,217,217))."""
+    constants = _field_debug_constant_lines()
+    pure = _field_debug_pure_geometry_source()
+    return (
+        f"{constants}\n{pure}\n"
+        'var pad="rgb(166, 166, 166)";\n'
+        'var knockout="rgb(255, 255, 255)";\n'
+        'var tint="rgb(217, 217, 217)";\n'
+        "process.stdout.write(JSON.stringify({"
+        "padTint:isTintTone(pad),padDecor:isDecorPaint(pad),"
+        "koDecor:isDecorPaint(knockout),tintDecor:isDecorPaint(tint)"
+        "}));\n"
+    )
+
+
+def field_debug_interior_decor_assertions(failures: list[str]) -> None:
+    """A 0.651 STROKE is a wall; a 0.651 FILL under a box centre is a pad.
+
+    The stroke split (isTintTone, 0.70) and the interior test (isDecorPaint,
+    the pipeline's structural cutoff 0.15) must therefore DISAGREE about
+    0.651 -- that disagreement is the whole reason two functions exist. If a
+    refactor ever collapses them, 0619-E's twelve centavo-separator pads come
+    back as phantom vacant boxes, or F210's checkbox outlines stop bounding
+    boxes; either way this trips first. Run on the shipped bytes under node,
+    not described."""
+    verdict = _run_node(_field_debug_decor_probe_script())
+    parsed = json.loads(verdict) if isinstance(verdict, str) else verdict
+    _check(parsed == {"padTint": False, "padDecor": True,
+                      "koDecor": False, "tintDecor": True},
+           "a 0.651 pad is below the stroke split yet inside the interior "
+           "decoration band, knockout white is in neither, tint is in both",
+           f"{parsed}", failures)
+
+
 def field_debug_assertions(html: str, failures: list[str]) -> None:
     """The overlay cannot reach paper, and cannot move anything without asking.
 
     Four barriers, asserted one at a time, because "it is behind a flag" is the
     kind of claim that is true until a refactor and false silently afterwards.
+    Beyond the barriers: the tone split (F213), proven by RUNNING the shipped
+    bytes under node rather than by describing them, and the census callable
+    (T3+T4) tab_check.py depends on.
     """
     styles = re.findall(r"<style>(.*?)</style>", html, flags=re.S)
     _check(len(styles) == 1, "the document still ships exactly one stylesheet",
@@ -7511,16 +8111,42 @@ def field_debug_assertions(html: str, failures: list[str]) -> None:
            "the overlay ships once, behind its query string",
            "?debug=fields", failures)
 
-    # Barrier 1: the token gate precedes every statement that could touch the
-    # document, so a page without it renders exactly as it did before.
+    # Barrier 1: nothing before the gate can change what the page renders.
+    # window.formgenFieldCensus is a deliberate, documented exception (T3+T4,
+    # F213's fix and tab_check.py's blue census): it is reachable WITHOUT the
+    # token because tab_check.py calls it on forms nobody ever loads with
+    # ?debug=fields, and everything it reaches -- census -> pageCensus ->
+    # ruleRects/ptRect/the pure geometry -- only READS the document
+    # (getBoundingClientRect, getComputedStyle, querySelectorAll), which
+    # cannot itself change what renders. The invariant this barrier actually
+    # protects is narrower than "no document access before the gate": it is
+    # "no MUTATION and no LISTENER before the gate", checked by name so the
+    # sanctioned exception is not banned along with everything else
+    # "document." would have caught.
     guard = FIELD_DEBUG_JS.find("if(!requested()){return;}")
-    first_touch = min((index for index in
-                       (FIELD_DEBUG_JS.find("document."),
-                        FIELD_DEBUG_JS.find("addEventListener"))
-                       if index >= 0), default=-1)
-    _check(guard > 0 and first_touch > guard,
-           "the query-string gate precedes any access to the document",
-           f"gate at {guard}, first document access at {first_touch}", failures)
+    before_gate = FIELD_DEBUG_JS[:guard] if guard > 0 else ""
+    after_gate = FIELD_DEBUG_JS[guard:] if guard > 0 else FIELD_DEBUG_JS
+    _check(guard > 0 and "window.formgenFieldCensus=census;" in before_gate,
+           "the census callable is assigned before the gate, unconditionally",
+           f"gate at {guard}", failures)
+    mutators = ("createElement(", "appendChild(", "removeChild(",
+               "setAttribute(", "removeAttribute(", "addEventListener(",
+               "innerHTML", "outerHTML", "insertAdjacentHTML(",
+               "insertAdjacentElement(", "insertAdjacentText(",
+               "document.write(", "insertBefore(", "replaceChild(",
+               "replaceChildren(")
+    found_before = sorted(name for name in mutators if name in before_gate)
+    _check(guard > 0 and not found_before,
+           "nothing before the gate can mutate the document or register a "
+           "listener",
+           f"gate at {guard}, found before it: {found_before or 'none'}",
+           failures)
+    _check(all(name in after_gate for name in
+               ("createElement(", "appendChild(", "setAttribute(",
+                "addEventListener(")),
+           "the overlay's own painting -- creation, attributes, listeners -- "
+           "still happens, gated, after it",
+           "present after the gate", failures)
 
     # Barrier 2/3: every injected rule is inside @media screen or @media print,
     # proved by walking the braces rather than by matching a substring.
@@ -7565,7 +8191,8 @@ def field_debug_assertions(html: str, failures: list[str]) -> None:
     # The overlay may never relax a threshold the pipeline holds elsewhere.
     for name, value in (("TOL", RULE_POSITION_TOLERANCE_PT),
                         ("WALL", RULE_WALL_COVERAGE),
-                        ("MIN_BOX", FIELD_MIN_SIZE_PT)):
+                        ("MIN_BOX", FIELD_MIN_SIZE_PT),
+                        ("TINT_SPLIT_GRAY", RULE_WALL_TINT_SPLIT_GRAY)):
         _check(f"var {name}={fmt(value)};" in FIELD_DEBUG_JS,
                f"the overlay's {name} is the module's own constant",
                f"{fmt(value)}", failures)
@@ -7585,6 +8212,74 @@ def field_debug_assertions(html: str, failures: list[str]) -> None:
                f"the overlay never reads the field layer's {selector} container",
                "no path from the subject to the expectation", failures)
 
+    # F213: tint stops being a wall candidate, but still paints. The logic
+    # itself is proven by EXECUTING it below (field_debug_tone_mutation_
+    # assertions); this is only the wiring -- that the right array is passed
+    # to the right function.
+    _check("wallVis=vis.filter(function(r){return !isTintTone(r.fill);});"
+           in FIELD_DEBUG_JS,
+           "tint rects are filtered out of wall candidacy before allBoxes/"
+           "boxAt ever see them",
+           "wallVis excludes isTintTone", failures)
+    _check("allBoxes(wallVis)" in FIELD_DEBUG_JS
+           and "boxAt((inputs[i].x+inputs[i].x1)/2,(inputs[i].y+inputs[i].y1)"
+               "/2,wallVis)" in FIELD_DEBUG_JS,
+           "box-finding for both the printed-box census and the input-to-box "
+           "match uses the tint-filtered set",
+           "allBoxes(wallVis), boxAt(..., wallVis)", failures)
+    _check("isDecorPaint(paintAt((box.L+box.R)/2,(box.T+box.B)/2,rawRects))"
+           in FIELD_DEBUG_JS,
+           "the vacant probe reads the RAW, unfiltered paint stack, not "
+           "visibleRects' per-rect judgement (F210's own knockout squares "
+           "are the proof this must NOT be `vis`: a same-as-paper knockout "
+           "painted over a tint band is invisible to visibleRects but is "
+           "still the real, topmost paint at that point)",
+           "paintAt(..., rawRects), not vis or wallVis", failures)
+    _check(FIELD_DEBUG_PURE_BEGIN in FIELD_DEBUG_JS
+           and FIELD_DEBUG_PURE_END in FIELD_DEBUG_JS
+           and (FIELD_DEBUG_JS.index(FIELD_DEBUG_PURE_BEGIN)
+                < FIELD_DEBUG_JS.index(FIELD_DEBUG_PURE_END)),
+           "the tone/box-finding functions are marked as the pure span the "
+           "self-test extracts and executes",
+           "PURE-GEOMETRY-BEGIN...END present and ordered", failures)
+    field_debug_tone_mutation_assertions(failures)
+    field_debug_paint_source_assertions(failures)
+    field_debug_interior_decor_assertions(failures)
+
+    # T4-addendum: one source of truth for the census, callable by
+    # tab_check.py on a page that never carries ?debug=fields.
+    _check("function census(){" in FIELD_DEBUG_JS
+           and "window.formgenFieldCensus=census;" in FIELD_DEBUG_JS,
+           "window.formgenFieldCensus is exposed and backed by the real "
+           "census function",
+           "census() assigned to window.formgenFieldCensus", failures)
+    _check("results=census()" in FIELD_DEBUG_JS
+           and "paintPage(page,result);" in FIELD_DEBUG_JS,
+           "the visual overlay itself calls census() -- one computation, "
+           "never two",
+           "run() calls census(), then paints its result", failures)
+    _check("return {id:el.id," in FIELD_DEBUG_JS,
+           "ptRect carries an id string, not a DOM element reference, so "
+           "census() results can cross Playwright's evaluate() boundary",
+           "ptRect returns {id,...}", failures)
+    _check("el=document.getElementById(result.inputs[i].id);" in FIELD_DEBUG_JS,
+           "painting re-resolves elements by id from the census result, "
+           "rather than the census itself carrying element references",
+           "paintPage looks inputs up by id", failures)
+
+    # Legend honesty (F213's counting-units fix and the two reviewer notes).
+    _check("input(s) fill their printed box" in FIELD_DEBUG_JS
+           and "printed box(es) with no input, after tone filtering"
+               in FIELD_DEBUG_JS,
+           "the legend states which UNIT each count is over (input vs box)",
+           "LABELS text names its own unit", failures)
+    _check("orange on a TIN comb is pre-printed constants" in FIELD_DEBUG_JS
+           and "blue is a candidate missing input, after excluding"
+               in FIELD_DEBUG_JS,
+           "the legend explains the two marks reviewers ask about most: "
+           "orange on TIN combs, and what blue means after tone filtering",
+           "two explanatory legend lines present", failures)
+
     # The erosion moves INWARD, and this is a regression guard for a bug that
     # was written here: with the sign inverted the "eroded" box included its own
     # walls, and every field on both test forms reported as too small -- 1069
@@ -7602,6 +8297,131 @@ def field_debug_assertions(html: str, failures: list[str]) -> None:
     _check('createElement("div")' not in FIELD_DEBUG_JS,
            "the overlay creates no div, so .page:last-of-type still matches",
            "chrome is <aside> and <i>", failures)
+
+
+TAB_DEBUG_PATH_BEGIN = "/* TAB-JSON-TARGET-BEGIN"
+TAB_DEBUG_PATH_END = "/* TAB-JSON-TARGET-END */"
+
+
+def _tab_debug_path_source() -> str:
+    start = TAB_DEBUG_JS.index(TAB_DEBUG_PATH_BEGIN)
+    end = TAB_DEBUG_JS.index(TAB_DEBUG_PATH_END) + len(TAB_DEBUG_PATH_END)
+    return TAB_DEBUG_JS[start:end]
+
+
+def _tab_debug_path_for(pathname: str) -> dict[str, str]:
+    """Run the SHIPPED tabJsonTarget() under node against a synthetic
+    location.pathname, proving the ../ vs ../../ split by execution rather
+    than by describing it."""
+    script = (
+        "var window={location:{pathname:" + json.dumps(pathname) + "}};\n"
+        + _tab_debug_path_source()
+        + "\nprocess.stdout.write(JSON.stringify(tabJsonTarget()));\n"
+    )
+    return _run_node(script)
+
+
+def tab_debug_assertions(html: str, failures: list[str]) -> None:
+    """The tab-walk viewer (T3): same independence rule, same four barriers,
+    a different token, proven the same way FIELD_DEBUG_JS is proven.
+    """
+    styles = re.findall(r"<style>(.*?)</style>", html, flags=re.S)
+    _check(all("data-tabdbg-" not in sheet for sheet in styles),
+           "no tab-debug rule is in the emitted stylesheet",
+           "the viewer's CSS exists only as a runtime string", failures)
+    body = html.split('<script type="application/json"', 1)[0]
+    _check("data-tabdbg-" not in body,
+           "no tab-debug attribute is in the emitted markup",
+           "every mark is set at runtime", failures)
+    _check(html.count(TAB_DEBUG_JS) == 1 and "debug=tab" in html,
+           "the tab-walk viewer ships once, behind its own query string",
+           "?debug=tab", failures)
+    _check('var TOKEN="debug=fields";' in FIELD_DEBUG_JS
+           and 'var TOKEN="debug=tab";' in TAB_DEBUG_JS,
+           "the two overlays gate on their own distinct TOKEN, so neither "
+           "can be triggered by the other's query string",
+           'FIELD_DEBUG_JS TOKEN="debug=fields", TAB_DEBUG_JS TOKEN="debug=tab"',
+           failures)
+
+    guard = TAB_DEBUG_JS.find("if(!requested()){return;}")
+    first_touch = min((index for index in
+                       (TAB_DEBUG_JS.find("document."),
+                        TAB_DEBUG_JS.find("addEventListener"))
+                       if index >= 0), default=-1)
+    _check(guard > 0 and first_touch > guard,
+           "the query-string gate precedes any access to the document",
+           f"gate at {guard}, first document access at {first_touch}", failures)
+
+    depth, cursor, outside = 0, 0, []
+    for index, char in enumerate(TAB_DEBUG_CSS):
+        if char == "{":
+            if depth == 0:
+                outside.append(TAB_DEBUG_CSS[cursor:index])
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                cursor = index + 1
+    outside.append(TAB_DEBUG_CSS[cursor:])
+    _check(depth == 0 and [chunk.strip() for chunk in outside]
+           == ["@media screen", "@media print", ""],
+           "every tab-debug rule is inside a media block",
+           " | ".join(chunk.strip() for chunk in outside), failures)
+    declarations = re.findall(r"([a-z-]+)\s*:([^;}]*)", TAB_DEBUG_PRINT_CSS)
+    _check(bool(declarations) and all("!important" in value
+                                      for _name, value in declarations),
+           "the print block only neutralises, with !important",
+           "; ".join(f"{name}:{value.strip()}" for name, value in declarations),
+           failures)
+    _check('window.addEventListener("beforeprint",drop)' in TAB_DEBUG_JS
+           and 'window.addEventListener("afterprint",start)' in TAB_DEBUG_JS,
+           "the viewer leaves the document for the print itself",
+           "beforeprint drops its marks, afterprint redraws them", failures)
+    _check('createElement("div")' not in TAB_DEBUG_JS,
+           "the viewer creates no div, so .page:last-of-type still matches",
+           "chrome is <aside>, <i> and <b>", failures)
+
+    # No path from the subject (the field layer) to the expectation (the
+    # tab-walk artifact): the same independence rule FIELD_DEBUG_JS follows.
+    _check("fetch(" in TAB_DEBUG_JS,
+           "the viewer's expectation is fetched from tab_check.py's own "
+           "artifact, a different producer entirely",
+           "forms/review/<slug>/tab.json, not page_layout cells", failures)
+    for selector in ('".layer-cells"', '".c"', '".s"', "'.c'", "closest("):
+        _check(selector not in TAB_DEBUG_JS,
+               f"the viewer never reads the field layer's {selector} container",
+               "no path from the subject to the expectation", failures)
+
+    # The slug/relative-path logic, run for real under node against both
+    # shapes forms/ actually contains.
+    plain = _tab_debug_path_for("/1701-2018/index.html")
+    _check(plain == {"slug": "1701-2018", "path": "../review/1701-2018/tab.json"},
+           "forms/<slug>/index.html resolves one level up to review/<slug>",
+           f"{plain}", failures)
+    plain_dir = _tab_debug_path_for("/1701-2018/")
+    _check(plain_dir == plain,
+           "a directory URL with no index.html resolves the same as the file",
+           f"{plain_dir}", failures)
+    extra = _tab_debug_path_for("/extra/1800-2018/index.html")
+    _check(extra == {"slug": "1800-2018", "path": "../../review/1800-2018/tab.json"},
+           "forms/extra/<slug>/index.html resolves two levels up",
+           f"{extra}", failures)
+    nested_extra = _tab_debug_path_for("/forms/extra/1800-2018/index.html")
+    _check(nested_extra == extra,
+           "the split depends on the path shape, not on what is mounted "
+           "above forms/",
+           f"{nested_extra}", failures)
+
+    # The two actionable hints the spec asks for, by exact substring: a
+    # file:// load and a fetch 404 must never present the same blank page.
+    _check("fetch() cannot read tab.json over " in TAB_DEBUG_JS
+           and "just review-serve" in TAB_DEBUG_JS,
+           "file:// gets a hint naming the fix (no server, so fetch fails)",
+           "hint text present", failures)
+    _check("just tab-check " in TAB_DEBUG_JS,
+           "a fetch that resolves but 404s gets a hint naming the fix "
+           "(tab_check.py has not run for this slug)",
+           "hint text present", failures)
 
 
 def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],

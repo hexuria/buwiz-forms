@@ -145,11 +145,15 @@ review-clean:
     if (Test-Path forms/review) { Remove-Item forms/review -Recurse -Force }
     Write-Host "forms/review cleared -- the gate needs a clean tree, so commit or clear this before running it."
 
-# Serve forms/review/ so tab_check's artifacts can be reviewed without
-# tabbing anything and without a file:// path -- from a phone on the same
-# network if need be.
+# Serve forms/ (not forms/review/) so both a generated form's index.html AND
+# tab_check's forms/review/<slug>/tab.json sit under ONE server root: the
+# ?debug=tab overlay in forms/<slug>/index.html fetches
+# ../review/<slug>/tab.json relative to itself, which only resolves if both
+# trees share a root. This also still serves tab_check's page-<N>.png
+# artifacts and forms/review/index.html without tabbing anything and without
+# a file:// path -- from a phone on the same network if need be.
 review-serve:
-    cd forms/review && python3 -m http.server 4190 --bind 127.0.0.1
+    cd forms && python3 -m http.server 4190 --bind 127.0.0.1
 
 # Build the tracked-contract, local-only HTML renderer before any package copies
 # the assets directory. The generated bundle stays ignored, so clean packages
