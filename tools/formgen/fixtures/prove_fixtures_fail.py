@@ -328,6 +328,38 @@ PROBE_UNRESOLVABLE_FACE_OP = b"/F2 10 Tf"
 PROBE_THICK_RESOLVED_FACE_OP = b"/F1 40 Tf"
 
 
+def mutate_rule_origin() -> None:
+    """Never draw the merge-partner rect, so the underscore run stays isolated.
+
+    Its blank is still drawn, by the same face at the same size on the same
+    baseline, and still becomes a rule -- so the page still carries all three
+    of the probe's shapes and the isolated vector bar and the isolated
+    underscore run are both untouched. What is gone is the ONE STROKE ON
+    PAPER the merge case exists to recognise: without the abutting vector
+    fragment, the run at IR y 41.26 publishes alone, at its own extent
+    (19.78 -> 42.46) rather than the merged (19.78 -> 60.46), and at its own
+    true origin, RULE_ORIGIN_TEXT_UNDERSCORE -- not the mixed-provenance
+    RULE_ORIGIN_VECTOR the pinned table names for that band. Both the lost
+    merged rule and the unnamed isolated one are the SAME check's evidence.
+
+    Counted rather than replaced blind, for the same reason as mutate_clips: a
+    pattern that stopped matching would mutate nothing, and a case that
+    mutates nothing proves nothing.
+    """
+    stream = extract.RULE_ORIGIN_PROBE_STREAM
+    partner = RULE_ORIGIN_PROBE_MERGE_PARTNER_OP
+    _one_operator(stream, partner, "rule-origin probe")
+    extract.RULE_ORIGIN_PROBE_STREAM = stream.replace(partner, b"")
+
+
+# The rule-origin probe's merge-partner rect: a vector-drawn bar placed at the
+# underscore run's own measured ink band so it merges into one rule with it.
+# Named for the same reason as PROBE_SCISSORS: a probe page rewritten around a
+# different band or offset must fail this case loudly rather than being
+# half-patched in silence.
+RULE_ORIGIN_PROBE_MERGE_PARTNER_OP = b"42.46 158.24 18.0 0.5 re f\n"
+
+
 def mutate_glyph_ink() -> None:
     """Set the unresolvable run in the resolvable face: `/F2 10 Tf` -> `/F1`.
 
@@ -440,6 +472,8 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
      "hyphens", mutate_ruled_blank_floor),
     ("ruled-blank-fail-closed", "the blank probe's unresolvable face is the "
      "resolvable one at 40pt", mutate_ruled_blank_fail_closed),
+    ("rule-origin", "the origin probe's merge-partner rect is never drawn",
+     mutate_rule_origin),
     ("glyph-ink", "the ink probe's unresolvable face is the resolvable one",
      mutate_glyph_ink),
     ("glyph-ink", "the ink probe's embedded program is never set type in",
@@ -453,7 +487,7 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
 # global and forgetting to put it back would leak into the next case and
 # misattribute its result -- and three cases patch one stream, so a leak here
 # would read as a check standing in for another. The probe streams are on this
-# list for that reason and no other: they are the five subjects that do not live
+# list for that reason and no other: they are the six subjects that do not live
 # in the corpus.
 PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "GREY_LIGHT"), (fixtures, "GREY_MID"),
@@ -461,6 +495,7 @@ PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
              (extract, "CLIP_PROBE_STREAM"), (extract, "CAP_PROBE_STREAM"),
              (extract, "RULED_BLANK_PROBE_STREAM"),
+             (extract, "RULE_ORIGIN_PROBE_STREAM"),
              (extract, "BASELINE_PROBE_STREAM"),
              (extract, "GLYPH_INK_PROBE_STREAM"))
 

@@ -99,6 +99,29 @@ RULED_BLANK_MIN_GLYPHS = 3
 RULED_BLANK_CHARACTER = "_"
 RULED_BLANK_CODEPOINT = ord(RULED_BLANK_CHARACTER)
 
+# Every rule's provenance, explicit rather than inferred from its other fields.
+# Before this, all 55,143 rules in the corpus shared exactly one key set and
+# nothing in it said whether a bar was drawn by a path operator or measured off
+# a run of underscore glyphs (see `ruled_blank_bars`) -- so a "label" cell with
+# an underscore-drawn writing line and a "label" cell with an ordinary printed
+# rule under it were the same shape to every downstream reader (F148/F149).
+# `RULE_ORIGIN_TEXT_UNDERSCORE` is reserved for a bar `ruled_blank_bars`
+# measured; every other bar -- a filled rect, a stroked edge, a zero-width
+# line -- is `RULE_ORIGIN_VECTOR`. Explicit rather than "absent means vector",
+# because a missing key is a weaker contract than a stated one and costs
+# nothing here: every rule already passes through `Segment.to_ir`.
+#
+# `extract_segments` unions a vector bar and an abutting underscore bar on the
+# same band into ONE rule -- "one stroke on paper", by that function's own
+# docstring -- and a merged rule's origin is `RULE_ORIGIN_TEXT_UNDERSCORE`
+# ONLY when every contributor is: a vector fragment abutting a writing line is
+# both kinds of ink at once, and calling the whole thing a writing surface the
+# moment a downstream reader can no longer tell which part is genuinely blank
+# would be a guess dressed as a measurement, not the fact this field exists to
+# state. See `merge_intervals`.
+RULE_ORIGIN_VECTOR = "vector"
+RULE_ORIGIN_TEXT_UNDERSCORE = "text-underscore"
+
 # Places the em-relative outline box is published to. An em is a size
 # multiplier rather than a coordinate, so QUANT does not apply to it: at
 # 39.535pt, the largest text size this corpus sets (2553 page 1's masthead),
@@ -204,11 +227,11 @@ class Segment:
     """One maximal axis-aligned filled bar."""
 
     __slots__ = ("axis", "near", "far", "start", "end", "gray", "rgb",
-                 "paint_seq", "paint_seq_max", "paint_spans")
+                 "paint_seq", "paint_seq_max", "origin", "paint_spans")
 
     def __init__(self, axis: str, near: float, far: float, start: float, end: float,
                  gray: float | None, rgb: tuple[float, float, float] | None,
-                 paint_seq: int, paint_seq_max: int,
+                 paint_seq: int, paint_seq_max: int, origin: str,
                  paint_spans: Sequence[tuple[float, float, int]]) -> None:
         self.axis = axis      # "h" or "v"
         self.near = near      # y0 for h, x0 for v
@@ -219,6 +242,7 @@ class Segment:
         self.rgb = rgb
         self.paint_seq = paint_seq          # first contributing op
         self.paint_seq_max = paint_seq_max  # last contributing op
+        self.origin = origin  # RULE_ORIGIN_VECTOR or RULE_ORIGIN_TEXT_UNDERSCORE
         # Every offered long-axis interval survives, including exact duplicates.
         # The canonical geometry-first order is part of the extractor contract;
         # paint_seq retains the independent source paint order.
@@ -248,6 +272,7 @@ class Segment:
             "role": classify_tone(self.gray),
             "paint_seq": self.paint_seq,
             "paint_seq_max": self.paint_seq_max,
+            "origin": self.origin,
             "paint_spans": [
                 {"start_pt": q(start), "end_pt": q(end), "paint_seq": seq}
                 for start, end, seq in self.paint_spans
@@ -255,9 +280,9 @@ class Segment:
         }
 
 
-def merge_intervals(intervals: list[tuple[float, float, int]]
+def merge_intervals(intervals: list[tuple[float, float, int, str]]
                     ) -> list[tuple[
-                        float, float, int, int,
+                        float, float, int, int, str,
                         tuple[tuple[float, float, int], ...],
                     ]]:
     """Union 1-D intervals, joining anything within JOIN_EPSILON_PT.
@@ -270,12 +295,24 @@ def merge_intervals(intervals: list[tuple[float, float, int]]
     late joint patch records only its tiny interval. That distinction is what
     lets lattice.py reconstruct exact per-slab paint order instead of assigning
     the merged hull to every contributing op.
+
+    Each input also carries its ORIGIN -- `RULE_ORIGIN_VECTOR` for a path-drawn
+    bar, `RULE_ORIGIN_TEXT_UNDERSCORE` for one `ruled_blank_bars` measured off a
+    run of underscore glyphs. A merged run's own origin is
+    `RULE_ORIGIN_TEXT_UNDERSCORE` only when EVERY contributor is: one vector
+    fragment abutting an underscore bar on the same band is one stroke on paper
+    (see `extract_segments`), and it is both kinds of ink, so it is reported as
+    `RULE_ORIGIN_VECTOR` rather than guessed to be a writing line just because
+    part of it is. The per-contributor origin is not itself retained in the
+    output `paint_spans` -- the aggregate above is the fact a reader needs, and
+    keeping the contract `(start, end, paint_seq)` unchanged there is what lets
+    every existing reader of a merged span's contributors keep working.
     """
     if not intervals:
         return []
 
-    ordered: list[tuple[float, float, int]] = []
-    for start, end, seq in intervals:
+    ordered: list[tuple[float, float, int, str]] = []
+    for start, end, seq, origin in intervals:
         if (isinstance(start, bool) or not isinstance(start, (int, float))
                 or isinstance(end, bool) or not isinstance(end, (int, float))
                 or not math.isfinite(float(start))
@@ -283,27 +320,33 @@ def merge_intervals(intervals: list[tuple[float, float, int]]
             raise ValueError(f"invalid paint interval coordinates: {(start, end)!r}")
         if isinstance(seq, bool) or not isinstance(seq, int) or seq < 0:
             raise ValueError(f"invalid paint interval ordinal: {seq!r}")
-        quantised = (q(start), q(end), seq)
+        if not isinstance(origin, str) or not origin:
+            raise ValueError(f"invalid paint interval origin: {origin!r}")
+        quantised = (q(start), q(end), seq, origin)
         if quantised[1] <= quantised[0]:
             raise ValueError(f"invalid paint interval extent: {quantised[:2]!r}")
         ordered.append(quantised)
 
-    ordered.sort(key=lambda span: (span[0], span[1], span[2]))
+    ordered.sort(key=lambda span: (span[0], span[1], span[2], span[3]))
     first = ordered[0]
     merged: list[list[Any]] = [
-        [first[0], first[1], first[2], first[2], [first]],
+        [first[0], first[1], first[2], first[2], first[3], [first]],
     ]
-    for start, end, seq in ordered[1:]:
+    for start, end, seq, origin in ordered[1:]:
         if start <= merged[-1][1] + JOIN_EPSILON_PT:
             merged[-1][1] = max(merged[-1][1], end)
             merged[-1][2] = min(merged[-1][2], seq)
             merged[-1][3] = max(merged[-1][3], seq)
-            merged[-1][4].append((start, end, seq))
+            if origin != merged[-1][4]:
+                merged[-1][4] = RULE_ORIGIN_VECTOR
+            merged[-1][5].append((start, end, seq, origin))
         else:
-            merged.append([start, end, seq, seq, [(start, end, seq)]])
+            merged.append([start, end, seq, seq, origin,
+                           [(start, end, seq, origin)]])
     return [
-        (q(a), q(b), lo, hi, tuple(spans))
-        for a, b, lo, hi, spans in merged
+        (q(a), q(b), lo, hi, origin,
+         tuple((s, e, sq) for s, e, sq, _origin in spans))
+        for a, b, lo, hi, origin, spans in merged
     ]
 
 
@@ -623,16 +666,19 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder,
     appended afterwards, because a bar that abuts a drawn rule of the same tone
     on the same band is one stroke on paper: emitting it as two would print two
     abutting rects, and re-extracting our own print would union them back into
-    one and report the pair as a missing rule against an extra one.
+    one and report the pair as a missing rule against an extra one. `offer`
+    tags every interval it routes with its origin, so that union still knows,
+    per contributor, which kind of ink it was -- see `merge_intervals`.
     """
-    h_groups: dict[tuple[float, float, float | None, Any], list[tuple[float, float, int]]] = (
-        collections.defaultdict(list))
-    v_groups: dict[tuple[float, float, float | None, Any], list[tuple[float, float, int]]] = (
-        collections.defaultdict(list))
+    h_groups: dict[tuple[float, float, float | None, Any],
+                   list[tuple[float, float, int, str]]] = collections.defaultdict(list)
+    v_groups: dict[tuple[float, float, float | None, Any],
+                   list[tuple[float, float, int, str]]] = collections.defaultdict(list)
 
     def offer(x0: float, y0: float, x1: float, y1: float,
               gray: float | None, rgb: Any, seq: int,
-              scissor: tuple[float, float, float, float] | None) -> None:
+              scissor: tuple[float, float, float, float] | None,
+              origin: str = RULE_ORIGIN_VECTOR) -> None:
         """Route one axis-aligned bar, as its scissor lets it through, into the
         horizontal and/or vertical group. Raw coordinates in; the quantisation
         happens after the clip, because the clip is where the bar really ends."""
@@ -644,9 +690,9 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder,
         if width <= 0 or height <= 0:
             return
         if height <= MAX_RULE_THICKNESS_PT:
-            h_groups[(y0, y1, gray, rgb)].append((x0, x1, seq))
+            h_groups[(y0, y1, gray, rgb)].append((x0, x1, seq, origin))
         if width <= MAX_RULE_THICKNESS_PT:
-            v_groups[(x0, x1, gray, rgb)].append((y0, y1, seq))
+            v_groups[(x0, x1, gray, rgb)].append((y0, y1, seq, origin))
 
     for index, item in enumerate(drawings):
         if not is_rectilinear(item):
@@ -729,17 +775,18 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder,
         # either, so the glyphs these bars replace were already published
         # unclipped. Inventing one here would be a new claim, not a kept one.
         offer(bar["x0"], bar["y0"], bar["x1"], bar["y1"],
-              bar["gray"], bar["rgb"], bar["paint_seq"], None)
+              bar["gray"], bar["rgb"], bar["paint_seq"], None,
+              origin=RULE_ORIGIN_TEXT_UNDERSCORE)
 
     segments: list[Segment] = []
     for (near, far, gray, rgb), spans in h_groups.items():
-        for start, end, lo, hi, paint_spans in merge_intervals(spans):
+        for start, end, lo, hi, origin, paint_spans in merge_intervals(spans):
             segments.append(Segment(
-                "h", near, far, start, end, gray, rgb, lo, hi, paint_spans))
+                "h", near, far, start, end, gray, rgb, lo, hi, origin, paint_spans))
     for (near, far, gray, rgb), spans in v_groups.items():
-        for start, end, lo, hi, paint_spans in merge_intervals(spans):
+        for start, end, lo, hi, origin, paint_spans in merge_intervals(spans):
             segments.append(Segment(
-                "v", near, far, start, end, gray, rgb, lo, hi, paint_spans))
+                "v", near, far, start, end, gray, rgb, lo, hi, origin, paint_spans))
 
     # A lone joint square that merged into nothing is noise, not structure.
     segments = [s for s in segments if s.length > MAX_RULE_THICKNESS_PT]
@@ -2455,24 +2502,32 @@ FIXTURE_PROFILE = SelfTestProfile(
 # within the source join epsilon. Exact equality below proves that contributors
 # stay scoped to their own cluster and that neither deduplication nor hull
 # expansion can turn the late patch into a full repaint.
-SELF_TEST_MERGE_INTERVALS: tuple[tuple[float, float, int], ...] = (
-    (30.0, 31.0, 12),
-    (5.0, 5.25, 99),
-    (0.0, 10.0, 8),
-    (31.01, 32.0, 10),
-    (9.5, 12.0, 3),
-    (0.0, 10.0, 7),
-    (0.0, 10.0, 8),
+#
+# Cluster one's exact-duplicate contributor is planted as
+# RULE_ORIGIN_TEXT_UNDERSCORE against four RULE_ORIGIN_VECTOR neighbours, so
+# the same corpus that proves contributor scoping also proves the origin
+# aggregation: a cluster with even one different origin among its contributors
+# reports RULE_ORIGIN_VECTOR, never the outvoted one. Cluster two is uniformly
+# RULE_ORIGIN_TEXT_UNDERSCORE and proves the opposite side -- a pure cluster
+# keeps the origin every contributor shares.
+SELF_TEST_MERGE_INTERVALS: tuple[tuple[float, float, int, str], ...] = (
+    (30.0, 31.0, 12, RULE_ORIGIN_TEXT_UNDERSCORE),
+    (5.0, 5.25, 99, RULE_ORIGIN_VECTOR),
+    (0.0, 10.0, 8, RULE_ORIGIN_VECTOR),
+    (31.01, 32.0, 10, RULE_ORIGIN_TEXT_UNDERSCORE),
+    (9.5, 12.0, 3, RULE_ORIGIN_VECTOR),
+    (0.0, 10.0, 7, RULE_ORIGIN_VECTOR),
+    (0.0, 10.0, 8, RULE_ORIGIN_TEXT_UNDERSCORE),
 )
 SELF_TEST_MERGED_INTERVALS = [
-    (0.0, 12.0, 3, 99, (
+    (0.0, 12.0, 3, 99, RULE_ORIGIN_VECTOR, (
         (0.0, 10.0, 7),
         (0.0, 10.0, 8),
         (0.0, 10.0, 8),
         (5.0, 5.25, 99),
         (9.5, 12.0, 3),
     )),
-    (30.0, 32.0, 10, 12, (
+    (30.0, 32.0, 10, 12, RULE_ORIGIN_TEXT_UNDERSCORE, (
         (30.0, 31.0, 12),
         (31.01, 32.0, 10),
     )),
@@ -2836,6 +2891,76 @@ def ruled_blank_probe_ir() -> dict[str, Any]:
             "stats": ir["stats"]}
 
 
+# A sixth written-here page, for the sixth question no form settles on its
+# own: a rule's ORIGIN. Three shapes, on three bands far enough apart that
+# none of them can join another:
+#
+#   * an isolated vector-drawn bar -- RULE_ORIGIN_VECTOR, uncontested;
+#   * an isolated run of underscores -- RULE_ORIGIN_TEXT_UNDERSCORE, the shape
+#     `ruled_blank_bars` exists for;
+#   * the same underscore run, but with a vector-drawn rect abutting it on the
+#     SAME band -- one merged rule, "one stroke on paper" by
+#     `extract_segments`' own reasoning, and RULE_ORIGIN_VECTOR because not
+#     every contributor to it is a writing line.
+#
+# Page is 200x200 and PDF y counts up from the bottom, so an IR y is the
+# 200-complement. Every text op is /F1 Helvetica at 10pt, the corpus's own
+# resolvable base-14 face, so the glyph ink band is exactly derivable and the
+# published boxes below are not guessed -- they are MuPDF's own measurement,
+# reproduced once here so a rewritten probe fails loudly rather than silently.
+RULE_ORIGIN_PROBE_STREAM = b"""0 g
+10 20 40 1.2 re f
+42.46 158.24 18.0 0.5 re f
+BT
+/F1 10 Tf
+0 g
+20 160 Td
+(____) Tj
+ET
+BT
+/F1 10 Tf
+0 g
+20 100 Td
+(____) Tj
+ET
+"""
+
+RULE_ORIGIN_PROBE_RESOURCES = b"<</Font<</F1 5 0 R>>>>"
+RULE_ORIGIN_PROBE_FONTS = (
+    b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>",
+)
+
+# (box, thickness, origin, why). The merge-partner rect at PDF (42.46, 158.24,
+# 18.0, 0.5) is placed at the underscore run's OWN measured ink band -- IR y
+# 41.26 -> 41.76, the same 0.5pt Helvetica underscore band the ruled-blank
+# probe pins -- so it lands in the identical `(near, far, gray, rgb)` bucket
+# `extract_segments.offer` groups by and merges with it, rather than merely
+# looking close on paper.
+RULE_ORIGIN_PROBE_RULES: tuple[
+    tuple[tuple[float, float, float, float], float, str, str], ...
+] = (
+    ((10.0, 178.8, 50.0, 180.0), 1.2, RULE_ORIGIN_VECTOR,
+     "an isolated vector-drawn bar, nothing else on its band"),
+    ((19.78, 101.26, 42.46, 101.76), 0.5, RULE_ORIGIN_TEXT_UNDERSCORE,
+     "an isolated run of underscores, nothing else on its band"),
+    ((19.78, 41.26, 60.46, 41.76), 0.5, RULE_ORIGIN_VECTOR,
+     "an underscore run merged with an abutting vector rect on the same "
+     "band -- one stroke on paper, and not every contributor is a writing "
+     "line"),
+)
+
+
+def rule_origin_probe_ir() -> dict[str, Any]:
+    """The provenance probe page's rules."""
+    doc = fitz.open(stream=probe_pdf(RULE_ORIGIN_PROBE_STREAM,
+                                     RULE_ORIGIN_PROBE_RESOURCES,
+                                     RULE_ORIGIN_PROBE_FONTS),
+                    filetype="pdf")
+    ir = extract_page(doc[0], doc, 1)
+    doc.close()
+    return {"rules": ir["rules"]}
+
+
 # A fourth written-here page, for the fourth question no form can settle on its
 # own: what happens when MuPDF's line builder puts two baselines in one span.
 # The official corpus does carry the shape -- 24 spans across 11 forms -- but
@@ -3172,6 +3297,9 @@ def gather_evidence(profile: SelfTestProfile,
         # And for a run of underscores, whose two fail-closed cases no form in
         # either corpus states.
         "ruled_blank_probe": ruled_blank_probe_ir(),
+        # And for a rule's origin, whose merged-and-mixed case no form in
+        # either corpus is pinned to state.
+        "rule_origin_probe": rule_origin_probe_ir(),
         # And for a rawdict span carrying two baselines, which the tracked
         # corpus does not.
         "baseline_probe": baseline_probe_ir(),
@@ -3798,6 +3926,40 @@ def check_ruled_blank_fail_closed(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def check_rule_origin(evidence: dict[str, Any]) -> list[str]:
+    """Every rule states how its ink was drawn, and a mixed one is honest about it.
+
+    Both directions, as with every other probe here: a rule missing from this
+    table and a rule this table names but the page no longer publishes are the
+    same failure seen from opposite sides. The merged case is the one that
+    matters -- an underscore bar and an abutting vector fragment on the same
+    band publish as ONE rule (`extract_segments`' own "one stroke on paper"),
+    and that rule must read `RULE_ORIGIN_VECTOR`, not the writing-line origin
+    of only one of its two contributors.
+    """
+    probe = evidence["rule_origin_probe"]
+    failures: list[str] = []
+    want = {box: (thickness, origin, why)
+            for box, thickness, origin, why in RULE_ORIGIN_PROBE_RULES}
+    got = {(rule["x0"], rule["y0"], rule["x1"], rule["y1"]): rule
+           for rule in probe["rules"]}
+    for box, (thickness, origin, why) in want.items():
+        rule = got.get(box)
+        if rule is None:
+            failures.append(f"rule-origin probe lost the rule at {box} ({why})")
+            continue
+        if rule["thickness_pt"] != thickness:
+            failures.append(f"rule-origin probe's rule at {box} is "
+                            f"{rule['thickness_pt']}pt thick, expected {thickness}")
+        if rule.get("origin") != origin:
+            failures.append(f"rule-origin probe's rule at {box} carries origin "
+                            f"{rule.get('origin')!r}, expected {origin!r} ({why})")
+    for box in sorted(got.keys() - want.keys()):
+        failures.append(f"rule-origin probe painted a rule at {box} that "
+                        f"nothing on its page draws")
+    return failures
+
+
 def check_glyph_ink(evidence: dict[str, Any]) -> list[str]:
     """A glyph is published at its own outline, or at the advance box and counted.
 
@@ -4136,6 +4298,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("ruled-blank-split", check_ruled_blank_split),
     ("ruled-blank-floor", check_ruled_blank_floor),
     ("ruled-blank-fail-closed", check_ruled_blank_fail_closed),
+    ("rule-origin", check_rule_origin),
     ("glyph-ink", check_glyph_ink),
     ("glyph-ink-fail-closed", check_glyph_ink_fail_closed),
     ("baseline-split", check_baseline_split),
@@ -4177,9 +4340,9 @@ def mutate_paint_spans(evidence: dict[str, Any]) -> None:
 def mutate_interval_provenance(evidence: dict[str, Any]) -> None:
     """Lose one exact duplicate while leaving the merged hull and range intact."""
     first = list(evidence["merged_intervals"][0])
-    spans = list(first[4])
+    spans = list(first[5])
     del spans[2]
-    first[4] = tuple(spans)
+    first[5] = tuple(spans)
     evidence["merged_intervals"][0] = tuple(first)
 
 
@@ -4306,6 +4469,22 @@ def mutate_ruled_blank_fail_closed(evidence: dict[str, Any]) -> None:
                              "retained blank")
 
 
+def mutate_rule_origin(evidence: dict[str, Any]) -> None:
+    """Mislabel the probe's pure vector rule as an underscore-drawn one.
+
+    A rule the page draws with nothing but a path operator carrying
+    RULE_ORIGIN_TEXT_UNDERSCORE is exactly the reading that would hand a
+    taxpayer a writing surface over an ordinary structural rule that happens
+    to share a band with nothing else.
+    """
+    probe = evidence["rule_origin_probe"]
+    for rule in probe["rules"]:
+        if rule.get("origin") == RULE_ORIGIN_VECTOR:
+            rule["origin"] = RULE_ORIGIN_TEXT_UNDERSCORE
+            return
+    raise AssertionError("rule-origin mutation found no vector-origin rule")
+
+
 def mutate_glyph_ink(evidence: dict[str, Any]) -> None:
     """Charge the dot with its whole advance box, as the advance view did.
 
@@ -4401,6 +4580,8 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
      "does not set", mutate_glyph_ink_fail_closed),
     ("ruled-blank-fail-closed", "a blank with no derivable band is dropped "
      "instead of kept as text", mutate_ruled_blank_fail_closed),
+    ("rule-origin", "a pure vector rule is mislabelled as underscore-drawn",
+     mutate_rule_origin),
     ("baseline-split", "a span carrying two baselines is published as one run",
      mutate_baseline_split),
     ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
@@ -4441,10 +4622,10 @@ def mutation_probes(evidence: dict[str, Any], stream: Any) -> tuple[list[str], i
 
 def paint_span_contract_probes(stream: Any) -> tuple[list[str], int]:
     """Prove malformed contributor contracts are rejected, case by case."""
-    start, end, first, last, spans = SELF_TEST_MERGED_INTERVALS[0]
+    start, end, first, last, origin, spans = SELF_TEST_MERGED_INTERVALS[0]
     valid = Segment(
         "h", 20.0, 20.48, start, end, 0.0, None,
-        first, last, spans,
+        first, last, origin, spans,
     ).to_ir(0)
     failures: list[str] = []
     unexpected = validate_rule_paint_spans(valid, "valid synthetic rule")
