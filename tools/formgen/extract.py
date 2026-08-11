@@ -2360,6 +2360,28 @@ SELF_TEST_TONES: tuple[tuple[float, str], ...] = (
 SELF_TEST_CHECKBOX_SQUARE: tuple[str, float, float, float, float, float] = (
     "1701", 31.44, 359.76, 42.72, 370.56, 0.72)
 
+# F211's signature box: (form code, the box's own top rule's y-CENTRE, the
+# box's own height, the top-left caption's exact text, that caption's own
+# y1). `emit.SignatureBoxWriting` claims a `label` cell whose only printed
+# ink sits within the top `emit.SIGNATURE_BOX_CAPTION_BAND` (0.4) of the
+# box's own height; this pins the arithmetic on 2551Q page 1's "For
+# Individual:" box (`p1c99` in the layout the rest of this corpus builds),
+# drawn by rule h95 (top) and h96 (bottom, shared with the caption below --
+# see SELF_TEST_SIGNATURE_LINE).
+SELF_TEST_SIGNATURE_BOX: tuple[str, float, float, str, float] = (
+    "2551Q", 631.78, 40.8, "For Individual: ", 641.15)
+
+# F212's signature line: the SAME box's own bottom rule (h96), and the
+# caption below it naming "Signature over Printed Name...". (form code, the
+# divider rule's own y-CENTRE, the caption text `emit._signature_line_
+# caption` matches, that caption's own y0). `emit.SignatureLineBinding`
+# binds a caption to the box directly above it -- the `BureauReservation`
+# precedent, reversed -- and this pins that the caption's own run sits BELOW
+# the wall the box above it shares, on 2551Q page 1's own "Signature over
+# Printed Name of Taxpayer/Authorized Representative/Tax Agent..." caption.
+SELF_TEST_SIGNATURE_LINE: tuple[str, float, str, float] = (
+    "2551Q", 672.58, "Signature over Printed Name of Taxpayer", 677.74)
+
 
 class SelfTestProfile:
     """One corpus, and every number pinned against it.
@@ -2381,7 +2403,7 @@ class SelfTestProfile:
                  "decimal_points", "tones", "retexted_glyphs",
                  "retexted_glyph_id", "retexted_rawdict_codepoint",
                  "bar_like_form", "leaning_bars", "checkbox_square",
-                 "is_evidence")
+                 "signature_box", "signature_line", "is_evidence")
 
     def __init__(self, *, name: str, source_root: pathlib.Path,
                  fixtures: dict[str, tuple[str, str, str]],
@@ -2393,6 +2415,8 @@ class SelfTestProfile:
                  retexted_rawdict_codepoint: int, bar_like_form: str,
                  leaning_bars: int,
                  checkbox_square: tuple[str, float, float, float, float, float],
+                 signature_box: tuple[str, float, float, str, float],
+                 signature_line: tuple[str, float, str, float],
                  is_evidence: bool) -> None:
         self.name = name
         self.source_root = source_root
@@ -2411,6 +2435,8 @@ class SelfTestProfile:
         self.bar_like_form = bar_like_form
         self.leaning_bars = leaning_bars
         self.checkbox_square = checkbox_square
+        self.signature_box = signature_box
+        self.signature_line = signature_line
         # Whether this corpus is evidence about the world or a restatement of
         # this module's own beliefs. Printed with the result so a passing
         # synthetic run can never be read as the real one.
@@ -2435,6 +2461,8 @@ REAL_PROFILE = SelfTestProfile(
     bar_like_form=SELF_TEST_BAR_LIKE_FORM,
     leaning_bars=SELF_TEST_LEANING_BARS,
     checkbox_square=SELF_TEST_CHECKBOX_SQUARE,
+    signature_box=SELF_TEST_SIGNATURE_BOX,
+    signature_line=SELF_TEST_SIGNATURE_LINE,
     is_evidence=True,
 )
 
@@ -2458,10 +2486,11 @@ FIXTURE_SOURCE_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures"
 FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # Paper, determinism, merged runs drawn as short bars plus corner squares,
     # all four thicknesses, both decorative greys, a white knockout, a
-    # fill+stroke drawing, a checkbox square (T5a, F210) and a comb band.
+    # fill+stroke drawing, a checkbox square (T5a, F210), a signature box
+    # (T5b+T5d, F211/F212) and a comb band.
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "dc0e218a026ff2cc8efcaeb7d55b1409531fbc1f462fc90262ecf53e5bc6da57"),
+        "565e90e072b3bb72ca307edf0b6b6ee2689958473148e4b4c4c4569998b4f4b7"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",
@@ -2516,6 +2545,16 @@ FIXTURE_PROFILE = SelfTestProfile(
     # geometry change in the builder is caught here rather than silently
     # re-measured.
     checkbox_square=("FIXTURE-RULES", 500.0, 460.0, 511.0, 471.0, 0.48),
+    # make_fixtures.signature_box's own bordered box (48,560)-(300,600): the
+    # top rule's own centre 560.24, the box's own 40pt height, and the
+    # in-box caption's own y1 -- all read directly off the built fixture, not
+    # computed from it, for the identical reason as checkbox_square above.
+    signature_box=("FIXTURE-RULES", 560.24, 40.0, "For Individual: ", 574.69),
+    # The SAME box's own bottom rule (centre 599.76) and the caption
+    # make_fixtures.signature_box draws below it.
+    signature_line=(
+        "FIXTURE-RULES", 599.76, "Signature over Printed Name of Taxpayer",
+        602.33),
     is_evidence=False,
 )
 
@@ -3814,6 +3853,101 @@ def check_checkbox_square(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def _find_run_by_text(ir: dict[str, Any], text: str) -> dict[str, Any] | None:
+    """The run whose own text STARTS WITH `text`, on either profile.
+
+    A prefix, not an exact match, because the pinned text is only the
+    fixture's own full caption -- 2551Q's real one continues past it
+    ("For Individual: " is the whole run, but "Signature over Printed Name
+    of Taxpayer" is a PREFIX of "...Taxpayer/Authorized Representative/Tax
+    Agent (Indicate title/designation and TIN)"). The same predicate
+    `emit._signature_box_caption` and `emit._signature_line_caption` apply
+    to a caption's normalised text, restated here directly rather than
+    imported, because extract.py carries no dependency on emit.py.
+    """
+    for page in ir["pages"]:
+        for run in page["text_runs"]:
+            if run["text"].startswith(text):
+                return run
+    return None
+
+
+def check_signature_box(evidence: dict[str, Any]) -> list[str]:
+    """F211's caption stays inside its own box's top SIGNATURE_BOX_CAPTION_BAND.
+
+    F211 (fixed in T5b): `emit.SignatureBoxWriting` claims a `label` cell
+    whose only printed ink is a top-left caption confined to the top 40% of
+    the box's own height (`emit.SIGNATURE_BOX_CAPTION_BAND`) -- that
+    arithmetic is what this pins, against the caption's own measured `y1`
+    and the box's own top rule and height, rather than re-deriving either
+    from the corpus at large.
+
+    `profile.signature_box` is a subject pin the same shape as
+    `profile.checkbox_square`: one named form, one named box and caption,
+    not a corpus-wide census. On `REAL_PROFILE` it is 2551Q page 1's "For
+    Individual:" box; on `FIXTURE_PROFILE` it is the synthetic one
+    `make_fixtures.signature_box` draws.
+    """
+    code, top_y, height, text, expected_y1 = evidence["profile"].signature_box
+    ir = evidence["ir"].get(code)
+    if ir is None:
+        return [f"{code}: not in this profile's corpus"]
+    failures: list[str] = []
+    run = _find_run_by_text(ir, text)
+    if run is None:
+        failures.append(f"{code}: no run with the pinned caption text {text!r}")
+        return failures
+    if abs(float(run["y1"]) - expected_y1) > 0.01:
+        failures.append(
+            f"{code}: the caption's own y1 is {run['y1']}, expected {expected_y1}")
+    limit = top_y + 0.4 * height
+    if float(run["y1"]) > limit:
+        failures.append(
+            f"{code}: the caption reaches {run['y1']}, past the box's own top "
+            f"40% line at {limit} -- emit.SignatureBoxWriting would refuse it")
+    return failures
+
+
+def check_signature_line(evidence: dict[str, Any]) -> list[str]:
+    """F212's caption sits BELOW the wall the box above it also shares.
+
+    F212 (fixed in T5d): `emit.SignatureLineBinding` binds a "Signature over
+    Printed Name..." caption to the box directly above it -- the
+    `BureauReservation` precedent, reversed. That depends on the caption's
+    own run sitting on the far side of the SAME wall the box's own bottom
+    border draws, which is what this pins: a rule at the pinned divider, and
+    the caption's own measured `y0` on the far side of it.
+
+    `profile.signature_line` is a subject pin the same shape as
+    `profile.signature_box`. On `REAL_PROFILE` it is 2551Q page 1's own
+    caption below the "For Individual:" box; on `FIXTURE_PROFILE` it is the
+    synthetic one `make_fixtures.signature_box` draws below its own box.
+    """
+    code, rule_y, text, expected_y0 = evidence["profile"].signature_line
+    ir = evidence["ir"].get(code)
+    if ir is None:
+        return [f"{code}: not in this profile's corpus"]
+    failures: list[str] = []
+    if not any(
+            rule["axis"] == "h"
+            and abs((float(rule["y0"]) + float(rule["y1"])) / 2.0 - rule_y) < 0.01
+            for page in ir["pages"] for rule in page["rules"]):
+        failures.append(f"{code}: no h-rule at the pinned divider {rule_y}")
+    run = _find_run_by_text(ir, text)
+    if run is None:
+        failures.append(f"{code}: no run with the pinned caption text {text!r}")
+        return failures
+    if abs(float(run["y0"]) - expected_y0) > 0.01:
+        failures.append(
+            f"{code}: the caption's own y0 is {run['y0']}, expected {expected_y0}")
+    if float(run["y0"]) < rule_y:
+        failures.append(
+            f"{code}: the caption sits ABOVE its own divider rule "
+            f"({run['y0']} < {rule_y}) -- emit.SignatureLineBinding would bind "
+            f"nothing to it")
+    return failures
+
+
 def check_clips(evidence: dict[str, Any]) -> list[str]:
     """Ink outside its scissor never reaches the IR, and ink inside is untouched.
 
@@ -4378,6 +4512,8 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("paths", check_paths),
     ("tone", check_tone),
     ("checkbox-square", check_checkbox_square),
+    ("signature-box", check_signature_box),
+    ("signature-line", check_signature_line),
     ("clips", check_clips),
     ("stroke-caps", check_stroke_caps),
     ("ruled-blank-split", check_ruled_blank_split),
@@ -4660,6 +4796,52 @@ def mutate_checkbox_square(evidence: dict[str, Any]) -> None:
     raise AssertionError("checkbox-square mutation found no checkbox frame rule")
 
 
+def _drift_run(ir: dict[str, Any], text: str, drift: float) -> bool:
+    run = _find_run_by_text(ir, text)
+    if run is None:
+        return False
+    run["y0"] = float(run["y0"]) + drift
+    run["y1"] = float(run["y1"]) + drift
+    return True
+
+
+def mutate_signature_box(evidence: dict[str, Any]) -> None:
+    """Push the in-box caption down until it crosses the box's own top-40% line.
+
+    Geometry, not text: `check_signature_box` pins the arithmetic
+    `emit.SignatureBoxWriting` performs -- a caption confined to the box's
+    own top `emit.SIGNATURE_BOX_CAPTION_BAND` -- so the mutation moves the
+    SAME run past that line by exactly enough to clear it, rather than
+    deleting or renaming it, which would only restate a text-presence check.
+    """
+    code, top_y, height, text, _expected_y1 = evidence["profile"].signature_box
+    ir = evidence["ir"][code]
+    run = _find_run_by_text(ir, text)
+    if run is None:
+        raise AssertionError("signature-box mutation found no pinned caption run")
+    limit = top_y + 0.4 * height
+    drift = (limit - float(run["y1"])) + 1.0
+    _drift_run(ir, text, drift)
+
+
+def mutate_signature_line(evidence: dict[str, Any]) -> None:
+    """Pull the caption above its own divider rule, so it no longer sits on
+    the wall the box above it shares.
+
+    Geometry, not text: `check_signature_line` pins the fact `emit.
+    SignatureLineBinding` depends on -- the caption's own run sits BELOW the
+    box's own bottom wall -- so the mutation moves the SAME run to the near
+    side of it by exactly enough to invert the relationship.
+    """
+    code, rule_y, text, _expected_y0 = evidence["profile"].signature_line
+    ir = evidence["ir"][code]
+    run = _find_run_by_text(ir, text)
+    if run is None:
+        raise AssertionError("signature-line mutation found no pinned caption run")
+    drift = (rule_y - float(run["y0"])) - 1.0
+    _drift_run(ir, text, drift)
+
+
 SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ...] = (
     ("determinism", "one serialisation gains a byte", mutate_determinism),
     ("paper", "the paper subject's height becomes Letter", mutate_paper),
@@ -4676,6 +4858,10 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
     ("tone", "a decorative grey rule is reported as structural", mutate_tone),
     ("checkbox-square", "the checkbox frame's top rule is dropped",
      mutate_checkbox_square),
+    ("signature-box", "the in-box caption is pushed past the top-40% line",
+     mutate_signature_box),
+    ("signature-line", "the caption below is pulled above its own divider rule",
+     mutate_signature_line),
     ("clips", "a bar drawn outside its scissor is painted anyway", mutate_clips),
     ("stroke-caps", "a round-capped bar is published at its declared endpoints",
      mutate_stroke_caps),

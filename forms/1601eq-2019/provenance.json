@@ -95,7 +95,7 @@
       "1601-EQ Guide January 2019 ENCS rev.pdf"
     ]
   },
-  "html_bytes": 512874,
+  "html_bytes": 513360,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

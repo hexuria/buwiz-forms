@@ -78,6 +78,22 @@ CHECKBOX_SQUARE_THICKNESS_PT = THICKNESSES_PT[1]
 # it without editing the drawing call.
 CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT = 0.0
 
+# F211/F212's two captions, reproduced from 2551Q page 1 verbatim (the
+# in-box one) and abbreviated (the one below, which only needs the two words
+# `emit._signature_line_caption` tests for). Both set at the corpus's own
+# modal body size.
+SIGNATURE_BOX_CAPTION = "For Individual: "
+SIGNATURE_LINE_CAPTION = "Signature over Printed Name of Taxpayer"
+SIGNATURE_BOX_FONT_SIZE_PT = 9.0
+
+# How far prove_fixtures_fail.py's mutate_signature_box/mutate_signature_line
+# slide each caption's own baseline, in points, positive downward. Zero in
+# every built fixture; dedicated constants rather than inline literals so
+# each mutation can reach one caption without touching the drawing call or
+# the other caption.
+SIGNATURE_BOX_CAPTION_DRIFT_PT = 0.0
+SIGNATURE_LINE_CAPTION_DRIFT_PT = 0.0
+
 # A stroked separator that leans less than its own stroke width. 2316 draws
 # twelve of these; an exact-alignment test demoted every one of them out of
 # `rules`, taking real box sides out of lattice.py's reach. 0.17pt of lean
@@ -241,6 +257,46 @@ def checkbox_square(page: fitz.Page, x0: float, y0: float, x1: float,
     bar(page, x0 + drift, y0, x1 + drift, y1, WHITE)              # knockout
 
 
+def signature_box(page: fitz.Page, x0: float, y0: float, x1: float,
+                  y1: float) -> None:
+    """F211/F212's signature box: a bordered box, a top-left caption confined
+    to its own top band, and a SEPARATE caption directly below it naming
+    "Signature over Printed Name...".
+
+    `x0,y0,x1,y1` is the box itself, framed by `merged_box`. Its BOTTOM
+    border is the one wall two things share, exactly the shape the real
+    corpus's 54 signature boxes measure: 2551Q page 1's "For Individual:"
+    box and the "Signature over Printed Name of Taxpayer..." caption below
+    it are drawn against the identical rule, one cell's bottom and the
+    next one's top. `emit.SignatureBoxWriting` reads the top-left caption
+    (confined to the box's own top `emit.SIGNATURE_BOX_CAPTION_BAND`);
+    `emit.SignatureLineBinding` reads the caption below it (bound to the
+    box the same wall it sits under also bounds) -- the `BureauReservation`
+    precedent, reversed.
+
+    The in-box caption is set 12pt below the box's own top edge -- inside
+    the pinned 40% band for any box taller than 30pt, this one included --
+    and the caption below is set 12pt under the box's own bottom edge, both
+    at the corpus's own modal 9pt body size.
+
+    Each caption's own baseline carries its own drift
+    (`SIGNATURE_BOX_CAPTION_DRIFT_PT` / `SIGNATURE_LINE_CAPTION_DRIFT_PT`),
+    zero in every built fixture: prove_fixtures_fail.py's mutate_signature_box
+    and mutate_signature_line set one non-zero at a time to slide a single
+    caption without touching the box, any rule's tone, or the other caption
+    -- so each mutation trips its own check alone.
+    """
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), THICKNESSES_PT[1], BLACK)
+    page.insert_text(
+        fitz.Point(x0 + 6, y0 + 12 + SIGNATURE_BOX_CAPTION_DRIFT_PT),
+        SIGNATURE_BOX_CAPTION,
+        fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+    page.insert_text(
+        fitz.Point(x0 + 6, y1 + 12 + SIGNATURE_LINE_CAPTION_DRIFT_PT),
+        SIGNATURE_LINE_CAPTION,
+        fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -300,6 +356,12 @@ def build_rules() -> fitz.Document:
     checkbox_square(first, 500, 460, 511, 471)
 
     comb_band(first, fitz.Rect(48, 480, 480, 504), slots=12, group_after=4)
+
+    # F211/F212's signature box: a bordered box with a top-left caption
+    # (see signature_box()'s own docstring) and a separate caption below it
+    # on the box's own bottom rule. Placed clear of the comb above (which
+    # ends at y504).
+    signature_box(first, 48, 560, 300, 600)
 
     # Page 2 exists so the paper assertion has more than one page to measure,
     # and carries drawings of its own so nothing on it is vacuously clean.

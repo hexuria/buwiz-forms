@@ -1922,6 +1922,347 @@ def checkbox_square_field_box(cell: dict[str, Any],
                     spacing, None, insets)
 
 
+# The evidence the sheet prints when it reserves a bordered box for the
+# TAXPAYER's own signature (F211), mirroring BUREAU_RESERVED_PREFIXES
+# exactly: a caption STARTS with its subject, so this is a prefix test, not a
+# substring one -- 0619E/0619F's sworn-declaration block prints "For
+# Individual:" over one box and "For Non-Individual:" over its neighbour, one
+# caption run each, and every other form carrying the identical block sets
+# the identical two captions. Measured corpus-wide (build/ir + build/layout,
+# 53 bundles, 2026-08-11): 54 caption runs on 27 forms, exactly two per form.
+SIGNATURE_BOX_CAPTION_PREFIXES = ("for individual", "for non-individual")
+
+# The bordered-box population this rule is even asked about, all four
+# measured rather than guessed. `border_count` >= 3 is the same floor
+# `lattice.classify_cell` already uses to call an empty box a writing
+# surface; the two size floors are generous enough to admit the smallest
+# real signature box in the corpus (0619F `p1c101`, 273.58 x 31.56pt) while
+# excluding the sea of small printed-reference cells that also carry a
+# partial frame. Over the full corpus this selects 126 cells -- NOT one
+# population: 54 are the taxpayer's own signature boxes above (the one this
+# class claims), 71 are Bureau-only stamp/validation boxes a taxpayer must
+# never be able to type in (already recognised by `BureauReservation`'s own
+# captions, and never claimed here because `_signature_box_caption` and
+# `BUREAU_RESERVED_PREFIXES` share no word), and 1 (`1600wp-2010` `p1c93`) is
+# neither -- it is the plain column-number header "(8)" of a table ("(4)",
+# "(5)", "(6)", "(7)" sit beside it, each too narrow to clear
+# SIGNATURE_BOX_MIN_WIDTH_PT), wide only because it is the table's last
+# column and runs to the page's right margin. It is left untouched, by
+# construction: its caption matches no prefix here, so this class never
+# claims it and it keeps its `label` verdict.
+SIGNATURE_BOX_MIN_BORDERS = 3
+SIGNATURE_BOX_MIN_HEIGHT_PT = 20.0
+SIGNATURE_BOX_MIN_WIDTH_PT = 100.0
+# How much of the box's OWN height the caption must be confined to, measured
+# from the top. Every one of the 54 real signature captions sits within the
+# top 21.6% of its box (0619F's, the tallest fraction, at 31.56pt); the
+# fraction is left generous rather than tuned tight to that number, because
+# the population this rule must never touch (the 71 Bureau boxes) is kept out
+# by caption TEXT, not by this band -- see `BUREAU_RESERVED_PREFIXES` and the
+# routing through `BureauReservation` at `field_verdict`'s call site.
+SIGNATURE_BOX_CAPTION_BAND = 0.4
+
+
+def _signature_box_caption(text: str) -> bool:
+    """Whether this run is a caption dedicating the box it sits in to the
+    taxpayer's own signature (F211)."""
+    normalised = " ".join(text.split()).lower()
+    return any(normalised.startswith(prefix)
+               for prefix in SIGNATURE_BOX_CAPTION_PREFIXES)
+
+
+class SignatureBoxWriting:
+    """Which `label` cells the sheet's own top-left caption dedicates to the
+    TAXPAYER's own signature (F211).
+
+    Each box's only printed ink is one caption run at its top-left corner --
+    "For Individual: " or "For Non-Individual: " -- which sets `is_empty =
+    False`, so `lattice.classify_cell` returns `label` and `field_verdict`
+    refuses it before this ever runs: one caption run costs a writing surface
+    as large as 302 x 43pt. `0620-2019` `p1c87` is the control -- the
+    identical signature box with no caption printed inside it, `is_empty =
+    True`, classified `field`, shipping a working input today -- so the
+    defect is exactly this: the geometry is a writing surface either way, and
+    only the caption's PRESENCE, not its content, decided whether the sheet
+    was allowed to keep its own writing space.
+
+    Ownership is per cell, not per run, because every real signature box in
+    this corpus carries exactly one caption run and the population this rule
+    must never admit -- the Bureau's own reserved boxes -- is excluded by
+    `_signature_box_caption` refusing their words, not by any cardinality
+    test here.
+
+    `field_verdict` still routes every cell this class claims through
+    `BureauReservation` before promoting it (see that call site) rather than
+    trusting this class's own caption test as the only gate -- the ordering
+    trap F211 itself named: `BureauReservation` already exists and already
+    recognises "Machine Validation...", "Stamp of Receiving Office/AAB..."
+    and "Stamp of Authorized Agent Bank...", but a `label` cell used to be
+    refused before that check was ever consulted, so a promotion rule that
+    bypassed it instead of routing through it would risk exactly the 71
+    Bureau boxes this rule is not allowed to touch.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, cells: Sequence[dict[str, Any]], page_index: int,
+                 runs: Sequence[dict[str, Any]]) -> None:
+        claims: dict[str, list[dict[str, Any]]] = {}
+        for cell, cell_runs, caption in signature_box_candidates(
+                cells, page_index, runs):
+            if _signature_box_caption(caption):
+                claims[cell["id"]] = cell_runs
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> Sequence[dict[str, Any]]:
+        return self._claims.get(cell_id, ())
+
+    def cell_ids(self) -> frozenset[str]:
+        """Every cell this class claims, for `SignatureLineBinding`'s own
+        candidate test -- a promoted signature box is a valid binding target
+        for the "Signature over Printed Name..." caption below it exactly
+        the way a pre-existing `field` cell is."""
+        return frozenset(self._claims)
+
+
+def signature_box_candidates(
+        cells: Sequence[dict[str, Any]], page_index: int,
+        runs: Sequence[dict[str, Any]],
+        ) -> Iterator[tuple[dict[str, Any], list[dict[str, Any]], str]]:
+    """Every bordered box whose printed ink is confined to a top-left caption.
+
+    The geometric half of F211's rule, split out from `SignatureBoxWriting`
+    so `signature_box_corpus_assertions` can ask the identical question of
+    the OTHER caption vocabulary a candidate might carry -- a Bureau
+    reservation instead of a taxpayer signature -- without maintaining a
+    second copy of the five thresholds. Every yielded cell, its own claimed
+    text runs and their joined caption text; the caller decides what the
+    caption means. Corpus-wide (build/ir + build/layout, 53 bundles,
+    2026-08-11) this selects exactly 126 cells: 54 caption "For Individual:"
+    / "For Non-Individual:" (`SignatureBoxWriting`'s own claim, see it), 71
+    caption one of `BUREAU_RESERVED_PREFIXES` / `BUREAU_RESERVED_SUBSTRINGS`,
+    and 1 (`1600wp-2010` `p1c93`) caption neither -- the plain column-number
+    header "(8)" of a table, wide only because it is the table's last column
+    and runs to the page's right margin; it is claimed by nothing on either
+    side and keeps its `label` verdict.
+    """
+    runs_by_id = {run_id(page_index, i): run for i, run in enumerate(runs)}
+    for cell in cells:
+        if cell["kind"] != "label":
+            continue
+        if cell["border_count"] < SIGNATURE_BOX_MIN_BORDERS:
+            continue
+        width = float(cell["x1"]) - float(cell["x0"])
+        height = float(cell["y1"]) - float(cell["y0"])
+        if (height < SIGNATURE_BOX_MIN_HEIGHT_PT
+                or width < SIGNATURE_BOX_MIN_WIDTH_PT):
+            continue
+        run_ids = cell.get("text_run_ids") or ()
+        cell_runs = [runs_by_id[rid] for rid in run_ids if rid in runs_by_id]
+        if not cell_runs:
+            continue
+        top_limit = float(cell["y0"]) + SIGNATURE_BOX_CAPTION_BAND * height
+        if max(float(r["y1"]) for r in cell_runs) > top_limit:
+            continue
+        yield cell, cell_runs, " ".join(r["text"] for r in cell_runs)
+
+
+def signature_box_field_box(cell: dict[str, Any], captions: Sequence[dict[str, Any]],
+                            face: FieldFace, ink: "PrePrintedInk | None",
+                            ) -> FieldBox | None:
+    """The writing surface a signature box's own top-left caption leaves it (F211).
+
+    Geometry, not a re-derivation of `field_box`'s: the box is the cell inset
+    by its own border thickness on every side, exactly as an ordinary field
+    gets, and then its TOP is raised again to clear the caption -- to the
+    caption's own lowest line-box edge, the same evidence
+    `writing_box_clear_of_printed_ink` reads for ink hanging in from a line
+    above. That function is not the mechanism here and is called afterward
+    only as the same defensive belt `ruled_blank_field_box` and
+    `checkbox_square_field_box` both keep: `SignatureBoxWriting` has already
+    proven every OTHER run in this cell sits in the top
+    `SIGNATURE_BOX_CAPTION_BAND` of its height, so nothing besides the
+    caption itself should ever intrude on the remainder, and this call
+    catches it if that measurement is ever wrong on a form not yet in this
+    corpus.
+
+    A cell this class is asked about carries exactly one caption cluster, so
+    -- unlike `ruled_blank_field_box`'s and `checkbox_square_field_box`'s
+    several regions on one line -- there is one box, seated on the FULL
+    remaining width: the caption is confined to the box's own top band by
+    construction, so trimming the whole strip below it can never cut into the
+    caption's own horizontal extent, and it is what a taxpayer signing "over"
+    that caption's line actually gets, corner to corner.
+    """
+    if not captions:
+        return None
+    top = _border_thickness(cell, "top")
+    right = _border_thickness(cell, "right")
+    bottom = _border_thickness(cell, "bottom")
+    left = _border_thickness(cell, "left")
+    cx0, cy0 = float(cell["x0"]) + left, float(cell["y0"]) + top
+    cx1, cy1 = float(cell["x1"]) - right, float(cell["y1"]) - bottom
+    caption_bottom = max(float(r["y1"]) for r in captions)
+    cy0 = max(cy0, caption_bottom)
+    tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((cx0, cy0, cx1, cy1), ink)
+    if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0 or face.line_span_em <= 0.0:
+        return None
+    height = ty1 - ty0
+    size = min(face.size_pt, _floor2(height / face.line_span_em))
+    if size <= 0.0:
+        return None
+    spacing = None
+    if face.size_pt > 0 and abs(face.letter_spacing_pt) > 0:
+        scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
+        if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
+            spacing = scaled
+    inset = (ty0 - float(cell["y0"]), float(cell["x1"]) - tx1,
+             float(cell["y1"]) - ty1, tx0 - float(cell["x0"]))
+    return FieldBox("text", inset, size, round(height, 4), spacing, None, None)
+
+
+def _signature_line_caption(text: str) -> bool:
+    """Whether this run names both a signature and a printed name -- BIR's
+    own words for "this is where you sign" (F212), in either order the
+    corpus sets them: "Signature over/and Printed Name of ..." on the
+    majority of this corpus's forms, "Printed Name and Signature of ..." on
+    five more (1700, 1701, 1701A, 1701MS, 2550-DS) plus 2200S's two officer
+    lines and 1701Q's own "Signature and Printed Name of Taxpayer...".
+    Neither word alone would do: "printed name" alone also names 1701A item
+    19's caption strip (F207), and "signature" alone would catch prose that
+    merely mentions one nearby. Together they select 87 runs corpus-wide,
+    of which one -- 2316 `p1t218`, a duplicate "Employee Signature over
+    Printed Name" -- is not assigned to any lattice cell at all and so cannot
+    bind anything.
+    """
+    normalised = " ".join(text.split()).lower()
+    return "signature" in normalised and "printed name" in normalised
+
+
+# Float fuzz only, not a tuned tolerance: a caption's owning cell and the box
+# above it share the identical lattice wall coordinate, so the measured gap
+# over all 75 real bindings in this corpus is exactly 0.0pt -- see
+# `SignatureLineBinding`'s own docstring.
+SIGNATURE_LINE_ADJACENCY_EPSILON_PT = 0.01
+
+
+class SignatureLineBinding:
+    """Which boxes a "Signature (over|and) Printed Name..." caption printed
+    directly BELOW them dedicates to a bottom-seated, centred writing line
+    (F212) -- the `BureauReservation` precedent, reversed: there a caption
+    printed ABOVE a blank reserves it for the Bureau; here a caption printed
+    BELOW a box says what belongs on the line at its bottom. Both readings
+    come from the identical fact about how BIR sets type: a caption is
+    printed immediately against the blank it describes.
+
+    **The binding is geometric and exact, not fuzzy.** For each caption run,
+    the compartment directly ABOVE its own owning cell -- `y1` equal to the
+    owning cell's `y0`, and the run's own x-centre inside the candidate's
+    `x0..x1` -- is the box it governs, the mirror image of how
+    `BureauReservation` reads the compartment a caption is printed inside.
+    Measured over the 75 real bindings this corpus admits, the y-gap is
+    0.0pt on every one (the two cells share one lattice wall) and the
+    x-centre clears its candidate's nearer edge by 116.7pt at the closest, so
+    `SIGNATURE_LINE_ADJACENCY_EPSILON_PT` is float fuzz, not a constant tuned
+    to make a count match.
+
+    **The candidate must already be a writing surface, or a box
+    `SignatureBoxWriting` has already claimed -- never any adjacent label.**
+    Geometry alone is not enough: 2316's "Present Employer/... Signature over
+    Printed Name" caption sits directly below its own "Date Signed" sub-row
+    (kind `label`, a different field entirely) with the REAL signature box
+    two rows further up, separated by that sub-row and a 1.32pt blank
+    divider -- an unconstrained adjacency test binds the wrong cell instead
+    of refusing outright. Restricting the candidate's kind removes that false
+    positive and every other still-open case in the corpus at once: 0605,
+    1604CF, 2550M, 2551M and 2553 each set their signature LINE as a vector
+    rule drawn inside the SAME cell as its own caption, not as a separate box
+    above it -- a different shape, refused rather than guessed at, exactly
+    `RuledBlankWriting`'s and `CheckboxSquareWriting`'s own precedent for
+    ownership that does not resolve to exactly one claimant. Multiple
+    geometric candidates are refused the same way; none occur in this
+    corpus.
+
+    Measured corpus-wide (build/ir + build/layout, 53 bundles, 2026-08-11):
+    75 boxes across 43 forms are bound. 54 are the signature boxes this same
+    session's `SignatureBoxWriting` creates -- every one of them also carries
+    this caption on the label cell below it -- and 21 are pre-existing
+    `field` cells, `1701-2018` `p1c125` among them: the strip the user typed
+    their name into and confirmed correct. 11 of the 86 reachable caption
+    runs are refused, all for the reason above.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, cells: Sequence[dict[str, Any]], page_index: int,
+                 runs: Sequence[dict[str, Any]],
+                 signature_box_cell_ids: frozenset[str]) -> None:
+        runs_by_id = {run_id(page_index, i): run for i, run in enumerate(runs)}
+        claims: dict[str, list[dict[str, Any]]] = {}
+        for cell in cells:
+            for rid in cell.get("text_run_ids") or ():
+                run = runs_by_id.get(rid)
+                if run is None or not _signature_line_caption(run["text"]):
+                    continue
+                x_centre = (float(run["x0"]) + float(run["x1"])) / 2.0
+                candidates = [
+                    other for other in cells
+                    if other["id"] != cell["id"]
+                    and abs(float(other["y1"]) - float(cell["y0"]))
+                        <= SIGNATURE_LINE_ADJACENCY_EPSILON_PT
+                    and float(other["x0"]) <= x_centre <= float(other["x1"])
+                    and (other["kind"] == "field"
+                         or other["id"] in signature_box_cell_ids)
+                ]
+                if len(candidates) != 1:
+                    continue
+                claims.setdefault(candidates[0]["id"], []).append(run)
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> Sequence[dict[str, Any]]:
+        return self._claims.get(cell_id, ())
+
+
+def seat_signature_line(box: FieldBox | None, one_line_pt: float) -> FieldBox | None:
+    """Re-seat a signature strip's writing box at the CELL's own bottom edge,
+    exactly one line tall (F212).
+
+    "Signature over Printed Name" puts the writing ON the line directly above
+    the printed name, at the bottom of the box the sheet rules for it -- not
+    floating at the box's vertical centre, which is what an ordinary field's
+    `line-height` equal to its FULL box height produces (`1701-2018`
+    `p1c125-i` measured at font-size 9pt / line-height 33.24pt in a 34.20pt
+    strip, so the caret sits at mid-height). The fix is arithmetic on the
+    box `field_box` (or `signature_box_field_box`) already computed, not a
+    new box: only the TOP inset grows, by the full difference between the
+    box's own height and one natural line at the fitted face, so the BOTTOM
+    inset -- already the cell's own bottom border clearance -- is untouched
+    and the strip stays seated exactly where it always was, just shorter.
+
+    A box already one line tall or shorter is returned unchanged: there is
+    nothing to seat further down, and growing its inset would push text
+    outside the box the sheet actually rules. A comb, or a box the sheet has
+    already cut into several regions with its own dividers, is returned
+    unchanged too -- fail closed, matching `ruled_blank_field_box`'s and
+    `checkbox_square_field_box`'s own refusal to guess ownership it cannot
+    resolve to exactly one claim; measured over this corpus's 75 bound boxes,
+    every one is a single-region plain field, so this guard is stated, not
+    exercised, but nothing here may assume the shape of a form it has not
+    read.
+
+    Horizontal centring is a SEPARATE declaration, applied at markup time by
+    `field_input_markup` to every input this box belongs to (see
+    `FieldPlan.centered`) -- this function only moves the box vertically.
+    """
+    if (box is None or box.kind != "text" or box.regions is not None
+            or box.inset_trbl is None or box.line_height_pt <= one_line_pt):
+        return box
+    top, right, bottom, left = box.inset_trbl
+    new_top = round(top + (box.line_height_pt - one_line_pt), 4)
+    return FieldBox(box.kind, (new_top, right, bottom, left), box.size_pt,
+                    round(one_line_pt, 4), box.letter_spacing_pt, box.capacity, None)
+
+
 # A cell whose own width is mostly pre-printed glyph ink is not a blank the
 # taxpayer can write in, whatever the box detector made of it: it is a table
 # cell whose text lattice.py assigned to a neighbour because the run crosses
@@ -2614,10 +2955,11 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   reservation: "BureauReservation | None",
                   ruled_blanks: "RuledBlankWriting | None" = None,
                   checkbox_squares: "CheckboxSquareWriting | None" = None,
+                  signature_boxes: "SignatureBoxWriting | None" = None,
                   ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Six rules, in this order, and the order is the point:
+    Seven rules, in this order, and the order is the point:
 
       * **A `label` cell whose paper carries its own underscore-drawn writing
         line is a field there, whatever else refuses it.** F148/F149: a ruled
@@ -2635,6 +2977,24 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         area into one `label` cell that `lattice.classify_cell` never
         segments. `CheckboxSquareWriting` has already resolved ownership; see
         it and `checkbox_square_field_box`.
+      * **A `label` cell whose only ink is a top-left caption dedicating it to
+        the taxpayer's OWN signature is a field there too, unless the sheet's
+        own Bureau caption also claims it.** F211: one caption run ("For
+        Individual: ") sets `is_empty = False` and costs a 302 x 43pt writing
+        surface the identical box ships today with no caption inside it
+        (`0620-2019` `p1c87`, the control). `SignatureBoxWriting` has already
+        resolved which `label` cells this is; see it and
+        `signature_box_field_box`. **This is routed through
+        `BureauReservation` here, explicitly, rather than skipped past it**:
+        a promoted `label` cell used to be refused at the `kind != "field"`
+        rule below before the Bureau check further down was ever reached, so
+        simply moving the refusal earlier without re-consulting
+        `BureauReservation` would risk handing a taxpayer one of the 71
+        Bureau-only stamp/validation boxes this rule's own population also
+        contains. Measured over this corpus, zero of `SignatureBoxWriting`'s
+        54 claims are also `BureauReservation` claims -- the two caption
+        vocabularies share no word -- but the check runs regardless, not on
+        that measurement's faith.
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
         "." or "%" inside it is decoration within that field, not a label. Only
@@ -2689,6 +3049,13 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     if (cell["kind"] == "label" and checkbox_squares is not None
             and checkbox_squares.for_cell(cell["id"])):
         return True, "checkbox-square"
+    if (cell["kind"] == "label" and signature_boxes is not None
+            and signature_boxes.for_cell(cell["id"])):
+        if reservation is not None and reservation.blocks(
+                float(cell["x0"]), float(cell["y0"]),
+                float(cell["x1"]), float(cell["y1"])):
+            return False, "bureau"
+        return True, "signature-box"
     if cell.get("comb"):
         # Left as it stands, on measurement rather than on principle. Exactly
         # one comb-bearing cell in the corpus is >= 70% covered by decorative
@@ -2825,7 +3192,8 @@ class FieldPlan:
 
     __slots__ = ("face", "boxes", "classes", "small", "blocked",
                  "undersized_source", "undersized_derived", "uncontained",
-                 "collapsed", "comb_count", "blocked_slots", "slot_count")
+                 "collapsed", "comb_count", "blocked_slots", "slot_count",
+                 "centered")
 
     def __init__(self, layout: dict[str, Any], face: FieldFace | None,
                  warnings: list[str], ir: dict[str, Any] | None = None) -> None:
@@ -2851,8 +3219,17 @@ class FieldPlan:
         # some of the boxes it drew. A cell appears in at most one of them --
         # a comb cell is always fillable at cell resolution.
         self.blocked_slots: dict[str, dict[int, str]] = {}
+        # cell id -> the plain field's own input(s) carry an inline
+        # `text-align:center` (F212's signature-strip target set; see
+        # `SignatureLineBinding`). Never a comb slot -- those are centred by
+        # the stylesheet's `.fc` rule already, and this set is only ever
+        # consulted for `slot_index is None` in `field_input_markup`.
+        self.centered: set[str] = set()
         if face is None:
             return
+        # One natural line at the fitted face, the target height
+        # `seat_signature_line` re-seats a signature strip's own box to.
+        one_line_pt = face.size_pt * face.line_span_em
         # Keyed by page index rather than zipped, so a layout page and an IR page
         # cannot be paired by position if either list is ever ordered otherwise.
         ink_by_page = {int(page["index"]): PrePrintedInk(page["text_runs"])
@@ -2871,20 +3248,38 @@ class FieldPlan:
                          for page in (ir or {}).get("pages", ())}
         fills_by_page = {int(page["index"]): page["area_fills"]
                          for page in (ir or {}).get("pages", ())}
+        # Runs only, keyed the same way again: SignatureBoxWriting and
+        # SignatureLineBinding both read the page's OWN text runs by id
+        # (`run_id`), the same evidence PrePrintedInk is built from above,
+        # not derived from it.
+        runs_by_page = {int(page["index"]): page["text_runs"]
+                        for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
-            ink = ink_by_page.get(int(page["index"]))
-            shading = shading_by_page.get(int(page["index"]))
-            reservation = reservation_by_page.get(int(page["index"]))
-            rules = rules_by_page.get(int(page["index"]))
-            fills = fills_by_page.get(int(page["index"]))
+            page_index = int(page["index"])
+            ink = ink_by_page.get(page_index)
+            shading = shading_by_page.get(page_index)
+            reservation = reservation_by_page.get(page_index)
+            rules = rules_by_page.get(page_index)
+            fills = fills_by_page.get(page_index)
+            runs = runs_by_page.get(page_index)
             ruled_blanks = (RuledBlankWriting(rules, page["cells"])
                             if rules is not None else None)
             checkbox_squares = (
                 CheckboxSquareWriting(rules, fills or (), page["cells"])
                 if rules is not None else None)
+            signature_boxes = (
+                SignatureBoxWriting(page["cells"], page_index, runs)
+                if runs is not None else None)
+            signature_lines = (
+                SignatureLineBinding(
+                    page["cells"], page_index, runs,
+                    signature_boxes.cell_ids() if signature_boxes is not None
+                    else frozenset())
+                if runs is not None else None)
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
-                                                 ruled_blanks, checkbox_squares)
+                                                 ruled_blanks, checkbox_squares,
+                                                 signature_boxes)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -2895,12 +3290,19 @@ class FieldPlan:
                 elif reason == "checkbox-square":
                     box = checkbox_square_field_box(
                         cell, checkbox_squares.for_cell(cell["id"]), face, ink)
+                elif reason == "signature-box":
+                    box = signature_box_field_box(
+                        cell, signature_boxes.for_cell(cell["id"]), face, ink)
                 else:
                     box = field_box(cell, face, ink)
                 if box is None:
                     warnings.append(f"cell {cell['id']}: the field's writing box has no "
                                     f"height, so it gets no typing surface")
                     continue
+                if (signature_lines is not None
+                        and signature_lines.for_cell(cell["id"])):
+                    box = seat_signature_line(box, one_line_pt)
+                    self.centered.add(cell["id"])
                 self.boxes[cell["id"]] = box
                 self._audit_surface(cell, box, face)
                 comb = cell.get("comb")
@@ -3101,9 +3503,21 @@ def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
     attrs: list[str] = []
     if slot_index is None:
         region = box.region_insets[region_index]
+        declarations: list[str] = []
         if region:
-            inset = " ".join(f"{fmt(v)}pt" for v in region)
-            attrs.append(f'style="inset:{esc_attr(inset)}"')
+            declarations.append(
+                "inset:" + " ".join(f"{fmt(v)}pt" for v in region))
+        # F212: a signature strip's own writing line is centred over the
+        # printed name below it -- an inline declaration, never a new class
+        # or a new rule on `.fi`, because the referee's stylesheet allowlist
+        # would reject either while its inline-style scan (unlike its
+        # attribute-KEY sets) does not ban `text-align`. Comb slots never
+        # reach here (`slot_index is None` guards the whole branch); they are
+        # already centred by the stylesheet's own `.fc` rule.
+        if cell_id in fields.centered:
+            declarations.append("text-align:center")
+        if declarations:
+            attrs.append(f'style="{esc_attr(";".join(declarations))}"')
     else:
         classes.append("fc")
     identity: list[str] = []
@@ -7688,14 +8102,20 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     reservation = {int(p["index"]): BureauReservation(
         p["text_runs"], p["rules"], p["area_fills"]) for p in ir["pages"]}
     rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+    runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
     ruled_blanks = {int(p["index"]): RuledBlankWriting(
         rules_by_page.get(int(p["index"]), ()), p["cells"])
+        for p in layout["pages"]}
+    signature_boxes = {int(p["index"]): SignatureBoxWriting(
+        p["cells"], int(p["index"]), runs_by_page.get(int(p["index"]), ()))
         for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
                                  shading.get(int(p["index"])),
                                  reservation.get(int(p["index"])),
-                                 ruled_blanks.get(int(p["index"])))[0]]
+                                 ruled_blanks.get(int(p["index"])),
+                                 signature_boxes=signature_boxes.get(
+                                     int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -7905,6 +8325,183 @@ def checkbox_square_corpus_assertions(failures: list[str]) -> None:
            f"{len(unfilled)} without a typing surface"
            + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
               if unfilled else ""),
+           failures)
+
+
+def signature_box_corpus_assertions(failures: list[str]) -> None:
+    """Every recognised signature box has an input, and no Bureau-reserved
+    box in the identical population ever does -- corpus-wide, not just on
+    the one pinned form the rest of this self-test exercises (F211).
+
+    Re-derives, independently of whatever `batch.py` last emitted, both
+    halves of F211's own claim against EVERY form this checkout has
+    extracted -- the same shape `ruled_blank_corpus_assertions`'s and
+    `checkbox_square_corpus_assertions`'s own checks already give F148/F149
+    and F210, and for the identical reason: a form added to `build/ir` after
+    this check was written is covered the moment it is extracted, by
+    construction, nothing here names a slug.
+
+    The two halves share one geometric population,
+    `signature_box_candidates`' own 126 cells, split by caption:
+
+      * every candidate `SignatureBoxWriting` claims (its caption matches
+        `_signature_box_caption`) must have a typing surface;
+      * every candidate whose caption instead matches `_bureau_caption`
+        (`BUREAU_RESERVED_PREFIXES` / `BUREAU_RESERVED_SUBSTRINGS`) must NOT
+        -- this is CLAUDE.md's own measurement, "no Bureau-reserved box has
+        one", proved on the corpus each run rather than assumed from the two
+        caption vocabularies sharing no word.
+
+    Both counts asserted `> 0` is load-bearing, not decoration, in both
+    directions -- following `ruled_blank_corpus_assertions`'s own comment on
+    the identical guard: a discovery mechanism that silently claimed nothing
+    would leave the corresponding failure list empty too, and "not unfilled"
+    (or "not leaked") alone would pass having verified nothing at all.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every signature box has an input, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        _check(False, "no Bureau-reserved box in the signature-box population has an input",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    forms_checked = 0
+    signature_claimed = 0
+    bureau_candidates = 0
+    unfilled: list[str] = []
+    leaked: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            unfilled.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            page_index = int(page["index"])
+            runs = runs_by_page.get(page_index, ())
+            for cell, _cell_runs, caption in signature_box_candidates(
+                    page["cells"], page_index, runs):
+                if _signature_box_caption(caption):
+                    signature_claimed += 1
+                    if fields.of(cell["id"]) is None:
+                        unfilled.append(
+                            f"{slug} {cell['id']}: signature box claimed, "
+                            f"no typing surface")
+                elif _bureau_caption(caption):
+                    bureau_candidates += 1
+                    if fields.of(cell["id"]) is not None:
+                        leaked.append(
+                            f"{slug} {cell['id']}: Bureau-captioned box has "
+                            f"a typing surface")
+
+    _check(forms_checked > 0 and signature_claimed > 0 and not unfilled,
+           "every recognised signature box has an input, corpus-wide",
+           f"{forms_checked} form(s), {signature_claimed} signature box(es) "
+           f"claimed, {len(unfilled)} without a typing surface"
+           + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
+              if unfilled else ""),
+           failures)
+    _check(bureau_candidates > 0 and not leaked,
+           "no Bureau-reserved box in the signature-box population has an input",
+           f"{bureau_candidates} Bureau-captioned candidate(s), {len(leaked)} "
+           f"leaked a typing surface"
+           + (f" ({'; '.join(leaked[:6])}{'...' if len(leaked) > 6 else ''})"
+              if leaked else ""),
+           failures)
+
+
+def signature_line_corpus_assertions(failures: list[str]) -> None:
+    """Every signature-line binding seats its writing box at the cell's own
+    bottom, exactly one line tall, and centres its input -- corpus-wide, not
+    just on the one pinned form the rest of this self-test exercises (F212).
+
+    Lives beside `signature_box_corpus_assertions` for the identical reason:
+    `SignatureLineBinding` and `FieldPlan` already need `build/ir` +
+    `build/layout` + `build/fonts`, this module already knows how to read
+    them, and re-deriving the claim set independently of whatever
+    `batch.py` last emitted is what makes this a corpus check rather than a
+    one-form spot check.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every signature line is bottom-seated and centred, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    forms_checked = 0
+    lines_checked = 0
+    wrong: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            wrong.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        one_line_pt = face.size_pt * face.line_span_em
+        runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            page_index = int(page["index"])
+            runs = runs_by_page.get(page_index, ())
+            signature_boxes = SignatureBoxWriting(page["cells"], page_index, runs)
+            signature_lines = SignatureLineBinding(
+                page["cells"], page_index, runs, signature_boxes.cell_ids())
+            for cell in page["cells"]:
+                if not signature_lines.for_cell(cell["id"]):
+                    continue
+                lines_checked += 1
+                box = fields.of(cell["id"])
+                if box is None:
+                    wrong.append(f"{slug} {cell['id']}: bound, no typing surface")
+                    continue
+                if cell["id"] not in fields.centered:
+                    wrong.append(f"{slug} {cell['id']}: bound, not centred")
+                    continue
+                # Compared rounded-to-rounded: `box.line_height_pt` is always
+                # `round(x, 4)` of something (`seat_signature_line` rounds
+                # its own output; an unmodified box's own producer already
+                # rounds `height` the same way), so comparing it against the
+                # UNROUNDED `one_line_pt` can be off by up to half of 1e-4 --
+                # far more than a float-fuzz epsilon -- and reports a box
+                # this same module just fitted exactly to one line as
+                # "more than one line tall".
+                if box.line_height_pt > round(one_line_pt, 4) + 1e-6:
+                    wrong.append(
+                        f"{slug} {cell['id']}: box is {fmt(box.line_height_pt)}pt "
+                        f"tall, more than one line ({fmt(one_line_pt)}pt)")
+
+    _check(forms_checked > 0 and lines_checked > 0 and not wrong,
+           "every signature line is bottom-seated, one line tall and centred, "
+           "corpus-wide",
+           f"{forms_checked} form(s), {lines_checked} signature line(s) bound, "
+           f"{len(wrong)} wrong"
+           + (f" ({'; '.join(wrong[:6])}{'...' if len(wrong) > 6 else ''})"
+              if wrong else ""),
            failures)
 
 
@@ -9477,6 +10074,12 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
 
     print("checkbox-square corpus check", file=sys.stderr)
     checkbox_square_corpus_assertions(failures)
+
+    print("signature-box corpus check", file=sys.stderr)
+    signature_box_corpus_assertions(failures)
+
+    print("signature-line corpus check", file=sys.stderr)
+    signature_line_corpus_assertions(failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)

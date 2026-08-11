@@ -550,8 +550,23 @@ AUDIT_DEPENDENCY_SHA256 = {
     # `fixtures/prove_fixtures_fail.py`. extract.py goes from 21 checks to 22
     # and 21+24 probes to 22+24, over 7 pinned PDFs instead of 6. No existing
     # rule field, comb census or tolerance moves.
+    #
+    # Re-pinned 2026-08-11 (T5b+T5d, F211/F212), for the identical reason as
+    # T5a's own entry above: two new self-test checks (`signature-box`,
+    # `signature-line`) pin the geometric facts `emit.SignatureBoxWriting`
+    # and `emit.SignatureLineBinding` depend on -- a caption confined to a
+    # box's own top 40%, and a caption sitting below the wall the box above
+    # it also bounds -- against 2551Q page 1's "For Individual:" box and its
+    # own caption below it (no new untracked PDF; already `SELF_TEST_
+    # FIXTURES["2551Q"]`). `fixtures/rules.pdf` gains a matching shape
+    # (`make_fixtures.signature_box`, re-pinned in `FIXTURE_FIXTURES`) with
+    # its own two source-level mutations in `fixtures/prove_fixtures_fail.py`.
+    # extract.py goes from 22 checks to 24 and 22+24 probes to 24+24, still
+    # over 7 pinned PDFs. No existing rule field, comb census or tolerance
+    # moves; `build/ir/*.ir.json` is byte-identical to a re-extraction under
+    # this pin (verified directly on 2551Q, this pin's own subject).
     "tools/formgen/extract.py": (
-        "55cae5cda20f0db073f6b9eab4ed129b1d5065d2793989538ced4bc8f782e8e6"
+        "35fdeed1c5c5efc4eec6a97c37aa20877e68e19eb0ec5da71f166cdeea88d9ee"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -1738,59 +1753,97 @@ HTML_ALLOWED_TAGS = frozenset({
 # "____ = ____"). `HTML_RUNTIME_SCRIPT_SHA256` does NOT move: no runtime
 # script text changed, only the pre-rendered cell markup these 19 documents
 # carry.
+#
+# Re-pinned 2026-08-11 (T5b+T5d, F211/F212). 43 of 53 move; the other 10 are
+# byte-identical (0605-1999, 1600wp-2010, 1604cf-2008, 1701-2018-attachment,
+# 1701-2018-conso, 1702mx-2018c-attachment, 2316-2021, 2550m-2007,
+# 2551m-2002, 2553-1999 -- every one of them either carries none of either
+# target caption or binds it to nothing this session's rules will claim; see
+# `SignatureBoxWriting` and `SignatureLineBinding` in emit.py for why each is
+# refused rather than guessed at). Two causes, landed together because they
+# touch the same cells:
+#
+#   * F211: `emit.py`'s `field_verdict` gains a `signature-box` branch
+#     (`SignatureBoxWriting` / `signature_box_field_box`) that gives a
+#     `label` cell an input when its only printed ink is a top-left caption
+#     dedicating the box to the taxpayer's own signature ("For Individual:"
+#     / "For Non-Individual:") -- routed through the existing
+#     `BureauReservation` check rather than around it, so none of the 71
+#     Bureau-captioned boxes in the identical bordered-box population gain
+#     one. 54 `label` cells across 27 forms gain a NEW `<input>`.
+#   * F212: `emit.py`'s `FieldPlan` re-seats every box a "Signature (over|
+#     and) Printed Name..." caption binds (`SignatureLineBinding`,
+#     `seat_signature_line`) to a single-line strip at the CELL's own
+#     bottom, centred with an inline `text-align:center` on the plain-field
+#     input -- no new CSS class, no new declaration on an existing selector.
+#     75 boxes across 43 forms are bound: the 54 F211 creates (every one
+#     also carries this caption below it) plus 21 pre-existing `field`
+#     cells, `1701-2018` `p1c125` among them (unchanged in kind -- it
+#     already worked -- only its own `<input>`'s inline `style` moves).
+#
+# So 54 NEW `<input>` elements are added and a further 21 PRE-EXISTING ones
+# have their inline `style` attribute changed; no cell's `id`, `class` or any
+# other attribute moves, and no comb is touched. `inputs_over_printed_text`
+# stays 3 forms/6, `comb_slots_match_printed` stays 10/19, comb censuses stay
+# 4,587/33/4,554 unmoved. New standing corpus-wide self-tests
+# `emit.signature_box_corpus_assertions` and
+# `emit.signature_line_corpus_assertions` (run by `emit.py --self-test`)
+# re-derive both claim sets against every `build/ir` this checkout has.
+# `HTML_RUNTIME_SCRIPT_SHA256` does NOT move: no runtime script text changed,
+# only the pre-rendered cell/field markup on these 43 documents.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "a0cf7a393661f5a841e1372495b9626af3d8d59ff232fe1bdb99f106ad2e92be",
-    "0619e-2018": "e05ada49de7720744959f792414e7d0e0e56853af70878215e31fe21214c9bb6",
-    "0619f-2018": "227241ccd43329558e4647e86b709b2ccbd98f91f9697774b9a5bf0d0589d233",
-    "0620-2019": "38d1e6f6c4b5e3ca10d3a8a410773e05a35c35de07f0a4a3956736ab1db05c92",
-    "1600-pt-2018": "5db4f02f8ffe15f64d736380134ee769604cda000a746566df2cbc469b39edb2",
-    "1600-vt-2018": "0319a0a84c75790dc9df9618d59d9a271877780aeb2dbb8d2c625f8d0ede9a50",
+    "0619e-2018": "837900d7e2ac57faf078290d18666c8f5ffeaee47cc0b956583a5ce3c16b1db9",
+    "0619f-2018": "54900cc9ac9b6a37260d0fda60403bdd99fcc038a751d55ebf5db9d9c4c02a6b",
+    "0620-2019": "1c0af3b694e6f30365cf2b4f35dae6a9719d4eac4f9783c49dbe558f82222310",
+    "1600-pt-2018": "417025114573c50307594be8d33ce59e947bad171929fa12b40840025dc0e9c1",
+    "1600-vt-2018": "0f490d966d201939034aff5f6f0d2ae59aeff408453eadb313e17811db31fd96",
     "1600wp-2010": "297c10448f2bfc6de436ec3133769636e14a1c2882d128ef93988399938e8260",
-    "1601-fq-2020": "027dc59692fcc356bda9f37c48a7090a703accd1fe24cf20d33457cf520aa09d",
-    "1601c-2018": "bfa6c242ab3a415034f928f6d2cb9b19bf92fccb9515fbfa4d97242929480a1b",
-    "1601eq-2019": "6b1f99c38966b90afbc50469455bda02450a5adcff35607059657059c9b73a18",
-    "1602q-2019": "8d124e72c326aff36b6aa7062e5dd06cb6318a1d51145cac0a031b18888e2279",
-    "1603q-2018": "388fdd7df83ae4216e93600d86ab7b9f62e4e8f091ed2e9d9cf96196335f0df4",
-    "1604c-2018": "6d438d41fafedb0e23fcf76a5ddfddb7c265c5bd654d192d15c9c347adb7150d",
+    "1601-fq-2020": "c31babb46b32ac8dee06038649d95cf5365f4d454b99744ff1f10129ee00f943",
+    "1601c-2018": "ea4d9f992e3d979aff777ef0f3d89e38fa17d29b3e8ba679c5056429633a8fc2",
+    "1601eq-2019": "5e8bbaa4aeb944fa3c182086d52ded6574c31736f9866f9d58786cff965c672b",
+    "1602q-2019": "68a6ad8f141f424ca3fa66dd306b19376bcb0e8348aa96f465dcdf52eab3fe7b",
+    "1603q-2018": "85369479fe0b52f8c69d4dc0e3fa4d3572945b0eb450e364db004d2617a22043",
+    "1604c-2018": "926039e8ea538c640951c331f5f4a686b860ebdb40d79bad938b9b880a16b49a",
     "1604cf-2008": "bd035b490a62ed0e29a79105c2a87271e7a9118add7a1c0c8d342196f4d07c7d",
-    "1604e-2018": "3e92bf702fa82fc80cc976d8129d7046f03a16e1a608051662dab068dcd86cef",
-    "1604f-2018": "c52422569ac0225552173a30c040cb37218458d15128f396572586ae47080acc",
-    "1606-2018": "86d2bb45018bf9172729fbbb4232027dd2024dea8c5206d5c81208cee1cfd31e",
-    "1621-2019": "4ec637f454b0bd690b634be08f9851228ea67c4bfcd3de94ffb7afdb15237053",
-    "1700-2018": "41e7848f0f0ccb36aed533ad45cb90fd7103a3cdd6519a77707540f99058f65a",
+    "1604e-2018": "ee84458a8dbfb3b8afb085a0efc29dfee285b6828ae60e501d8ba4b196eee750",
+    "1604f-2018": "fb97d8ab5468d31dfea3762bd82bbbc2de75c0793deb0ea01d7f853def6d22b5",
+    "1606-2018": "6db12ef721b021208d3bf2ee09e00121263f434c750b88852975970073b22d95",
+    "1621-2019": "0d56ea12807a4b2d417c5c9fe0ef47b2adcc3b733b22f07d8d88ea41c615de03",
+    "1700-2018": "c93ca1f4071c61fe11c06faed4af843897679d1f81a1a270497bc690bb3b0437",
     "1701-2018-attachment": "2bd26bc1df46ecbdec79838baeb4d1a85ec220f93337aa74842a8943fd1d657c",
     "1701-2018-conso": "aa1f84d0738657c798719bd2c886436e39fb02d36fd2830da8eb094db21b18d8",
-    "1701-2018": "d1bb1ef32f15362a47cfbb51bf1cf4895e0a05d5757f5946d4ae5774cfb555bb",
-    "1701a-2018": "95c9f47a7e0f64399b04056bcecb9d9294592c7f146144f7dae1874361f804d6",
-    "1701ms-2024": "ae6154bb05c213404dd156ccaa3d2060519aa0c90d43fb70b4d3fe1d499f6901",
-    "1701q-2018": "64938ee49b4a95cafb21929da65c744ef89cded3976489b145cf334e9ea50675",
-    "1702ex-2018": "ab4d3b993fa3263510a8210ffdbcca12b53d75646842644bca6800aaab4b854e",
+    "1701-2018": "d62ef0f8471daefb68eb962d826e5ab670502b229d6b359c54400c55b59a0aee",
+    "1701a-2018": "6af2522f16ce0d14f8a036f4db82541ba3357ccf04f9344fbabbd1e546df507b",
+    "1701ms-2024": "b265682998370d994f8907d7c0d4b2cd98991d59bb18f27ee2bdd664022a172a",
+    "1701q-2018": "a53f08e7283b01eefc53296a3e5d76661c157f9143536275482bd14d7381d146",
+    "1702ex-2018": "2c08aa9f66b7e2a1d712d8259b692ab69fc29bda7d0b8e110910d0a51b3e8989",
     "1702mx-2018c-attachment": "7e046541d9960c3753e3af11b85ec71deea98091170e641e3cd50c98146a160e",
-    "1702mx-2018c": "7c935e5a539fc46deae56ac392ba36c27daa473cd8bf754fd71a705622c44c12",
-    "1702q-2018": "eef1123d396a59dfd24fb4c095af986bd82e0f9218d6adeaa9ce7db21a5a5133",
-    "1702rt-2018c": "c6d30c21d32380aa219aab37211bf9a291f12bcdcc8721d26887d8eb34cc4370",
-    "1706-2018": "c175e947675efec400e175f839e5b75a6683f03c76b1260f5a1eef2264881e9e",
-    "1707-2021": "faa68a8e2af4a1871efbbde2b2a202f385759d0ef8ace036b247a615a56b461d",
-    "1707a-2021": "368b4f95ced71e3ef9738b21dc4522487bc7737e2133db4119c92098ad217fc5",
-    "1709-2020": "56693f2aa97ab423cfef2d22acc36ce7d2836a97f8cd59a08aeb0fc53a2a3bb6",
-    "1800-2018": "7e6a5ee04d54ee36f343c601f90db7fcb33dbc3bfe8f8c3b265e1cb6d57cc271",
-    "1801-2018": "abed94c844ca7892360bd1c104bdd460ae2dc7c70cd80670adaa63f9d5820c2c",
-    "2000-dst-2018": "e3ce8d774cf7ba67fb461940c76342742384ec01fe078055ff4df476fbee18a2",
-    "2000-ot-2018": "c36cbfbe0bcfa43c6e17d473ec1c736c59d4249a968a598fe116a79198a42f6e",
-    "2200a-2020": "6b9813220fe19b3638962d3d1ccab234fee4196a7854af0ebda722eac5b9d93d",
-    "2200an-2018": "02ba144d05e3c452e3b26b8b6809f1c57ad804d059f44a9917103a235c613e1c",
-    "2200c-2018": "83631ba1f06b07b32b50049c2c31c58766675a8dc69030924072fe3f53096bfd",
-    "2200m-2018": "d52d03ae26df53c12505cf0accf8af892d6f2a2fbb765467f4e71417515380ed",
-    "2200p-2020": "8aa44072e6798255e58fa96b7c8bf47110a3f44f7b3369540a47434c5e008e86",
-    "2200s-2018": "0a3d501bc34e44b31f801b5da1bda811254c69789be5f0a897b9cc5a9a7c9a4a",
-    "2200t-2022": "8282bb10a4620e7471dfc587df5795d96f152fedff832ab709dec97549b48b2e",
+    "1702mx-2018c": "59f26cc1dcad78fb5ab43c58ba4b1fedbbdf0f648e79fdcb28edc59de437e3bf",
+    "1702q-2018": "2f7180e185e1b438430bcaf2e34196e96152e71c875cf53a1c9bd3a91e4a174f",
+    "1702rt-2018c": "b1a1fb22a2121d0f5da04a19fe784e1eba3260b5f1fa039dda730ebe04ddcd90",
+    "1706-2018": "3f1b30b8703c80de4b82bd97f566fd9e32769266fd096afb9870b78882cb6bf6",
+    "1707-2021": "1b0c0291c7f7c8567c4839b825bfc3b8b14930a292a44b2ba82ca06e08695bab",
+    "1707a-2021": "016fcf17f89fbd5d12f181f43963e1539e4bbe1e371fcc86cfde725f62046f41",
+    "1709-2020": "d641617ad3f958b78c47ab650f50888cc9e6cd5f2c0948723c34fd53fbbf3139",
+    "1800-2018": "9ce67ab3b9002ba253ee8dc335142c419c45fb883b3665b92367159ea2b1d00f",
+    "1801-2018": "734dd64560a6baba98ce321eeab6533c636091b3ccba714f808df816f72e6cf7",
+    "2000-dst-2018": "b3b2d41c014a4612539fbbd82b96cfd6e0dea29d3fc27453a87036bf5e0e7d02",
+    "2000-ot-2018": "6f36505be0a0cd57cd46275e70e9b39e040ebf3453b6ff85f43323b815b98c93",
+    "2200a-2020": "90aa0ec3aee2adbf648fa727ec9bc07817c3970f2b8f6a428845317c3eb41b6e",
+    "2200an-2018": "1e93efa9fcf8e21f544a7d3d797322d214539d2e108efe029be65871f13b8892",
+    "2200c-2018": "507e2a0fd64fb465dfe55f009b09c1fb792f8edcadb67f9730a1eda131f83a6d",
+    "2200m-2018": "0903e71133e6e0c21a433b3880930eae48bbca0cbbdd8fb095776e39904e5ba1",
+    "2200p-2020": "45dd364e738b9fcbdf5df8746ba2ffc05bce574a4d8b5dc52a13386007978c1e",
+    "2200s-2018": "13239ad3f5517842a94a045dd24ca9cacae14ca8ca01cd98d226a98b00a0e722",
+    "2200t-2022": "f3ee644eb874d227a7141ecb89000914ca998f6699de270b4eb16983645d23c7",
     "2316-2021": "f5a355cbb1e773148bf7d6faf8862ca2294c8c6c8662001b4d67cba30fed65eb",
-    "2550-ds-2025": "d9d6a023b89cdb9225fb10cb18302e40f7d88a996346f6b27475ada0aa65f6f2",
+    "2550-ds-2025": "71540821b15d77f68aae33504ffb6318e3fba6c9f876dbb90960af08cd36addb",
     "2550m-2007": "f094117787276fda7ce615299088ac30f860d6f5a98899f1ea71078273ca79c1",
-    "2550q-2024": "8145522733b1372340e129a5ea84f419ebf14194ba1f1c2e8470cfbc3dcc216a",
+    "2550q-2024": "b914266a71f01fcf125a087d80b3902a66c7c75ab2e1135a600208d7bea356db",
     "2551m-2002": "a77b455244b1a67e22b404363078a610a6f77eb8044264333e48e7cd1bc81c80",
-    "2551q-2018": "b7c977358c0839e20cf01df80fe9c3d3cbb59a02f894648fc524b053614fa6f2",
-    "2552-2018": "238cf2b035c2783836353e19068edaf0daace8ee770a789f4bffa25a919147a2",
+    "2551q-2018": "f061a98a5863c0d41ec1b23ccf623f7e9d9833a4610308b9f6a781a14f980c7a",
+    "2552-2018": "bd0b75cc8531598a2b9e7471ce2d8dfb1b8bec6b8759e747f8b70c1f2abd6d1c",
     "2553-1999": "eab2dc243a11b17db3a6d8c7672267d16362f302aa69990bf3e4beeb9ce9ca94",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):

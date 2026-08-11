@@ -152,6 +152,33 @@ def mutate_checkbox_square() -> None:
     fixtures.CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT = 3.0
 
 
+def mutate_signature_box() -> None:
+    """Push the in-box caption 10pt down its own box, across the top-40% line.
+
+    Nothing about the BOX moves -- its rules, thickness and role are
+    untouched, so `check_checkbox_square` (a different box on the same page)
+    and `check_tone`'s corpus-wide census see nothing -- only the caption
+    text's own baseline does, and only enough to clear
+    `emit.SIGNATURE_BOX_CAPTION_BAND`'s own top 40% of the box's 40pt height
+    by a clear margin (the caption's measured y1 sits 1.31pt inside the line
+    today, so 10pt is an order of magnitude past it, not a graze).
+    """
+    fixtures.SIGNATURE_BOX_CAPTION_DRIFT_PT = 10.0
+
+
+def mutate_signature_line() -> None:
+    """Pull the caption below the box 10pt up, past its own divider rule.
+
+    Nothing about the box's bottom rule moves -- only the caption text's own
+    baseline does, and only enough to cross to the near side of it (the
+    caption's measured y0 sits 2.57pt below the rule today, so 10pt clears
+    it by a clear margin). What breaks is the fact `emit.
+    SignatureLineBinding` reads: the caption sits on the far side of the
+    wall the box above it also bounds.
+    """
+    fixtures.SIGNATURE_LINE_CAPTION_DRIFT_PT = -10.0
+
+
 def mutate_bar_like() -> None:
     """Draw the separators exactly vertical, so none of them leans at all."""
     fixtures.LEAN_OFFSET_PT = 0.0
@@ -479,6 +506,10 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
     ("tone", "both decorative greys are painted black", mutate_tone),
     ("checkbox-square", "the checkbox square's knockout drifts 3pt off its "
      "frame's centreline", mutate_checkbox_square),
+    ("signature-box", "the in-box caption is pushed 10pt down, across the "
+     "top-40% line", mutate_signature_box),
+    ("signature-line", "the caption below is pulled 10pt up, above its own "
+     "divider rule", mutate_signature_line),
     ("is-bar-like", "the separators are drawn exactly vertical", mutate_bar_like),
     ("clips", "the probe page's scissors are never established", mutate_clips),
     ("stroke-caps", "the cap probe's every stroke is butt-capped",
@@ -509,6 +540,8 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
 PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "GREY_LIGHT"), (fixtures, "GREY_MID"),
              (fixtures, "CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT"),
+             (fixtures, "SIGNATURE_BOX_CAPTION_DRIFT_PT"),
+             (fixtures, "SIGNATURE_LINE_CAPTION_DRIFT_PT"),
              (fixtures, "right_triangle"), (fixtures, "checkerboard"),
              (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
              (extract, "CLIP_PROBE_STREAM"), (extract, "CAP_PROBE_STREAM"),
@@ -541,6 +574,7 @@ def profile_over(root: pathlib.Path) -> extract.SelfTestProfile:
         retexted_rawdict_codepoint=base.retexted_rawdict_codepoint,
         bar_like_form=base.bar_like_form, leaning_bars=base.leaning_bars,
         checkbox_square=base.checkbox_square,
+        signature_box=base.signature_box, signature_line=base.signature_line,
         is_evidence=False)
 
 
