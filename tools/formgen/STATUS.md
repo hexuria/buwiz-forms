@@ -10,6 +10,66 @@ regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
 that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
+## r49 — the overlay stops inventing walls, and blue becomes actionable
+
+**`?debug=fields` had no tone awareness, so grey decorative tint closed boxes
+that are not boxes** — the instrument a reviewer uses to find defects was
+generating them (F213). Two tone tests now, because there are two questions:
+`isTintTone` asks "can this STROKE bound a box?" and splits at
+`RULE_WALL_TINT_SPLIT_GRAY = 0.70`, inside the only genuinely empty interval in
+the corpus tone census (0.651 -> 0.7489); `isDecorPaint` asks "is this box's
+INTERIOR a shading pad?" over the wider band `(STRUCTURAL_MAX_GRAY, 1)`, 0.15
+being the pipeline's own structural cutoff rather than a new number.
+
+The census that settled it, over all 53 IRs: rule tones are eight quantised
+values. **0.502 and 0.651 are WALLS** — mid-grey checkbox outlines, 100% and
+94% short box edges, with no page-spanning run at 0.251 or 0.502 at all —
+while 0.7489/0.8509 are dominated by page-spanning band edges. The plan had
+assumed the empty interval sat between 0.251 and 0.7489; measurement refuted
+that, and a split placed there would have erased real checkboxes and hidden
+F210's whole family.
+
+Measured over 53 forms: `over` (red) fell to zero or dropped on every form and
+rose on none; `vacant` (blue) **~2,700 -> 130 across 12 forms** and rose on
+none. 0619E 12 -> 0 (its centavo-separator pads are pads, not forgotten
+fields). The survivors are real: 1701's four Schedule-1 squares **plus two
+item-8 Yes/No squares**, 1700's fourteen — F210's mechanism on a second form,
+so it is a family — and 2550M/1604CF's wide empty ruled table rows.
+
+**Two defects found while proving the above, both by testing against the real
+corpus rather than trusting the design.** (1) The vacant probe first read
+`visibleRects`' FILTERED output, which made every one of F210's squares
+vanish: a same-as-paper white knockout that nothing wholly contains is
+invisible to a filter that compares against white paper, so the probe found
+the tint under it instead of the knockout on top. (2) A structure re-pin was
+taken from `forms/` when `EXPECTED_HTML_STRUCTURE_SHA256` locks
+`build/html/` — every form then read "bytes changed from the reviewed pin" and
+the referee measured 0 of 53. Contention was the first hypothesis (the r48
+gate ran at load 65.8 under another project's test suites, and r40 collapsed
+that way) and re-running standalone on a quiet machine refuted it: 53
+identical errors is not what contention looks like. The pin's comment now
+names the tree it locks.
+
+Every tone claim is proven by running the SHIPPED bytes under node: the split
+is mutated and required to change a verdict, the paint source is passed both
+arguments and required to disagree, and the two tone tests are required to
+DISAGREE about 0.651 so a refactor collapsing them trips first.
+
+Also landed: `?debug=tab` renders `tab_check`'s JSON; `window.formgenFieldCensus`
+is one census with two consumers, so the blue boxes are burned into the same
+`page-<N>.png` as the green/red tab verdicts — one review surface, per the
+user's request; `review-serve` re-roots at `forms/` so both trees share a root.
+
+**Gate r49: 10/13**, determinism byte-identical (`2ab6f9da241e`). Referee
+healthy: 53 forms measured, 0 errors, 4,587 combs found, **4,508 agree, ZERO
+disagreements**, 4,554 active, 33 retained. Assertions unmoved at
+`inputs_over_printed_text` 3 forms/6 and `comb_slots_match_printed` 10/19,
+verified against a complete 53-form audit after a truncated 48-form run first
+read as an improvement. 45,333 inputs. Tab walk 53/53 green. The `findings`
+check went from UNEVALUABLE (r47, two malformed entries) to a genuine FAIL
+reporting 10/143 blocker+major unresolved — an unevaluable check hides what it
+cannot measure, so this is the check working for the first time this round.
+
 ## r47 — tab order holds on all 53 forms, and the walk that proves it is a tool
 
 **Keyboard tab order now follows the printed reading order corpus-wide, and
