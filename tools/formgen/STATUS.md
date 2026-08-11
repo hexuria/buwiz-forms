@@ -11,6 +11,62 @@ that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
 
+
+## T5b + T5d — 54 signable boxes, 71 Bureau boxes untouched (F211/F212 fixed)
+
+**Gate r52: 10/13**, determinism byte-identical (`1ebe225b54d1`), open
+blocker+major **7 -> 6**, and `inputs_over_printed_text` **3 forms/6 -> 2/5** --
+the first assertion improvement this session.
+
+0619E's "For Individual:" / "For Non-Individual:" boxes took no input because
+one ~9pt caption run at the top-left corner set `is_empty=False`, so the cell
+was a `label` and `field_verdict` refused it. One caption run cost a 302x43pt
+writing surface, and the overlay could not report it either: `vacant` skips any
+printed box containing text, correct in general and blind here. 0620 `p1c87` is
+the control -- same box, no interior caption, shipping an input all along.
+
+**The measurement that mattered was the one taken BEFORE writing code.** The
+obvious rule -- "a bordered box whose ink is confined to a top strip" --
+selects **126 cells**, and they are two families: **54 signature boxes**
+(exactly 2 per form on 27 forms) and **71 BUREAU-ONLY areas** ("Machine
+Validation", "Stamp of Receiving Office/AAB", "Stamp of Authorized Agent
+Bank"), plus one unclassified (`1600wp-2010 p1c93`, a table column header
+"(8)", claimed by neither vocabulary and left alone). Shipping the naive rule
+would have made 71 Bureau stamp boxes writable by the taxpayer.
+
+**And the ordering trap under it:** `BureauReservation` (`emit.py:2481`)
+already recognises those captions, but `field_verdict` refuses `kind != field`
+at rule 2 while the Bureau check is rule 4b -- so for these cells the guard was
+never consulted. A promotion written carelessly would have sailed straight past
+it. `SignatureBoxWriting` calls `reservation.blocks(...)` explicitly before
+returning True. Verified in a browser: 0619E `p1c139` ("Machine Validation")
+has **0 inputs**.
+
+T5d seats a signature line at its cell's bottom via `field_box`'s existing
+inline inset and centres it with inline `text-align:center` -- no new CSS class
+or stylesheet declaration, both of which the referee's allowlist rejects.
+Target set 75 boxes / 43 forms: T5b's 54 plus 21 pre-existing signature
+fields including `1701-2018 p1c125`, the strip the user typed into. Measured
+in Chromium: input 13.42px tall in a 45.59px cell, 0.63px above the bottom
+border (the border itself), `text-align: center`.
+
+**A styling fix closed a correctness offender**: 1701MS `p1c287` grazed a
+printed run at exactly 0.0000pt clearance, and bottom-seating moved it clear.
+
+Verified: inputs 45,413 -> **45,467 (+54)**; corpus walk **53/53 green**; blue
+census **108, unmoved**; `comb_slots_match_printed` 10/19 and censuses
+4,587/33/4,554 unmoved; seven self-tests pass, 19 proven mutations; 43
+structure pins re-derived from `build/html`.
+
+**Operator error worth recording.** I first measured this package's audit
+immediately after merging, while `build/ir` and `build/layout` still held the
+previous package's geometry, and reported 3 forms/6 -- calling the agent's
+2 forms/5 an unearned improvement. The gate, which regenerates before
+auditing, published 2/5 on a consistent tree. The rule this file already
+states ("measure both sides with ONE instrument, on a tree that was actually
+written") is the one I broke. Stale `build/` after a merge is not a neutral
+starting point.
+
 ## T5a — the checkbox squares the lattice could not see (F210 fixed)
 
 **Gate r51: 10/13**, determinism byte-identical (`b47a82b63e68`), open
