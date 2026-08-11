@@ -1571,6 +1571,147 @@ def field_box(cell: dict[str, Any], face: FieldFace,
                     regions)
 
 
+# extract.py's rule origin, restated here because emit.py reads the IR as JSON
+# and carries no import of the module that produces it. Must read exactly
+# `extract.RULE_ORIGIN_TEXT_UNDERSCORE`.
+RULE_ORIGIN_TEXT_UNDERSCORE = "text-underscore"
+
+
+def ruled_blank_field_box(cell: dict[str, Any], rules: Sequence[dict[str, Any]],
+                          face: FieldFace, ink: "PrePrintedInk | None",
+                          ) -> FieldBox | None:
+    """The writing surface a label cell's own underscore-drawn rule(s) earn it.
+
+    F148/F149: item 9 on 1701 page 4 prints "Other Tax Credits/Payments
+    (specify)" followed by a ruled blank on the SAME line, and the caption and
+    the blank are one `label` cell -- `field_verdict` refuses every `label`,
+    so the taxpayer had no way to state what the credit was. **A ruled blank
+    is written ON its line, not below it**: the strip lattice.py cuts beneath
+    the rule is a 3.22pt sliver, too thin to hold a glyph, and correctly
+    classified `blank` -- the writing space is the caption cell's OWN paper,
+    to the right of the caption, sitting on the bar.
+
+    One box per rule, in reading order (top to bottom, then left to right),
+    because a caption can carry more than one blank on its own line -- 1706
+    page 2 sets "____ % X ____ = ____" as three, and 1600-WP's masthead sets
+    "Page ____ of ____" as two. `emit.RuledBlankWriting` has already resolved
+    which rules belong to this cell before this is called; a rule claimed by
+    two `label` cells at once (2550Q page 2's fraction bar under "Total
+    Sales", underscored rather than drawn) is refused THERE, not here.
+
+    Geometry, not a re-derivation of `field_box`'s: the box sits ABOVE its
+    rule, seated on it -- `y1` is the rule's own top edge, so the box never
+    overlaps the ink a taxpayer's own line is ruled with, and `x0`/`x1` are
+    the rule's own extent, because that is exactly the span the sheet left
+    blank (the caption's glyphs end before the underscores begin; there is no
+    printed ink to trim horizontally). Height is capped at ONE line -- the
+    modal body face's own natural line box -- never the cell's remaining
+    height, which is most of a wrapped caption's own second line on some
+    forms. `writing_box_clear_of_printed_ink` still runs per box, because nothing
+    here has looked at whether some OTHER run (a caption two lines up) hangs
+    into it, and that function already answers exactly that question.
+
+    A cell's regions share one metrics class (`FieldBox.metrics_key`), so
+    every surviving box is reclamped to the SHORTEST one after its own trim:
+    two blanks on one line where only one meets printed ink still render at
+    one size, one line, like every other multi-region field in this corpus.
+    """
+    if face.line_span_em <= 0.0:
+        return None
+    ordered = sorted(rules, key=lambda r: (float(r["y0"]), float(r["x0"])))
+    one_line = face.size_pt * face.line_span_em
+    cy0 = float(cell["y0"])
+
+    boxes: list[tuple[float, float, float, float]] = []
+    for rule in ordered:
+        headroom = float(rule["y0"]) - cy0
+        if headroom <= 0.0:
+            continue
+        height = min(headroom, one_line)
+        rx0, rx1, ry1 = float(rule["x0"]), float(rule["x1"]), float(rule["y0"])
+        ry0 = ry1 - height
+        tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((rx0, ry0, rx1, ry1), ink)
+        if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0:
+            continue
+        boxes.append((tx0, ty0, tx1, ty1))
+    if not boxes:
+        return None
+
+    shared_height = min(y1 - y0 for _x0, y0, _x1, y1 in boxes)
+    size = min(face.size_pt, _floor2(shared_height / face.line_span_em))
+    if size <= 0.0:
+        return None
+    spacing = None
+    if face.size_pt > 0 and abs(face.letter_spacing_pt) > 0:
+        scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
+        if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
+            spacing = scaled
+
+    cx0, cx1, cy1 = float(cell["x0"]), float(cell["x1"]), float(cell["y1"])
+    # Every region's top is reclamped to its own bottom minus the ONE shared
+    # height, not to whatever its own (possibly less-trimmed) box left it at
+    # -- see the docstring's last paragraph.
+    insets = tuple(
+        ((y1 - shared_height) - cy0, cx1 - x1, cy1 - y1, x0 - cx0)
+        for x0, _y0, x1, y1 in boxes
+    )
+    if len(insets) == 1:
+        return FieldBox("text", insets[0], size, round(shared_height, 4),
+                        spacing, None, None)
+    return FieldBox("text", insets[0], size, round(shared_height, 4),
+                    spacing, None, insets)
+
+
+class RuledBlankWriting:
+    """Which `label` cells a ruled blank earns an input, per page (F148/F149).
+
+    Two filters, both load-bearing. A rule must be `RULE_ORIGIN_TEXT_UNDERSCORE`
+    -- extract.py's own statement that it measured the bar off underscore
+    glyphs rather than a path operator (`extract.ruled_blank_bars`) -- and it
+    must be `role == "structural"` (`gray == 0.0`): 58 of this corpus's 118
+    underscore-drawn bars are `knockout` (`gray == 1.0`, white-on-colour
+    lettering inside a legend/swatch, 1600-PT/1600-VT/1606/1706), and every
+    one of them sits over paper the lattice never even cut a cell for. Tone
+    is the same discriminator CLAUDE.md already requires for every other rule
+    on this sheet: width says how thick a stroke is, only grey says whether a
+    taxpayer is meant to see it.
+
+    A rule claimed by more than one `label` cell is refused rather than
+    guessed at. 2550Q page 2 sets "VAT Exempt Sale" over "Total Sales" as a
+    fraction, and the bar between them -- drawn with underscore glyphs, not a
+    path -- straddles the boundary between the two caption cells exactly the
+    way F148's own writing line straddles `label`/`blank`. There the second
+    cell is empty; here it holds "Total Input Tax attributable to Exempt
+    Sale", so admitting it would print a live `<input>` over that caption's
+    own printed text -- the one population `inputs_over_printed_text` exists
+    to catch. Ownership by exactly one `label` cell is what tells a writing
+    line from a fraction bar the sheet happened to draw the same way.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, rules: Sequence[dict[str, Any]],
+                 cells: Sequence[dict[str, Any]]) -> None:
+        label_cells = [c for c in cells if c["kind"] == "label"]
+        claims: dict[str, list[dict[str, Any]]] = {}
+        for rule in rules:
+            if (rule.get("origin") != RULE_ORIGIN_TEXT_UNDERSCORE
+                    or rule.get("role") != "structural"):
+                continue
+            rx0, ry0 = float(rule["x0"]), float(rule["y0"])
+            rx1, ry1 = float(rule["x1"]), float(rule["y1"])
+            owners = [c for c in label_cells
+                     if float(c["x0"]) <= rx0 and rx1 <= float(c["x1"])
+                     and ry0 < float(c["y1"]) and ry1 > float(c["y0"])]
+            if len(owners) != 1:
+                continue
+            claims.setdefault(owners[0]["id"], []).append(rule)
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> Sequence[dict[str, Any]]:
+        return self._claims.get(cell_id, ())
+
+
 # A cell whose own width is mostly pre-printed glyph ink is not a blank the
 # taxpayer can write in, whatever the box detector made of it: it is a table
 # cell whose text lattice.py assigned to a neighbour because the run crosses
@@ -2260,11 +2401,20 @@ class BureauReservation:
 
 def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   shading: DecorativeShading | None,
-                  reservation: "BureauReservation | None") -> tuple[bool, str]:
+                  reservation: "BureauReservation | None",
+                  ruled_blanks: "RuledBlankWriting | None" = None) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Four rules, in this order, and the order is the point:
+    Five rules, in this order, and the order is the point:
 
+      * **A `label` cell whose paper carries its own underscore-drawn writing
+        line is a field there, whatever else refuses it.** F148/F149: a ruled
+        blank is written ON its line, so the writing space is the CAPTION
+        cell's own paper, not the sliver `lattice.classify_cell` cuts beneath
+        the rule. `RuledBlankWriting` has already resolved ownership -- one
+        `label` cell, one or more of its own rules -- so this asks it rather
+        than re-deriving the geometry. See `RuledBlankWriting` and
+        `ruled_blank_field_box`.
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
         "." or "%" inside it is decoration within that field, not a label. Only
@@ -2313,6 +2463,9 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     Passing None for either means that evidence was not measured -- the caller
     says so in its report rather than the check silently passing.
     """
+    if (cell["kind"] == "label" and ruled_blanks is not None
+            and ruled_blanks.for_cell(cell["id"])):
+        return True, "ruled-blank"
     if cell.get("comb"):
         # Left as it stands, on measurement rather than on principle. Exactly
         # one comb-bearing cell in the corpus is >= 70% covered by decorative
@@ -2487,17 +2640,30 @@ class FieldPlan:
             int(page["index"]): BureauReservation(
                 page["text_runs"], page["rules"], page["area_fills"])
             for page in (ir or {}).get("pages", ())}
+        # Rules only, keyed the same way: RuledBlankWriting needs the layout's
+        # OWN cells (to know which are `label`), so it is built per page below
+        # rather than alongside the three evidence indices above.
+        rules_by_page = {int(page["index"]): page["rules"]
+                         for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
             ink = ink_by_page.get(int(page["index"]))
             shading = shading_by_page.get(int(page["index"]))
             reservation = reservation_by_page.get(int(page["index"]))
+            rules = rules_by_page.get(int(page["index"]))
+            ruled_blanks = (RuledBlankWriting(rules, page["cells"])
+                            if rules is not None else None)
             for cell in page["cells"]:
-                fillable, reason = field_verdict(cell, ink, shading, reservation)
+                fillable, reason = field_verdict(cell, ink, shading, reservation,
+                                                 ruled_blanks)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
                     continue
-                box = field_box(cell, face, ink)
+                if reason == "ruled-blank":
+                    box = ruled_blank_field_box(
+                        cell, ruled_blanks.for_cell(cell["id"]), face, ink)
+                else:
+                    box = field_box(cell, face, ink)
                 if box is None:
                     warnings.append(f"cell {cell['id']}: the field's writing box has no "
                                     f"height, so it gets no typing surface")
@@ -7288,10 +7454,15 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     shading = {int(p["index"]): DecorativeShading(p["area_fills"]) for p in ir["pages"]}
     reservation = {int(p["index"]): BureauReservation(
         p["text_runs"], p["rules"], p["area_fills"]) for p in ir["pages"]}
+    rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+    ruled_blanks = {int(p["index"]): RuledBlankWriting(
+        rules_by_page.get(int(p["index"]), ()), p["cells"])
+        for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
                                  shading.get(int(p["index"])),
-                                 reservation.get(int(p["index"])))[0]]
+                                 reservation.get(int(p["index"])),
+                                 ruled_blanks.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -7349,6 +7520,82 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     writing_box_assertions(plan, failures)
     field_debug_assertions(html, failures)
     tab_debug_assertions(html, failures)
+
+
+def ruled_blank_corpus_assertions(failures: list[str]) -> None:
+    """Every underscore-drawn writing line earns its label cell an input --
+    corpus-wide, not just on the one pinned form the rest of this self-test
+    exercises.
+
+    F148/F149 were found by the user tabbing through 1701 page 4 by hand.
+    That is the class this check ends: it re-derives, independently of
+    whatever `batch.py` last emitted, which rules `RuledBlankWriting` would
+    admit on EVERY form this checkout has extracted, and fails loudly if any
+    of them lacks a typing surface. A form added to `build/ir` after this
+    check was written is covered the moment it is extracted, by construction
+    -- nothing here names a slug.
+
+    Runs over `build/ir` + `build/layout` + `build/fonts`, which is why it
+    lives beside emit.py's other self-test assertions rather than in
+    `audit.py` (locked) or `comb_referee.py` (an independent referee scoped
+    to comb geometry, not to this mechanism): those three directories are
+    exactly what `FieldPlan` and `RuledBlankWriting` already need, this
+    module already knows how to read them, and `python3 tools/formgen/
+    emit.py --self-test` is a check an operator runs directly and one of the
+    ten modules `gate.py`'s own `SELF_TEST_MODULES` runs on every gate round
+    -- the same enforcement point as every other assertion in this file.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every underscore-drawn writing line has an input, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    forms_checked = 0
+    rules_checked = 0
+    unfilled: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            unfilled.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            ruled_blanks = RuledBlankWriting(
+                rules_by_page.get(int(page["index"]), ()), page["cells"])
+            for cell in page["cells"]:
+                claimed = ruled_blanks.for_cell(cell["id"])
+                if not claimed:
+                    continue
+                rules_checked += len(claimed)
+                if fields.of(cell["id"]) is None:
+                    unfilled.append(
+                        f"{slug} {cell['id']}: {len(claimed)} underscore-drawn "
+                        f"rule(s) claimed, no typing surface")
+
+    # rules_checked > 0 is load-bearing, not decoration: a discovery mechanism
+    # that silently claimed nothing would leave `unfilled` empty too, and
+    # "not unfilled" alone would pass having verified nothing at all.
+    _check(forms_checked > 0 and rules_checked > 0 and not unfilled,
+           "every underscore-drawn writing line has an input, corpus-wide",
+           f"{forms_checked} form(s), {rules_checked} rule(s) claimed, "
+           f"{len(unfilled)} without a typing surface"
+           + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
+              if unfilled else ""),
+           failures)
 
 
 def _synthetic_comb(cells: int, x0: float, pitch: float,
@@ -8914,6 +9161,9 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
               file=sys.stderr)
         print("constructed cases", file=sys.stderr)
         constructed_assertions(ir, layout, plan, None, failures)
+
+    print("ruled-blank corpus check", file=sys.stderr)
+    ruled_blank_corpus_assertions(failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)

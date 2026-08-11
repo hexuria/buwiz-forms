@@ -10,6 +10,84 @@ regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
 that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
+## T5c — a ruled blank is written on its line, not below it (F148/F149 fixed)
+
+**Measured 2026-08-11, worktree `wt/t5c-ruled-blanks`, base `2a34a0c`, on top
+of r47.** F148/F149: 1701 p4 item 9 and 1701A p2 item 63 ("Other Tax
+Credits/Payments (specify)") had no input for the ruled blank beside the
+caption, because the caption and the blank are one `label` cell and
+`field_verdict` refuses every `label`. The r37 attempt at this was reverted
+(F200) because underscores were TEXT then, so an input on the blank overlapped
+a printed run; P3 made a run of underscores draw a RULE instead
+(`extract.ruled_blank_bars`), which removed the conflict but left rules with
+no way to tell an underscore-drawn bar from an ordinary one.
+
+**Provenance first.** Every rule now carries `origin`:
+`RULE_ORIGIN_TEXT_UNDERSCORE` for a bar `ruled_blank_bars` measured off
+underscore glyphs, `RULE_ORIGIN_VECTOR` for everything else. `merge_intervals`
+takes the origin per contributor and a merged run's own origin is
+text-underscore only when EVERY contributor is — a vector fragment abutting a
+writing line on the same band ("one stroke on paper") reports vector-origin,
+never guessed to be a writing line because part of it is. `Segment.to_ir`
+publishes it as a 15th rule key; `SCHEMA_VERSION` does not move (a key added,
+per its own comment).
+
+**Then the input.** `emit.field_verdict` gives a `label` cell an input when
+its own paper carries a structural, singly-owned underscore-drawn rule
+(`RuledBlankWriting`); the box is seated ON the rule (`ruled_blank_field_box`)
+— one line tall, bottom edge the rule's own top, x-extent the rule's own — and
+a cell carrying more than one blank on its own line ("Page ___ of ___",
+"___ % X ___ = ___") gets one region per blank, reusing the same
+`region_insets` multi-input mechanism 39 other cells already use for a
+printed-divider split.
+
+**Census.** 118 underscore-drawn rules corpus-wide (matches F200's own 118
+published). 60 are `role: "structural"`; the other 58 are `role: "knockout"`
+(white-on-colour lettering inside a legend/swatch on
+1600-PT/1600-VT/1606/1706) and fall inside no lattice cell at all — excluded
+by construction, not by a new rule. Of the 60 structural rules, 1 is claimed
+by two `label` cells at once — 2550Q p2's fraction bar under "Total Sales",
+itself underscore-drawn — and is refused rather than guessed at, the same way
+F148's own writing line would be ambiguous between two labels; the other 59
+are singly-owned, but two of the 54 owning cells claim more than one rule
+(1600wp-2010's "Page ___ of ___" and one row on 1706-2018), so **54 cells /
+58 rules / 58 `<input>` elements** across **19 forms**: 1600wp-2010, 1601c-2018,
+1603q-2018, 1700-2018, 1701-2018, 1701a-2018, 1701ms-2024, 1701q-2018,
+1702mx-2018c, 1706-2018, 1801-2018, 2200a-2020, 2200an-2018, 2200m-2018,
+2200p-2020, 2200t-2022, 2550-ds-2025, 2550q-2024, 2551q-2018.
+
+**Nothing else moves.** `inputs_over_printed_text` **3 forms / 6 offenders**,
+unmoved (the r43 baseline exactly). `comb_slots_match_printed` **10 forms /
+19 offenders**, unmoved. Comb censuses **4,587 subjects / 33 retained / 4,554
+comb cells**, unmoved (`comb_referee.py` run against the assertions-only
+audit: census fields agree exactly; the deeper position-agreement adjudication
+needs a full roundtrip audit, not run here, consistent with not running the
+full gate). Tab-walk **53/53 fully green**, `p4c213-i` reached in reading
+order between item 8's comb and item 9's own money comb. Inputs **45,333 →
+45,391** (+58, exactly the `<input>` count above). Two `batch.py` runs over
+the full 53-form corpus are byte-identical (`build/html`, `build/ir`,
+`build/layout`, `forms/`). 1701 p4 item 9 verified typeable in a real
+Chromium page: `goto` → `click` → keyboard `type` → `input_value()` read back.
+
+**Standing check.** `emit.ruled_blank_corpus_assertions`, run by
+`emit.py --self-test`, re-derives the 58-rule claim set against every
+`build/ir` + `build/layout` + `build/fonts` triple this checkout has and
+fails if any claimed cell lacks a typing surface (`rules_checked > 0` is
+asserted too, so a broken discovery mechanism that silently claimed nothing
+cannot pass by having verified nothing — proven with two independent
+mutations, neither committed). `fixtures/prove_fixtures_fail.py` gained a
+dedicated written-here probe (`RULE_ORIGIN_PROBE_STREAM`) and source-level
+mutation (`rule-origin`) proving the merge-collapses-to-vector rule can fail;
+`extract.py --self-test` gained the matching in-memory check and mutation,
+20 checks → 21.
+
+**Pins.** `EXPECTED_HTML_STRUCTURE_SHA256` re-pinned in `comb_referee.py` for
+the 19 moved slugs (the other 34 byte-identical); `HTML_RUNTIME_SCRIPT_SHA256`
+unmoved (no runtime script text changed).
+`AUDIT_DEPENDENCY_SHA256["tools/formgen/extract.py"]` re-pinned to
+`extract.py`'s new bytes. `audit.py` and `gate.py` were not touched and their
+pins do not move. Review findings: F148 and F149 both `fixed`.
+
 ## r49 — the overlay stops inventing walls, and blue becomes actionable
 
 **`?debug=fields` had no tone awareness, so grey decorative tint closed boxes

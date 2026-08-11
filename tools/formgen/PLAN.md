@@ -1013,14 +1013,31 @@ items 3/4/12 reds gone; per-form blue counts published before and after.
 
 ### T5 — the missing-input family (measurement-first; `audit.py` locked)
 
-- **T5c first — it is unblocked** (F148/F149). The r37 attempt was reverted
-  only because underscores were TEXT then (F200); P3 made them RULES, so the
-  conflict is gone. Stamp underscore-derived rules with provenance in
-  `extract.py` (`origin: "text-underscore"`; rule dicts have no key locks),
-  and let `field_verdict` give a `label` cell holding such a rule one input
-  over the rule's x-extent, one line tall, seated ON the line. Acceptance:
-  F148/F149 cells gain inputs; `inputs_over_printed_text` does **not**
-  regress; comb censuses unmoved.
+- **T5c — DONE** (F148/F149 fixed; worktree `wt/t5c-ruled-blanks`). Every rule
+  in `extract.py` now carries `origin` (`RULE_ORIGIN_TEXT_UNDERSCORE` for a
+  `ruled_blank_bars` bar, `RULE_ORIGIN_VECTOR` otherwise; a merged bar is
+  text-underscore only when EVERY contributor is), and `emit.py`'s
+  `field_verdict` gives a `label` cell one input per structural,
+  singly-owned underscore-drawn rule it carries (`RuledBlankWriting`,
+  `ruled_blank_field_box` — one line tall, seated on the rule, x-extent the
+  rule's own; a cell with more than one blank on its own line, e.g.
+  "Page ___ of ___", gets one region per blank). Corpus: 118 underscore-drawn
+  rules total, 60 structural (58 are `role: "knockout"` — white-on-colour
+  legend lettering on 1600-PT/1600-VT/1606/1706, inside no lattice cell at
+  all); of the 60, 1 is claimed by two `label` cells at once (2550Q p2's
+  fraction bar under "Total Sales", refused rather than guessed at) and 58
+  are singly-owned, spanning 54 cells across 19 forms. 54 cells / 58 inputs
+  gained; `inputs_over_printed_text` **3/6 unmoved**,
+  `comb_slots_match_printed` **10/19 unmoved**, comb censuses **4,587/33/4,554
+  unmoved**, tab-walk **53/53 green** with every new input in reading order,
+  inputs **45,333 → 45,391**, two `batch.py` runs byte-identical. New standing
+  corpus-wide self-test `emit.ruled_blank_corpus_assertions` (run by
+  `emit.py --self-test`) re-derives the claim set against every `build/ir`
+  this checkout has and fails if any claimed cell lacks a typing surface —
+  F148's class is machine-checked from here on. `EXPECTED_HTML_STRUCTURE_SHA256`
+  re-pinned for the 19 moved slugs and `AUDIT_DEPENDENCY_SHA256["tools/formgen/
+  extract.py"]` re-pinned in `comb_referee.py`; `audit.py` and `gate.py` pins
+  untouched.
 - **T5a** (F210). Two candidates, measurement decides: (i) a knockout
   interior inside a decorative rule box, checkbox-sized ⇒ field (F206's
   marker family); (ii) admit mid-tone rules into lattice intake at the split
