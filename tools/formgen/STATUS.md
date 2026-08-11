@@ -10,6 +10,47 @@ regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
 that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
+
+## T5a — the checkbox squares the lattice could not see (F210 fixed)
+
+**Gate r51: 10/13**, determinism byte-identical (`b47a82b63e68`), open
+blocker+major **8 -> 7**. The Taxpayer/Spouse squares in 1701 Part V
+Schedule 1 are drawn at gray 0.251, which `tone_role` calls decorative and
+`lattice.py:6295` excludes from grid intake, so no lattice line existed at
+their edges, the area collapsed to one `label` cell, and `field_verdict`
+refused it. The source stated its own intent beside those rules all along:
+each square's interior carries a white KNOCKOUT fill -- the sheet painting the
+box back to paper.
+
+**Two independent instruments agreed on the population before anything was
+built.** An IR-side geometric census (closed box of four decorative rules
+around a knockout fill, 4-20pt) and the browser-side tone-aware `vacant`
+census from T3+T4 -- entirely separate code paths, one reading the extracted
+content stream, the other reading rendered SVG -- both return **22 squares
+across exactly 3 forms**: 1700-2018 fourteen, 1701-2018 six, 1701A-2018 two.
+All 22 at a single stroke tone. That agreement is what made the target set
+trustworthy rather than an artifact of one instrument's assumptions.
+
+The implementing agent measured BOTH candidate mechanisms and chose the
+tighter one: knockout-interior-of-a-decorative-box selects exactly those 22
+and nothing else, where admitting mid-tone rules into the lattice would have
+reclassified cells on 11 and 26 forms that no finding has reviewed.
+
+Verified independently, in a browser, by the user's own method: all six 1701
+p2 squares reached by Tab (positions 704/705 for the item-8 Yes/No pair the
+user had not spotted, 731/732 and 798/799 for Schedule 1), focused, typed
+into, read back. Inputs 45,391 -> **45,413** (+22). Corpus walk 53/53 green.
+**Blue census 130 -> 108**, with those three forms at exactly 0 -- the
+remaining 108 are a different class (2550M's 59 and 1604CF's 40 wide empty
+ruled table rows) and were correctly untouched. Assertions unmoved at 3/6 and
+10/19; censuses 4,587 / 33 / 4,554. Seven self-tests pass, 17 proven mutations.
+
+Checked because they touch standing rules: `~/Downloads/forms` was read from
+during regeneration and is untouched (274 files, none modified that day,
+working tree clean), and no official BIR PDF was committed -- the only PDF in
+the diff is the synthetic `fixtures/rules.pdf` that `make_fixtures.py`
+generates.
+
 ## T5c — a ruled blank is written on its line, not below it (F148/F149 fixed)
 
 **Gate r50: 10/13**, determinism byte-identical (`684cedfdd9f8`), open
