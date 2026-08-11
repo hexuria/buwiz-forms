@@ -535,8 +535,23 @@ AUDIT_DEPENDENCY_SHA256 = {
     # and 20+24 probes to 21+24. `SCHEMA_VERSION` does NOT move (a key ADDED
     # to a structure, per its own comment) and no existing rule field, comb
     # census or tolerance moves.
+    #
+    # Re-pinned 2026-08-11 (T5a, F210): a new self-test check
+    # (`checkbox-square`) pins the geometric fact `emit.checkbox_square_boxes`
+    # depends on -- a KNOCKOUT fill sitting on its own frame rules' centreline,
+    # within their own half-thickness -- deliberately leaving role/tone to
+    # `check_tone`'s existing corpus-wide scan, so the two checks cannot stand
+    # in for each other. `SELF_TEST_FIXTURES` gains a seventh real PDF, "1701"
+    # (already used elsewhere in this pipeline; no new untracked dependency),
+    # naming 1701 page 2's Part V Schedule-1 "Taxpayer" square as
+    # `SELF_TEST_CHECKBOX_SQUARE`; the synthetic corpus gains a matching shape
+    # in `fixtures/rules.pdf` (`make_fixtures.checkbox_square`, re-pinned in
+    # `FIXTURE_FIXTURES`) with its own source-level mutation in
+    # `fixtures/prove_fixtures_fail.py`. extract.py goes from 21 checks to 22
+    # and 21+24 probes to 22+24, over 7 pinned PDFs instead of 6. No existing
+    # rule field, comb census or tolerance moves.
     "tools/formgen/extract.py": (
-        "370304dfbe08c426483bcf456c45f725fd3e85d19f31ba891b5350890eb3fa65"
+        "55cae5cda20f0db073f6b9eab4ed129b1d5065d2793989538ced4bc8f782e8e6"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -1188,6 +1203,33 @@ HTML_STYLESHEET_FIXED_VALUES: dict[tuple[str, str], frozenset[str]] = {
 # of build/html or the referee will reject the whole corpus.
 # Re-pinned 2026-08-11 (T3+T4). Read only by the referee, which runs last.
 #
+# Re-pinned 2026-08-11 (T5a, F210): `emit.py`'s `field_verdict` gains a
+# `checkbox-square` branch (`CheckboxSquareWriting` / `checkbox_square_
+# field_box`) that gives a `label` cell an input for every checkbox square
+# printed inside it -- a closed box of four DECORATIVE rules whose interior
+# carries a KNOCKOUT fill, 4-20pt on both axes, the source's own "write here"
+# that the lattice never turns into a cell boundary. Corpus-wide this selects
+# exactly 22 squares on exactly 3 forms -- 1700-2018 (14), 1701-2018 (6, the
+# four Schedule-1 Taxpayer/Spouse boxes plus the two item-8 Foreign-Tax-Credit
+# Yes/No boxes), 1701a-2018 (2) -- independently corroborated by the
+# tone-aware `?debug=fields` overlay's `vacant` census (6/14/2, computed in a
+# browser from the rendered SVG, a completely different code path). 11 label
+# cells gain an input, 22 `<input>` elements are added (every claimed cell
+# holds exactly two squares). No comb constant moves and no existing tolerance
+# moves; `inputs_over_printed_text` stays 3 forms/6, `comb_slots_match_printed`
+# stays 10/19, comb censuses stay 4,587/33/4,554 unmoved. New standing
+# corpus-wide self-test `emit.checkbox_square_corpus_assertions` (run by
+# `emit.py --self-test`) re-derives the claim set against every `build/ir`
+# this checkout has and fails if any claimed cell lacks a typing surface.
+# `EXPECTED_HTML_STRUCTURE_SHA256` re-pinned for the 3 moved slugs.
+# `AUDIT_DEPENDENCY_SHA256["tools/formgen/extract.py"]` (this file's own
+# earlier pin) is ALSO re-pinned this session, but for an unrelated reason:
+# extract.py's own self-test corpus gained a `checkbox-square` check, not an
+# extraction behaviour change -- every `build/ir/*.ir.json` byte-matches a
+# re-extraction of the same source PDF. `HTML_RUNTIME_SCRIPT_SHA256` does NOT
+# move (no runtime script text changed, only pre-rendered cell markup on
+# these 3 documents).
+#
 # The THIRD moved once more in the same session, for the vacant probe's
 # INTERIOR test only (operator review of T3+T4). `isTintTone` answers "can
 # this STROKE bound a box?" and keeps its 0.70 split, because 0.651 strokes
@@ -1715,11 +1757,11 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1604f-2018": "c52422569ac0225552173a30c040cb37218458d15128f396572586ae47080acc",
     "1606-2018": "86d2bb45018bf9172729fbbb4232027dd2024dea8c5206d5c81208cee1cfd31e",
     "1621-2019": "4ec637f454b0bd690b634be08f9851228ea67c4bfcd3de94ffb7afdb15237053",
-    "1700-2018": "0c74bcd45385ae722d10b1ceda80ed6bc20a38bc7e79058b39753b9b1477cff3",
+    "1700-2018": "41e7848f0f0ccb36aed533ad45cb90fd7103a3cdd6519a77707540f99058f65a",
     "1701-2018-attachment": "2bd26bc1df46ecbdec79838baeb4d1a85ec220f93337aa74842a8943fd1d657c",
     "1701-2018-conso": "aa1f84d0738657c798719bd2c886436e39fb02d36fd2830da8eb094db21b18d8",
-    "1701-2018": "c4fa5acabdffd13e8d6be30a53393c3e84b27995047804c00c015f9354abd2d1",
-    "1701a-2018": "c3b7dfef76d18f74735a6bd8577f6a2a6c821ae64a3325c26fb23accdd3c12ba",
+    "1701-2018": "d1bb1ef32f15362a47cfbb51bf1cf4895e0a05d5757f5946d4ae5774cfb555bb",
+    "1701a-2018": "95c9f47a7e0f64399b04056bcecb9d9294592c7f146144f7dae1874361f804d6",
     "1701ms-2024": "ae6154bb05c213404dd156ccaa3d2060519aa0c90d43fb70b4d3fe1d499f6901",
     "1701q-2018": "64938ee49b4a95cafb21929da65c744ef89cded3976489b145cf334e9ea50675",
     "1702ex-2018": "ab4d3b993fa3263510a8210ffdbcca12b53d75646842644bca6800aaab4b854e",

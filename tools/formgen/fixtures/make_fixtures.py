@@ -2,7 +2,7 @@
 """Build the synthetic PDF corpus extract.py's --self-test measures in CI.
 
 `extract.py --self-test` is the strongest check this pipeline has, and none of
-it could run anywhere but this laptop: every assertion is pinned against six
+it could run anywhere but this laptop: every assertion is pinned against seven
 official BIR PDFs that are deliberately untracked (`*.pdf` is gitignored, they
 are official documents, and they are pinned by sha256 precisely so a swapped
 file fails loudly). A CI job that skipped it would print a green tick having
@@ -13,7 +13,7 @@ So this builds a second corpus that *is* trackable. Each file here is the
 smallest PDF that still exercises one property the real corpus taught us about,
 and the docstring on each builder names the real form it stands in for. The
 fixtures do not replace the real pins: a fixture can only ever encode what this
-module already believes, whereas the six official files are evidence. Both pin
+module already believes, whereas the seven official files are evidence. Both pin
 tables live in extract.py and both are still runnable; `--self-test` alone reads
 the real one.
 
@@ -63,6 +63,20 @@ GREY_LIGHT = 0.8509
 GREY_MID = 0.6509
 WHITE = 1.0
 BLACK = 0.0
+
+# F210's checkbox square: a closed box of four DECORATIVE rules (frame) around
+# a KNOCKOUT interior (the source's own "write here"), reproduced at the
+# corpus's own scale. The frame is painted GREY_MID, the SAME live constant
+# every other decorative rule in this fixture uses (not a snapshot), so
+# `mutate_tone`'s corpus-wide "paint every decorative rule black" reaches it
+# too, exactly as it reaches the rest of the corpus's decorative ink.
+CHECKBOX_SQUARE_THICKNESS_PT = THICKNESSES_PT[1]
+
+# How far prove_fixtures_fail.py's mutate_checkbox_square slides the knockout
+# fill off the frame's own centreline. Zero in every built fixture; a
+# dedicated constant rather than an inline literal so the mutation can reach
+# it without editing the drawing call.
+CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT = 0.0
 
 # A stroked separator that leans less than its own stroke width. 2316 draws
 # twelve of these; an exact-alignment test demoted every one of them out of
@@ -195,6 +209,38 @@ def comb_band(page: fitz.Page, rect: fitz.Rect, slots: int,
         bar(page, x, rect.y0, x + thickness, rect.y1, BLACK)
 
 
+def checkbox_square(page: fitz.Page, x0: float, y0: float, x1: float,
+                    y1: float) -> None:
+    """F210's checkbox square: four DECORATIVE rules around a KNOCKOUT fill.
+
+    `x0,y0,x1,y1` is the KNOCKOUT interior -- the box a taxpayer marks -- not
+    the frame. The frame is drawn OUTWARD from it, exactly the relationship
+    the real corpus's 22 squares measure: each rule's own centre sits ON the
+    knockout's edge (so the knockout is the frame's centreline rectangle,
+    never independently placed), and each side's LENGTH runs half the frame's
+    own thickness past the interior's corner so the two perpendicular bars
+    close the corner rather than leaving a gap. `checkbox_square_boxes` in
+    emit.py matches a candidate rule to a knockout fill on precisely this
+    tolerance -- see its docstring.
+
+    The knockout is offset by `CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT`, zero in
+    every built fixture: prove_fixtures_fail.py's mutate_checkbox_square sets
+    it non-zero to slide the fill off the frame's centreline without
+    touching any rule's tone, so that mutation trips `checkbox-square` alone
+    -- `check_tone`'s corpus-wide decorative census, which owns
+    `mutate_tone`, never sees a changed gray value.
+    """
+    thickness = CHECKBOX_SQUARE_THICKNESS_PT
+    half = thickness / 2.0
+    tone = GREY_MID
+    drift = CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT
+    bar(page, x0 - half, y0 - half, x1 + half, y0 + half, tone)   # top
+    bar(page, x0 - half, y1 - half, x1 + half, y1 + half, tone)   # bottom
+    bar(page, x0 - half, y0 - half, x0 + half, y1 + half, tone)   # left
+    bar(page, x1 - half, y0 - half, x1 + half, y1 + half, tone)   # right
+    bar(page, x0 + drift, y0, x1 + drift, y1, WHITE)              # knockout
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -244,6 +290,14 @@ def build_rules() -> fitz.Document:
     # outlined in black. `fs` in get_drawings(), two entries in get_bboxlog().
     first.draw_rect(fitz.Rect(64, 428, 200, 446), color=gray(BLACK),
                     fill=gray(WHITE), width=THICKNESSES_PT[1])
+
+    # F210's checkbox square: a closed box of four DECORATIVE rules around a
+    # KNOCKOUT interior, drawn as four separate filled bars plus a fill --
+    # never a single stroked rect -- because that is how the BIR generator
+    # draws it (see checkbox_square()'s own docstring). Placed clear of the
+    # tint band above (which ends at y452) and the comb below (which starts
+    # at y480).
+    checkbox_square(first, 500, 460, 511, 471)
 
     comb_band(first, fitz.Rect(48, 480, 480, 504), slots=12, group_after=4)
 

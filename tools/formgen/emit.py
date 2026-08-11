@@ -1712,6 +1712,216 @@ class RuledBlankWriting:
         return self._claims.get(cell_id, ())
 
 
+# The size band a checkbox square's own KNOCKOUT interior falls in --
+# `checkbox_square_boxes`' box detector -- measured across the corpus's real
+# population rather than guessed: every one of the 22 real squares measures
+# 9.12-12.0pt on both axes, comfortably inside a 4-20pt band that is wide
+# enough to admit them and narrow enough to exclude every wide reference-table
+# knockout F206 catalogued separately (the narrowest of those is 56pt).
+CHECKBOX_SQUARE_MIN_PT = 4.0
+CHECKBOX_SQUARE_MAX_PT = 20.0
+# The float-fuzz margin ADDED to a candidate rule's own half-thickness, never
+# a substitute for it -- see `checkbox_square_boxes` for why half-thickness is
+# the exact, measured tolerance and not a tuned guess.
+CHECKBOX_SQUARE_EDGE_SLACK_PT = 0.02
+
+
+def checkbox_square_boxes(rules: Sequence[dict[str, Any]],
+                          fills: Sequence[dict[str, Any]],
+                          ) -> list[dict[str, Any]]:
+    """Every closed decorative-rule box whose interior is a knockout square.
+
+    F210, CLAUDE.md's own mechanism, restated once and read from here on: the
+    square is drawn by four DECORATIVE rules (`role == "decorative"`, the tone
+    band strictly between structural black and knockout white) closing a box,
+    and the source paints the interior back to paper with a KNOCKOUT fill
+    (`role == "knockout"`) -- the sheet's own "write here". `lattice.tone_role`
+    calls that frame decorative and `lattice.build_page` builds the x/y
+    lattice from structural rules only, so this area never becomes a lattice
+    boundary; the caption glyphs beside it ("Taxpayer", "Yes", ...) then
+    swallow the whole region into one `label` cell, and `field_verdict`
+    refuses every `label` before this ever runs. See its `checkbox-square`
+    branch, the one reader of this function's output.
+
+    The tolerance matching a candidate rule to the fill's own edge is NOT a
+    constant: it is that rule's OWN half-thickness (plus the fixed float-fuzz
+    margin above), because the knockout is painted to the frame's INNER edge
+    while the "centre" read off each rule here is the stroke's geometric
+    centre -- exactly half its own thickness from that inner edge. Measured
+    over the corpus's 22 real squares, the observed deviation is exactly
+    0.24pt on every 0.48pt-thick frame and exactly 0.36pt on every 0.72pt-thick
+    one -- precisely half their own stroke, with no spread -- so this is the
+    tolerance the paper itself states, not one tuned to make a count match.
+
+    A closed box needs FOUR rules and they need not be four DISTINCT ones: two
+    checkboxes stacked in one frame (1701 Schedule 1's Taxpayer/Spouse pair)
+    share their left and right verticals, drawn as one continuous stroke
+    spanning both boxes. So only the horizontal top/bottom edges are matched
+    on LENGTH as well as position -- a rule whose own x-extent does not match
+    the fill's is some other band merely passing close by, exactly the trap a
+    page-wide 0.8509 row separator sets 1.5pt from a real box edge on
+    1700-2018 -- while the verticals are matched on COVERAGE alone, never
+    length, or the shared-wall case above would be refused.
+
+    Corpus-wide this selects exactly 22 squares on exactly 3 forms
+    (1700-2018: 14, 1701-2018: 6, 1701a-2018: 2), independently corroborated
+    by the tone-aware `?debug=fields` overlay's `vacant` census computed in a
+    browser from the rendered SVG -- a completely different code path
+    reporting the identical 6/14/2.
+    """
+    h_dec = [r for r in rules
+            if r.get("axis") == "h" and r.get("role") == "decorative"]
+    v_dec = [r for r in rules
+            if r.get("axis") == "v" and r.get("role") == "decorative"]
+    squares: list[dict[str, Any]] = []
+    for fill in fills:
+        if fill.get("role") != "knockout":
+            continue
+        fx0, fy0 = float(fill["x0"]), float(fill["y0"])
+        fx1, fy1 = float(fill["x1"]), float(fill["y1"])
+        width, height = fx1 - fx0, fy1 - fy0
+        if not (CHECKBOX_SQUARE_MIN_PT <= width <= CHECKBOX_SQUARE_MAX_PT
+                and CHECKBOX_SQUARE_MIN_PT <= height <= CHECKBOX_SQUARE_MAX_PT):
+            continue
+
+        def find_h(y_target: float) -> dict[str, Any] | None:
+            for rule in h_dec:
+                tol = float(rule["thickness_pt"]) / 2.0 + CHECKBOX_SQUARE_EDGE_SLACK_PT
+                centre = (float(rule["y0"]) + float(rule["y1"])) / 2.0
+                if (abs(centre - y_target) <= tol
+                        and abs(float(rule["x0"]) - fx0) <= tol
+                        and abs(float(rule["x1"]) - fx1) <= tol):
+                    return rule
+            return None
+
+        def find_v(x_target: float) -> dict[str, Any] | None:
+            for rule in v_dec:
+                tol = float(rule["thickness_pt"]) / 2.0 + CHECKBOX_SQUARE_EDGE_SLACK_PT
+                centre = (float(rule["x0"]) + float(rule["x1"])) / 2.0
+                if (abs(centre - x_target) <= tol
+                        and float(rule["y0"]) <= fy0 + tol
+                        and float(rule["y1"]) >= fy1 - tol):
+                    return rule
+            return None
+
+        top, bottom = find_h(fy0), find_h(fy1)
+        left, right = find_v(fx0), find_v(fx1)
+        if top is None or bottom is None or left is None or right is None:
+            continue
+        squares.append({
+            "x0": fx0, "y0": fy0, "x1": fx1, "y1": fy1,
+            "top_pt": float(top["thickness_pt"]),
+            "bottom_pt": float(bottom["thickness_pt"]),
+            "left_pt": float(left["thickness_pt"]),
+            "right_pt": float(right["thickness_pt"]),
+        })
+    return squares
+
+
+class CheckboxSquareWriting:
+    """Which `label` cells a checkbox square earns an input, per page (F210).
+
+    Mirrors `RuledBlankWriting`'s shape exactly, for the identical reason: a
+    `label` cell may hold more than one square (1701 Schedule 1's row holds
+    both the Taxpayer and the Spouse box; item 8 holds the Yes and the No
+    box), each earning its own region, and a square whose interior is not
+    contained in exactly one `label` cell is refused rather than guessed at.
+    Measured over the corpus this refusal never fires -- all 22 squares land
+    inside exactly one `label` cell each -- but it is kept because nothing
+    here may assume the shape of a form it has not read.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, rules: Sequence[dict[str, Any]],
+                 fills: Sequence[dict[str, Any]],
+                 cells: Sequence[dict[str, Any]]) -> None:
+        label_cells = [c for c in cells if c["kind"] == "label"]
+        claims: dict[str, list[dict[str, Any]]] = {}
+        for square in checkbox_square_boxes(rules, fills):
+            sx0, sy0 = square["x0"], square["y0"]
+            sx1, sy1 = square["x1"], square["y1"]
+            owners = [c for c in label_cells
+                     if float(c["x0"]) <= sx0 and sx1 <= float(c["x1"])
+                     and float(c["y0"]) <= sy0 and sy1 <= float(c["y1"])]
+            if len(owners) != 1:
+                continue
+            claims.setdefault(owners[0]["id"], []).append(square)
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> Sequence[dict[str, Any]]:
+        return self._claims.get(cell_id, ())
+
+
+def checkbox_square_field_box(cell: dict[str, Any],
+                              squares: Sequence[dict[str, Any]],
+                              face: FieldFace, ink: "PrePrintedInk | None",
+                              ) -> FieldBox | None:
+    """The single-character writing surface a checkbox square earns (F210).
+
+    One region per square, in reading order (top to bottom, then left to
+    right) -- a `label` cell can hold more than one, the same shape
+    `ruled_blank_field_box` answers for a caption's own writing line.
+
+    The box is the square's own interior: the knockout fill's rectangle,
+    inset by the FRAME rule's own thickness on each side -- the identical
+    clearance `field_box` gives an ordinary cell (see its docstring for why
+    the full thickness, not half, is the deliberate margin). This is a
+    mark-with-an-X box, so one character is the whole capacity; nothing here
+    invents a new element, a new attribute or a maxlength -- it is rendered
+    by `field_input_markup`, the same function every other plain field goes
+    through.
+
+    A cell's regions share one metrics class, so -- exactly as
+    `ruled_blank_field_box` reclamps two blanks on one caption line to the
+    shorter one -- every surviving region here is reclamped to the SHORTEST
+    one after its own trim. It is reclamped CENTRED rather than seated on an
+    edge: a checkbox square has no baseline to write a line of text on, so
+    there is no "seat on the rule" reason `ruled_blank_field_box` has to
+    anchor at the bottom, and a mark meant to land inside a small square is
+    better centred in it than pinned to one side.
+    """
+    if face.line_span_em <= 0.0:
+        return None
+    ordered = sorted(squares, key=lambda s: (s["y0"], s["x0"]))
+
+    boxes: list[tuple[float, float, float, float]] = []
+    for square in ordered:
+        x0 = square["x0"] + square["left_pt"]
+        y0 = square["y0"] + square["top_pt"]
+        x1 = square["x1"] - square["right_pt"]
+        y1 = square["y1"] - square["bottom_pt"]
+        tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((x0, y0, x1, y1), ink)
+        if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0:
+            continue
+        boxes.append((tx0, ty0, tx1, ty1))
+    if not boxes:
+        return None
+
+    shared_height = min(y1 - y0 for _x0, y0, _x1, y1 in boxes)
+    size = min(face.size_pt, _floor2(shared_height / face.line_span_em))
+    if size <= 0.0:
+        return None
+    spacing = None
+    if face.size_pt > 0 and abs(face.letter_spacing_pt) > 0:
+        scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
+        if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
+            spacing = scaled
+
+    cx0, cx1 = float(cell["x0"]), float(cell["x1"])
+    cy0, cy1 = float(cell["y0"]), float(cell["y1"])
+    insets = tuple(
+        (((y0 + y1 - shared_height) / 2.0) - cy0, cx1 - x1,
+         cy1 - ((y0 + y1 + shared_height) / 2.0), x0 - cx0)
+        for x0, y0, x1, y1 in boxes
+    )
+    if len(insets) == 1:
+        return FieldBox("text", insets[0], size, round(shared_height, 4),
+                        spacing, None, None)
+    return FieldBox("text", insets[0], size, round(shared_height, 4),
+                    spacing, None, insets)
+
+
 # A cell whose own width is mostly pre-printed glyph ink is not a blank the
 # taxpayer can write in, whatever the box detector made of it: it is a table
 # cell whose text lattice.py assigned to a neighbour because the run crosses
@@ -2402,10 +2612,12 @@ class BureauReservation:
 def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   shading: DecorativeShading | None,
                   reservation: "BureauReservation | None",
-                  ruled_blanks: "RuledBlankWriting | None" = None) -> tuple[bool, str]:
+                  ruled_blanks: "RuledBlankWriting | None" = None,
+                  checkbox_squares: "CheckboxSquareWriting | None" = None,
+                  ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Five rules, in this order, and the order is the point:
+    Six rules, in this order, and the order is the point:
 
       * **A `label` cell whose paper carries its own underscore-drawn writing
         line is a field there, whatever else refuses it.** F148/F149: a ruled
@@ -2415,6 +2627,14 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         `label` cell, one or more of its own rules -- so this asks it rather
         than re-deriving the geometry. See `RuledBlankWriting` and
         `ruled_blank_field_box`.
+      * **A `label` cell whose paper carries its own checkbox square is a
+        field there too.** F210: the square is a closed box of decorative
+        rules the lattice never turns into a boundary, painted back to paper
+        with a knockout fill -- the source's own "write here" -- so the
+        caption glyphs beside it ("Taxpayer", "Yes", ...) swallow the whole
+        area into one `label` cell that `lattice.classify_cell` never
+        segments. `CheckboxSquareWriting` has already resolved ownership; see
+        it and `checkbox_square_field_box`.
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
         "." or "%" inside it is decoration within that field, not a label. Only
@@ -2466,6 +2686,9 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     if (cell["kind"] == "label" and ruled_blanks is not None
             and ruled_blanks.for_cell(cell["id"])):
         return True, "ruled-blank"
+    if (cell["kind"] == "label" and checkbox_squares is not None
+            and checkbox_squares.for_cell(cell["id"])):
+        return True, "checkbox-square"
     if cell.get("comb"):
         # Left as it stands, on measurement rather than on principle. Exactly
         # one comb-bearing cell in the corpus is >= 70% covered by decorative
@@ -2640,21 +2863,28 @@ class FieldPlan:
             int(page["index"]): BureauReservation(
                 page["text_runs"], page["rules"], page["area_fills"])
             for page in (ir or {}).get("pages", ())}
-        # Rules only, keyed the same way: RuledBlankWriting needs the layout's
-        # OWN cells (to know which are `label`), so it is built per page below
-        # rather than alongside the three evidence indices above.
+        # Rules only, keyed the same way: RuledBlankWriting and
+        # CheckboxSquareWriting need the layout's OWN cells (to know which
+        # are `label`), so each is built per page below rather than
+        # alongside the three evidence indices above.
         rules_by_page = {int(page["index"]): page["rules"]
+                         for page in (ir or {}).get("pages", ())}
+        fills_by_page = {int(page["index"]): page["area_fills"]
                          for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
             ink = ink_by_page.get(int(page["index"]))
             shading = shading_by_page.get(int(page["index"]))
             reservation = reservation_by_page.get(int(page["index"]))
             rules = rules_by_page.get(int(page["index"]))
+            fills = fills_by_page.get(int(page["index"]))
             ruled_blanks = (RuledBlankWriting(rules, page["cells"])
                             if rules is not None else None)
+            checkbox_squares = (
+                CheckboxSquareWriting(rules, fills or (), page["cells"])
+                if rules is not None else None)
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
-                                                 ruled_blanks)
+                                                 ruled_blanks, checkbox_squares)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -2662,6 +2892,9 @@ class FieldPlan:
                 if reason == "ruled-blank":
                     box = ruled_blank_field_box(
                         cell, ruled_blanks.for_cell(cell["id"]), face, ink)
+                elif reason == "checkbox-square":
+                    box = checkbox_square_field_box(
+                        cell, checkbox_squares.for_cell(cell["id"]), face, ink)
                 else:
                     box = field_box(cell, face, ink)
                 if box is None:
@@ -7598,6 +7831,83 @@ def ruled_blank_corpus_assertions(failures: list[str]) -> None:
            failures)
 
 
+def checkbox_square_corpus_assertions(failures: list[str]) -> None:
+    """Every checkbox square earns its label cell an input -- corpus-wide,
+    not just on the one pinned form the rest of this self-test exercises.
+
+    F210 was found by the user tabbing through 1701 page 2 by hand and
+    confirmed real by the tone-aware `?debug=fields` overlay. That is the
+    class this check ends, the same shape `ruled_blank_corpus_assertions`
+    already gives F148/F149: it re-derives, independently of whatever
+    `batch.py` last emitted, which squares `CheckboxSquareWriting` would
+    admit on EVERY form this checkout has extracted, and fails loudly if any
+    of them lacks a typing surface. A form added to `build/ir` after this
+    check was written is covered the moment it is extracted, by construction
+    -- nothing here names a slug.
+
+    Lives beside `ruled_blank_corpus_assertions` for the identical reason:
+    `build/ir` + `build/layout` + `build/fonts` are exactly what `FieldPlan`
+    and `CheckboxSquareWriting` already need, this module already knows how
+    to read them, and `python3 tools/formgen/emit.py --self-test` is a check
+    an operator runs directly and one of the ten modules `gate.py`'s own
+    `SELF_TEST_MODULES` runs on every gate round.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every checkbox square has an input, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    forms_checked = 0
+    squares_checked = 0
+    unfilled: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            unfilled.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+        fills_by_page = {int(p["index"]): p["area_fills"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            checkbox_squares = CheckboxSquareWriting(
+                rules_by_page.get(int(page["index"]), ()),
+                fills_by_page.get(int(page["index"]), ()),
+                page["cells"])
+            for cell in page["cells"]:
+                claimed = checkbox_squares.for_cell(cell["id"])
+                if not claimed:
+                    continue
+                squares_checked += len(claimed)
+                if fields.of(cell["id"]) is None:
+                    unfilled.append(
+                        f"{slug} {cell['id']}: {len(claimed)} checkbox "
+                        f"square(s) claimed, no typing surface")
+
+    # squares_checked > 0 is load-bearing, not decoration: a discovery
+    # mechanism that silently claimed nothing would leave `unfilled` empty
+    # too, and "not unfilled" alone would pass having verified nothing at all.
+    _check(forms_checked > 0 and squares_checked > 0 and not unfilled,
+           "every checkbox square has an input, corpus-wide",
+           f"{forms_checked} form(s), {squares_checked} square(s) claimed, "
+           f"{len(unfilled)} without a typing surface"
+           + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
+              if unfilled else ""),
+           failures)
+
+
 def _synthetic_comb(cells: int, x0: float, pitch: float,
                     y0: float, height: float,
                     writing: tuple[float, float] | None = None) -> dict[str, Any]:
@@ -9164,6 +9474,9 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
 
     print("ruled-blank corpus check", file=sys.stderr)
     ruled_blank_corpus_assertions(failures)
+
+    print("checkbox-square corpus check", file=sys.stderr)
+    checkbox_square_corpus_assertions(failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)

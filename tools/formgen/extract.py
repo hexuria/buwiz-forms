@@ -2289,6 +2289,10 @@ SELF_TEST_FIXTURES: dict[str, tuple[str, str, str]] = {
     # Twelve leaning stroked separators that must stay rules.
     "2316": ("2316v2021/2316 Sep 2021 ENCS_Final_corrected.pdf", "2021",
              "8e927e65b096d7a786ba7d36c55c28ee3de3546278880d9de8c11a91d1b48d60"),
+    # F210's checkbox squares: four DECORATIVE rules around a KNOCKOUT
+    # interior that the lattice never turns into a cell boundary.
+    "1701": ("1701v2018/1701 Jan 2018 final with rates.pdf", "2018",
+             "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e"),
 }
 
 # (code, width_pt, height_pt, page_count). Folio, not A4 and not Letter.
@@ -2348,6 +2352,14 @@ SELF_TEST_TONES: tuple[tuple[float, str], ...] = (
     (1.0, "knockout"),
 )
 
+# F210's checkbox square, restated as a subject pin the same shape as
+# SELF_TEST_MASKED / SELF_TEST_FLIPPED: (form code, the KNOCKOUT interior's
+# x0,y0,x1,y1, the frame rules' own thickness). 1701 page 2's Part V Schedule
+# 1 "Taxpayer" box -- the first of the four the user found unfillable by
+# hand -- drawn by h165/h169/h170/h172/v236/v241 at 0.72pt.
+SELF_TEST_CHECKBOX_SQUARE: tuple[str, float, float, float, float, float] = (
+    "1701", 31.44, 359.76, 42.72, 370.56, 0.72)
+
 
 class SelfTestProfile:
     """One corpus, and every number pinned against it.
@@ -2368,7 +2380,8 @@ class SelfTestProfile:
                  "masked", "flipped", "paths_form", "triangles",
                  "decimal_points", "tones", "retexted_glyphs",
                  "retexted_glyph_id", "retexted_rawdict_codepoint",
-                 "bar_like_form", "leaning_bars", "is_evidence")
+                 "bar_like_form", "leaning_bars", "checkbox_square",
+                 "is_evidence")
 
     def __init__(self, *, name: str, source_root: pathlib.Path,
                  fixtures: dict[str, tuple[str, str, str]],
@@ -2378,7 +2391,9 @@ class SelfTestProfile:
                  tones: tuple[tuple[float, str], ...],
                  retexted_glyphs: dict[str, int], retexted_glyph_id: int,
                  retexted_rawdict_codepoint: int, bar_like_form: str,
-                 leaning_bars: int, is_evidence: bool) -> None:
+                 leaning_bars: int,
+                 checkbox_square: tuple[str, float, float, float, float, float],
+                 is_evidence: bool) -> None:
         self.name = name
         self.source_root = source_root
         self.fixtures = fixtures
@@ -2395,6 +2410,7 @@ class SelfTestProfile:
         self.retexted_rawdict_codepoint = retexted_rawdict_codepoint
         self.bar_like_form = bar_like_form
         self.leaning_bars = leaning_bars
+        self.checkbox_square = checkbox_square
         # Whether this corpus is evidence about the world or a restatement of
         # this module's own beliefs. Printed with the result so a passing
         # synthetic run can never be read as the real one.
@@ -2418,6 +2434,7 @@ REAL_PROFILE = SelfTestProfile(
     retexted_rawdict_codepoint=SELF_TEST_RETEXTED_RAWDICT_CODEPOINT,
     bar_like_form=SELF_TEST_BAR_LIKE_FORM,
     leaning_bars=SELF_TEST_LEANING_BARS,
+    checkbox_square=SELF_TEST_CHECKBOX_SQUARE,
     is_evidence=True,
 )
 
@@ -2441,10 +2458,10 @@ FIXTURE_SOURCE_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures"
 FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # Paper, determinism, merged runs drawn as short bars plus corner squares,
     # all four thicknesses, both decorative greys, a white knockout, a
-    # fill+stroke drawing and a comb band.
+    # fill+stroke drawing, a checkbox square (T5a, F210) and a comb band.
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "42b7bf64491e53d5afec01e1876530268b1e4611c950acd76ebfdeae9fef29f5"),
+        "dc0e218a026ff2cc8efcaeb7d55b1409531fbc1f462fc90262ecf53e5bc6da57"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",
@@ -2493,6 +2510,12 @@ FIXTURE_PROFILE = SelfTestProfile(
     retexted_rawdict_codepoint=0xA7,
     bar_like_form="FIXTURE-LEAN",
     leaning_bars=12,
+    # A closed box of four 0.48pt-thick decorative rules around an 11x11pt
+    # knockout interior at (500,460)-(511,471) -- read directly off the built
+    # fixture (make_fixtures.checkbox_square), not computed from it, so a
+    # geometry change in the builder is caught here rather than silently
+    # re-measured.
+    checkbox_square=("FIXTURE-RULES", 500.0, 460.0, 511.0, 471.0, 0.48),
     is_evidence=False,
 )
 
@@ -3730,6 +3753,67 @@ def check_tone(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def check_checkbox_square(evidence: dict[str, Any]) -> list[str]:
+    """A checkbox square's knockout interior sits on its frame's own centreline.
+
+    F210 (fixed in T5a): emit.py recognises a checkbox square by matching a
+    KNOCKOUT fill to the four rules that frame it, on a tolerance that is the
+    frame's OWN half-thickness -- see `emit.checkbox_square_boxes`'s
+    docstring for why that tolerance is exact and not a guess. That geometric
+    relationship is what this pins: the pinned subject's fill sits at the
+    pinned coordinates, and a rule of the pinned thickness frames each of its
+    four edges there.
+
+    Deliberately silent about ROLE (decorative vs structural): `check_tone`
+    already proves every rule's role is correctly derived from its own grey
+    corpus-wide, including this one's, so re-asserting it here would let one
+    corpus PDF's mutation trip both checks and hide which of the two actually
+    failed. What check_tone does NOT test is the geometric fact
+    `checkbox_square_boxes` depends on -- that this specific fill sits ON
+    this specific frame -- and that is the only thing pinned here.
+
+    `profile.checkbox_square` is a subject pin the same shape as
+    `SELF_TEST_MASKED` / `SELF_TEST_FLIPPED`: one named form and one named
+    box, not a corpus-wide census. On `REAL_PROFILE` it is 1701 page 2's Part
+    V Schedule 1 "Taxpayer" square; on `FIXTURE_PROFILE` it is the synthetic
+    one `make_fixtures.checkbox_square` draws.
+    """
+    code, fx0, fy0, fx1, fy1, thickness = evidence["profile"].checkbox_square
+    ir = evidence["ir"].get(code)
+    if ir is None:
+        return [f"{code}: not in this profile's corpus"]
+    failures: list[str] = []
+    if not any(
+            abs(f["x0"] - fx0) < 0.01 and abs(f["y0"] - fy0) < 0.01
+            and abs(f["x1"] - fx1) < 0.01 and abs(f["y1"] - fy1) < 0.01
+            for page in ir["pages"] for f in page["area_fills"]):
+        failures.append(f"{code}: no fill at the pinned checkbox interior "
+                        f"({fx0}, {fy0}, {fx1}, {fy1})")
+    for edge_name, target, axis in (
+            ("top", fy0, "h"), ("bottom", fy1, "h"),
+            ("left", fx0, "v"), ("right", fx1, "v")):
+        found = None
+        for page in ir["pages"]:
+            for rule in page["rules"]:
+                if rule["axis"] != axis:
+                    continue
+                centre = ((rule["y0"] + rule["y1"]) / 2.0 if axis == "h"
+                          else (rule["x0"] + rule["x1"]) / 2.0)
+                if abs(centre - target) < 0.01:
+                    found = rule
+                    break
+            if found is not None:
+                break
+        if found is None:
+            failures.append(f"{code}: no {axis}-rule at the checkbox {edge_name} "
+                            f"edge {target}")
+        elif abs(float(found["thickness_pt"]) - thickness) > 0.01:
+            failures.append(
+                f"{code}: the checkbox {edge_name} frame is {found['thickness_pt']}pt "
+                f"thick, expected {thickness}pt")
+    return failures
+
+
 def check_clips(evidence: dict[str, Any]) -> list[str]:
     """Ink outside its scissor never reaches the IR, and ink inside is untouched.
 
@@ -4293,6 +4377,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("transforms", check_transforms),
     ("paths", check_paths),
     ("tone", check_tone),
+    ("checkbox-square", check_checkbox_square),
     ("clips", check_clips),
     ("stroke-caps", check_stroke_caps),
     ("ruled-blank-split", check_ruled_blank_split),
@@ -4553,6 +4638,28 @@ def mutate_bar_like(evidence: dict[str, Any]) -> None:
                          if not bar_matches_rule(rule, bar)]
 
 
+def mutate_checkbox_square(evidence: dict[str, Any]) -> None:
+    """Drop the checkbox frame's top rule, exactly as a broken join would.
+
+    Geometry, not tone: `check_checkbox_square` pins the geometric fact
+    `checkbox_square_boxes` (emit.py) reads -- a rule of the frame's own
+    thickness at each of the knockout's four edges -- deliberately leaving
+    role/tone to `check_tone`'s own corpus-wide scan (see both docstrings).
+    So the mutation that proves it removes a frame edge outright rather than
+    repainting it, which would only restate `mutate_tone`'s case.
+    """
+    code, _fx0, fy0, _fx1, _fy1, _thickness = evidence["profile"].checkbox_square
+    for page in evidence["ir"][code]["pages"]:
+        before = len(page["rules"])
+        page["rules"] = [
+            rule for rule in page["rules"]
+            if not (rule["axis"] == "h" and rule["role"] == "decorative"
+                    and abs((rule["y0"] + rule["y1"]) / 2.0 - fy0) < 0.01)]
+        if len(page["rules"]) != before:
+            return
+    raise AssertionError("checkbox-square mutation found no checkbox frame rule")
+
+
 SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ...] = (
     ("determinism", "one serialisation gains a byte", mutate_determinism),
     ("paper", "the paper subject's height becomes Letter", mutate_paper),
@@ -4567,6 +4674,8 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
      mutate_transforms),
     ("paths", "one filled triangle is dropped", mutate_paths),
     ("tone", "a decorative grey rule is reported as structural", mutate_tone),
+    ("checkbox-square", "the checkbox frame's top rule is dropped",
+     mutate_checkbox_square),
     ("clips", "a bar drawn outside its scissor is painted anyway", mutate_clips),
     ("stroke-caps", "a round-capped bar is published at its declared endpoints",
      mutate_stroke_caps),

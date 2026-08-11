@@ -137,6 +137,21 @@ def mutate_tone() -> None:
     fixtures.GREY_MID = 0.0
 
 
+def mutate_checkbox_square() -> None:
+    """Slide the checkbox square's knockout 3pt off its frame's centreline.
+
+    No rule's tone moves -- the frame stays exactly as decorative as it was
+    -- so `check_tone`'s corpus-wide census is untouched and only
+    `checkbox-square` trips. What breaks is the geometric fact
+    `checkbox_square_boxes` (emit.py) actually reads: the knockout fill sits
+    on the frame's own centreline, within half the frame's own thickness.
+    3pt clears that tolerance by an order of magnitude, so the fixture's
+    checkbox stops being a checkbox square by the same measure real evidence
+    would -- a knockout printed somewhere the frame does not bound it.
+    """
+    fixtures.CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT = 3.0
+
+
 def mutate_bar_like() -> None:
     """Draw the separators exactly vertical, so none of them leans at all."""
     fixtures.LEAN_OFFSET_PT = 0.0
@@ -462,6 +477,8 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
     ("transforms", "the seal is placed unflipped", mutate_transforms),
     ("codepoints", "the unmappable glyph is not emitted", mutate_codepoints),
     ("tone", "both decorative greys are painted black", mutate_tone),
+    ("checkbox-square", "the checkbox square's knockout drifts 3pt off its "
+     "frame's centreline", mutate_checkbox_square),
     ("is-bar-like", "the separators are drawn exactly vertical", mutate_bar_like),
     ("clips", "the probe page's scissors are never established", mutate_clips),
     ("stroke-caps", "the cap probe's every stroke is butt-capped",
@@ -491,6 +508,7 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
 # in the corpus.
 PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "GREY_LIGHT"), (fixtures, "GREY_MID"),
+             (fixtures, "CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT"),
              (fixtures, "right_triangle"), (fixtures, "checkerboard"),
              (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
              (extract, "CLIP_PROBE_STREAM"), (extract, "CAP_PROBE_STREAM"),
@@ -522,6 +540,7 @@ def profile_over(root: pathlib.Path) -> extract.SelfTestProfile:
         retexted_glyph_id=base.retexted_glyph_id,
         retexted_rawdict_codepoint=base.retexted_rawdict_codepoint,
         bar_like_form=base.bar_like_form, leaning_bars=base.leaning_bars,
+        checkbox_square=base.checkbox_square,
         is_evidence=False)
 
 
