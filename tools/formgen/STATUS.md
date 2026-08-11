@@ -12,6 +12,22 @@ superseded by the r43 section.
 
 ## T5c — a ruled blank is written on its line, not below it (F148/F149 fixed)
 
+**Gate r50: 10/13**, determinism byte-identical (`684cedfdd9f8`), open
+blocker+major **10 -> 8**. Verified independently of the implementing agent,
+in a real browser, by the method the user used to find the defect: Tab pressed
+until `#p4c213-i` took focus (2,413 presses), then typed into and read back.
+Corpus walk 53/53 green; 1701 2,835 green / 0 red. Inputs 45,333 -> **45,391**.
+Assertions unmoved: `inputs_over_printed_text` 3 forms/6 (the assertion that
+killed the r37 attempt), `comb_slots_match_printed` 10/19.
+
+**The standing check is load-bearing, and it proved it immediately.** Right
+after the merge, `emit --self-test` FAILED with "53 form(s), 0 rule(s)
+claimed" -- `build/` still held artifacts from the pre-provenance extractor, so
+there were no underscore rules to check and the `rules_checked > 0` guard
+refused to pass while having verified nothing. Regenerating fixed it. A check
+that can report success over an empty population is not a check.
+
+
 **Measured 2026-08-11, worktree `wt/t5c-ruled-blanks`, base `2a34a0c`, on top
 of r47.** F148/F149: 1701 p4 item 9 and 1701A p2 item 63 ("Other Tax
 Credits/Payments (specify)") had no input for the ruled blank beside the
