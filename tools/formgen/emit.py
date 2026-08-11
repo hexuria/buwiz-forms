@@ -5668,16 +5668,45 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
         parts.append(text_markup(run, rid, styles[(index, run_index)]))
     parts.append("</div>")
 
-    # -- field layer ---------------------------------------------------------
-    parts.append('<div class="layer-cells">')
+    # -- field layer, split around each band's reading-order position --------
+    # A growable band is not appended after every static cell: it is spliced
+    # into the tab order at its own (y0, x0), the SAME key lattice.py sorts
+    # `page_layout["cells"]` by (`boxes.sort(key=lambda b: (yl.positions[...],
+    # xl.positions[...]))`), so a repeat-row table lands exactly where its
+    # first row would have sorted instead of at the page's tab-order end
+    # (F209: a 490pt backward jump on 1600-pt-2018 p1). The cells layer is
+    # therefore emitted as `len(band_order) + 1` separate, flat
+    # `<div class="layer-cells">` sibling runs -- never nested, never
+    # reordered among themselves -- with one band's `<template>` + rendered
+    # `<div class="band">` filling each gap. Multiple bands on one page each
+    # land at their own position because `band_order` is sorted by that same
+    # key and the cells are partitioned by walking it once.
+    band_order = sorted(
+        plans, key=lambda plan: (float(plan.band["y0"]), float(plan.band["x0"])))
+    segments: list[list[dict[str, Any]]] = [[]]
+    band_cursor = 0
     for cell in page_layout["cells"]:
         if cell["id"] in band_cell_ids or not split.keep_cell(cell["id"]):
             continue
-        parts.append(cell_markup(split.clipped(cell, "cell", cell["id"]), fields))
-    parts.append("</div>")
+        cell_key = (cell["y0"], cell["x0"])
+        while (band_cursor < len(band_order)
+               and cell_key >= (float(band_order[band_cursor].band["y0"]),
+                                float(band_order[band_cursor].band["x0"]))):
+            segments.append([])
+            band_cursor += 1
+        segments[-1].append(cell)
+    while band_cursor < len(band_order):
+        segments.append([])
+        band_cursor += 1
 
-    # -- growable bands: template + pre-rendered rows ------------------------
-    for plan in plans:
+    def emit_cells_layer(cells: list[dict[str, Any]]) -> None:
+        parts.append('<div class="layer-cells">')
+        for cell in cells:
+            parts.append(cell_markup(split.clipped(cell, "cell", cell["id"]), fields))
+        parts.append("</div>")
+
+    emit_cells_layer(segments[0])
+    for seg_index, plan in enumerate(band_order):
         rows = plan.capacity if options.band_rows is None else min(options.band_rows,
                                                                    plan.capacity)
         parts.append(band_template_markup(plan, len(band_blobs), fields))
@@ -5697,6 +5726,7 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
                                          extra=(("data-band-row", str(row)),)))
         parts.append("</div>")
         band_blobs.append(band_json(plan, rows, styles, runs_by_id, fields))
+        emit_cells_layer(segments[seg_index + 1])
 
     parts.append("</div>")
     return "".join(parts)
