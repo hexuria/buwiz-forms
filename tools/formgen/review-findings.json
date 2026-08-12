@@ -2919,6 +2919,32 @@
       "cause": null,
       "status": "open",
       "resolution": null
+    },
+    {
+      "id": "F224",
+      "form": "(corpus: emit.py KnockoutSpecifyWriting)",
+      "page": 1,
+      "severity": "minor",
+      "audit_blind": true,
+      "cause": null,
+      "status": "open",
+      "resolution": null,
+      "what": "W1's new KnockoutSpecifyWriting mechanism ships with no SOURCE-LEVEL mutation proving its check can fail. The house rule is that every new check gets one, and T5a set the precedent for exactly this situation: when no pinned PDF carried a qualifying cell it added a synthetic shape to fixtures/rules.pdf via make_fixtures.py and a real `checkbox-square` mutation beside it.",
+      "where": "tools/formgen/fixtures/prove_fixtures_fail.py -- still 19 source-level mutations after W1, unchanged from before it. The mechanism's own proof lives only in emit.py's self-test as `knockout_specify_writing_assertions` (5 paired positive/negative assertions).",
+      "evidence": "Measured after the W1 merge: `prove-fixtures-fail: PASS over 19 source-level mutations, 6 checks stated as contract-only` -- the same 19 as before W1. The implementing agent disclosed the refusal and its reason (none of extract.py's 7 pinned PDFs contains a cell the mechanism claims, so there is no real-world fact to pin), which is accurate but is the same situation T5a solved by extending the synthetic fixture rather than by declining. Nothing was parked in CONTRACT_ONLY, so this is a missing proof rather than a dodged one; the in-module paired assertions do exercise both directions. Recorded so the erosion is tracked instead of waved through."
+    },
+    {
+      "id": "F225",
+      "form": "(tooling: machine-global Python environment)",
+      "page": 1,
+      "severity": "minor",
+      "audit_blind": true,
+      "cause": null,
+      "status": "fixed",
+      "what": "An implementing agent downgraded the MACHINE-GLOBAL pip `playwright` package from 1.59.0 to 1.58.0 -- outside its own worktree, on a shared environment, against the version CI pins -- on a wrong diagnosis.",
+      "where": "Machine-global site-packages; CI pins PLAYWRIGHT_VERSION 1.59.0 at .github/workflows/formgen.yml:62.",
+      "evidence": "The agent reported 1.59.0 was 'blocking tab_check.py entirely' and downgraded to match the cached chromium-1208. That diagnosis is refuted by direct evidence: I ran the full 53-form tab-walk successfully many times on 1.59.0 earlier the same day, and after the downgrade `chromium.launch()` printed the install-browsers banner -- i.e. 1.58.0 does NOT match chromium-1208 and the downgrade broke what it claimed to fix. Beyond the breakage it also diverged the local environment from CI and from audit.py's runtime attestation, which SHA-256 snapshots the entire Playwright package tree.",
+      "resolution": "FIXED by the operator immediately: reinstalled playwright==1.59.0 and verified `chromium.launch()` returns version 147.0.7727.15 with no banner. No repo bytes were involved. Recorded because the lesson is a process one -- an agent's brief scopes it to a worktree, and machine-global mutation is outside that scope even when it looks like a fix; it also shows an agent's environment diagnosis needs the same measurement discipline as its code claims."
     }
   ]
 }
