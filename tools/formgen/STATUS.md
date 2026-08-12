@@ -11,6 +11,63 @@ that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
 
+
+## W3 + W4 — the abort was the deliverable, and the blue census became readable
+
+**Gate r55: 10/13**, determinism byte-identical (`b3c72753a362`), open
+blocker+major **6 -> 3**, zero blockers. Inputs 45,487 -> **45,537**, tab-walk
+53/53 green, **blue census 108 -> 5**.
+
+**W3's most valuable output is a refusal.** F064's recorded general fix --
+bound a lattice line by the x-extent of the ink that induces it -- was measured
+at three tolerances over all 53 forms before any behaviour changed. At the most
+permissive (30pt) it moves **166 cells across 13 forms AND STILL does not
+resolve item 8A**; at the strictest (0pt) it moves **751 cells across 24 forms
+and regresses an unrelated 12-slot money field on 1707's own page 1**. Both
+dwarf the 49-cell scale that already needed a 31-cell correction in W2. The
+"obvious" fix would have moved hundreds of unreviewed cells and not fixed the
+thing it was for.
+
+Route B shipped instead: a comb subject with no rectangular owner gets its own
+rectangle, bounded only by existing lattice positions, absorbing verified-empty
+cells only and refusing any wall that is not one of the comb's own dividers.
+Operator-verified in a browser: 1707-2021 item 8A has **25 focusable
+compartments**, "SPECIFIED ANSWER" types straight across, first compartment at
+Tab press 37. It generalises without special-casing -- 1707a-2021 25/25,
+2551m-2002 4/4 -- so 3 forms change and 50 are byte-identical, and the
+referee's retained floor falls **33 -> 30**, further than the 32 projected.
+W3 also caught a bug in its own fix that only the tab-walk could see: the
+reunified cell was appended rather than inserted at its `(y0,x0)` position, so
+it tabbed dead last (`red-order=25` on both 25-slot forms).
+
+**W4 made the missing-input census usable: 108 marks -> 5.** F220's mechanism,
+measured in a live page rather than taken from the finding's prose: `boxAt`
+closed boxes on wall members flush with the box at one end while running far
+past the other (1604CF's data-table dividers start at a coincidental crossing
+rule then run 108.96pt further through real rows). The fix is applied only from
+`allBoxes`' strict search, never from the per-input lookup, so **it can only
+narrow the vacant population by construction**. Two regressions were found and
+reverted before landing: an unscaled margin broke 9,421 real inputs (comb
+ticks' normal sub-point overshoot read as asymmetric), and applying the test to
+top/bottom edges broke every comb's edge compartments (shared rails are
+legitimately flush by design). Safety proven the right way: `fits/small/over/
+unboxed` totals are byte-identical before and after on all 53 forms
+(43,731/604/27/240) -- **zero real inputs reclassified**.
+
+F214 fixed and proved with a fixture reproducing its exact evidence shape (the
+misplaced field is now the one graded red, not the fields it pre-empted), plus
+a genuine focus-trap fixture proving the cap path the tool's "never silently
+truncated" claim depends on. F217 was proved LIVE before being fixed -- the old
+computation mismatched by 3 cells on 1701. F215, F216, F218, F219 closed.
+
+**Two process notes.** W4 re-pinned all 53 hashes from its own regenerated
+tree but committed only its six source files, leaving tracked `forms/` running
+the previous overlay -- caught by measuring the blue census after the merge and
+getting 108 rather than the reported 7. And merging W3 over W4 conflicted on
+exactly the files two concurrent packages must both touch: the pins were
+**re-derived from the merged tree**, not taken from either branch, because a
+merged pin is a pin from neither.
+
 ## W3 — a comb band gets a rectangle instead of the general walk getting a new rule (F064 closed)
 
 **Measured 2026-08-12, worktree `wt/w3-lattice`, base `986fe767`.** F064: item
