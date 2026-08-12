@@ -1512,6 +1512,17 @@ HTML_INPUT_ATTRIBUTES = frozenset({
     "spellcheck",
     "type",
 })
+def slot_input_style_ok(style: str | None) -> bool:
+    """The one style a comb-slot input may declare (W6/F227): a top-only
+    writing-trim inset, positive, in points, with the other three components
+    exactly 0pt. Anything else -- any other property, any other inset shape --
+    is outside the emitter grammar, so the style attribute cannot become a
+    general styling channel for slot inputs."""
+    if style is None:
+        return True
+    return re.fullmatch(r"inset:\d+(?:\.\d+)?pt 0pt 0pt 0pt", style) is not None
+
+
 HTML_LINK_ATTRIBUTES = frozenset({
     "as",
     "crossorigin",
@@ -4006,9 +4017,19 @@ class SlotParser(html.parser.HTMLParser):
                 "transform", "width", "x", "y",
             }
         elif tag == "input":
+            # DECLARED SCHEMA CHANGE (W6/F227, 2026-08-13): a comb-slot input
+            # may carry a `style` whose SOLE declaration is the writing-top
+            # trim -- `inset:<T>pt 0pt 0pt 0pt` -- because the existing
+            # printed-ink trim now reaches combs and expresses its result on
+            # the nested input, never on the slot div (whose geometry this
+            # referee pins and compares). The value shape is enforced at the
+            # slot-input check below; here only the key set widens, and only
+            # by `style`.
             valid = keys in (
                 HTML_INPUT_ATTRIBUTES,
+                HTML_INPUT_ATTRIBUTES | {"style"},
                 HTML_INPUT_ATTRIBUTES - {"id", "name"},
+                (HTML_INPUT_ATTRIBUTES | {"style"}) - {"id", "name"},
                 {
                     "autocomplete", "class", "id", "name", "spellcheck",
                     "style", "type",
@@ -4146,7 +4167,17 @@ class SlotParser(html.parser.HTMLParser):
                 not parent_roles or parent_roles[-1] != "comb"):
             render_safe = False
         if tag == "input" and parent_roles and parent_roles[-1] == "slot":
-            if (set(values) != HTML_INPUT_ATTRIBUTES
+            slot_keys = set(values)
+            slot_style = values.get("style")
+            # The one style a comb-slot input may declare is the writing-top
+            # trim W6/F227 introduced: a top-only inset, positive, in points,
+            # with the other three components exactly 0pt. Anything else --
+            # any other property, any other inset shape -- stays outside the
+            # grammar, so this cannot become a general styling channel.
+            style_ok = slot_input_style_ok(slot_style)
+            if (slot_keys not in (HTML_INPUT_ATTRIBUTES,
+                                  HTML_INPUT_ATTRIBUTES | {"style"})
+                    or not style_ok
                     or values.get("type") != "text"
                     or values.get("maxlength") != "1"
                     or values.get("autocomplete") != "off"
@@ -10791,6 +10822,19 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
 
 
 def self_test() -> int:
+    # The W6/F227 slot-input style grammar, proven able to FAIL. The accept
+    # path is exercised for real by every corpus run (1604CF, 1701MS and 2316
+    # ship top-inset slot inputs); these probes prove the REJECT paths exist,
+    # so the grammar cannot silently widen into a styling channel.
+    assert slot_input_style_ok(None)
+    assert slot_input_style_ok("inset:0.18pt 0pt 0pt 0pt")
+    assert not slot_input_style_ok("inset:0.18pt 0pt 1pt 0pt"), (
+        "a non-top-only inset must be outside the grammar")
+    assert not slot_input_style_ok("color:red"), (
+        "a non-inset property must be outside the grammar")
+    assert not slot_input_style_ok("inset:0.18pt 0pt 0pt 0pt;color:red"), (
+        "a second declaration must be outside the grammar")
+
     assert parse_transform("matrix(1,0,0,-1,0,100)").point(3, 20) == (3, 80)
     translated = parse_transform("translate(10 20) scale(2)")
     assert translated.point(1, 1) == (12, 22)
