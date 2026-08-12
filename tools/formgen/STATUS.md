@@ -12,6 +12,155 @@ superseded by the r43 section.
 
 
 
+## W5 — 6 of 19 source-topology-unevaluable comb offenders decided (agree); two mechanisms extended and shipped, two implemented then refused
+
+**Measured 2026-08-13, worktree `wt/w5-referee`, base `ae50f7ee`.** No producer
+file touched (`extract.py`, `lattice.py`, `emit.py`, `fonts.py`, `guides.py`,
+`correct.py`, `batch.py` all byte-identical to base); only `audit.py` (the
+locked judge, extended per its own review-bundle rule) and `comb_referee.py`
+(one pin comment + hash) change. Two full-roundtrip `audit.py` runs (not
+`--assertions-only`, so `comb_referee.py` can evaluate its own audit-evidence
+binding) over all 53 forms: rules 100.0%/text 100.0% on every form, both
+before mechanisms shipped and after -- the producer output is unmoved.
+`inputs_over_printed_text` **2 forms/5 offenders, unmoved**, every assertion
+other than `comb_slots_match_printed` **0 offenders, all 53 forms, unmoved**
+(diffed assertion-by-assertion, form-by-form, against the pre-change tree),
+comb censuses **4,587/4,557/30, unmoved** (`comb_referee.json`'s own totals),
+tab-walk **53/53 green**, blue census **5, unmoved**. `comb_slots_match_printed`
+moves **10 forms/19 offenders -> 9 forms/13 offenders**.
+
+**Two mechanisms shipped, both decided-agree, both independently
+cross-validated by `comb_referee.py`'s wholly separate Poppler-based
+implementation (six of six new `agree` verdicts).**
+
+- **Mechanism 1 (chromatic vector fill, 4 offenders closed):** the extractor
+  refused a fill for being chromatic before ever looking at its geometry.
+  `_rectilinear_fill_regions` (a pure refactor: the grey-fill path's own
+  `re`/`qu` parse, now shared) is attempted regardless of colour; a chromatic
+  fill that parses exactly rectilinear gets `_perceptual_luminance` (ITU-R
+  BT.601, published coefficients, not invented) as its tone and its exact
+  regions attached to the refused `UnsupportedVectorPaint`, never to the
+  shared `page.paints`. `printed_compartments` locally promotes only the
+  regions that intersect ITS OWN owner rect, via one `dataclasses.replace`
+  that rebinds a local `page`, never the bundle-wide one every other
+  assertion reads. Closes 2553-1999 p1c18/p1c20/p1c22/p1c24 (a shaded swatch
+  1.32-5.04pt outside the comb's own writing edge, now correctly excluded
+  from candidacy by the pre-existing `COMB_EDGE_PT` guard rather than
+  blocking the whole comb).
+- **Mechanism 2 (non-rectilinear vector stroke, 2 offenders closed):** the
+  same "refused before its geometry is asked" shape. A bezier/diagonal
+  stroke's own extrema-derived bounding rect -- pymupdf's `drawing["rect"]`,
+  already exact, already computed -- now decides whether it can BE a divider,
+  mirroring the pre-existing position-aware `text_hits` deferral exactly (own
+  `stroke_hits` check, added to `deferred_reasons`). One that never straddles
+  a divider the band's own rectilinear ink establishes no longer blocks; one
+  that does still blocks, unchanged. Closes 1604cf-2008 p1c13 and 2550m-2007
+  p1c13 (three decorative circles per comb, centred inside each digit
+  compartment, never touching a divider line).
+
+**One mechanism shipped, decided-nothing but genuinely deeper:**
+mechanism 4 (no strict-majority topology, 2 offenders: 1604cf-2008 p2c73,
+2551m-2002 p2c13). F064 lets a candidate band own a vertical mark's full
+painted extent so a genuinely shared multi-row divider reads as one
+continuous topology; here that extent is the WHOLE multi-row table column
+(54-405pt), and the strict-majority test inside `_band_topologies` -- itself
+untouched -- correctly fails against that denominator even though the row's
+own 16.8pt slice is unambiguous. When the unclipped pass decides nothing and
+blocks nothing, `printed_compartments` retries the identical unmodified rule
+against the SAME band clipped to the claimed owner's own rectangle -- one
+further, narrower measurement, not a different rule. Both offenders now
+resolve a real divider topology (matching the layout's own claim) where
+before there was none to reason about at all -- but a SEPARATE, genuine
+U-frame-ownership problem (the shared column rail's own baseline search finds
+a maximal frame spanning the whole page-wide table row, not this one column)
+was sitting directly behind the topology blocker and is now what both report:
+`why` moves from "no strict-majority topology" to "crops a wider source
+U-frame," `failure_kinds` unchanged (`source-topology-unevaluable`), offender
+count unchanged. This merges them into the SAME family as the 4 pre-existing
+U-frame offenders (1604f-2018 p1c25, 2551m-2002 p1c82, 2553-1999 p1c87, and
+1801-2018 p1c31's differing-interiors variant) -- 6 of the 13 remaining
+offenders now share one root cause.
+
+**Two mechanisms implemented, empirically validated against their own named
+target offenders, then refused and fully reverted** -- both broke an
+EXISTING, deliberately mutation-tested guard in `audit.py`'s own self-test,
+which is exactly the fail-closed machinery this package is bound not to
+weaken:
+- A `_dominant_certified_topology`-style containment fallback
+  (`compartment counts [3, 14]`/`[2, 4]`, 4 offenders: 2000-dst-2018 p1c109,
+  2200a-2020 p1c62/p1c86, 1801-2018 p1c13) that admitted a topology whenever
+  it strictly contained every other observed one, dropping the existing
+  span-majority requirement. It resolved all 4 target offenders to the
+  richer topology (matching the layout's own claim) -- and also made
+  `printed_compartments`'s own self-test fixture "a minority richer slab
+  stays competing and publishes relations" resolve, which the fixture exists
+  specifically to refuse: a short, richer slab must never win on containment
+  alone, only on a genuine majority of the measured band. Measured directly:
+  containment-without-coverage cannot tell 2000-DST's real taller
+  group-boundary ticks (2 of the SAME 14 dividers, drawn reaching higher, no
+  new x-position) from a spurious short-lived divider that happens to be a
+  positional superset by coincidence. No safe way to keep the real case and
+  refuse the synthetic one was found in scope; reverted in full
+  (`_topology_contains_positionally`/`_uniquely_containing_topology` and
+  their call site removed, `_dominant_certified_topology` restored to its
+  original inline closure, byte-identical).
+- A multi-wall generalisation of `_frame_cut_at_source_walls` (the 4 "crops a
+  wider source U-frame" offenders left open above) that searched `cuts` for
+  any matching wall at the owner's x0/x1 rather than requiring one atomic
+  adjacent-pair segment, so a claimed cell that owns one of its own thick
+  interior walls (1604-CF/2551-M's own two-slot rows: a single 0.72-0.96pt
+  divider, thick enough to register as a wall in its own right) could still
+  be found. It resolved 1604cf-2008 p2c73 end to end (own scratch harness,
+  confirmed against a hand-built owner certificate) -- and broke two
+  mutation-tested self-checks, "border weight alone makes a wall" and
+  "standing above the band alone makes a wall": a wall spuriously
+  reclassified by either weakened predicate now let a claim silently
+  resolve instead of correctly staying wide/uncropped, exactly the canary
+  those two mutations exist to trip. Reverted in full, byte-identical to
+  base.
+
+**`comb-referee.py` now evaluates** (`audit_evidence_complete_forms` 53/53,
+requires a full non-`--assertions-only` `audit.py` run so the roundtrip
+closure is attested; the prior `--assertions-only`-only tree in `build/`
+could not be evaluated by it at all, before or after this package).
+`forms_ok` **23**, `forms_disagreement` **0**, `forms_unevaluable` **30**
+(dominated by 116 corpus-wide lattice-ledger blockers unrelated to this
+package -- e.g. 2550m-2007 stays unevaluable on 4 OTHER blocked combs even
+though its own W5-closed p1c13 now agrees), `comparisons.agree` **4,514**,
+`comparisons.unevaluable` **73**. All six mechanism-1/2 closures independently
+cross-checked cell by cell against this wholly separate Poppler
+implementation: 2553-1999 p1c18/p1c20/p1c22/p1c24, 1604cf-2008 p1c13 and
+2550m-2007 p1c13 all read `comparison_status: agree`, `referee, lattice,
+audit, and emitted agree`, with `referee_compartments` matching audit's own
+count on every one. 2553-1999 p1c87 and 1604cf-2008 p2c73 (mechanism-4's
+"decided nothing" pair, above) both read `comparison_status: unevaluable`,
+`"audit published this subject as an offender with no printed topology"` --
+consistent, not contradicted.
+
+**No new review-findings.json entries.** Every offender this package moved
+resolved decided-AGREE (matches the reviewed layout's own claimed slot
+count); none resolved decided-disagree, so there is no producer defect to
+file.
+
+**Pin:** `comb_referee.AUDIT_PRODUCER_SHA256` re-pinned
+(`2e8e4dff7389e1dc362124cd2e45a952e96b826f1ff128996ef58215dd084731`), cause
+recorded inline at the pin. `EXPECTED_HTML_STRUCTURE_SHA256` **unmoved** --
+`comb_referee.py`'s own hard-fail check on every one of the 53 slugs raised
+zero `RefereeError`s, which is a byte-exact guarantee the mismatch check
+alone (not a raw count) can give.
+
+**Self-tests, all pass:** `extract.py --self-test` (24 checks, 24+24 probes),
+`lattice.py --ir build/ir/2551q-2018.ir.json` (489/264 slots, unchanged),
+`emit.py --self-test`, `comb_referee.py --self-test`, `tab_check.py
+--self-test`, `validate_tree.py --self-test`,
+`fixtures/prove_fixtures_fail.py`, `audit.py --self-test` (0 failures,
+including 9 new checks: a luminance unit check against the BT.601 reference
+values, and one positive + one boundary check per shipped mechanism, each
+boundary check proving the mechanism can be WRONG and is caught --
+mechanism-1's non-rectilinear chromatic fill still blocks, mechanism-2's
+divider-straddling stroke still blocks, mechanism-4's still-fragmented
+clipped row stays unevaluable). Two `batch.py` runs into scratch `--out`
+directories (never `forms/`) produced byte-identical tree digests.
 ## W7 — is_one_boundary's fusion criterion, measured corpus-wide and refused (F222)
 
 **Measured 2026-08-13, worktree `wt/w7-boundary`, base `24cdc6e7`. No producer

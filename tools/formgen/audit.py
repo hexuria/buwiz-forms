@@ -1922,7 +1922,18 @@ class VectorPaint:
 
 @dataclasses.dataclass(frozen=True)
 class UnsupportedVectorPaint:
-    """A source paint whose final topology cannot be represented exactly."""
+    """A source paint whose final topology cannot be represented exactly.
+
+    `exact_regions` is populated only for a "chromatic vector fill" whose OWN
+    geometry (its `re`/`qu` items) parses exactly rectilinear -- the same
+    parse the grey-fill path already runs, just gated on colour rather than
+    shape. When present, `tone` is that fill's measured luminance and
+    `fill_rule` is its own even-odd/nonzero rule, letting a caller that has
+    independently decided a chromatic colour is not disqualifying reconstruct
+    the exact regions this paint would have contributed had it been grey.
+    Never populated for any other reason: a genuinely non-rectilinear or
+    unbounded fill has no exact regions to offer.
+    """
 
     rect: Rect
     order: int
@@ -1930,6 +1941,8 @@ class UnsupportedVectorPaint:
     tone: float | None = None
     opacity: float | None = None
     trace_rects: tuple[Rect, ...] = ()
+    exact_regions: tuple[tuple[Rect, int], ...] = ()
+    fill_rule: str = "union"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -2520,6 +2533,59 @@ def _axis_aligned_quad_box(quad: Any) -> Rect | None:
     return x0, y0, x1, y1
 
 
+def _rectilinear_fill_regions(
+        drawing: dict[str, Any],
+        ) -> tuple[list[tuple[Rect, int]], str] | None:
+    """One drawing's exact axis-aligned fill regions, or None if it has none.
+
+    Shared by the grey-fill path (which paints these regions immediately) and
+    a chromatic fill (W5 mechanism 1): a chromatic fill is refused only when
+    its OWN `re`/`qu` items are not exactly rectilinear, never merely for its
+    colour -- colour and geometry are independent questions, and this answers
+    only the geometry one.
+    """
+    fill_supported = True
+    fill_regions: list[tuple[Rect, int]] = []
+    parts = drawing.get("items") or ()
+    for item in parts:
+        if item[0] == "re":
+            rect = item[1]
+            winding = int(item[2]) if len(item) > 2 else 1
+            if winding == 0:
+                fill_supported = False
+            else:
+                fill_regions.append((_rect_tuple(rect), winding))
+        elif item[0] == "qu":
+            box = _axis_aligned_quad_box(item[1])
+            if box is None or len(parts) != 1:
+                fill_supported = False
+            else:
+                fill_regions.append((box, 1))
+        else:
+            fill_supported = False
+    if not fill_supported or not fill_regions:
+        return None
+    fill_rule = "evenodd" if bool(drawing.get("even_odd")) else "nonzero"
+    return fill_regions, fill_rule
+
+
+def _perceptual_luminance(color: Sequence[float]) -> float:
+    """ITU-R BT.601 luma: the scalar brightness of a genuinely chromatic fill.
+
+    `extract.to_gray` refuses a colour whose channel spread exceeds 1e-3
+    because it is not this codebase's near-neutral BIR grey; that refusal is
+    correct for the structural/decorative/knockout tone bands, which assume
+    near-neutral ink. It is not a reason to treat a chromatic colour as
+    unmeasurable -- every colour has a standard scalar luma, computed here
+    with the same published coefficients used throughout image processing to
+    collapse RGB to grayscale, not a constant invented for this file. The
+    downstream tone comparisons (final-tone equality, the existing cutoffs)
+    apply to the result exactly as they do to any other tone.
+    """
+    r, g, b = (float(channel) for channel in color[:3])
+    return max(0.0, min(1.0, 0.299 * r + 0.587 * g + 0.114 * b))
+
+
 def _rect_tuple(rect: Any) -> Rect:
     return tuple(float(value) for value in (rect.x0, rect.y0, rect.x1, rect.y1))
 
@@ -2740,7 +2806,11 @@ def ordered_vector_paints(page: Any) -> VectorPage:
 
     def add_unsupported_rect(rect: Rect, ordinal: int, reason: str,
                              pad: float = 0.0,
-                             clip: Rect | None = None) -> None:
+                             clip: Rect | None = None,
+                             tone: float | None = None,
+                             opacity: float | None = None,
+                             exact_regions: tuple[tuple[Rect, int], ...] = (),
+                             fill_rule: str = "union") -> None:
         padded = (rect[0] - pad, rect[1] - pad,
                   rect[2] + pad, rect[3] + pad)
         if clip is not None:
@@ -2752,15 +2822,22 @@ def ordered_vector_paints(page: Any) -> VectorPage:
             return
         if not all(math.isfinite(value) for value in padded):
             raise ValueError(f"{reason} has a non-finite source rectangle")
-        unsupported.append(UnsupportedVectorPaint(padded, ordinal, reason))
+        unsupported.append(UnsupportedVectorPaint(
+            padded, ordinal, reason, tone, opacity, (),
+            exact_regions, fill_rule))
 
     def add_unsupported(drawing: dict[str, Any], ordinal: int,
                         reason: str, pad: float = 0.0,
-                        clip: Rect | None = None) -> None:
+                        clip: Rect | None = None,
+                        tone: float | None = None,
+                        opacity: float | None = None,
+                        exact_regions: tuple[tuple[Rect, int], ...] = (),
+                        fill_rule: str = "union") -> None:
         rect_value = drawing.get("rect")
         if rect_value is None:
             raise ValueError(f"{reason} has no bounded source rectangle")
-        add_unsupported_rect(_rect_tuple(rect_value), ordinal, reason, pad, clip)
+        add_unsupported_rect(_rect_tuple(rect_value), ordinal, reason, pad,
+                             clip, tone, opacity, exact_regions, fill_rule)
 
     def expect_bbox_kind(ordinal: int, wanted: str) -> None:
         if not 0 <= ordinal < len(bboxlog):
@@ -2816,35 +2893,33 @@ def ordered_vector_paints(page: Any) -> VectorPage:
         half = stroke_width / 2
 
         if fill_colour is not None and fill_tone is None:
-            add_unsupported(
-                drawing, fill_order, "chromatic vector fill", clip=context.clip)
+            # A chromatic colour is refused only for having no exact
+            # rectilinear geometry to offer, never for being chromatic on its
+            # own: `_perceptual_luminance` gives every colour a measurable
+            # scalar tone, and a caller that independently decides this fill
+            # cannot hide a comb divider (F225/W5 mechanism 1) reconstructs
+            # these exact regions rather than approximating a shape.
+            parsed = _rectilinear_fill_regions(drawing)
+            if parsed is None:
+                add_unsupported(
+                    drawing, fill_order, "chromatic vector fill",
+                    clip=context.clip)
+            else:
+                regions, fill_rule = parsed
+                add_unsupported(
+                    drawing, fill_order, "chromatic vector fill",
+                    clip=context.clip,
+                    tone=round(_perceptual_luminance(fill_colour), 4),
+                    opacity=fill_opacity,
+                    exact_regions=tuple(regions), fill_rule=fill_rule)
         elif fill_order >= 0 and fill_tone is not None:
-            fill_supported = True
-            fill_regions: list[tuple[Rect, int]] = []
-            parts = drawing.get("items") or ()
-            for item in drawing["items"]:
-                if item[0] == "re":
-                    rect = item[1]
-                    winding = int(item[2]) if len(item) > 2 else 1
-                    if winding == 0:
-                        fill_supported = False
-                    else:
-                        fill_regions.append((_rect_tuple(rect), winding))
-                elif item[0] == "qu":
-                    box = _axis_aligned_quad_box(item[1])
-                    if box is None or len(parts) != 1:
-                        fill_supported = False
-                    else:
-                        fill_regions.append((box, 1))
-                else:
-                    fill_supported = False
-            if not fill_supported or not fill_regions:
+            parsed = _rectilinear_fill_regions(drawing)
+            if parsed is None:
                 add_unsupported(drawing, fill_order,
                                 "non-rectilinear or unbounded vector fill",
                                 clip=context.clip)
             else:
-                fill_rule = ("evenodd" if bool(drawing.get("even_odd"))
-                             else "nonzero")
+                fill_regions, fill_rule = parsed
                 for rect, winding in fill_regions:
                     add_rect(
                         rect, fill_tone, fill_opacity, fill_order,
@@ -5281,6 +5356,48 @@ def printed_compartments(
             "comb owner certificate does not bind this exact cell identity")
 
     owner = (x0, y0, x1, y1)
+    # W5 mechanism 1: a chromatic fill the extractor could parse exactly
+    # rectilinear (`exact_regions` populated -- see `_rectilinear_fill_regions`)
+    # is promoted from refused paint to ordinary paint for this comb's OWN
+    # evaluation only. This never touches `page.paints`/`page.unsupported`
+    # themselves -- `page` is rebound to a new `VectorPage` local to this
+    # call, so `inputs_over_printed_text` and every other reader of the
+    # shared bundle-wide vector page is unaffected. Scoped to paint
+    # intersecting the owner rect: paint that never comes near this comb
+    # cannot change what it prints.
+    chromatic_promotions = [
+        unsupported for unsupported in page.unsupported
+        if unsupported.reason == "chromatic vector fill"
+        and unsupported.exact_regions
+        and unsupported.tone is not None
+        and _rects_intersect(owner, unsupported.rect)
+    ]
+    if chromatic_promotions:
+        promoted_paints = tuple(
+            VectorPaint(
+                *region_rect, float(item.tone),
+                item.opacity if item.opacity is not None else 1.0,
+                item.order, "fill-region", item.order, item.fill_rule,
+                winding,
+            )
+            for item in chromatic_promotions
+            for region_rect, winding in item.exact_regions
+        )
+        promoted = set(chromatic_promotions)
+        page = dataclasses.replace(
+            page,
+            paints=tuple(sorted(
+                (*page.paints, *promoted_paints),
+                key=lambda paint: (
+                    paint.order, paint.operation, paint.kind,
+                    paint.x0, paint.y0, paint.x1, paint.y1,
+                    paint.fill_rule, paint.winding),
+            )),
+            unsupported=tuple(
+                item for item in page.unsupported
+                if item not in promoted
+            ),
+        )
     bands, first_source_order = _source_band_candidates(page, owner)
     if not bands:
         relevant = sorted({
@@ -5301,7 +5418,8 @@ def printed_compartments(
         "unmodeled source stroke-text paint",
     }
     image_reason = "unmodeled source fill-image paint"
-    deferred_reasons = {*text_reasons, image_reason}
+    stroke_reason = "non-rectilinear vector stroke"
+    deferred_reasons = {*text_reasons, image_reason, stroke_reason}
     image_hits = sorted(
         (
             unsupported for unsupported in page.unsupported
@@ -5339,7 +5457,8 @@ def printed_compartments(
             },
         )
     blocked: set[str] = set()
-    for band_y0, band_y1 in bands:
+
+    def process_band(band_y0: float, band_y1: float) -> None:
         subject = (x0, band_y0, x1, band_y1)
         nonforeign_hits = [
             unsupported for unsupported in page.unsupported
@@ -5348,9 +5467,30 @@ def printed_compartments(
         ]
         if nonforeign_hits:
             blocked.update(hit.reason for hit in nonforeign_hits)
-            continue
+            return
         for tone, topology in _band_topologies(
                 page, x0, x1, band_y0, band_y1):
+            # W5 mechanism 2: a non-rectilinear (bezier/diagonal) stroke's own
+            # bounding geometry -- pymupdf's extrema-derived `rect`, already
+            # exact and already computed at extraction time -- is what decides
+            # whether it can BE one of this band's dividers, exactly as an
+            # unmodeled text paint's rect already decides for `text_hits`
+            # below. One that never straddles a divider this band's own
+            # rectilinear ink establishes is refuted as a divider candidate,
+            # not left unevaluable; one that does still blocks exactly as
+            # before -- this never admits a curve as ink, it only ever
+            # excuses one that cannot be a divider from blocking the ones
+            # that are.
+            stroke_hits = [
+                unsupported for unsupported in page.unsupported
+                if unsupported.reason == stroke_reason
+                and _rects_intersect(subject, unsupported.rect)
+                and any(unsupported.rect[0] <= divider_x <= unsupported.rect[2]
+                        for divider_x in topology)
+            ]
+            if stroke_hits:
+                blocked.update(hit.reason for hit in stroke_hits)
+                continue
             text_hits = [
                 unsupported for unsupported in page.unsupported
                 if unsupported.reason in text_reasons
@@ -5388,6 +5528,30 @@ def printed_compartments(
                 normalized, frame_key = frame
             results.append((
                 band_y0, band_y1, tone, normalized, frame_key))
+
+    for band_y0, band_y1 in bands:
+        process_band(band_y0, band_y1)
+
+    # W5 mechanism 4: F064 lets a candidate band own the full painted extent
+    # of a vertical mark so a genuinely shared multi-row divider is read as
+    # one continuous topology. The strict-majority test inside
+    # `_band_topologies` must then clear that FULL extent, which is right
+    # when the extent really is one row's own comb and wrong when the
+    # claimed owner is only a fraction of a taller seed -- a short comb row
+    # whose own divider ink sits inside a much taller shared column rule.
+    # Retried only when the unclipped pass decided nothing at all and hit no
+    # blocking paint either: a band clipped to the claimed owner's own
+    # rectangle is measured by the exact same strict-majority rule in
+    # `_band_topologies`, unmodified, just windowed to the row actually being
+    # asked about instead of every row the same physical stroke also serves.
+    if not blocked and not results:
+        clipped_bands = sorted({
+            (max(band_y0, y0), min(band_y1, y1))
+            for band_y0, band_y1 in bands
+            if max(band_y0, y0) < min(band_y1, y1) - COMB_MINLEN_PT
+        } - set(bands))
+        for band_y0, band_y1 in clipped_bands:
+            process_band(band_y0, band_y1)
 
     if blocked:
         raise ValueError(
@@ -13588,6 +13752,190 @@ def self_test() -> int:
                     f"{image_order}",
                     between_divider_image_failed,
                 )
+
+        # W5 mechanism 1: a chromatic fill is refused only when it has no
+        # exact rectilinear regions to offer, never merely for its colour.
+        chromatic_regions = (((35.0, 2.0, 38.0, 8.0), 1),)
+        chromatic_tone = round(_perceptual_luminance((0.2, 0.4, 0.9)), 4)
+        away_from_divider_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        away_from_divider_page = VectorPage(
+            away_from_divider_page.paints,
+            (UnsupportedVectorPaint(
+                (35.0, 2.0, 38.0, 8.0), 99, "chromatic vector fill",
+                tone=chromatic_tone, opacity=1.0,
+                exact_regions=chromatic_regions, fill_rule="nonzero"),),
+        )
+        try:
+            chromatic_resolved = printed_compartments(
+                away_from_divider_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except Exception:  # noqa: BLE001 - must not raise at all
+            chromatic_resolved = None
+        check(
+            "a rectilinear chromatic fill away from any divider does not "
+            "block (W5 mechanism 1)",
+            chromatic_resolved == (3, [10.0, 20.0]),
+        )
+        unparseable_chromatic_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        unparseable_chromatic_page = VectorPage(
+            unparseable_chromatic_page.paints,
+            (UnsupportedVectorPaint(
+                (35.0, 2.0, 38.0, 8.0), 99, "chromatic vector fill"),),
+        )
+        try:
+            printed_compartments(
+                unparseable_chromatic_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except ValueError as exc:
+            unparseable_chromatic_failed = (
+                "chromatic vector fill" in str(exc))
+        else:
+            unparseable_chromatic_failed = False
+        check(
+            "a chromatic fill with no exact rectilinear regions still "
+            "blocks (W5 mechanism 1 boundary)",
+            unparseable_chromatic_failed,
+        )
+
+        # W5 mechanism 2: a non-rectilinear stroke's own bounding geometry
+        # decides whether it can be a divider, never its colour or shape
+        # otherwise.
+        stroke_away_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        stroke_away_page = VectorPage(
+            stroke_away_page.paints,
+            (UnsupportedVectorPaint(
+                (35.0, 2.0, 38.0, 8.0), 99, "non-rectilinear vector stroke"),),
+        )
+        try:
+            stroke_resolved = printed_compartments(
+                stroke_away_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except Exception:  # noqa: BLE001 - must not raise at all
+            stroke_resolved = None
+        check(
+            "a non-rectilinear stroke away from any divider does not block "
+            "(W5 mechanism 2)",
+            stroke_resolved == (3, [10.0, 20.0]),
+        )
+        stroke_on_divider_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        stroke_on_divider_page = VectorPage(
+            stroke_on_divider_page.paints,
+            (UnsupportedVectorPaint(
+                (9.0, 2.0, 11.0, 8.0), 99, "non-rectilinear vector stroke"),),
+        )
+        try:
+            printed_compartments(
+                stroke_on_divider_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except ValueError as exc:
+            stroke_on_divider_failed = (
+                "non-rectilinear vector stroke" in str(exc))
+        else:
+            stroke_on_divider_failed = False
+        check(
+            "a non-rectilinear stroke straddling a divider still blocks "
+            "(W5 mechanism 2 boundary)",
+            stroke_on_divider_failed,
+        )
+
+        # W5 mechanism 4: F064 lets a candidate band own the full painted
+        # extent of a shared vertical mark, so its strict-majority test can
+        # fail for a row that is only a fraction of that extent even though
+        # the row's own slice is unambiguous. One continuous divider at
+        # x=20 runs y 0..200 -- far beyond the claimed owner's own row
+        # (y 90..100) -- interrupted every 10pt by a differently-toned
+        # crossing EXCEPT across the owner's own row, which stays clean.
+        def crossed_divider_page(
+                extra_interruptions: tuple[float, ...] = (),
+                ) -> VectorPage:
+            divider = VectorPaint(
+                19.88, 0.0, 20.12, 200.0, 0.0, 1.0, 0, "test")
+            interrupters = []
+            order = 1
+            y = 9.85
+            while y < 200.0:
+                if not (85.0 < y < 100.0):
+                    interrupters.append(VectorPaint(
+                        15.0, y, 25.0, y + 0.3, 0.35, 1.0, order, "test"))
+                    order += 1
+                y += 10.0
+            for extra_y in extra_interruptions:
+                interrupters.append(VectorPaint(
+                    15.0, extra_y, 25.0, extra_y + 0.3, 0.35, 1.0,
+                    order, "test"))
+                order += 1
+            rails = (
+                VectorPaint(-0.12, 0.0, 0.12, 200.0, 0.0, 1.0, 900, "test"),
+                VectorPaint(39.88, 0.0, 40.12, 200.0, 0.0, 1.0, 901, "test"),
+            )
+            return VectorPage(tuple(sorted(
+                (divider, *interrupters, *rails),
+                key=lambda paint: paint.order,
+            )), ())
+
+        crossed_owner_cell = comb_subject(cell_y0=90.0, cell_y1=100.0)
+        _, _, crossed_owner_certificate, crossed_owner_reason = (
+            owner_registry_fixture(crossed_owner_cell))
+        if crossed_owner_certificate is not None:
+            no_majority_page = crossed_divider_page()
+            no_majority_bands, _ = _source_band_candidates(
+                no_majority_page, (0.0, 90.0, 40.0, 100.0))
+            no_majority_full_band_empty = all(
+                not _band_topologies(no_majority_page, 0.0, 40.0, b0, b1)
+                for b0, b1 in no_majority_bands
+                if (b0, b1) == (0.0, 200.0)
+            )
+            check(
+                "the unclipped full-extent band alone finds no majority "
+                "(fixture sanity check)",
+                any((b0, b1) == (0.0, 200.0) for b0, b1 in no_majority_bands)
+                and no_majority_full_band_empty,
+            )
+            clipped_retry_result = printed_compartments(
+                no_majority_page, crossed_owner_cell,
+                owner_certificate=crossed_owner_certificate)
+            check(
+                "a band clipped to the claimed owner's own row decides the "
+                "divider a page-wide band could not (W5 mechanism 4)",
+                clipped_retry_result == (2, [20.0]),
+            )
+            # Two further interruptions squarely inside the owner's own row
+            # fragment it below strict majority there too -- the fallback
+            # must not force an answer when the row itself is genuinely
+            # undecided.
+            still_undecided_page = crossed_divider_page((93.0, 96.5))
+            try:
+                printed_compartments(
+                    still_undecided_page, crossed_owner_cell,
+                    owner_certificate=crossed_owner_certificate)
+            except CombTopologyError as exc:
+                still_undecided_failed = (
+                    "no strict-majority topology" in str(exc))
+            else:
+                still_undecided_failed = False
+            check(
+                "a row genuinely fragmented even after clipping stays "
+                "unevaluable (W5 mechanism 4 boundary)",
+                still_undecided_failed,
+            )
+        check(
+            "the W5 mechanism 4 fixture certifies its own owner",
+            crossed_owner_certificate is not None
+            and crossed_owner_reason is None,
+        )
+
+    check(
+        "perceptual luminance uses the standard BT.601 coefficients",
+        abs(_perceptual_luminance((1.0, 0.0, 0.0)) - 0.299) < 1e-9
+        and abs(_perceptual_luminance((0.0, 1.0, 0.0)) - 0.587) < 1e-9
+        and abs(_perceptual_luminance((0.0, 0.0, 1.0)) - 0.114) < 1e-9
+        and abs(_perceptual_luminance((1.0, 1.0, 1.0)) - 1.0) < 1e-9
+        and _perceptual_luminance((0.0, 0.0, 0.0)) == 0.0,
+    )
 
     unframed_expansion_page = source_page(
         source_paint(10), source_paint(20), source_paint(45),
