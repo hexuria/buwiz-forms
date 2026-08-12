@@ -3568,6 +3568,21 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         return True, "knockout-specify"
     if (cell["kind"] == "label" and row_numbers is not None
             and row_numbers.for_cell(cell["id"]) is not None):
+        # A row number on SHADED paper is the sheet's own printed index, not a
+        # writing surface -- the same thing the ordinary field path refuses a
+        # few lines below ("a blank the source shaded is not a blank either"),
+        # asked here because this branch returns before reaching it.
+        #
+        # Measured over the 49 cells this rule first promoted: 31 sit on >=70%
+        # tint and 18 on white paper. The 31 are Seq. No. / item-index columns
+        # -- 1621-2019 p2's "Seq. No. (A)" is the clean case, a grey band whose
+        # 1..5 are printed by the Bureau and rendered as such. The 18 include
+        # F151's four Schedule D Description cells (1701-2018-conso p2c132,
+        # p2c136, p2c140, p2c144), which the official sheet leaves white and
+        # writable. Nothing here keys on a form code; the discriminator is the
+        # source's own tint, read through the existing gate.
+        if shading is not None and shading.blocks(cell):
+            return False, "shading"
         return True, "row-number"
     if cell.get("comb"):
         # Left as it stands, on measurement rather than on principle. Exactly
@@ -9162,7 +9177,9 @@ def row_number_corpus_assertions(failures: list[str]) -> None:
 
     forms_checked = 0
     claims_checked = 0
+    shaded_claims = 0
     unfilled: list[str] = []
+    leaked: list[str] = []
     for ir_path in ir_paths:
         slug = ir_path.name[: -len(".ir.json")]
         layout_path = layout_dir / f"{slug}.layout.json"
@@ -9180,15 +9197,28 @@ def row_number_corpus_assertions(failures: list[str]) -> None:
         forms_checked += 1
         metrics = _min_fillable_line_metrics(ir)
         runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        fills_by_page = {int(p["index"]): p.get("area_fills") or []
+                         for p in ir["pages"]}
         for page in layout["pages"]:
             page_index = int(page["index"])
             runs = runs_by_page.get(page_index, ())
             row_numbers = RowNumberWriting(page["cells"], page_index, runs, metrics)
+            shading = DecorativeShading(fills_by_page.get(page_index, []))
             for cell in page["cells"]:
                 band = row_numbers.for_cell(cell["id"])
                 if band is None:
                     continue
                 claims_checked += 1
+                if shading.blocks(cell):
+                    # A row number on shaded paper is the sheet's printed
+                    # index. Asserted in the OTHER direction so the exclusion
+                    # cannot rot into a silent skip: it must have no input.
+                    shaded_claims += 1
+                    if fields.of(cell["id"]) is not None:
+                        leaked.append(
+                            f"{slug} {cell['id']}: row number on shaded paper "
+                            f"has a typing surface")
+                    continue
                 if fields.of(cell["id"]) is None:
                     unfilled.append(
                         f"{slug} {cell['id']}: row-number band claimed, "
@@ -9200,11 +9230,20 @@ def row_number_corpus_assertions(failures: list[str]) -> None:
     # `unfilled` empty too, and "not unfilled" alone would pass having
     # verified nothing at all.
     _check(forms_checked > 0 and claims_checked > 0 and not unfilled,
-           "every bare row number has an input beside it, corpus-wide",
+           "every bare row number on UNSHADED paper has an input beside it, "
+           "corpus-wide",
            f"{forms_checked} form(s), {claims_checked} row-number cell(s) "
            f"claimed, {len(unfilled)} without a typing surface"
            + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
               if unfilled else ""),
+           failures)
+    _check(shaded_claims > 0 and not leaked,
+           "no row number on SHADED paper has an input -- the sheet's own "
+           "printed index is not a writing surface",
+           f"{shaded_claims} shaded row-number cell(s), {len(leaked)} leaked "
+           f"a typing surface"
+           + (f" ({'; '.join(leaked[:6])}{'...' if len(leaked) > 6 else ''})"
+              if leaked else ""),
            failures)
 
 
