@@ -12,6 +12,143 @@ superseded by the r43 section.
 
 
 
+## W4b — nine more signatures, and the wall-crossing overlay reds turn out to be 23 real (and not worth the fix) plus 4 correctly-shipped
+
+**Measured 2026-08-12, worktree `wt/w4b-signature`, base `60a3ab16`.** Inputs
+45,537 -> **45,546 (+9)**, tab-walk 53/53 green, blue census **5, unmoved**,
+`inputs_over_printed_text` **2 forms/5 offenders, unmoved** (1604cf-2008,
+2316-2021), `comb_slots_match_printed` **10 forms/19 offenders, unmoved**,
+every other assertion **0 offenders, all 53 forms, unmoved**, comb censuses
+**4,587/4,557/30, unmoved** -- all re-measured on the regenerated tree via a
+full `audit.py --assertions-only` run, not carried over from a prior round.
+
+**F221 case 1 closes 9 of the 12 named sites.** The caption and the vector-
+drawn signature line are not drawn inside one cell, as the finding's own
+prose said -- they straddle the SAME lattice wall the caption's own cell
+shares with it, `SignatureLineBinding`'s own relation (caption below,
+candidate above), not `RuledBlankWriting`'s (caption and rule share one
+cell). The candidate above is refused today only because it is `kind=label`
+(it also carries the jurat paragraph and an item number), never `field`.
+`emit.SignatureRuleWriting` implements exactly that: a `label` cell owning a
+VECTOR rule whose own thickness straddles its `y1` (`rule.y0 <= cell.y1 <=
+rule.y1`, 0.0pt slack on all 9 real claims), with exactly one signature
+caption in the cell sharing that wall naming it. Geometry is
+`ruled_blank_field_box`, reused whole -- no new field-box function.
+0605-1999, 1604cf-2008, 2550m-2007, 2551m-2002 and 2553-1999 give 8 rules
+(F221's own case 1, closed exactly as scoped); 2316-2021's own item 55 is
+reached by the identical shape without being told to look for it, closing
+one of its four named sites as a direct consequence, not a special case.
+
+**Every claim routes through both `BureauReservation` and `shading`**, and a
+whole-cell test would have been wrong: 0605-1999's and 1604cf-2008's own
+oversized jurat cell also prints an unrelated "Stamp of Receiving Office"
+caption 300pt along the SAME cell. Measured directly before shipping the
+narrower rect: a whole-cell reservation test refused BOTH real claims on
+those two forms over a caption neither signature line sits under; the guard
+is now asked over the claimed rule's own x-span, and both are correctly
+admitted (0 of 9 real claims sit on a Bureau caption or a tint, either way).
+
+**Browser-verified**, Tab from the page's first input, typed, read back: all
+9 reachable at presses 84/85 (0605-1999), 249/250 (1604cf-2008), 90/91
+(2550m-2007), 89 (2551m-2002), 79 (2553-1999), 175 (2316-2021); every input
+computed `text-align: center`; bottom gap to the cell's own bottom border
+0.48-0.63px (T5d's own bottom-seated treatment -- `seat_signature_line` is a
+correct no-op here since `ruled_blank_field_box` already seats one line tall
+on the rule, and is still called, not skipped, for the day a form leaves more
+headroom than that).
+
+**2316-2021's remaining 3 named sites are left open, filed as F226.** Two
+(items 53/54, "Date Signed") each correctly own their own signature rule, but
+the caption sits across a genuine intervening `blank` cell or an ungridded
+gap the lattice made no cell for at all -- the exact "unconstrained adjacency
+test bound the wrong cell" shape the task named as already-tried-and-rejected,
+and this checkout's own F064/Route A history (W3) measured that a comparably
+loosened lattice/adjacency relation reliably reaches cells nothing has
+reviewed. The third (item 56) cannot bind under ANY cell-to-cell mechanism at
+all: its own caption run is not assigned to any lattice cell on the page.
+
+**F222 closes nothing and ships no code change -- the diagnosis is the
+deliverable.** First, the finding's own question: every reader of a comb's
+outer slot edges (`comb_slots_markup`, `cell_json`) already routes through
+`comb_slot_edges`, which already prefers `writing_x0`/`writing_x1` over
+`slot_x`'s own outer values (F208, verified live -- `p2c115-s0`'s own
+rendered left edge is 355.734pt, matching `writing_x0`, not `slot_x[0]`).
+`comb_slot_verdicts` keeps raw `slot_x` deliberately, documented at the call
+site as a superset. No consumer was missed; F208 is complete on the X axis,
+and the missed-consumer hypothesis this finding names is refuted.
+
+Per-site verdict on all 27 marks (a live Playwright census against
+`window.formgenFieldCensus()`, the SAME instrument the debug overlay itself
+calls, plus the underlying rule/rail geometry): **23 are a real producer
+defect** (1701Q's own 16, plus one each on 2550M/1801x2/2553x2/0605/2551M).
+Every wall `boxAt` closes on is the claimed cell's own real border rule --
+never a coincidental unrelated structure -- and the writing box genuinely
+overruns it by 0.15-0.6pt past the overlay's own 0.25pt tolerance. Root cause
+traced to source: `lattice.is_one_boundary`/`fuse_boundaries` fuses two
+GENUINELY SEPARATE rules (1701Q: a real 2.4pt gap with no ink anywhere
+between them across the whole page width; 1801: a real 1.32pt gap) into one
+lattice line positioned in the gap, at neither rule's own true edge; the
+fused boundary's reported thickness is the MAX of both rules', and
+`cell.y1 - thickness` lands past the real wall by roughly the difference. A
+genuine `lattice.py` row/column-boundary-fusion defect -- not F208's own
+X-axis shape, and not comb-specific (7 of the 23 are plain text fields).
+
+**Not fixed, deliberately.** The two candidate fixes -- tightening
+`is_one_boundary`'s own fusion criterion (shared by every cell boundary in
+the corpus; F064's own Route A precedent measured a comparably general
+lattice correction moving 166-751 cells across 13-24 forms for ONE named
+defect and still not fixing it) or adding a new per-side true-ink-position
+capture to every cell's border (general-purpose, Y-axis, `comb_rails`' own
+rail-ink shape but corpus-wide reach) -- both carry a blast radius this
+package did not measure and cannot responsibly ship inside its own scope.
+Every one of the 23 sites is a real, correctly-positioned input against the
+rail a taxpayer actually sees; the overrun is in the writing box's own
+unrendered clearance, never glyph ink (none of the 23 is an
+`inputs_over_printed_text` offender).
+
+**The remaining 4 (2550M's own `p1c203`, a 4-slot comb) are an overlay
+over-report, not a producer defect.** `boxAt`'s non-strict wall search picks
+`v228`, a genuinely separate, correctly-drawn vertical 0.96pt inside the
+comb's own TRUE rail `v223` -- not this comb's own wall. `lattice.comb_rails`
+already performs the wall-vs-tick discrimination this shape needs and
+correctly identifies `v223` (`left_rail_ink` matches the rendered input's own
+left edge exactly). `crossesCleanly` (F220) does not exclude `v228` either --
+it cleanly spans the comb's own row height, a different failure shape than
+F220's own. Not fixable on either side: the comb is already correctly
+emitted, and FIELD_DEBUG_JS's own documented constraint -- it may not consult
+the field layer's own containers -- forbids the overlay from breaking this
+tie with comb-specific rail data. Left as-is, correctly.
+
+**Standing checks and mutations.** `emit.signature_rule_corpus_assertions`
+(53 forms, 9 rules claimed, 0 without a typing surface) and
+`emit.signature_rule_writing_assertions` (paired synthetic positive/negative
+fixtures proving the ownership test, the caption gate, the wrong-wall
+refusal, the ambiguous-caption refusal and the Bureau/shading gate can each
+independently fail) run every `emit.py --self-test`.
+`fixtures.signature_rule_row` / `mutate_signature_rule` / `prove_signature_
+rule` reproduce 0605-1999's own real "Title/Position of Signatory" refusal
+on a rebuilt PDF (`prove_fixtures_fail.py`, run outside its own
+CASES/CONTRACT_ONLY accounting, the `prove_row_number`/`prove_comb_band_
+reunification` precedent).
+
+**Pins.** `extract.FIXTURE_FIXTURES["FIXTURE-RULES"]` and
+`comb_referee.AUDIT_DEPENDENCY_SHA256["tools/formgen/extract.py"]` moved
+(`fixtures/rules.pdf` gained `signature_rule_row`'s new shape; no
+extract.py check, count or tolerance moved).
+`comb_referee.EXPECTED_HTML_STRUCTURE_SHA256` re-pinned for the 6 forms
+whose `build/html/<slug>.html` bytes moved (0605-1999, 1604cf-2008,
+2316-2021, 2550m-2007, 2551m-2002, 2553-1999); the other 47 are
+byte-identical, verified directly (`comb_referee.py`'s own run: `forms_error:
+0`, comb censuses 4,587/4,557/30 match exactly). `review-findings.json`:
+F221 fixed (9/12, residue filed as new finding F226, left open with its own
+measurement); F222 measured and left open, no code changed; F226 filed and
+left open.
+
+**Determinism**: two `batch.py` regenerations over the full 53-form corpus
+produce byte-identical `build/html`, `build/ir`, `build/layout` and `forms/`
+(tree digests match exactly: `build/html` `c99cde01be21…`, `build/ir`
+`f8cc40faa735…`, `build/layout` `84bddb4e4040…`, `forms` `dd80a38813e9…`).
+
 ## W3 + W4 — the abort was the deliverable, and the blue census became readable
 
 **Gate r55: 10/13**, determinism byte-identical (`b3c72753a362`), open

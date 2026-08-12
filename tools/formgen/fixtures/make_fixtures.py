@@ -159,6 +159,34 @@ COMB_BAND_REUNIFICATION_SLOTS = 4
 COMB_BAND_REUNIFICATION_BAND_TOP_INSET_PT = 25.0
 COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT = 0.0
 
+# F221 case 1's shape (`emit.SignatureRuleWriting`): a bordered `label` cell
+# (the jurat declaration's own item number, nothing else) rules a VECTOR
+# signature line across its own bottom wall, and a SEPARATE `label` cell
+# directly below carries the "Signature over Printed Name..." caption that
+# names it -- 0605-1999, 1604cf-2008, 2550m-2007, 2551m-2002 and 2553-1999's
+# own item pairs, reproduced at the corpus's own scale. The signature bar
+# spans the row's own full available width (between its left/right borders)
+# rather than a narrower slice the way 2550M's own two-per-row rules do,
+# because a narrower one would not, by itself, give the row's shared wall
+# enough coverage to become a lattice boundary in a single-column fixture --
+# on the real forms that coverage comes from OTHER columns in the same page-
+# wide row, which a minimal fixture has no reason to reproduce. The straddle
+# ownership test (`rule["y0"] <= cell["y1"] <= rule["y1"]`) and the caption
+# match are exercised exactly the same either way.
+#
+# `SIGNATURE_RULE_CAPTION_TEXT` is its own constant, not a reuse of
+# `SIGNATURE_LINE_CAPTION` above, so `prove_fixtures_fail.py`'s
+# `mutate_signature_rule` can change it without touching the unrelated
+# F212 fixture `signature_box()` builds. Mutated to 0605-1999's own real
+# residue -- "Title/Position of Signatory", the identical geometry beside a
+# caption that names no signature -- so the mutation is drawn from a real,
+# already-measured refusal rather than invented.
+SIGNATURE_RULE_ROW_WIDTH_PT = 260.0
+SIGNATURE_RULE_ROW_HEIGHT_PT = 30.0
+SIGNATURE_RULE_CAPTION_ROW_HEIGHT_PT = 20.0
+SIGNATURE_RULE_ITEM_TEXT = "27"
+SIGNATURE_RULE_CAPTION_TEXT = "Signature over Printed Name of Taxpayer"
+
 
 def gray(value: float) -> tuple[float, float, float]:
     """A neutral RGB triple. to_gray() collapses it back to this exact value."""
@@ -418,6 +446,44 @@ def comb_band_reunification_row(page: fitz.Page, x0: float, y0: float) -> None:
     bar(page, comb_x0, rail_y0, comb_x0 + thickness, y1, BLACK)
 
 
+def signature_rule_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F221 case 1's shape (`emit.SignatureRuleWriting`): a `label` cell's
+    own vector-drawn signature line, straddling the wall it shares with a
+    caption cell below.
+
+    `x0,y0` anchors the upper cell's own top-left corner. Two abutting
+    bordered cells, sharing one frame and one internal wall (drawn as plain
+    bars, not `merged_box`'s four-sided box, because the wall a real form
+    draws there is not the CELL's own reported border either --
+    2550M's `p1c181` measures `border_count: 2`, not 4): the upper cell
+    carries `SIGNATURE_RULE_ITEM_TEXT`, the item number that is its own
+    only OTHER ink (what makes it `label`, not `blank`); the lower cell
+    carries `SIGNATURE_RULE_CAPTION_TEXT`. Between them, straddling the
+    wall, is the vector signature line itself -- the one piece of ink
+    `emit.SignatureRuleWriting`'s own ownership test
+    (`rule["y0"] <= cell["y1"] <= rule["y1"]`) reads, drawn the same way
+    every rule in this fixture is (a filled bar, `bar()`), never as
+    underscore glyphs (`RuledBlankWriting`'s own population, a different
+    shape this class explicitly excludes).
+    """
+    x1 = x0 + SIGNATURE_RULE_ROW_WIDTH_PT
+    wall_y = y0 + SIGNATURE_RULE_ROW_HEIGHT_PT
+    caption_y1 = wall_y + SIGNATURE_RULE_CAPTION_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    half = thickness / 2.0
+    bar(page, x0, y0, x0 + thickness, caption_y1, BLACK)
+    bar(page, x1 - thickness, y0, x1, caption_y1, BLACK)
+    bar(page, x0, y0, x1, y0 + thickness, BLACK)
+    bar(page, x0, caption_y1 - thickness, x1, caption_y1, BLACK)
+    page.insert_text(fitz.Point(x0 + 6, y0 + 14), SIGNATURE_RULE_ITEM_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+    bar(page, x0 + thickness, wall_y - half, x1 - thickness, wall_y + half,
+        BLACK)
+    page.insert_text(fitz.Point(x0 + 10, wall_y + 12),
+                     SIGNATURE_RULE_CAPTION_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -498,6 +564,11 @@ def build_rules() -> fitz.Document:
     # F064's comb-band-reunification shape (W3): placed clear of the
     # row-number row above (which ends at y304).
     comb_band_reunification_row(second, 48, 340)
+
+    # F221 case 1's own vector-drawn signature line (`emit.
+    # SignatureRuleWriting`): placed clear of the comb-band-reunification
+    # row above (which ends at y380).
+    signature_rule_row(second, 48, 400)
     return doc
 
 

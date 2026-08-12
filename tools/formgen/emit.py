@@ -2263,6 +2263,119 @@ def seat_signature_line(box: FieldBox | None, one_line_pt: float) -> FieldBox | 
                     round(one_line_pt, 4), box.letter_spacing_pt, box.capacity, None)
 
 
+class SignatureRuleWriting:
+    """Which `label` cells own a vector-drawn line at their own bottom wall,
+    directly above a "Signature over Printed Name" caption printed in the
+    cell below (F221, case 1) -- `RuledBlankWriting`'s own relation, reused
+    rather than reinvented, with two things swapped for it: the rule there is
+    UNDERSCORE-drawn text wholly inside the caption's own cell; here it is a
+    VECTOR rule straddling the wall this cell shares with the next one down,
+    and the caption that names it is not in this cell at all -- it is in the
+    cell below, `SignatureLineBinding`'s own "caption below, candidate above"
+    reading, because a `label` cell (unlike a `field` cell or a
+    `SignatureBoxWriting` claim) is not a candidate `SignatureLineBinding`
+    will ever bind to.
+
+    0605-1999, 1604cf-2008, 2550m-2007, 2551m-2002 and 2553-1999 each set
+    their jurat declaration ("I declare, under the penalties of perjury...")
+    and one or two item numbers in ONE `label` cell, with a vector rule ruled
+    across the bottom of that SAME cell for each signatory -- the line a
+    taxpayer signs on -- and set "Signature over Printed Name of..." (or
+    2550M's "(Signature Over Printed Name)") as a caption in the NEXT cell
+    down, against the identical wall the rule is drawn on.
+    `SignatureLineBinding`'s own box-above test requires the candidate
+    directly above the caption to already be `kind == "field"`; here it is
+    `label`, because it also carries the jurat paragraph and the item
+    number, so that test never fires and the rule is never associated with
+    anything a taxpayer can type into.
+
+    Ownership is a STRADDLE test, not `RuledBlankWriting`'s containment: the
+    rule's own thickness is centred exactly on the two cells' shared wall (a
+    printed rule doubling as the lattice boundary that separates them), so
+    `rule["y0"] <= cell["y1"] <= rule["y1"]` is what "this rule is drawn at
+    THIS cell's own bottom" means here -- measured at 0.0pt slack on every
+    one of the 9 rules this selects. A rule at a cell's own TOP never
+    satisfies this test for the cell whose CAPTION lives below it, which is
+    what keeps a header rule (2550M's `h100`, 452.64-575.28pt, sitting
+    exactly over the x-range where item 28's caption centres) from being
+    claimed: its centre sits at the cell's own TOP wall, not its bottom.
+
+    A rule is claimed only when exactly one caption in a cell directly below
+    (sharing this cell's own bottom wall, `SignatureLineBinding`'s own
+    `SIGNATURE_LINE_ADJACENCY_EPSILON_PT`) names it -- its x-centre inside
+    the rule's own x-extent. 0605 rules three lines at this cell's own
+    bottom, and only two have any caption below them at all ("Title/Position
+    of Signatory" is not a signature caption); 2551M and 2553 each rule two,
+    and only one of the two has a caption below it. `RuledBlankWriting`'s own
+    precedent for ownership that does not resolve to exactly one claimant:
+    refused, not guessed at.
+
+    Where the box is drawn: reused whole, not re-derived --
+    `ruled_blank_field_box`'s "the box sits ABOVE its rule, seated on it" is
+    the identical geometry a signature line needs, one line tall, x-extent
+    the rule's own extent, trimmed by whatever ink hangs into it from above
+    (the jurat paragraph, on every one of these forms, sits well clear of
+    it). `field_verdict` calls that function directly with this class's own
+    claims; there is no second field-box function to keep in step with it.
+
+    Measured over this corpus (build/ir + build/layout, 53 bundles): 8 rules
+    across the 5 forms named above, plus a 9th this class reaches without
+    being told to look for it -- `2316-2021`'s own item 55 ("I declare...
+    qualified under substituted filing...") sets its rule and its caption's
+    owning cell directly adjacent, the identical shape, so it is claimed the
+    same way, not special-cased for the form. Three more 2316 sites stay
+    open: two ("Date Signed" item 53/54) each own their own rule correctly
+    but the caption sits ACROSS an intervening cell (a genuine sub-row) or an
+    ungridded gap the lattice never made a cell for, and the third
+    (item 56's own caption run) is not assigned to any lattice cell at all,
+    so no cell-to-cell adjacency test -- this one or `SignatureLineBinding`'s
+    -- can ever reach it. See F221's own resolution for the measurement.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, cells: Sequence[dict[str, Any]], page_index: int,
+                 rules: Sequence[dict[str, Any]],
+                 runs: Sequence[dict[str, Any]]) -> None:
+        runs_by_id = {run_id(page_index, i): run for i, run in enumerate(runs)}
+        label_cells = [c for c in cells if c["kind"] == "label"]
+        claims: dict[str, list[dict[str, Any]]] = {}
+        for cell in label_cells:
+            owned = [
+                r for r in rules
+                if r.get("origin") != RULE_ORIGIN_TEXT_UNDERSCORE
+                and r.get("role") == "structural"
+                and float(cell["x0"]) <= float(r["x0"])
+                and float(r["x1"]) <= float(cell["x1"])
+                and float(r["y0"]) <= float(cell["y1"]) <= float(r["y1"])
+            ]
+            if not owned:
+                continue
+            captions: list[dict[str, Any]] = []
+            for other in cells:
+                if (other["id"] == cell["id"]
+                        or abs(float(other["y0"]) - float(cell["y1"]))
+                            > SIGNATURE_LINE_ADJACENCY_EPSILON_PT):
+                    continue
+                for rid in other.get("text_run_ids") or ():
+                    run = runs_by_id.get(rid)
+                    if run is not None and _signature_line_caption(run["text"]):
+                        captions.append(run)
+            matched = []
+            for rule in owned:
+                rx0, rx1 = float(rule["x0"]), float(rule["x1"])
+                hits = [c for c in captions
+                        if rx0 <= (float(c["x0"]) + float(c["x1"])) / 2.0 <= rx1]
+                if len(hits) == 1:
+                    matched.append(rule)
+            if matched:
+                claims[cell["id"]] = matched
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> Sequence[dict[str, Any]]:
+        return self._claims.get(cell_id, ())
+
+
 # Restated from `lattice.min_fillable_line_metrics` -- emit.py reads the IR as
 # JSON and carries no import of the module that computes it (the same reason
 # `RULE_ORIGIN_TEXT_UNDERSCORE` above is a restated literal, not an import).
@@ -3437,10 +3550,11 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   signature_boxes: "SignatureBoxWriting | None" = None,
                   knockout_specify: "KnockoutSpecifyWriting | None" = None,
                   row_numbers: "RowNumberWriting | None" = None,
+                  signature_rules: "SignatureRuleWriting | None" = None,
                   ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Nine rules, in this order, and the order is the point:
+    Ten rules, in this order, and the order is the point:
 
       * **A `label` cell whose paper carries its own underscore-drawn writing
         line is a field there, whatever else refuses it -- unless the sheet's
@@ -3457,6 +3571,21 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         one place `shading` is deliberately NOT consulted -- see its own
         comment at the call site for the measured 41/7 split that makes an
         underscore rule on tint a writing line, not shaded decoration.
+      * **A `label` cell whose own bottom wall carries a vector-drawn
+        signature line, with a "Signature over Printed Name" caption in the
+        cell directly below naming it, is a field there too, unless the
+        sheet's own Bureau caption also claims it.** F221 case 1:
+        `RuledBlankWriting`'s own relation, for a VECTOR rule straddling the
+        wall this cell shares with its own caption below rather than an
+        underscore rule drawn wholly inside the caption's own cell.
+        `SignatureRuleWriting` has already resolved ownership; see it and
+        `ruled_blank_field_box`, which this branch reuses whole -- there is
+        no second field-box function for a vector-drawn signature line.
+        **Routed through `BureauReservation` and `shading`**, both: none of
+        this corpus's 9 claims sit on a Bureau caption or a decorative tint,
+        checked rather than assumed, the same discipline the row-number rule
+        below was shipped without once (F151/W2) and had to add after the
+        fact.
       * **A `label` cell whose paper carries its own checkbox square is a
         field there too, unless the sheet's own Bureau caption also claims
         it.** F210: the square is a closed box of decorative rules the
@@ -3587,6 +3716,38 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                 float(cell["x1"]), float(cell["y1"])):
             return False, "bureau"
         return True, "ruled-blank"
+    if (cell["kind"] == "label" and signature_rules is not None
+            and signature_rules.for_cell(cell["id"])):
+        # F221 case 1: routed through BOTH `BureauReservation` and `shading`
+        # -- unlike the ruled-blank branch above, which deliberately skips
+        # `shading` for a measured reason stated there. This population has
+        # no equivalent measurement excusing it, so it takes the ordinary
+        # double guard `row_number`'s own W2 package had to add after
+        # shipping without it (F151): zero of this corpus's 9 claims sit on
+        # a Bureau caption or a decorative tint, checked rather than assumed.
+        #
+        # Asked over the CLAIMED RULES' own x-span, never the owning cell's
+        # full width. 0605's own jurat cell rules item 22A/22B's two
+        # signature lines AND prints "Stamp of Receiving Office and Date of
+        # Receipt" 300pt further right in the SAME oversized `label` cell --
+        # a caption for a DIFFERENT, already-reserved compartment on the
+        # page, not for either signature line. Asking `reservation`/`shading`
+        # of the whole cell (`ruled_blanks`'/`checkbox_squares`'/
+        # `signature_boxes`' own shape, correct for their own single-purpose
+        # cells) would refuse both real signature lines over a caption
+        # neither one sits under; measured directly, this is not
+        # hypothetical -- 0605-1999 and 1604cf-2008 both do this, and a
+        # whole-cell test refused their real claims before this was caught.
+        claimed = signature_rules.for_cell(cell["id"])
+        rx0 = min(float(r["x0"]) for r in claimed)
+        rx1 = max(float(r["x1"]) for r in claimed)
+        if reservation is not None and reservation.blocks(
+                rx0, float(cell["y0"]), rx1, float(cell["y1"])):
+            return False, "bureau"
+        if shading is not None and shading.blocks(
+                {"x0": rx0, "y0": cell["y0"], "x1": rx1, "y1": cell["y1"]}):
+            return False, "shading"
+        return True, "signature-rule"
     if (cell["kind"] == "label" and checkbox_squares is not None
             and checkbox_squares.for_cell(cell["id"])):
         # F218: the identical guard, the identical reasoning -- zero of the
@@ -3857,11 +4018,14 @@ class FieldPlan:
             row_numbers = (
                 RowNumberWriting(page["cells"], page_index, runs, fillable_metrics)
                 if runs is not None else None)
+            signature_rules = (
+                SignatureRuleWriting(page["cells"], page_index, rules, runs)
+                if rules is not None and runs is not None else None)
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
                                                  ruled_blanks, checkbox_squares,
                                                  signature_boxes, knockout_specify,
-                                                 row_numbers)
+                                                 row_numbers, signature_rules)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -3869,6 +4033,9 @@ class FieldPlan:
                 if reason == "ruled-blank":
                     box = ruled_blank_field_box(
                         cell, ruled_blanks.for_cell(cell["id"]), face, ink)
+                elif reason == "signature-rule":
+                    box = ruled_blank_field_box(
+                        cell, signature_rules.for_cell(cell["id"]), face, ink)
                 elif reason == "checkbox-square":
                     box = checkbox_square_field_box(
                         cell, checkbox_squares.for_cell(cell["id"]), face, ink)
@@ -3887,8 +4054,19 @@ class FieldPlan:
                     warnings.append(f"cell {cell['id']}: the field's writing box has no "
                                     f"height, so it gets no typing surface")
                     continue
-                if (signature_lines is not None
-                        and signature_lines.for_cell(cell["id"])):
+                if (reason == "signature-rule"
+                        or (signature_lines is not None
+                            and signature_lines.for_cell(cell["id"]))):
+                    # F221 case 1's own box already sits ON its rule, one
+                    # line tall (`ruled_blank_field_box`'s own geometry), so
+                    # `seat_signature_line` is a no-op for it every time --
+                    # its own guard returns a box already at or under one
+                    # line unchanged. It is still called, not skipped,
+                    # because it is the SAME re-seat `SignatureLineBinding`'s
+                    # own claims take, and a future form whose vector rule
+                    # leaves more than one line of headroom above it must not
+                    # silently start floating this box at that box's own
+                    # centre instead of on the line.
                     box = seat_signature_line(box, one_line_pt)
                     self.centered.add(cell["id"])
                 self.boxes[cell["id"]] = box
@@ -8791,6 +8969,8 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     rule, so `ruled_blanks` claims it first and the missing branch was never
     exercised even though it would have disagreed. All three are wired in
     now, the same shape `ruled_blanks`/`signature_boxes` already had.
+    `signature_rules` (F221) is wired in from its own first commit, not left
+    to repeat the same gap a second time.
     """
     fields = FieldPlan(layout, resolve_field_face(plan, []), [], ir)
     expected: dict[str, int] = {}
@@ -8831,6 +9011,10 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     row_numbers = {int(p["index"]): RowNumberWriting(
         p["cells"], int(p["index"]), runs_by_page.get(int(p["index"]), ()), fillable_metrics)
         for p in layout["pages"]}
+    signature_rules = {int(p["index"]): SignatureRuleWriting(
+        p["cells"], int(p["index"]), rules_by_page.get(int(p["index"]), ()),
+        runs_by_page.get(int(p["index"]), ()))
+        for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
                                  shading.get(int(p["index"])),
@@ -8839,7 +9023,8 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
                                  checkbox_squares=checkbox_squares.get(int(p["index"])),
                                  signature_boxes=signature_boxes.get(int(p["index"])),
                                  knockout_specify=knockout_specify.get(int(p["index"])),
-                                 row_numbers=row_numbers.get(int(p["index"])))[0]]
+                                 row_numbers=row_numbers.get(int(p["index"])),
+                                 signature_rules=signature_rules.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -8896,6 +9081,7 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     comb_writing_rectangle_assertions(plan, failures)
     writing_box_assertions(plan, failures)
     knockout_specify_writing_assertions(plan, failures)
+    signature_rule_writing_assertions(plan, failures)
     field_debug_assertions(html, failures)
     tab_debug_assertions(html, failures)
 
@@ -9455,6 +9641,82 @@ def row_number_corpus_assertions(failures: list[str]) -> None:
            failures)
 
 
+def signature_rule_corpus_assertions(failures: list[str]) -> None:
+    """Every vector-drawn signature line a `label` cell owns at its own
+    bottom wall, with a matching "Signature over Printed Name" caption in
+    the cell below, has an input -- corpus-wide (F221 case 1), the same
+    shape `ruled_blank_corpus_assertions`, `checkbox_square_corpus_
+    assertions`, `signature_box_corpus_assertions`, `signature_line_corpus_
+    assertions` and `row_number_corpus_assertions` already give their own
+    findings: it re-derives, independently of whatever `batch.py` last
+    emitted, which cells `SignatureRuleWriting` would admit on EVERY form
+    this checkout has extracted, and fails loudly if any of them lacks a
+    typing surface. A form added to `build/ir` after this check was written
+    is covered the moment it is extracted, by construction -- nothing here
+    names a slug.
+
+    The corpus carries no Bureau-reserved or shaded case in this population
+    to assert the second direction against (measured: 0 of the 9 real claims
+    are either), so that half is proved on synthetic geometry instead --
+    `signature_rule_writing_assertions`, `knockout_specify_writing_
+    assertions`' own precedent for a gate the real corpus never exercises.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every owned signature line has an input, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    forms_checked = 0
+    rules_checked = 0
+    unfilled: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            unfilled.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+        runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            page_index = int(page["index"])
+            signature_rules = SignatureRuleWriting(
+                page["cells"], page_index,
+                rules_by_page.get(page_index, ()), runs_by_page.get(page_index, ()))
+            for cell in page["cells"]:
+                claimed = signature_rules.for_cell(cell["id"])
+                if not claimed:
+                    continue
+                rules_checked += len(claimed)
+                if fields.of(cell["id"]) is None:
+                    unfilled.append(
+                        f"{slug} {cell['id']}: {len(claimed)} owned signature "
+                        f"line(s) claimed, no typing surface")
+
+    # rules_checked > 0 is load-bearing, not decoration: a discovery mechanism
+    # that silently claimed nothing would leave `unfilled` empty too, and
+    # "not unfilled" alone would pass having verified nothing at all.
+    _check(forms_checked > 0 and rules_checked > 0 and not unfilled,
+           "every owned signature line has an input, corpus-wide",
+           f"{forms_checked} form(s), {rules_checked} rule(s) claimed, "
+           f"{len(unfilled)} without a typing surface"
+           + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
+              if unfilled else ""),
+           failures)
+
+
 def _synthetic_comb(cells: int, x0: float, pitch: float,
                     y0: float, height: float,
                     writing: tuple[float, float] | None = None) -> dict[str, Any]:
@@ -9795,6 +10057,152 @@ def knockout_specify_writing_assertions(plan: dict[str, Any],
            "field_verdict routes a claimed cell through the knockout-specify "
            "reason",
            f"{verdict}", failures)
+
+
+def signature_rule_writing_assertions(plan: dict[str, Any],
+                                      failures: list[str]) -> None:
+    """F221 case 1: a label cell's OWN vector-drawn rule earns it a writing
+    surface exactly when a "Signature over Printed Name" caption sits in the
+    cell directly below it, naming that rule -- and not otherwise. Paired
+    positive/negative fixture assertions, each isolating the one property
+    that separates 2550M's own item 27/28 (and eight more sites like them)
+    from the corpus's much larger population of vector rules a `label` cell
+    happens to own, plus the Bureau and shading gate the real corpus carries
+    no case to exercise this against (`signature_rule_corpus_assertions`'s
+    own note).
+    """
+    page_index = 0
+    OWNER = {"id": "p0g0", "kind": "label", "row": 0, "col": 0,
+            "x0": 0.0, "y0": 0.0, "x1": 300.0, "y1": 40.0, "text_run_ids": []}
+    CAPTION_CELL = {"id": "p0g1", "kind": "label", "row": 1, "col": 0,
+                    "x0": 0.0, "y0": 40.0, "x1": 300.0, "y1": 60.0,
+                    "text_run_ids": [run_id(page_index, 0)]}
+
+    def owned_rule(y0: float = 39.6, y1: float = 40.4, x0: float = 50.0,
+                   x1: float = 250.0, origin: str = "vector") -> dict[str, Any]:
+        return {"id": "hTEST", "axis": "h", "x0": x0, "x1": x1, "y0": y0, "y1": y1,
+                "thickness_pt": round(y1 - y0, 4), "gray": 0.0,
+                "role": "structural", "origin": origin}
+
+    def caption_run(text: str = "Signature over Printed Name of Taxpayer",
+                    x0: float = 100.0, x1: float = 200.0) -> dict[str, Any]:
+        return {"text": text, "x0": x0, "x1": x1, "y0": 42.0, "y1": 50.0}
+
+    def claim(cells: Sequence[dict[str, Any]], rules: Sequence[dict[str, Any]],
+             runs: Sequence[dict[str, Any]]) -> Sequence[dict[str, Any]]:
+        return SignatureRuleWriting(cells, page_index, rules, runs).for_cell("p0g0")
+
+    base = claim([OWNER, CAPTION_CELL], [owned_rule()], [caption_run()])
+    _check(list(base) == [owned_rule()],
+           "a label cell's own vector rule at its own bottom wall, named by "
+           "a signature caption directly below it, is claimed",
+           f"{base}", failures)
+
+    no_caption = claim([OWNER, CAPTION_CELL], [owned_rule()],
+                       [caption_run("Title/Position of Signatory")])
+    _check(not no_caption,
+           "the identical rule with no signature caption below it (0605's "
+           "own \"Title/Position of Signatory\" line) is refused",
+           f"{no_caption}", failures)
+
+    underscore = claim([OWNER, CAPTION_CELL], [owned_rule(origin="text-underscore")],
+                       [caption_run()])
+    _check(not underscore,
+           "an UNDERSCORE-drawn rule in the identical geometry is refused -- "
+           "that population is RuledBlankWriting's, not this class's",
+           f"{underscore}", failures)
+
+    top_rule = claim([OWNER, CAPTION_CELL], [owned_rule(y0=-0.4, y1=0.4)],
+                     [caption_run()])
+    _check(not top_rule,
+           "a rule straddling this cell's own TOP wall instead of its "
+           "bottom -- 2550M's own header rule h100's shape -- is refused",
+           f"{top_rule}", failures)
+
+    far_caption = claim(
+        [OWNER, {**CAPTION_CELL, "y0": 41.0}], [owned_rule()], [caption_run()])
+    _check(not far_caption,
+           "a caption cell that does not share this cell's own bottom wall "
+           "(a 1.0pt gap, not the 0.0pt every real binding measures) is "
+           "refused",
+           f"{far_caption}", failures)
+
+    ambiguous = claim(
+        [OWNER, {**CAPTION_CELL,
+                 "text_run_ids": [run_id(page_index, 0), run_id(page_index, 1)]}],
+        [owned_rule()],
+        [caption_run(), caption_run("Signature over Printed Name of Spouse",
+                                    x0=60.0, x1=150.0)])
+    _check(not ambiguous,
+           "a rule two captions both name is refused rather than guessed "
+           "at -- RuledBlankWriting's own precedent for ownership that does "
+           "not resolve to exactly one claimant",
+           f"{ambiguous}", failures)
+
+    # End to end: the claimed rule becomes an input, seated on its own
+    # geometry, through the same dispatch `field_verdict` and `FieldPlan`
+    # use on the real corpus -- and the Bureau/shading gate this population
+    # has no real corpus case to exercise refuses it exactly like every
+    # sibling mechanism's own does.
+    signature_rules = SignatureRuleWriting(
+        [OWNER, CAPTION_CELL], page_index, [owned_rule()], [caption_run()])
+    verdict = field_verdict(OWNER, None, None, None,
+                            signature_rules=signature_rules)
+    _check(verdict == (True, "signature-rule"),
+           "field_verdict routes a claimed cell through the signature-rule "
+           "reason",
+           f"{verdict}", failures)
+
+    bureau = BureauReservation(
+        [{"text": "Stamp of Receiving Office", "x0": 100.0, "y0": 2.0,
+          "x1": 150.0, "y1": 10.0}], [], [])
+    bureau_verdict = field_verdict(OWNER, None, None, bureau,
+                                   signature_rules=signature_rules)
+    _check(bureau_verdict == (False, "bureau"),
+           "a Bureau caption over the identical claimed cell refuses it, "
+           "not typed over by a taxpayer's own signature line",
+           f"{bureau_verdict}", failures)
+
+    # 0605-1999's and 1604cf-2008's own measured shape: the SAME oversized
+    # `label` cell rules a taxpayer signature line AND prints an unrelated
+    # "Stamp of Receiving Office" caption for a DIFFERENT, already-reserved
+    # compartment 300pt further along the same cell. The guard is asked over
+    # the CLAIMED RULE's own x-span, not the whole cell, so a caption outside
+    # that span must not refuse a real claim.
+    far_bureau = BureauReservation(
+        [{"text": "Stamp of Receiving Office", "x0": 260.0, "y0": 2.0,
+          "x1": 295.0, "y1": 10.0}], [], [])
+    far_bureau_verdict = field_verdict(OWNER, None, None, far_bureau,
+                                       signature_rules=signature_rules)
+    _check(far_bureau_verdict == (True, "signature-rule"),
+           "a Bureau caption printed elsewhere in the SAME oversized label "
+           "cell, outside the claimed rule's own x-span, does not refuse a "
+           "real signature-line claim -- 0605-1999 p1c176's and "
+           "1604cf-2008 p1c316's own measured shape",
+           f"{far_bureau_verdict}", failures)
+
+    shading = DecorativeShading(
+        [{"x0": 0.0, "y0": 0.0, "x1": 300.0, "y1": 40.0, "role": "decorative",
+          "gray": 0.65, "paint_seq": 1}])
+    shading_verdict = field_verdict(OWNER, None, shading, None,
+                                    signature_rules=signature_rules)
+    _check(shading_verdict == (False, "shading"),
+           "a decorative tint under the identical claimed cell refuses it -- "
+           "unlike RuledBlankWriting's own deliberate override, this "
+           "population has no measurement excusing it from the shading gate",
+           f"{shading_verdict}", failures)
+
+    face = resolve_field_face(plan, [])
+    if face is None:
+        _check(False, "the font plan resolves a body face to fit fields to",
+               "no metric-compatible face", failures)
+        return
+    box = ruled_blank_field_box(OWNER, signature_rules.for_cell("p0g0"), face, None)
+    _check(box is not None and box.inset_trbl is not None
+           and abs(box.inset_trbl[2] - (40.0 - 39.6)) < 1e-6,
+           "the field box is seated exactly on the claimed rule's own top "
+           "edge, not floating at the cell's own centre",
+           f"{box.inset_trbl if box else None}", failures)
 
 
 def comb_writing_rectangle_assertions(plan: dict[str, Any],
@@ -11178,6 +11586,9 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
 
     print("row-number corpus check", file=sys.stderr)
     row_number_corpus_assertions(failures)
+
+    print("signature-rule corpus check", file=sys.stderr)
+    signature_rule_corpus_assertions(failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)

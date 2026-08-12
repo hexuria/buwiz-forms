@@ -2487,11 +2487,14 @@ FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # Paper, determinism, merged runs drawn as short bars plus corner squares,
     # all four thicknesses, both decorative greys, a white knockout, a
     # fill+stroke drawing, a checkbox square (T5a, F210), a signature box
-    # (T5b+T5d, F211/F212), a comb band, a row-number row (F151) and a
-    # comb-band-reunification row (W3, F064).
+    # (T5b+T5d, F211/F212), a comb band, a row-number row (F151), a
+    # comb-band-reunification row (W3, F064) and a signature-rule row
+    # (F221 case 1) -- the sha256 moved for the last of these
+    # (`make_fixtures.signature_rule_row`'s own new shape); no extract.py
+    # check, count or tolerance moved.
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "50dbd9c58cf4617a1a997558345d99aa54280be8ec2e6aca895f2f95bffefca4"),
+        "c67c0c0a37c095b3e39865b20700cf2566723417c8db76dc71afb0b408ca8283"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",

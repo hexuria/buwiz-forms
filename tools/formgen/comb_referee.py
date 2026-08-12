@@ -624,8 +624,24 @@ AUDIT_DEPENDENCY_SHA256 = {
     # extract.py check count or tolerance moves; `build/ir/*.ir.json` for
     # the seven real pinned PDFs is untouched (only the synthetic
     # FIXTURE-RULES pin moved).
+    #
+    # Re-pinned 2026-08-12 (W4b, F221 case 1), for the identical reason as
+    # the two entries above: `emit.SignatureRuleWriting` is entirely a
+    # `lattice.py`/`emit.py` decision with no new extract-level primitive,
+    # so `extract.SELF_TEST_CHECKS` stays at 24 checks and
+    # `prove_fixtures_fail.py`'s own CASES/CONTRACT_ONLY accounting is
+    # untouched (see `prove_signature_rule`, deliberately run outside it).
+    # What moved this file's own bytes is BOTH `FIXTURE_FIXTURES
+    # ["FIXTURE-RULES"]`'s sha256 (`fixtures/rules.pdf` gained a new shape,
+    # `make_fixtures.signature_rule_row`, a bordered `label` cell ruling a
+    # vector signature line across its own bottom wall above a caption cell
+    # naming it) and this comment recording that cause -- both part of the
+    # whole-file bytes the sha256 below is taken over. No rule field, comb
+    # census, extract.py check count or tolerance moves; `build/ir/
+    # *.ir.json` for the seven real pinned PDFs is untouched (only the
+    # synthetic FIXTURE-RULES pin moved).
     "tools/formgen/extract.py": (
-        "effd6e07f6c2ed2c09b04ca9c41bc76da0dbaec430b583d2b3b0f93dfa8828e9"
+        "00767649eb2993c42b953bb5040e57429854692d5ef01e8ec945a1569551c731"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -2080,7 +2096,17 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2551q-2018": "f061a98a5863c0d41ec1b23ccf623f7e9d9833a4610308b9f6a781a14f980c7a",
     "2552-2018": "bd0b75cc8531598a2b9e7471ce2d8dfb1b8bec6b8759e747f8b70c1f2abd6d1c",
     "2553-1999": "eab2dc243a11b17db3a6d8c7672267d16362f302aa69990bf3e4beeb9ce9ca94",
-    "0605-1999": "babbb12ae4a8186dcd9abc8222efebd3e1ed045f1bf5f790f653900330986573",
+    # Re-pinned 2026-08-12 (W4b, F221 case 1): `emit.SignatureRuleWriting`
+    # gives a `label` cell an input when it owns a vector-drawn signature
+    # line at its own bottom wall, named by a "Signature over Printed
+    # Name..." caption in the cell directly below. Six documents move:
+    # 0605-1999, 1604cf-2008, 2550m-2007, 2551m-2002, 2553-1999 (F221's own
+    # named case 1, 8 rules across 8 cells) and 2316-2021 (its own item 55,
+    # reached by the identical shape without being told to look for it, 1
+    # rule). The other 47 are byte-identical. Comb censuses (EXPECTED_COMBS,
+    # EXPECTED_COMBS_BY_SLUG, EXPECTED_RETAINED_SUBJECTS_BY_SLUG) do not
+    # move -- this mechanism never touches a comb cell, verified directly.
+    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
     "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
     "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
     "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
@@ -2093,7 +2119,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
     "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
     "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "2c931cc53c73be986be87ca4412d16b53825af0b349bf7f2cb2191ed1c12f813",
+    "1604cf-2008": "7b82d2d3bbbb64808d06fc20952a96b319b5be6f965cdd64268cab2119f5dce6",
     "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
     "1604f-2018": "56e3352c5f5e40f2dd70c88d648b2d786d1aa3f14a16b859df877145354da6ac",
     "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
@@ -2125,14 +2151,14 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2200p-2020": "b3839e31aec5ff27b792b799331eaef9c995e59d771aeba6158fc1037a4c9489",
     "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
     "2200t-2022": "e14e106a282013a336cce8eb637fbd2f47d93a43fc59f22253b33c1eb3ec8fbe",
-    "2316-2021": "7501b04a2a25c7a896e1a0ceac4a375a56c699da4895b78125b5c45b0ee38ea8",
+    "2316-2021": "34b9a369d30f2fefcf6191f09e9cb485a1ef76a38c91068bbe04ef4b71ffd232",
     "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
-    "2550m-2007": "308cd216484107defcb7a4742126cbefa66bed58598f90886b2bbda6ee93fc8a",
+    "2550m-2007": "73d78714b0221a013af4769fa207d5a3d81293b71f1c8a0dbd85f87350589e53",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
-    "2551m-2002": "b2aafc2b768fe09fdf5adf5dfe9574a53570de9308a0a3c2798c87dcba2cbe1a",
+    "2551m-2002": "c3383a4a37ed71719f71617cd9465b6112898ad87a9823abc624d4f090abc012",
     "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
     "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "52217789979eed9d9ecc3e2a59f868f4b84275cc0921402e5f725eb99c5c5f8c",
+    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")

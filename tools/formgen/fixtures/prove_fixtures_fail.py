@@ -892,6 +892,135 @@ def prove_comb_band_reunification(stream: Any) -> int:
     return 1 if failures else 0
 
 
+def _signature_rule_cell(page: dict[str, Any], ir_page: dict[str, Any],
+                         ) -> dict[str, Any] | None:
+    """The fixture's own signature-rule cell, found by content, not id.
+
+    A cell id is a position in lattice.py's own numbering of the whole page,
+    and nothing here needs it to be stable -- the subject is "the `label`
+    cell holding only `make_fixtures.SIGNATURE_RULE_ITEM_TEXT`", found the
+    same way a reader would, so a page rewritten above this shape still
+    locates it (`_row_number_cell`'s own precedent).
+    """
+    page_index = int(page["index"])
+    runs_by_id = {emit.run_id(page_index, i): run
+                  for i, run in enumerate(ir_page["text_runs"])}
+    for cell in page["cells"]:
+        if cell["kind"] != "label":
+            continue
+        texts = [runs_by_id[rid]["text"] for rid in cell.get("text_run_ids") or ()
+                 if rid in runs_by_id]
+        if texts == [fixtures.SIGNATURE_RULE_ITEM_TEXT]:
+            return cell
+    return None
+
+
+def _signature_rule_claimed(root: pathlib.Path) -> bool | None:
+    """Whether `emit.SignatureRuleWriting` claims the fixture's own
+    signature-rule cell under `root`'s corpus, or None if the fixture does
+    not carry the subject at all (a mutation that deleted the cell rather
+    than changing its caption, which would be a different failure than the
+    one this proves)."""
+    ir = extract.extract(root / "rules.pdf", "FIXTURE-RULES", "0001", None)
+    layout = lattice.build_layout(ir)
+    page = next(p for p in layout["pages"] if int(p["index"]) == 2)
+    ir_page = next(p for p in ir["pages"] if int(p["index"]) == 2)
+    cell = _signature_rule_cell(page, ir_page)
+    if cell is None:
+        return None
+    signature_rules = emit.SignatureRuleWriting(
+        page["cells"], 2, ir_page["rules"], ir_page["text_runs"])
+    return bool(signature_rules.for_cell(cell["id"]))
+
+
+def mutate_signature_rule() -> None:
+    """Change the caption below the signature line from a signature caption
+    to 0605-1999's own real "Title/Position of Signatory" residue.
+
+    Nothing about either cell's own geometry moves -- not the wall they
+    share, not the vector bar straddling it, not the item number's own ink
+    -- only the caption text's own words do, from "Signature over Printed
+    Name of Taxpayer" to a caption that names no signature. What breaks is
+    the fact `emit.SignatureRuleWriting` reads: a `label` cell's own vector
+    rule earns it an input only when a caption naming BOTH "signature" and
+    "printed name" sits in the cell directly below it -- exactly 0605-1999's
+    own measured shape (its identical geometry beside "Title/Position of
+    Signatory" is correctly refused today; F221 case 1's own resolution
+    names this as one of three real rules straddling this exact cell's own
+    bottom wall, only two of which have a matching caption).
+    """
+    fixtures.SIGNATURE_RULE_CAPTION_TEXT = "Title/Position of Signatory"
+
+
+def prove_signature_rule(stream: Any) -> int:
+    """Prove F221 case 1's signature-rule mechanism can fail, via a real PDF
+    mutation.
+
+    Not one of `extract.py`'s own checks, and deliberately run outside
+    `prove()`'s CASES/CONTRACT_ONLY accounting, the identical shape
+    `prove_row_number` and `prove_comb_band_reunification` already give
+    their own findings: `emit.SignatureRuleWriting` is entirely a
+    `lattice.py`/`emit.py` decision (a `label` cell's own vector rule,
+    straddling the wall it shares with a cell below naming it "Signature
+    over Printed Name...") with no new extract-level primitive of its own,
+    so folding it into that table would misname what it tests: `extract.py`
+    extracts this fixture's rules and text runs identically whether the
+    mutation below has run or not, and every one of its own checks agrees.
+    What changes is a later-stage geometric-and-textual fact neither
+    `extract.SELF_TEST_CHECKS` nor `CONTRACT_ONLY` is about.
+
+    Same method as every case in `CASES` -- mutate the source PDF, rebuild,
+    observe -- carried one stage further than `extract.gather_evidence`
+    reaches: `lattice.build_layout` and `emit.SignatureRuleWriting` run over
+    the rebuilt IR too, the same two calls `batch.py` chains after
+    extract.py for every real bundle.
+    """
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as scratch:
+        root = pathlib.Path(scratch)
+        fixtures.build_all(root)
+        claimed = _signature_rule_claimed(root)
+        if claimed is not True:
+            failures.append(
+                f"the unmutated signature-rule fixture's claim is "
+                f"{claimed!r}, not True; the fixture never carried the "
+                f"property")
+        print(f"  {'unmutated':<12} {'OK' if claimed is True else 'BROKEN':<5} "
+              f"signature-rule claims the fixture's own vector-drawn line",
+              file=stream)
+
+    previous = fixtures.SIGNATURE_RULE_CAPTION_TEXT
+    try:
+        mutate_signature_rule()
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            fixtures.build_all(root)
+            claimed = _signature_rule_claimed(root)
+            good = claimed is False
+            if not good:
+                failures.append(
+                    f"the retitled signature-rule fixture's claim is "
+                    f"{claimed!r}, not False; the mutation did not clear "
+                    f"the caption gate")
+            print(f"  {'signature-rule':<12} {'OK' if good else 'WEAK':<5} "
+                  f"the caption below the line changes from "
+                  f"{previous!r} to "
+                  f"{fixtures.SIGNATURE_RULE_CAPTION_TEXT!r} -- 0605-1999's "
+                  f"own real \"Title/Position of Signatory\" residue -- and "
+                  f"names no signature", file=stream)
+    finally:
+        fixtures.SIGNATURE_RULE_CAPTION_TEXT = previous
+
+    for message in failures:
+        print(f"    FAIL {message}", file=stream)
+    print(f"prove-signature-rule: "
+          f"{'PASS' if not failures else f'{len(failures)} FAILURE(S)'} over "
+          f"1 source-level mutation, run outside extract.py's own "
+          f"CASES/CONTRACT_ONLY accounting (see prove_signature_rule)",
+          file=stream)
+    return 1 if failures else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -900,8 +1029,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     extract_result = prove(sys.stderr)
     row_number_result = prove_row_number(sys.stderr)
     comb_band_reunification_result = prove_comb_band_reunification(sys.stderr)
+    signature_rule_result = prove_signature_rule(sys.stderr)
     return 1 if (extract_result or row_number_result
-                or comb_band_reunification_result) else 0
+                or comb_band_reunification_result
+                or signature_rule_result) else 0
 
 
 if __name__ == "__main__":
