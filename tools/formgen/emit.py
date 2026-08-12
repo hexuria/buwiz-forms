@@ -2380,23 +2380,84 @@ class SignatureRuleWriting:
     being told to look for it -- `2316-2021`'s own item 55 ("I declare...
     qualified under substituted filing...") sets its rule and its caption's
     owning cell directly adjacent, the identical shape, so it is claimed the
-    same way, not special-cased for the form. Three more 2316 sites stay
-    open: two ("Date Signed" item 53/54) each own their own rule correctly
-    but the caption sits ACROSS an intervening cell (a genuine sub-row) or an
-    ungridded gap the lattice never made a cell for, and the third
-    (item 56's own caption run) is not assigned to any lattice cell at all,
-    so no cell-to-cell adjacency test -- this one or `SignatureLineBinding`'s
-    -- can ever reach it. See F221's own resolution for the measurement.
+    same way, not special-cased for the form.
+
+    **F226: the caption need not share the rule-owner's own wall exactly --
+    it may sit across a small vertical GAP, provided nothing is printed in
+    it.** Two more 2316 sites are this shape: item 53 ("Date Signed") owns
+    its rule at its own bottom wall, y=770.10, but the caption naming it
+    ("Present Employer/Authorized Agent Signature over Printed Name") is not
+    in the cell sharing that wall -- it is one cell further down, across a
+    1.32pt blank sliver with no caption of its own; item 54's own rule
+    (y=801.30) is separated from its caption the same way, across a 0.54pt
+    span the lattice made no cell for AT ALL (an ungridded hole, not merely
+    an empty cell). Both gaps are real: `lattice.classify_cell` genuinely cut
+    a sliver cell (or nothing) rather than fusing the wall, exactly the
+    fusion `is_one_boundary` was measured NOT to perform for these two pairs
+    (F222/W7's own corpus-wide fusion audit).
+
+    The gap is bridged only when it is **smaller than the form's own
+    `glyph_height_pt`** (`lattice.min_fillable_line_metrics`'s own sliver-rule
+    metric -- no new constant) **and carries no printed ink anywhere across
+    the rule's own x-extent.** This is deliberately geometric -- the
+    candidate caption's own cell top minus the rule-owner's own cell bottom,
+    never a cell-hop count -- so the 0.54pt ungridded hole needs no special
+    handling: there is no cell to hop across, only a vertical distance to
+    measure. It also refuses the one wrong-binding shape this exact form
+    offers to THIS class's own search direction (a rule-owning cell looking
+    DOWN for its caption, never `SignatureLineBinding`'s own caption-looking-
+    UP test, which W4b already fixed separately by restricting its own
+    candidates to `kind == "field"`): `p1c322`'s own rule h178 (the jurat-
+    paragraph/field-divider rule, straddling `p1c322`'s own bottom wall,
+    y=748.62) is 22.8pt above the nearest x-matching caption, `p1c327`'s own
+    "Present Employer/Authorized Agent Signature over Printed Name" --
+    correctly refused, measured directly against this corpus: 22.8pt is
+    more than 4x this form's own `glyph_height_pt` (4.65pt), AND the gap
+    itself carries real printed ink ("Date Signed"/"53", `p1c324`'s own
+    text) across the rule's own x-extent. Either test alone refuses it, and
+    both hold together, because a row that holds text is at least one glyph
+    tall by definition and can never fit under `glyph_height_pt`. The two
+    real 2316 gaps (1.32pt, 0.54pt) both clear glyph-free.
+
+    A third 2316 site, item 56's own caption ("Employee Signature over
+    Printed Name", `p1t218`), stays open regardless: its run is not assigned
+    to ANY lattice cell on the page (confirmed directly, unmoved by this
+    extension), so there is no "candidate cell's own top" for this
+    geometric test -- or any other cell-to-cell adjacency test -- to read at
+    all. `_signature_line_caption`'s own docstring already names it as
+    unreachable this way; closing it needs a `lattice.py` change to how a
+    run is assigned to a cell, out of this class's own scope.
+
+    Measured corpus-wide (build/ir + build/layout, 53 bundles, F226): the
+    extension binds exactly these two additional rules and nothing else --
+    no form outside 2316-2021 carries a `label` cell whose owned rule has an
+    ink-free, sub-`glyph_height_pt` gap to exactly one signature caption
+    below it that the old exact-wall test did not already claim.
     """
 
-    __slots__ = ("_claims",)
+    __slots__ = ("_claims", "_gap_bound", "_gap_refused")
 
     def __init__(self, cells: Sequence[dict[str, Any]], page_index: int,
                  rules: Sequence[dict[str, Any]],
-                 runs: Sequence[dict[str, Any]]) -> None:
+                 runs: Sequence[dict[str, Any]],
+                 metrics: dict[str, float] | None = None) -> None:
         runs_by_id = {run_id(page_index, i): run for i, run in enumerate(runs)}
+        ink = PrePrintedInk(runs)
+        glyph_height = (float(metrics["glyph_height_pt"])
+                        if metrics is not None else None)
         label_cells = [c for c in cells if c["kind"] == "label"]
         claims: dict[str, list[dict[str, Any]]] = {}
+        # F226's own two corpus-wide witnesses: `_gap_bound` counts a rule
+        # actually claimed across a genuine gap (the sliver-gap population
+        # this extension exists for); `_gap_refused` counts a REAL candidate
+        # caption -- one that matches this rule's own x-range -- found near
+        # a rule-owning cell across a genuine gap and correctly declined,
+        # either too tall or carrying real ink (h178's own 22.8pt/inked
+        # case, and every other near-miss this corpus carries). Both are
+        # asserted `> 0` corpus-wide so neither side of the guard is
+        # vacuous.
+        gap_bound = 0
+        gap_refused = 0
         for cell in label_cells:
             owned = [
                 r for r in rules
@@ -2408,29 +2469,66 @@ class SignatureRuleWriting:
             ]
             if not owned:
                 continue
-            captions: list[dict[str, Any]] = []
-            for other in cells:
-                if (other["id"] == cell["id"]
-                        or abs(float(other["y0"]) - float(cell["y1"]))
-                            > SIGNATURE_LINE_ADJACENCY_EPSILON_PT):
-                    continue
-                for rid in other.get("text_run_ids") or ():
-                    run = runs_by_id.get(rid)
-                    if run is not None and _signature_line_caption(run["text"]):
-                        captions.append(run)
+            cell_bottom = float(cell["y1"])
             matched = []
             for rule in owned:
                 rx0, rx1 = float(rule["x0"]), float(rule["x1"])
-                hits = [c for c in captions
-                        if rx0 <= (float(c["x0"]) + float(c["x1"])) / 2.0 <= rx1]
+                hits: list[tuple[dict[str, Any], float]] = []
+                for other in cells:
+                    if other["id"] == cell["id"]:
+                        continue
+                    # ALL matching captions this candidate carries, not just
+                    # the first -- two captions in the SAME cell must still
+                    # count as two hits (the `ambiguous` fixture's own
+                    # shape), exactly as the exact-wall test always has.
+                    captions = [
+                        run for rid in (other.get("text_run_ids") or ())
+                        for run in (runs_by_id.get(rid),)
+                        if (run is not None
+                            and _signature_line_caption(run["text"])
+                            and rx0 <= (float(run["x0"]) + float(run["x1"])) / 2.0 <= rx1)
+                    ]
+                    if not captions:
+                        continue
+                    gap = float(other["y0"]) - cell_bottom
+                    if gap < -SIGNATURE_LINE_ADJACENCY_EPSILON_PT:
+                        continue
+                    if gap > SIGNATURE_LINE_ADJACENCY_EPSILON_PT:
+                        # A genuine gap, not the two cells' shared wall: only
+                        # bridge it when it is smaller than a glyph and the
+                        # rule's own x-extent carries no printed ink across
+                        # it -- see the class docstring's own h178 refusal.
+                        if glyph_height is None or gap >= glyph_height:
+                            gap_refused += len(captions)
+                            continue
+                        if _gap_has_ink(ink, rx0, cell_bottom, rx1,
+                                        cell_bottom + gap):
+                            gap_refused += len(captions)
+                            continue
+                    hits.extend((caption, gap) for caption in captions)
                 if len(hits) == 1:
                     matched.append(rule)
+                    if hits[0][1] > SIGNATURE_LINE_ADJACENCY_EPSILON_PT:
+                        gap_bound += 1
             if matched:
                 claims[cell["id"]] = matched
         self._claims = claims
+        self._gap_bound = gap_bound
+        self._gap_refused = gap_refused
 
     def for_cell(self, cell_id: str) -> Sequence[dict[str, Any]]:
         return self._claims.get(cell_id, ())
+
+    def gap_bound_count(self) -> int:
+        """How many rules this instance claimed across a genuine (non-wall)
+        gap -- the sliver-gap population's own positive witness."""
+        return self._gap_bound
+
+    def gap_refused_count(self) -> int:
+        """How many real candidate captions, matching a rule's own x-range
+        across a genuine gap, were declined -- too tall, inked, or both --
+        the guard's own negative witness."""
+        return self._gap_refused
 
 
 # Restated from `lattice.min_fillable_line_metrics` -- emit.py reads the IR as
@@ -3282,6 +3380,28 @@ class PrePrintedInk:
                 continue
             return "".join(span[0] for span in spans)
         return None
+
+
+def _gap_has_ink(ink: "PrePrintedInk", x0: float, y0: float,
+                 x1: float, y1: float) -> bool:
+    """Whether the strip x0..x1/y0..y1 carries any pre-printed glyph ink.
+
+    `PrePrintedInk.intrusions` is a coarse pre-filter -- it selects by a
+    run's whole LINE box, not by where the returned glyph's own precise box
+    actually sits, so every caller re-checks the returned boxes against its
+    own rectangle (`writing_box_clear_of_printed_ink` does, by centre, one
+    direction at a time). This is the plain, symmetric version: true only
+    when a glyph's own box genuinely overlaps this rectangle on both axes,
+    used by
+    `SignatureRuleWriting` to ask whether a vertical gap between a
+    rule-owning cell and a caption cell below it is genuinely ink-free paper
+    (F226) rather than the run whose LINE merely reaches into the query
+    band from outside it.
+    """
+    for gx0, gy0, gx1, gy1 in ink.intrusions(x0, y0, x1, y1):
+        if gy1 > y0 and gy0 < y1 and gx1 > x0 and gx0 < x1:
+            return True
+    return False
 
 
 def _glyph_ink_box(run: dict[str, Any], char: str, origin_x: float
@@ -4140,7 +4260,8 @@ class FieldPlan:
                 RowNumberWriting(page["cells"], page_index, runs, fillable_metrics)
                 if runs is not None else None)
             signature_rules = (
-                SignatureRuleWriting(page["cells"], page_index, rules, runs)
+                SignatureRuleWriting(page["cells"], page_index, rules, runs,
+                                     fillable_metrics)
                 if rules is not None and runs is not None else None)
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
@@ -9164,7 +9285,7 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
         for p in layout["pages"]}
     signature_rules = {int(p["index"]): SignatureRuleWriting(
         p["cells"], int(p["index"]), rules_by_page.get(int(p["index"]), ()),
-        runs_by_page.get(int(p["index"]), ()))
+        runs_by_page.get(int(p["index"]), ()), fillable_metrics)
         for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
@@ -9811,6 +9932,17 @@ def signature_rule_corpus_assertions(failures: list[str]) -> None:
     are either), so that half is proved on synthetic geometry instead --
     `signature_rule_writing_assertions`, `knockout_specify_writing_
     assertions`' own precedent for a gate the real corpus never exercises.
+
+    F226: also re-derives, over the SAME corpus, the sliver-gap population
+    the class's own gap extension adds -- `gap_bound_count()` sums to the
+    number of rules claimed across a genuine (non-wall) gap, corpus-wide
+    (2316-2021's own item 53/54, and nothing else: no other form carries a
+    `label` cell whose owned rule has an ink-free, sub-`glyph_height_pt` gap
+    to exactly one caption below it), and `gap_refused_count()` sums the
+    real candidate captions this same search found and correctly declined
+    -- too tall, inked, or both, `p1c322`'s own h178/`p1c327` case among
+    them. Both are asserted `> 0`: a positive-only proof would not show the
+    guard ever says no.
     """
     ir_dir = _ROOT / "build/ir"
     layout_dir = _ROOT / "build/layout"
@@ -9823,6 +9955,8 @@ def signature_rule_corpus_assertions(failures: list[str]) -> None:
 
     forms_checked = 0
     rules_checked = 0
+    gap_bound_total = 0
+    gap_refused_total = 0
     unfilled: list[str] = []
     for ir_path in ir_paths:
         slug = ir_path.name[: -len(".ir.json")]
@@ -9841,11 +9975,15 @@ def signature_rule_corpus_assertions(failures: list[str]) -> None:
         forms_checked += 1
         rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
         runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        fillable_metrics = _min_fillable_line_metrics(ir)
         for page in layout["pages"]:
             page_index = int(page["index"])
             signature_rules = SignatureRuleWriting(
                 page["cells"], page_index,
-                rules_by_page.get(page_index, ()), runs_by_page.get(page_index, ()))
+                rules_by_page.get(page_index, ()), runs_by_page.get(page_index, ()),
+                fillable_metrics)
+            gap_bound_total += signature_rules.gap_bound_count()
+            gap_refused_total += signature_rules.gap_refused_count()
             for cell in page["cells"]:
                 claimed = signature_rules.for_cell(cell["id"])
                 if not claimed:
@@ -9866,6 +10004,18 @@ def signature_rule_corpus_assertions(failures: list[str]) -> None:
            + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
               if unfilled else ""),
            failures)
+    # F226: the sliver-gap extension's own two witnesses, both directions --
+    # something is actually bound across a gap, and something real is
+    # actually refused across a gap. Neither alone would prove the guard is
+    # not vacuous.
+    _check(gap_bound_total > 0,
+           "the sliver-gap extension claims at least one rule across a "
+           "genuine (non-wall) gap, corpus-wide",
+           f"{gap_bound_total} rule(s) gap-bound", failures)
+    _check(gap_refused_total > 0,
+           "the sliver-gap extension also refuses at least one real "
+           "candidate caption across a genuine gap, corpus-wide",
+           f"{gap_refused_total} candidate(s) refused", failures)
 
 
 def _synthetic_comb(cells: int, x0: float, pitch: float,
@@ -10236,6 +10386,16 @@ def signature_rule_writing_assertions(plan: dict[str, Any],
     happens to own, plus the Bureau and shading gate the real corpus carries
     no case to exercise this against (`signature_rule_corpus_assertions`'s
     own note).
+
+    F226: a second population of paired assertions for the sliver-gap
+    extension -- a caption cell that does NOT share the rule-owner's own
+    wall, across a genuine vertical gap. `far_caption` above already proves
+    the `metrics=None` fallback (no line-fit metric to bound the gap by, so
+    even a 1.0pt gap is refused, the pre-F226 behaviour exactly); these add
+    the `metrics`-driven cases: a small, ink-free gap is bridged; the
+    identical gap with the form's own glyph tall enough to reach across it
+    is refused (`p1c322`'s own h178 shape, in miniature); and a gap wide
+    enough on its own, whatever ink it carries, is refused too.
     """
     page_index = 0
     OWNER = {"id": "p0g0", "kind": "label", "row": 0, "col": 0,
@@ -10251,12 +10411,15 @@ def signature_rule_writing_assertions(plan: dict[str, Any],
                 "role": "structural", "origin": origin}
 
     def caption_run(text: str = "Signature over Printed Name of Taxpayer",
-                    x0: float = 100.0, x1: float = 200.0) -> dict[str, Any]:
-        return {"text": text, "x0": x0, "x1": x1, "y0": 42.0, "y1": 50.0}
+                    x0: float = 100.0, x1: float = 200.0,
+                    y0: float = 42.0, y1: float = 50.0) -> dict[str, Any]:
+        return {"text": text, "x0": x0, "x1": x1, "y0": y0, "y1": y1}
 
     def claim(cells: Sequence[dict[str, Any]], rules: Sequence[dict[str, Any]],
-             runs: Sequence[dict[str, Any]]) -> Sequence[dict[str, Any]]:
-        return SignatureRuleWriting(cells, page_index, rules, runs).for_cell("p0g0")
+             runs: Sequence[dict[str, Any]],
+             metrics: dict[str, float] | None = None) -> Sequence[dict[str, Any]]:
+        return SignatureRuleWriting(cells, page_index, rules, runs,
+                                    metrics).for_cell("p0g0")
 
     base = claim([OWNER, CAPTION_CELL], [owned_rule()], [caption_run()])
     _check(list(base) == [owned_rule()],
@@ -10304,6 +10467,93 @@ def signature_rule_writing_assertions(plan: dict[str, Any],
            "at -- RuledBlankWriting's own precedent for ownership that does "
            "not resolve to exactly one claimant",
            f"{ambiguous}", failures)
+
+    # F226: the sliver-gap extension, only reachable with a `metrics` line-fit
+    # metric. `GAP_CELL` sits 3.0pt below the rule-owner's own bottom wall
+    # (40.0), under the fixture's own 5.0pt `glyph_height_pt` -- 2316's own
+    # 1.32pt and 0.54pt gaps, both under its own 4.65pt metric, at this
+    # fixture's own scale.
+    GAP_METRICS = {"glyph_height_pt": 5.0, "line_width_pt": 12.0}
+    GAP_CELL = {"id": "p0g2", "kind": "label", "row": 1, "col": 0,
+               "x0": 0.0, "y0": 43.0, "x1": 300.0, "y1": 60.0,
+               "text_run_ids": [run_id(page_index, 0)]}
+    gap_caption = caption_run(y0=44.0, y1=52.0)
+
+    gap_clean = claim([OWNER, GAP_CELL], [owned_rule()], [gap_caption], GAP_METRICS)
+    _check(list(gap_clean) == [owned_rule()],
+           "a caption cell 3.0pt below the rule-owner's own bottom wall, "
+           "under the form's own glyph_height_pt and carrying no ink in "
+           "the gap, is bridged -- 2316's own item 53/54 shape",
+           f"{gap_clean}", failures)
+
+    # The identical 3.0pt gap, but a run genuinely printed IN it (any text,
+    # not a signature caption -- p1c322's own "Date Signed" shape) refuses
+    # the bridge even though the gap itself clears the height bound.
+    gap_ink = _synthetic_run("Date Signed", 100.0, 41.0, 1.0,
+                             ascender=0.5, descender=-0.5)  # line box 40.5..41.5
+    gap_inked = claim([OWNER, GAP_CELL], [owned_rule()],
+                      [gap_caption, gap_ink], GAP_METRICS)
+    _check(not gap_inked,
+           "the identical 3.0pt gap is refused once real ink is printed in "
+           "it, even though the gap alone clears glyph_height_pt",
+           f"{gap_inked}", failures)
+
+    # A gap at or past glyph_height_pt is refused on its own, whatever ink
+    # it does or does not carry -- p1c322's own h178/p1c327 shape (22.8pt,
+    # more than 4x this form's own glyph_height_pt) in miniature.
+    GAP_TOO_TALL = {**GAP_CELL, "id": "p0g3", "y0": 46.0}  # 6.0pt gap
+    gap_too_tall = claim([OWNER, GAP_TOO_TALL], [owned_rule()],
+                         [caption_run(y0=47.0, y1=55.0)], GAP_METRICS)
+    _check(not gap_too_tall,
+           "a 6.0pt gap -- past the fixture's own 5.0pt glyph_height_pt -- "
+           "is refused even though it carries no ink",
+           f"{gap_too_tall}", failures)
+
+    # `metrics=None` (no line-fit metric at all -- an empty/synthetic IR)
+    # falls back to the pre-F226 behaviour: even the smallest genuine gap is
+    # refused, exactly `far_caption` above with no metric to bound it by.
+    gap_no_metrics = claim([OWNER, GAP_CELL], [owned_rule()], [gap_caption])
+    _check(not gap_no_metrics,
+           "the identical 3.0pt gap is refused with no glyph_height_pt to "
+           "measure it against at all",
+           f"{gap_no_metrics}", failures)
+
+    # The extension's own two corpus witnesses, exercised directly: the
+    # clean gap is claimed AND counted as gap-bound; the inked and the too-
+    # tall gaps are each counted as one real candidate refused.
+    clean_stats = SignatureRuleWriting(
+        [OWNER, GAP_CELL], page_index, [owned_rule()], [gap_caption], GAP_METRICS)
+    _check(clean_stats.gap_bound_count() == 1 and clean_stats.gap_refused_count() == 0,
+           "gap_bound_count/gap_refused_count read the clean gap correctly",
+           f"bound={clean_stats.gap_bound_count()} "
+           f"refused={clean_stats.gap_refused_count()}", failures)
+
+    inked_stats = SignatureRuleWriting(
+        [OWNER, GAP_CELL], page_index, [owned_rule()],
+        [gap_caption, gap_ink], GAP_METRICS)
+    _check(inked_stats.gap_bound_count() == 0 and inked_stats.gap_refused_count() == 1,
+           "gap_bound_count/gap_refused_count read the inked gap correctly",
+           f"bound={inked_stats.gap_bound_count()} "
+           f"refused={inked_stats.gap_refused_count()}", failures)
+
+    tall_stats = SignatureRuleWriting(
+        [OWNER, GAP_TOO_TALL], page_index, [owned_rule()],
+        [caption_run(y0=47.0, y1=55.0)], GAP_METRICS)
+    _check(tall_stats.gap_bound_count() == 0 and tall_stats.gap_refused_count() == 1,
+           "gap_bound_count/gap_refused_count read the too-tall gap "
+           "correctly",
+           f"bound={tall_stats.gap_bound_count()} "
+           f"refused={tall_stats.gap_refused_count()}", failures)
+
+    # End to end: the gap-bound claim becomes an input the same way the
+    # exact-wall claim does -- `ruled_blank_field_box` is reused whole, no
+    # second geometry function for this shape.
+    gap_verdict = field_verdict(OWNER, None, None, None,
+                                signature_rules=clean_stats)
+    _check(gap_verdict == (True, "signature-rule"),
+           "field_verdict routes a gap-bound claim through the signature-"
+           "rule reason exactly like an exact-wall claim",
+           f"{gap_verdict}", failures)
 
     # End to end: the claimed rule becomes an input, seated on its own
     # geometry, through the same dispatch `field_verdict` and `FieldPlan`

@@ -2489,13 +2489,15 @@ FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # fill+stroke drawing, a checkbox square (T5a, F210), a signature box
     # (T5b+T5d, F211/F212), a comb band, a row-number row (F151), a
     # comb-band-reunification row (W3, F064), a signature-rule row (F221
-    # case 1) and an ink-trim comb row (F227) -- the sha256 moved for the
-    # last of these (`make_fixtures.ink_trim_comb_row`'s own new shape,
-    # a caption's descender genuinely hanging into a comb's own writing
-    # top); no extract.py check, count or tolerance moved.
+    # case 1), an ink-trim comb row (F227) and a signature-rule GAP row
+    # (W9, F226) -- the sha256 moved for the last of these
+    # (`make_fixtures.signature_rule_gap_row`'s own new shape, a rule-owning
+    # label cell's caption sitting one row down, across a genuinely blank
+    # sliver cell rather than sharing the rule's own bottom wall); no
+    # extract.py check, count or tolerance moved.
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "8556569fa5f33e927e4fb09be7eeb213fdab874e057e75ac7cf68957800098e6"),
+        "6e4b5327b69232a8593294dd6fab54f9e44fd717b2d3e6ef2b8690301d4056fd"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",
