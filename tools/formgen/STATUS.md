@@ -12,6 +12,103 @@ superseded by the r43 section.
 
 
 
+## W9 — 2316's own item 53/54 sign, item 56 stays open and is spawned as F228 (F226 closed)
+
+**Measured 2026-08-13, worktree `wt/w9-f226`, base `b9af586b`.** `emit.SignatureRuleWriting`'s
+caption search (F221's own mechanism) now bridges a genuine vertical GAP
+between a rule-owning `label` cell and its caption, not only the exact
+shared wall F221's own 9 sites and 2316's own item 55 already prove. The
+gap is bridged only when it is smaller than the form's own `glyph_height_pt`
+(`lattice.min_fillable_line_metrics`'s own sliver-rule metric, no new
+constant) AND carries no printed ink anywhere across the claimed rule's own
+x-extent, checked with a new helper (`_gap_has_ink`) that re-verifies
+`PrePrintedInk.intrusions`'s own coarse pre-filter against each glyph's own
+precise box on both axes. Deliberately geometric (candidate caption cell's
+own top minus the rule-owner's own bottom), never a cell hop, so 2316-2021's
+own 0.54pt ungridded hole (no lattice cell at all) needs no special case.
+
+2316-2021's item 53 (`p1c324`, owns rule h180) bridges a 1.32pt ink-free
+gap, across a genuinely blank sliver cell (`p1c326`, kind=blank, no
+caption of its own), to reach `p1c327`'s "Present Employer/Authorized
+Agent Signature over Printed Name." Item 54 (`p1c328`, owns rule h183)
+bridges a 0.54pt ink-free gap -- a span the lattice made no cell for at
+all -- to `p1c330`'s "Employee Signature over Printed Name." Both
+browser-verified: focus, type, read back, `text-align: center`, seated
+0.42pt above each one's own rule (half its 0.84pt thickness), tab order
+continuing into the adjacent date comb.
+
+**The wrong-binding case this task named stays refused, measured, not
+assumed.** `p1c322`'s own rule h178 (the jurat-paragraph/field-divider
+rule) reaches for `p1c327`'s caption 22.8pt away -- refused on BOTH
+grounds independently: 22.8pt is more than 4x this form's own 4.6476pt
+`glyph_height_pt`, and the gap itself carries real printed ink ("Date
+Signed"/"53") across the rule's own x-extent. A row that holds text is at
+least one glyph tall by definition and can never fit under
+`glyph_height_pt`.
+
+**Corpus-wide, not just 2316-2021.** Every label cell's owned rule across
+all 53 forms was independently re-derived old (`metrics=None`) vs new
+(with `metrics`); the extension binds exactly the two 2316 sites above and
+NOTHING else. A parallel near-miss census (every candidate caption within
+a genuine gap under 200pt, whether or not it ultimately binds) found 24
+non-2316 near-misses, 60.0-198.51pt each; every one exceeds its own form's
+`glyph_height_pt` AND carries real ink, so the guard is never exercised at
+a hairline anywhere in this corpus. New standing corpus assertions sum
+`SignatureRuleWriting.gap_bound_count()`/`.gap_refused_count()` over all
+53 forms and assert `count > 0` both directions: 2 rules gap-bound
+corpus-wide, 250 real candidates refused corpus-wide.
+
+**Item 56 (`p1c339`, owns rule h194) stays open, spawned as F228.** Its
+own caption run `p1t218` is confirmed absent from every cell's own
+`text_run_ids` on the page -- the identical orphan-run shape
+`_signature_line_caption`'s own docstring already names. The F226
+extension is geometric over CELLS; an orphan run with no owning cell has
+no "candidate cell's own top" for this test, or any cell-to-cell
+adjacency test, to read at all. Closing it needs a `lattice.py` change to
+run-to-cell assignment, out of this class's own scope and this worktree's
+own boundary (`lattice.py` untouched).
+
+**A real source-level mutation**, `make_fixtures.signature_rule_gap_row`
+(fixtures/rules.pdf) -- a rule-owning label cell, a genuinely blank sliver
+cell, a caption cell, reproducing 2316's own item 53 at fixture scale --
+with `prove_fixtures_fail.mutate_signature_rule_gap` widening the sliver
+past the fixture's own `glyph_height_pt` (3.0pt -> 15.0pt), the same
+wall-move idiom `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT` already set.
+`prove-fixtures-fail: PASS over 19 source-level mutations` (unmoved) plus
+this new one (`prove_signature_rule_gap`), run separately.
+
+Measured on the tree this package wrote: input count **45,546 -> 45,548
+(+2** -- not +3; item 56 does not gain an input because it cannot).
+`inputs_over_printed_text` **0 forms/0, unmoved.** `comb_slots_match_
+printed` **9 forms/13, unmoved** (this package never moves a slot count
+or divider). Comb censuses **4,587 subjects / 4,557 active / 30 retained,
+unmoved.** Blue (vacant) census **5, unmoved.** Tab-walk **53/53 green**
+(2316-2021 green=177, exactly 175+2). Self-tests pass: `extract.py
+--self-test` (7 pinned PDFs) and `--self-test --fixtures` (6 fixture
+PDFs, re-pinned), `lattice.py --ir build/ir/2551q-2018.ir.json`,
+`emit.py --self-test`, `comb_referee.py --self-test` and a full run
+(`EXPECTED_HTML_STRUCTURE_SHA256` matches on all 53 after the
+2316-2021 re-pin), `gate.py --self-test`, `tab_check.py` (53/53 green),
+`validate_tree.py` (6/7 -- the one failure, a staged-but-unreferenced
+asset, is pre-existing and unrelated, matching `batch.py`'s own
+documented "one unreferenced asset" precedent), `fixtures/
+prove_fixtures_fail.py` (20 source-level mutations total).
+
+Pins moved: `comb_referee.EXPECTED_HTML_STRUCTURE_SHA256['2316-2021']`
+(the only slug whose `build/html` bytes moved, appended as a new re-pin
+round per this file's own changelog-dict convention). `extract.
+FIXTURE_FIXTURES['FIXTURE-RULES']` (fixtures/rules.pdf gained
+`signature_rule_gap_row`'s new shape). `comb_referee.
+AUDIT_DEPENDENCY_SHA256['tools/formgen/extract.py']` (extract.py's own
+bytes moved with its pin-table comment). No comb census, extract.py
+check count, or tolerance moved.
+
+**Determinism:** two full `batch.py` regenerations over the corpus
+produce byte-identical `build/ir`, `build/layout`, `build/html` and
+`forms/` trees (`diff -rq`, 0 differences).
+
+
+
 ## W6 — the five assertion offenders close honestly, and a comb gets ink-trimmed for the first time (F227 closed)
 
 **Measured 2026-08-13, worktree `wt/w6-inktrim`, base `24cdc6e7`.**

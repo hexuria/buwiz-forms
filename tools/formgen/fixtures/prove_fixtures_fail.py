@@ -1128,6 +1128,135 @@ def prove_ink_trim_comb(stream: Any) -> int:
     return 1 if failures else 0
 
 
+def _signature_rule_gap_cell(page: dict[str, Any], ir_page: dict[str, Any],
+                             ) -> dict[str, Any] | None:
+    """The fixture's own sliver-gap signature-rule cell, found by content,
+    not id -- `_signature_rule_cell`'s own precedent, so a page rewritten
+    above this shape still locates it."""
+    page_index = int(page["index"])
+    runs_by_id = {emit.run_id(page_index, i): run
+                  for i, run in enumerate(ir_page["text_runs"])}
+    for cell in page["cells"]:
+        if cell["kind"] != "label":
+            continue
+        texts = [runs_by_id[rid]["text"] for rid in cell.get("text_run_ids") or ()
+                 if rid in runs_by_id]
+        if texts == [fixtures.SIGNATURE_RULE_GAP_ITEM_TEXT]:
+            return cell
+    return None
+
+
+def _signature_rule_gap_claimed(root: pathlib.Path) -> bool | None:
+    """Whether `emit.SignatureRuleWriting`'s sliver-gap extension claims the
+    fixture's own gap cell under `root`'s corpus, or None if the fixture
+    does not carry the subject at all (a mutation that deleted the cell
+    rather than moving the sliver, which would be a different failure than
+    the one this proves).
+
+    Unlike `_signature_rule_claimed`, this passes the IR's own
+    `_min_fillable_line_metrics` -- the extension is unreachable without it,
+    exactly as `field_verdict`'s own real callers always supply it.
+    """
+    ir = extract.extract(root / "rules.pdf", "FIXTURE-RULES", "0001", None)
+    layout = lattice.build_layout(ir)
+    page = next(p for p in layout["pages"] if int(p["index"]) == 2)
+    ir_page = next(p for p in ir["pages"] if int(p["index"]) == 2)
+    cell = _signature_rule_gap_cell(page, ir_page)
+    if cell is None:
+        return None
+    metrics = emit._min_fillable_line_metrics(ir)
+    signature_rules = emit.SignatureRuleWriting(
+        page["cells"], 2, ir_page["rules"], ir_page["text_runs"], metrics)
+    return bool(signature_rules.for_cell(cell["id"]))
+
+
+def mutate_signature_rule_gap() -> None:
+    """Widen the sliver-gap fixture's own blank sliver past the fixture's
+    own `glyph_height_pt` (9.675pt, measured over the whole synthetic
+    corpus).
+
+    Nothing about either cell's own bordering wall moves relative to ITS
+    caption/item ink, and the vector rule stays exactly where it is,
+    straddling the rule-owner's own bottom wall -- only the sliver's own
+    height does, from 3.0pt (comfortably under the metric, 2316-2021's own
+    1.32pt and 0.54pt gaps at this fixture's own scale) to a gap far past
+    it. This is a real wall move, `make_fixtures.
+    COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT`'s own precedent (0.0pt -> 12pt)
+    for mutating a fixture's geometry rather than a caption's own text --
+    what breaks is the fact `emit.SignatureRuleWriting`'s own sliver-gap
+    extension reads: a genuine gap is bridged only when it is smaller than
+    the form's own `glyph_height_pt`, exactly `p1c322`'s own h178/`p1c327`
+    refusal (22.8pt over a 4.65pt metric) in miniature.
+    """
+    fixtures.SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT = 15.0
+
+
+def prove_signature_rule_gap(stream: Any) -> int:
+    """Prove F226's sliver-gap extension can fail, via a real PDF mutation.
+
+    Not one of extract.py's own checks, and deliberately run outside
+    prove()'s CASES/CONTRACT_ONLY accounting, the identical shape
+    prove_row_number/prove_comb_band_reunification/prove_signature_rule/
+    prove_ink_trim_comb already give their own findings:
+    `emit.SignatureRuleWriting`'s sliver-gap extension is entirely a
+    `lattice.py`/`emit.py` decision (a rule-owning `label` cell's own
+    caption sitting one row down, across a genuinely blank sliver, bridged
+    only under the form's own `glyph_height_pt`) with no new extract-level
+    primitive of its own, so folding it into that table would misname what
+    it tests: `extract.py` extracts this fixture's rules and text runs
+    identically whether the mutation below has run or not, and every one
+    of its own checks agrees. What changes is a later-stage geometric fact
+    neither `extract.SELF_TEST_CHECKS` nor `CONTRACT_ONLY` is about.
+
+    Same method as every case in CASES -- mutate the source PDF, rebuild,
+    observe -- carried one stage further than `extract.gather_evidence`
+    reaches: `lattice.build_layout` and `emit.SignatureRuleWriting` (with
+    its own `_min_fillable_line_metrics`) run over the rebuilt IR too, the
+    same calls `batch.py` chains after extract.py for every real bundle.
+    """
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as scratch:
+        root = pathlib.Path(scratch)
+        fixtures.build_all(root)
+        claimed = _signature_rule_gap_claimed(root)
+        if claimed is not True:
+            failures.append(
+                f"the unmutated sliver-gap fixture's claim is {claimed!r}, "
+                f"not True; the fixture never carried the property")
+        print(f"  {'unmutated':<12} {'OK' if claimed is True else 'BROKEN':<5} "
+              f"the sliver-gap extension bridges the fixture's own 3.0pt "
+              f"blank sliver to claim its rule", file=stream)
+
+    previous = fixtures.SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT
+    try:
+        mutate_signature_rule_gap()
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            fixtures.build_all(root)
+            claimed = _signature_rule_gap_claimed(root)
+            good = claimed is False
+            if not good:
+                failures.append(
+                    f"the widened sliver-gap fixture's claim is {claimed!r}, "
+                    f"not False; the mutation did not clear the height gate")
+            print(f"  {'signature-rule-gap':<12} {'OK' if good else 'WEAK':<5} "
+                  f"the sliver widens from {fmt(previous)}pt to "
+                  f"{fmt(fixtures.SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT)}pt, "
+                  f"past the fixture's own glyph_height_pt, and the "
+                  f"extension refuses to bridge it", file=stream)
+    finally:
+        fixtures.SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT = previous
+
+    for message in failures:
+        print(f"    FAIL {message}", file=stream)
+    print(f"prove-signature-rule-gap: "
+          f"{'PASS' if not failures else f'{len(failures)} FAILURE(S)'} over "
+          f"1 source-level mutation, run outside extract.py's own "
+          f"CASES/CONTRACT_ONLY accounting (see prove_signature_rule_gap)",
+          file=stream)
+    return 1 if failures else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -1138,9 +1267,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     comb_band_reunification_result = prove_comb_band_reunification(sys.stderr)
     signature_rule_result = prove_signature_rule(sys.stderr)
     ink_trim_comb_result = prove_ink_trim_comb(sys.stderr)
+    signature_rule_gap_result = prove_signature_rule_gap(sys.stderr)
     return 1 if (extract_result or row_number_result
                 or comb_band_reunification_result
-                or signature_rule_result or ink_trim_comb_result) else 0
+                or signature_rule_result or ink_trim_comb_result
+                or signature_rule_gap_result) else 0
 
 
 if __name__ == "__main__":

@@ -187,6 +187,26 @@ SIGNATURE_RULE_CAPTION_ROW_HEIGHT_PT = 20.0
 SIGNATURE_RULE_ITEM_TEXT = "27"
 SIGNATURE_RULE_CAPTION_TEXT = "Signature over Printed Name of Taxpayer"
 
+# F226's own sliver-gap shape (`emit.SignatureRuleWriting`'s caption search,
+# extended): the caption naming a rule-owning `label` cell's own vector line
+# is not in the cell sharing its bottom wall -- it is one further row down,
+# across a genuinely blank sliver cell 2316-2021's own item 53 measures at
+# 1.32pt (`p1c324` -> `p1c326`'s own blank sliver -> `p1c327`'s caption).
+# `SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT` is the sliver's own height, well
+# under `rules.pdf`'s own measured `glyph_height_pt`: `prove_fixtures_fail.py`'s
+# `mutate_signature_rule_gap` raises it past that metric (a real wall move,
+# `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT`'s own precedent for mutating a
+# fixture's geometry rather than a caption's own text) so the gap this class
+# bridges becomes too tall to bridge, the fail-closed half of F226's own
+# height-AND-ink guard.
+SIGNATURE_RULE_GAP_ROW_WIDTH_PT = 260.0
+SIGNATURE_RULE_GAP_ROW_HEIGHT_PT = 30.0
+SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT = 3.0
+SIGNATURE_RULE_GAP_CAPTION_ROW_HEIGHT_PT = 20.0
+SIGNATURE_RULE_GAP_ITEM_TEXT = "53"
+SIGNATURE_RULE_GAP_CAPTION_TEXT = (
+    "Present Employer/Authorized Agent Signature over Printed Name")
+
 # F227's shape (`emit.comb_writing_top_clear_of_printed_ink`): a caption's
 # own descender genuinely hangs into a COMB's shared writing top -- 1604CF's
 # "8 Telephone No." over its phone comb, reproduced at the corpus's own
@@ -517,6 +537,48 @@ def signature_rule_row(page: fitz.Page, x0: float, y0: float) -> None:
                      fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
 
 
+def signature_rule_gap_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F226's shape (`emit.SignatureRuleWriting`'s sliver-gap extension): a
+    `label` cell's own vector-drawn signature line at its own bottom wall,
+    with the caption naming it not directly adjacent -- one further row
+    down, across a genuinely blank sliver cell no caption occupies.
+
+    `x0,y0` anchors the upper (rule-owning) cell's own top-left corner.
+    THREE stacked bordered cells sharing one frame: the upper cell carries
+    `SIGNATURE_RULE_GAP_ITEM_TEXT`, the middle sliver carries no ink at all
+    (`lattice.classify_cell`'s own `kind == "blank"`, exactly `p1c326`'s own
+    measured fact), and the lower cell carries
+    `SIGNATURE_RULE_GAP_CAPTION_TEXT`. The vector signature line straddles
+    the wall between the upper cell and the sliver -- the rule-owner's own
+    bottom wall, `emit.SignatureRuleWriting`'s own ownership test
+    (`rule["y0"] <= cell["y1"] <= rule["y1"]`) -- and a second, ordinary
+    wall (never a signature line, just a ROW boundary) separates the sliver
+    from the caption cell below it, reproducing 2316-2021's own item 53
+    (`p1c324`'s own rule h180 -> `p1c326`'s own 1.32pt blank sliver ->
+    `p1c327`'s own caption) at this fixture's own scale.
+    """
+    x1 = x0 + SIGNATURE_RULE_GAP_ROW_WIDTH_PT
+    wall_y = y0 + SIGNATURE_RULE_GAP_ROW_HEIGHT_PT
+    sliver_y1 = wall_y + SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT
+    caption_y1 = sliver_y1 + SIGNATURE_RULE_GAP_CAPTION_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    half = thickness / 2.0
+    bar(page, x0, y0, x0 + thickness, caption_y1, BLACK)
+    bar(page, x1 - thickness, y0, x1, caption_y1, BLACK)
+    bar(page, x0, y0, x1, y0 + thickness, BLACK)
+    # The sliver's own bottom wall -- an ordinary row boundary, not a
+    # signature line -- separates the blank sliver from the caption cell.
+    bar(page, x0, sliver_y1 - thickness, x1, sliver_y1, BLACK)
+    bar(page, x0, caption_y1 - thickness, x1, caption_y1, BLACK)
+    page.insert_text(fitz.Point(x0 + 6, y0 + 14), SIGNATURE_RULE_GAP_ITEM_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+    bar(page, x0 + thickness, wall_y - half, x1 - thickness, wall_y + half,
+        BLACK)
+    page.insert_text(fitz.Point(x0 + 10, sliver_y1 + 12),
+                     SIGNATURE_RULE_GAP_CAPTION_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+
+
 def ink_trim_comb_row(page: fitz.Page, x0: float, y0: float) -> None:
     """F227's shape (`emit.comb_writing_top_clear_of_printed_ink`): a
     caption's own descender genuinely hangs into a comb's own shared
@@ -640,6 +702,11 @@ def build_rules() -> fitz.Document:
     # F227's own shape (`emit.comb_writing_top_clear_of_printed_ink`):
     # placed clear of the signature-rule row above (which ends at y450).
     ink_trim_comb_row(second, 48, 480)
+
+    # F226's own sliver-gap shape (`emit.SignatureRuleWriting`'s extended
+    # caption search): placed clear of the ink-trim comb above (which ends
+    # at y504).
+    signature_rule_gap_row(second, 48, 560)
     return doc
 
 
