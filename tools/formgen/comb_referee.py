@@ -640,8 +640,23 @@ AUDIT_DEPENDENCY_SHA256 = {
     # census, extract.py check count or tolerance moves; `build/ir/
     # *.ir.json` for the seven real pinned PDFs is untouched (only the
     # synthetic FIXTURE-RULES pin moved).
+    # Re-pinned 2026-08-13 (W6, F227), for the identical reason as the three
+    # entries above: `emit.comb_writing_top_clear_of_printed_ink` and
+    # `emit.PrePrintedInk.intrusions`'s own per-glyph precision are entirely
+    # a `lattice.py`/`emit.py` decision with no new extract-level primitive,
+    # so `extract.SELF_TEST_CHECKS` stays at 24 checks and
+    # `prove_fixtures_fail.py`'s own CASES/CONTRACT_ONLY accounting is
+    # untouched (see `prove_ink_trim_comb`, deliberately run outside it).
+    # What moved this file's own bytes is BOTH `FIXTURE_FIXTURES
+    # ["FIXTURE-RULES"]`'s sha256 (`fixtures/rules.pdf` gained a new shape,
+    # `make_fixtures.ink_trim_comb_row`, a caption's own descender genuinely
+    # hanging into a comb's shared writing top) and this comment recording
+    # that cause -- both part of the whole-file bytes the sha256 below is
+    # taken over. No rule field, comb census, extract.py check count or
+    # tolerance moves; `build/ir/*.ir.json` for the seven real pinned PDFs
+    # is untouched (only the synthetic FIXTURE-RULES pin moved).
     "tools/formgen/extract.py": (
-        "00767649eb2993c42b953bb5040e57429854692d5ef01e8ec945a1569551c731"
+        "881590d6202061d5b55766ee470f4b8be5be0456ba40bf51705c2cbbeb3f33c3"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -2156,6 +2171,75 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2550m-2007": "73d78714b0221a013af4769fa207d5a3d81293b71f1c8a0dbd85f87350589e53",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
     "2551m-2002": "c3383a4a37ed71719f71617cd9465b6112898ad87a9823abc624d4f090abc012",
+    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
+    "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
+    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
+    # Re-pinned 2026-08-13 (W6, F227): `emit.field_box`'s comb branch now
+    # calls `comb_writing_top_clear_of_printed_ink`, the identical ink trim a
+    # plain field's own writing box already had, and `intrusions` now reads
+    # each glyph's OWN measured outline (`glyph_ink_em`) where the source
+    # states one instead of restating a run's shared line box for every
+    # character in it. Twelve documents move: 1604cf-2008 and 2316-2021 (the
+    # five named F227 offenders, now clear), 1701ms-2024 (one further comb
+    # the same reach finds, not previously named), and 1600wp-2010, 1604f-2018,
+    # 1706-2018, 1800-2018, 2200an-2018, 2200p-2020, 2200t-2022, 2550m-2007,
+    # 2551m-2002 (plain-field writing boxes that were over-trimmed against a
+    # run's shared line box and now measure against their own glyphs' real
+    # ink instead, recovering real typing area). The other 41 are
+    # byte-identical. Comb censuses (EXPECTED_COMBS, EXPECTED_COMBS_BY_SLUG,
+    # EXPECTED_RETAINED_SUBJECTS_BY_SLUG) do not move -- no slot rectangle,
+    # divider or slot count changes on any comb; only the INPUT nested inside
+    # a slot or a plain field's own box gains or loses an inset.
+    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
+    "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
+    "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
+    "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
+    "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
+    "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
+    "1600wp-2010": "52c2f96df56e04e7cf91999a7d6ed1d58ebc96767e7fdb085d47f09c31f95862",
+    "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
+    "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
+    "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
+    "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
+    "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
+    "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
+    "1604cf-2008": "b3cc3ea689114f7ca872f9b55588c6ad6c5a2fe72836ac3bfcd945b6b431d4a6",
+    "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
+    "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
+    "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
+    "1621-2019": "36bf4f8cc2a094eb505623a49bbe29dba4b2709364ea224f076200bbb2ef84d3",
+    "1700-2018": "a44b168534770580efb653f3c3fe9f20e35481deac45e0356943a1f468051500",
+    "1701-2018-attachment": "a3827477a27630219b0775b256184102dcc7fe53824354e51aeb97ab39c8803f",
+    "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
+    "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
+    "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
+    "1701ms-2024": "60c93f1c3141615ca0182943750115dd66a8f1dc5c906438f69023ca89ff18e1",
+    "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
+    "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
+    "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
+    "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
+    "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
+    "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
+    "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
+    "1707-2021": "fc7e97da7a5df9b425dc7d251a7859b0c6512b32e73264a924b3292e002b446d",
+    "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
+    "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
+    "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
+    "1801-2018": "ac13a85a821e548045adb9766b0aea027369a4d4a2cf8b38a961f279b372017e",
+    "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
+    "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
+    "2200a-2020": "47f685fd81dbddaae27f171c0dcb93984a64f76805babb9efc6bb76ff0e41c98",
+    "2200an-2018": "b99630b147eb9b2e7e727d96fd48c1909661fca045e7df26967f9b2c67b2f878",
+    "2200c-2018": "ee1defcc41a9b4fc0d344e5a799bf8d85b7c0c060fcf4641ef2af1e7062c51e7",
+    "2200m-2018": "efefd832ce29747d50b2f9cdc55637e339b77dbae6ffb322523b204dbd9b446b",
+    "2200p-2020": "07e5ce960cf57da3adab66db4c674eea5e5a8773cf85b9351448d3050f2c6140",
+    "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
+    "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
+    "2316-2021": "871ab20e09c4f994a98a74dd991e5f078327fc2ea2a81b789859da0a178b44b5",
+    "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
+    "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
+    "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
+    "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
     "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
     "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
     "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
