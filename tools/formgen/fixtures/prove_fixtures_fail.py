@@ -1021,6 +1021,113 @@ def prove_signature_rule(stream: Any) -> int:
     return 1 if failures else 0
 
 
+def mutate_ink_trim_comb() -> None:
+    """Lift the ink-trim comb's own caption clear of the row below it.
+
+    Nothing about the comb moves -- not its walls, not its divider ticks,
+    not its slot count -- only the caption's own baseline does, raised
+    `INK_TRIM_CAPTION_DRIFT_PT` further above the row's own top wall than
+    the default 1.0pt gap `ink_trim_comb_row`'s own docstring measures. At
+    that clearance no glyph's own measured outline reaches the comb's
+    writing top any more -- the identical fail-closed fact
+    `emit.py`'s own self-test already proves at the Python level ("lines
+    seated just above the strip graze it and do not take it"), proven here
+    instead from a real rebuilt PDF, one stage past where that self-test
+    starts.
+    """
+    fixtures.INK_TRIM_CAPTION_DRIFT_PT = 2.0
+
+
+def _ink_trim_comb_top_clear(root: pathlib.Path) -> float | None:
+    """The ink-trim comb's own measured top clearance under `root`'s
+    corpus, or None if the fixture does not carry a comb there at all (a
+    mutation that deleted the comb rather than moving the caption, which
+    would be a different failure than the one this proves)."""
+    ir = extract.extract(root / "rules.pdf", "FIXTURE-RULES", "0001", None)
+    layout = lattice.build_layout(ir)
+    page = next(p for p in layout["pages"] if int(p["index"]) == 2)
+    ir_page = next(p for p in ir["pages"] if int(p["index"]) == 2)
+    cell = next((c for c in page["cells"]
+                if c.get("comb") and abs(float(c["x0"]) - 48.0) <= 1.0
+                and 470.0 < float(c["y0"]) < 510.0), None)
+    if cell is None:
+        return None
+    comb = cell["comb"]
+    write_top, height = emit.comb_writing_rect(cell, comb)
+    ink = emit.PrePrintedInk(ir_page["text_runs"])
+    return emit.comb_writing_top_clear_of_printed_ink(comb, write_top, height, ink)
+
+
+def prove_ink_trim_comb(stream: Any) -> int:
+    """Prove F227's comb-offering mechanism can fail, via a real PDF mutation.
+
+    Not one of extract.py's own checks, and deliberately run outside
+    prove()'s CASES/CONTRACT_ONLY accounting, the identical shape
+    prove_row_number/prove_comb_band_reunification/prove_signature_rule
+    already give their own findings: `emit.comb_writing_top_clear_of_
+    printed_ink` is entirely a `lattice.py`/`emit.py` decision (a comb's
+    own shared writing top, trimmed against printed ink the identical way
+    a plain field's already was, which the comb branch of `field_box`
+    never did before this session) with no new extract-level primitive of
+    its own, so folding it into that table would misname what it tests:
+    `extract.py` extracts this fixture's rules and text runs identically
+    whether the mutation below has run or not, and every one of its own
+    checks agrees. What changes is a later-stage geometric fact neither
+    `extract.SELF_TEST_CHECKS` nor `CONTRACT_ONLY` is about.
+
+    Same method as every case in CASES -- mutate the source PDF, rebuild,
+    observe -- carried one stage further than `extract.gather_evidence`
+    reaches: `lattice.build_layout` and
+    `emit.comb_writing_top_clear_of_printed_ink` run over the rebuilt IR
+    too, the same two calls (through `field_box`) `batch.py` chains after
+    extract.py for every real bundle.
+    """
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as scratch:
+        root = pathlib.Path(scratch)
+        fixtures.build_all(root)
+        top_clear = _ink_trim_comb_top_clear(root)
+        real = top_clear is not None and top_clear > 0.0
+        if not real:
+            failures.append(
+                f"the unmutated ink-trim comb fixture's own top clearance "
+                f"is {top_clear!r}, not a positive amount; the fixture "
+                f"never carried the property")
+        print(f"  {'unmutated':<12} {'OK' if real else 'BROKEN':<5} "
+              f"the comb's own writing top trims {top_clear!r}pt off the "
+              f"caption's own descender", file=stream)
+
+    previous = fixtures.INK_TRIM_CAPTION_DRIFT_PT
+    try:
+        mutate_ink_trim_comb()
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            fixtures.build_all(root)
+            top_clear = _ink_trim_comb_top_clear(root)
+            good = top_clear == 0.0
+            if not good:
+                failures.append(
+                    f"the lifted ink-trim comb fixture's own top clearance "
+                    f"is {top_clear!r}, not 0.0; the mutation did not clear "
+                    f"the caption's own reach")
+            print(f"  {'ink-trim-comb':<12} {'OK' if good else 'WEAK':<5} "
+                  f"the caption's own baseline lifts to a "
+                  f"{fmt(fixtures.INK_TRIM_CAPTION_DRIFT_PT)}pt drift from "
+                  f"{fmt(previous)}pt, and no glyph's own measured outline "
+                  f"reaches the comb's writing top any more", file=stream)
+    finally:
+        fixtures.INK_TRIM_CAPTION_DRIFT_PT = previous
+
+    for message in failures:
+        print(f"    FAIL {message}", file=stream)
+    print(f"prove-ink-trim-comb: "
+          f"{'PASS' if not failures else f'{len(failures)} FAILURE(S)'} over "
+          f"1 source-level mutation, run outside extract.py's own "
+          f"CASES/CONTRACT_ONLY accounting (see prove_ink_trim_comb)",
+          file=stream)
+    return 1 if failures else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -1030,9 +1137,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     row_number_result = prove_row_number(sys.stderr)
     comb_band_reunification_result = prove_comb_band_reunification(sys.stderr)
     signature_rule_result = prove_signature_rule(sys.stderr)
+    ink_trim_comb_result = prove_ink_trim_comb(sys.stderr)
     return 1 if (extract_result or row_number_result
                 or comb_band_reunification_result
-                or signature_rule_result) else 0
+                or signature_rule_result or ink_trim_comb_result) else 0
 
 
 if __name__ == "__main__":

@@ -187,6 +187,39 @@ SIGNATURE_RULE_CAPTION_ROW_HEIGHT_PT = 20.0
 SIGNATURE_RULE_ITEM_TEXT = "27"
 SIGNATURE_RULE_CAPTION_TEXT = "Signature over Printed Name of Taxpayer"
 
+# F227's shape (`emit.comb_writing_top_clear_of_printed_ink`): a caption's
+# own descender genuinely hangs into a COMB's shared writing top -- 1604CF's
+# "8 Telephone No." over its phone comb, reproduced at the corpus's own
+# scale and with the corpus's own words. The comb's divider ticks are drawn
+# confined to a band `INK_TRIM_COMB_BAND_TOP_INSET_PT` below the row's own
+# top wall, never spanning the row's full height: a divider that reaches the
+# top wall reads to the grid-building pass as a genuine COLUMN boundary and
+# splits the row into `INK_TRIM_COMB_SLOTS` separate FIELD cells instead of
+# one comb, measured directly against this fixture -- the mirror, on the
+# divider side, of the same fact `comb_writing_rect`'s own docstring states
+# on the writing-rectangle side ("A tick is a guide mark *under* the box,
+# not the box").
+#
+# `INK_TRIM_CAPTION_GAP_PT` is the caption's own baseline, measured UP from
+# the row's own top wall, at 0.0 drift (every built fixture): 1.0pt puts the
+# 'p' of "Telephone" 0.24pt inside the comb's own writing top
+# (`emit.comb_writing_top_clear_of_printed_ink`, measured directly against
+# this fixture), the same order of magnitude 1604CF's own real defect
+# measures (0.71pt) and comfortably clear of float noise.
+# `INK_TRIM_CAPTION_DRIFT_PT` is its own constant, zero in every built
+# fixture like every other DRIFT constant here: `prove_fixtures_fail.py`'s
+# `mutate_ink_trim_comb` raises it enough to lift the caption's baseline
+# clear of the comb's own writing top entirely, without moving the row's
+# own walls, dividers or slot count.
+INK_TRIM_COMB_ROW_WIDTH_PT = 200.0
+INK_TRIM_COMB_ROW_HEIGHT_PT = 24.0
+INK_TRIM_COMB_SLOTS = 7
+INK_TRIM_COMB_BAND_TOP_INSET_PT = 14.0
+INK_TRIM_CAPTION_TEXT = "Telephone No."
+INK_TRIM_CAPTION_FONT_SIZE_PT = 9.0
+INK_TRIM_CAPTION_GAP_PT = 1.0
+INK_TRIM_CAPTION_DRIFT_PT = 0.0
+
 
 def gray(value: float) -> tuple[float, float, float]:
     """A neutral RGB triple. to_gray() collapses it back to this exact value."""
@@ -484,6 +517,40 @@ def signature_rule_row(page: fitz.Page, x0: float, y0: float) -> None:
                      fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
 
 
+def ink_trim_comb_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F227's shape (`emit.comb_writing_top_clear_of_printed_ink`): a
+    caption's own descender genuinely hangs into a comb's own shared
+    writing top, and the comb -- unlike a plain field -- was never offered
+    that evidence at all before this session.
+
+    `x0,y0` anchors the comb's own top-left corner. One bordered box
+    (`merged_box`, the row's own four walls), its divider ticks confined to
+    a band `INK_TRIM_COMB_BAND_TOP_INSET_PT` below the row's own top wall
+    rather than spanning the row's full height -- see the module comment
+    above `INK_TRIM_COMB_ROW_WIDTH_PT` for why that confinement is what
+    lets the row resolve as one comb instead of `INK_TRIM_COMB_SLOTS`
+    separate field cells. `INK_TRIM_CAPTION_TEXT` is set above the row's
+    own top wall, `INK_TRIM_CAPTION_GAP_PT` plus `INK_TRIM_CAPTION_DRIFT_PT`
+    above it, so its own 'p' reaches -- or, once `prove_fixtures_fail.py`'s
+    `mutate_ink_trim_comb` raises the drift, does not reach -- past the
+    comb's own writing top the identical way 1604CF's "8 Telephone No."
+    does over its real phone comb.
+    """
+    x1 = x0 + INK_TRIM_COMB_ROW_WIDTH_PT
+    y1 = y0 + INK_TRIM_COMB_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), thickness, BLACK, pieces=2)
+    step = (x1 - x0) / INK_TRIM_COMB_SLOTS
+    band_y0 = y0 + INK_TRIM_COMB_BAND_TOP_INSET_PT
+    for index in range(1, INK_TRIM_COMB_SLOTS):
+        divider_x = x0 + index * step
+        bar(page, divider_x, band_y0, divider_x + THICKNESSES_PT[0], y1,
+            BLACK)
+    baseline = y0 - INK_TRIM_CAPTION_GAP_PT - INK_TRIM_CAPTION_DRIFT_PT
+    page.insert_text(fitz.Point(x0 + 4, baseline), INK_TRIM_CAPTION_TEXT,
+                     fontname="helv", fontsize=INK_TRIM_CAPTION_FONT_SIZE_PT)
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -569,6 +636,10 @@ def build_rules() -> fitz.Document:
     # SignatureRuleWriting`): placed clear of the comb-band-reunification
     # row above (which ends at y380).
     signature_rule_row(second, 48, 400)
+
+    # F227's own shape (`emit.comb_writing_top_clear_of_printed_ink`):
+    # placed clear of the signature-rule row above (which ends at y450).
+    ink_trim_comb_row(second, 48, 480)
     return doc
 
 

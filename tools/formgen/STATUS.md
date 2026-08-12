@@ -12,6 +12,151 @@ superseded by the r43 section.
 
 
 
+## W6 — the five assertion offenders close honestly, and a comb gets ink-trimmed for the first time (F227 closed)
+
+**Measured 2026-08-13, worktree `wt/w6-inktrim`, base `24cdc6e7`.**
+`inputs_over_printed_text` **0 forms / 0 offenders** (was 2 forms/5:
+1604cf-2008, 2316-2021), independently re-verified by loading all 53
+bundles and calling `audit.check_inputs_over_printed_text` directly (0
+errors, 0 offenders), then confirmed on a full `audit.py --assertions-only`
+run over the regenerated corpus. `comb_slots_match_printed` **10 forms / 19
+offenders, unmoved** (this package moves no slot count and no divider; the
+concurrent W5 lattice.py package is not merged here). Every other
+assertion **0 offenders, all 53 forms, unmoved**. Comb censuses **4,587
+subjects / 4,557 active / 30 retained, unmoved**, measured directly over
+`build/layout`. Input count **45,546, unmoved**. Tab-walk **53/53 green**;
+blue (vacant) census **5, unmoved**.
+
+**Two mechanisms, not one, and the finding's own request to diagnose before
+fixing paid off: fixing only the first would have left three of the five
+offenders open, and fixing only the second would have created a NEW wrong
+1.15pt over-trim on 1604cf-2008's Zip-code comb.**
+
+**(1) Not offered at all.** 1604cf-2008 p1c16 and 2316-2021 p1c38/p1c39 are
+combs. `field_box`'s comb branch never called
+`writing_box_clear_of_printed_ink` at all — `comb_writing_rect`'s own
+rectangle is deliberately exempt from ink (it is
+`comb_referee.writing_band_corroboration`'s contract with the source's
+painted walls), and that exemption stays correct, but nothing was reading
+the INPUT nested one level inside it. `comb_writing_top_clear_of_printed_ink`
+(new) runs the identical trim over a comb's own writing rectangle and
+applies the result as an `inset` on every slot's `<input>` — never on the
+slot `<div>`, which stays byte-identical on every affected form (verified:
+`comb_slots_markup`'s left/top/width/height and `cell_json`'s `comb.y`/`h`
+are unchanged everywhere). Only the TOP component is read: the same trim
+also fires LEFT on 7 unrelated compartments corpus-wide (0605-1999 p1c3,
+2551m-2002 p1c74/p1c79/p1c86, 2553-1999 p1c79/p1c84/p1c91), and a comb's
+height is already shared across every slot (one face size, fit once) while
+its width is not (one compartment each) — a shared left/right inset would
+shrink typing area in slots the ink never reaches, so it is deliberately
+left to whatever narrower, per-slot fix that population eventually needs.
+The same shape as F207: a box never offered to the trim is now offered, on
+the one axis the row genuinely shares.
+
+**(2) Seen but trimmed to the wrong bound.** 2316-2021 p1c62/p1c83 were
+already offered and trimmed, but `intrusions` restated the run's shared
+line box (ascent line to the face's DECLARED descent line) for every glyph
+in it. 'p'/'y' measure -0.218em of real outline against a declared -0.21em,
+so the line box was 0.055pt short of the ink it stood in for. `intrusions`
+now reads each glyph's OWN outline (`_glyph_ink_box`, ported from
+`audit.published_glyph_ink`'s own math the way `RULE_ORIGIN_TEXT_UNDERSCORE`
+is already ported from `extract.py`) where the source states one, falling
+back to the run's shared line box only where it does not.
+
+This is reach in BOTH directions on the same corpus, never a threshold:
+2316-2021's 'p'/'y' now measure deeper than the line box promised (closing
+p1c62/p1c83 to exact contact — the box grows by exactly 0.0548pt on each),
+while 1604CF's "Zip Code" 'e' — no descender, but sharing a run with 'p' —
+now measures its own real ~0.02em instead of the whole run's deepest
+character. That second direction is why offering combs the trim (fix 1)
+does NOT create a false 1.15pt over-trim on 1604cf-2008 p1c21 (Zip-code
+comb): with the coarse, run-line-box measurement alone, fix 1 by itself
+would have wrongly trimmed a cell with no real ink threat. Both fixes were
+required together.
+
+**A third offender the pre-fix sweep did not name closes as the same
+reach, not invented:** 1701ms-2024 p1c184 ("Others" caption, an unmeasured
+face that correctly falls back to its line box) also gets a comb top-clear
+(0.18pt), found by the corpus-wide sweep the fix's own verification
+requires. Every comb top-clear in the corpus: before either fix, 11
+candidates (coarse line-box measurement only); after both, exactly **4** —
+1604cf-2008 p1c16 (0.7142pt), 2316-2021 p1c38/p1c39 (0.2198pt each),
+1701ms-2024 p1c184 (0.18pt) — all closing to exact contact. The other 7
+(1604cf-2008 p1c21 1.15pt, 1600wp-2010 p1c24 0.63pt, 2316-2021 p1c37/p1c40
+0.38pt each, 2550m-2007 p1c89/p1c90/p1c91 0.14pt each) resolve to 0 once
+the glyph is read precisely; none of the 7 was ever an audit offender, so
+nothing regressed by them going untrimmed. The same re-measurement also
+takes the 7 LEFT-nonzero compartments named above to exactly 0 on every
+axis, so the vertical-only restriction on combs costs nothing observable
+in this corpus — but it stays, because it is not evidence-dependent.
+
+**Every writing box that changed size, corpus-wide**, on the tree this
+package actually wrote (`build/html`, re-derived from source): the 4 comb
+input insets above, plus 17 plain-field writing-box changes across 9 more
+forms, all the same `intrusions()` precision fix: 1604f-2018 p1c160 top
+0.91→0pt (grew); 1600wp-2010 p1c62/p1c67/p1c68 top 0.74→0.25pt (grew) and
+p1c63/p1c64 top 0.74→0.7471pt (+0.0071pt, further trimmed); 1604cf-2008
+p1c20 top 1.63→1.6742pt, p1c31/p1c32 top 1.15→1.1942pt, p1c316-i0/i1 top
+35.74→35.785pt (all further trimmed, +0.0442–0.045pt); 1706-2018 p2c179-i1
+left 14.56→14.35pt (grew) and p2c183-i top 0.41→0pt (grew); 1800-2018
+p1c186-i top 1.13→0pt (grew); 2200an-2018 p2c245-i/p2c253-i right
+20.3→20.1pt (grew); 2200p-2020 p2c376-i/p2c390-i left 11.96→11.82pt
+(grew); 2200t-2022 p3c109/p3c116/p3c123 left 19.73→19.5724pt (grew);
+2550m-2007 p1c87/p1c88 top 0.86→0.72pt (grew); 2551m-2002
+p1c34/p1c39/p1c44/p1c49/p1c54 right 1.44→0.9014pt (grew). Every "grew" case
+is a coarse over-trim recovered by measuring the actual offending glyph
+instead of the whole run's declared descent; every further-trimmed case
+closes a genuine gap between a face's declared descender and a specific
+glyph's real outline, all under 0.05pt. None crossed `FIELD_MIN_SIZE_PT`;
+input count is unchanged at 45,546.
+
+**A real source-level mutation**, so F224's refusal is not repeated:
+`make_fixtures.ink_trim_comb_row` (new, `fixtures/rules.pdf`) builds a comb
+whose divider ticks are confined to a band below the row's own top wall —
+spanning the row's full height reads to the lattice grid-building pass as
+a genuine column boundary and splits the row into separate field cells
+instead of one comb, the mirror, on the divider side, of
+`comb_writing_rect`'s own "a tick is a guide mark under the box, not the
+box" — with "Telephone No." set 1.0pt above it, whose 'p' measures a real
+0.242pt top-clear by default. `prove_fixtures_fail.mutate_ink_trim_comb`
+raises `INK_TRIM_CAPTION_DRIFT_PT` 0→2.0pt, lifting the caption clear;
+`prove_ink_trim_comb` (new, run outside CASES/CONTRACT_ONLY the way
+`prove_row_number`/`prove_comb_band_reunification`/`prove_signature_rule`
+already are, since this is a `lattice.py`/`emit.py` decision with no new
+extract-level primitive) confirms the claim flips from a positive
+top-clear to exactly 0.0. `prove-fixtures-fail: PASS over 19 source-level
+mutations` (unmoved) plus this new one, run separately and also passing.
+
+**Pins.** `extract.FIXTURE_FIXTURES["FIXTURE-RULES"]` and
+`comb_referee.AUDIT_DEPENDENCY_SHA256["tools/formgen/extract.py"]` moved
+(`fixtures/rules.pdf` gained `ink_trim_comb_row`'s new shape; no
+extract.py check, count or tolerance moved).
+`comb_referee.EXPECTED_HTML_STRUCTURE_SHA256` re-pinned for the 12 forms
+whose `build/html/<slug>.html` bytes moved (1600wp-2010, 1604cf-2008,
+1604f-2018, 1701ms-2024, 1706-2018, 1800-2018, 2200an-2018, 2200p-2020,
+2200t-2022, 2316-2021, 2550m-2007, 2551m-2002); the other 41 are
+byte-identical. Comb censuses (`EXPECTED_COMBS`, `EXPECTED_COMBS_BY_SLUG`,
+`EXPECTED_RETAINED_SUBJECTS_BY_SLUG`) do not move — no slot rectangle,
+divider or slot count changes anywhere in the corpus.
+
+**Determinism**: two `batch.py` regenerations over the full 53-form corpus
+produce byte-identical `build/html`, `build/ir`, `build/layout` and
+`forms/` trees (tree digests match exactly: `build/html`
+`b49e98dad6bb…`, `build/ir` `0a2ce4fb31f9…`, `build/layout`
+`b20ed08cfd28…`, `forms` `e4bd8a7e859d…`).
+
+**Standing checks.** `extract.py --self-test` (7 pinned PDFs) and
+`--self-test --fixtures` (6 fixture PDFs, re-pinned); `lattice.py --ir
+build/ir/2551q-2018.ir.json`; `emit.py --self-test` (all assertions,
+including two rewritten to state the new correct behaviour instead of the
+old one this closes — the comb-exemption test and the
+`intrusions`/line-box test); `comb_referee.py --self-test` and a full run
+(`EXPECTED_HTML_STRUCTURE_SHA256` matches on all 53); `gate.py --self-test`;
+`tab_check.py` (53/53 green, blue 5); `validate_tree.py`;
+`fixtures/prove_fixtures_fail.py` (20 source-level mutations, up from 19).
+`review-findings.json`: F227 fixed.
+
+
 ## W5 — 6 of 19 source-topology-unevaluable comb offenders decided (agree); two mechanisms extended and shipped, two implemented then refused
 
 **Measured 2026-08-13, worktree `wt/w5-referee`, base `ae50f7ee`.** No producer
