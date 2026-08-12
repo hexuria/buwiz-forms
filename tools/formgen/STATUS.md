@@ -10,8 +10,96 @@ regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
 that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
+## W2 — the row-number rule (F151 closed, the last blocker)
 
+**Measured 2026-08-12, worktree `wt/w2-row-number`, base `2b3e20c8`.**
+Implements P2's own measured rule exactly: a `label` cell sharing its row with
+a `field` cell, holding ONLY a bare numeral (`^\d{1,3}$`), earns the paper
+beside it when the trailing blank clears the form's own `line_width_pt`
+(`lattice.min_fillable_line_metrics`, the sliver rule's own metric) at 1.0x --
+no new constant. `emit.py` gains `RowNumberWriting` / `row_number_band` /
+`row_number_field_box`, the fourth member of the `RuledBlankWriting` /
+`CheckboxSquareWriting` / `KnockoutSpecifyWriting` family.
 
+**The number moved from P2's own measurement, and the reason is named rather
+than papered over.** P2 measured 296 candidates -> 56 across 23 forms on the
+r38 tree (2026-08-10). Re-derived on this tree by the new standing self-test
+(`emit.row_number_corpus_assertions`, run by `emit.py --self-test`, corpus-wide
+every run): **61 cells across 13 forms.** ~35 commits landed between r38 and
+this tree that are each capable of reclassifying a `label` cell -- F148/F149
+(ruled-blank), F210 (checkbox-square), F211/F212 (signature-box), F206
+(knockout-specify), and several lattice-level ink/wall/pre-printed-text fixes
+-- fully accounting for the drift. Of those 61, **12 are already fillable via
+`RuledBlankWriting`**, which landed after P2's own measurement (2200m-2018's 4
+cells; 1702mx-2018c's p2c278/p2c280 and p4c196/198/200/202/204/206), so the
+**NET NEW gain this package ships is 49 cells across 11 forms**: 1600-pt-2018
+(5), 1600-vt-2018 (5), 1621-2019 (5), 1700-2018 (4), 1701-2018 (2),
+1701-2018-conso (4, the four Schedule D anchors this closes F151 for), 1702mx-
+2018c (4), 1702mx-2018c-attachment (8), 1702rt-2018c (8), 2200a-2020 (2),
+2200p-2020 (2).
+
+**The four Schedule D anchors** (`1701-2018-conso` p2c132/p2c136/p2c140/
+p2c144) verified in a real Chromium page: `page.goto(file://…)`, Tab pressed
+437/441/445/449 times from the first input to reach each, typed
+"Contribution to accredited NGO" into each and read the value back correctly.
+
+**Excluded, by construction, verified as a count.** All 228 narrow (13-16pt)
+item-number boxes sharing a row with a field cell in this corpus (BIR's own
+"12" inside a box barely wider than two digits -- P2's own population,
+measured at 188 on the r38 tree, the same drift as above) stay refused: zero
+overlap between that set and the 49 gained cells, checked directly. The
+`1701-2018-conso` Schedule C cells `p2c97`/`p2c103`/`p2c109` (pre-printed
+deduction category names, F151's own refuted half) are byte-identical before
+and after.
+
+**Measurement found a real defect and this package fixed it before shipping.**
+The first cut of `row_number_band` trimmed only the candidate cell's own
+leading ink and left the rest of `writing_box_clear_of_printed_ink`'s
+"a glyph whose centre lies inside the box is not this function's problem"
+rule unguarded for this promotion. On `0605-1999`, `p1c81`'s own row also
+carries "  For the           Calendar           Fiscal" -- a checkbox caption
+`assign_points` gave to a NEIGHBOURING cell, whose glyphs still physically
+overlap p1c81's rectangle, the same shape CLAUDE.md already documents for
+`printed_box_peers_all_fillable`, pointed a new way. The unguarded band
+claimed paper that was not blank, and `inputs_over_printed_text` caught it
+immediately (2 forms/5 -> 3 forms/6, 0605-1999's `p1c81` the new offender).
+`row_number_band` now refuses any candidate whose trailing blank carries ANY
+intrusion from ANY run's own ink, page-wide (`PrePrintedInk.intrusions`), not
+just the candidate cell's own assigned run; 0605-1999's `p1c81` is correctly
+excluded (raw claims 62 -> 61, and 0605-1999 drops out of the net-new list
+entirely) and gains nothing. The 61/13/49-across-11 figures reported above
+are all measured AFTER this fix.
+
+Measured against the corpus, full regeneration (`batch.py` twice; determinism
+confirmed against a third run into a scratch tree): `inputs_over_printed_text`
+stays **2 forms/5 offenders** (1604cf-2008, 2316-2021), unmoved;
+`comb_slots_match_printed` stays **10 forms/19 offenders**, unmoved; comb
+censuses stay **4,587 subjects/33 retained/4,554 comb cells** (row-number never
+touches a comb cell by construction, verified directly off `build/layout`).
+Inputs **45,468 -> 45,520 (+52)**: 49 net-new cells, +3 more because three of
+them sit in a growable band and are mirrored into that band's own `<template>`
+blueprint row. Corpus tab-walk **53/53 green**. Blue/vacant census stays
+**108**, unmoved.
+
+A real source-level mutation was added rather than declined or parked in
+`CONTRACT_ONLY` (a prior package's decline on this exact point is F224).
+`fixtures/make_fixtures.py` gains `row_number_row` -- a synthetic bordered row
+on `rules.pdf` splitting a bare-numeral label cell from a blank field cell --
+and `fixtures/prove_fixtures_fail.py` gains `mutate_row_number` (narrows the
+label cell 60pt -> 20pt, dropping the trailing blank under half of
+`line_width_pt`) and a new `prove_row_number` routine that runs the actual
+pipeline (`extract.extract` -> `lattice.build_layout` -> `emit.RowNumberWriting`)
+over the clean and mutated fixture and asserts the claim flips. Deliberately
+run OUTSIDE `prove()`'s own `extract.SELF_TEST_CHECKS`/`CONTRACT_ONLY`
+accounting: row-number is a `lattice.py`/`emit.py` decision with no new
+extract-level primitive of its own, so folding it into that table would
+misname what it tests -- extract.py's own 24 checks are unmoved, only
+`FIXTURE_FIXTURES["FIXTURE-RULES"]`'s own sha256 (and its dependent pin in
+`comb_referee.AUDIT_DEPENDENCY_SHA256`) moved.
+
+`EXPECTED_HTML_STRUCTURE_SHA256` (`comb_referee.py`) re-pinned for the 11 forms
+whose `build/html/<slug>.html` bytes moved (all 53 verified to match the
+regenerated tree). `review-findings.json` F151 closed.
 
 ## W0 + W1 — the sweep found more than the fix closed, and that is the honest direction
 

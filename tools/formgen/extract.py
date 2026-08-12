@@ -2490,7 +2490,7 @@ FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # (T5b+T5d, F211/F212) and a comb band.
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "565e90e072b3bb72ca307edf0b6b6ee2689958473148e4b4c4c4569998b4f4b7"),
+        "4e2e323d0a41a874d43adbd6becd1222c269da1b7b8290046dd2a52fc9c98863"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",

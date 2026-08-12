@@ -41,6 +41,15 @@ is what stops this file from looking like complete coverage: the case table and
 that list must between them account for every check extract.py declares, and
 this exits non-zero if they do not.
 
+`prove_row_number` (F151, P2's row-number rule) runs the identical method one
+stage past extract.py: a `label` cell sharing its row with a `field` cell,
+holding only a short numeral, earns the paper beside it when that blank clears
+the form's own `line_width_pt` at 1.0x -- a `lattice.py`/`emit.py` decision
+with no new extract-level primitive, so it is proven by mutating the source and
+running `lattice.build_layout` + `emit.RowNumberWriting` over it, outside
+`prove()`'s own CASES/CONTRACT_ONLY accounting (which is specifically about
+`extract.SELF_TEST_CHECKS`, and would misname this if folded in).
+
 Usage:
     python3 tools/formgen/fixtures/prove_fixtures_fail.py
 """
@@ -63,6 +72,8 @@ except ImportError:  # pragma: no cover - environment guard
     sys.exit("PyMuPDF is required: pip install pymupdf")
 
 import extract  # noqa: E402 - the path has to be set up first
+import lattice  # noqa: E402
+import emit  # noqa: E402
 import make_fixtures as fixtures  # noqa: E402
 
 # Checks whose subject is the extractor's output contract, not the corpus. No
@@ -177,6 +188,26 @@ def mutate_signature_line() -> None:
     wall the box above it also bounds.
     """
     fixtures.SIGNATURE_LINE_CAPTION_DRIFT_PT = -10.0
+
+
+def mutate_row_number() -> None:
+    """Narrow the row-number label cell from 60pt to 20pt.
+
+    Nothing about the numeral's own ink moves, no rule's tone changes, and
+    the field cell beside it keeps its own width -- only the label cell's
+    own width does, and only enough that the paper trailing the numeral
+    (roughly 10.76pt of that 20pt, the rest being the numeral's own ink and
+    left margin) drops to about 9.2pt, under HALF of the fixture's own
+    18pt `line_width_pt`. What breaks is the geometric fact `row_number_band`
+    (emit.py) actually reads: a bare row number's own trailing blank clears
+    the form's own two-glyph line width at 1.0x. See `prove_row_number`,
+    which is where this trips -- unlike every other case in `CASES`, this
+    is not one of `extract.py`'s own checks (row-number is a lattice/emit
+    decision with no new extract-level primitive of its own), so it runs
+    the pipeline this module already imports rather than
+    `extract.SELF_TEST_CHECKS`.
+    """
+    fixtures.ROW_NUMBER_LABEL_WIDTH_PT = 20.0
 
 
 def mutate_bar_like() -> None:
@@ -636,12 +667,120 @@ def prove(stream: Any) -> int:
     return 1 if failures else 0
 
 
+def fmt(value: float) -> str:
+    return f"{value:g}"
+
+
+def _row_number_cell(page: dict[str, Any], ir_page: dict[str, Any],
+                     ) -> dict[str, Any] | None:
+    """The fixture's own row-number label cell, found by content, not id.
+
+    A cell id is a position in lattice.py's own numbering of the whole page,
+    and nothing here needs it to be stable -- the subject is "the `label`
+    cell holding only `make_fixtures.ROW_NUMBER_TEXT`", found the same way a
+    reader would, so a page rewritten above this shape still locates it.
+    """
+    page_index = int(page["index"])
+    runs_by_id = {emit.run_id(page_index, i): run
+                  for i, run in enumerate(ir_page["text_runs"])}
+    for cell in page["cells"]:
+        if cell["kind"] != "label":
+            continue
+        texts = [runs_by_id[rid]["text"] for rid in cell.get("text_run_ids") or ()
+                 if rid in runs_by_id]
+        if texts == [fixtures.ROW_NUMBER_TEXT]:
+            return cell
+    return None
+
+
+def _row_number_claimed(root: pathlib.Path) -> bool | None:
+    """Whether `emit.RowNumberWriting` claims the fixture's own row-number
+    cell under `root`'s corpus, or None if the fixture does not carry the
+    subject at all (a mutation that deleted the cell rather than narrowing
+    it, which would be a different failure than the one this proves)."""
+    ir = extract.extract(root / "rules.pdf", "FIXTURE-RULES", "0001", None)
+    layout = lattice.build_layout(ir)
+    metrics = emit._min_fillable_line_metrics(ir)
+    page = next(p for p in layout["pages"] if int(p["index"]) == 2)
+    ir_page = next(p for p in ir["pages"] if int(p["index"]) == 2)
+    cell = _row_number_cell(page, ir_page)
+    if cell is None:
+        return None
+    row_numbers = emit.RowNumberWriting(
+        page["cells"], 2, ir_page["text_runs"], metrics)
+    return row_numbers.for_cell(cell["id"]) is not None
+
+
+def prove_row_number(stream: Any) -> int:
+    """Prove F151's row-number rule (P2) can fail, via a real PDF mutation.
+
+    Not one of `extract.py`'s own checks, and deliberately run outside
+    `prove()`'s CASES/CONTRACT_ONLY accounting: row-number is entirely a
+    `lattice.py`/`emit.py` decision (a `label` cell shares its row with a
+    `field` cell, holds only a short numeral, and its own trailing blank
+    clears the form's own `line_width_pt` at 1.0x -- `emit.RowNumberWriting`)
+    with no new extract-level primitive of its own, so folding it into that
+    table would misname what it tests: `extract.py` extracts this fixture's
+    rules, fills and text runs identically whether the mutation below has
+    run or not, and every one of its own checks agrees. What changes is a
+    later-stage geometric fact neither `extract.SELF_TEST_CHECKS` nor
+    `CONTRACT_ONLY` is about.
+
+    Same method as every case in `CASES` -- mutate the source PDF, rebuild,
+    observe -- carried one stage further than `extract.gather_evidence`
+    reaches: `lattice.build_layout` and `emit.RowNumberWriting` run over the
+    rebuilt IR too, the same two calls `batch.py` chains after extract.py for
+    every real bundle.
+    """
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as scratch:
+        root = pathlib.Path(scratch)
+        fixtures.build_all(root)
+        claimed = _row_number_claimed(root)
+        if claimed is not True:
+            failures.append(
+                f"the unmutated row-number fixture's claim is {claimed!r}, "
+                f"not True; the fixture never carried the property")
+        print(f"  {'unmutated':<12} {'OK' if claimed is True else 'BROKEN':<5} "
+              f"row-number claims the fixture's own label cell", file=stream)
+
+    previous = fixtures.ROW_NUMBER_LABEL_WIDTH_PT
+    try:
+        mutate_row_number()
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            fixtures.build_all(root)
+            claimed = _row_number_claimed(root)
+            good = claimed is False
+            if not good:
+                failures.append(
+                    f"the narrowed row-number fixture's claim is {claimed!r}, "
+                    f"not False; the mutation did not clear the bound")
+            print(f"  {'row-number':<12} {'OK' if good else 'WEAK':<5} "
+                  f"the label cell's own width narrows from "
+                  f"{fmt(previous)}pt to {fmt(fixtures.ROW_NUMBER_LABEL_WIDTH_PT)}pt, "
+                  f"the trailing blank drops under half of line_width_pt", file=stream)
+    finally:
+        fixtures.ROW_NUMBER_LABEL_WIDTH_PT = previous
+
+    for message in failures:
+        print(f"    FAIL {message}", file=stream)
+    print(f"prove-row-number: "
+          f"{'PASS' if not failures else f'{len(failures)} FAILURE(S)'} over "
+          f"1 source-level mutation, run outside extract.py's own "
+          f"CASES/CONTRACT_ONLY accounting (see prove_row_number)",
+          file=stream)
+    return 1 if failures else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.parse_args(argv)
-    return prove(sys.stderr)
+    extract_result = prove(sys.stderr)
+    row_number_result = prove_row_number(sys.stderr)
+    return 1 if (extract_result or row_number_result) else 0
 
 
 if __name__ == "__main__":

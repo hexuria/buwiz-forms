@@ -565,8 +565,24 @@ AUDIT_DEPENDENCY_SHA256 = {
     # over 7 pinned PDFs. No existing rule field, comb census or tolerance
     # moves; `build/ir/*.ir.json` is byte-identical to a re-extraction under
     # this pin (verified directly on 2551Q, this pin's own subject).
+    #
+    # Re-pinned 2026-08-12 (W2, F151), and for a different reason than every
+    # entry above: extract.py's own CHECKS do not move -- row-number (F151's
+    # Schedule D half, P2's measured rule) is entirely a `lattice.py`/
+    # `emit.py` decision with no new extract-level primitive, so `extract.
+    # SELF_TEST_CHECKS` stays at 24 checks and `prove_fixtures_fail.py`'s own
+    # CASES/CONTRACT_ONLY accounting is untouched (see `prove_row_number`,
+    # deliberately run outside it). What moved this file's own bytes is
+    # `FIXTURE_FIXTURES["FIXTURE-RULES"]`'s sha256: `fixtures/rules.pdf`
+    # gained a new shape (`make_fixtures.row_number_row`, a bordered row
+    # split into a bare-numeral label cell and a blank field cell) so the
+    # row-number rule has a source-level mutation to fail, the same "mutate
+    # the source PDF, rebuild, observe" method every other case in this
+    # corpus uses. No rule field, comb census, extract.py check count or
+    # tolerance moves; `build/ir/*.ir.json` for the seven REAL pinned PDFs is
+    # untouched (only the synthetic FIXTURE-RULES pin moved).
     "tools/formgen/extract.py": (
-        "35fdeed1c5c5efc4eec6a97c37aa20877e68e19eb0ec5da71f166cdeea88d9ee"
+        "49e7eab4df043573b680e5a994ba1d6bc084680efdd3f4a0a8f7becc14929468"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -1812,13 +1828,58 @@ HTML_ALLOWED_TAGS = frozenset({
 # constructs a band for them regardless of geometry. `HTML_RUNTIME_SCRIPT_
 # SHA256` does NOT move: no runtime script text changed, only `1801-2018`'s
 # own pre-rendered cell markup.
+# Re-pinned 2026-08-12 (W2, F151): `emit.py`'s `field_verdict` gains a
+# `row-number` branch (`RowNumberWriting` / `row_number_field_box`) that gives
+# a `label` cell an input beside its own bare row number -- "1", nothing else
+# -- for every row where that cell shares its row with a `field` cell and its
+# own trailing blank clears the form's own `line_width_pt`
+# (`lattice.min_fillable_line_metrics`) at 1.0x, no new constant, the same
+# bound the sliver rule already spends. P2's measured corpus census was 296
+# candidates -> 56 across 23 forms on the r38 tree; re-measured on this tree,
+# after ~35 intervening commits (F148/F149 ruled-blank, F210 checkbox-square,
+# F211/F212 signature-box, F206 knockout-specify, and several lattice-level
+# ink/wall/pre-printed-text fixes, each capable of reclassifying a `label`
+# cell), the rule's own claim set is 61 across 13 forms (`emit.
+# row_number_corpus_assertions`, run by `emit.py --self-test`); 12 of those
+# 61 (2200m-2018's 4, 1702mx-2018c's p2c278/p2c280 + p4c196/198/200/202/204/
+# 206) are ALREADY fillable via `RuledBlankWriting`, which landed after P2's
+# own measurement, so the NET NEW gain this package ships is 49 cells across
+# 11 forms -- listed below, each also gaining an EXPECTED_HTML_STRUCTURE_
+# SHA256 pin. The four Schedule D anchors this closes F151 for -- 1701-2018-
+# conso p2c132/p2c136/p2c140/p2c144 -- are among them, verified typeable in a
+# real Chromium page (goto/Tab/type/read-back). Excludes, by construction and
+# verified as a count: all 228 of the corpus's narrow (13-16pt) item-number
+# boxes sharing a row with a field cell (BIR's own "12" inside a box barely
+# wider than two digits; P2 measured 188 on the r38 tree, the same drift as
+# above), and 1701-2018-conso's Schedule C p2c97/p2c103/p2c109 (pre-printed
+# category names, not bare numerals, F151's own refuted half). One real
+# defect this measurement FOUND and fixed before shipping: `row_number_band`
+# originally trimmed only the CANDIDATE cell's own leading ink, the same way
+# `writing_box_clear_of_printed_ink` trims ink hanging in from outside a box
+# -- but 0605-1999 p1c81 sits under a wide "Calendar ... Fiscal" checkbox
+# caption assigned to a NEIGHBOURING cell whose own glyphs physically
+# overlap p1c81's rectangle (the `assign_points`/`printed_box_peers_all_
+# fillable` shape CLAUDE.md already documents, pointed a new way), so the
+# unguarded band claimed a "blank" that was not blank and this rule's own
+# published input landed on top of printed ink. `row_number_band` now
+# refuses any candidate whose band carries ANY intrusion from ANY run's own
+# ink, corpus-wide, not just this cell's assigned one -- `inputs_over_
+# printed_text` stays at its own pre-existing 2 forms/5 (1604cf-2008,
+# 2316-2021), `comb_slots_match_printed` stays 10/19, and comb censuses stay
+# 4,587 subjects/33 retained/4,554 comb cells (row-number never touches a
+# comb cell by construction). Input count rises 45,468 -> 45,520 (+52; 49 net
+# -new cells, +3 more because three of them sit in a growable band and are
+# mirrored into that band's own <template> blueprint). New standing
+# corpus-wide self-test `emit.row_number_corpus_assertions` (run by
+# `emit.py --self-test`) re-derives the claim set against every `build/ir`
+# this checkout has and fails if any claimed cell lacks a typing surface.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "a0cf7a393661f5a841e1372495b9626af3d8d59ff232fe1bdb99f106ad2e92be",
     "0619e-2018": "837900d7e2ac57faf078290d18666c8f5ffeaee47cc0b956583a5ce3c16b1db9",
     "0619f-2018": "54900cc9ac9b6a37260d0fda60403bdd99fcc038a751d55ebf5db9d9c4c02a6b",
     "0620-2019": "1c0af3b694e6f30365cf2b4f35dae6a9719d4eac4f9783c49dbe558f82222310",
-    "1600-pt-2018": "417025114573c50307594be8d33ce59e947bad171929fa12b40840025dc0e9c1",
-    "1600-vt-2018": "0f490d966d201939034aff5f6f0d2ae59aeff408453eadb313e17811db31fd96",
+    "1600-pt-2018": "9b97631f332634265123356d229b22ed01907a1a043e772ed815c1e9a1118354",
+    "1600-vt-2018": "c18c25f1f8437b6ee42a044400ce711b00af7e382d4607a355faff03453f1112",
     "1600wp-2010": "297c10448f2bfc6de436ec3133769636e14a1c2882d128ef93988399938e8260",
     "1601-fq-2020": "c31babb46b32ac8dee06038649d95cf5365f4d454b99744ff1f10129ee00f943",
     "1601c-2018": "ea4d9f992e3d979aff777ef0f3d89e38fa17d29b3e8ba679c5056429633a8fc2",
@@ -1830,19 +1891,19 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1604e-2018": "ee84458a8dbfb3b8afb085a0efc29dfee285b6828ae60e501d8ba4b196eee750",
     "1604f-2018": "fb97d8ab5468d31dfea3762bd82bbbc2de75c0793deb0ea01d7f853def6d22b5",
     "1606-2018": "6db12ef721b021208d3bf2ee09e00121263f434c750b88852975970073b22d95",
-    "1621-2019": "0d56ea12807a4b2d417c5c9fe0ef47b2adcc3b733b22f07d8d88ea41c615de03",
-    "1700-2018": "c93ca1f4071c61fe11c06faed4af843897679d1f81a1a270497bc690bb3b0437",
+    "1621-2019": "b6a11e888d80f1a76873e55ee7c29adf3455e99bb8d49abe153d7ab254e885e4",
+    "1700-2018": "c2e0d8dac1cbeec7091dbb2269fd3dd6b9d08c1566ce5bbdf3f2842501117934",
     "1701-2018-attachment": "2bd26bc1df46ecbdec79838baeb4d1a85ec220f93337aa74842a8943fd1d657c",
-    "1701-2018-conso": "aa1f84d0738657c798719bd2c886436e39fb02d36fd2830da8eb094db21b18d8",
-    "1701-2018": "d62ef0f8471daefb68eb962d826e5ab670502b229d6b359c54400c55b59a0aee",
+    "1701-2018-conso": "50328a3b780bf2febe70a6f11b2fb37fddce31698db01e9c5a031ca83ab0869a",
+    "1701-2018": "d39f9916c10986650211265f7d2f1040b7baa8ad35c81d467fb82f2b5bd35cd1",
     "1701a-2018": "6af2522f16ce0d14f8a036f4db82541ba3357ccf04f9344fbabbd1e546df507b",
     "1701ms-2024": "b265682998370d994f8907d7c0d4b2cd98991d59bb18f27ee2bdd664022a172a",
     "1701q-2018": "a53f08e7283b01eefc53296a3e5d76661c157f9143536275482bd14d7381d146",
     "1702ex-2018": "2c08aa9f66b7e2a1d712d8259b692ab69fc29bda7d0b8e110910d0a51b3e8989",
-    "1702mx-2018c-attachment": "7e046541d9960c3753e3af11b85ec71deea98091170e641e3cd50c98146a160e",
-    "1702mx-2018c": "59f26cc1dcad78fb5ab43c58ba4b1fedbbdf0f648e79fdcb28edc59de437e3bf",
+    "1702mx-2018c-attachment": "8da9bd6d5d48057bd6478ae4c1fe9aef85663a44b2f3f2edbb3071f6d505fa0d",
+    "1702mx-2018c": "00dcacf57e3afa03dc60313a644891556352ae2f0c0513062537865b79a87110",
     "1702q-2018": "2f7180e185e1b438430bcaf2e34196e96152e71c875cf53a1c9bd3a91e4a174f",
-    "1702rt-2018c": "b1a1fb22a2121d0f5da04a19fe784e1eba3260b5f1fa039dda730ebe04ddcd90",
+    "1702rt-2018c": "0264f69e7a54dd88f1a7930d4dd9150d727a31aa718a5e11891a42e0266235f2",
     "1706-2018": "3f1b30b8703c80de4b82bd97f566fd9e32769266fd096afb9870b78882cb6bf6",
     "1707-2021": "1b0c0291c7f7c8567c4839b825bfc3b8b14930a292a44b2ba82ca06e08695bab",
     "1707a-2021": "016fcf17f89fbd5d12f181f43963e1539e4bbe1e371fcc86cfde725f62046f41",
@@ -1851,11 +1912,11 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1801-2018": "903988607f9a6aa0658bbd5b295021c67ce513c0c99934a2c919096833c6fbf3",
     "2000-dst-2018": "b3b2d41c014a4612539fbbd82b96cfd6e0dea29d3fc27453a87036bf5e0e7d02",
     "2000-ot-2018": "6f36505be0a0cd57cd46275e70e9b39e040ebf3453b6ff85f43323b815b98c93",
-    "2200a-2020": "90aa0ec3aee2adbf648fa727ec9bc07817c3970f2b8f6a428845317c3eb41b6e",
+    "2200a-2020": "7d888ecf52c2dcf2578a71c7068cfec62617c0f050b91216b244cf91a9ae3e7d",
     "2200an-2018": "1e93efa9fcf8e21f544a7d3d797322d214539d2e108efe029be65871f13b8892",
     "2200c-2018": "507e2a0fd64fb465dfe55f009b09c1fb792f8edcadb67f9730a1eda131f83a6d",
     "2200m-2018": "0903e71133e6e0c21a433b3880930eae48bbca0cbbdd8fb095776e39904e5ba1",
-    "2200p-2020": "45dd364e738b9fcbdf5df8746ba2ffc05bce574a4d8b5dc52a13386007978c1e",
+    "2200p-2020": "ad235a13f8196ba6f2cf14f2799114b898e4d493be9a6135694423d6e4e20182",
     "2200s-2018": "13239ad3f5517842a94a045dd24ca9cacae14ca8ca01cd98d226a98b00a0e722",
     "2200t-2022": "f3ee644eb874d227a7141ecb89000914ca998f6699de270b4eb16983645d23c7",
     "2316-2021": "f5a355cbb1e773148bf7d6faf8862ca2294c8c6c8662001b4d67cba30fed65eb",

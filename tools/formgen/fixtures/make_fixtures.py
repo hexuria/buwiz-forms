@@ -94,6 +94,29 @@ SIGNATURE_BOX_FONT_SIZE_PT = 9.0
 SIGNATURE_BOX_CAPTION_DRIFT_PT = 0.0
 SIGNATURE_LINE_CAPTION_DRIFT_PT = 0.0
 
+# F151's row-number rule (P2): a bare row number -- "1", nothing else -- in a
+# bordered `label` cell sharing its row with a bordered `field` cell, with
+# paper beside it wide enough to be a description surface too. The bound is
+# the form's own `line_width_pt` (`lattice.min_fillable_line_metrics`, two em
+# squares of the smallest two-glyph body run) at 1.0x -- no new constant --
+# and in this fixture that body run is `SIGNATURE_BOX_CAPTION` /
+# `SIGNATURE_LINE_CAPTION` at `SIGNATURE_BOX_FONT_SIZE_PT` (9pt), the only
+# other text this file's IR states, giving `line_width_pt` = 18pt. The
+# numeral is one glyph, so it never enters that measurement itself (the
+# metric demands two or more non-whitespace glyphs) -- it only ever sits
+# beside the paper the metric bounds.
+#
+# `ROW_NUMBER_LABEL_WIDTH_PT` is the label cell's own width, wide enough at
+# 60pt that the paper trailing the numeral clears 18pt several times over.
+# prove_fixtures_fail.py's mutate_row_number shrinks it below the bound
+# without moving the numeral's own ink, any rule, or the field cell's own
+# width, so that mutation trips the row-number rule alone.
+ROW_NUMBER_LABEL_WIDTH_PT = 60.0
+ROW_NUMBER_FIELD_WIDTH_PT = 190.0
+ROW_NUMBER_ROW_HEIGHT_PT = 24.0
+ROW_NUMBER_TEXT = "1"
+ROW_NUMBER_FONT_SIZE_PT = SIGNATURE_BOX_FONT_SIZE_PT
+
 # A stroked separator that leans less than its own stroke width. 2316 draws
 # twelve of these; an exact-alignment test demoted every one of them out of
 # `rules`, taking real box sides out of lattice.py's reach. 0.17pt of lean
@@ -297,6 +320,32 @@ def signature_box(page: fitz.Page, x0: float, y0: float, x1: float,
         fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
 
 
+def row_number_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F151's row-number shape (P2): a bordered row split into a bare-numeral
+    label cell and a blank field cell beside it.
+
+    `x0,y0` anchors the row's own top-left corner. The row is one bordered
+    box (`merged_box`, the same shape every other bordered region in this
+    fixture uses) split by ONE vertical rule into two cells: a label cell
+    `ROW_NUMBER_LABEL_WIDTH_PT` wide, holding only `ROW_NUMBER_TEXT`, and a
+    field cell `ROW_NUMBER_FIELD_WIDTH_PT` wide, empty. lattice.py cuts
+    those at the divider, the way it cuts any two-column table row; the
+    numeral sits at the label cell's own left edge, matching the real
+    corpus's own row-number columns (`p2c132`... on 1701-2018-conso).
+
+    Row height is fixed at `ROW_HEIGHT_PT`, comfortably taller than one line
+    of the fixture's own 9pt body face, so neither cell is a sliver.
+    """
+    x1 = x0 + ROW_NUMBER_LABEL_WIDTH_PT + ROW_NUMBER_FIELD_WIDTH_PT
+    y1 = y0 + ROW_NUMBER_ROW_HEIGHT_PT
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), THICKNESSES_PT[1], BLACK,
+              pieces=2)
+    divider = x0 + ROW_NUMBER_LABEL_WIDTH_PT
+    bar(page, divider, y0, divider + THICKNESSES_PT[1], y1, BLACK)
+    page.insert_text(fitz.Point(x0 + 6, y0 + 14), ROW_NUMBER_TEXT,
+                     fontname="helv", fontsize=ROW_NUMBER_FONT_SIZE_PT)
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -369,6 +418,10 @@ def build_rules() -> fitz.Document:
     bar(second, 48, 170, 564, 170 + THICKNESSES_PT[0], GREY_MID)
     second.draw_rect(fitz.Rect(48, 200, 300, 240), color=None,
                      fill=gray(GREY_LIGHT), width=0)
+
+    # F151's row-number shape (P2): placed clear of the grey band above
+    # (which ends at y240).
+    row_number_row(second, 48, 280)
     return doc
 
 

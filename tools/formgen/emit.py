@@ -2559,6 +2559,189 @@ def knockout_specify_field_box(cell: dict[str, Any],
     return FieldBox("text", inset, size, round(height, 4), spacing, None, None)
 
 
+# F151's Schedule D half, and P2's own measured generalisation of it
+# corpus-wide: a bare row number -- "1 ", "2 ", "12", nothing else -- printed
+# where BIR always prints one, at the head of a row that also carries a
+# fillable field. `lattice.classify_cell` swallows the numeral AND the blank
+# paper beside it into one `label` cell exactly the way it swallows a ruled
+# blank's line, a checkbox's square or a "(specify)" knockout band into
+# theirs; a taxpayer can fill the row's amount but never say what the row
+# IS. Pure digits, no punctuation: "12" is a row number, "12." or "(12)" is
+# not ONLY a numeral and is left alone -- the vocabulary this class promotes
+# is as narrow as `KNOCKOUT_SPECIFY_CAPTION_MARKER`'s, just numeric instead
+# of lexical.
+ROW_NUMBER_TEXT_RE = re.compile(r"^\d{1,3}$")
+
+
+def row_number_band(cell: dict[str, Any], runs_by_id: dict[str, dict[str, Any]],
+                    metrics: dict[str, float], ink: "PrePrintedInk | None",
+                    ) -> tuple[float, float, float, float] | None:
+    """The paper beside a bare row number, or None if it is not viable.
+
+    Geometry only -- no field, no comb: this is a candidacy TEST, asked of
+    one `label` cell's own ink and its own remaining paper, exactly the
+    question `lattice.min_fillable_line_metrics`'s sliver rule already asks
+    of an EMPTY bordered cell, asked here of a non-empty one instead.
+
+    The numeral's own ink edge is read the same way `PrePrintedInk` reads
+    every other glyph in this module -- `_glyph_spans`' per-character widths,
+    not the run's advance box, so the trailing space `text_run_ids` always
+    carries after a row number ("1 ") is never counted as the numeral's own
+    mark. The candidate band starts there and runs to the cell's own right
+    wall: that is the paper the numeral's row has left blank, precisely the
+    paper `KnockoutSpecifyWriting`'s "(specify)" band and `RuledBlankWriting`'s
+    underscore line are the SAME shape of evidence for.
+
+    Two measured bounds, both restated from `metrics`
+    (`lattice.min_fillable_line_metrics`) rather than a new constant, per
+    CLAUDE.md and per P2's own measurement (2026-08-10): the trailing blank
+    must clear the form's own `line_width_pt` at 1.0x -- P2's corpus census
+    is 188 cells below 0.5x (BIR's own narrow item-number boxes, "12" inside
+    a box barely wider than two digits), 52 more between 0.5x and 1.0x, and
+    56 at or past 1.0x, 45 of those past 2.0x. The 1.0x line is the one that
+    keeps the narrow item-number population out while admitting Schedule D's
+    452.7pt row (blank >= 2x on this metric) -- and the cell must be tall
+    enough to hold one line of the form's own smallest body text
+    (`glyph_height_pt`), the same floor the sliver rule already applies to an
+    EMPTY strip, asked here of this one instead.
+
+    **The band must carry no OTHER printed ink, corpus-wide, not just this
+    cell's own.** `writing_box_clear_of_printed_ink` trims ink hanging in
+    from OUTSIDE a box; it deliberately leaves alone a glyph whose own
+    centre lies INSIDE the box, on the reasoning that the sheet printed
+    something in the middle of the blank -- a different defect
+    `field_verdict`'s `PREPRINTED_COVERAGE` rule owns for a plain `field`
+    cell, and one this promotion never reached before F151 measured it:
+    0605-1999 assigns "  For the           Calendar           Fiscal" (a
+    checkbox caption, one wide run with big gaps for the boxes) to a cell
+    well to this one's right, but that run's own glyphs -- "For the" --
+    physically overlap p1c81's rectangle, the same "the row_number's box
+    centre is not where its ink is" shape CLAUDE.md and `assign_points`
+    already document for `printed_box_peers_all_fillable`. `intrusions`
+    checked here, not `coverage`: this band claims to be BLANK, not merely
+    under some threshold of ink, so ANY glyph reaching into it -- from any
+    run, owned by this cell or not -- refuses the candidacy. Corpus-wide
+    this refuses exactly the one cell it exists for and moves nothing else;
+    `inputs_over_printed_text` stays at its own pre-existing 2 forms/5.
+    """
+    rids = cell.get("text_run_ids") or ()
+    runs = [runs_by_id[rid] for rid in rids if rid in runs_by_id]
+    text = "".join(run["text"] for run in runs).strip()
+    if not ROW_NUMBER_TEXT_RE.match(text):
+        return None
+    spans = [span for run in runs for span in _glyph_spans(run)]
+    if not spans:
+        return None
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    ink_x1 = max(span[2] for span in spans)
+    if ink_x1 >= x1:
+        return None
+    if (x1 - ink_x1) < float(metrics["line_width_pt"]):
+        return None
+    if (y1 - y0) < float(metrics["glyph_height_pt"]):
+        return None
+    if ink is not None and ink.intrusions(ink_x1, y0, x1, y1):
+        return None
+    return (ink_x1, y0, x1, y1)
+
+
+class RowNumberWriting:
+    """Which `label` cells a bare row number earns an input beside (F151).
+
+    Mirrors `RuledBlankWriting`'s, `CheckboxSquareWriting`'s and
+    `KnockoutSpecifyWriting`'s own shape: a label cell whose printed content
+    is a row number sharing its row with a fillable field, and whose own
+    paper carries the band `row_number_band` measures, earns a sub-region,
+    not a reclassification of the whole cell. Ownership is per cell -- a
+    cell holds at most one numeral run in this corpus, so there is no
+    multi-claimant case to refuse, the same as `KnockoutSpecifyWriting`'s own
+    "specify" caption and unlike a ruled blank's several underscores or a
+    checkbox pair's two squares.
+
+    "Sharing a row with a fillable field" is asked of the LATTICE's own
+    `kind == "field"`, not of `field_verdict`'s eventual answer for that
+    sibling -- the same layer every sibling promotion in this family reads
+    its own evidence from, and the reason a narrow item-number column stays
+    excluded even where its immediate neighbour is itself later refused (a
+    shaded or pre-printed field): the numeral is still sitting at the head of
+    a row the sheet built to be filled in, which is the fact this class
+    tests for.
+
+    Builds its OWN `PrePrintedInk` off the page's full `runs` -- a second
+    index alongside `FieldPlan`'s own, not a saving of one -- because
+    `row_number_band` needs the corpus-wide "does ANY glyph reach into this
+    band" question `intrusions` answers, not the per-cell question
+    `assign_points` already resolved when it gave this cell exactly its own
+    `text_run_ids`.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, cells: Sequence[dict[str, Any]], page_index: int,
+                 runs: Sequence[dict[str, Any]],
+                 metrics: dict[str, float] | None) -> None:
+        claims: dict[str, tuple[float, float, float, float]] = {}
+        if metrics is None:
+            self._claims = claims
+            return
+        runs_by_id = {run_id(page_index, i): run for i, run in enumerate(runs)}
+        ink = PrePrintedInk(runs)
+        cells_by_row: dict[Any, list[dict[str, Any]]] = {}
+        for cell in cells:
+            cells_by_row.setdefault(cell.get("row"), []).append(cell)
+        for cell in cells:
+            if cell["kind"] != "label" or cell.get("comb"):
+                continue
+            siblings = cells_by_row.get(cell.get("row"), ())
+            if not any(sibling["kind"] == "field" for sibling in siblings
+                       if sibling["id"] != cell["id"]):
+                continue
+            band = row_number_band(cell, runs_by_id, metrics, ink)
+            if band is not None:
+                claims[cell["id"]] = band
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> tuple[float, float, float, float] | None:
+        return self._claims.get(cell_id)
+
+
+def row_number_field_box(cell: dict[str, Any],
+                         band: tuple[float, float, float, float],
+                         face: FieldFace, ink: "PrePrintedInk | None",
+                         ) -> FieldBox | None:
+    """The writing surface a bare row number earns beside it (F151).
+
+    Geometry, not a re-derivation of `field_box`'s, and identical in shape to
+    `knockout_specify_field_box`: the box is the band's own rectangle --
+    `row_number_band` has already measured the paper to the right of the
+    numeral's own ink, clipped to nothing further, because that IS the
+    sheet's own blank paper and the whole reason it was found.
+    `writing_box_clear_of_printed_ink` still runs, the same defensive belt
+    every sibling in this family keeps: nothing here has looked at whether
+    some OTHER run on the page hangs into the band, and that function already
+    answers exactly that question.
+    """
+    if face.line_span_em <= 0.0:
+        return None
+    bx0, by0, bx1, by1 = band
+    tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((bx0, by0, bx1, by1), ink)
+    if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0:
+        return None
+    height = ty1 - ty0
+    size = min(face.size_pt, _floor2(height / face.line_span_em))
+    if size <= 0.0:
+        return None
+    spacing = None
+    if face.size_pt > 0 and abs(face.letter_spacing_pt) > 0:
+        scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
+        if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
+            spacing = scaled
+    inset = (ty0 - float(cell["y0"]), float(cell["x1"]) - tx1,
+             float(cell["y1"]) - ty1, tx0 - float(cell["x0"]))
+    return FieldBox("text", inset, size, round(height, 4), spacing, None, None)
+
+
 # A cell whose own width is mostly pre-printed glyph ink is not a blank the
 # taxpayer can write in, whatever the box detector made of it: it is a table
 # cell whose text lattice.py assigned to a neighbour because the run crosses
@@ -3253,10 +3436,11 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   checkbox_squares: "CheckboxSquareWriting | None" = None,
                   signature_boxes: "SignatureBoxWriting | None" = None,
                   knockout_specify: "KnockoutSpecifyWriting | None" = None,
+                  row_numbers: "RowNumberWriting | None" = None,
                   ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Eight rules, in this order, and the order is the point:
+    Nine rules, in this order, and the order is the point:
 
       * **A `label` cell whose paper carries its own underscore-drawn writing
         line is a field there, whatever else refuses it.** F148/F149: a ruled
@@ -3303,6 +3487,21 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         vocabulary is irrelevant to this one: the two caption vocabularies
         ("specify" vs "for individual"/"for non-individual") share no word,
         measured the same way the signature-box/Bureau split is.
+      * **A `label` cell holding ONLY a bare row number, sharing its row with
+        a fillable field, is a field beside the numeral too.** F151 (P2's
+        row-number rule): the row's own item number -- "1 ", "12", nothing
+        else -- is printed the way BIR always prints one, and the caption
+        cell's remaining paper is the row's description, swallowed the same
+        way a ruled blank's line, a checkbox's square or a "(specify)" band
+        is. `RowNumberWriting` has already resolved which cells qualify and
+        measured the band, bounded by the form's own `line_width_pt` and
+        `glyph_height_pt` (`lattice.min_fillable_line_metrics`, the sliver
+        rule's own metric -- no new constant); see it and
+        `row_number_field_box`. Ordered last of the four `label`-promotion
+        rules because its vocabulary -- pure digits, nothing else in the
+        cell's own text -- cannot overlap any of the other three's (an
+        underscore rule, a checkbox square, a "specify"/"for individual"
+        caption all require ink this rule's own text test refuses).
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
         "." or "%" inside it is decoration within that field, not a label. Only
@@ -3367,6 +3566,9 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     if (cell["kind"] == "label" and knockout_specify is not None
             and knockout_specify.for_cell(cell["id"]) is not None):
         return True, "knockout-specify"
+    if (cell["kind"] == "label" and row_numbers is not None
+            and row_numbers.for_cell(cell["id"]) is not None):
+        return True, "row-number"
     if cell.get("comb"):
         # Left as it stands, on measurement rather than on principle. Exactly
         # one comb-bearing cell in the corpus is >= 70% covered by decorative
@@ -3596,10 +3798,14 @@ class FieldPlan:
                 KnockoutSpecifyWriting(
                     page["cells"], page_index, runs, fills or (), fillable_metrics)
                 if runs is not None else None)
+            row_numbers = (
+                RowNumberWriting(page["cells"], page_index, runs, fillable_metrics)
+                if runs is not None else None)
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
                                                  ruled_blanks, checkbox_squares,
-                                                 signature_boxes, knockout_specify)
+                                                 signature_boxes, knockout_specify,
+                                                 row_numbers)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -3616,6 +3822,9 @@ class FieldPlan:
                 elif reason == "knockout-specify":
                     box = knockout_specify_field_box(
                         cell, knockout_specify.for_cell(cell["id"]), face, ink)
+                elif reason == "row-number":
+                    box = row_number_field_box(
+                        cell, row_numbers.for_cell(cell["id"]), face, ink)
                 else:
                     box = field_box(cell, face, ink)
                 if box is None:
@@ -8923,6 +9132,82 @@ def knockout_specify_corpus_assertions(failures: list[str]) -> None:
            failures)
 
 
+def row_number_corpus_assertions(failures: list[str]) -> None:
+    """Every bare row number beside a fillable field has an input beside it,
+    corpus-wide -- the same shape `ruled_blank_corpus_assertions`,
+    `checkbox_square_corpus_assertions`, `signature_box_corpus_assertions` and
+    `knockout_specify_corpus_assertions` already give F148/F149, F210,
+    F211/F212 and F206 (F151, P2's row-number rule): it re-derives,
+    independently of whatever `batch.py` last emitted, which cells
+    `RowNumberWriting` would admit on EVERY form this checkout has extracted,
+    and fails loudly if any of them lacks a typing surface. A form added to
+    `build/ir` after this check was written is covered the moment it is
+    extracted, by construction -- nothing here names a slug.
+
+    Lives beside `knockout_specify_corpus_assertions` for the identical
+    reason: `build/ir` + `build/layout` + `build/fonts` are exactly what
+    `FieldPlan` and `RowNumberWriting` already need, this module already
+    knows how to read them, and `python3 tools/formgen/emit.py --self-test`
+    is a check an operator runs directly and one of the ten modules
+    `gate.py`'s own `SELF_TEST_MODULES` runs on every gate round.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every bare row number has an input beside it, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    forms_checked = 0
+    claims_checked = 0
+    unfilled: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            unfilled.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        metrics = _min_fillable_line_metrics(ir)
+        runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            page_index = int(page["index"])
+            runs = runs_by_page.get(page_index, ())
+            row_numbers = RowNumberWriting(page["cells"], page_index, runs, metrics)
+            for cell in page["cells"]:
+                band = row_numbers.for_cell(cell["id"])
+                if band is None:
+                    continue
+                claims_checked += 1
+                if fields.of(cell["id"]) is None:
+                    unfilled.append(
+                        f"{slug} {cell['id']}: row-number band claimed, "
+                        f"no typing surface")
+
+    # claims_checked > 0 is load-bearing, not decoration, following every
+    # sibling corpus assertion's own comment on the identical guard: a
+    # discovery mechanism that silently claimed nothing would leave
+    # `unfilled` empty too, and "not unfilled" alone would pass having
+    # verified nothing at all.
+    _check(forms_checked > 0 and claims_checked > 0 and not unfilled,
+           "every bare row number has an input beside it, corpus-wide",
+           f"{forms_checked} form(s), {claims_checked} row-number cell(s) "
+           f"claimed, {len(unfilled)} without a typing surface"
+           + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
+              if unfilled else ""),
+           failures)
+
+
 def _synthetic_comb(cells: int, x0: float, pitch: float,
                     y0: float, height: float,
                     writing: tuple[float, float] | None = None) -> dict[str, Any]:
@@ -10623,6 +10908,9 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
 
     print("knockout-specify corpus check", file=sys.stderr)
     knockout_specify_corpus_assertions(failures)
+
+    print("row-number corpus check", file=sys.stderr)
+    row_number_corpus_assertions(failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)
