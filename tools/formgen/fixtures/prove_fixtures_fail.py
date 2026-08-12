@@ -773,6 +773,125 @@ def prove_row_number(stream: Any) -> int:
     return 1 if failures else 0
 
 
+def mutate_comb_band_reunification() -> None:
+    """Draw the comb-band-reunification row's own notch box.
+
+    Nothing about the row's outer border, the comb's own rail or its
+    dividers moves. A small bordered box appears left of the rail, entirely
+    inside the row -- the row's own DSU component stops being fully
+    occupied (the box's own interior is a hole neither its own borders nor
+    the row's outer ones reach), `no-rectangular-owner` appears (F064's own
+    ledger state), and `lattice._reunify_comb_band` has to decide whether
+    it may still absorb the row into one comb-owning cell. It may not: the
+    notch's own two internal walls match none of the comb's own divider
+    positions. See `prove_comb_band_reunification`, which is where this
+    trips -- like `mutate_row_number`, not one of `extract.py`'s own checks
+    (comb-band-reunification is a `lattice.py` decision with no new
+    extract-level primitive of its own), so it runs the pipeline this
+    module already imports rather than `extract.SELF_TEST_CHECKS`.
+    """
+    fixtures.COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT = 12.0
+
+
+def _comb_band_reunification_subject(
+        root: pathlib.Path) -> dict[str, Any] | None:
+    """The comb-band-reunification row's own comb subject, or None if the
+    fixture does not carry the subject at all (a mutation that deleted the
+    row's own comb rather than adding the notch, which would be a
+    different failure than the one this proves)."""
+    ir = extract.extract(root / "rules.pdf", "FIXTURE-RULES", "0001", None)
+    layout = lattice.build_layout(ir)
+    page = next(p for p in layout["pages"] if int(p["index"]) == 2)
+    for subject in page["comb_subjects"]:
+        bbox = subject["legacy_bbox"]
+        if abs(float(bbox[0]) - 48.24) <= 1.0 and 335 < float(bbox[1]) < 385:
+            return subject
+    return None
+
+
+def prove_comb_band_reunification(stream: Any) -> int:
+    """Prove F064's comb-band-reunification mechanism (W3) can fail, via a
+    real PDF mutation.
+
+    Not one of `extract.py`'s own checks, and deliberately run outside
+    `prove()`'s CASES/CONTRACT_ONLY accounting: comb-band-reunification is
+    entirely a `lattice.py` decision (`lattice._reunify_comb_band`, given a
+    legacy comb subject with no CURRENT rectangular owner, absorbs or trims
+    every current cell its own rails and rows bound, refusing outright the
+    moment an internal wall does not match the comb's own dividers) with no
+    new extract-level primitive of its own, so folding it into that table
+    would misname what it tests: `extract.py` extracts this fixture's
+    rules and fills identically whether the mutation below has run or not,
+    and every one of its own checks agrees. What changes is a later-stage
+    geometric fact neither `extract.SELF_TEST_CHECKS` nor `CONTRACT_ONLY`
+    is about.
+
+    Same method as every case in `CASES` -- mutate the source PDF, rebuild,
+    observe -- carried one stage further than `extract.gather_evidence`
+    reaches: `lattice.build_layout` runs over the rebuilt IR too, the same
+    call `batch.py` chains after extract.py for every real bundle.
+    """
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as scratch:
+        root = pathlib.Path(scratch)
+        fixtures.build_all(root)
+        subject = _comb_band_reunification_subject(root)
+        healthy = (
+            subject is not None and subject.get("state") == "active_resolved"
+            and "no-rectangular-owner"
+            not in " ".join(subject.get("reason_codes") or ()))
+        if not healthy:
+            failures.append(
+                f"the unmutated comb-band-reunification fixture's subject "
+                f"is {subject!r}, not a healthy active_resolved comb; the "
+                f"fixture never carried the property")
+        print(f"  {'unmutated':<12} {'OK' if healthy else 'BROKEN':<5} "
+              f"the row's own comb resolves through the ordinary path, "
+              f"no retained subject at all", file=stream)
+
+    previous = fixtures.COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT
+    try:
+        mutate_comb_band_reunification()
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            fixtures.build_all(root)
+            subject = _comb_band_reunification_subject(root)
+            reason_codes = (
+                subject.get("reason_codes") if subject is not None else None)
+            declined_safely = (
+                subject is not None
+                and subject.get("state") == "retained_unresolved"
+                and reason_codes is not None
+                and "emission-suppressed-no-rectangular-owner"
+                in reason_codes)
+            if not declined_safely:
+                failures.append(
+                    f"the notched comb-band-reunification fixture's "
+                    f"subject is {subject!r}, not a safely-declined "
+                    f"no-rectangular-owner retention; the mutation did not "
+                    f"reproduce F064's own ledger state")
+            print(f"  {'notched':<12} "
+                  f"{'OK' if declined_safely else 'WEAK':<5} "
+                  f"a bordered notch appears inside the row, "
+                  f"COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT 0.0pt -> "
+                  f"{fmt(fixtures.COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT)}pt, "
+                  f"the row's own component stops being fully occupied and "
+                  f"reunification correctly declines to absorb it",
+                  file=stream)
+    finally:
+        fixtures.COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT = previous
+
+    for message in failures:
+        print(f"    FAIL {message}", file=stream)
+    print(f"prove-comb-band-reunification: "
+          f"{'PASS' if not failures else f'{len(failures)} FAILURE(S)'} over "
+          f"1 source-level mutation, run outside extract.py's own "
+          f"CASES/CONTRACT_ONLY accounting "
+          f"(see prove_comb_band_reunification)",
+          file=stream)
+    return 1 if failures else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -780,7 +899,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.parse_args(argv)
     extract_result = prove(sys.stderr)
     row_number_result = prove_row_number(sys.stderr)
-    return 1 if (extract_result or row_number_result) else 0
+    comb_band_reunification_result = prove_comb_band_reunification(sys.stderr)
+    return 1 if (extract_result or row_number_result
+                or comb_band_reunification_result) else 0
 
 
 if __name__ == "__main__":

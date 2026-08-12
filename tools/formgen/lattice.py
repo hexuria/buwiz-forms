@@ -5072,6 +5072,337 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             }
         return cell
 
+    # A component this whole-file's OWN certificate machinery already had
+    # the chance to certify -- `source_owned_comb_frame` runs on every
+    # FULLY OCCUPIED (rectangular) component -- must never be touched here.
+    # `source_owned_comb_frame` returning None on one is an explicit
+    # refusal (a divider landing on an internal seam rather than the outer
+    # frame baseline, an incomplete rail, ...), and reunification exists
+    # only for the shape that certificate cannot even reach: a component
+    # that is NOT fully occupied, so no full-frame proof was ever
+    # attempted. Trusting a legacy-discovered comb's divider positions
+    # alone cannot tell the two apart -- both a real corpus comb and this
+    # self-test's own "lands on the seam, not the baseline" probe agree on
+    # divider count and position -- so the gate has to be this component
+    # fact, not the divider geometry.
+    rectangular_component_roots = {
+        root for root, squares in components.items()
+        if len(squares) == (
+            (max(j for j, _i in squares) - min(j for j, _i in squares) + 1)
+            * (max(i for _j, i in squares) - min(i for _j, i in squares) + 1)
+        )
+    }
+
+    def _rail_local_span(x_position: float) -> list[Interval]:
+        """Same-x rule ink joined by the fused-boundary physical test.
+
+        `is_one_boundary` already treats a paper gap smaller than the sum of
+        two bars' own thicknesses as one drawn stroke interrupted by a
+        printing seam, not a doorway -- a table border transitioning to a
+        thinner in-band comb rail at the identical x (1707-2021's v255/v256:
+        0.48pt border ending at 339.65, 0.24pt comb rail starting 340.13,
+        0.48pt of paper against a 0.72pt thickness sum). Applied along one
+        rail instead of across a fused pair, the same test tells a real
+        break in a wall from a seam within it, without touching the
+        page-wide `near_centre` coverage `GroupGeometry` already computes.
+        """
+        near = sorted(
+            (rule for rule in v_ink
+             if abs(centre(rule) - x_position) <= CLUSTER_TOL_PT),
+            key=lambda rule: (float(rule["y0"]), float(rule["y1"])))
+        merged: list[list[float]] = []
+        for rule in near:
+            y0, y1 = float(rule["y0"]), float(rule["y1"])
+            thickness = float(rule["thickness_pt"])
+            if merged and y0 - merged[-1][1] <= merged[-1][2] + thickness:
+                merged[-1][1] = max(merged[-1][1], y1)
+                merged[-1][2] = max(merged[-1][2], thickness)
+            else:
+                merged.append([y0, y1, thickness])
+        return [(a, b) for a, b, _c in merged]
+
+    def _reunify_comb_band(subject: dict[str, Any]) -> None:
+        """F064 / Route B: let a registered comb band own the paper it spans.
+
+        A comb band the source draws as one printed feature can end up with
+        no owning CURRENT rectangle when a narrow, elsewhere-located rule's
+        own row boundary happens to fall inside the band's own height -- a
+        false cut the band's own ink never asked for (1707-2021 item 8A: the
+        cut sits at y=343.44, induced by two Yes/No checkbox bottom edges
+        whose own ink is x 132.96-145.32 and 190.80-203.16, both entirely
+        left of the comb's own rail).  Reworking the general lattice walk so
+        no line ever over-reaches (Route A) was measured and refused: even
+        at its most permissive tested bound it still fragments this exact
+        band, still regresses an unrelated field on the SAME page, and moves
+        166-751 cells across 13-24 of the 53 forms depending on the bound --
+        not reviewable.  This is the narrow alternative Route A's own
+        finding names: the comb is already correctly recognised (rails,
+        pitch, divider count all measured), so give it a rectangle rather
+        than reworking how every rectangle in the corpus is found.
+
+        The candidate rectangle is bounded only by lattice positions that
+        already exist elsewhere on the page -- no new column or row is
+        invented, and every side is the nearest existing position outside
+        the comb's own divider run, never past the legacy (pre-refinement)
+        cell that originally discovered this comb.  Every current cell the
+        rectangle would touch is either absorbed whole (and must already be
+        empty paper) or trimmed on exactly one side (never split into an
+        L-shape); an internal wall survives inside it only when that wall is
+        one of the comb's own dividers.  Printed text is checked directly
+        against `text_runs`, because runs are not yet bucketed onto `cells`
+        at this point in the pipeline.  Any failed check leaves `cells`
+        untouched and the subject falls through to the existing
+        retained/suppressed path exactly as before.
+        """
+        legacy_comb = subject["comb"]
+        raw_divider_x = legacy_comb.get("divider_x") or ()
+        if len(raw_divider_x) < 1:
+            return
+        divider_x = [float(value) for value in raw_divider_x]
+        comb_y0, comb_y1 = float(legacy_comb["y0"]), float(legacy_comb["y1"])
+        if comb_y1 <= comb_y0:
+            return
+        bx0, bx1 = min(divider_x), max(divider_x)
+        sx0, sy0, sx1, sy1 = (float(value) for value in subject["legacy_bbox"])
+
+        # Only a subject the ordinary path cannot already own needs this at
+        # all: if some current cell already carries this exact legacy bbox,
+        # the standard reconciliation below finds it directly and nothing
+        # here may touch `cells` -- every other legacy subject on the page,
+        # already-resolved or not, must reach the comb-discovery loop with
+        # the SAME cells it would have had without this mechanism.
+        legacy_key = geometry_subject_key(page_index, (sx0, sy0, sx1, sy1))
+        if any(str(cell["subject_key"]) == legacy_key for cell in cells):
+            return
+
+        # The nearest existing position outside the divider run is not
+        # necessarily a rail of THIS band: a page-wide position can sit
+        # between the run and its true rail purely by x/y coincidence with
+        # unrelated ink elsewhere (Route A's own finding, e.g. 1707-2021's
+        # x=246.0, an item-elsewhere checkbox edge 2.09pt inside this band's
+        # own first divider).  Walk outward from the divider run and accept
+        # the first candidate whose OWN locally-joined ink -- never ink
+        # merely sharing its x from anywhere else on the page -- actually
+        # covers the band's height.  A row boundary needs no such proof: it
+        # is never required to be a complete wall (a cell's own border is
+        # already allowed to go unrecorded when its ink is a seam), and
+        # picking the nearest one still leaves the rectangle containing the
+        # band, only ever with a tighter or looser margin above/below it.
+        # Strictly outside the divider run: the run's own outermost divider
+        # can itself be an xl position (the same page-wide x-coincidence
+        # this whole mechanism exists to see past, 1707a-2021's own 24th
+        # divider at x=579.34), and that divider's own ink trivially
+        # "covers" the band's height in the rail-coverage walk below --
+        # it IS the band. `<=`/`>=` here would accept it as its own rail
+        # and produce a rectangle one compartment too narrow.
+        left_pool = sorted(
+            (p for p in xl.positions if sx0 - CLUSTER_TOL_PT <= p < bx0),
+            reverse=True)
+        right_pool = sorted(
+            p for p in xl.positions if bx1 < p <= sx1 + CLUSTER_TOL_PT)
+        top_candidates = [
+            p for p in yl.positions if sy0 - CLUSTER_TOL_PT <= p <= comb_y0]
+        bottom_candidates = [
+            p for p in yl.positions if comb_y1 <= p <= sy1 + CLUSTER_TOL_PT]
+        if not (left_pool and right_pool
+                and top_candidates and bottom_candidates):
+            return
+        rx0 = next(
+            (p for p in left_pool
+             if covers(_rail_local_span(p), comb_y0, comb_y1)),
+            None)
+        rx1 = next(
+            (p for p in right_pool
+             if covers(_rail_local_span(p), comb_y0, comb_y1)),
+            None)
+        if rx0 is None or rx1 is None:
+            return
+        ry0, ry1 = max(top_candidates), min(bottom_candidates)
+        if rx1 - rx0 <= 0.0 or ry1 - ry0 <= 0.0:
+            return
+
+        i0, i1 = xl.positions.index(rx0), xl.positions.index(rx1)
+        j0, j1 = yl.positions.index(ry0), yl.positions.index(ry1)
+        if i1 <= i0 or j1 <= j0:
+            return
+
+        # No wall may survive inside the rectangle unless it is one of the
+        # comb's own dividers (`source_owned_comb_frame`'s own admission
+        # test, applied here to a box that function never sees because its
+        # component is not rectangular).
+        for i in range(i0 + 1, i1):
+            for j in range(j0, j1):
+                if v_at[i][j] and not any(
+                        abs(xl.positions[i] - value) <= CLUSTER_TOL_PT
+                        for value in divider_x):
+                    return
+        for j in range(j0 + 1, j1):
+            for i in range(i0, i1):
+                if h_at[j][i]:
+                    return
+
+        # A rectangle that will not end up owning this subject's OWN full
+        # divider topology must never touch `cells` at all -- otherwise a
+        # cell some OTHER, already-working comb owns (attachment has not
+        # run yet, so `cell.get("comb")` cannot see it here) gets resized
+        # for no gain the moment this band's rectangle happens to overlap
+        # it (2200c-2018 p1c13: a genuine, already-correct 2-slot comb one
+        # step of this band's own divider run away from a DIFFERENT,
+        # 4-slot legacy subject).  Ask the current pass's own divider
+        # recognition directly, the same evidence `assign_comb_anchors`
+        # will use, rather than trust that recognition to undo an
+        # unhelpful mutation after the fact.
+        band_divider_x = sorted(
+            centre(divider) for divider in dividers
+            if rx0 + JOIN_EPSILON_PT < centre(divider) < rx1 - JOIN_EPSILON_PT
+            and comb_y0 - CLUSTER_TOL_PT
+            <= (float(divider["y0"]) + float(divider["y1"])) / 2.0
+            <= comb_y1 + CLUSTER_TOL_PT
+        )
+        if not same_boundary_topology(band_divider_x, divider_x):
+            return
+
+        absorbed: list[dict[str, Any]] = []
+        trims: list[tuple[dict[str, Any], tuple[int, int, int, int]]] = []
+        for cell in cells:
+            cx0, cy0 = float(cell["x0"]), float(cell["y0"])
+            cx1, cy1 = float(cell["x1"]), float(cell["y1"])
+            if (cx1 <= rx0 + JOIN_EPSILON_PT or cx0 >= rx1 - JOIN_EPSILON_PT
+                    or cy1 <= ry0 + JOIN_EPSILON_PT
+                    or cy0 >= ry1 - JOIN_EPSILON_PT):
+                continue
+            if cell.get("comb") is not None:
+                return
+            if int(cell["_component_root"]) in rectangular_component_roots:
+                # This cell's own DSU component was fully occupied, so
+                # `source_owned_comb_frame` already had its chance to own
+                # this exact band and either did (a certificate, refused
+                # just above) or explicitly declined it (a divider that
+                # only looks like the comb's own, e.g. one landing on an
+                # internal seam rather than the outer frame baseline).
+                # Reunification exists for the shape that certificate
+                # cannot reach at all -- a NON-rectangular component --
+                # never for one it already ruled on.
+                return
+            if cell.get("comb_frame_certificate") is not None:
+                # A cell the row-run walk already certified as owning its
+                # OWN framed comb (`source_owned_comb_frame`) is never
+                # paper this mechanism may absorb, whole or in part --
+                # every other check here is about proving this rectangle
+                # is safe to claim, and that proof already exists, for a
+                # different band, on this cell.
+                return
+            left_out = cx0 < rx0 - JOIN_EPSILON_PT
+            right_out = cx1 > rx1 + JOIN_EPSILON_PT
+            top_out = cy0 < ry0 - JOIN_EPSILON_PT
+            bottom_out = cy1 > ry1 + JOIN_EPSILON_PT
+            diffs = sum((left_out, right_out, top_out, bottom_out))
+            if diffs == 0:
+                absorbed.append(cell)
+                continue
+            if diffs != 1:
+                return
+            ci0 = int(cell["col"])
+            ci1 = int(cell["col"] + cell["col_span"])
+            cj0 = int(cell["row"])
+            cj1 = int(cell["row"] + cell["row_span"])
+            if left_out:
+                remainder = (cj0, cj1, ci0, i0)
+            elif right_out:
+                remainder = (cj0, cj1, i1, ci1)
+            elif top_out:
+                remainder = (cj0, j0, ci0, ci1)
+            else:
+                remainder = (j1, cj1, ci0, ci1)
+            trims.append((cell, remainder))
+
+        if not absorbed and not trims:
+            return
+
+        # No printed ink may be swallowed.  Text is not yet bucketed onto
+        # `cells` at this point in the pipeline, so `text_runs` is checked
+        # directly rather than through a cell's own `text_run_ids`.
+        for run in text_runs:
+            run_x0, run_x1 = float(run["x0"]), float(run["x1"])
+            run_y0, run_y1 = float(run["y0"]), float(run["y1"])
+            run_cx = (run_x0 + run_x1) / 2.0
+            run_cy = (run_y0 + run_y1) / 2.0
+            if not (rx0 - JOIN_EPSILON_PT < run_cx < rx1 + JOIN_EPSILON_PT
+                    and ry0 - JOIN_EPSILON_PT < run_cy < ry1 + JOIN_EPSILON_PT):
+                continue
+            if (run_x1 > rx0 + JOIN_EPSILON_PT
+                    and run_x0 < rx1 - JOIN_EPSILON_PT
+                    and run_y1 > ry0 + JOIN_EPSILON_PT
+                    and run_y0 < ry1 - JOIN_EPSILON_PT):
+                return
+
+        # Tile check: the absorbed cells plus every trim's own rectangle-side
+        # slice must exactly cover the rectangle's area -- proof that this
+        # never claims paper another cell still owns and never leaves a hole
+        # the new cell cannot see.
+        area = (rx1 - rx0) * (ry1 - ry0)
+        covered = sum(
+            (cell["x1"] - cell["x0"]) * (cell["y1"] - cell["y0"])
+            for cell in absorbed
+        )
+        for cell, _remainder in trims:
+            ix0 = max(float(cell["x0"]), rx0)
+            iy0 = max(float(cell["y0"]), ry0)
+            ix1 = min(float(cell["x1"]), rx1)
+            iy1 = min(float(cell["y1"]), ry1)
+            covered += (ix1 - ix0) * (iy1 - iy0)
+        if abs(covered - area) > JOIN_EPSILON_PT:
+            return
+
+        nonlocal next_partition_id
+        # Replace by identity, never by dict equality: two blank cells can
+        # otherwise compare equal enough for `list.index`/`list.remove` to
+        # pick the wrong one.
+        absorbed_ids = {id(cell) for cell in absorbed}
+        trim_map = {id(cell): remainder for cell, remainder in trims}
+        replaced: list[dict[str, Any]] = []
+        for cell in cells:
+            if id(cell) in absorbed_ids:
+                continue
+            if id(cell) in trim_map:
+                rj0, rj1, ri0, ri1 = trim_map[id(cell)]
+                trimmed_box = {
+                    "j0": rj0, "j1": rj1, "i0": ri0, "i1": ri1,
+                    "rectangular": True,
+                    "component_root": cell["_component_root"],
+                }
+                replaced.append(materialise_cell(trimmed_box, cell["id"]))
+                continue
+            replaced.append(cell)
+        cells[:] = replaced
+
+        new_id = f"p{page_index}c{next_partition_id}"
+        next_partition_id += 1
+        new_box = {
+            "j0": j0, "j1": j1, "i0": i0, "i1": i1,
+            "rectangular": True,
+            "component_root": -1,
+        }
+        new_cell = materialise_cell(new_box, new_id)
+        new_cell["comb_band_reunification"] = {
+            "legacy_subject_key": subject["subject_key"],
+            "rect": [q(rx0), q(ry0), q(rx1), q(ry1)],
+            "absorbed_cell_ids": sorted(cell["id"] for cell in absorbed),
+            "trimmed_cell_ids": sorted(cell["id"] for cell, _r in trims),
+        }
+        # `cells` is reading order (top to bottom, then left to right) --
+        # the same key `boxes.sort` already established it by -- and DOM
+        # order IS focus order (F209), so appending at the end would tab
+        # this band in dead last regardless of where on the page it prints.
+        # Insert at the position that key already puts it at.
+        insert_at = len(cells)
+        new_key = (new_cell["y0"], new_cell["x0"])
+        for index, existing in enumerate(cells):
+            if (existing["y0"], existing["x0"]) > new_key:
+                insert_at = index
+                break
+        cells.insert(insert_at, new_cell)
+
     legacy_cells = [
         materialise_cell(
             box, f"p{page_index}c{box['legacy_index']}",
@@ -5171,6 +5502,9 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             "final_candidate": final_candidate,
             "has_final_support": has_distinct_final_support,
         })
+
+    for subject in legacy_subjects:
+        _reunify_comb_band(subject)
 
     anchor_buckets, _unplaced_anchors, _ambiguous_anchors = assign_comb_anchors(
         cells, dividers, xl, yl, final_paint)
@@ -5466,6 +5800,45 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             return None
         return owner
 
+    def comb_band_reunification_owner(
+            subject: dict[str, Any]) -> dict[str, Any] | None:
+        """The reunified cell this subject's own comb band now owns, if any.
+
+        `_reunify_comb_band` mutates `cells` before this reconciliation
+        runs, but a reunified cell's own bbox is the comb band's own
+        rectangle, not the legacy subject's wider mixed-cell bbox, so
+        `output_by_subject` cannot find it by identity.  Find it instead by
+        the same kind of evidence `source_certified_replacement_owner`
+        already requires for a different-identity substitute: a resolved
+        comb, inside the legacy subject's own bbox, whose divider topology
+        is this subject's own.
+        """
+        legacy_comb = subject["comb"]
+        legacy_divider_x = [
+            float(value) for value in legacy_comb.get("divider_x") or ()]
+        if not legacy_divider_x:
+            return None
+        sx0, sy0, sx1, sy1 = (
+            float(value) for value in subject["legacy_bbox"])
+        candidates = [
+            candidate for candidate in cells
+            if candidate.get("comb") is not None
+            and (candidate["comb"].get("resolution") or {}).get("status")
+            == "resolved"
+            and str(candidate["subject_key"]) not in legacy_keys
+            and float(candidate["x0"]) >= sx0 - CLUSTER_TOL_PT
+            and float(candidate["x1"]) <= sx1 + CLUSTER_TOL_PT
+            and float(candidate["y0"]) >= sy0 - CLUSTER_TOL_PT
+            and float(candidate["y1"]) <= sy1 + CLUSTER_TOL_PT
+            and same_boundary_topology(
+                [float(value)
+                 for value in candidate["comb"].get("divider_x") or ()],
+                legacy_divider_x)
+        ]
+        if len(candidates) != 1:
+            return None
+        return candidates[0]
+
     subject_ledger: list[dict[str, Any]] = []
     inference_ledger: list[dict[str, Any]] = []
     legacy_keys = {
@@ -5556,6 +5929,27 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                     "state": "active_resolved",
                     "reason_codes": [],
                     "cells": int(owner_comb["cells"]),
+                    "blocks_gate": False,
+                })
+                continue
+            reunified_owner = (
+                comb_band_reunification_owner(subject)
+                if cell is None else None)
+            if reunified_owner is not None:
+                reunified_comb = reunified_owner["comb"]
+                legacy_keys.add(str(reunified_owner["subject_key"]))
+                subject_ledger.append({
+                    "subject_key": reunified_owner["subject_key"],
+                    "legacy_cell_id": reunified_owner["id"],
+                    "legacy_bbox": [
+                        reunified_owner["x0"], reunified_owner["y0"],
+                        reunified_owner["x1"], reunified_owner["y1"],
+                    ],
+                    "cell_id": reunified_owner["id"],
+                    "mapped_partition_cell_ids": [reunified_owner["id"]],
+                    "state": "active_resolved",
+                    "reason_codes": [],
+                    "cells": int(reunified_comb["cells"]),
                     "blocks_gate": False,
                 })
                 continue
