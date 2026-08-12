@@ -133,6 +133,32 @@ LEAN_STROKE_PT = 0.44
 UNMAPPED_CODE = 0xA7
 UNMAPPED_GLYPH_NAME = "gexotic"
 
+# F064's comb-band-reunification shape (W3, `lattice._reunify_comb_band`): a
+# bordered row whose comb only partly reaches the row's own top rule -- the
+# comb's own left rail is drawn from mid-row down, exactly as 1707-2021's own
+# v255/v256 continue an existing border rather than hanging free -- so the
+# row's own DSU component is genuinely non-rectangular only when something
+# ELSE inside the row also fails to reach a wall (1707-2021's own item 8/9
+# checkboxes). `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT` is that something: a
+# small bordered notch box, left of the comb, entirely inside the row. At
+# 0.0 (every built fixture) nothing is drawn there, the row's own component
+# stays rectangular, `source_owned_comb_frame` owns it directly, and the
+# comb resolves through the ordinary path with no `retained_unresolved`
+# subject at all. `prove_fixtures_fail.py`'s `mutate_comb_band_reunification`
+# sets it to 12.0, drawing the notch: the row's own component becomes
+# non-rectangular, `no-rectangular-owner` appears (F064's own ledger state),
+# and `lattice._reunify_comb_band` correctly DECLINES to absorb it -- the
+# notch's own two internal walls match none of the comb's own divider
+# positions, which is exactly the "never swallow paper this mechanism does
+# not understand" refusal the mechanism exists to make.
+COMB_BAND_REUNIFICATION_ROW_WIDTH_PT = 300.0
+COMB_BAND_REUNIFICATION_ROW_HEIGHT_PT = 40.0
+COMB_BAND_REUNIFICATION_RAIL_INSET_PT = 60.0
+COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT = 15.0
+COMB_BAND_REUNIFICATION_SLOTS = 4
+COMB_BAND_REUNIFICATION_BAND_TOP_INSET_PT = 25.0
+COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT = 0.0
+
 
 def gray(value: float) -> tuple[float, float, float]:
     """A neutral RGB triple. to_gray() collapses it back to this exact value."""
@@ -346,6 +372,52 @@ def row_number_row(page: fitz.Page, x0: float, y0: float) -> None:
                      fontname="helv", fontsize=ROW_NUMBER_FONT_SIZE_PT)
 
 
+def comb_band_reunification_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F064's shape (W3): a comb band whose row is genuinely non-rectangular
+    only when something ELSE in the row also fails to reach a wall.
+
+    `x0,y0` anchors a bordered row. The comb's own left rail is drawn only
+    from `COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT` down -- like
+    1707-2021's own v255/v256, which continue an EXISTING border rather
+    than hang free, so `split_verticals` classifies it as a border (a
+    rail), never a hanging comb divider. With
+    `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT` at 0 (every built fixture)
+    nothing else is drawn left of the rail: the row's own component stays
+    rectangular, `source_owned_comb_frame` owns it directly, and the comb
+    resolves through the ordinary path. `prove_fixtures_fail.py`'s
+    `mutate_comb_band_reunification` draws a small bordered notch there
+    instead, entirely inside the row -- the row's own component becomes
+    non-rectangular (a hole neither the notch's own borders nor the row's
+    outer ones reach), F064's own `no-rectangular-owner` ledger state
+    appears, and `lattice._reunify_comb_band` must correctly decline it:
+    the notch's own two internal walls match none of the comb's own
+    divider positions.
+    """
+    x1 = x0 + COMB_BAND_REUNIFICATION_ROW_WIDTH_PT
+    y1 = y0 + COMB_BAND_REUNIFICATION_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), thickness, BLACK, pieces=2)
+
+    if COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT > 0.0:
+        notch = COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT
+        merged_box(
+            page,
+            fitz.Rect(x0 + 10.0, y0 + 4.0, x0 + 10.0 + notch,
+                     y0 + 4.0 + notch * 0.6),
+            thickness, BLACK, pieces=1)
+
+    comb_x0 = x0 + COMB_BAND_REUNIFICATION_RAIL_INSET_PT
+    step = (x1 - comb_x0) / COMB_BAND_REUNIFICATION_SLOTS
+    band_y0 = y0 + COMB_BAND_REUNIFICATION_BAND_TOP_INSET_PT
+    for index in range(1, COMB_BAND_REUNIFICATION_SLOTS):
+        divider_x = comb_x0 + index * step
+        bar(page, divider_x, band_y0, divider_x + THICKNESSES_PT[0], y1,
+            BLACK)
+
+    rail_y0 = y0 + COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT
+    bar(page, comb_x0, rail_y0, comb_x0 + thickness, y1, BLACK)
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -422,6 +494,10 @@ def build_rules() -> fitz.Document:
     # F151's row-number shape (P2): placed clear of the grey band above
     # (which ends at y240).
     row_number_row(second, 48, 280)
+
+    # F064's comb-band-reunification shape (W3): placed clear of the
+    # row-number row above (which ends at y304).
+    comb_band_reunification_row(second, 48, 340)
     return doc
 
 

@@ -319,8 +319,35 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # sides and are counted by reason in `writing_x_rails`; 0 surrender to a
 # degenerate width, and the narrowest resulting outer compartment corpus-wide is
 # 6.12pt (1604CF p1c30). `EXPECTED_HTML_STRUCTURE_SHA256` moves on all 53, below.
+#
+# Re-pinned 2026-08-12 (W3, F064): `lattice.py` gains `_reunify_comb_band`,
+# `comb_band_reunification_owner` and `_rail_local_span`. When the general
+# cell walk cannot find one rectangular owner for a legacy comb subject, the
+# new mechanism absorbs or trims exactly the current cells that subject's own
+# rails and rows bound into one new cell -- never inventing a lattice
+# position, never touching a cell whose own DSU component was already fully
+# occupied (so a `source_owned_comb_frame` certificate or refusal is never
+# second-guessed), never claiming a wall that is not one of the comb's own
+# dividers, printed ink, or a cell an already-resolved comb owns. Reworking
+# the general lattice walk instead (bounding a line's reach by the ink that
+# induces it) was measured and refused: even at its most permissive tested
+# bound it still fragments 1707-2021's own item 8A, still regresses an
+# unrelated field on the same page, and moves 166-751 cells across 13-24 of
+# the 53 forms depending on the bound -- not reviewable. Three documents
+# move (see `EXPECTED_HTML_STRUCTURE_SHA256` and
+# `EXPECTED_RETAINED_SUBJECTS_BY_SLUG`, both below); no lattice constant,
+# tolerance or comb field moves, and `lattice.py --self-test` (2551Q) passes
+# unchanged (489/264 slots).
+#
+# Re-pinned again the same day: the new cell was appended to `cells` --
+# reading order (F209's own key, `(y0, x0)`) -- so it tabbed dead last on
+# the page instead of where it prints. `tab_check.py` caught it directly
+# (1707-2021 and 1707a-2021 both `red-order=25`, one press per slot); the
+# new cell is now inserted at its own sorted position instead. Both forms
+# re-pin below with a second byte change; 2551m-2002's cell already landed
+# in its correct sorted position and its own bytes are unchanged.
 LATTICE_PRODUCER_SHA256 = (
-    "a3e03a707e7900331889941ad39400699289cd70dd3d83c2fc8d92012ba12a48"
+    "a335f43015de1eca5cfa375b6b4d17baf5303b8663f45e5caba154624738c0c5"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -581,8 +608,24 @@ AUDIT_DEPENDENCY_SHA256 = {
     # corpus uses. No rule field, comb census, extract.py check count or
     # tolerance moves; `build/ir/*.ir.json` for the seven REAL pinned PDFs is
     # untouched (only the synthetic FIXTURE-RULES pin moved).
+    #
+    # Re-pinned 2026-08-12 (W3, F064), for the identical reason as the
+    # row-number entry above: comb-band-reunification is entirely a
+    # `lattice.py` decision with no new extract-level primitive, so
+    # `extract.SELF_TEST_CHECKS` stays at 24 checks and
+    # `prove_fixtures_fail.py`'s own CASES/CONTRACT_ONLY accounting is
+    # untouched (see `prove_comb_band_reunification`, deliberately run
+    # outside it). What moved this file's own bytes is
+    # `FIXTURE_FIXTURES["FIXTURE-RULES"]`'s sha256:
+    # `fixtures/rules.pdf` gained a new shape
+    # (`make_fixtures.comb_band_reunification_row`, a bordered row whose
+    # comb's own rail is drawn only from mid-row down) so the mechanism has
+    # a source-level mutation to fail. No rule field, comb census,
+    # extract.py check count or tolerance moves; `build/ir/*.ir.json` for
+    # the seven real pinned PDFs is untouched (only the synthetic
+    # FIXTURE-RULES pin moved).
     "tools/formgen/extract.py": (
-        "49e7eab4df043573b680e5a994ba1d6bc084680efdd3f4a0a8f7becc14929468"
+        "effd6e07f6c2ed2c09b04ca9c41bc76da0dbaec430b583d2b3b0f93dfa8828e9"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -843,14 +886,35 @@ if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
 # EXPECTED_RETAINED_SUBJECTS (derived below) moves 33 -> 34 with it.
 # EXPECTED_COMBS_BY_SLUG["2000-dst-2018"] does NOT move (131, unchanged): the
 # subject stays in the ledger, only its resolution state does.
+#
+# Re-measured 2026-08-12 (W3, F064): `lattice._reunify_comb_band` gives a
+# comb band its own rectangle -- absorbing or trimming exactly the current
+# cells its own rails and rows bound -- when the general cell walk could not
+# find one rectangular owner for it but doing so claims no paper the comb's
+# own dividers do not own. 1707-2021's item 8A ("If yes, please specify"),
+# F064's own named defect, is entirely resolved: its ONE
+# `emission-suppressed-no-rectangular-owner` subject (a 25-slot comb whose
+# band the cell walk split at a false row cut a checkbox's own bottom edge
+# induced, then fragmented further at a page-wide x-coincidence between its
+# own dividers and unrelated ink elsewhere) moves `retained_unresolved` ->
+# `active_resolved` and leaves this table (1 -> 0, absent). Generalising the
+# SAME evidence, never special-cased to this form, resolves two more
+# subjects the general mechanism reaches by the identical proof: 1707a-2021's
+# own matching item-8A shape (2 -> 1) and one of 2551m-2002's four subjects,
+# a 4-slot comb sharing the same false-cut shape (4 -> 3). The other 30
+# retained subjects in this table are untouched -- each one either already
+# has an exact current-cell owner (nothing to reunify) or the candidate
+# rectangle would cross a wall not among the comb's own dividers, absorb a
+# cell a `source_owned_comb_frame` certificate or an already-resolved comb
+# already owns, or swallow printed ink -- and reunification correctly
+# declines all of them. EXPECTED_RETAINED_SUBJECTS moves 33 -> 30.
 EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "0605-1999": 1,
     "1600wp-2010": 2,
     "1604cf-2008": 1,
     "1604f-2018": 1,
     "1606-2018": 1,
-    "1707-2021": 1,
-    "1707a-2021": 2,
+    "1707a-2021": 1,
     "1800-2018": 1,
     "2000-ot-2018": 2,
     "2200a-2020": 2,
@@ -860,7 +924,7 @@ EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "2200s-2018": 1,
     "2200t-2022": 2,
     "2550m-2007": 4,
-    "2551m-2002": 4,
+    "2551m-2002": 3,
     "2553-1999": 2,
 }
 EXPECTED_RETAINED_SUBJECTS = sum(EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
@@ -1886,6 +1950,21 @@ HTML_ALLOWED_TAGS = frozenset({
 # through the existing gate. `row_number_corpus_assertions` now asserts BOTH
 # directions -- unshaded claims must have an input, shaded claims must not --
 # so the exclusion cannot rot into a silent skip.
+#
+# Re-pinned 2026-08-12 (W3, F064): `lattice._reunify_comb_band` gives a comb
+# band its own rectangle when the general cell walk found none, claiming only
+# paper the comb's own dividers own. Three documents move: 1707-2021's item
+# 8A comb (F064's own named defect, 25 slots), 1707a-2021's matching shape
+# (same 25 slots) and one of 2551m-2002's four retained subjects (4 slots).
+# The other 50 documents are byte-identical. Input count 45,487 -> 45,541
+# (+54: 25+25+4). Comb censuses: EXPECTED_COMBS/EXPECTED_COMBS_BY_SLUG do NOT
+# move (4,587; no ledger entry is added or removed, three existing ones
+# change state and subject_key); EXPECTED_RETAINED_SUBJECTS_BY_SLUG moves
+# 33 -> 30 (1707-2021 leaves the table, 1707a-2021 2 -> 1, 2551m-2002 4 -> 3),
+# measured directly: `comb_subjects_active` 4,554 -> 4,557,
+# `comb_subjects_retained_unresolved` 33 -> 30. `inputs_over_printed_text`
+# and `comb_slots_match_printed` are unmoved (neither touches a cell either
+# assertion's own offender list names).
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "a0cf7a393661f5a841e1372495b9626af3d8d59ff232fe1bdb99f106ad2e92be",
     "0619e-2018": "837900d7e2ac57faf078290d18666c8f5ffeaee47cc0b956583a5ce3c16b1db9",
@@ -1918,8 +1997,8 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1702q-2018": "2f7180e185e1b438430bcaf2e34196e96152e71c875cf53a1c9bd3a91e4a174f",
     "1702rt-2018c": "3af327f05480a8503aebb6ab6d1895ac2f867ec43ed8b5e1b1c8b627b7a6c9d9",
     "1706-2018": "3f1b30b8703c80de4b82bd97f566fd9e32769266fd096afb9870b78882cb6bf6",
-    "1707-2021": "1b0c0291c7f7c8567c4839b825bfc3b8b14930a292a44b2ba82ca06e08695bab",
-    "1707a-2021": "016fcf17f89fbd5d12f181f43963e1539e4bbe1e371fcc86cfde725f62046f41",
+    "1707-2021": "5cd686c9e856e4c5ec13233962ce0fbe8e9e1aade7f0de393e43c033d953d7ac",
+    "1707a-2021": "7c6c1098c950f6cf4516586de73c4a32714115da75505208ec1b887034696fb4",
     "1709-2020": "d641617ad3f958b78c47ab650f50888cc9e6cd5f2c0948723c34fd53fbbf3139",
     "1800-2018": "9ce67ab3b9002ba253ee8dc335142c419c45fb883b3665b92367159ea2b1d00f",
     "1801-2018": "903988607f9a6aa0658bbd5b295021c67ce513c0c99934a2c919096833c6fbf3",
@@ -1936,7 +2015,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2550-ds-2025": "71540821b15d77f68aae33504ffb6318e3fba6c9f876dbb90960af08cd36addb",
     "2550m-2007": "f094117787276fda7ce615299088ac30f860d6f5a98899f1ea71078273ca79c1",
     "2550q-2024": "b914266a71f01fcf125a087d80b3902a66c7c75ab2e1135a600208d7bea356db",
-    "2551m-2002": "a77b455244b1a67e22b404363078a610a6f77eb8044264333e48e7cd1bc81c80",
+    "2551m-2002": "a0757418057108b6d5d45403da6563e955118d4bc82052e4a17e28055e87799f",
     "2551q-2018": "f061a98a5863c0d41ec1b23ccf623f7e9d9833a4610308b9f6a781a14f980c7a",
     "2552-2018": "bd0b75cc8531598a2b9e7471ce2d8dfb1b8bec6b8759e747f8b70c1f2abd6d1c",
     "2553-1999": "eab2dc243a11b17db3a6d8c7672267d16362f302aa69990bf3e4beeb9ce9ca94",

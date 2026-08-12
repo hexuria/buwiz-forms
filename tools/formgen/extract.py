@@ -2487,10 +2487,11 @@ FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # Paper, determinism, merged runs drawn as short bars plus corner squares,
     # all four thicknesses, both decorative greys, a white knockout, a
     # fill+stroke drawing, a checkbox square (T5a, F210), a signature box
-    # (T5b+T5d, F211/F212) and a comb band.
+    # (T5b+T5d, F211/F212), a comb band, a row-number row (F151) and a
+    # comb-band-reunification row (W3, F064).
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "4e2e323d0a41a874d43adbd6becd1222c269da1b7b8290046dd2a52fc9c98863"),
+        "50dbd9c58cf4617a1a997558345d99aa54280be8ec2e6aca895f2f95bffefca4"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",

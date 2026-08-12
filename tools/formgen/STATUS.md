@@ -11,6 +11,167 @@ that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
 
+## W3 — a comb band gets a rectangle instead of the general walk getting a new rule (F064 closed)
+
+**Measured 2026-08-12, worktree `wt/w3-lattice`, base `986fe767`.** F064: item
+8A's 25-slot comb on 1707-2021 page 1 was correctly recognised (rails, pitch,
+divider count all measured) but suppressed with zero inputs, because the
+general cell walk cuts its band at y=343.44 -- a false row boundary two Yes/No
+checkbox bottom edges (x 132.96-145.32 and 190.80-203.16, both entirely left of
+the comb's own rail at x~233.7) induce despite neither ever reaching the
+comb's own x-range, and a page-wide x-coincidence between the comb's own
+dividers and unrelated ink elsewhere then fragments what the false cut leaves
+into eight further pieces.
+
+**Route A (rework the general lattice walk so no line's reach exceeds the ink
+that induces it) was measured corpus-wide and refused, honestly, per the
+package's own abort clause.** A candidate fix bounding a lattice line's
+coverage span to ink genuinely local to its own defining rules -- rather than
+any same-centre ink anywhere on the page, the mechanism this whole defect
+traces to -- was tested at three tolerances. Even at the most permissive
+bound tested (30pt): 166 cells move across 13 of the 53 forms, and item 8A
+still does not resolve (the false row cut and the row-run "exact span match to
+stack" requirement are a second, independent obstacle the coverage fix alone
+does not reach). At the strictest bound (0pt, near-total): 751 cells move
+across 24 forms, AND it regresses an unrelated field on 1707-2021's own page 1
+(a 12-slot money field collapses from three cells into one non-functional
+`mixed` cell). Both numbers dwarf F151's own 49-cell threshold for "too large
+to review at any comparable scale." Route A is abandoned on this evidence, not
+attempted.
+
+**Route B -- named by the same finding -- ships.** `lattice._reunify_comb_band`
+gives a legacy comb subject with no current rectangular owner its own
+rectangle: bounded only by lattice positions that already exist elsewhere on
+the page (a rail's true position is found by walking outward from the comb's
+own divider run and accepting the first candidate whose OWN locally-joined
+ink -- never ink merely sharing its x from anywhere else on the page, Route
+A's own bug turned into a discriminator -- actually covers the band's height),
+never inventing a new column or row. Every current cell the rectangle would
+touch is either absorbed whole (verified empty: no comb, no printed ink, no
+`source_owned_comb_frame` certificate) or trimmed on exactly one side (never
+split into an L-shape); the resulting rectangle must not cross any wall that
+is not one of the comb's own dividers, must not swallow printed ink (checked
+directly against `text_runs`, since text is not yet bucketed onto `cells` at
+this point in the pipeline), and -- the load-bearing guard a synthetic
+self-test found -- must never touch a cell whose own DSU component was
+already fully occupied, because `source_owned_comb_frame` already had the
+chance to certify or explicitly refuse that exact shape and reunification
+must never re-litigate a refusal it cannot see the reasoning behind. A final
+topology pre-check (`same_boundary_topology` against the current pass's own
+independently-anchored dividers, not the legacy comb's own list, which can
+itself include a rail miscounted as a divider) refuses any candidate that
+will not end up owning the subject's own exact divider set -- caught live
+mid-package: an early draft merged 2200C-2018's `p1c13`, a genuine
+already-correct 2-slot comb one divider-run-step from a different 4-slot
+subject, for zero gain.
+
+**1707-2021 item 8A verified in a real browser, the user's own method:**
+`page.goto(file://…)`, Tab from the page's first input, typed and read back
+in the first, middle and last compartment. All **25 compartments reachable**,
+at tab presses **349 through 373** (25 consecutive presses, one per slot, in
+order 0-24). The same method on the two forms Route B generalises to
+(**never special-cased to 1707-2021**): 1707a-2021's own matching item-8A
+shape, 25/25 compartments at presses 507-531; 2551m-2002's own 4-slot comb
+(`p1c103`, a different retained subject from the same form's own four), 4/4
+compartments at presses 12-15.
+
+**Full corpus delta, measured on the tree the corpus diff and the referee
+both scored: exactly 3 forms change, 50 are byte-identical.** 1707-2021
+(item 8A, 25 slots), 1707a-2021 (its own matching shape, 25 slots) and one of
+2551m-2002's four retained subjects (a 4-slot comb, `p1c103`). Every other
+retained subject on every other form is left exactly as it was: each fails
+one of reunification's own checks (already has a current-cell owner with a
+different defect; the candidate rectangle would cross a wall not among the
+comb's own dividers; would absorb a cell a certificate or an already-resolved
+comb owns; or would swallow printed ink). Zero regressions: comb-cell and
+comb-slot counts move on no other form, corpus-wide, verified by re-deriving
+`lattice.build_layout` over every one of the 53 cached IRs and diffing
+against the committed `build/layout/*.json` cell-for-cell.
+
+**Census, measured directly (not from the assertion suite, which does not
+carry these numbers):** `EXPECTED_COMBS`/`EXPECTED_COMBS_BY_SLUG` do **not**
+move -- **4,587**, per-slug unchanged on all three forms -- because
+reunification never adds or removes a ledger entry, it changes three
+existing ones' state and subject_key. `comb_subjects_active`
+**4,554 -> 4,557**; `comb_subjects_retained_unresolved` **33 -> 30**
+(1707-2021 leaves `EXPECTED_RETAINED_SUBJECTS_BY_SLUG` entirely, 1 -> 0;
+1707a-2021 2 -> 1; 2551m-2002 4 -> 3 -- **not** the "33 -> 32" the package
+brief itself projected for a single-subject fix, because the mechanism is
+corpus-general by construction and two more real, equally-evidenced
+resolutions were the honest result of measuring it that way rather than
+hand-limiting it to the named form). Input count: **+54** (25 + 25 + 4, one
+`<input>` per newly-owned comb slot, the same identity every prior package in
+this file measures its own delta by).
+
+**Assertions, measured via a full `audit.py --assertions-only` run (53 forms,
+verified not truncated): unmoved.** `inputs_over_printed_text` **2 forms / 5
+offenders** (1604cf-2008, 2316-2021) -- byte-identical to the pre-existing
+baseline. `comb_slots_match_printed` **10 forms / 19 offenders** -- also
+byte-identical; this comb was suppressed, not previously counted as an
+offender in that assertion either way, so its resolution moves neither
+number. Every other assertion (`money_boxes_have_inputs`,
+`rules_below_guide_cut`, `run_colour_matches_ir`,
+`reflow_rate_without_description`, `image_transform_applied`,
+`no_invented_codepoints`, `inputs_span_no_printed_divider`,
+`printed_box_peers_all_fillable`) holds at 0 offenders, all 53 forms.
+
+**Corpus tab-walk 53/53 green**, including both re-checks after a bug this
+package found and fixed in itself: the reunified cell was first `cells.append`-ed
+at the END of the list, so it tabbed dead last on the page instead of where it
+prints -- `tab_check.py` caught it directly as `red-order=25` on both
+1707-2021 and 1707a-2021 (one press per slot in the wrong position). `cells`
+is reading order (`(y0, x0)`, the same key F209 already established for
+this exact reason); the new cell is now **inserted** at its own sorted
+position instead of appended, and both forms are 53/53 green with
+`red-order=0` after. **Blue (`vacant`) census: 108 -> 106** (measured via a
+fresh `tab_check.py --json` run over the corpus) -- **fell, did not rise**:
+exactly the two forms whose item-8A comb used to be a "printed compartments,
+zero inputs" blue box and now is not (1707-2021 and 1707a-2021 both measure
+0 vacant after; 2551m-2002 still measures 3, its own three untouched
+retained subjects, unmoved).
+
+**Self-tests: all pass.** `extract.py --self-test` (7 pinned PDFs, 24 checks,
+unmoved). `lattice.py --self-test --ir build/ir/2551q-2018.ir.json` (489/264
+slots, unmoved -- 2551Q carries none of this package's own subjects).
+`emit.py --self-test` (every corpus-wide assertion, including the five other
+producers' own comb/field mechanisms, pass unchanged). `comb_referee.py
+--self-test`. `gate.py --self-test`. `validate_tree.py` (7/7). `fixtures/
+prove_fixtures_fail.py` (19 source-level mutations + `prove_row_number` +
+the new `prove_comb_band_reunification`, all pass).
+
+**A real source-level mutation, run outside `prove()`'s own
+CASES/CONTRACT_ONLY accounting** (comb-band-reunification is a `lattice.py`
+decision with no new extract-level primitive, the identical shape F151's own
+`prove_row_number` is): `make_fixtures.comb_band_reunification_row` builds a
+bordered row whose comb's own left rail is drawn only from mid-row down (like
+1707-2021's own v255/v256, continuing an existing border rather than hanging
+free) at `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT` 0.0pt -- every built
+fixture -- where the comb resolves through the ordinary path,
+`active_resolved`, no retained subject at all. `mutate_comb_band_reunification`
+draws a small bordered notch box inside the row instead (12.0pt): the row's
+own DSU component stops being fully occupied, F064's own `no-rectangular-
+owner` ledger state appears on a REAL rebuilt PDF, and reunification
+correctly declines to absorb it (the notch's own two internal walls match
+none of the comb's own divider positions) -- proving the mechanism's own
+central safety discriminator can fail, on the source, not on an in-memory IR
+edit.
+
+**Pins moved, each with its cause named at the pin.** `LATTICE_PRODUCER_SHA256`
+(`comb_referee.py`) -- `lattice.py` gained the mechanism, then gained the
+reading-order fix. `AUDIT_DEPENDENCY_SHA256["tools/formgen/extract.py"]` --
+`FIXTURE_FIXTURES["FIXTURE-RULES"]`'s own sha256 moved (`fixtures/rules.pdf`
+gained the new shape); no extract.py check, count or tolerance moved.
+`EXPECTED_HTML_STRUCTURE_SHA256` re-pinned for 1707-2021, 1707a-2021 and
+2551m-2002 only; the other 50 are byte-identical, verified directly.
+`EXPECTED_RETAINED_SUBJECTS_BY_SLUG` **33 -> 30**, cause named inline (above
+and at the pin). `review-findings.json` F064 closed.
+
+**Determinism:** two full `batch.py` regenerations over the corpus (three,
+counting the reading-order fix's own re-run) produced byte-identical
+`build/html`, `build/ir`, `build/layout` and `forms/` trees each time,
+verified by sha256 digest and by `git diff` reporting no changes on a
+same-code re-run.
+
 ## W2 — the last blocker closes, and the flag mattered more than the fix (F151)
 
 **Gate r54: 10/13**, determinism byte-identical (`c6d61584d081`), open
