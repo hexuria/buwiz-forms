@@ -12,6 +12,62 @@ superseded by the r43 section.
 
 
 
+
+## W0 + W1 — the sweep found more than the fix closed, and that is the honest direction
+
+**Gate r53: 10/13**, determinism byte-identical (`9ceb064713d4`), inputs
+45,467 -> **45,468**, tab-walk 53/53 green, blue census 108 unmoved, open
+blocker+major **8 -> 7**.
+
+**W0** put three reviewers over the PR's ~2,900 new lines and triaged the four
+residual populations nobody had examined. Ten findings filed, four major, and
+the most important is a defect in the INSTRUMENT: **F214** — `tab_check`'s
+`running_max` starts at -1 so the first input reached is graded green
+unconditionally, and the walk starts at the DOM-first input rather than the
+reading-order-first one. When the first-focused field is itself the misplaced
+one it is marked green and the correctly-ordered fields before it are marked
+red. The form still fails, so 53/53 stands, but the page markers point a
+reviewer at the wrong boxes — and the self-test cannot catch it by
+construction. **F220**: 99 of the 108 remaining blue marks are phantoms;
+1604CF `p1c33` is the clean case, a column-header row whose six interior
+verticals stop 9.6pt short of its bottom rule while blue boxes sit *below*
+where those verticals end, on faces that do not exist. **F221**: twelve more
+unsignable signature areas on six forms. **F222**: sixteen comb-slot
+wall-crossings on 1701Q, never investigated — and given F220 the
+overlay-over-report hypothesis must be excluded before any producer change.
+
+**A reviewer alarm was refuted by looking, not accepted.** 27 ruled blanks on
+tint bands were flagged as possible write-on-shading surfaces. Of 48
+underscore-origin rules sitting on a tint, 41 lie inside a white knockout the
+sheet paints to clear a writing space; the 7 without one were rendered and
+read — 1801 item 21 is "...to be paid on or before ____" with a visible white
+box, 2200A/2200P are "Others (specify)" ATC lines. All correct. What remains is
+that the precedence is undocumented (F218), not a filing-safety defect.
+
+**W1** closed F206. Its measured payoff is one field, and that was checked
+rather than taken on report: F206's own named defect `1801-2018 p2c261` was
+**already fixed by T5c**, so the new mechanism nets exactly `1801-2018 p1c197`
+— rendered before acceptance ("☐ Others *(specify)* ______" with a real
+write-on line and nothing to type in), then tabbed to at press 254, typed into
+and read back. The implementation needed a caption gate ("specify") that is NOT
+in F206's recorded marker: the bare geometry selects 90+ cells, mostly false
+positives. Disclosed, defensible under the caption-as-evidence precedent, but
+the shipped rule is not the one F206 measured. F065 measured and left open (its
+knockout is real but the caption run carrying the correctly-refused Arial
+Narrow underscores covers it); F221 measured and left for W4 (the geometric
+half reaches 6 of 12, none carries "specify", so the caption gate correctly
+declines rather than improvising a second mechanism).
+
+**Two process findings filed against ourselves.** **F224**: W1's mechanism
+ships with no source-level mutation proving it can fail —
+`prove_fixtures_fail` is still 19, unchanged; T5a hit the same situation and
+solved it by extending the synthetic fixture instead of declining. **F225**: an
+agent downgraded the machine-global `playwright` package 1.59.0 -> 1.58.0 on a
+wrong diagnosis; the full tab-walk had run fine on 1.59.0 the same day, and
+after the downgrade `chromium.launch()` printed the install banner, so the
+change broke what it claimed to fix while diverging the machine from CI's pin
+and from `audit.py`'s runtime attestation. Restored and verified.
+
 ## W1 — a knockout-over-tint band beside a "(specify)" caption is a field there too (F206 closed)
 
 **Measured 2026-08-12, worktree `wt/w1-knockout-split`, base `b718994`.** F206's
