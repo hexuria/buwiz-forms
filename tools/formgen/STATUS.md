@@ -12,6 +12,107 @@ superseded by the r43 section.
 
 
 
+## W1 — a knockout-over-tint band beside a "(specify)" caption is a field there too (F206 closed)
+
+**Measured 2026-08-12, worktree `wt/w1-knockout-split`, base `b718994`.** F206's
+own marker -- "the widest ink-free band whose topmost paint is a KNOCKOUT over a
+decorative tint, at >= 1x the form's own line width" -- is real, but its own
+prose under-specifies it: run bare against the corpus it selects 90+ `label`
+cells, the large majority NOT writing surfaces (1604CF's 11-run table headers,
+2550M's near-full-width declaration bands, 2553's "OT  0   1   0" ATC captions
+with wide but non-writable margins). Two refinements, both forced by measuring
+against F206's own named residue, narrow it to the real family: a fill counts as
+"this cell's own tint/knockout" only past a MEANINGFUL clipped overlap
+(`KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT`, 1.5pt, `extract.MAX_RULE_THICKNESS_PT`
+restated, both axes -- excludes a 0.12-0.33pt graze from a neighbouring row's
+own background), and a candidate cell's own text runs block by their WHOLE line
+box, not per glyph (excludes an ATC code's inter-character gaps). A third gate,
+not in F206's own prose but forced by the same measurement: the caption must
+contain "specify" -- BIR's own free-text invitation, and the one thing 1801
+p2c261 has that 1604CF's table headers and 2553's ATC captions do not.
+
+`emit.py` gains `KnockoutSpecifyWriting` / `knockout_specify_band` /
+`knockout_specify_field_box`, the third member of the `RuledBlankWriting` /
+`CheckboxSquareWriting` family: a `label` cell's writing surface is a
+sub-region, never a reclassification of the whole cell, and `lattice.py` is
+byte-identical -- untouched. 23 cells across 11 forms qualify. **22 already had
+an input from `RuledBlankWriting`**, `1801-2018` `p2c261` itself among them --
+F206's own named example was independently fixed by T5c (gate r50,
+2026-08-11), between F206's filing (2026-07-29) and this package, and this
+package's own mechanism, run against it directly, agrees: same cell, same
+verdict. **Exactly ONE cell gains a NEW input: `1801-2018` `p1c197`**, "Others
+(specify)" (item 24), the same tint-caption / knockout-writing-surface
+tri-partition as p2c261 but on a different row. Verified in a real Chromium
+page: `#p1c197-i` reached by Tab at press 256, `#p2c261-i` at press 899, both
+typed into and read back correctly.
+
+**The 8 residue cells F206 named stay refused, two independent ways.** None
+carries "specify" in its caption (checked directly, false in every case). And
+independently, the pure geometric band -- caption gate bypassed -- measures at
+or below the form's own line width for every one: 0605-1999 `p2c58` and
+1600wp-2010's `p1c30`/`p1c33` clear no band at all past the meaningful-overlap
+gate; 0605-1999 `p2c121` and 2553-1999's `p1c37`/`p1c42`/`p1c47`/`p1c52` measure
+0.78x-0.91x. Neither test alone would be enough (the geometric ratio is close
+for the 2553 cells; the caption test says nothing about geometry).
+
+Measured against the corpus, full regeneration (`batch.py` twice, byte-identical
+tree): `inputs_over_printed_text` stays **2 forms/5 offenders**, unmoved;
+`comb_slots_match_printed` stays **10 forms/19 offenders**, unmoved; comb
+censuses stay **4,587 subjects/33 retained/4,554 active cells** (guaranteed by
+`lattice.py` being byte-identical, not merely measured). Inputs **45,467 ->
+45,468 (+1)**. Corpus tab-walk **53/53 green** (118.2s). Blue/vacant census
+stays **108**, per-form identical to the prior round -- `p1c197` was never in
+it, the same F211 precedent (the overlay's `vacant` test skips any printed box
+carrying text). A standing corpus-wide self-test
+(`emit.knockout_specify_corpus_assertions`, run by `emit.py --self-test`)
+re-derives the 23-cell claim set against every `build/ir` + `build/layout` +
+`build/fonts` triple this checkout has and fails if any claimed cell lacks a
+typing surface (`bands_checked > 0` asserted too); it also cross-checks the
+restated `_min_fillable_line_metrics` (emit.py carries no import of lattice.py)
+against `lattice.min_fillable_line_metrics` directly, on every form, so the two
+cannot silently drift. Five paired positive/negative fixture assertions
+(`emit.knockout_specify_writing_assertions`) prove the caption gate, the
+meaningful-overlap gate and the whole-run-bbox ink block can each independently
+fail, on synthetic geometry mirroring the named residue's own shape.
+
+**F065 measured, not closed.** The knockout is real -- (471.82, 351.53, 583.66,
+360.89), exactly this finding's own coordinates -- but the caption run carrying
+"(please specify)" also carries the unresolved underscore sequence (F065's own
+standing, correct refusal: unembedded Arial Narrow, no substitutable face), and
+that run's own WHOLE bounding box (not per glyph, the same rule that keeps
+2553's ATC captions out) covers virtually the entire knockout. No candidate band
+survives. F065's other barrier is untouched.
+
+**F221 measured, left for W4.** The GEOMETRIC half of the marker (caption gate
+bypassed) reaches 6 of the 12 named signature areas -- 0605-1999 `p1c176`,
+1604cf-2008 `p1c316`, 2550m-2007 `p1c181`, 2551m-2002 `p1c175`, 2553-1999
+`p1c216`, 2316-2021 `p1c337` -- at 29x-52x their own form's line width: the same
+tri-partition shape. But every caption is "I declare, under the penalties of
+perjury..." or "Date Signed", never "specify", so this package's own caption
+gate correctly never claims them -- a signature area needs
+`SignatureLineBinding`'s bottom-seated, centred treatment, not a generic
+left-anchored box, and building that here would have been the improvised second
+mechanism the package brief forbade.
+
+**Not attempted, and why:** extending `fixtures/prove_fixtures_fail.py` (the
+`extract.py`-scoped PDF-mutation harness F210/F211 both extended) with a new
+pinned real-world fact. Checked all 7 of `extract.py`'s pinned official PDFs
+(2551Q, 0605, 1604E, 2550M, 2553, 2316, 1701) directly against the shipped
+`KnockoutSpecifyWriting` -- none contains a cell it claims, so there is no real
+fact in that corpus to pin a check against. Every geometric primitive this
+mechanism reads (fill role/tone, glyph/run geometry) is already exhaustively
+proven by `extract.py`'s existing checks (`tone`, general geometry fidelity),
+so there is no new extraction-side contract for that harness to mutate; the
+mutation proof lives entirely in `emit.py`'s own self-test, the same
+paired-assertion idiom this file already uses for F147/F210/F211's own
+`field_verdict` branches.
+
+**Environment note.** `python -m playwright`'s pip package had drifted to
+1.59.0 against a browser cache pinned at chromium 1208 (the node toolchain's
+own 1.58.2 pin), which made `tab_check.py` fail to launch outright; downgraded
+the pip package to 1.58.0 to match. Unrelated to any change in this package,
+recorded because it changed the machine's Python environment.
+
 ## T5b + T5d — 54 signable boxes, 71 Bureau boxes untouched (F211/F212 fixed)
 
 **Gate r52: 10/13**, determinism byte-identical (`1ebe225b54d1`), open

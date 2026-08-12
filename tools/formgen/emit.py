@@ -2263,6 +2263,302 @@ def seat_signature_line(box: FieldBox | None, one_line_pt: float) -> FieldBox | 
                     round(one_line_pt, 4), box.letter_spacing_pt, box.capacity, None)
 
 
+# Restated from `lattice.min_fillable_line_metrics` -- emit.py reads the IR as
+# JSON and carries no import of the module that computes it (the same reason
+# `RULE_ORIGIN_TEXT_UNDERSCORE` above is a restated literal, not an import).
+# Must stay the identical computation: `glyph_height_pt` is the smallest body
+# run's own cap-height in points, `line_width_pt` is two em squares of that
+# run's own size, both derived only from runs of two or more non-whitespace
+# glyphs. `knockout_specify_corpus_assertions` cross-checks this against
+# `lattice.min_fillable_line_metrics` directly on every self-test run, so a
+# drift between the two trips immediately rather than silently.
+def _min_fillable_line_metrics(ir: dict[str, Any]) -> dict[str, float] | None:
+    fonts = ir.get("fonts") or {}
+    cap_ratio_by_font: dict[str, float] = {}
+    for key, descriptor in fonts.items():
+        if not isinstance(descriptor, dict):
+            continue
+        base = str(descriptor.get("basefont") or key)
+        stripped = base.split("+", 1)[-1]
+        capheight = descriptor.get("capheight")
+        if (isinstance(capheight, (int, float)) and capheight > 0
+                and stripped not in cap_ratio_by_font):
+            cap_ratio_by_font[stripped] = float(capheight) / 1000.0
+
+    glyph_height: float | None = None
+    line_width: float | None = None
+    for page in ir.get("pages", ()):
+        for run in page["text_runs"]:
+            if sum(1 for ch in run["text"] if not ch.isspace()) < 2:
+                continue
+            size = float(run["size_pt"])
+            ratio = cap_ratio_by_font.get(str(run["font"]), float(run["ascender"]))
+            height = size * ratio
+            if glyph_height is None or height < glyph_height:
+                glyph_height = height
+            if line_width is None or 2.0 * size < line_width:
+                line_width = 2.0 * size
+    if glyph_height is None or line_width is None:
+        return None
+    return {"glyph_height_pt": glyph_height, "line_width_pt": line_width}
+
+
+# F206's marker for the "part caption, part writing surface" family (F148,
+# F149, F151's own kin): the widest ink-free band whose topmost paint is a
+# KNOCKOUT over a decorative tint, at >= 1x the form's own two-glyph line
+# width. `lattice.classify_cell` never segments this: the caption glyphs set
+# `is_empty = False`, so the whole cell -- caption AND the blank paper beside
+# it -- is one refused `label`, exactly the shape `RuledBlankWriting` and
+# `CheckboxSquareWriting` already fix for a printed underscore and a knockout
+# square. This is the same family's third member, and the writing surface a
+# KNOCKOUT band earns is a sub-region of the cell, never a reclassification of
+# it (F206's own conclusion) -- `knockout_specify_field_box` seats the region
+# exactly where `checkbox_square_field_box`/`ruled_blank_field_box` seat theirs.
+#
+# Two refinements measurement forced beyond F206's own prose, both load-bearing
+# against its own named residue -- 8 cells across 3 forms (0605-1999
+# p2c58/p2c121, 2553-1999 p1c37/p1c42/p1c47/p1c52, 1600wp-2010 p1c30/p1c33),
+# every one an ATC-code or rate cell on a reference table, none a writing
+# surface:
+#
+#   * A fill only counts as "this cell's own tint" (or "this cell's own
+#     knockout") if its overlap with the cell clears a REAL size on both
+#     axes, not a hairline. A neighbouring row's background fill grazes a
+#     cell's own top edge by 0.12-0.33pt at 0605 p2c58 and 1600wp p1c30/p1c33
+#     -- registration overlap, not this cell's own paint -- and admitting it
+#     lets the widest band search treat the WHOLE cell as fair game.
+#     `KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT` is `extract.MAX_RULE_THICKNESS_PT`
+#     (1.5pt) restated: the identical floor extraction already uses to tell a
+#     fill from a rule, applied here to tell a fill that belongs to this cell
+#     from one that merely touches it.
+#   * A candidate cell's own assigned text runs block by their WHOLE line box
+#     (`x0..x1`, `y0..y1`), not per glyph. 2553's ATC-code captions ("OT  0
+#     1   0") are printed with wide inter-character gaps to align with a
+#     reference grid; a per-glyph ink test leaves those gaps "free" and the
+#     widest-rectangle search reports the full cell width. The whole run's own
+#     territory is not writable paper merely because a letterform does not
+#     ink every point of it.
+#
+# Against the 9 named cells this measures the strict separation the residue
+# is defined by: 1801-2018 p2c261 ("Others (specify)") clears
+# `KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT` on a genuine tint-white-tint tiled row
+# and reports a 294.65pt band (32x its own line width); every one of the 8
+# residue cells reports either no band at all or one under 1x. See
+# `knockout_specify_corpus_assertions` for the standing, corpus-wide version
+# of this measurement, and this package's report for the full selected-cell
+# list.
+KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT = 1.5   # extract.MAX_RULE_THICKNESS_PT, restated
+
+# The caption vocabulary this class promotes: BIR's own invitation to write
+# free text, not a fixed reference code. "Others (specify)", "(please
+# specify)", "If yes, specify" -- every spelling in the corpus carries this
+# one word. It is what separates 1801 p2c261 from 2553's "OT  0   1   0" and
+# 1604CF's table headers, all of which ALSO carry a wide knockout-over-tint
+# band (measured: 1604CF alone contributes 15 such bands) but state a fixed
+# code or an empty column, never an invitation. Substring, case-insensitive,
+# because the corpus sets it embedded ("please specify", "Specify Foreign
+# Tax Number") as often as standalone.
+KNOCKOUT_SPECIFY_CAPTION_MARKER = "specify"
+
+
+def _knockout_specify_caption(text: str) -> bool:
+    return KNOCKOUT_SPECIFY_CAPTION_MARKER in text.lower()
+
+
+def knockout_specify_band(cell: dict[str, Any], area_fills: Sequence[dict[str, Any]],
+                          runs_by_id: dict[str, dict[str, Any]],
+                          metrics: dict[str, float],
+                          ) -> tuple[float, float, float, float] | None:
+    """This cell's own widest ink-free knockout-over-tint band, or None.
+
+    Every point of the cell is resolved to its topmost fill (or to this
+    cell's own printed ink, which is always topmost); a point counts as a
+    band candidate only when that topmost fill is `role == "knockout"` --
+    never bare paper, which is `dropping the "over a tint" requirement`
+    F206 itself measured destroys the marker (123 cells, mostly white-on-
+    white reference tables). `has_knockout`/`has_decorative` gate the whole
+    cell first, both past `KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT` on both axes,
+    so a cell with no tint anywhere in its own paper is never searched at all.
+
+    The widest RECTANGLE, not the bounding box of a merely-connected region:
+    a caption's own ink can sit in the middle of a wide knockout-over-tint
+    cell with clear paper on both sides, and a flood fill's bounding box
+    would then claim the full cell width even though no single straight band
+    of that width is ink-free (measured on 2553's "OT  0   1   0" cells
+    before this was fixed: a reported 4x-line-width band that was actually a
+    ring around the caption, not a band). Classic largest-rectangle-in-
+    histogram, one row of atoms at a time, heights accumulated in actual
+    points because atom rows are not uniform height.
+    """
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    if x1 <= x0 or y1 <= y0:
+        return None
+
+    layers: list[tuple[float, float, float, float, int, str]] = []
+    has_knockout = has_decorative = False
+    for fill in area_fills:
+        cx0 = max(float(fill["x0"]), x0)
+        cx1 = min(float(fill["x1"]), x1)
+        if cx1 <= cx0:
+            continue
+        cy0 = max(float(fill["y0"]), y0)
+        cy1 = min(float(fill["y1"]), y1)
+        if cy1 <= cy0:
+            continue
+        role = fill.get("role")
+        meaningful = ((cx1 - cx0) > KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT
+                      and (cy1 - cy0) > KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT)
+        if role == "knockout" and meaningful:
+            has_knockout = True
+        elif role == "decorative" and meaningful:
+            has_decorative = True
+        ordinal = int(fill.get("paint_seq_max", fill.get("paint_seq", -1)))
+        layers.append((cx0, cy0, cx1, cy1, ordinal, role))
+    if not (has_knockout and has_decorative):
+        return None
+
+    # This cell's own printed ink -- the caption -- is always topmost, and
+    # blocks by its WHOLE line box (see the module comment above for why not
+    # per glyph).
+    ink_ordinal = max((layer[4] for layer in layers), default=0) + 1
+    for run_id in cell.get("text_run_ids") or ():
+        run = runs_by_id.get(run_id)
+        if run is None:
+            continue
+        cx0 = max(float(run["x0"]), x0)
+        cx1 = min(float(run["x1"]), x1)
+        if cx1 <= cx0:
+            continue
+        cy0 = max(float(run["y0"]), y0)
+        cy1 = min(float(run["y1"]), y1)
+        if cy1 <= cy0:
+            continue
+        layers.append((cx0, cy0, cx1, cy1, ink_ordinal, "ink"))
+
+    xs = sorted({x0, x1} | {edge for layer in layers for edge in (layer[0], layer[2])})
+    ys = sorted({y0, y1} | {edge for layer in layers for edge in (layer[1], layer[3])})
+    columns, rows = len(xs) - 1, len(ys) - 1
+
+    candidate = [[False] * columns for _ in range(rows)]
+    for j in range(rows):
+        my = (ys[j] + ys[j + 1]) / 2.0
+        for i in range(columns):
+            mx = (xs[i] + xs[i + 1]) / 2.0
+            covering = [(ordinal, role) for cx0, cy0, cx1, cy1, ordinal, role in layers
+                       if cx0 < mx < cx1 and cy0 < my < cy1]
+            if not covering:
+                continue
+            covering.sort()
+            _top_ordinal, top_role = covering[-1]
+            if top_role == "knockout":
+                candidate[j][i] = True
+
+    min_height = float(metrics["glyph_height_pt"])
+    min_width = float(metrics["line_width_pt"])
+    best_width = 0.0
+    best_rect: tuple[float, float, float, float] | None = None
+    heights = [0.0] * columns
+    for j in range(rows):
+        row_height = ys[j + 1] - ys[j]
+        for i in range(columns):
+            heights[i] = heights[i] + row_height if candidate[j][i] else 0.0
+        stack: list[tuple[int, float]] = []
+        for i in range(columns + 1):
+            height = heights[i] if i < columns else 0.0
+            start = i
+            while stack and stack[-1][1] > height:
+                popped_start, popped_height = stack.pop()
+                if popped_height >= min_height:
+                    width = xs[i] - xs[popped_start]
+                    if width > best_width:
+                        best_width = width
+                        best_rect = (xs[popped_start], ys[j + 1] - popped_height,
+                                    xs[i], ys[j + 1])
+                start = popped_start
+            stack.append((start, height))
+    if best_rect is None or best_width < min_width:
+        return None
+    return best_rect
+
+
+class KnockoutSpecifyWriting:
+    """Which `label` cells a knockout-over-tint band, beside a "(specify)"
+    caption, earns an input (F206).
+
+    Mirrors `RuledBlankWriting`'s and `CheckboxSquareWriting`'s own shape: a
+    label cell whose printed caption invites free text and whose own paper
+    carries the band `knockout_specify_band` measures earns a sub-region, not
+    a reclassification of the whole cell. Ownership is per cell -- a cell has
+    at most one caption cluster carrying "specify" in this corpus, so there
+    is no multi-claimant case to refuse, unlike a ruled blank's several
+    underscores or a checkbox pair's two squares.
+    """
+
+    __slots__ = ("_claims",)
+
+    def __init__(self, cells: Sequence[dict[str, Any]], page_index: int,
+                 runs: Sequence[dict[str, Any]],
+                 area_fills: Sequence[dict[str, Any]],
+                 metrics: dict[str, float] | None) -> None:
+        claims: dict[str, tuple[float, float, float, float]] = {}
+        if metrics is None:
+            self._claims = claims
+            return
+        runs_by_id = {run_id(page_index, i): run for i, run in enumerate(runs)}
+        for cell in cells:
+            if cell["kind"] != "label" or cell.get("comb"):
+                continue
+            caption = " ".join(
+                runs_by_id[rid]["text"] for rid in cell.get("text_run_ids") or ()
+                if rid in runs_by_id)
+            if not _knockout_specify_caption(caption):
+                continue
+            band = knockout_specify_band(cell, area_fills, runs_by_id, metrics)
+            if band is not None:
+                claims[cell["id"]] = band
+        self._claims = claims
+
+    def for_cell(self, cell_id: str) -> tuple[float, float, float, float] | None:
+        return self._claims.get(cell_id)
+
+
+def knockout_specify_field_box(cell: dict[str, Any],
+                               band: tuple[float, float, float, float],
+                               face: FieldFace, ink: "PrePrintedInk | None",
+                               ) -> FieldBox | None:
+    """The writing surface a knockout-over-tint band earns (F206).
+
+    Geometry, not a re-derivation of `field_box`'s: the box is the band's own
+    rectangle -- the knockout paper `knockout_specify_band` already measured,
+    clipped to nothing further, because that band IS the sheet's own blank
+    paper and the whole reason it was found. `writing_box_clear_of_printed_ink`
+    still runs, the same defensive belt `ruled_blank_field_box` and
+    `checkbox_square_field_box` both keep: nothing here has looked at whether
+    some OTHER run on the page (not this cell's own caption, already excluded
+    by construction) hangs into the band, and that function already answers
+    exactly that question.
+    """
+    if face.line_span_em <= 0.0:
+        return None
+    bx0, by0, bx1, by1 = band
+    tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((bx0, by0, bx1, by1), ink)
+    if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0:
+        return None
+    height = ty1 - ty0
+    size = min(face.size_pt, _floor2(height / face.line_span_em))
+    if size <= 0.0:
+        return None
+    spacing = None
+    if face.size_pt > 0 and abs(face.letter_spacing_pt) > 0:
+        scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
+        if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
+            spacing = scaled
+    inset = (ty0 - float(cell["y0"]), float(cell["x1"]) - tx1,
+             float(cell["y1"]) - ty1, tx0 - float(cell["x0"]))
+    return FieldBox("text", inset, size, round(height, 4), spacing, None, None)
+
+
 # A cell whose own width is mostly pre-printed glyph ink is not a blank the
 # taxpayer can write in, whatever the box detector made of it: it is a table
 # cell whose text lattice.py assigned to a neighbour because the run crosses
@@ -2956,10 +3252,11 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   ruled_blanks: "RuledBlankWriting | None" = None,
                   checkbox_squares: "CheckboxSquareWriting | None" = None,
                   signature_boxes: "SignatureBoxWriting | None" = None,
+                  knockout_specify: "KnockoutSpecifyWriting | None" = None,
                   ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Seven rules, in this order, and the order is the point:
+    Eight rules, in this order, and the order is the point:
 
       * **A `label` cell whose paper carries its own underscore-drawn writing
         line is a field there, whatever else refuses it.** F148/F149: a ruled
@@ -2995,6 +3292,17 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         54 claims are also `BureauReservation` claims -- the two caption
         vocabularies share no word -- but the check runs regardless, not on
         that measurement's faith.
+      * **A `label` cell whose own paper carries a knockout-over-tint band
+        beside a "(specify)" caption is a field there too.** F206: the band
+        is a sub-region of the cell, the same "caption swallows the whole
+        `label`" shape as the two rules above, and `KnockoutSpecifyWriting`
+        has already resolved which cells qualify and measured the band; see
+        it and `knockout_specify_field_box`. Ordered after the ruled-blank
+        and checkbox-square rules so a cell either of those already claims is
+        never re-claimed here, and before the signature-box rule's own
+        vocabulary is irrelevant to this one: the two caption vocabularies
+        ("specify" vs "for individual"/"for non-individual") share no word,
+        measured the same way the signature-box/Bureau split is.
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
         "." or "%" inside it is decoration within that field, not a label. Only
@@ -3056,6 +3364,9 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                 float(cell["x1"]), float(cell["y1"])):
             return False, "bureau"
         return True, "signature-box"
+    if (cell["kind"] == "label" and knockout_specify is not None
+            and knockout_specify.for_cell(cell["id"]) is not None):
+        return True, "knockout-specify"
     if cell.get("comb"):
         # Left as it stands, on measurement rather than on principle. Exactly
         # one comb-bearing cell in the corpus is >= 70% covered by decorative
@@ -3230,6 +3541,11 @@ class FieldPlan:
         # One natural line at the fitted face, the target height
         # `seat_signature_line` re-seats a signature strip's own box to.
         one_line_pt = face.size_pt * face.line_span_em
+        # The whole-IR metric `KnockoutSpecifyWriting` measures a band's
+        # width and height against; None when the IR states no body run at
+        # all (an empty/synthetic fixture), in which case that class claims
+        # nothing rather than guessing a threshold.
+        fillable_metrics = _min_fillable_line_metrics(ir) if ir is not None else None
         # Keyed by page index rather than zipped, so a layout page and an IR page
         # cannot be paired by position if either list is ever ordered otherwise.
         ink_by_page = {int(page["index"]): PrePrintedInk(page["text_runs"])
@@ -3276,10 +3592,14 @@ class FieldPlan:
                     signature_boxes.cell_ids() if signature_boxes is not None
                     else frozenset())
                 if runs is not None else None)
+            knockout_specify = (
+                KnockoutSpecifyWriting(
+                    page["cells"], page_index, runs, fills or (), fillable_metrics)
+                if runs is not None else None)
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
                                                  ruled_blanks, checkbox_squares,
-                                                 signature_boxes)
+                                                 signature_boxes, knockout_specify)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -3293,6 +3613,9 @@ class FieldPlan:
                 elif reason == "signature-box":
                     box = signature_box_field_box(
                         cell, signature_boxes.for_cell(cell["id"]), face, ink)
+                elif reason == "knockout-specify":
+                    box = knockout_specify_field_box(
+                        cell, knockout_specify.for_cell(cell["id"]), face, ink)
                 else:
                     box = field_box(cell, face, ink)
                 if box is None:
@@ -8171,6 +8494,7 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     field_surface_assertions(layout, plan, failures)
     comb_writing_rectangle_assertions(plan, failures)
     writing_box_assertions(plan, failures)
+    knockout_specify_writing_assertions(plan, failures)
     field_debug_assertions(html, failures)
     tab_debug_assertions(html, failures)
 
@@ -8505,6 +8829,100 @@ def signature_line_corpus_assertions(failures: list[str]) -> None:
            failures)
 
 
+def knockout_specify_corpus_assertions(failures: list[str]) -> None:
+    """Every knockout-over-tint band beside a "(specify)" caption has an
+    input, corpus-wide -- the same shape `ruled_blank_corpus_assertions`,
+    `checkbox_square_corpus_assertions` and `signature_box_corpus_assertions`
+    already give F148/F149, F210 and F211 (F206): it re-derives, independently
+    of whatever `batch.py` last emitted, which cells `KnockoutSpecifyWriting`
+    would admit on EVERY form this checkout has extracted, and fails loudly if
+    any of them lacks a typing surface. A form added to `build/ir` after this
+    check was written is covered the moment it is extracted, by construction
+    -- nothing here names a slug.
+
+    Also cross-checks `_min_fillable_line_metrics` -- the restated computation
+    this module needs because it carries no import of `lattice.py` -- against
+    `lattice.min_fillable_line_metrics` directly, on every form this corpus
+    holds, so a drift between the two trips HERE rather than silently sizing
+    a band against the wrong threshold. `lattice` is imported locally, only
+    inside this one check, so it stays no part of the load-bearing pipeline.
+    """
+    ir_dir = _ROOT / "build/ir"
+    layout_dir = _ROOT / "build/layout"
+    plan_dir = _ROOT / "build/fonts"
+    ir_paths = sorted(ir_dir.glob("*.ir.json"))
+    if not ir_paths:
+        _check(False, "every knockout-specify band has an input, corpus-wide",
+               f"no build/ir corpus at {ir_dir}", failures)
+        return
+
+    sys.path.insert(0, str(_ROOT / "tools/formgen"))
+    import lattice  # local import: see the docstring above for why
+
+    forms_checked = 0
+    bands_checked = 0
+    unfilled: list[str] = []
+    metric_drift: list[str] = []
+    for ir_path in ir_paths:
+        slug = ir_path.name[: -len(".ir.json")]
+        layout_path = layout_dir / f"{slug}.layout.json"
+        plan_path = plan_dir / f"{slug}.fontplan.json"
+        if not layout_path.is_file() or not plan_path.is_file():
+            unfilled.append(f"{slug}: no layout/font plan to check against")
+            continue
+        ir = json.loads(ir_path.read_text(encoding="utf-8"))
+        layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        face = resolve_field_face(plan, [])
+        if face is None:
+            continue
+
+        restated = _min_fillable_line_metrics(ir)
+        canonical = lattice.min_fillable_line_metrics(ir)
+        if restated != canonical:
+            metric_drift.append(f"{slug}: restated {restated} != lattice {canonical}")
+
+        fields = FieldPlan(layout, face, [], ir)
+        forms_checked += 1
+        runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+        fills_by_page = {int(p["index"]): p["area_fills"] for p in ir["pages"]}
+        for page in layout["pages"]:
+            page_index = int(page["index"])
+            runs = runs_by_page.get(page_index, ())
+            fills = fills_by_page.get(page_index, ())
+            knockout_specify = KnockoutSpecifyWriting(
+                page["cells"], page_index, runs, fills, restated)
+            for cell in page["cells"]:
+                band = knockout_specify.for_cell(cell["id"])
+                if band is None:
+                    continue
+                bands_checked += 1
+                if fields.of(cell["id"]) is None:
+                    unfilled.append(
+                        f"{slug} {cell['id']}: knockout-specify band claimed, "
+                        f"no typing surface")
+
+    _check(not metric_drift,
+           "the restated line-fit metric matches lattice.min_fillable_line_metrics, "
+           "corpus-wide",
+           f"{len(metric_drift)} form(s) drifted"
+           + (f" ({'; '.join(metric_drift[:6])}{'...' if len(metric_drift) > 6 else ''})"
+              if metric_drift else ""),
+           failures)
+    # bands_checked > 0 is load-bearing, not decoration, following every
+    # sibling corpus assertion's own comment on the identical guard: a
+    # discovery mechanism that silently claimed nothing would leave
+    # `unfilled` empty too, and "not unfilled" alone would pass having
+    # verified nothing at all.
+    _check(forms_checked > 0 and bands_checked > 0 and not unfilled,
+           "every knockout-specify band has an input, corpus-wide",
+           f"{forms_checked} form(s), {bands_checked} band(s) claimed, "
+           f"{len(unfilled)} without a typing surface"
+           + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
+              if unfilled else ""),
+           failures)
+
+
 def _synthetic_comb(cells: int, x0: float, pitch: float,
                     y0: float, height: float,
                     writing: tuple[float, float] | None = None) -> dict[str, Any]:
@@ -8703,6 +9121,128 @@ def writing_box_assertions(plan: dict[str, Any], failures: list[str]) -> None:
                _synthetic_cell("p0c3", 40.0, 60.0), single_plan),
            "an undivided cell keeps the one input and the one name it had",
            f"regions {single_box.regions if single_box else 'none'}", failures)
+
+
+def _knockout_specify_fill(role: str, gray: float | None,
+                           x0: float, y0: float, x1: float, y1: float,
+                           seq: int) -> dict[str, Any]:
+    return {"role": role, "gray": gray, "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "paint_seq": seq, "paint_seq_max": seq}
+
+
+def _knockout_specify_run(text: str, x0: float, x1: float,
+                          y0: float = 0.0, y1: float = 10.0) -> dict[str, Any]:
+    return {"text": text, "x0": x0, "x1": x1, "y0": y0, "y1": y1}
+
+
+def knockout_specify_writing_assertions(plan: dict[str, Any],
+                                        failures: list[str]) -> None:
+    """F206: a "(specify)" caption's own knockout-over-tint band earns an
+    input, and the marker's own named residue does not.
+
+    Four mutations of one 200 x 10pt `label` cell, each isolating the ONE
+    property that separates `1801-2018` `p2c261` ("Others (specify)") from
+    F206's own named residue -- 8 ATC-code/rate cells across 3 forms
+    (0605-1999 p2c58/p2c121, 2553-1999 p1c37/p1c42/p1c47/p1c52, 1600wp-2010
+    p1c30/p1c33), none a writing surface:
+
+      * the base case -- a caption at the left, a decorative tint under it, a
+        knockout to its right -- gets the knockout's own rectangle;
+      * the identical geometry with "specify" dropped from the caption gets
+        nothing, proving the caption gate `KnockoutSpecifyWriting` applies
+        (this is what excludes 2553's "OT  0   1   0" and every other
+        ATC-code caption in the corpus, none of which says "specify");
+      * a decorative fill overlapping the cell by 0.2pt -- a neighbouring
+        row's background grazing this cell's own edge, the exact shape at
+        0605 p2c58 and 1600wp p1c30/p1c33 -- gets nothing, proving
+        `KNOCKOUT_FILL_MEANINGFUL_OVERLAP_PT` is load-bearing and not a
+        hairline the corpus never reaches;
+      * a caption spanning all but 2pt of the cell on each side (less than
+        `metrics["line_width_pt"]`) gets nothing even though every fill is a
+        clean, meaningful knockout over a clean, meaningful tint, proving the
+        whole-run-bbox ink block -- the shape at every one of 2553's four
+        residue cells, whose "OT  0   1   0" caption's own bounding box
+        reaches to within a few points of the cell's own walls.
+    """
+    face = resolve_field_face(plan, [])
+    if face is None:
+        _check(False, "the font plan resolves a body face to fit fields to",
+               "no metric-compatible face", failures)
+        return
+    metrics = {"glyph_height_pt": 4.0, "line_width_pt": 12.0}
+    page_index = 0
+
+    def claim(cell_id: str, caption: str, caption_x1: float,
+             decorative: tuple[float, float, float, float],
+             knockout: tuple[float, float, float, float],
+             ) -> tuple[float, float, float, float] | None:
+        cell = {"id": cell_id, "kind": "label", "row": 0, "col": 0,
+                "x0": 0.0, "y0": 0.0, "x1": 200.0, "y1": 10.0,
+                "text_run_ids": [run_id(page_index, 0)]}
+        runs = [_knockout_specify_run(caption, 2.0, caption_x1)]
+        fills = [
+            _knockout_specify_fill("decorative", 0.75, *decorative, 1),
+            _knockout_specify_fill("knockout", 1.0, *knockout, 2),
+        ]
+        writing = KnockoutSpecifyWriting([cell], page_index, runs, fills, metrics)
+        return writing.for_cell(cell_id)
+
+    base = claim("p0k0", "Others (specify)", 48.0,
+                (0.0, 0.0, 60.0, 10.0), (60.0, 0.0, 200.0, 10.0))
+    _check(base == (60.0, 0.0, 200.0, 10.0),
+           "a knockout beside a decorative tint, past a \"(specify)\" caption, "
+           "earns its own rectangle",
+           f"{base}", failures)
+
+    no_specify = claim("p0k1", "Others", 48.0,
+                       (0.0, 0.0, 60.0, 10.0), (60.0, 0.0, 200.0, 10.0))
+    _check(no_specify is None,
+           "the identical band with \"specify\" dropped from the caption is "
+           "refused -- the caption gate, not the geometry, is what F206's "
+           "ATC-code residue fails first",
+           f"{no_specify}", failures)
+
+    sliver_overlap = claim("p0k2", "Others (specify)", 48.0,
+                           (0.0, -9.8, 200.0, 0.2), (0.0, 0.0, 200.0, 10.0))
+    _check(sliver_overlap is None,
+           "a decorative fill grazing this cell's own edge by 0.2pt -- a "
+           "neighbouring row's background, not this cell's own tint -- is "
+           "refused",
+           f"{sliver_overlap}", failures)
+
+    dense_caption = claim(
+        "p0k3", "Others (specify) 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0", 198.0,
+        (0.0, 0.0, 200.0, 10.0), (0.0, 0.0, 200.0, 10.0))
+    _check(dense_caption is None,
+           "a caption reaching to within 2pt of the cell's own walls leaves "
+           "no band wide enough to clear the form's own line width, even "
+           "over a clean knockout-over-tint cell",
+           f"{dense_caption}", failures)
+
+    # End to end: the claimed band becomes an input, seated on its own
+    # rectangle, through the same dispatch `field_verdict` and `FieldPlan`
+    # use on the real corpus.
+    box = knockout_specify_field_box(
+        {"id": "p0k0", "x0": 0.0, "y0": 0.0, "x1": 200.0, "y1": 10.0},
+        base, face, None)
+    _check(box is not None and box.inset_trbl == (0.0, 0.0, 0.0, 60.0),
+           "the field box is seated exactly on the claimed band",
+           f"{box.inset_trbl if box else None}", failures)
+    verdict = field_verdict(
+        {"id": "p0k0", "kind": "label", "x0": 0.0, "y0": 0.0,
+         "x1": 200.0, "y1": 10.0},
+        None, None, None, knockout_specify=KnockoutSpecifyWriting(
+            [{"id": "p0k0", "kind": "label", "x0": 0.0, "y0": 0.0,
+              "x1": 200.0, "y1": 10.0,
+              "text_run_ids": [run_id(page_index, 0)]}],
+            page_index, [_knockout_specify_run("Others (specify)", 2.0, 48.0)],
+            [_knockout_specify_fill("decorative", 0.75, 0.0, 0.0, 60.0, 10.0, 1),
+             _knockout_specify_fill("knockout", 1.0, 60.0, 0.0, 200.0, 10.0, 2)],
+            metrics))
+    _check(verdict == (True, "knockout-specify"),
+           "field_verdict routes a claimed cell through the knockout-specify "
+           "reason",
+           f"{verdict}", failures)
 
 
 def comb_writing_rectangle_assertions(plan: dict[str, Any],
@@ -10080,6 +10620,9 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
 
     print("signature-line corpus check", file=sys.stderr)
     signature_line_corpus_assertions(failures)
+
+    print("knockout-specify corpus check", file=sys.stderr)
+    knockout_specify_corpus_assertions(failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)

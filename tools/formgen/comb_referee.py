@@ -1791,6 +1791,27 @@ HTML_ALLOWED_TAGS = frozenset({
 # re-derive both claim sets against every `build/ir` this checkout has.
 # `HTML_RUNTIME_SCRIPT_SHA256` does NOT move: no runtime script text changed,
 # only the pre-rendered cell/field markup on these 43 documents.
+#
+# Re-pinned 2026-08-12 (W1, F206). `emit.py`'s `field_verdict` gains a
+# `knockout-specify` branch (`KnockoutSpecifyWriting` / `knockout_specify_
+# field_box`) that gives a `label` cell an input when its own paper carries a
+# knockout-over-tint band -- the widest ink-free rectangle whose topmost
+# paint is a knockout fill directly over, or immediately beside within the
+# same row, a decorative tint, at or past the form's own two-glyph line
+# width -- beside a caption containing "specify". Corpus-wide this claims 23
+# cells across 11 forms; 22 already carried an input from an earlier rule
+# (`RuledBlankWriting`, checked first) and are untouched byte-for-byte.
+# **Only 1 slug moves: `1801-2018`.** `p1c197` ("Others (specify)", item 24)
+# gains one NEW `<input>`, seated on the knockout's own rectangle
+# (516.82-584.38pt, the same row's decorative tint at 411.91-471.7pt beside
+# it); no other cell on any of the 53 documents changes. The other 8 cells
+# F206 measured as this marker's own residue -- 0605-1999 p2c58/p2c121,
+# 2553-1999 p1c37/p1c42/p1c47/p1c52, 1600wp-2010 p1c30/p1c33, every one an
+# ATC-code or rate cell on a reference table -- are proven unchanged: none
+# carries "specify" in its caption, so `KnockoutSpecifyWriting` never
+# constructs a band for them regardless of geometry. `HTML_RUNTIME_SCRIPT_
+# SHA256` does NOT move: no runtime script text changed, only `1801-2018`'s
+# own pre-rendered cell markup.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "a0cf7a393661f5a841e1372495b9626af3d8d59ff232fe1bdb99f106ad2e92be",
     "0619e-2018": "837900d7e2ac57faf078290d18666c8f5ffeaee47cc0b956583a5ce3c16b1db9",
@@ -1827,7 +1848,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1707a-2021": "016fcf17f89fbd5d12f181f43963e1539e4bbe1e371fcc86cfde725f62046f41",
     "1709-2020": "d641617ad3f958b78c47ab650f50888cc9e6cd5f2c0948723c34fd53fbbf3139",
     "1800-2018": "9ce67ab3b9002ba253ee8dc335142c419c45fb883b3665b92367159ea2b1d00f",
-    "1801-2018": "734dd64560a6baba98ce321eeab6533c636091b3ccba714f808df816f72e6cf7",
+    "1801-2018": "903988607f9a6aa0658bbd5b295021c67ce513c0c99934a2c919096833c6fbf3",
     "2000-dst-2018": "b3b2d41c014a4612539fbbd82b96cfd6e0dea29d3fc27453a87036bf5e0e7d02",
     "2000-ot-2018": "6f36505be0a0cd57cd46275e70e9b39e040ebf3453b6ff85f43323b815b98c93",
     "2200a-2020": "90aa0ec3aee2adbf648fa727ec9bc07817c3970f2b8f6a428845317c3eb41b6e",
