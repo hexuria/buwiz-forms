@@ -3443,21 +3443,31 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     Nine rules, in this order, and the order is the point:
 
       * **A `label` cell whose paper carries its own underscore-drawn writing
-        line is a field there, whatever else refuses it.** F148/F149: a ruled
-        blank is written ON its line, so the writing space is the CAPTION
-        cell's own paper, not the sliver `lattice.classify_cell` cuts beneath
-        the rule. `RuledBlankWriting` has already resolved ownership -- one
-        `label` cell, one or more of its own rules -- so this asks it rather
-        than re-deriving the geometry. See `RuledBlankWriting` and
-        `ruled_blank_field_box`.
+        line is a field there, whatever else refuses it -- unless the sheet's
+        own Bureau caption also claims it.** F148/F149: a ruled blank is
+        written ON its line, so the writing space is the CAPTION cell's own
+        paper, not the sliver `lattice.classify_cell` cuts beneath the rule.
+        `RuledBlankWriting` has already resolved ownership -- one `label`
+        cell, one or more of its own rules -- so this asks it rather than
+        re-deriving the geometry. See `RuledBlankWriting` and
+        `ruled_blank_field_box`. **Routed through `BureauReservation`**
+        (F218), the identical guard the signature-box rule below already
+        took and this one had not: zero of the corpus's 58 claims are also a
+        Bureau claim, checked rather than assumed. This branch is also the
+        one place `shading` is deliberately NOT consulted -- see its own
+        comment at the call site for the measured 41/7 split that makes an
+        underscore rule on tint a writing line, not shaded decoration.
       * **A `label` cell whose paper carries its own checkbox square is a
-        field there too.** F210: the square is a closed box of decorative
-        rules the lattice never turns into a boundary, painted back to paper
-        with a knockout fill -- the source's own "write here" -- so the
-        caption glyphs beside it ("Taxpayer", "Yes", ...) swallow the whole
-        area into one `label` cell that `lattice.classify_cell` never
-        segments. `CheckboxSquareWriting` has already resolved ownership; see
-        it and `checkbox_square_field_box`.
+        field there too, unless the sheet's own Bureau caption also claims
+        it.** F210: the square is a closed box of decorative rules the
+        lattice never turns into a boundary, painted back to paper with a
+        knockout fill -- the source's own "write here" -- so the caption
+        glyphs beside it ("Taxpayer", "Yes", ...) swallow the whole area
+        into one `label` cell that `lattice.classify_cell` never segments.
+        `CheckboxSquareWriting` has already resolved ownership; see it and
+        `checkbox_square_field_box`. **Routed through `BureauReservation`**
+        (F218) for the identical reason: zero of the corpus's 22 claims are
+        also a Bureau claim today, checked rather than assumed.
       * **A `label` cell whose only ink is a top-left caption dedicating it to
         the taxpayer's OWN signature is a field there too, unless the sheet's
         own Bureau caption also claims it.** F211: one caption run ("For
@@ -3552,9 +3562,40 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     """
     if (cell["kind"] == "label" and ruled_blanks is not None
             and ruled_blanks.for_cell(cell["id"])):
+        # F218: routed through `BureauReservation`, the same guard the
+        # signature-box branch below already takes deliberately. Zero of the
+        # corpus's 58 ruled-blank claims fall inside a Bureau-reserved
+        # rectangle today, but the guard has to hold by construction, not by
+        # that measurement's own faith holding forever.
+        #
+        # Deliberately does NOT consult `shading`, unlike the ordinary field
+        # path below -- this is the one place the two are meant to disagree.
+        # An underscore-drawn writing line is the taxpayer's OWN writing
+        # surface even printed on a tinted band, because BIR paints the tint
+        # first and the rule second: an explicit line on tint means "write
+        # here", not "no rate applies". Measured (F218): of 48 underscore
+        # rules sitting on tint, 41 sit inside a white knockout the sheet
+        # paints to clear a writing space, and the 7 without one are genuine
+        # write-on lines -- 1801 item 21's "...to be paid on or before ____"
+        # (a date blank with a visible white box) and 2200A/2200P's "Others
+        # (specify)" ATC lines. This override is CORRECT and must stay; see
+        # `ruled_blank_corpus_assertions`'s own shaded-claim check, which
+        # proves it on the corpus every run rather than leaving it to this
+        # comment's word.
+        if reservation is not None and reservation.blocks(
+                float(cell["x0"]), float(cell["y0"]),
+                float(cell["x1"]), float(cell["y1"])):
+            return False, "bureau"
         return True, "ruled-blank"
     if (cell["kind"] == "label" and checkbox_squares is not None
             and checkbox_squares.for_cell(cell["id"])):
+        # F218: the identical guard, the identical reasoning -- zero of the
+        # corpus's 22 checkbox-square claims fall inside a Bureau-reserved
+        # rectangle today, asserted rather than assumed to stay that way.
+        if reservation is not None and reservation.blocks(
+                float(cell["x0"]), float(cell["y0"]),
+                float(cell["x1"]), float(cell["y1"])):
+            return False, "bureau"
         return True, "checkbox-square"
     if (cell["kind"] == "label" and signature_boxes is not None
             and signature_boxes.for_cell(cell["id"])):
@@ -4080,7 +4121,7 @@ def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
             + ">")
 
 
-def field_json(box: FieldBox, fields: FieldPlan) -> dict[str, Any]:
+def field_json(box: FieldBox, fields: FieldPlan, cell_id: str) -> dict[str, Any]:
     """The field as data, so the band renderer can build one from scratch."""
     return {
         "kind": box.kind,
@@ -4097,6 +4138,13 @@ def field_json(box: FieldBox, fields: FieldPlan) -> dict[str, Any]:
         **({"region_insets": [
             None if inset is None else [round(v, 4) for v in inset]
             for inset in box.region_insets]} if box.regions is not None else {}),
+        # F219: mirrors `field_input_markup`'s own inline `text-align:center`
+        # (`if cell_id in fields.centered`) into the band blob, so a row
+        # cloned at run time from THIS json is not left-aligned when its
+        # pre-rendered sibling is centred. Sparse, like `region_insets` above:
+        # present only where the field IS centred, so an uncentred field's
+        # JSON is unchanged and every other reader keeps its current answer.
+        **({"centered": True} if cell_id in fields.centered else {}),
     }
 
 
@@ -4329,7 +4377,7 @@ def cell_json(cell: dict[str, Any], fields: "FieldPlan | None" = None) -> dict[s
         }
     box = fields.of(cell["id"]) if fields is not None else None
     if box is not None:
-        payload["field"] = field_json(box, fields)
+        payload["field"] = field_json(box, fields, cell["id"])
     return payload
 
 
@@ -5856,7 +5904,7 @@ function fieldRegions(field){
      FieldBox.region_insets. */
   return field.region_insets?field.region_insets:[field.inset_trbl];
 }
-function fieldMetrics(el,field,regionIndex){
+function fieldMetrics(el,field,regionIndex,slotIndex){
   el.style.fontSize=field.size_pt+"pt";
   el.style.lineHeight=field.line_height_pt+"pt";
   if(field.letter_spacing_pt!==null&&field.letter_spacing_pt!==undefined){
@@ -5868,6 +5916,13 @@ function fieldMetrics(el,field,regionIndex){
   if(inset){
     el.style.inset=inset[0]+"pt "+inset[1]+"pt "+inset[2]+"pt "+inset[3]+"pt";
   }
+  /* F219: mirrors field_input_markup's own inline text-align:center for a
+     plain field's writing line (F212's signature-strip target set,
+     `fields.centered`) into a row cloned at run time -- a comb slot never
+     reaches here with field.centered true (SignatureLineBinding never
+     targets a comb), but the slotIndex==null guard matches field_input_
+     markup's own condition exactly rather than relying on that being so. */
+  el.style.textAlign=(slotIndex==null&&field.centered)?"center":"";
 }
 function fieldName(cell,slotIndex,regionIndex){
   if(slotIndex!==null){return cell.id+"-s"+slotIndex;}
@@ -5885,7 +5940,7 @@ function fieldInput(cell,slotIndex,regionIndex){
     el.setAttribute("data-slot-index",slotIndex);
     el.setAttribute("maxlength","1");
   }
-  fieldMetrics(el,cell.field,regionIndex);
+  fieldMetrics(el,cell.field,regionIndex,slotIndex);
   return el;
 }
 /* The clone carries the template's inputs, which are deliberately anonymous:
@@ -5902,7 +5957,7 @@ function applyFields(el,cell){
     inputs[i].id=fieldName(cell,slot===null?null:slot,region);
     inputs[i].name=cell.id;
     inputs[i].value="";
-    fieldMetrics(inputs[i],cell.field,region);
+    fieldMetrics(inputs[i],cell.field,region,slot);
     if(slot===null){region++;}
   }
 }
@@ -6537,23 +6592,103 @@ function coverage(spans,lo,hi){
   }
   return total/(hi-lo);
 }
+/* F220: whether a vertical (L/R) member's ink actually spans the box it is
+   being asked to bound, along Y -- as opposed to merely grazing it at one
+   end while running on past the other, which is the shape of a rule that
+   belongs to a taller structure and happens to graze this box, not one
+   drawn for it. 1604cf-2008 p1c33's column-header row is the measured case:
+   its six interior verticals stop 9.6pt short of the cell's own bottom
+   rule, so a taxpayer-facing box never closes there -- but the DATA
+   table's column dividers immediately below start at that exact same y
+   (271, a coincidence of where BIR's own artwork happens to break the
+   stroke) and run on for another 116pt through the real rows beneath. A
+   probe landing in the 8pt gap between the header's own closing rule and
+   the first real row divider closes a box using those dividers as its L/R
+   walls: `Math.abs(r.x1-L)<=TOL` is satisfied (their inner face is exactly
+   L), coverage is 100% (they run the box's whole height and far past it),
+   and nothing before this caught it. 2550m-2007 p2's column-header block is
+   the same shape from the other side: `boxAt` finds walls purely from ink
+   with no notion of "this region is unsegmented", so 40+59 phantom marks
+   over the two forms alone (measured; 99 of the corpus's 108).
+
+   Y only, never X: a comb's shared top/bottom rail is ONE rule under every
+   compartment it writes, so the first and last compartment's own T/B member
+   is, BY DESIGN, flush with that one compartment's own edge on one side (its
+   own end of the comb) while running the width of every other compartment
+   on the other -- 2551Q p1c9-s0's own top rail runs 0.48pt short of flush on
+   its own left and 57pt past flush on its right, which is exactly this
+   asymmetric shape and is not a defect. Applying this check to T/B rejected
+   every edge compartment of every comb in the corpus (measured: unboxed rose
+   from 240 to 29,450). A vertical divider carries no such shared-rail
+   population -- the corpus's dividers are drawn per column, not per comb --
+   so the asymmetry the L/R check catches is never this one.
+   A member fully capable of covering [lo,hi] on its own -- reaching to
+   within TOL of BOTH ends -- is genuine in exactly two shapes: flush at BOTH
+   ends (a standalone box's own frame, drawn for exactly that box: a
+   checkbox square, a signature box) or flush at NEITHER (an interior
+   divider running through a row it does not begin or end, which is every
+   real multi-row divider in the corpus, verified against 1604cf-2008's own
+   real first and last remittance rows -- both overshoot their own row by
+   several points on the far side, never landing flush). Flush at EXACTLY
+   one end and running CLEARLY past the other is neither: it is a rule whose
+   far end belongs to some OTHER structure and whose near end merely happens
+   to coincide with this box's edge, which is precisely 1604cf-2008's and
+   2550m-2007's shape above.
+
+   "Clearly" has to be scaled to the box, not a fixed point value, or this
+   over-fires: comb dividers routinely overshoot their own writing band by a
+   few tenths of a point on one side only (a drawn tick's own serif, not a
+   second structure) -- measured directly, 2551Q p1c9-s0's own left divider
+   overshoots its box's top by 0.48pt and is flush at the bottom, and a fixed
+   TOL=0.25pt margin called that "asymmetric" and cost 9,421 real inputs
+   their box corpus-wide before this was caught. The corpus's two genuine
+   phantom shapes overshoot by 30 to 116pt against an 7.68-8.64pt box -- 4 to
+   15 times the box's own span -- while every regressed comb tick overshoot
+   measured was under 3% of its own box's span. The margin is the box's own
+   span: an overshoot smaller than the box itself is the box's own stroke
+   detail, and only an overshoot AT LEAST AS LARGE AS the box itself is big
+   enough to be another row or column's worth of a different structure.
+   A member that does not reach both ends at all is a partial contributor to
+   `coverage()` and is untouched -- this guards only the single-member,
+   full-coverage case the corpus evidence measures.
+
+   Applied only in `strict` mode (`allBoxes`' own candidate search, never the
+   per-input lookup `pageCensus` makes for a REAL input's own centre). That
+   split is not a shortcut, it is load-bearing: any box a real input resolves
+   to is re-added to the candidate set from that non-strict lookup regardless
+   of what `allBoxes` found (see `pageCensus`, "if(!boxes[key])"), so this
+   function can only ever remove candidates that no input occupies -- the
+   vacant population is the only population `strict` can change, by
+   construction, not by care taken while tuning the margin above. */
+function crossesCleanly(a0,a1,lo,hi){
+  if(a0>lo+TOL||a1<hi-TOL){return true;}
+  var margin=Math.max(TOL,hi-lo);
+  var flushLo=(lo-a0)<=margin,flushHi=(a1-hi)<=margin;
+  return flushLo===flushHi;
+}
 /* The four walls of a candidate box: which rects form each one, how much of
    the side they ink, and where the wall's OUTER face is. The outer face is the
    far side of the ink, and it is the whole tolerance story: "the box" is
    ambiguous to within the stroke that draws it, so an input is at home
-   anywhere between the inner rectangle and this one. */
-function wallsOf(L,T,R,B,vis,banned){
+   anywhere between the inner rectangle and this one. `strict` is F220's own
+   flag -- see `crossesCleanly`'s docstring for why it may only ever narrow
+   the vacant population, never an input's own box. */
+function wallsOf(L,T,R,B,vis,banned,strict){
   var walls={L:null,T:null,R:null,B:null},side,i,r,spans,members,outer,lo,hi;
   var sides=["L","T","R","B"];
   for(var s=0;s<4;s++){
     side=sides[s];spans=[];members=[];outer=null;
+    lo=(side==="L"||side==="R")?T:L;
+    hi=(side==="L"||side==="R")?B:R;
     for(i=0;i<vis.length;i++){
       r=vis[i];
       if(banned[r.n]){continue;}
       if(side==="L"&&Math.abs(r.x1-L)<=TOL&&r.y<B&&r.y1>T){
+        if(strict&&!crossesCleanly(r.y,r.y1,lo,hi)){continue;}
         spans.push([r.y,r.y1]);members.push(r.n);
         outer=outer===null?r.x:Math.min(outer,r.x);
       }else if(side==="R"&&Math.abs(r.x-R)<=TOL&&r.y<B&&r.y1>T){
+        if(strict&&!crossesCleanly(r.y,r.y1,lo,hi)){continue;}
         spans.push([r.y,r.y1]);members.push(r.n);
         outer=outer===null?r.x1:Math.max(outer,r.x1);
       }else if(side==="T"&&Math.abs(r.y1-T)<=TOL&&r.x<R&&r.x1>L){
@@ -6564,8 +6699,6 @@ function wallsOf(L,T,R,B,vis,banned){
         outer=outer===null?r.y1:Math.max(outer,r.y1);
       }
     }
-    lo=(side==="L"||side==="R")?T:L;
-    hi=(side==="L"||side==="R")?B:R;
     walls[side]={cover:coverage(spans,lo,hi),members:members,
                  outer:outer===null?(side==="L"?L:side==="R"?R:side==="T"?T:B):outer};
   }
@@ -6577,8 +6710,14 @@ function wallsOf(L,T,R,B,vis,banned){
    a guide tick, not a wall; it is banned and the search widens, which is what
    resolves a comb slot to the comb cell its guides subdivide rather than to a
    slot with two open sides. Without that step 2550M reported nine "no printed
-   box" fields that are sitting in perfectly good printed boxes. */
-function boxAt(cx,cy,vis){
+   box" fields that are sitting in perfectly good printed boxes.
+
+   `strict`, when true, additionally refuses a wall member that does not
+   `crossesCleanly` (F220) -- passed true only from `allBoxes`' own candidate
+   search, never from a lookup keyed to a real input's own centre. Default
+   false/undefined preserves this function's exact prior behaviour for every
+   other caller. */
+function boxAt(cx,cy,vis,strict){
   var banned={},round,i,r,L,T,R,B,walls,worst,worstSide,sides=["L","T","R","B"],s;
   for(round=0;round<ROUNDS;round++){
     L=null;T=null;R=null;B=null;
@@ -6596,7 +6735,7 @@ function boxAt(cx,cy,vis){
       }
     }
     if(L===null||T===null||R===null||B===null||R-L<=EPS||B-T<=EPS){return null;}
-    walls=wallsOf(L,T,R,B,vis,banned);
+    walls=wallsOf(L,T,R,B,vis,banned,strict);
     worst=2;worstSide=null;
     for(s=0;s<4;s++){
       if(walls[sides[s]].cover<worst){worst=walls[sides[s]].cover;worstSide=sides[s];}
@@ -6641,7 +6780,14 @@ function boxKey(box){
    such a crossing, so no closed box on the sheet is unreachable this way, and
    the probe count is proportional to the number of boxes rather than to the
    square of the number of rects. Probes are snapped to a half-point grid so
-   two rules that cross twice do not pay twice. */
+   two rules that cross twice do not pay twice.
+
+   `boxAt` is called `strict` here (F220): this is the candidate set the
+   vacant census is built from, and nowhere else -- `pageCensus`'s own
+   per-input lookup calls `boxAt` non-strict, and re-adds any box a real
+   input resolves to regardless of what this function found (see
+   `crossesCleanly`'s docstring for why that ordering makes the stricter
+   search safe to apply here alone). */
 function allBoxes(vis){
   var horizontal=[],vertical=[],i,j,h,v,seen={},boxes={},px,py,key,box,probes=[];
   for(i=0;i<vis.length;i++){
@@ -6662,7 +6808,7 @@ function allBoxes(vis){
     }
   }
   for(i=0;i<probes.length;i++){
-    box=boxAt(probes[i][0],probes[i][1],vis);
+    box=boxAt(probes[i][0],probes[i][1],vis,true);
     if(box===null){continue;}
     key=boxKey(box);
     if(!boxes[key]){boxes[key]=box;}
@@ -8628,6 +8774,23 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     entire money grid), and a `field` cell filled with statutory text is not one
     (1700 page 2's tax brackets), nor is one the source shaded out (2200T page
     2's "no rate applies" rows).
+
+    F217: this is an INDEPENDENT re-derivation of `FieldPlan`'s own fillable
+    set -- `expected` above comes from `fields.of(...)`, `fillable` below is
+    built by calling `field_verdict` directly, a second time, over evidence
+    assembled here rather than trusted from `FieldPlan`'s own construction.
+    That independence is void wherever the two constructions disagree on
+    which optional plans they pass: `ruled_blanks` and `signature_boxes` were
+    wired into both; `checkbox_squares`, `knockout_specify` and `row_numbers`
+    were only ever wired into `FieldPlan`'s own production call, never here,
+    so all three of `field_verdict`'s corresponding branches were
+    unreachable from this self-check. Latent for `checkbox_squares` only
+    because the pinned self-test form (2551Q) carries zero checkbox squares;
+    latent for `knockout_specify` and `row_numbers` by pure coincidence --
+    2551Q's one knockout-specify claim (`p1c187`) also carries an underscore
+    rule, so `ruled_blanks` claims it first and the missing branch was never
+    exercised even though it would have disagreed. All three are wired in
+    now, the same shape `ruled_blanks`/`signature_boxes` already had.
     """
     fields = FieldPlan(layout, resolve_field_face(plan, []), [], ir)
     expected: dict[str, int] = {}
@@ -8649,20 +8812,34 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     reservation = {int(p["index"]): BureauReservation(
         p["text_runs"], p["rules"], p["area_fills"]) for p in ir["pages"]}
     rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+    fills_by_page = {int(p["index"]): p["area_fills"] for p in ir["pages"]}
     runs_by_page = {int(p["index"]): p["text_runs"] for p in ir["pages"]}
+    fillable_metrics = _min_fillable_line_metrics(ir)
     ruled_blanks = {int(p["index"]): RuledBlankWriting(
         rules_by_page.get(int(p["index"]), ()), p["cells"])
         for p in layout["pages"]}
+    checkbox_squares = {int(p["index"]): CheckboxSquareWriting(
+        rules_by_page.get(int(p["index"]), ()), fills_by_page.get(int(p["index"]), ()),
+        p["cells"]) for p in layout["pages"]}
     signature_boxes = {int(p["index"]): SignatureBoxWriting(
         p["cells"], int(p["index"]), runs_by_page.get(int(p["index"]), ()))
+        for p in layout["pages"]}
+    knockout_specify = {int(p["index"]): KnockoutSpecifyWriting(
+        p["cells"], int(p["index"]), runs_by_page.get(int(p["index"]), ()),
+        fills_by_page.get(int(p["index"]), ()), fillable_metrics)
+        for p in layout["pages"]}
+    row_numbers = {int(p["index"]): RowNumberWriting(
+        p["cells"], int(p["index"]), runs_by_page.get(int(p["index"]), ()), fillable_metrics)
         for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
                                  shading.get(int(p["index"])),
                                  reservation.get(int(p["index"])),
                                  ruled_blanks.get(int(p["index"])),
-                                 signature_boxes=signature_boxes.get(
-                                     int(p["index"])))[0]]
+                                 checkbox_squares=checkbox_squares.get(int(p["index"])),
+                                 signature_boxes=signature_boxes.get(int(p["index"])),
+                                 knockout_specify=knockout_specify.get(int(p["index"])),
+                                 row_numbers=row_numbers.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -8758,6 +8935,8 @@ def ruled_blank_corpus_assertions(failures: list[str]) -> None:
     forms_checked = 0
     rules_checked = 0
     unfilled: list[str] = []
+    shaded_claims = 0
+    shaded_unfilled: list[str] = []
     for ir_path in ir_paths:
         slug = ir_path.name[: -len(".ir.json")]
         layout_path = layout_dir / f"{slug}.layout.json"
@@ -8774,18 +8953,37 @@ def ruled_blank_corpus_assertions(failures: list[str]) -> None:
         fields = FieldPlan(layout, face, [], ir)
         forms_checked += 1
         rules_by_page = {int(p["index"]): p["rules"] for p in ir["pages"]}
+        fills_by_page = {int(p["index"]): p["area_fills"] for p in ir["pages"]}
         for page in layout["pages"]:
+            page_index = int(page["index"])
             ruled_blanks = RuledBlankWriting(
-                rules_by_page.get(int(page["index"]), ()), page["cells"])
+                rules_by_page.get(page_index, ()), page["cells"])
+            shading = DecorativeShading(fills_by_page.get(page_index, []))
             for cell in page["cells"]:
                 claimed = ruled_blanks.for_cell(cell["id"])
                 if not claimed:
                     continue
                 rules_checked += len(claimed)
-                if fields.of(cell["id"]) is None:
+                has_input = fields.of(cell["id"]) is not None
+                if not has_input:
                     unfilled.append(
                         f"{slug} {cell['id']}: {len(claimed)} underscore-drawn "
                         f"rule(s) claimed, no typing surface")
+                # F218: `field_verdict`'s ruled-blank branch deliberately does
+                # NOT consult `shading` -- an underscore-drawn writing line
+                # beats decorative tint, the one place the two are meant to
+                # disagree (see the branch's own comment for the 41/7 measured
+                # split). Asserted in THIS direction, the mirror of
+                # `row_number_corpus_assertions`' own shaded check: a claim
+                # on shaded paper must STILL have a typing surface, so the
+                # override cannot rot into a silent loss the day someone
+                # "fixes" it back to consulting shading.
+                if shading.blocks(cell):
+                    shaded_claims += 1
+                    if not has_input:
+                        shaded_unfilled.append(
+                            f"{slug} {cell['id']}: shaded ruled-blank claim "
+                            f"lost its typing surface")
 
     # rules_checked > 0 is load-bearing, not decoration: a discovery mechanism
     # that silently claimed nothing would leave `unfilled` empty too, and
@@ -8796,6 +8994,16 @@ def ruled_blank_corpus_assertions(failures: list[str]) -> None:
            f"{len(unfilled)} without a typing surface"
            + (f" ({'; '.join(unfilled[:6])}{'...' if len(unfilled) > 6 else ''})"
               if unfilled else ""),
+           failures)
+    # shaded_claims > 0 is load-bearing for the identical reason: without a
+    # tinted claim in the corpus this proves nothing about the override.
+    _check(shaded_claims > 0 and not shaded_unfilled,
+           "a ruled blank on SHADED paper still has an input -- an explicit "
+           "writing line beats decorative tint, corpus-wide",
+           f"{shaded_claims} shaded ruled-blank claim(s), {len(shaded_unfilled)} "
+           f"lost their typing surface to shading"
+           + (f" ({'; '.join(shaded_unfilled[:6])}"
+              f"{'...' if len(shaded_unfilled) > 6 else ''})" if shaded_unfilled else ""),
            failures)
 
 
@@ -9430,21 +9638,41 @@ def writing_box_assertions(plan: dict[str, Any], failures: list[str]) -> None:
            == ["0pt 60.25pt 0pt 0pt", "0pt 0pt 0pt 60.25pt"],
            "a divided cell emits one named input per region, on the region",
            f"{named}", failures)
-    _check(field_json(divided_box, divided_plan)["region_insets"]
+    _check(field_json(divided_box, divided_plan, "p0c2")["region_insets"]
            == [[0.0, 60.25, 0.0, 0.0], [0.0, 0.0, 0.0, 60.25]],
            "the band template carries every region, so a cloned row has them all",
-           f"{field_json(divided_box, divided_plan).get('region_insets')}",
+           f"{field_json(divided_box, divided_plan, 'p0c2').get('region_insets')}",
            failures)
     single_plan = FieldPlan(
         {"pages": [{"index": 0, "cells": [_synthetic_cell("p0c3", 40.0, 60.0)]}]},
         face, [])
     single_box = single_plan.of("p0c3")
     _check(single_box is not None and single_box.regions is None
-           and "region_insets" not in field_json(single_box, single_plan)
+           and "region_insets" not in field_json(single_box, single_plan, "p0c3")
            and 'id="p0c3-i"' in cell_markup(
                _synthetic_cell("p0c3", 40.0, 60.0), single_plan),
            "an undivided cell keeps the one input and the one name it had",
            f"regions {single_box.regions if single_box else 'none'}", failures)
+
+    # F219: `field_json`'s `centered` key must exist exactly where
+    # `field_input_markup`'s own inline `text-align:center` does (`fields.
+    # centered`, F212's own set), and be silently absent everywhere else --
+    # proven directly against `FieldPlan.centered` rather than routed through
+    # `SignatureLineBinding`'s caption detection, which is a separate,
+    # already-proven mechanism (`signature_line_corpus_assertions`).
+    _check("centered" not in field_json(single_box, single_plan, "p0c3"),
+           "an uncentred field's band JSON carries no centered key at all",
+           f"{field_json(single_box, single_plan, 'p0c3')}", failures)
+    single_plan.centered.add("p0c3")
+    _check(field_json(single_box, single_plan, "p0c3").get("centered") is True,
+           "a centred field's band JSON carries centered:true, mirroring its "
+           "pre-rendered inline text-align:center",
+           f"{field_json(single_box, single_plan, 'p0c3')}", failures)
+    _check("field.centered" in BAND_JS and "textAlign" in BAND_JS,
+           "the band runtime mirrors a centred field's alignment into a row "
+           "cloned at run time, not just the pre-rendered instance",
+           "BAND_JS's fieldMetrics reads field.centered and sets textAlign",
+           failures)
 
 
 def _knockout_specify_fill(role: str, gray: float | None,

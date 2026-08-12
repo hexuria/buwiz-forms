@@ -248,21 +248,20 @@ jobs:
       # tracked forms/ tree (see the module's own docstring for why), so it
       # needs neither build/ nor a pinned PDF and runs here for real -- it is
       # not one of the NOT COVERED lines below. Chromium is already installed
-      # above. Its own self-test runs first, on a synthetic three-input page,
-      # for the same reason every self-test in this job runs before its
-      # subject is trusted: a check that has never been proven able to fail
-      # is not evidence.
+      # above. Its own self-test runs first, on synthetic pages, for the same
+      # reason every self-test in this job runs before its subject is
+      # trusted: a check that has never been proven able to fail is not
+      # evidence.
       #
-      # KNOWN RED, BY DESIGN, RIGHT NOW: 20 of the corpus's 22 growable-band
-      # forms fail this walk. This is finding F209 -- emit.py appends a
-      # growable band's rendered rows after the page's entire static cell
-      # layer (`layer-cells`), so a band that is not the last thing on its
-      # page gets tabbed to after content that sits below it on paper. That
-      # is a defect in emit.py being fixed in a separate, concurrent change,
-      # not a flake in this check, and this step exists to MEASURE it
-      # precisely and report the exact per-form red counts that fix will be
-      # judged against -- not to tolerate it. It fails the job on any red,
-      # including every one of those 20 forms, until the emit.py fix lands.
+      # F209 (emit.py appended a growable band's rendered rows after the
+      # page's entire static cell layer, so a band that was not the last
+      # thing on its page got tabbed to after content that sits below it on
+      # paper) is CLOSED -- the corpus is 53/53 green on this walk. There is
+      # no tolerated-red form here, and there must not be one waved through
+      # by a stale "expected failure" comment beside this gate ever again
+      # (F216: this note itself, left in place two commits after the fix
+      # landed, was found stale by a review sweep). This step fails the job
+      # on ANY red, full stop.
       - name: Tab-order walk over the tracked forms/ corpus
         run: |
           set -euo pipefail

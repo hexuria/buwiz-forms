@@ -11,6 +11,106 @@ that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
 
+## W4 — the tooling backlog closes (F214-F220)
+
+**Measured 2026-08-12, worktree `wt/w4-backlog`, base `986fe767`.** Seven
+findings closed, none of them a field decision: `tab_check.py --self-test`
+passes 26 checks including three new fixtures, the corpus tab-walk stays
+**53/53 green**, and the blue vacant census falls from **110 to 7**
+corpus-wide with **fits/small/over/unboxed byte-identical before and after on
+every one of the 53 forms** (43,731/604/27/240). Input count on this tree's
+own seeded corpus is unmoved at **44,602** before and after (see the note
+below on why that is not 45,487).
+
+**F214 (major) — the tab-walk blamed the wrong field.** `compute_verdicts`'s
+`running_max = -1` sentinel let the DOM-first-reached input pass
+unconditionally, so when that input was NOT the reading-order-first one, it
+was graded green and the fields it pre-empted were graded red-order — the
+inverse of the truth. Fixed by grading only the first counted entry against
+`rank == 0` instead of the general `r >= running_max` rule; every later entry
+is unaffected. Proved by a new fixture reproducing F214's own evidence shape
+(DOM order [rank 1, rank 0]): the misplaced field is now the one graded red.
+Two further self-test gaps closed: a genuine focus-trap fixture proves
+`terminated_by == "cap"` and a field the trap prevented from ever being
+reached is red-skipped, not silently dropped; the self-test browser context
+now matches the corpus run's `device_scale_factor=2`.
+
+**F215 (minor) — latent silent false green.** `build_expected` now raises
+`DuplicateInputIdError` the instant a second input claims an id, instead of
+silently collapsing two fields into one verdict slot; `walk_form` turns that
+into a named hard per-form failure. Latent on the shipped corpus (no
+duplicate ids exist today) — the guard's value is failing loudly the day one
+is introduced.
+
+**F216 (minor) — stale CI comment.** `.github/workflows/formgen.yml`'s
+"KNOWN RED, BY DESIGN" note (F209, closed two commits after the comment was
+written) is replaced with the true, current state: 53/53 green, no
+tolerated red.
+
+**F217 (minor) — checker-of-checkers hole.** `field_assertions`'s
+independent re-derivation of `FieldPlan`'s fillable set never wired
+`checkbox_squares`, `knockout_specify` or `row_numbers` into its own
+`field_verdict` calls — latent on the pinned self-test form (2551Q) by
+coincidence for two of the three (its one `knockout_specify` claim is also a
+`ruled_blanks` claim, checked first). Proved real by reproducing the OLD
+computation against 1701-2018 (407 expected vs 404 old-style fillable, a
+genuine 3-cell mismatch) before fixing it. All three now wired the same shape
+`ruled_blanks`/`signature_boxes` already had.
+
+**F218 (minor) — guard asymmetries in `field_verdict`.** The ruled-blank and
+checkbox-square branches now route through `BureauReservation`, the same
+guard the signature-box branch already took deliberately (zero live cases,
+closed by construction regardless). The ruled-blank branch's deliberate
+non-consultation of `DecorativeShading` — correct, verified by measurement
+(of 48 underscore rules on tint, 41 sit in a white knockout and 7 are genuine
+write-on lines) — is now documented at the branch and captured by a new
+standing assertion: 27 shaded ruled-blank claims corpus-wide, 0 lost their
+typing surface.
+
+**F219 (minor) — band-blob mirroring.** `SignatureLineBinding`'s inline
+`text-align:center` is now mirrored into the growable-band runtime blob
+(`field_json` gains a sparse `centered` key; `BAND_JS`'s `fieldMetrics` gains
+a `slotIndex` parameter and sets `textAlign` from it). Zero live cases,
+exactly as F219 predicted — the band-data JSON blob is byte-identical across
+all 53 forms before and after — proved structurally instead, by two
+synthetic `FieldPlan` checks and a source-text assertion.
+
+**F220 (major) — the overlay closed boxes on faces that do not span them.**
+`FIELD_DEBUG_JS` gains `crossesCleanly`: a vertical (L/R) wall member is
+refused if it is flush with the box's own edge at one end (within
+`Math.max(TOL, box span)`) while running clearly past the other — the shape
+of a rule belonging to a taller structure that merely grazes this box, not
+one drawn for it. Measured directly in a real Chromium page rather than
+re-derived from prose: 1604cf-2008's phantom closes on two real data-table
+dividers whose ink starts EXACTLY at the box's own top (0.00pt off — the same
+rule that defines it) and runs 108.96pt further down through the real rows
+beneath. Applied only in `strict` mode, from `allBoxes`' own candidate search
+alone, never from the per-input lookup that classifies a real input's
+verdict — provably safe, not just careful, since any box a real input
+resolves to is re-added to the candidate set from that non-strict lookup
+regardless of what `allBoxes` found. Two regressions found and reverted
+before landing: an unscaled margin cost 9,421 real inputs their box
+corpus-wide (a comb tick's own few-tenths-of-a-point overshoot read as
+"asymmetric"); applying the same check to T/B rejected every edge
+compartment of every comb in the corpus (a comb's shared rail is, by design,
+flush with its own edge on one side). `HTML_RUNTIME_SCRIPT_SHA256` and all 53
+`EXPECTED_HTML_STRUCTURE_SHA256` (`comb_referee.py`) re-pinned for this and
+F219 together; comb census unmoved (4,587/33/4,554); determinism verified
+(two independent 53-form regenerations, byte-identical).
+
+**Why input count on this tree is 44,602, not 45,487.** STATUS.md's own
+r54/W2 entry above states 45,487 measured AT commit `986fe767` — this
+worktree's own base — but that number was measured on a corpus regenerated
+fresh from the six pinned source PDFs on `gol/form-correction`. This
+worktree's `build/ir`/`build/layout`/`build/fonts` were seeded directly
+(no PDFs available to re-extract from), and the seeded corpus's own baseline,
+measured before any change in this package, is 44,602 — not a number this
+package moved or could account for. What this package proves instead, and
+what its own acceptance criterion asks for, is that the count is IDENTICAL
+before and after every fix here (44,602 == 44,602): this package changes no
+field decision, regardless of which absolute baseline the seed started from.
+
+
 ## W2 — the last blocker closes, and the flag mattered more than the fix (F151)
 
 **Gate r54: 10/13**, determinism byte-identical (`c6d61584d081`), open

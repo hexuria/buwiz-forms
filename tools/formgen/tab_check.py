@@ -268,6 +268,21 @@ def discover_slugs(forms_root: pathlib.Path, layout_dir: pathlib.Path) -> list[s
 # ---------------------------------------------------------------------------
 
 
+class DuplicateInputIdError(RuntimeError):
+    """Two physically distinct inputs share one DOM id (F215).
+
+    `build_expected` and `compute_verdicts` both key everything by id, in
+    plain dicts, with no uniqueness assertion of their own -- so a duplicate
+    id would silently collapse two real fields into one verdict slot and drop
+    one of them out of grading entirely: a genuine, silent false green, not a
+    red marker a reviewer could ever see. Raised here, at the one place the
+    id list is actually built, so neither downstream dict can ever see a
+    duplicate to begin with; `compute_verdicts`'s own `rank = {id: i for
+    i, id in enumerate(expected_order)}` is therefore safe by construction,
+    not by a second check repeating this one.
+    """
+
+
 def build_expected(pages_raw: list[dict[str, Any]]
                    ) -> tuple[list[str], dict[str, dict[str, Any]], dict[int, dict[str, float]]]:
     """The reading-order sequence every input is graded against.
@@ -276,6 +291,9 @@ def build_expected(pages_raw: list[dict[str, Any]]
     reclustered y0 -- and within a cell, inputs keep the DOM order the
     document already put them in: slot 0..capacity-1 for a comb, writing
     region 0..N for a plain field the source rules into several boxes.
+
+    Raises `DuplicateInputIdError` (F215) the moment a second input claims an
+    id `input_meta` already holds -- a hard failure, not a silent overwrite.
     """
     expected_order: list[str] = []
     input_meta: dict[str, dict[str, Any]] = {}
@@ -286,6 +304,12 @@ def build_expected(pages_raw: list[dict[str, Any]]
         for cell in sorted(page["cells"], key=lambda c: (c["row"], c["left"])):
             for inp in cell["inputs"]:
                 input_id = inp["id"]
+                if input_id in input_meta:
+                    raise DuplicateInputIdError(
+                        f"duplicate input id {input_id!r} on page {index}: two "
+                        "physically distinct inputs would collapse into one "
+                        "verdict slot and one would be silently dropped from "
+                        "grading (F215)")
                 expected_order.append(input_id)
                 input_meta[input_id] = {
                     "page": index,
@@ -339,6 +363,26 @@ def compute_verdicts(expected_order: list[str], sequence: list[str]
     non-decreasing. The first press that breaks that is `red-order`: an input
     whose row-cluster (or, tied, whose x) is strictly above one already
     reached. Never-reached inputs are `red-skipped`.
+
+    F214: the VERY FIRST input the walk reaches is graded against a stricter
+    rule than the rest. A real Tab walk starts wherever `document.
+    querySelector("input.fi")` lands -- DOM order, not reading order -- and
+    the honest question is whether that DOM-first element IS the
+    reading-order-first one (rank 0). Grading it the same way later entries
+    are graded ("not behind anything already reached") is vacuous: nothing
+    has been reached yet, so `r >= running_max`'s sentinel is satisfied by
+    every rank, and the misplaced field that STARTS the walk always comes
+    back green while the fields it pre-empted -- which are themselves in
+    correct relative order -- come back red-order instead: with DOM order
+    [p2 (rank 1), p1 (rank 0)], the old rule graded p2 green and p1
+    red-order, the inverse of the truth. Requiring rank 0 specifically for
+    this one entry, and leaving `running_max` at its sentinel when that
+    check fails -- exactly as a later red-order entry already leaves it
+    unchanged -- fixes that: p2 is graded red-order (it IS the defect) and
+    p1 is graded on its own merits again (green, since nothing before it in
+    the walk has been accepted yet). Every entry after the first keeps the
+    original rule unchanged; this is scoped to the first counted entry only,
+    matching F214's own evidence, not a general reordering of the walk.
     """
     rank = {input_id: i for i, input_id in enumerate(expected_order)}
     seen: set[str] = set()
@@ -359,11 +403,12 @@ def compute_verdicts(expected_order: list[str], sequence: list[str]
         seq_num += 1
         reached_at[entry_id] = seq_num
         r = rank[entry_id]
-        if r < running_max:
-            order_ok[entry_id] = False
-        else:
+        in_order = r == 0 if seq_num == 1 else r >= running_max
+        if in_order:
             order_ok[entry_id] = True
             running_max = r
+        else:
+            order_ok[entry_id] = False
 
     verdicts: dict[str, str] = {}
     for input_id in expected_order:
@@ -483,7 +528,18 @@ def walk_form(tab: Any, slug: str, bundle: pathlib.Path, review_dir: pathlib.Pat
             "totals": {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0, "vacant": 0},
         }
 
-    expected_order, input_meta, page_meta = build_expected(pages_raw)
+    try:
+        expected_order, input_meta, page_meta = build_expected(pages_raw)
+    except DuplicateInputIdError as exc:
+        # F215: a hard per-form failure, not a silent collapse -- the walk
+        # cannot grade a form whose own id space is not one-to-one with its
+        # inputs, and pretending otherwise is exactly the false green this
+        # guard exists to end.
+        return {
+            "schema_version": SCHEMA_VERSION, "slug": slug, "limitation": LIMITATION,
+            "ok": False, "failures": [str(exc)],
+            "totals": {"green": 0, "red-skipped": 0, "red-order": 0, "total": 0, "vacant": 0},
+        }
     input_count = len(expected_order)
 
     sequence, presses, cap, terminated_by = run_walk(tab, input_count)
@@ -676,97 +732,244 @@ SELF_TEST_HTML = ("""<!doctype html>
 </body></html>
 """)
 
+# F214's own fixture: the DOM-first input is NOT the reading-order-first one.
+# p2 (row 0, left 100, true rank 1) is placed BEFORE p1 (row 0, left 10, true
+# rank 0) in the DOM, so a real Tab walk -- which starts at `document.
+# querySelector("input.fi")`, DOM order -- reaches p2 first. Before F214's
+# fix this graded p2 green (the sentinel `running_max=-1` accepts any first
+# rank unconditionally) and p1 red-order, blaming the correctly-placed field
+# for the misplaced one's own defect. The fix must reverse that: p2 (DOM
+# first, not rank 0) is the actual defect and must be red-order; p1 (true
+# rank 0, merely reached second because something jumped ahead of it) must
+# be green.
+SELF_TEST_HTML_DOM_FIRST = ("""<!doctype html>
+<html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box }
+.page { position:relative; background:#fff }
+.c { position:absolute }
+.fi { position:absolute; inset:0; border:0.5pt solid #999 }
+</style></head><body>
+<div class="page page-1" id="page-1" style="width:200pt;height:200pt">
+  <div id="p2" class="c f" data-cell-kind="field" data-row="0" data-col="1"
+       style="left:100pt;top:10pt;width:20pt;height:20pt"><input class="fi" id="p2-i"></div>
+  <div id="p1" class="c f" data-cell-kind="field" data-row="0" data-col="0"
+       style="left:10pt;top:10pt;width:20pt;height:20pt"><input class="fi" id="p1-i"></div>
+</div>
+<script>
+""" + emit.FIELD_DEBUG_JS + """
+</script>
+</body></html>
+""")
+
+# F214's second gap: `terminated_by="cap"` is never exercised, though "never
+# silently truncated" is a central claim of this module. A merely-unfocusable
+# input (`tabindex="-1"`) does not do it -- Tab simply skips it and the walk
+# still reaches `<body>` in a bounded number of presses, checked and proven
+# by the DOM-first fixture above and by every real corpus form with a
+# growable band's overflow markers. The one honest way `terminated_by="cap"`
+# can happen is a genuine focus trap: a runtime that intercepts Tab and never
+# releases it, so `document.activeElement` never becomes `<body>` at all. p1's
+# own keydown listener is exactly that, and p2 (`tabindex="-1"`, so it could
+# never be reached even if the trap were bypassed) is never focused as a
+# result: this fixture proves BOTH that the cap saves the walk from hanging
+# (`terminated_by == "cap"`, `presses == cap`) and that a field the trap
+# prevented from ever being reached is reported red-skipped rather than
+# silently dropped.
+SELF_TEST_HTML_CAP_TRAP = ("""<!doctype html>
+<html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box }
+.page { position:relative; background:#fff }
+.c { position:absolute }
+.fi { position:absolute; inset:0; border:0.5pt solid #999 }
+</style></head><body>
+<div class="page page-1" id="page-1" style="width:200pt;height:200pt">
+  <div id="p1" class="c f" data-cell-kind="field" data-row="0" data-col="0"
+       style="left:10pt;top:10pt;width:20pt;height:20pt"><input class="fi" id="p1-i"></div>
+  <div id="p2" class="c f" data-cell-kind="field" data-row="0" data-col="1"
+       style="left:100pt;top:10pt;width:20pt;height:20pt">
+    <input class="fi" id="p2-i" tabindex="-1"></div>
+</div>
+<script>
+""" + emit.FIELD_DEBUG_JS + """
+</script>
+<script>
+document.getElementById("p1-i").addEventListener("keydown", (ev) => {
+  if (ev.key === "Tab") { ev.preventDefault(); }
+});
+</script>
+</body></html>
+""")
+
+
+def _run_self_test_form(engine: Any, context: Any, slug: str, html: str,
+                        review_dir: pathlib.Path) -> dict[str, Any]:
+    """Write one synthetic fixture, walk it for real, return its report."""
+    tmp_path = review_dir.parent
+    bundle = tmp_path / f"bundle-{slug}"
+    bundle.mkdir()
+    (bundle / "index.html").write_text(html, encoding="utf-8")
+    tab = context.new_page()
+    report = walk_form(tab, slug, bundle, review_dir)
+    tab.close()
+    return report
+
 
 def self_test() -> int:
-    """Build a synthetic 3-input page with one deliberately displaced input
-    and prove the walk catches exactly that one as red-order."""
+    """Prove the ordering check, the vacant census, and both termination
+    paths (`body`, `cap`) -- three synthetic pages, one browser context with
+    the same `device_scale_factor=2` the corpus run in `main()` uses (F214:
+    the self-test previously ran at the default DPR, proving nothing about
+    the DPR-2 documents this module actually walks)."""
     from playwright.sync_api import sync_playwright
 
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = pathlib.Path(tmp)
-        bundle = tmp_path / "bundle"
-        bundle.mkdir()
-        (bundle / "index.html").write_text(SELF_TEST_HTML, encoding="utf-8")
         review_dir = tmp_path / "review"
+        reports: list[dict[str, Any]] = []
 
         with sync_playwright() as engine:
             browser = engine.chromium.launch()
-            context = browser.new_context()
-            tab = context.new_page()
-            report = walk_form(tab, "selftest", bundle, review_dir)
-            tab.close()
-            write_index_html(review_dir, [report])
-            browser.close()
+            context = browser.new_context(device_scale_factor=2)
 
-        verdicts = {entry["id"]: entry["verdict"] for entry in report["inputs"]}
-        expected = {"p1c1-i": "green", "p1c3-i": "green", "p1c2-i": "red-order"}
-        for input_id, want in expected.items():
-            got = verdicts.get(input_id)
-            ok = got == want
+            report = _run_self_test_form(engine, context, "selftest", SELF_TEST_HTML, review_dir)
+            reports.append(report)
+
+            verdicts = {entry["id"]: entry["verdict"] for entry in report["inputs"]}
+            expected = {"p1c1-i": "green", "p1c3-i": "green", "p1c2-i": "red-order"}
+            for input_id, want in expected.items():
+                got = verdicts.get(input_id)
+                ok = got == want
+                failures += not ok
+                print(f"  {'PASS' if ok else 'FAIL'}  {input_id} expected {want}, got {got}",
+                      file=sys.stderr)
+
+            ok = report["totals"]["red-skipped"] == 0
             failures += not ok
-            print(f"  {'PASS' if ok else 'FAIL'}  {input_id} expected {want}, got {got}",
+            print(f"  {'PASS' if ok else 'FAIL'}  nothing is red-skipped "
+                  f"(got {report['totals']['red-skipped']})", file=sys.stderr)
+
+            ok = not report["walk"]["cap_hit"]
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  the walk did not hit the hard cap on 3 inputs",
                   file=sys.stderr)
 
-        ok = report["totals"]["red-skipped"] == 0
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  nothing is red-skipped "
-              f"(got {report['totals']['red-skipped']})", file=sys.stderr)
-
-        ok = not report["walk"]["cap_hit"]
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  the walk did not hit the hard cap on 3 inputs",
-              file=sys.stderr)
-
-        ok = report["walk"]["input_count"] == 3 and report["walk"]["presses"] == 3
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  3 inputs, 3 presses to reach body "
-              f"(got input_count={report['walk']['input_count']}, presses={report['walk']['presses']})",
-              file=sys.stderr)
-
-        image = review_dir / "selftest" / "page-1.png"
-        ok = image.is_file() and image.stat().st_size > 0
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  page-1.png artifact written to {image}", file=sys.stderr)
-
-        tab_json = review_dir / "selftest" / "tab.json"
-        ok = tab_json.is_file()
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  tab.json written to {tab_json}", file=sys.stderr)
-
-        # T4-addendum: the deliberate vacant box (SVG rect, x/y 130..150)
-        # must come back as exactly one tone-aware "vacant" mark, distinct
-        # from the three tabbed inputs, at the geometry the fixture prints.
-        vacant = report.get("vacant") or []
-        ok = len(vacant) == 1
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  exactly one vacant box census'd "
-              f"(got {len(vacant)}: {vacant})", file=sys.stderr)
-        if vacant:
-            entry = vacant[0]
-            geometry_ok = (entry["page"] == 1
-                          and abs(entry["x_pt"] - 130) < 0.1
-                          and abs(entry["y_pt"] - 130) < 0.1
-                          and abs(entry["w_pt"] - 20) < 0.1
-                          and abs(entry["h_pt"] - 20) < 0.1)
-            failures += not geometry_ok
-            print(f"  {'PASS' if geometry_ok else 'FAIL'}  the vacant box's "
-                  f"geometry matches the printed fixture (got {entry})",
+            ok = report["walk"]["input_count"] == 3 and report["walk"]["presses"] == 3
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  3 inputs, 3 presses to reach body "
+                  f"(got input_count={report['walk']['input_count']}, presses={report['walk']['presses']})",
                   file=sys.stderr)
-        ok = report["totals"].get("vacant") == 1
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  totals.vacant is 1 "
-              f"(got {report['totals'].get('vacant')})", file=sys.stderr)
-        ok = report["pages"] and report["pages"][0].get("vacant") == 1
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  the page's own vacant count is 1 "
-              f"(got {report['pages'][0].get('vacant') if report['pages'] else None})",
-              file=sys.stderr)
-        ok = tab_json.is_file() and json.loads(
-            tab_json.read_text(encoding="utf-8")).get("vacant") == vacant
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  tab.json on disk carries the "
-              f"same vacant list", file=sys.stderr)
+
+            image = review_dir / "selftest" / "page-1.png"
+            ok = image.is_file() and image.stat().st_size > 0
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  page-1.png artifact written to {image}", file=sys.stderr)
+
+            tab_json = review_dir / "selftest" / "tab.json"
+            ok = tab_json.is_file()
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  tab.json written to {tab_json}", file=sys.stderr)
+
+            # T4-addendum: the deliberate vacant box (SVG rect, x/y 130..150)
+            # must come back as exactly one tone-aware "vacant" mark, distinct
+            # from the three tabbed inputs, at the geometry the fixture prints.
+            vacant = report.get("vacant") or []
+            ok = len(vacant) == 1
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  exactly one vacant box census'd "
+                  f"(got {len(vacant)}: {vacant})", file=sys.stderr)
+            if vacant:
+                entry = vacant[0]
+                geometry_ok = (entry["page"] == 1
+                              and abs(entry["x_pt"] - 130) < 0.1
+                              and abs(entry["y_pt"] - 130) < 0.1
+                              and abs(entry["w_pt"] - 20) < 0.1
+                              and abs(entry["h_pt"] - 20) < 0.1)
+                failures += not geometry_ok
+                print(f"  {'PASS' if geometry_ok else 'FAIL'}  the vacant box's "
+                      f"geometry matches the printed fixture (got {entry})",
+                      file=sys.stderr)
+            ok = report["totals"].get("vacant") == 1
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  totals.vacant is 1 "
+                  f"(got {report['totals'].get('vacant')})", file=sys.stderr)
+            ok = report["pages"] and report["pages"][0].get("vacant") == 1
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  the page's own vacant count is 1 "
+                  f"(got {report['pages'][0].get('vacant') if report['pages'] else None})",
+                  file=sys.stderr)
+            ok = tab_json.is_file() and json.loads(
+                tab_json.read_text(encoding="utf-8")).get("vacant") == vacant
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  tab.json on disk carries the "
+                  f"same vacant list", file=sys.stderr)
+
+            # F214: the DOM-first-is-misplaced fixture. The walk's own
+            # sequence is [p2-i, p1-i] (DOM order); rank(p1-i)=0, rank(p2-i)=1.
+            # p2-i started the walk despite not being rank 0 -- IT is the
+            # defect and must be the one graded red. p1-i is reached second
+            # but is in correct relative order on its own merits and must be
+            # green, the inverse of what the unfixed code produced.
+            dom_first_report = _run_self_test_form(
+                engine, context, "selftest-domfirst", SELF_TEST_HTML_DOM_FIRST, review_dir)
+            reports.append(dom_first_report)
+            dom_first_verdicts = {entry["id"]: entry["verdict"]
+                                  for entry in dom_first_report["inputs"]}
+            expected_dom_first = {"p2-i": "red-order", "p1-i": "green"}
+            for input_id, want in expected_dom_first.items():
+                got = dom_first_verdicts.get(input_id)
+                ok = got == want
+                failures += not ok
+                print(f"  {'PASS' if ok else 'FAIL'}  (F214, DOM-first misplaced) "
+                      f"{input_id} expected {want}, got {got}", file=sys.stderr)
+            ok = dom_first_report["totals"]["red-skipped"] == 0
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, DOM-first misplaced) "
+                  f"nothing is red-skipped (got {dom_first_report['totals']['red-skipped']})",
+                  file=sys.stderr)
+            ok = dom_first_report["walk"]["sequence"][:1] == ["p2-i"]
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, DOM-first misplaced) "
+                  f"the walk really did reach p2-i first "
+                  f"(got {dom_first_report['walk']['sequence']})", file=sys.stderr)
+
+            # F214: the cap-hit fixture. p1's own keydown listener traps Tab
+            # forever, so `document.activeElement` never becomes <body> and
+            # the walk must exhaust its hard cap rather than hang or silently
+            # report success. p2 (never reached) must be red-skipped, not
+            # dropped -- "never silently truncated" proven on a case that
+            # actually truncates.
+            cap_report = _run_self_test_form(
+                engine, context, "selftest-captrap", SELF_TEST_HTML_CAP_TRAP, review_dir)
+            reports.append(cap_report)
+            ok = cap_report["walk"]["terminated_by"] == "cap"
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, cap trap) "
+                  f"terminated_by is \"cap\" (got {cap_report['walk']['terminated_by']!r})",
+                  file=sys.stderr)
+            ok = cap_report["walk"]["cap_hit"] is True
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, cap trap) cap_hit is True "
+                  f"(got {cap_report['walk']['cap_hit']!r})", file=sys.stderr)
+            ok = cap_report["walk"]["presses"] == cap_report["walk"]["cap"]
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, cap trap) the walk ran "
+                  f"exactly to its own cap, not beyond and not short of it "
+                  f"(presses={cap_report['walk']['presses']}, cap={cap_report['walk']['cap']})",
+                  file=sys.stderr)
+            cap_verdicts = {entry["id"]: entry["verdict"] for entry in cap_report["inputs"]}
+            ok = cap_verdicts.get("p1-i") == "green" and cap_verdicts.get("p2-i") == "red-skipped"
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, cap trap) the trapped field is "
+                  f"green (reached), the never-reached one is red-skipped, not silently "
+                  f"dropped (got {cap_verdicts})", file=sys.stderr)
+            ok = cap_report["ok"] is False
+            failures += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  (F214, cap trap) a capped walk never "
+                  f"reports ok (got {cap_report['ok']!r})", file=sys.stderr)
+
+            write_index_html(review_dir, reports)
+            browser.close()
 
         index_html = review_dir / "index.html"
         ok = index_html.is_file() and "red-order" in index_html.read_text(encoding="utf-8")
