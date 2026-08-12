@@ -10,6 +10,50 @@ regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
 that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
+
+## W2 — the last blocker closes, and the flag mattered more than the fix (F151)
+
+**Gate r54: 10/13**, determinism byte-identical (`c6d61584d081`), open
+blocker+major **7 -> 6 and ZERO blockers remain**. Inputs 45,468 -> **45,487**,
+tab-walk 53/53 green, blue census 108 unmoved.
+
+F151's Schedule D Description cells are fillable. P2's row-number rule landed
+as specified — a `label` cell sharing a row with a field cell, holding only a
+short numeral, with a trailing blank clearing the form's own `line_width_pt`
+and room to write. **P2 recorded a caveat that no longer applied**: it said
+F151 could not close because its Schedule C half was unseparable. F151 was
+later NARROWED and that half REFUTED (those cells hold 88-94% of their own
+pre-printed category names), so Schedule D alone closes it. Reading both
+records against each other was the difference between attempting this and
+skipping it.
+
+P2 measured 296 -> 56/23 on the r38 tree; this tree gives 61/13, drift fully
+explained by ~35 intervening commits that reclassify `label` cells, of which
+12 were already fillable — **49 net-new**. Nothing was tuned toward 56.
+
+**The implementing agent's flag was worth more than its patch.** It promoted
+1621-2019 p2's "Seq. No. (A)" column and, rather than hand-excluding it, said
+so and left it for review. Rendering it settled the question in one look: a
+grey band whose 1..5 the Bureau prints. Measuring the whole promoted set found
+**31 of 49 sit on >=70% tint** — printed row indexes across 7 forms, not
+writing surfaces.
+
+The cause is the third instance of one shape: the new branch returns before
+reaching the refusal the ordinary field path applies a few lines below ("a
+blank the source shaded is not a blank either") — the same ordering asymmetry
+**F218** filed against the ruled-blank and checkbox branches. It now asks the
+existing shading gate; no new constant, no form-code special case, the
+discriminator is the source's own tint. `row_number_corpus_assertions` asserts
+**both directions** so the exclusion cannot rot into a silent skip: 31 shaded
+cells, 0 leaked.
+
+Browser-verified: `1701-2018-conso` p2c132/136/140/144 type and read back;
+1621-2019 p2c16/23/30/37/44 have zero inputs. An agent also found and fixed a
+real defect mid-package — its first cut let a writing box overlap foreign
+printed ink from a neighbouring cell (0605-1999 p1c81), which
+`inputs_over_printed_text` caught at 2/5 -> 3/6; requiring the band be free of
+foreign ink page-wide restored 2/5 and 0605 correctly gains nothing.
+
 ## W2 — the row-number rule (F151 closed, the last blocker)
 
 **Measured 2026-08-12, worktree `wt/w2-row-number`, base `2b3e20c8`.**
