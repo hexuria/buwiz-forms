@@ -12,6 +12,41 @@ superseded by the r43 section.
 
 
 
+
+## r57–r58 — the assertion that started it all reaches zero, and the failure surface is now fully mapped
+
+**Gate r58: 10/13**, determinism byte-identical (`c05717841c8e`).
+**`inputs_over_printed_text` no longer appears on the gate** — 0 forms / 0
+offenders, the first corpus-wide zero in this project's history. W6/F227's
+diagnosis: the trim existed and was correct, but never REACHED three combs
+(field_box's comb branch never called it) and trimmed two plain fields to the
+run's declared line box instead of the glyphs' measured outlines (0.055pt
+short — 'p' and 'y' descend 0.218em, the line box says 0.21). The seventh
+logged defect of the shape "a nominal edge standing in for measured ink."
+
+**W5 merged with the user's approval** — the one edit the locked judge
+permits, reviewed before merging. `comb_slots_match_printed` 10 forms/19 →
+**9/13**; the referee evaluates end-to-end for the first time.
+
+**One integration defect, mine to own:** F227's fix expressed the comb trim
+as `style="inset:<T>pt 0pt 0pt 0pt"` on slot inputs, whose referee grammar
+pinned an exact key set with no `style` — gate r57 correctly rejected all
+three changed forms ("outside the emitter grammar"). The fix was right; the
+schema change was never DECLARED, and declaring pins is the single-writer's
+job, not the package's. Declared at r58: the grammar admits `style` on slot
+inputs constrained to EXACTLY a top-only positive inset, factored into
+`slot_input_style_ok()` and proven able to fail with three reject probes
+(non-top-only inset, non-inset property, second declaration), so the channel
+cannot silently widen.
+
+**The remaining failure surface, fully mapped:** `assertions` = 13 comb
+offenders across 9 forms, every one waiting on the user's 13-cell topology
+review (the sheet is with them; their counts become pinned reviewed facts —
+W8); `findings` = F065 + F222 (the two user-approved done-condition
+exceptions, impossibility proofs attached) + F226 (2316's three signature
+sites, W9 running on the sliver-gap rule); `comb-referee` = the same 13
+offenders seen through the audit-complete guard. Nothing else is red.
+
 ## W6 — the five assertion offenders close honestly, and a comb gets ink-trimmed for the first time (F227 closed)
 
 **Measured 2026-08-13, worktree `wt/w6-inktrim`, base `24cdc6e7`.**
