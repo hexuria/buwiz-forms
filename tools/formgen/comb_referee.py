@@ -495,8 +495,40 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # move inside a slot is visible to the judge in both directions; where the
 # attribution is ambiguous it keeps the larger slot rectangle, which can only
 # report more overlap and never less.
+# Re-pinned 2026-08-12 (W5): `printed_compartments` gained three narrowly
+# scoped extensions to what it can MEASURE, none touching this file's own
+# proven rules. (1) A chromatic fill is refused only when its own `re`/`qu`
+# items are not exactly rectilinear -- `_perceptual_luminance` (BT.601,
+# published coefficients, not invented) supplies the missing scalar tone for
+# any colour, and the exact regions are reconstructed and composited exactly
+# as a grey fill's would be, scoped to one comb's own evaluation via a local
+# `dataclasses.replace(page, ...)`, never touching the shared bundle-wide
+# `page.paints`/`page.unsupported`. (2) A non-rectilinear (bezier/diagonal)
+# stroke's own extrema-derived bounding rect -- already computed by pymupdf,
+# unchanged -- decides whether it can BE a divider, mirroring the existing
+# position-aware `text_hits` deferral; one that never straddles a divider the
+# band's own rectilinear ink establishes no longer blocks. (3) When a
+# candidate band's full painted extent (F064's own shared-multi-row-rule
+# reading) yields no strict-majority topology at all, the SAME unmodified
+# `_band_topologies` majority rule is retried against that band clipped to
+# the claimed owner's own rectangle -- one further, narrower measurement of
+# the same source ink, not a different rule. A fourth and fifth candidate
+# extension (a `_dominant_certified_topology`-style containment fallback for
+# competing topologies, and a multi-wall generalisation of
+# `_frame_cut_at_source_walls`) were implemented, then refused and reverted:
+# both passed their own target offenders but broke this file's own proven
+# mutation-tested guards (a synthetic short, richer slab must stay competing;
+# a spuriously reclassified wall must not let a claim silently resolve), so
+# neither ships. `comb_slots_match_printed` moves from 10 forms/19 offenders
+# to 9 forms/13 (1604-CF p1c13, 2550-M p1c13, 2553 p1c18/p1c20/p1c22/p1c24
+# decided-agree; every other prior offender is either untouched or, for
+# 1604-CF p2c73 and 2551-M p2c13, now diagnosed as the SAME U-frame-ownership
+# problem the refused fifth extension would have addressed, not resolved).
+# No comb constant or tolerance moved; every other assertion, corpus-wide, is
+# unmoved (verified by a full 53-form `audit.py --assertions-only` re-run,
+# form by form, assertion by assertion, against the pre-change baseline).
 AUDIT_PRODUCER_SHA256 = (
-    "e864b25e31bd2c0fa61ff2425d829abe6f7d95c4cfae11212ddca66cea78851d"
+    "2e8e4dff7389e1dc362124cd2e45a952e96b826f1ff128996ef58215dd084731"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
