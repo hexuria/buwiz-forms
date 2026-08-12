@@ -12,6 +12,91 @@ superseded by the r43 section.
 
 
 
+## W7 — is_one_boundary's fusion criterion, measured corpus-wide and refused (F222)
+
+**Measured 2026-08-13, worktree `wt/w7-boundary`, base `24cdc6e7`. No producer
+change; `tools/formgen/lattice.py` is byte-identical to base.** F222 left one
+open question after W4b: closing the 23 real wall-crossing marks needs either
+tightening `is_one_boundary`'s own fusion criterion or a new per-side ink
+capture, and both were named as corpus-wide-reach mechanisms nobody had
+measured. This package measured the first one and refused to ship it.
+
+**Method.** Every FINAL v/h call `build_page` makes to `build_lattice` (the
+two calls that actually determine `cell.x0/x1/y0/y1`, not the raw/legacy
+pair) was instrumented over all 53 tracked `build/ir` files to capture
+`fuse_boundaries`' own pre-fusion clusters. For every pair of clusters
+currently fused into one boundary, measured directly (not inferred) whether
+ANY ink anywhere on the page intersects the gap between them — the identical
+"checked directly across the whole page width" method F222's own prior round
+used by hand for the 1701Q and 1801 examples.
+
+**Corpus measurement: 348 currently-fused pairs across all 53 of 53 forms
+carry genuine (no-ink) paper in their gap.** The shape is universal, not
+confined to F222's 6 named forms. 312 of those sit in one dense, continuous
+population where the paper is strictly LESS than the larger of the two
+sides' own rule thickness (ratio 0.197–0.931 against the wider bar), on 51 of
+the 53 forms — matching the two positive fusions `is_one_boundary`'s own
+docstring already names (0619E y=150.1, 1600WP x=357.0), BIR's own
+deliberate "two rules read as one heavier line" design reused at page
+headers, item separators and signature blocks corpus-wide with the same
+1.08/1.2/1.32/1.44pt paper values recurring everywhere. 36 pairs, across 17
+of the 53 forms, have paper AT OR PAST the larger side's own thickness
+(ratio ≥ 1.0) — the shape F222's own 23 real sites carry (1701Q's 2.4pt gap
+over a 1.44pt bar is ratio 1.667; 1801's 1.08pt gap over a 0.72pt bar is
+ratio 1.5).
+
+**One candidate discriminator was tested, and it is the function's own
+documented intent, not a new tuning constant.** `is_one_boundary`'s docstring
+already reads "a white core thinner than the bars around it ... reads as one
+heavier line," but its code compares paper against the SUM of both sides'
+own max thickness. Comparing against a SINGLE side's own max thickness (the
+larger of the two) is what the docstring describes, and separates F222's own
+two hand-carried cases exactly: h18/h19 (legitimate, 1.2pt/1.44pt, ratio
+0.833, stays fused) vs h73/h74+h75 (F222's own canonical defect,
+2.4pt/1.44pt, ratio 1.667, separates). Implemented only as a monkeypatched
+substitution over a scratch copy run against the tracked `build/ir` —
+`lattice.py` itself carries no edit — rebuilt all 53 layouts, and diffed
+every cell against the committed `build/layout/*.json` cell-for-cell, W3's
+own blast-radius method. Harness validated first: rebuilding with the
+UNCHANGED `is_one_boundary` reproduces the committed tree exactly, **0
+mismatches on all 53 forms**.
+
+**Blast radius: 2,428 cells change across 17 of 53 forms** (0605-1999 67,
+1600wp-2010 174, 1604cf-2008 545, 1606-2018 35, 1701-2018-conso 157,
+1701ms-2024 212, 1701q-2018 8, 1707a-2021 8, 1801-2018 28, 2200s-2018 113,
+2316-2021 163, 2550-ds-2025 138, 2550m-2007 180, 2551m-2002 117, 2551q-2018
+175, 2552-2018 262, 2553-1999 46). **11 of those 17 forms are entirely
+outside F222's own 6 named forms** and have never been checked by the live
+Playwright census the prior round used to confirm the 23 real marks; the
+change cannot be scoped to only the reviewed sites because the discriminating
+quantity is a corpus-general property of every rule pair in the lattice.
+Even inside the 6 reviewed forms the change is not surgical: 2550M's own
+`p1c86` does not just move its bottom edge — the whole cell relocates,
+`(360.48,813.6)-(484.46,828.58)` to `(302.47,812.16)-(346.32,823.92)`, and
+gains a comb structure (`comb.cells` `None` → `4`) that did not exist
+before, because separating one fused row boundary changes the DSU cell-merge
+topology for the whole surrounding region, not only the one wall it was
+measured against. 1701Q's own `p2c115`/`p2c116` do move the right direction
+(`y1` `769.46` → `766.90`, off the printed wall they overran at `770.02`) but
+land on the upper rule's own CENTRE, not its own far ink edge (`767.62`) — the
+one site this candidate targeted is not landed exactly, only moved off the
+defect.
+
+**Refused, per this checkout's own calibration.** W3's Route A was refused at
+166 cells/13 forms (its loosest tested bound) and 751 cells/24 forms (its
+strictest), both exceeding F151's own 49-cell "too large to review at any
+comparable scale" threshold. The one candidate measured here — **2,428
+cells/17 forms** — exceeds W3's own worst rejected bound by more than 3x in
+cell count, and unlike W3's Route A (which stayed inside the one form family
+it targeted before generalising), 11 of its 17 touched forms have zero
+relationship to F222's own evidence. No second candidate was tried: the
+discriminator above is already the function's own documented design intent,
+and narrowing it further to chase a smaller number would be exactly the
+"tolerance widened until the pairs separate" move this task explicitly
+forbids. `review-findings.json`: F222 stays open, resolution updated with
+this measurement. No pin moved; no census, assertion, input count or
+determinism digest changed, because no producer file changed.
+
 ## W4b — nine more signatures, and the wall-crossing overlay reds turn out to be 23 real (and not worth the fix) plus 4 correctly-shipped
 
 **Measured 2026-08-12, worktree `wt/w4b-signature`, base `60a3ab16`.** Inputs
