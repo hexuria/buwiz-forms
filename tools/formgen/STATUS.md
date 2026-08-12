@@ -12,6 +12,34 @@ superseded by the r43 section.
 
 
 
+
+## r59 — everything agent-closable is closed; the last input is the user's
+
+**Gate r59: 10/13**, determinism byte-identical (`15947889ee6a`). The three
+remaining reds now reduce to ONE pending input plus one approved exception:
+
+- `assertions` — only `comb_slots_match_printed`, 9 forms / 13 offenders,
+  every one a cell the audit provably cannot decide from vector data and every
+  one on the 13-cell review sheet sent to the user (official crop vs ours, red
+  box on each cell). Their counts become pinned reviewed facts (W8).
+- `findings` — **2/149, exactly the user-approved exception list**: F065
+  (writing area under a correctly-refused font's text) and F222 (honest fix
+  measured at 2,428 cells / 17 forms and refused per the project's own
+  calibration). Impossibility proofs attached to both.
+- `comb-referee` — the same 13 offenders seen through the audit-complete
+  guard; clears with W8.
+
+W9 closed F226's two bindable sites (+2 inputs, browser-verified, centred,
+bottom-seated 0.42pt above their rules; the wrong-binding case refused at
+22.8pt by both tests independently; corpus-wide the rule binds exactly the 2
+target cells with 250 candidates refused, both directions asserted). The
+orphan third site is F228 (minor): its caption run is assigned to no lattice
+cell, unreachable by any cell-to-cell mechanism.
+
+Final corpus numbers at r59: **45,548 inputs** (45,333 at the session's
+start), tab-walk **53/53 green**, blue census **5**,
+`inputs_over_printed_text` **0/0**, censuses 4,587 / 4,557 / 30.
+
 ## W9 — 2316's own item 53/54 sign, item 56 stays open and is spawned as F228 (F226 closed)
 
 **Measured 2026-08-13, worktree `wt/w9-f226`, base `b9af586b`.** `emit.SignatureRuleWriting`'s
