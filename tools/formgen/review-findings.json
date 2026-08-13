@@ -3023,6 +3023,19 @@
       "status": "fixed",
       "resolution": "Deduplicated: EXPECTED_HTML_STRUCTURE_SHA256 goes from 265 key entries to 53, dropping the 212 dead lines and keeping the last (live) value for every slug. Semantics-preservation was PROVEN, not assumed -- the dict resolved from the source before and after the edit is byte-for-byte the same mapping. Guarded by `source_literal_duplicate_keys`, a new comb_referee self-test assertion that parses THIS FILE with ast and refuses any repeated key in EXPECTED_HTML_STRUCTURE_SHA256 or AUDIT_DEPENDENCY_SHA256. It reads the SOURCE LITERAL precisely because the resolved dict cannot see the defect: proven by inserting a dead duplicate ahead of the live entry, which leaves the resolved mapping IDENTICAL (so a resolved-dict check is structurally blind to it) while the new guard still fails the self-test. A second mutation, a duplicate inserted after the live entry, is caught too.",
       "evidence": "Found 2026-08-13 while re-pinning for Z2: a scripted edit anchored on the FIRST occurrence of each slug and silently updated a dead block, leaving the live pin stale. Caught by re-reading the reported before-values, which did not match the stale-check's. Parsed with ast: 265 key entries, 53 distinct keys, exactly 5 blocks. Nothing detects this today -- a stale-pin check that builds a dict from the source also keeps the last value, so it agrees with the runtime and the dead blocks stay invisible. Same class the repo has logged before: a checker sharing an assumption with its subject. Deduplicating is mechanical but was deliberately NOT bundled into the Z2 producer commit, so it can be reviewed on its own."
+    },
+    {
+      "id": "F232",
+      "form": "1801-2018, 2200a-2020, 2200c-2018, 2200p-2020",
+      "page": 1,
+      "severity": "minor",
+      "what": "The comb referee recognises only a full-height WALL as a comb's outer edge and has no concept of a rail bounded by the start of a guide-tick run, so on the four cells Z2 trimmed it keeps counting the caption region and dissents from a producer output that is correct. Lattice and audit agree; the referee is the outlier.",
+      "where": "1801-2018 p1c13 (ours 3, referee 4), 2200a-2020 p1c111, 2200c-2018 p1c107, 2200p-2020 p1c110 (ours 28, referee 29). All four report comparison_status `stop`: 'lattice and audit agree against the independent referee'. gate r65 counts them in referee_layout_mismatches.",
+      "audit_blind": false,
+      "cause": null,
+      "status": "open",
+      "resolution": null,
+      "evidence": "SEVERITY IS minor BECAUSE THE PRODUCT IS VERIFIED CORRECT, not because a lower severity is convenient: the compartment counts were measured directly from the pinned PDFs (hashes verified against each IR) and re-reviewed by the owner from annotated 300-dpi crops, and REVIEWED_COMB_TOPOLOGY records them. No shipped form is wrong. What is incomplete is the CHECKER's model of a comb's outer edge.\n\nDeferred to the comb-referee campaign by owner decision 2026-08-13, deliberately NOT fixed in the same round as the producer change it would vindicate -- a judge is not taught a new rule in the round that needs it to agree.\n\nWhen it is taught: the referee parses Poppler's vectors itself and imports nothing from lattice.py. Any tick-run rail must be derived from its OWN evidence and must remain able to dissent. Porting outer_paper_unguided's conclusion across would collapse two independent implementations into one, which is the only thing this check is for. See tools/formgen/COMB-REFEREE-CAMPAIGN.md."
     }
   ]
 }

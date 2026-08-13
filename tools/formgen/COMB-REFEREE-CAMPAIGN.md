@@ -34,10 +34,16 @@ clean form**.
 | B | 3 | `audit published this subject as an offender with no printed topology` |
 | C | 32 | `referee: the source does not corroborate the comb writing band` (+3 topology-proof variants) |
 
-**Class A (30).** Same count as `subjects_retained_unresolved` (30). The
-report publishes no retained-subject list, so the two sets are NOT proven
-identical here — only their counts match. Prove or refute before treating them
-as one population.
+**Class A (30). IDENTITY NOW PROVEN, 2026-08-14.** Measured on the gate-r65
+referee report by set equality, not by count: the 30 cells whose comparison
+reason is `ledger subject has no active topology` are EXACTLY the 30 cells the
+gate counts as `emission_layout_mismatches` (`emitted: None`,
+`emitted_indexes_valid: false`), and `subjects_retained_unresolved` is 30. One
+population, three names. The earlier note that only their counts matched is
+superseded.
+
+They span 17 forms: 2550M 4; 2200C, 2551M 3; 1600WP, 2000-OT, 2200A, 2200P,
+2200T, 2553 2; 0605, 1604CF, 1604F, 1606, 1707A, 1800, 2200AN, 2200S 1.
 
 **Class B (3).** 2200a-2020 p1c111, 2200c-2018 p1c107, 2200p-2020 p1c110 — the
 F229 trio. Z2's outer-rail trim is expected to close these.
@@ -72,3 +78,38 @@ gate.py:7067-7156 + elevation :6498-6757 — forms_ok 53, `comparisons.agree`
 == 4587, `unevaluable` == 0, `subjects_retained_unresolved` == 0, and per-form
 elevation with every cell four-way agree. Classes A and C are the campaign;
 B closes with Z2.
+
+
+## Gate r65: the check is EVALUABLE for the first time, and FAILS
+
+Until r65 `comb-referee` reported UNEVALUABLE, so its own arithmetic never ran.
+With the Z1 partition defects fixed it evaluates, and reports **35** — which is
+34 distinct cells, one of them counted under two stats:
+
+| cells | stat | origin |
+| --- | --- | --- |
+| 30 | `emission_layout_mismatches` | class A above. PRE-EXISTING, newly visible. |
+| 4 | `referee_layout_mismatches` | Z2's combs. Lattice and audit AGREE; the referee dissents. |
+| 1 | `referee_layout_mismatches` | 2200C `p1c6` — pre-existing, and also one of the 30. |
+
+The four Z2 cells, all `status: stop` ("lattice and audit agree against the
+independent referee"):
+
+| form | cell | ours | referee |
+| --- | --- | --- | --- |
+| 1801-2018 | p1c13 | 3 | 4 |
+| 2200a-2020 | p1c111 | 28 | 29 |
+| 2200c-2018 | p1c107 | 28 | 29 |
+| 2200p-2020 | p1c110 | 28 | 29 |
+
+The referee recognises only a full-height WALL as a comb's outer edge and has no
+concept of a rail bounded by a guide-tick run, so on these four it keeps
+counting the caption region. Deferred here by owner decision 2026-08-13 rather
+than fixed alongside the producer change it would vindicate: a judge is not
+taught a new rule in the round that needs it to agree.
+
+**Teaching it must be an independent measurement.** The referee parses Poppler's
+vectors itself and shares no code with `lattice.py`; any tick-run rail it learns
+must be derived from its own evidence and must remain able to dissent. Copying
+`outer_paper_unguided`'s conclusion across would make the two implementations
+one, and this check exists precisely because they are two.
