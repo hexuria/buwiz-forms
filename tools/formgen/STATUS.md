@@ -11,6 +11,43 @@ that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
 
+
+## Z1 — ten reviewed topology facts land; three are withdrawn on measurement
+
+**`comb_slots_match_printed` 9 forms / 13 offenders -> 3 forms / 3**, verified on
+a clean full 53-form `audit.py --assertions-only` (an earlier run reported
+"9 forms, no failing assertions" and was discarded as truncated -- it had been
+interrupted by a concurrent self-test). `decided_by_review` = 10, exactly the
+ten pinned facts. The three that remain are exactly the withdrawn trio.
+
+The registry (W8) is stricter than the package asked for, in the ways that
+matter: it supplies a compartment COUNT only and never divider positions --
+position evidence is published as unavailable **with its reason** rather than
+fabricated from a count; it is consulted only where `printed_compartments`
+already raised; an entry for an independently-decidable subject is an ERROR;
+a `source_sha256` mismatch is an ERROR; and **a reviewed count that disagrees
+with what we emit is still an offender**, so it can resolve "I cannot tell"
+but can never force agreement. Decided subjects publish
+`layout_relation: decided-by-review` and are listed separately, so human-
+reviewed and machine-measured facts stay distinguishable in `build/audit.json`
+permanently.
+
+**Three of the user's thirteen confirmations were WITHDRAWN rather than
+pinned, and the reason is a lesson about what a review answers.** Measuring
+2200A `p1c111`, 2200C `p1c107` and 2200P `p1c110` before committing showed
+their slot 0 is **173.66pt wide against the comb's own 14.52pt pitch** and
+holds the row's printed caption ("27 Tax Debit Memo") -- not a character
+compartment. And the source prints ticks at x 117.4, 131.9, 146.4, 160.8 and
+175.3, **inside that caption region at the same pitch**, so the sheet's tick
+row runs on underneath the caption. "How many writing compartments" is
+therefore genuinely open there, which is what the audit's competing readings
+[5, 8, 29] were saying all along. The review sheet established that OUR RENDER
+MATCHES THE OFFICIAL SHEET -- true, and a different question from the one the
+registry asks. Filed as **F229** instead, recording both halves as one
+question: slot 0 has no `<input>` AND is not a compartment, and those three
+carry `invalid-emission` independently of topology (audit.py:8041-8042), so no
+topology fact could have cleared them regardless.
+
 ## W8 — the reviewed-topology registry, shipped EMPTY
 
 **Measured 2026-08-13, worktree `wt/w8-registry`, base `3b633cce`.** No
