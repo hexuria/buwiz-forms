@@ -256,3 +256,55 @@ denominators move as declared census changes when transitions land.
 **Newly scoped population: the 85 active-unresolved subjects.** Their
 comparisons already agree (they are inside the 4,525); each needs a REVIEWED
 RESOLUTION. Review load for the campaign is therefore 115 subjects, not 30.
+
+
+## R2b design (2026-08-14) — reviewed resolutions and composite transitions
+
+`active_composite` and `retired_proven_false` are permitted-transition
+literals with no mechanics anywhere; the design below gives them mechanics
+consistent with every pin and every doctrine already in the tree.
+
+**The pass bar chooses the landing state.** Under `active_composite` for all
+30 retained subjects, `subjects_active` reaches exactly 4,587 == the pinned
+denominator with NO census change: the subject stays in the ledger and lives
+on as the COMPOSITE of its mapped partition cells -- which
+`validate_comb_ledger` already validates cell-by-cell against the layout.
+`retired_proven_false` remains the path for a subject whose partition is NOT
+real; no current subject is in that case, and the state is implemented but
+expected unused.
+
+**Two registries, reviewed data, shipped empty first** (the W8 pattern),
+under `tools/formgen/review/`:
+
+- `reviewed-resolutions.json` -- for the 85 active-unresolved subjects:
+  (slug, page, cell_id) -> reviewer, date, citation, the four-way tuple the
+  reviewer saw. Valid ONLY when the referee's own current run re-derives
+  four-way agreement on that cell; an entry on a disagreeing or unevaluable
+  cell is an ERROR.
+- `reviewed-transitions.json` -- for the 30 retained subjects:
+  (slug, page, legacy_cell_id) -> transition ("active_composite"), reviewer,
+  date, citation. Valid ONLY when the subject's R2a source corroboration is
+  TRUE on the current run; an entry for a FALSE-corroborated subject (1800
+  p1c4 today) is an ERROR -- review cannot overrule the paper.
+
+**Flow:** lattice.py consumes the registries when building the subject ledger
+and publishes the transitioned state plus a bound review certificate (the
+producer publishes, the registry certifies -- the producer never certifies
+its own promotion). comb_referee.py validates each certificate against the
+registry AND against its own evidence (four-way agreement / corroboration).
+gate.py learns the new state as a DECLARED SCHEMA CHANGE: LEDGER_STATES +
+`active_composite`, `_transition_for_cell` returns "none" for it, derived
+counts fold it into subjects_active/subjects_active_resolved, and the ledger
+binding validates the certificate shape.
+
+**1800 p1c4** cannot transition on today's evidence. Honest paths, in order:
+a connectivity-based v2 of the partition criterion (the drawn partial edges
+plus the border may disconnect the rectangle even though no single full-span
+edge is complete -- its probe-3 edges each score 1.0 locally), or the subject
+stays pending and the gate stays honest about it.
+
+**Packages:** R2b-1 registries + validation, shipped empty, mutations proven.
+R2b-2 lattice consumption + gate schema; empty registries must leave the
+corpus byte-identical and gate r-next at 12/13. R2b-3 the 115-subject
+evidence-panel generator, panels delivered for user review. R2b-4 populate
+per review; comparisons move; nothing else does.
