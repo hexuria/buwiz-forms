@@ -113,3 +113,69 @@ vectors itself and shares no code with `lattice.py`; any tick-run rail it learns
 must be derived from its own evidence and must remain able to dissent. Copying
 `outer_paper_unguided`'s conclusion across would make the two implementations
 one, and this check exists precisely because they are two.
+
+
+## Campaign packages (R-series) — measured 2026-08-14, plan of record
+
+User instruction 2026-08-14: "go start with it" — the campaign is now IN
+scope. All numbers below are from the r65 report (`build/comb-referee.json`,
+determinism `b9d71850a8c6`), enumerated per cell, not inferred.
+
+The 66 non-agree comparisons (agree 4,521 + stop 4 + unevaluable 62 = 4,587):
+
+| n | class | mechanism |
+| --- | --- | --- |
+| 30 | retained subjects | `comparison()` has NO adjudication path for a non-active ledger state — unconditional unevaluable |
+| 22 | walls-inset | source walls inset the cell; band uncorroborated |
+| 4 | wall-not-one-weight | 1702MX-attachment: top/bottom wall mixed weights across compartments |
+| 3 | no-border-tone | 1707 p1c217, 1707A p1c207, 2551M p1c103: layout declares no border tone where the source measures a wall |
+| 3 | topology-proof | single-frame proof / ambiguous slabs / strict majority — one cell each |
+| 4 | stop (F232) | referee's wall-only outer-edge model dissents on Z2's four combs |
+
+The 30 retained subjects, by suppression reason:
+
+| n | reason codes | corroborable today? |
+| --- | --- | --- |
+| 18 | `emission-suppressed-no-rectangular-owner` + `painted-edge-partition` | NO — no source re-derivation exists |
+| 11 | `emission-suppressed-caption-block-not-character-cells` | YES — glyph census 28–87 per compartment, already runs |
+| 1 | `emission-suppressed-no-final-visible-band` | NO |
+
+Every retained subject publishes exactly two permitted transitions:
+`active_composite` or `retired_proven_false`, with
+`requires_independent_evidence: true` and `blocks_gate: true`. The design
+comments are explicit: the transition belongs to "whoever reviews it";
+nothing in lattice.py may retire its own subject, and `validate_comb_ledger`
+today refuses a ledger arriving in the retired state (proven by its own
+mutation) — a certificate path does not exist yet.
+
+### Packages, in order
+
+- **R1 — tick-bounded outer rails in the referee (F232).** Derived from the
+  referee's OWN Poppler vectors with its own clauses; it must remain able to
+  dissent. Porting `outer_paper_unguided`'s conclusion across is forbidden —
+  it would collapse two implementations into one. Moves stop 4 → 0 only if
+  the referee's own measurement lands there.
+- **R2a — source re-derivations for the two uncovered suppression criteria.**
+  `no-rectangular-owner`/`painted-edge-partition`: re-derive from Poppler that
+  painted edges partition the legacy rectangle (the ledger already publishes
+  `mapped_partition_subject_keys` to check against). `no-final-visible-band`:
+  re-derive that no final-visible band exists there. Modeled on the
+  caption-block re-derivation, which is the template: reason code selects the
+  question, Poppler answers it.
+- **R2b — reviewed retirement.** Registry + certificate validation so a
+  corroborated subject can take `retired_proven_false` ONLY with a named
+  reviewer; evidence panels generated for the user's review; entries land
+  after the user confirms. `comparison()` gains the adjudication verdict for
+  a corroborated, review-retired subject. retained 30 → 0.
+- **R3 — writing-band corroborations (29).** Per-cell measurement first;
+  producer vs referee decided per class from the ink; never weaken either.
+- **R4 — the three topology-proof cells.** Individual deep-dives.
+- **R5 — elevation + final.** forms_ok 53, agree 4,587, unevaluable 0,
+  stop 0, retained 0, four-way agree on every cell, attestation complete and
+  enforceable. Gate 13/13.
+
+House rules carried into every package: comb_referee.py is single-writer
+(operator); audit.py stays locked; measure on the tree written and verify 53
+forms; every new check gets a load-bearing mutation (proven by neutering);
+never weaken a check or tolerance; no form-code special cases; the gate runs
+alone.
