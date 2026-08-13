@@ -8958,6 +8958,13 @@ def audit_evidence(
             counts["source_certified_unframed_evaluable"]),
         "emission_behind_layout": counts["emission_behind_layout"],
         "emission_invalid": counts["emission_invalid"],
+        # Z1's declared schema change: mirrored from the audit's own
+        # publication so the gate can compare the two key for key. PROVENANCE
+        # only -- the referee still adjudicates a reviewed subject exactly as
+        # a measured one, and never treats "decided by review" as agreement.
+        "decided_by_review": counts.get("decided_by_review", 0),
+        "decided_by_review_subjects": list(
+            counts.get("decided_by_review_subjects") or ()),
         "offender_dimensions": dimensions_by_cell,
         "offenders": offenders,
         "holds": holds,

@@ -2182,6 +2182,15 @@ AUDIT_ASSERTION_SUMMARY_KEYS = (
     "owner_certificates_valid", "owner_certificates_invalid",
     "source_u_frame_evaluable", "source_certified_unframed_evaluable",
     "emission_behind_layout", "emission_invalid",
+    # DECLARED SCHEMA CHANGE (Z1, 2026-08-13): audit.py publishes, for every
+    # form and unconditionally, how many comb subjects it settled from the
+    # reviewed comb-topology registry and which ones. PROVENANCE, not verdict:
+    # a reviewed subject is compared exactly as a measured one, and a reviewed
+    # count that disagrees with the emitted count is still an offender. Listed
+    # here so every consumer that enumerates the summary keys -- including this
+    # file's own fixtures -- carries them, which is what makes the validator
+    # below reachable on a well-formed record.
+    "decided_by_review", "decided_by_review_subjects",
 )
 AUDIT_POSITION_FAILURE_KINDS = {
     "emission-layout-position-mismatch",
@@ -2524,6 +2533,16 @@ def _normalise_outer_comb_assertion(
     if set(assertion) != expected_keys:
         raise CombRefereeScopeError(
             "comb audit assertion schema is incomplete or unsupported")
+    reviewed_count = assertion.get("decided_by_review")
+    reviewed_subjects = assertion.get("decided_by_review_subjects")
+    if (not _is_count(reviewed_count)
+            or not isinstance(reviewed_subjects, list)
+            or len(reviewed_subjects) != reviewed_count
+            or not all(isinstance(item, str) and item
+                       for item in reviewed_subjects)
+            or len(set(reviewed_subjects)) != len(reviewed_subjects)):
+        raise CombRefereeScopeError(
+            "comb audit reviewed-topology publication is malformed")
     reason = assertion.get("reason")
     if (not isinstance(reason, str)
             or (holds and reason != "")
@@ -3598,6 +3617,9 @@ AUDIT_EVIDENCE_KEYS = {
     "owner_certificates_valid", "owner_certificates_invalid",
     "source_u_frame_evaluable", "source_certified_unframed_evaluable",
     "emission_behind_layout", "emission_invalid", "offender_dimensions",
+    # Z1's declared schema change: the referee mirrors the audit's reviewed-
+    # topology provenance so the gate can compare them key for key.
+    "decided_by_review", "decided_by_review_subjects",
     "holds", "input_manifest_verified", "input_manifest_reason",
     "manifest_binding", "ledger_binding", "evidence_published",
     "byte_and_relation_binding_valid",
@@ -10053,6 +10075,9 @@ def _synthetic_comb_fixture(
         "source_certified_unframed_evaluable": 1,
         "emission_behind_layout": 0,
         "emission_invalid": 0,
+        # Z1's declared schema change (see AUDIT_ASSERTION_SUMMARY_KEYS).
+        "decided_by_review": 0,
+        "decided_by_review_subjects": [],
         "offender_count": 0,
         "offenders_published": 0,
         "offenders_omitted": 0,
@@ -10638,6 +10663,11 @@ def _synthetic_audit_record(
         "source_certified_unframed_evaluable": 0,
         "emission_behind_layout": 0,
         "emission_invalid": 0,
+        # Z1's declared schema change: published unconditionally by audit.py,
+        # so the fixture must carry it or the validator that now requires it
+        # would never be exercised on a well-formed record.
+        "decided_by_review": 0,
+        "decided_by_review_subjects": [],
     }
     basic_counts = {
         "inputs_over_printed_text": {
@@ -13026,6 +13056,8 @@ def self_test() -> int:
         "offenders": [invalid_physical_offender],
         "emission_behind_layout": 1,
         "emission_invalid": 1,
+        "decided_by_review": 0,
+        "decided_by_review_subjects": [],
     })
     try:
         _normalise_outer_comb_assertion(
