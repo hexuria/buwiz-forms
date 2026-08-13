@@ -527,8 +527,22 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # No comb constant or tolerance moved; every other assertion, corpus-wide, is
 # unmoved (verified by a full 53-form `audit.py --assertions-only` re-run,
 # form by form, assertion by assertion, against the pre-change baseline).
+# Re-pinned 2026-08-13 (W8): `audit.py` gained `REVIEWED_COMB_TOPOLOGY`, a
+# human-reviewed-topology registry consulted ONLY where `printed_compartments`
+# has already raised `source-topology-unevaluable` for the exact subject, and
+# never for a subject the audit can decide on its own evidence (a registry
+# entry for a decidable subject is itself an ERROR, asserted by a new
+# self-test check). SHIPPED EMPTY: with no entries, every lookup returns
+# "no entry" and every branch that reads `printed`/`layout_relation` afterward
+# is byte-for-byte the pre-change code path. `comb_slots_match_printed` stays
+# **9 forms/13 offenders, unmoved**; `inputs_over_printed_text` **0/0,
+# unmoved**; every other assertion, corpus-wide, unmoved (diffed form by form,
+# assertion by assertion, against the pre-change tree); comb censuses
+# **4,587/4,557/30, unmoved**; input count **45,548, unmoved**; tab-walk
+# **53/53 green, unmoved**; blue census **5, unmoved**. No comb constant,
+# tolerance, or existing assertion weakened.
 AUDIT_PRODUCER_SHA256 = (
-    "2e8e4dff7389e1dc362124cd2e45a952e96b826f1ff128996ef58215dd084731"
+    "346e293028c58890b410a69d2f49f14526306f04e39f847d4ad015112499e6c0"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3

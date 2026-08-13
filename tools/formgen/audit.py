@@ -2517,6 +2517,164 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
     return CombOwnerRegistry(certificates, {})
 
 
+# --------------------------------------------------------------------------
+# reviewed comb topology (W8) -- human review for subjects the source
+# genuinely cannot settle, consulted ONLY where `printed_compartments` has
+# already raised on its own evidence
+# --------------------------------------------------------------------------
+
+
+COMB_TOPOLOGY_REVIEW_FIELDS = (
+    "compartments", "source_sha256", "page", "cell_id", "bbox",
+    "reviewer", "date", "citation",
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class ReviewedCombTopology:
+    """One human-reviewed printed-compartment count for one subject.
+
+    Never a substitute for measurement, and never consulted for a subject
+    `printed_compartments` can decide on its own: `resolve_reviewed_comb_topology`
+    reads this only after that function has already raised for this EXACT
+    (slug, page, cell_id).  It supplies a compartment COUNT only -- never
+    divider positions, which stay unevaluable exactly as they do today.
+    """
+
+    compartments: int
+    source_sha256: str
+    page: int
+    cell_id: str
+    bbox: tuple[float, float, float, float]
+    reviewer: str
+    date: str
+    citation: str
+
+    def evidence(self) -> dict[str, Any]:
+        return {
+            "criterion": "reviewed-comb-topology-v1",
+            "valid": True,
+            "compartments": self.compartments,
+            "source_sha256": self.source_sha256,
+            "page": self.page,
+            "cell_id": self.cell_id,
+            "bbox": list(self.bbox),
+            "reviewer": self.reviewer,
+            "date": self.date,
+            "citation": self.citation,
+        }
+
+
+# Keyed by (slug, page, cell_id).  Consulted only for a subject the audit has
+# already decided it cannot evaluate from vector data alone -- never for a
+# subject it can decide (see the sibling guard at the call site).  Follows the
+# exact discipline `scripts/audit_html_form_migration.py` already uses for its
+# trusted-producer registries: "a producer is registered only after the user
+# reviews it".  SHIPPED EMPTY.  An entry lands in its own reviewed,
+# evidence-carrying commit once the user has confirmed the fact -- never here
+# -- and an empty registry must change nothing this file already reports.
+REVIEWED_COMB_TOPOLOGY: dict[tuple[str, int, str], dict[str, Any]] = {}
+
+_COMB_TOPOLOGY_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def resolve_reviewed_comb_topology(
+        slug: Any, page_index: int, cell: dict[str, Any], source_sha256: Any,
+        ) -> tuple[ReviewedCombTopology | None, str | None]:
+    """Consult REVIEWED_COMB_TOPOLOGY for one already-unevaluable subject.
+
+    Returns (entry, None) when a valid reviewed fact applies. Returns
+    (None, None) when no entry exists for this exact (slug, page, cell_id) --
+    the subject stays `source-topology-unevaluable`, exactly as it does with
+    an empty registry. Returns (None, reason) when an entry exists but fails
+    a guard: the caller MUST publish this as an ERROR, never silently treat
+    it as "no entry".
+    """
+    cell_id = cell.get("id")
+    if not isinstance(slug, str) or not isinstance(cell_id, str):
+        return None, None
+    raw = REVIEWED_COMB_TOPOLOGY.get((slug, page_index, cell_id))
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, (
+            f"reviewed comb topology entry for {cell_id} on page "
+            f"{page_index} is not a record")
+    missing = sorted(
+        field for field in COMB_TOPOLOGY_REVIEW_FIELDS if field not in raw)
+    if missing:
+        return None, (
+            f"reviewed comb topology entry for {cell_id} on page "
+            f"{page_index} is missing required field(s): "
+            f"{', '.join(missing)}")
+    compartments = raw["compartments"]
+    entry_sha256 = raw["source_sha256"]
+    entry_page = raw["page"]
+    entry_cell_id = raw["cell_id"]
+    bbox = raw["bbox"]
+    reviewer = raw["reviewer"]
+    date = raw["date"]
+    citation = raw["citation"]
+    if (isinstance(compartments, bool) or not isinstance(compartments, int)
+            or compartments <= 0):
+        return None, (
+            "reviewed comb topology entry compartments must be a positive "
+            f"integer for {cell_id} on page {page_index}")
+    if (not isinstance(entry_sha256, str)
+            or _COMB_TOPOLOGY_SHA256_RE.fullmatch(entry_sha256) is None):
+        return None, (
+            "reviewed comb topology entry source_sha256 must be a "
+            f"64-character lowercase hex digest for {cell_id} on page "
+            f"{page_index}")
+    if isinstance(entry_page, bool) or entry_page != page_index:
+        return None, (
+            "reviewed comb topology entry page does not match its own "
+            f"registry key for {cell_id} on page {page_index}")
+    if entry_cell_id != cell_id:
+        return None, (
+            "reviewed comb topology entry cell_id does not match its own "
+            f"registry key for {cell_id} on page {page_index}")
+    if (not isinstance(bbox, (list, tuple)) or len(bbox) != 4
+            or any(isinstance(value, bool)
+                   or not isinstance(value, (int, float))
+                   or not math.isfinite(value) for value in bbox)
+            or not (bbox[2] > bbox[0] and bbox[3] > bbox[1])):
+        return None, (
+            "reviewed comb topology entry bbox must be four finite numbers "
+            f"with positive area for {cell_id} on page {page_index}")
+    try:
+        cell_bbox = tuple(
+            float(cell[name]) for name in ("x0", "y0", "x1", "y1"))
+    except (KeyError, TypeError, ValueError):
+        cell_bbox = None
+    if cell_bbox is None or any(
+            abs(float(entry_value) - live_value) > 1e-6
+            for entry_value, live_value in zip(bbox, cell_bbox)):
+        return None, (
+            "reviewed comb topology entry bbox does not match the active "
+            f"layout cell geometry for {cell_id} on page {page_index}")
+    if (not isinstance(reviewer, str) or not reviewer.strip()
+            or not isinstance(date, str) or not date.strip()
+            or not isinstance(citation, str) or not citation.strip()):
+        return None, (
+            "reviewed comb topology entry reviewer/date/citation must be "
+            f"non-empty text for {cell_id} on page {page_index}")
+    if not isinstance(source_sha256, str) or entry_sha256 != source_sha256:
+        return None, (
+            "reviewed comb topology entry source_sha256 does not match the "
+            f"current IR's source.sha256 for {cell_id} on page {page_index}")
+    return ReviewedCombTopology(
+        compartments=compartments,
+        source_sha256=entry_sha256,
+        page=entry_page,
+        cell_id=entry_cell_id,
+        bbox=tuple(float(value) for value in bbox),
+        reviewer=reviewer,
+        date=date,
+        citation=citation,
+    ), None
+
+
 def _axis_aligned_quad_box(quad: Any) -> Rect | None:
     points = (quad.ul, quad.ur, quad.ll, quad.lr)
     xs = [float(point.x) for point in points]
@@ -7492,6 +7650,14 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     something is a mirror, not a check. Everything else about a compartment
     with no input is unchanged: with no source evidence, or with source
     evidence that the compartment is blank paper, it is still an offender.
+
+    W8: when `printed_compartments` itself raises -- the source genuinely
+    cannot settle the topology from vector data alone -- `REVIEWED_COMB_TOPOLOGY`
+    is consulted for this exact subject before the verdict is published. A
+    reviewed fact decides only a compartment COUNT, never divider positions,
+    and a subject it resolves is published with `layout_relation
+    == "decided-by-review"`, never silently indistinguishable from one this
+    function measured itself. See `resolve_reviewed_comb_topology`.
     """
     if b.layout is None:
         return broken("no layout to read comb geometry from")
@@ -7609,6 +7775,12 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     owner_certificates_invalid = 0
     source_u_frame_evaluable = 0
     source_certified_unframed_evaluable = 0
+    decided_by_review = 0
+    decided_by_review_subjects: list[dict[str, Any]] = []
+    source_sha256 = (
+        (getattr(b, "ir", None) or {}).get("source") or {}
+    ).get("sha256")
+    bundle_slug = getattr(b, "slug", None)
     if owner_registry.binding_error is not None:
         # Registry integrity is assertion-wide. It must fail even when every
         # active comb is relocated, or when a malformed retained-only ledger
@@ -7839,6 +8011,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         failure_kinds: list[str] = []
         reasons: list[str] = []
         source_frame: dict[str, Any] | None = None
+        printed_positions_available = True
         if owner_certificate is None:
             printed = None
             xs = []
@@ -7876,7 +8049,70 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if isinstance(exc, CombTopologyError):
                     evidence["source_topology_evidence"] = exc.evidence
                 layout_unevaluable += 1
+                # W8: the source cannot settle this from vector data alone --
+                # consult the reviewed-topology registry for this EXACT
+                # subject. An empty registry (the ship state) always returns
+                # (None, None) here and this whole branch is a no-op.
+                reviewed_topology, reviewed_topology_error = (
+                    resolve_reviewed_comb_topology(
+                        bundle_slug, page_index, cell, source_sha256))
+                if reviewed_topology_error is not None:
+                    failure_kinds.append("reviewed-comb-topology-invalid")
+                    reasons.append(reviewed_topology_error)
+                    evidence["reviewed_comb_topology"] = {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": False,
+                        "reason": reviewed_topology_error,
+                    }
+                elif reviewed_topology is not None:
+                    layout_unevaluable -= 1
+                    decided_by_review += 1
+                    printed = reviewed_topology.compartments
+                    printed_positions_available = False
+                    layout_relation = "decided-by-review"
+                    failure_kinds = [
+                        kind for kind in failure_kinds
+                        if kind != "source-topology-unevaluable"
+                    ]
+                    reasons = [
+                        reason for reason in reasons
+                        if not reason.startswith(
+                            "unevaluable final-paint topology")
+                    ]
+                    evidence["reviewed_comb_topology"] = (
+                        reviewed_topology.evidence())
+                    if latticed != printed:
+                        layout_mismatches += 1
+                        failure_kinds.append("layout-printed-mismatch")
+                        reasons.append(
+                            f"layout has {latticed} slots but the reviewed "
+                            f"source topology prints {printed} compartments")
+                    decided_by_review_subjects.append({
+                        "cell": cell_id,
+                        "page": page_index,
+                        "latticed": latticed,
+                        "printed": printed,
+                        "reviewed_comb_topology":
+                            reviewed_topology.evidence(),
+                    })
             else:
+                # W8's load-bearing guard: a reviewed fact must never be
+                # entered for a subject the audit can already decide for
+                # itself. A stray entry here is an integrity ERROR, not a
+                # silently-ignored fact.
+                if (bundle_slug, page_index, cell_id) in REVIEWED_COMB_TOPOLOGY:
+                    failure_kinds.append("reviewed-comb-topology-invalid")
+                    reasons.append(
+                        "reviewed comb topology registry has an entry for "
+                        f"{cell_id} on page {page_index}, but the source "
+                        "topology is independently decidable; a reviewed "
+                        "fact must never be entered for a subject the audit "
+                        "can already evaluate")
+                    evidence["reviewed_comb_topology"] = {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": False,
+                        "reason": reasons[-1],
+                    }
                 if source_frame is None:
                     source_certified_unframed_evaluable += 1
                 else:
@@ -7893,15 +8129,21 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
 
         source_position = _position_evidence(
             actual_internal_edges,
-            xs if printed is not None else None,
+            xs if printed is not None and printed_positions_available
+            else None,
             comparable=bool(
                 emission["valid"]
                 and printed is not None
+                and printed_positions_available
                 and slots == printed
             ),
             unavailable_reason=(
                 "source topology is unevaluable"
                 if printed is None else
+                "source topology was decided by the reviewed-comb-topology "
+                "registry, which supplies only a compartment count, not "
+                "divider positions"
+                if not printed_positions_available else
                 "emitted/source slot counts differ"
                 if slots != printed else
                 "emitted slot geometry is invalid"
@@ -8212,6 +8454,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             source_certified_unframed_evaluable),
         "emission_behind_layout": stale_emission,
         "emission_invalid": emission_invalid,
+        "decided_by_review": decided_by_review,
+        "decided_by_review_subjects": decided_by_review_subjects,
     }
     if offenders:
         return broken(
@@ -12880,6 +13124,126 @@ def self_test() -> int:
         == "<comb-owner-registry>"
         and corrupt_relocated["offenders"][0]["failure_kinds"]
         == ["comb-owner-registry-invalid"],
+    )
+
+    # W8: the reviewed-topology registry. Every check above already proves
+    # "no entry -> stays unevaluable exactly as today", because none of them
+    # registers anything in `REVIEWED_COMB_TOPOLOGY`, which ships EMPTY. These
+    # tests inject synthetic entries directly and remove them again in a
+    # `finally`, so the module returns to its shipped-empty state once
+    # self-test finishes, whether a check below passes or fails.
+    review_fixture = source_filled_fixture(
+        glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),), paints=())
+    review_fixture.slug = "w8-review-fixture"
+    review_fixture.ir = {"source": {"sha256": "b" * 64}}
+    review_key = ("w8-review-fixture", 1, "p1c0")
+    review_bbox = [0.0, 0.0, 30.0, 10.0]
+
+    def complete_review_entry(**over: Any) -> dict[str, Any]:
+        entry = {
+            "compartments": 3,
+            "source_sha256": "b" * 64,
+            "page": 1,
+            "cell_id": "p1c0",
+            "bbox": list(review_bbox),
+            "reviewer": "uriah",
+            "date": "2026-08-13",
+            "citation": "W8 self-test synthetic fixture, not a real review",
+        }
+        entry.update(over)
+        return entry
+
+    REVIEWED_COMB_TOPOLOGY[review_key] = complete_review_entry()
+    try:
+        decided_result = check_comb_slots_match_printed(review_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[review_key]
+    decided_subject = (
+        decided_result["decided_by_review_subjects"][0]
+        if decided_result.get("decided_by_review_subjects") else {}
+    )
+    check(
+        "a valid reviewed entry decides an otherwise-unevaluable subject",
+        decided_result["holds"] is True
+        and decided_result["layout_unevaluable"] == 0
+        and decided_result["decided_by_review"] == 1
+        and decided_subject.get("cell") == "p1c0"
+        and decided_subject.get("printed") == 3
+        and decided_subject.get("latticed") == 3
+        and decided_subject.get("reviewed_comb_topology", {}).get(
+            "compartments") == 3
+        and decided_subject.get("reviewed_comb_topology", {}).get(
+            "reviewer") == "uriah",
+    )
+
+    decidable_fixture = CombEmissionFixture([valid_three])
+    decidable_fixture.slug = "w8-decidable-fixture"
+    decidable_key = ("w8-decidable-fixture", 1, "p1c0")
+    REVIEWED_COMB_TOPOLOGY[decidable_key] = complete_review_entry()
+    try:
+        decidable_result = check_comb_slots_match_printed(decidable_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[decidable_key]
+    decidable_offender = first_offender(decidable_result)
+    check(
+        "a reviewed entry for a subject the audit can already decide is an "
+        "ERROR -- the load-bearing guard against overruling a real "
+        "disagreement",
+        decidable_result["holds"] is False
+        and "reviewed-comb-topology-invalid"
+        in decidable_offender.get("failure_kinds", ())
+        and "independently decidable" in decidable_offender.get("why", ""),
+    )
+
+    REVIEWED_COMB_TOPOLOGY[review_key] = complete_review_entry(
+        source_sha256="c" * 64)
+    try:
+        mismatched_sha_result = check_comb_slots_match_printed(review_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[review_key]
+    mismatched_sha_offender = first_offender(mismatched_sha_result)
+    check(
+        "a reviewed entry whose sha256 does not match the current source is "
+        "an ERROR, not a stale-but-usable fact",
+        mismatched_sha_result["holds"] is False
+        and mismatched_sha_result["decided_by_review"] == 0
+        and "reviewed-comb-topology-invalid"
+        in mismatched_sha_offender.get("failure_kinds", ())
+        and "source-topology-unevaluable"
+        in mismatched_sha_offender.get("failure_kinds", ())
+        and "does not match the current IR's source.sha256"
+        in mismatched_sha_offender.get("why", ""),
+    )
+
+    incomplete_entry = complete_review_entry()
+    del incomplete_entry["citation"]
+    REVIEWED_COMB_TOPOLOGY[review_key] = incomplete_entry
+    try:
+        missing_field_result = check_comb_slots_match_printed(review_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[review_key]
+    missing_field_offender = first_offender(missing_field_result)
+    check(
+        "a reviewed entry missing a required field is an ERROR, not a "
+        "skipped entry",
+        missing_field_result["holds"] is False
+        and missing_field_result["decided_by_review"] == 0
+        and "reviewed-comb-topology-invalid"
+        in missing_field_offender.get("failure_kinds", ())
+        and "missing required field(s): citation"
+        in missing_field_offender.get("why", ""),
+    )
+
+    unregistered_result = check_comb_slots_match_printed(review_fixture)
+    unregistered_offender = first_offender(unregistered_result)
+    check(
+        "no reviewed entry leaves a genuinely unevaluable subject exactly "
+        "where it was",
+        review_key not in REVIEWED_COMB_TOPOLOGY
+        and unregistered_result["holds"] is False
+        and unregistered_result["decided_by_review"] == 0
+        and unregistered_offender.get("failure_kinds")
+        == ["source-topology-unevaluable"],
     )
 
     # Geometry helpers, where an off-by-one epsilon would silently disable an

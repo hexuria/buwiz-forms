@@ -11,6 +11,99 @@ that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
 
+## W8 — the reviewed-topology registry, shipped EMPTY
+
+**Measured 2026-08-13, worktree `wt/w8-registry`, base `3b633cce`.** No
+producer file touched (`extract.py`, `lattice.py`, `emit.py`, `fonts.py`,
+`guides.py`, `correct.py`, `batch.py` all byte-identical to base, confirmed by
+`git diff`); only `audit.py` (the locked judge, extended per its own
+review-bundle rule) and `comb_referee.py` (one pin comment + hash) change.
+
+`check_comb_slots_match_printed`'s 13 remaining `source-topology-unevaluable`
+offenders (9 forms) are exactly the population the source's own vector
+operators cannot settle -- competing band/tone topologies, ambiguous U-frame
+ownership, no strict-majority reading -- which W5 measured as far as the
+audit's own evaluation can honestly go. The designed route past a limit of
+*measurement* is human review, the same way
+`scripts/audit_html_form_migration.py` keeps its trusted-producer registries
+as empty frozensets until the user reviews a producer. `REVIEWED_COMB_TOPOLOGY`
+(new, `audit.py`) is that registry for comb topology: keyed by
+`(slug, page, cell_id)`, consulted **only** for a subject whose own verdict is
+already `source-topology-unevaluable`, and **shipped EMPTY**. The 13 reviewed
+facts land in their own commit once the user confirms them; this package adds
+only the mechanism.
+
+**Every guard is load-bearing and self-test-proven, not merely asserted:**
+
+- A registry entry for a subject the audit can already decide from vector data
+  is an ERROR (`reviewed-comb-topology-invalid`), never silently ignored --
+  the guard that stops the registry ever overruling a real disagreement.
+- An entry whose `source_sha256` does not match the current IR's own
+  `source.sha256` is an ERROR, not a stale-but-usable fact.
+- An entry missing any of its eight required fields (`compartments`,
+  `source_sha256`, `page`, `cell_id`, `bbox`, `reviewer`, `date`, `citation`)
+  is an ERROR, not a skipped entry.
+- Two further guards beyond the four the task named, in the same fail-closed
+  spirit: the entry's own `page`/`cell_id` must match its registry key
+  (transcription check), and its `bbox` must match the active layout cell's
+  own rectangle within 1e-6pt (the same staleness class as the sha256 check --
+  a cell that moved since review is not the cell that was reviewed).
+- No entry -> the subject stays `source-topology-unevaluable` exactly as
+  today.
+
+A subject the registry decides publishes `layout_relation
+== "decided-by-review"` (never silently indistinguishable from one the audit
+measured itself) and is separately listed under the assertion's new
+`decided_by_review_subjects`, alongside a `decided_by_review` count. It
+supplies a compartment COUNT only -- divider positions stay reported
+unevaluable, with an explicit reason, exactly as they do today; nothing here
+lets a reviewed fact stand in for a measured rail position.
+
+**With the registry empty, every number is unmoved**, verified by a full
+53-form `audit.py --assertions-only` run (`build/audit-w8.json`, uninterrupted
+by any edit mid-run): `comb_slots_match_printed` **9 forms/13 offenders**
+(1604cf-2008:1, 1604f-2018:1, 1801-2018:2, 2000-dst-2018:1, 2200a-2020:3,
+2200c-2018:1, 2200p-2020:1, 2551m-2002:2, 2553-1999:1 -- exactly the 13-cell
+sheet sent to the user), `decided_by_review` **0 on every one of the 53
+records** (proof the empty registry decided nothing), `inputs_over_printed_text`
+**0 forms/0**, every other assertion unmoved, all 53 forms `status: "ok"`.
+`comb_referee.EXPECTED_HTML_STRUCTURE_SHA256`'s all-53 pins were independently
+hashed against the actual `build/html/*.html` bytes on this tree: zero drift,
+which is the same invariant the comb censuses and input count are computed
+from, so **comb censuses 4,587/4,557/30** and **input count 45,548** are
+unmoved by construction (not independently re-derived by a fresh full-roundtrip
+`comb_referee.py` run, which this package's own byte-identity proof makes
+unnecessary). Tab-walk **53/53 green** (2316-2021 green=177, matching its own
+prior recorded figure exactly), blue (vacant) census **5, unmoved**
+(0605-1999:1, 1604cf-2008:1, 2550m-2007:3).
+
+**Self-tests, all pass:** `extract.py --self-test` (7 pinned PDFs, 24 checks,
+24+24 probes), `lattice.py --ir build/ir/2551q-2018.ir.json` (489/264 slots,
+unchanged), `emit.py --self-test`, `comb_referee.py --self-test`, `gate.py
+--self-test`, `tab_check.py --self-test`, `validate_tree.py --self-test`,
+`fixtures/prove_fixtures_fail.py` (19 mutations, 6 contract-only), `audit.py
+--self-test` (0 failures, including 5 new W8 checks: a valid entry decides an
+otherwise-unevaluable subject with the right count; an entry for an
+independently-decidable subject fails closed; a mismatched-sha256 entry fails
+closed; an entry missing a required field fails closed; no entry leaves a
+genuinely unevaluable subject exactly where it was -- each proven by injecting
+a synthetic `REVIEWED_COMB_TOPOLOGY` entry and removing it again in a
+`finally`, and cross-checked by a forced-failure monkeypatch that made all
+five fail together, then restoring cleanly).
+
+**Determinism:** two independent `batch.py` runs into scratch `--out`
+directories (never `forms/`) produced byte-identical tree digests
+(`288e84d4a18d8faa37ff662dcc4e65430cd219e669144ad81630fda493c5a28d`).
+
+**Pin:** `comb_referee.AUDIT_PRODUCER_SHA256` re-pinned
+(`346e293028c58890b410a69d2f49f14526306f04e39f847d4ad015112499e6c0`), cause
+recorded inline at the pin. `EXPECTED_HTML_STRUCTURE_SHA256` **unmoved** --
+verified directly against `build/html`'s current bytes, above, rather than
+inferred from `comb_referee.py` never raising.
+
+**Operator guide:** `tools/formgen/review/README.md` documents the entry
+schema and the exact steps to add a reviewed fact, so populating the registry
+later is mechanical.
 
 
 ## r59 — everything agent-closable is closed; the last input is the user's
