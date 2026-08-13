@@ -30,6 +30,8 @@ import hashlib
 import json
 import math
 import pathlib
+import re
+import struct
 import sys
 from typing import Any, Callable, Sequence
 
@@ -161,6 +163,16 @@ try:  # pragma: no cover - binding presence is environmental
     _clean_font_name = fitz.mupdf.pdf_clean_font_name
 except AttributeError:  # pragma: no cover - older PyMuPDF
     _clean_font_name = None
+
+# A PDF subset font's name is prefixed with a random six-uppercase-letter tag
+# and a '+' (ISO 32000-1 9.6.4, "shall consist of a tag ... followed by a plus
+# sign"). MuPDF's `get_fonts(full=True)` reports the literal /BaseFont, tag
+# included; its rawdict `span["font"]` reports the SAME face with the tag
+# already stripped -- so a face registered only under its exact /BaseFont is
+# invisible to every span that names it the stripped way (F065). This is
+# mechanical spec, not a name table and not a font this module resolves by
+# guessing: see substitutable_faces, which is the only place it is applied.
+SUBSET_TAG_RE = re.compile(r"^[A-Z]{6}\+")
 
 
 def q(value: float) -> float:
@@ -1147,14 +1159,37 @@ def substitutable_faces(page: fitz.Page,
     machine-dependence extract_text_runs refuses on the metrics side for the
     same reason.
 
-    A name MuPDF's cleaner does not recognise (this corpus has one: Arial
-    Narrow) yields no face at all. That is the intended answer, not a gap:
-    caller-side, no face means no measurement means the glyphs stay text.
+    A name MuPDF's cleaner does not recognise (this corpus has one:
+    unembedded Tahoma, 229 glyphs on 1604cf-2008/2553-1999) yields no face at
+    all. That is the intended answer, not a gap: caller-side, no face means no
+    measurement means the glyphs stay text. `Arial Narrow` used to be read as
+    the same shape (F065's original diagnosis) -- it is not: every `Arial
+    Narrow` resource in this corpus is EMBEDDED (`ext == 'ttf'`), so it never
+    reaches this branch at all; see the subset-tag key below.
 
     Several resources can share one BaseFont -- 1701 page 4 carries both an
     unembedded `Arial,Italic` and an embedded Type0 subset of the same name --
     so the value is every candidate, and the caller resolves between them by
     the glyph id the page actually drew.
+
+    An embedded face is registered under its exact /BaseFont AND, when that
+    name carries a PDF subset tag (`SUBSET_TAG_RE`), under the tag stripped
+    too -- never the reverse, so an exact hit is never displaced by a
+    stripped one. MuPDF's rawdict reports `span["font"]` with the tag already
+    gone (F065: 1707-2021's `ABCDEE+Arial Narrow` is embedded and correctly
+    identified, but every span asking for it says `"Arial Narrow"`, so
+    `faces.get("Arial Narrow")` returned nothing and its ruled blank was
+    booked to "no face is resolvable" for a reason that was never about
+    resolvability). Corpus-wide this is the SAME key mismatch on 61,781 of
+    the 62,010 glyphs this function used to leave unclaimed -- measured on
+    the tree this fix actually wrote, "no face is resolvable for this font"
+    falls from 62,010 to exactly 229 (unembedded Tahoma, the corpus's only
+    remaining instance), and every one of the 61,781 that moved is now
+    correctly identified. At least 50 of the corpus's 53 forms carry a
+    spec-shaped subset-tagged embedded font resource at all (re-derivable by
+    scanning every pinned PDF's own `get_fonts(full=True)` for
+    `SUBSET_TAG_RE`); most, not all, of those resources are actually asked
+    for by a span this key mismatch used to miss.
     """
     faces: dict[str, list[fitz.Font]] = collections.defaultdict(list)
     for xref, ext, _ftype, basefont, _res, _enc, _ in page.get_fonts(full=True):
@@ -1172,7 +1207,178 @@ def substitutable_faces(page: fitz.Page,
                 font = None
         if font is not None:
             faces[basefont].append(font)
+            stripped = SUBSET_TAG_RE.sub("", basefont)
+            if stripped != basefont:
+                faces[stripped].append(font)
     return {name: tuple(fonts) for name, fonts in faces.items()}
+
+
+def embedded_font_programs(page: fitz.Page,
+                           doc: fitz.Document) -> dict[str, tuple[bytes, ...]]:
+    """Every embedded TrueType font PROGRAM the page could draw each BaseFont with.
+
+    Keyed exactly as `substitutable_faces` keys its own table -- the exact
+    `/BaseFont` and, for a subset-tagged program, its tag-stripped name too --
+    so a caller that already resolved a face by name under that table can ask
+    this one for the SAME face's raw bytes. Restricted to `ext == 'ttf'`: a
+    `glyf`/`loca` TrueType program is the one shape `embedded_glyph_outline`
+    hand-parses, and a Type1 or CFF program is not that shape and is not
+    registered here.
+
+    Feeds the ruled-blank path ONLY (`ruled_blank_bars`), never
+    `GlyphOutlines`'s corpus-wide measurement: see `embedded_glyph_outline`'s
+    own docstring for why widening that coverage is deliberately out of scope.
+    """
+    programs: dict[str, list[bytes]] = collections.defaultdict(list)
+    for xref, ext, _ftype, basefont, _res, _enc, _ in page.get_fonts(full=True):
+        if ext != "ttf":
+            continue
+        try:
+            buffer = doc.extract_font(xref)[3]
+        except Exception:  # noqa: BLE001 - an unreadable program has no bytes
+            buffer = None
+        if not buffer:
+            continue
+        programs[basefont].append(buffer)
+        stripped = SUBSET_TAG_RE.sub("", basefont)
+        if stripped != basefont:
+            programs[stripped].append(buffer)
+    return {name: tuple(bufs) for name, bufs in programs.items()}
+
+
+def _sfnt_tables(buffer: bytes) -> dict[bytes, bytes] | None:
+    """The table directory of a plain (non-WOFF2) sfnt/TrueType program.
+
+    Hand-read for the reason `fonts.py` hand-reads its own WOFF2 table
+    directory (`fonts.py:187-196`): `fitz.Font(fontbuffer=...).glyph_bbox`
+    answers every codepoint with the whole font box (see `glyph_ink_box`), so
+    a real per-glyph box has to come from the file's own bytes, and eleven
+    bytes of pointer arithmetic is not worth a new dependency. Every failure
+    -- too short to hold a header, a table record running past the buffer --
+    returns None rather than raising: a malformed program is "not derivable",
+    exactly like every other refusal in this module.
+    """
+    if len(buffer) < 12:
+        return None
+    try:
+        num_tables = struct.unpack(">H", buffer[4:6])[0]
+    except struct.error:
+        return None
+    tables: dict[bytes, bytes] = {}
+    for index in range(num_tables):
+        record_at = 12 + index * 16
+        record = buffer[record_at:record_at + 16]
+        if len(record) < 16:
+            return None
+        tag, _checksum, offset, length = struct.unpack(">4sIII", record)
+        if offset + length > len(buffer):
+            return None
+        tables[tag] = buffer[offset:offset + length]
+    return tables
+
+
+def embedded_glyph_outline(buffer: bytes, glyph_id: int,
+                           ) -> tuple[tuple[float, float, float, float], float] | None:
+    """One glyph's own ink box and advance, hand-read from a TrueType program.
+
+    Exists for exactly one reason: `fitz.Font(fontbuffer=...).glyph_bbox`
+    answers every codepoint on a buffer-loaded face with the whole font box
+    (see `glyph_ink_box`'s docstring), so a real per-glyph outline has to come
+    from the program's own tables instead. Walks `head` for `unitsPerEm` and
+    `indexToLocFormat`, `loca` for this glyph's own byte range in `glyf`, and
+    `glyf`'s first ten bytes for its numberOfContours-then-bbox header (every
+    TrueType glyph states one there, composite or simple, so nothing here
+    walks component glyphs). `hmtx` supplies the advance the same way, so the
+    caller can refuse a program whose advance disagrees with the file's own
+    stated one instead of trusting glyph identity alone.
+
+    Scoped to the ruled-blank path only (`ruled_blank_bars`) -- never plugged
+    into `GlyphOutlines`'s corpus-wide measurement -- because that is the one
+    place this module already has a SINGLE glyph id to ask for and a single
+    codepoint (`RULED_BLANK_CODEPOINT`) to cross-check it against; widening it
+    to every codepoint a run sets is real reach this package does not measure
+    and is filed as a minor finding instead of shipped here.
+
+    Every failure -- a missing table, an out-of-range glyph id, a glyph with
+    no outline at all (`loca[gid] == loca[gid + 1]`, e.g. space), a degenerate
+    box -- returns None: "not derivable", not a guess.
+    """
+    tables = _sfnt_tables(buffer)
+    if tables is None:
+        return None
+    head, loca, glyf = tables.get(b"head"), tables.get(b"loca"), tables.get(b"glyf")
+    hhea, hmtx, maxp = tables.get(b"hhea"), tables.get(b"hmtx"), tables.get(b"maxp")
+    if not (head and loca and glyf and hhea and hmtx and maxp):
+        return None
+    if len(head) < 54 or len(maxp) < 6:
+        return None
+    units_per_em = struct.unpack(">H", head[18:20])[0]
+    index_to_loc_format = struct.unpack(">h", head[50:52])[0]
+    if units_per_em <= 0:
+        return None
+    num_glyphs = struct.unpack(">H", maxp[4:6])[0]
+    if not (0 <= glyph_id < num_glyphs):
+        return None
+    if index_to_loc_format == 0:
+        entry_at = glyph_id * 2
+        if entry_at + 4 > len(loca):
+            return None
+        off1, off2 = struct.unpack(">HH", loca[entry_at:entry_at + 4])
+        off1, off2 = off1 * 2, off2 * 2
+    elif index_to_loc_format == 1:
+        entry_at = glyph_id * 4
+        if entry_at + 8 > len(loca):
+            return None
+        off1, off2 = struct.unpack(">II", loca[entry_at:entry_at + 8])
+    else:
+        return None
+    if off2 <= off1 or off2 > len(glyf):
+        return None  # no outline at all (e.g. space), or a malformed table
+    glyph_data = glyf[off1:off2]
+    if len(glyph_data) < 10:
+        return None
+    _num_contours, xmin, ymin, xmax, ymax = struct.unpack(">hhhhh", glyph_data[:10])
+    if xmax <= xmin or ymax <= ymin:
+        return None
+    box = (xmin / units_per_em, ymin / units_per_em,
+          xmax / units_per_em, ymax / units_per_em)
+
+    if len(hhea) < 36:
+        return None
+    num_h_metrics = struct.unpack(">H", hhea[34:36])[0]
+    if num_h_metrics <= 0:
+        return None
+    metric_index = glyph_id if glyph_id < num_h_metrics else num_h_metrics - 1
+    metric_at = metric_index * 4
+    if metric_at + 2 > len(hmtx):
+        return None
+    advance_units = struct.unpack(">H", hmtx[metric_at:metric_at + 2])[0]
+    if advance_units <= 0:
+        return None
+    return box, advance_units / units_per_em
+
+
+def ruled_blank_embedded_outline(programs: Sequence[bytes], glyph_id: int,
+                                 ) -> tuple[tuple[float, float, float, float],
+                                            float] | None:
+    """The ruled-blank path's fallback outline, agreed across every candidate.
+
+    Reached only after `glyph_ink_box` has already refused -- never a first
+    resort (see `ruled_blank_bars`). Resolves on the same terms
+    `glyph_ink_box` resolves the fontbuffer case on: every candidate program
+    is parsed for this exact glyph id, and the answer is published only when
+    every one that parses at all agrees. Two programs that parse this glyph id
+    to different boxes are an ambiguity, not an answer, for the identical
+    reason `glyph_ink_box` refuses two disagreeing faces.
+    """
+    results: set[tuple[tuple[float, float, float, float], float]] = set()
+    for buffer in programs:
+        parsed = embedded_glyph_outline(buffer, glyph_id)
+        if parsed is not None:
+            results.add(parsed)
+    if len(results) != 1:
+        return None
+    return next(iter(results))
 
 
 def glyph_ink_box(faces: Sequence[fitz.Font], codepoint: int,
@@ -1192,15 +1398,26 @@ def glyph_ink_box(faces: Sequence[fitz.Font], codepoint: int,
     `glyph_bbox` answers every codepoint on that face with `Font.bbox` --
     (-0.665, -0.325, 2.0, 1.040), two ems wide and covering 'T', 'a', 'e' and
     '.' alike. Published, that band would claim ink across a quarter of an inch
-    of blank paper per glyph. It is 9,217 glyphs of this corpus, on 48 of its 53
-    forms. The test is exact equality against the face's own bbox, which costs
-    at most the one glyph per face that really does set all four extremes, and
-    costs it in the safe direction.
+    of blank paper per glyph. It is 70,963 glyphs of this corpus, on 49 of its
+    53 forms (F065's own subset-tag key fix, `substitutable_faces`, resolves a
+    face for many more glyphs than it used to -- corpus-wide, "no face is
+    resolvable for this font" falls from 62,010 to 229 -- and most of what it
+    newly resolves lands here instead, because the face it resolves to is
+    still buffer-loaded and still cannot state a real per-glyph box). The test
+    is exact equality against the face's own bbox, which costs at most the one
+    glyph per face that really does set all four extremes, and costs it in the
+    safe direction.
 
-    The ruled-blank path was never exposed to it -- a font box is 1.36 em tall
-    and `ruled_blank_bars` refuses a band thicker than MAX_RULE_THICKNESS_PT --
-    so this names and counts a refusal that used to happen incidentally, and
-    changes no rule: the corpus still publishes 118 of its 119 blanks.
+    The ruled-blank path was never exposed to THIS guard by itself -- a font
+    box is 1.36 em tall and `ruled_blank_bars` refuses a band thicker than
+    MAX_RULE_THICKNESS_PT before a font-box answer could even be offered -- so
+    naming and counting the refusal here still changes no rule on its own.
+    F065's second fix, `embedded_glyph_outline`, is what changes the rule
+    count: hand-parsed from the same embedded program's own `glyf`/`loca`
+    bytes, scoped to the ruled-blank path only (see `ruled_blank_bars`), it
+    recovers the one glyph this guard would otherwise cost the corpus its
+    ONLY refused blank -- 1707-2021's item 9 -- and the corpus now publishes
+    all 119 of its 119 ruled blanks.
 
     The box is in font units with y counting UP from the baseline, which is why
     the caller flips it into page coordinates rather than adding it.
@@ -1298,6 +1515,11 @@ class GlyphOutlines:
                  ) -> None:
         self.provenance = glyph_provenance(page)
         self.faces = substitutable_faces(page, doc)
+        # Raw embedded TrueType programs, keyed the same way `self.faces` is.
+        # Read here (once per page, beside the fitz.Font table this class
+        # already builds) but consumed ONLY by the ruled-blank path -- see
+        # ruled_blank_embedded_outline and embedded_glyph_outline.
+        self.programs = embedded_font_programs(page, doc)
         self.text_ops = text_ops
         self._outlines: dict[tuple[str, int, int],
                              tuple[tuple[float, float, float, float] | None,
@@ -1372,7 +1594,7 @@ def run_glyph_ink(chars: Sequence[dict[str, Any]], letters: Sequence[str],
     Keyed by CHARACTER, because a run states one font at one size and the box is
     then a property of the character inside it. That is also what keeps the
     published table a tenth of the size of a per-glyph one: this corpus sets
-    356,092 inked glyphs in 19,287 runs but only 9.9 distinct characters per
+    356,057 inked glyphs in 19,287 runs but only 9.9 distinct characters per
     run.
 
     A character is published only when EVERY inked occurrence of it in the run
@@ -1497,7 +1719,8 @@ def ruled_blank_bars(chars: Sequence[dict[str, Any]], size: float,
                      provenance: dict[tuple[float, float], tuple[int, int]],
                      text_ops: dict[int, tuple[int,
                                                tuple[float, float, float, float]]],
-                     colour: Any) -> tuple[list[dict[str, Any]], str]:
+                     colour: Any,
+                     programs: Sequence[bytes] = ()) -> tuple[list[dict[str, Any]], str]:
     """One underscore group as the bar it draws, or a refusal and its reason.
 
     Every step can only fail closed. The band is the glyphs' OWN ink -- the
@@ -1523,6 +1746,15 @@ def ruled_blank_bars(chars: Sequence[dict[str, Any]], size: float,
     arithmetic above, and it is expanded by one unit for antialiasing -- so a
     band derived off the wrong baseline, at the wrong scale, or in the wrong
     coordinate space cannot be contained by it and is refused.
+
+    `programs` (F065's second half) is the fallback ONLY `glyph_ink_box`
+    itself cannot reach: every candidate face resolved by name but every one
+    of them answered with its own whole font box (the fontbuffer barrier
+    `glyph_ink_box` documents). Reached with the SAME glyph id already
+    identified above, hand-parsed from the file's own embedded program
+    (`ruled_blank_embedded_outline`), and cross-checked against the file's own
+    stated advance for these exact glyphs before it is trusted -- an outline a
+    program states but does not advance to is not this sheet's ink.
     """
     if not chars:
         return [], "no glyphs"
@@ -1542,7 +1774,15 @@ def ruled_blank_bars(chars: Sequence[dict[str, Any]], size: float,
 
     box = glyph_ink_box(faces, RULED_BLANK_CODEPOINT, glyph_id)
     if box is None:
-        return [], "no single face states this glyph's outline"
+        fallback = ruled_blank_embedded_outline(programs, glyph_id)
+        if fallback is None:
+            return [], "no single face states this glyph's outline"
+        box, advance_em = fallback
+        advance_pt = advance_em * size
+        for char in chars:
+            stated_pt = float(char["bbox"][2]) - float(char["bbox"][0])
+            if abs(advance_pt - stated_pt) > GLYPH_INK_ADVANCE_AGREEMENT_PT:
+                return [], "the face's advance contradicts the file's"
 
     channels = colour if isinstance(colour, (list, tuple)) else (
         (((int(colour) >> 16) & 0xFF) / 255.0,
@@ -1711,9 +1951,14 @@ def extract_text_runs(page: fitz.Page, doc: fitz.Document, order: PaintOrder,
     Every run that survives all of that carries `glyph_ink_em`, the outline box
     of each character it sets (`run_glyph_ink`). It is published beside the
     advance metrics rather than in place of them, because it is derivable for
-    78.4% of this corpus's glyphs -- 279,101 of 356,092 -- and the other 76,991
-    must keep the wider box they already had. The same third return value
-    carries that split, by reason.
+    78.4% of this corpus's glyphs -- 279,101 of 356,057 -- and the other
+    76,956 must keep the wider box they already had. The same third return
+    value carries that split, by reason. (356,057, not the 356,092 this
+    corpus stated before F065's fix: 1707-2021's own 35 ruled-blank
+    underscores used to be counted here, refused, while their run still held
+    them as text; publishing them as a rule instead takes them out of this
+    census entirely -- "a glyph that left for a ruled-blank bar is in
+    neither column," as `extract_text_runs` already documents below.)
     """
     runs: list[dict[str, Any]] = []
     bars: list[dict[str, Any]] = []
@@ -1778,7 +2023,8 @@ def extract_text_runs(page: fitz.Page, doc: fitz.Document, order: PaintOrder,
                         pieces, reason = ruled_blank_bars(
                             chars[start:end], size,
                             outlines.faces.get(span["font"], ()),
-                            outlines.provenance, order.text, span.get("color"))
+                            outlines.provenance, order.text, span.get("color"),
+                            outlines.programs.get(span["font"], ()))
                         if not pieces:
                             refusals[reason] += 1
                             continue
@@ -2873,13 +3119,15 @@ def clip_probe_ir() -> dict[str, Any]:
 # ordinal 1: a bar published at ordinal 0 would be one this page never proved
 # was read off the operator stream at all.
 #
-#   /F1 Helvetica     -- unembedded and base-14, the shape 111 of this corpus's
-#                        118 ruled blanks have: MuPDF substitutes, and the
+#   /F1 Helvetica     -- unembedded and base-14: MuPDF substitutes, and the
 #                        substitute's own outline is the ink on the page.
-#   /F2 ArialNarrow   -- unembedded and NOT base-14, which is 1707's shape:
-#                        MuPDF still draws something, and no face this module
-#                        can name states that glyph's outline, so the glyphs
-#                        stay text.
+#   /F2 ArialNarrow   -- unembedded and NOT base-14, which is Tahoma's shape
+#                        in this corpus (229 glyphs, 1604cf-2008/2553-1999),
+#                        not 1707's: MuPDF still draws something, and no
+#                        face this module can name states that glyph's
+#                        outline, so the glyphs stay text. 1707-2021's own
+#                        blank is an EMBEDDED, subset-tagged face --
+#                        `ruled_blank_embedded_probe_ir` states that shape.
 RULED_BLANK_PROBE_STREAM = b"""0 g
 20 20 60 1.2 re f
 BT
@@ -2953,6 +3201,273 @@ def ruled_blank_probe_ir() -> dict[str, Any]:
     doc = fitz.open(stream=probe_pdf(RULED_BLANK_PROBE_STREAM,
                                      RULED_BLANK_PROBE_RESOURCES,
                                      RULED_BLANK_PROBE_FONTS),
+                    filetype="pdf")
+    ir = extract_page(doc[0], doc, 1)
+    doc.close()
+    return {"rules": ir["rules"], "text_runs": ir["text_runs"],
+            "stats": ir["stats"]}
+
+
+# An eighth written-here page, for F065's own second question, which the
+# ruled-blank probe above never states: an underscore run drawn in an
+# EMBEDDED, subset-tagged TrueType face -- 1707-2021's real shape, and
+# 61,781 of the corpus's 62,010 "no face is resolvable" glyphs, none of them
+# by an unresolvable name (the ruled-blank probe's own
+# `/F2 ArialNarrow` is that shape, and it is Tahoma's, not 1707's). The
+# corpus states the GOLDEN path of it 118 times over -- a key that matches
+# once stripped, a program that hand-parses cleanly -- but never a
+# subset-tagged program whose own bytes cannot be hand-parsed, so the second
+# half of F065's fix (`embedded_glyph_outline`'s own fail-closed behaviour)
+# would ship with no PDF ever having exercised its refusal path.
+#
+# Two embedded (`ext == 'ttf'`) TrueType programs, built by hand
+# (`_ruled_blank_embedded_probe_ttf`, the same reason `fonts.py` hand-reads
+# its own WOFF2 table directory: no font-shaped asset is worth tracking for
+# eleven bytes of pointer arithmetic) from IDENTICAL tables except one:
+#
+#   /F1 ABCDEF+ProbeSubsetGood    -- a valid, spec-shaped six-letter subset
+#                                    tag (`SUBSET_TAG_RE`). Every table,
+#                                    including `glyf`, is intact: its own
+#                                    underscore glyph states a real outline,
+#                                    (0.04, -0.125, 0.46, -0.075) em, well
+#                                    inside its own whole-font box
+#                                    (-0.05, -0.2, 0.9, 0.8) em -- which is
+#                                    what `fitz.Font(fontbuffer=...).
+#                                    glyph_bbox` answers regardless (the
+#                                    fontbuffer barrier `glyph_ink_box`
+#                                    documents), so this run is UNMEASURABLE
+#                                    without the hand-parsed fallback and
+#                                    PUBLISHED with it.
+#   /F2 GHIJKL+ProbeSubsetBroken  -- the identical shape and a DIFFERENT
+#                                    spec-shaped tag, so its own key can
+#                                    never be mistaken for /F1's, but its
+#                                    `glyf` table is truncated: `loca`'s own
+#                                    offsets for the underscore glyph run
+#                                    past the end of it. `head`, `cmap`,
+#                                    `hhea`, `hmtx` and `maxp` are
+#                                    byte-identical to /F1's own -- MuPDF
+#                                    still loads the font, still draws the
+#                                    glyph and still states its advance --
+#                                    so ONLY the hand-parsed OUTLINE is
+#                                    undecodable, which is the one thing
+#                                    `embedded_glyph_outline` is asked for.
+RULED_BLANK_EMBEDDED_PROBE_GOOD_NAME = b"ABCDEF+ProbeSubsetGood"
+RULED_BLANK_EMBEDDED_PROBE_BROKEN_NAME = b"GHIJKL+ProbeSubsetBroken"
+
+# The em-relative outline / advance the /F1 program's OWN bytes state for its
+# underscore glyph (gid 2), and the font units they are stated in. Named
+# rather than inlined so a rewritten probe font fails loudly instead of being
+# compared against a stale literal.
+RULED_BLANK_EMBEDDED_PROBE_UNITS_PER_EM = 1000
+RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_GID = 2
+RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_BOX_UNITS = (40, -125, 460, -75)
+RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_ADVANCE_UNITS = 500
+RULED_BLANK_EMBEDDED_PROBE_FONT_BBOX_UNITS = (-50, -200, 900, 800)
+
+
+def _ruled_blank_embedded_probe_ttf(corrupt_glyf: bool) -> bytes:
+    """Hand-build a minimal sfnt TrueType program: .notdef, space, underscore.
+
+    Pure `struct`, no font-shaped asset tracked, for the same reason
+    `fonts.py:187-196` hand-reads its own WOFF2 table directory: three
+    tables' worth of arithmetic is not worth a new dependency, and hand
+    building keeps every byte -- and therefore every measurement the probe's
+    own module comment states -- reproducible from this source alone.
+
+    `corrupt_glyf` truncates the `glyf` table to end exactly where the
+    underscore glyph's own bytes would start, so `loca`'s stated offsets for
+    it run past the table's end. Every other table is built identically
+    either way.
+    """
+    units_per_em = RULED_BLANK_EMBEDDED_PROBE_UNITS_PER_EM
+    xmin, ymin, xmax, ymax = RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_BOX_UNITS
+    glyf_underscore = struct.pack(">hhhhh", 1, xmin, ymin, xmax, ymax)
+    glyf_underscore += struct.pack(">HH", 3, 0)  # endPtsOfContours[0], instructionLength
+    glyf_underscore += bytes([0x01, 0x01, 0x01, 0x01])  # 4 on-curve points, no repeat
+    xs = [xmin, xmax - xmin, 0, -(xmax - xmin)]
+    ys = [ymin, 0, ymax - ymin, 0]
+    for value in (*xs, *ys):
+        glyf_underscore += struct.pack(">h", value)
+
+    glyf_table = b""              # .notdef (gid 0) and space (gid 1) are empty
+    loca_offsets = [0, 0, 0]
+    glyf_table += _pad4_bytes(glyf_underscore)
+    loca_offsets.append(len(glyf_table))
+    if corrupt_glyf:
+        glyf_table = glyf_table[:loca_offsets[2]]
+    loca_table = b"".join(struct.pack(">H", offset // 2)
+                          for offset in loca_offsets)
+
+    advance = RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_ADVANCE_UNITS
+    hmtx_table = struct.pack(">Hh", 0, 0) + struct.pack(">Hh", 300, 0) + \
+        struct.pack(">Hh", advance, 0)
+
+    # cmap: a (1,0) Mac format-0 subtable and a (3,1) Windows Unicode
+    # format-4 subtable, both mapping U+0020 (space, gid 1) and U+005F
+    # (underscore, gid 2) -- so a WinAnsiEncoding-encoded PDF text op
+    # resolves to the SAME glyph ids `has_glyph` reports, on either platform
+    # a reader consults.
+    glyph_ids = bytearray(256)
+    glyph_ids[0x20] = 1
+    glyph_ids[0x5F] = 2
+    cmap_f0 = struct.pack(">HHH", 0, 262, 0) + bytes(glyph_ids)
+    segments = ((0x20, 0x20, 1), (0x5F, 0x5F, 2), (0xFFFF, 0xFFFF, 1))
+    end_codes = b"".join(struct.pack(">H", seg[1]) for seg in segments)
+    start_codes = b"".join(struct.pack(">H", seg[0]) for seg in segments)
+    id_deltas = b"".join(
+        struct.pack(">h", _signed16(seg[2] - seg[0]) if seg[1] != 0xFFFF else 1)
+        for seg in segments)
+    id_range_offsets = b"\x00\x00" * len(segments)
+    seg_count_x2 = len(segments) * 2
+    entry_selector = max(0, int(math.log2(len(segments))))
+    search_range = 2 * (2 ** entry_selector)
+    range_shift = seg_count_x2 - search_range
+    f4_body = end_codes + b"\x00\x00" + start_codes + id_deltas + id_range_offsets
+    cmap_f4 = struct.pack(">HHHHHHH", 4, 14 + len(f4_body), 0, seg_count_x2,
+                          search_range, entry_selector, range_shift) + f4_body
+    f0_offset = 4 + 2 * 8
+    f4_offset = f0_offset + len(cmap_f0)
+    cmap_table = (struct.pack(">HH", 0, 2)
+                 + struct.pack(">HHI", 1, 0, f0_offset)
+                 + struct.pack(">HHI", 3, 1, f4_offset)
+                 + cmap_f0 + cmap_f4)
+
+    maxp_table = struct.pack(">IHHHHHHHHHHHHHH", 0x00010000, 3,
+                             4, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0)
+    hhea_table = struct.pack(
+        ">IhhhHhhhhhhhhhhhH", 0x00010000, int(units_per_em * 0.8),
+        -int(units_per_em * 0.2), 0, advance, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3)
+    fxmin, fymin, fxmax, fymax = RULED_BLANK_EMBEDDED_PROBE_FONT_BBOX_UNITS
+    head_table = struct.pack(
+        ">IIIIHHqqhhhhHHhhh", 0x00010000, 0x00010000, 0, 0x5F0F3CF5, 0,
+        units_per_em, 0, 0, fxmin, fymin, fxmax, fymax, 0, 8, 2, 0, 0)
+
+    return _assemble_sfnt({
+        b"cmap": cmap_table, b"glyf": glyf_table, b"head": head_table,
+        b"hhea": hhea_table, b"hmtx": hmtx_table, b"loca": loca_table,
+        b"maxp": maxp_table,
+    })
+
+
+def _pad4_bytes(data: bytes) -> bytes:
+    """Pad to a 4-byte boundary, as every sfnt table must be."""
+    while len(data) % 4:
+        data += b"\x00"
+    return data
+
+
+def _signed16(value: int) -> int:
+    """Wrap an int into cmap format 4's signed 16-bit `idDelta` range."""
+    value &= 0xFFFF
+    return value - 0x10000 if value >= 0x8000 else value
+
+
+def _assemble_sfnt(tables: dict[bytes, bytes]) -> bytes:
+    """The plain (non-WOFF2) sfnt container `embedded_glyph_outline` reads."""
+    tags = sorted(tables.keys())
+    entry_selector = int(math.log2(len(tags))) if tags else 0
+    search_range = (2 ** entry_selector) * 16
+    range_shift = len(tags) * 16 - search_range
+    header = struct.pack(">IHHHH", 0x00010000, len(tags), search_range,
+                         entry_selector, range_shift)
+    directory = b""
+    body = b""
+    offset = 12 + len(tags) * 16
+    for tag in tags:
+        data = _pad4_bytes(tables[tag])
+        checksum = 0
+        for index in range(0, len(data), 4):
+            checksum = (checksum
+                       + struct.unpack(">I", data[index:index + 4])[0]) & 0xFFFFFFFF
+        directory += struct.pack(">4sIII", tag, checksum, offset, len(tables[tag]))
+        body += data
+        offset += len(data)
+    return header + directory + body
+
+
+RULED_BLANK_EMBEDDED_PROBE_GOOD_TTF = _ruled_blank_embedded_probe_ttf(False)
+RULED_BLANK_EMBEDDED_PROBE_BROKEN_TTF = _ruled_blank_embedded_probe_ttf(True)
+
+RULED_BLANK_EMBEDDED_PROBE_STREAM = b"""BT
+/F1 10 Tf
+0 g
+20 160 Td
+(____) Tj
+ET
+BT
+/F2 10 Tf
+0 g
+20 140 Td
+(____) Tj
+ET
+"""
+
+RULED_BLANK_EMBEDDED_PROBE_RESOURCES = b"<</Font<</F1 5 0 R/F2 8 0 R>>>>"
+
+
+def _ruled_blank_embedded_probe_font_descriptor(
+       name: bytes, filestream_object: int) -> bytes:
+    fxmin, fymin, fxmax, fymax = RULED_BLANK_EMBEDDED_PROBE_FONT_BBOX_UNITS
+    return (b"<</Type/FontDescriptor/FontName/" + name
+           + b"/Flags 32/ItalicAngle 0/Ascent 800/Descent -200/CapHeight 700"
+             b"/StemV 80/FontBBox[%d %d %d %d]/FontFile2 %d 0 R>>"
+           % (fxmin, fymin, fxmax, fymax, filestream_object))
+
+
+def _ruled_blank_embedded_probe_fonts() -> tuple[bytes, ...]:
+    """The probe's six font objects: /F1's dict, descriptor and program, then /F2's."""
+    good_name = RULED_BLANK_EMBEDDED_PROBE_GOOD_NAME
+    broken_name = RULED_BLANK_EMBEDDED_PROBE_BROKEN_NAME
+    good_ttf = RULED_BLANK_EMBEDDED_PROBE_GOOD_TTF
+    broken_ttf = RULED_BLANK_EMBEDDED_PROBE_BROKEN_TTF
+    return (
+        b"<</Type/Font/Subtype/TrueType/BaseFont/" + good_name
+        + b"/FirstChar 95/LastChar 95/Widths[%d]/Encoding/WinAnsiEncoding"
+          b"/FontDescriptor 6 0 R>>"
+        % RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_ADVANCE_UNITS,
+        _ruled_blank_embedded_probe_font_descriptor(good_name, 7),
+        b"<</Length %d/Length1 %d>>stream\n" % (len(good_ttf), len(good_ttf))
+        + good_ttf + b"\nendstream",
+        b"<</Type/Font/Subtype/TrueType/BaseFont/" + broken_name
+        + b"/FirstChar 95/LastChar 95/Widths[%d]/Encoding/WinAnsiEncoding"
+          b"/FontDescriptor 9 0 R>>"
+        % RULED_BLANK_EMBEDDED_PROBE_UNDERSCORE_ADVANCE_UNITS,
+        _ruled_blank_embedded_probe_font_descriptor(broken_name, 10),
+        b"<</Length %d/Length1 %d>>stream\n" % (len(broken_ttf), len(broken_ttf))
+        + broken_ttf + b"\nendstream",
+    )
+
+
+# The one rule /F1's group publishes, measured exactly as `RULED_BLANK_
+# PROBE_RULES` documents its own: baseline PDF y=160 -> IR y=40.0; the
+# outline box in em is (0.04, -0.125, 0.46, -0.075), so at 10pt
+# y0 = 40.0 - 10*(-0.075) = 40.75, y1 = 40.0 - 10*(-0.125) = 41.25; x runs
+# from the first glyph's own ink edge (20.0 + 10*0.04 = 20.4) to the last
+# glyph's (35.0 + 10*0.46 = 39.6), four glyphs 5.0pt apart at the program's
+# own 0.5em advance. No vector op precedes either text op on this page, so
+# both states paint_seq 0 (`PaintOrder.text` counts painting ops before a
+# text op, and there are none here -- see PaintOrder's own docstring).
+RULED_BLANK_EMBEDDED_PROBE_RULE: tuple[tuple[float, float, float, float],
+                                       float, int, str] = (
+    (20.4, 40.75, 39.6, 41.25), 0.5, 0,
+    "the subset-tagged embedded program's own underscore group, published "
+    "from its hand-parsed outline once the key resolves")
+
+# /F2's group stays text, verbatim, refused for the SAME reason string the
+# ruled-blank probe's unembedded face is (`RULED_BLANK_PROBE_REFUSAL`) --
+# reached by a different route: the key resolves (its own tag is spec-shaped
+# too) and `glyph_ink_box` refuses on the fontbuffer barrier exactly as /F1's
+# does, but the hand-parsed fallback ALSO refuses, because /F2's own `glyf`
+# table cannot state this glyph's outline.
+RULED_BLANK_EMBEDDED_PROBE_RETAINED_TEXT = "____"
+RULED_BLANK_EMBEDDED_PROBE_REFUSAL = RULED_BLANK_PROBE_REFUSAL
+
+
+def ruled_blank_embedded_probe_ir() -> dict[str, Any]:
+    """The subset-tag probe page's rules, runs and reclassification census."""
+    doc = fitz.open(stream=probe_pdf(RULED_BLANK_EMBEDDED_PROBE_STREAM,
+                                     RULED_BLANK_EMBEDDED_PROBE_RESOURCES,
+                                     _ruled_blank_embedded_probe_fonts()),
                     filetype="pdf")
     ir = extract_page(doc[0], doc, 1)
     doc.close()
@@ -3132,10 +3647,15 @@ def baseline_probe_ir() -> dict[str, Any]:
 # A fifth written-here page, for the fifth question no form can settle on its
 # own: where a glyph inks, as against where it advances. The official corpus
 # states each of these five answers -- the measured case 279,101 times, the
-# unresolvable face 62,010, the unboundable embedded program 9,217 and the
+# unresolvable face 229, the unboundable embedded program 70,963 and the
 # contradicted advance 5,173 -- but it states them in untracked files, mixed
 # together on pages doing other things, and the synthetic corpus states none of
-# them at all.
+# them at all. (229 and 70,963 are F065's own corrected counts: unembedded
+# Tahoma, not unembedded Arial Narrow, is this corpus's genuinely-unresolvable
+# shape -- 1707-2021's real face is EMBEDDED and subset-tagged, and once its
+# key resolves it lands on the font-box guard below instead, which is why that
+# count rose from 9,217 to 70,963 on the same fix that took this one from
+# 62,010 to 229.)
 #
 # Page is 200x200 and PDF y counts up from the bottom, so an IR y is the
 # 200-complement. One string, `Tag.`, is set five times: a capital with no
@@ -3146,9 +3666,10 @@ def baseline_probe_ir() -> dict[str, Any]:
 #   /F1 Helvetica       unembedded base-14: MuPDF substitutes, the substitute's
 #                       own outline is the ink, and the file's advances are the
 #                       substitute's. MEASURED.
-#   /F2 ArialNarrow     unembedded and not base-14, 1707's shape and 62,010
-#                       glyphs of this corpus: MuPDF draws something and no face
-#                       this module can name states that glyph's outline.
+#   /F2 ArialNarrow     unembedded and not base-14 -- Tahoma's shape in this
+#                       corpus (229 glyphs, 1604cf-2008/2553-1999), not
+#                       1707's: MuPDF draws something and no face this module
+#                       can name states that glyph's outline.
 #   /F3 Helvetica       the same substitute, with a /Widths array that contradicts
 #                       it -- every character 0.2 em where the face says 0.611,
 #                       0.556, 0.556 and 0.278. This is 2551M page 2's shape
@@ -3158,9 +3679,10 @@ def baseline_probe_ir() -> dict[str, Any]:
 #                       not this sheet's ink.
 #   /F4 ProbeEmbedded   a font whose PROGRAM the page embeds. MuPDF loads it and
 #                       answers every codepoint on it with the whole FONT box:
-#                       this is 2551Q page 1's embedded Identity-H Arial and the
-#                       9,217 glyphs on 48 forms behind `glyph_ink_box`'s
-#                       font-box guard, and it is not special to that file --
+#                       this is 2551Q page 1's embedded Identity-H Arial and
+#                       1707-2021's own embedded Arial Narrow alike -- 70,963
+#                       glyphs on 49 of 53 forms behind `glyph_ink_box`'s
+#                       font-box guard, and it is not special to either file --
 #                       every face `substitutable_faces` loads through
 #                       `fitz.Font(fontbuffer=...)` behaves this way, which is
 #                       why embedding a program HERE states the case. The
@@ -3366,6 +3888,11 @@ def gather_evidence(profile: SelfTestProfile,
         # And for a run of underscores, whose two fail-closed cases no form in
         # either corpus states.
         "ruled_blank_probe": ruled_blank_probe_ir(),
+        # And for F065's own second barrier: a subset-tagged EMBEDDED face
+        # (1707-2021's real shape), whose ONLY pinned corpus instance
+        # resolves cleanly, so the hand-parser's own fail-closed residue on
+        # a program that cannot be parsed would otherwise ship unproven.
+        "ruled_blank_embedded_probe": ruled_blank_embedded_probe_ir(),
         # And for a rule's origin, whose merged-and-mixed case no form in
         # either corpus is pinned to state.
         "rule_origin_probe": rule_origin_probe_ir(),
@@ -4118,9 +4645,13 @@ def check_ruled_blank_fail_closed(evidence: dict[str, Any]) -> list[str]:
 
     Never guess a band. The probe's second face is unembedded and is not one
     MuPDF's own name cleaner resolves, so no face this module can name states
-    that glyph's outline -- exactly 1707's shape. The count and the surviving
-    runs are asserted against each other, so neither a silently dropped blank
-    nor an unrecorded refusal can pass.
+    that glyph's outline -- the corpus's own shape here is unembedded Tahoma
+    (229 glyphs), not 1707: 1707's own blank is an EMBEDDED, subset-tagged
+    face, and `check_ruled_blank_embedded_subset` is where that shape (and
+    its own fail-closed residue, a program that cannot be hand-parsed) is
+    proven. The count and the surviving runs are asserted against each other
+    here, so neither a silently dropped blank nor an unrecorded refusal can
+    pass.
     """
     probe = evidence["ruled_blank_probe"]
     stats = probe["stats"]
@@ -4148,6 +4679,62 @@ def check_ruled_blank_fail_closed(evidence: dict[str, Any]) -> list[str]:
             f"ruled-blank probe saw {stats['ruled_blank_groups']} group(s) and "
             f"published {stats['ruled_blank_published']}; the difference must "
             f"be the {retained} it refused")
+    return failures
+
+
+def check_ruled_blank_embedded_subset(evidence: dict[str, Any]) -> list[str]:
+    """F065's second barrier: a subset-tagged EMBEDDED face, key and program.
+
+    Two directions, on two independently key-matched fonts: /F1's group must
+    publish, from its own hand-parsed outline, at the exact box its own
+    `glyf` table states; /F2's group -- the identical shape, but with a
+    `glyf` table that cannot state this glyph's outline -- must stay text,
+    refused by the SAME reason string the ruled-blank probe's unembedded
+    face is, reached by a different route (its key resolves; its hand-parsed
+    program does not). A rule this check does not name and a refusal that
+    silently vanishes are the same failure seen from opposite sides.
+    """
+    probe = evidence["ruled_blank_embedded_probe"]
+    stats = probe["stats"]
+    failures: list[str] = []
+
+    box, thickness, seq, why = RULED_BLANK_EMBEDDED_PROBE_RULE
+    got = {(rule["x0"], rule["y0"], rule["x1"], rule["y1"]): rule
+          for rule in probe["rules"]}
+    rule = got.get(box)
+    if rule is None:
+        failures.append(f"subset-embedded probe lost the rule at {box} ({why})")
+    else:
+        if rule["thickness_pt"] != thickness:
+            failures.append(f"subset-embedded probe's rule at {box} is "
+                            f"{rule['thickness_pt']}pt thick, expected {thickness}")
+        if rule["paint_seq"] != seq or rule["paint_seq_max"] != seq:
+            failures.append(f"subset-embedded probe's rule at {box} paints at "
+                            f"{rule['paint_seq']}..{rule['paint_seq_max']}, "
+                            f"expected {seq}")
+        if rule["origin"] != RULE_ORIGIN_TEXT_UNDERSCORE:
+            failures.append(f"subset-embedded probe's rule at {box} carries "
+                            f"origin {rule['origin']!r}, expected "
+                            f"{RULE_ORIGIN_TEXT_UNDERSCORE!r}")
+    for extra in sorted(got.keys() - {box}):
+        failures.append(f"subset-embedded probe painted an unnamed rule at "
+                        f"{extra}")
+
+    retained = RULED_BLANK_EMBEDDED_PROBE_RETAINED_TEXT
+    if not any(run["text"] == retained and run["font"] == "ProbeSubsetBroken"
+              for run in probe["text_runs"]):
+        failures.append(f"subset-embedded probe lost the run {retained!r} in "
+                        f"ProbeSubsetBroken: a program that cannot be "
+                        f"hand-parsed stays text, it does not vanish")
+    if stats["ruled_blank_refusals"] != {RULED_BLANK_EMBEDDED_PROBE_REFUSAL: 1}:
+        failures.append(f"subset-embedded probe recorded refusals "
+                        f"{stats['ruled_blank_refusals']}, expected exactly "
+                        f"{{{RULED_BLANK_EMBEDDED_PROBE_REFUSAL!r}: 1}}")
+    if (stats["ruled_blank_groups"], stats["ruled_blank_published"]) != (2, 1):
+        failures.append(
+            f"subset-embedded probe saw {stats['ruled_blank_groups']} "
+            f"group(s), published {stats['ruled_blank_published']}; expected "
+            f"2 seen, 1 published (the other refused)")
     return failures
 
 
@@ -4526,6 +5113,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("ruled-blank-split", check_ruled_blank_split),
     ("ruled-blank-floor", check_ruled_blank_floor),
     ("ruled-blank-fail-closed", check_ruled_blank_fail_closed),
+    ("ruled-blank-embedded-subset", check_ruled_blank_embedded_subset),
     ("rule-origin", check_rule_origin),
     ("glyph-ink", check_glyph_ink),
     ("glyph-ink-fail-closed", check_glyph_ink_fail_closed),
@@ -4695,6 +5283,23 @@ def mutate_ruled_blank_fail_closed(evidence: dict[str, Any]) -> None:
     if len(probe["text_runs"]) == before:
         raise AssertionError("ruled-blank-fail-closed mutation found no "
                              "retained blank")
+
+
+def mutate_ruled_blank_embedded_subset(evidence: dict[str, Any]) -> None:
+    """Drop the subset-embedded probe's one published rule.
+
+    The quiet failure this check exists to catch, on its own evidence rather
+    than the ruled-blank probe's: a subset-tagged embedded program's
+    hand-parsed outline that leaves the rule table and is never seen again.
+    """
+    probe = evidence["ruled_blank_embedded_probe"]
+    box = RULED_BLANK_EMBEDDED_PROBE_RULE[0]
+    before = len(probe["rules"])
+    probe["rules"] = [rule for rule in probe["rules"]
+                      if (rule["x0"], rule["y0"], rule["x1"], rule["y1"]) != box]
+    if len(probe["rules"]) == before:
+        raise AssertionError("ruled-blank-embedded-subset mutation found no "
+                             "pinned rule to drop")
 
 
 def mutate_rule_origin(evidence: dict[str, Any]) -> None:
@@ -4882,6 +5487,8 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
      "does not set", mutate_glyph_ink_fail_closed),
     ("ruled-blank-fail-closed", "a blank with no derivable band is dropped "
      "instead of kept as text", mutate_ruled_blank_fail_closed),
+    ("ruled-blank-embedded-subset", "the subset-tagged embedded program's own "
+     "published rule is dropped", mutate_ruled_blank_embedded_subset),
     ("rule-origin", "a pure vector rule is mislabelled as underscore-drawn",
      mutate_rule_origin),
     ("baseline-split", "a span carrying two baselines is published as one run",
@@ -4922,6 +5529,71 @@ def mutation_probes(evidence: dict[str, Any], stream: Any) -> tuple[list[str], i
     return failures, ran
 
 
+# Every way a contributor contract can be malformed, and the phrase
+# `validate_rule_paint_spans` must reject it with. A module-level tuple
+# (rather than local to `paint_span_contract_probes`) so its own length is
+# the count `self_test` checks ran rather than skipped -- a coincidence with
+# `len(SELF_TEST_CHECKS)` (24, before `ruled-blank-embedded-subset` made it
+# 25) is not a contract, and keying "did every probe run" off an unrelated
+# tuple's length would silently stop meaning that the moment either one
+# changed on its own.
+PAINT_SPAN_CONTRACT_CASES: tuple[
+    tuple[str, str, Callable[[dict[str, Any]], Any]], ...
+] = (
+    ("missing-field", "has no paint_spans",
+     lambda rule: rule.pop("paint_spans")),
+    ("wrong-container", "expected list",
+     lambda rule: rule.__setitem__("paint_spans", {})),
+    ("empty", "is empty",
+     lambda rule: rule.__setitem__("paint_spans", [])),
+    ("wrong-entry", "expected object",
+     lambda rule: rule["paint_spans"].__setitem__(0, [])),
+    ("missing-key", "keys differ",
+     lambda rule: rule["paint_spans"][0].pop("end_pt")),
+    ("extra-key", "keys differ",
+     lambda rule: rule["paint_spans"][0].__setitem__("x0", 0.0)),
+    ("wrong-coordinate", "not a finite number",
+     lambda rule: rule["paint_spans"][0].__setitem__("start_pt", "0")),
+    ("bool-coordinate", "not a finite number",
+     lambda rule: rule["paint_spans"][0].__setitem__("start_pt", True)),
+    ("nan-coordinate", "not a finite number",
+     lambda rule: rule["paint_spans"][0].__setitem__("start_pt", math.nan)),
+    ("infinite-coordinate", "not a finite number",
+     lambda rule: rule["paint_spans"][0].__setitem__("start_pt", math.inf)),
+    ("unquantised-coordinate", "not q-coordinate",
+     lambda rule: rule["paint_spans"][3].__setitem__("start_pt", 5.001)),
+    ("reversed-extent", "non-positive extent",
+     lambda rule: rule["paint_spans"][0].__setitem__("end_pt", -1.0)),
+    ("wrong-ordinal", "not a non-negative integer",
+     lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", 7.0)),
+    ("bool-ordinal", "not a non-negative integer",
+     lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", True)),
+    ("negative-ordinal", "not a non-negative integer",
+     lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", -1)),
+    ("unsorted", "not ordered",
+     lambda rule: rule["paint_spans"].reverse()),
+    ("disconnected-cluster", "form 2 clusters",
+     lambda rule: rule["paint_spans"][-1].update(
+         start_pt=20.0, end_pt=21.0)),
+    ("wrong-union", "do not equal contributor union",
+     lambda rule: rule.__setitem__("x1", 11.99)),
+    ("off-grid-parent-x0", "x0 is not q-coordinate",
+     lambda rule: rule.__setitem__("x0", 0.004)),
+    ("off-grid-parent-x1", "x1 is not q-coordinate",
+     lambda rule: rule.__setitem__("x1", 12.004)),
+    ("off-grid-parent-y0", "y0 is not q-coordinate",
+     lambda rule: rule.update(
+         axis="v", x0=20.0, x1=20.48, y0=0.004, y1=12.0)),
+    ("off-grid-parent-y1", "y1 is not q-coordinate",
+     lambda rule: rule.update(
+         axis="v", x0=20.0, x1=20.48, y0=0.0, y1=12.004)),
+    ("wrong-min", "contributor min",
+     lambda rule: rule.__setitem__("paint_seq", 4)),
+    ("wrong-max", "contributor max",
+     lambda rule: rule.__setitem__("paint_seq_max", 98)),
+)
+
+
 def paint_span_contract_probes(stream: Any) -> tuple[list[str], int]:
     """Prove malformed contributor contracts are rejected, case by case."""
     start, end, first, last, origin, spans = SELF_TEST_MERGED_INTERVALS[0]
@@ -4934,65 +5606,8 @@ def paint_span_contract_probes(stream: Any) -> tuple[list[str], int]:
     if unexpected:
         failures.append(f"valid paint_spans contract was rejected: {unexpected}")
 
-    def reverse_spans(rule: dict[str, Any]) -> None:
-        rule["paint_spans"].reverse()
-
-    cases: tuple[
-        tuple[str, str, Callable[[dict[str, Any]], Any]], ...
-    ] = (
-        ("missing-field", "has no paint_spans",
-         lambda rule: rule.pop("paint_spans")),
-        ("wrong-container", "expected list",
-         lambda rule: rule.__setitem__("paint_spans", {})),
-        ("empty", "is empty",
-         lambda rule: rule.__setitem__("paint_spans", [])),
-        ("wrong-entry", "expected object",
-         lambda rule: rule["paint_spans"].__setitem__(0, [])),
-        ("missing-key", "keys differ",
-         lambda rule: rule["paint_spans"][0].pop("end_pt")),
-        ("extra-key", "keys differ",
-         lambda rule: rule["paint_spans"][0].__setitem__("x0", 0.0)),
-        ("wrong-coordinate", "not a finite number",
-         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", "0")),
-        ("bool-coordinate", "not a finite number",
-         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", True)),
-        ("nan-coordinate", "not a finite number",
-         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", math.nan)),
-        ("infinite-coordinate", "not a finite number",
-         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", math.inf)),
-        ("unquantised-coordinate", "not q-coordinate",
-         lambda rule: rule["paint_spans"][3].__setitem__("start_pt", 5.001)),
-        ("reversed-extent", "non-positive extent",
-         lambda rule: rule["paint_spans"][0].__setitem__("end_pt", -1.0)),
-        ("wrong-ordinal", "not a non-negative integer",
-         lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", 7.0)),
-        ("bool-ordinal", "not a non-negative integer",
-         lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", True)),
-        ("negative-ordinal", "not a non-negative integer",
-         lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", -1)),
-        ("unsorted", "not ordered", reverse_spans),
-        ("disconnected-cluster", "form 2 clusters",
-         lambda rule: rule["paint_spans"][-1].update(
-             start_pt=20.0, end_pt=21.0)),
-        ("wrong-union", "do not equal contributor union",
-         lambda rule: rule.__setitem__("x1", 11.99)),
-        ("off-grid-parent-x0", "x0 is not q-coordinate",
-         lambda rule: rule.__setitem__("x0", 0.004)),
-        ("off-grid-parent-x1", "x1 is not q-coordinate",
-         lambda rule: rule.__setitem__("x1", 12.004)),
-        ("off-grid-parent-y0", "y0 is not q-coordinate",
-         lambda rule: rule.update(
-             axis="v", x0=20.0, x1=20.48, y0=0.004, y1=12.0)),
-        ("off-grid-parent-y1", "y1 is not q-coordinate",
-         lambda rule: rule.update(
-             axis="v", x0=20.0, x1=20.48, y0=0.0, y1=12.004)),
-        ("wrong-min", "contributor min",
-         lambda rule: rule.__setitem__("paint_seq", 4)),
-        ("wrong-max", "contributor max",
-         lambda rule: rule.__setitem__("paint_seq_max", 98)),
-    )
     ran = 0
-    for name, expected, mutate in cases:
+    for name, expected, mutate in PAINT_SPAN_CONTRACT_CASES:
         broken = copy.deepcopy(valid)
         mutate(broken)
         found = validate_rule_paint_spans(broken, name)
@@ -5052,7 +5667,7 @@ def self_test(profile: SelfTestProfile, source_root: pathlib.Path) -> int:
     # reports a count of *failures* and zero failures is indistinguishable from
     # zero checks. A CI prove-phase fault did exactly that and went undetected.
     expected_mutations = len(SELF_TEST_MUTATIONS)
-    expected_contracts = len(SELF_TEST_CHECKS)
+    expected_contracts = len(PAINT_SPAN_CONTRACT_CASES)
     if mutations_ran != expected_mutations:
         failures.append(f"{mutations_ran} mutation probes ran, {expected_mutations} "
                         f"declared -- a probe was removed or skipped")

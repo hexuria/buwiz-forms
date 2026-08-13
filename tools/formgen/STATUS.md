@@ -143,6 +143,147 @@ schema and the exact steps to add a reviewed fact, so populating the registry
 later is mechanical.
 
 
+## Z3 — F065 closes: the cause was a subset-tag key mismatch and the universal fontbuffer font-box barrier, not an unresolvable font (1707-2021 item 9 gains an input)
+
+**Measured 2026-08-13, worktree `wt/z3-f065`, base `3b633cce`.** F065's own
+recorded cause -- "1707-2021's item 9 blank is UNEMBEDDED Arial Narrow, which
+MuPDF's name cleaner cannot resolve" -- was wrong, though its refusal was
+truthful. Measured directly on the pinned PDF: 1707-2021 page 1 carries
+`ABCDEE+Arial Narrow` at xref 28 with `ext='ttf'` -- a real, EMBEDDED
+TrueType program, subset-tagged per the PDF spec (ISO 32000-1 9.6.4: six
+uppercase letters then `+`), plus `,Bold`/`,Italic` siblings, also embedded.
+`substitutable_faces` registered it under its exact `/BaseFont`, but MuPDF's
+own rawdict strips the subset tag from `span["font"]` before this module
+ever sees it, so every span asking for the face by its stripped name found
+nothing -- a key mismatch, never a name MuPDF's cleaner was even asked
+about (embedded fonts never reach that branch). Corpus-wide, the SAME
+mismatch was booking 61,781 of the corpus's 62,010 "no face is resolvable
+for this font" glyphs; only 229 (unembedded Tahoma, 1604cf-2008/2553-1999)
+are genuinely unresolvable, confirming F065's ORIGINAL account was Tahoma's
+shape, misattributed to 1707.
+
+**Two fixes, in one package.** (a) `substitutable_faces` now registers an
+embedded face under its tag-stripped name too (`SUBSET_TAG_RE`, exactly the
+spec's six-uppercase-letters-then-`+` pattern, never a looser one), additive
+only -- an exact-key hit is never displaced by a stripped one. Measured to be
+inert on its own: every embedded, buffer-loaded face MuPDF loads still
+answers `glyph_bbox` with its own whole `Font.bbox` for every codepoint,
+never a real per-glyph outline (`glyph_ink_box`'s own documented barrier,
+now corpus-confirmed rather than assumed) -- so fixing the key alone moves
+61,781 glyphs from "no face is resolvable" to "no single face states this
+glyph's outline" (9,217/48 forms -> 70,963/49 forms) and publishes nothing
+new; `glyph_ink_measured` stays exactly 279,101, corpus-wide, both before and
+after. (b) New function `embedded_glyph_outline` hand-parses one glyph's own
+outline and advance from an embedded TrueType program's own
+`head`/`loca`/`glyf`/`hmtx` bytes (mirroring `fonts.py`'s own WOFF2
+table-directory reading -- no new dependency), fed into `ruled_blank_bars`
+ONLY -- never the corpus-wide `GlyphOutlines` measurement -- with the parsed
+advance cross-checked against the run's own stated `char_widths_pt` before
+being trusted. Together: 1707-2021's item 9 blank -- the corpus's one ruled-
+blank refusal -- now publishes at (471.78, 359.61)-(583.52, 359.96)pt, 0.35pt
+thick; `ruled_blank_groups`/`published`/`refused` moves 119/118/1 -> 119/119/0,
+corpus-wide. The 35 underscore glyphs that used to sit in the caption's text
+run leave the corpus's `glyph_ink` census entirely (published as a rule
+instead), so the corpus's own `glyph_ink_glyphs` denominator moves
+356,092 -> 356,057; nothing else about the census's shape (78.4% measured,
+one character not measurable everywhere it's set 558, advance contradicted
+5,173, glyph id/codepoint not stated 20/13) moves at all.
+
+**`RuledBlankWriting`, the corpus's existing 118-strong mechanism, seats the
+new field with no special case.** Cell `p1c214` (`data-cell-kind="label"`)
+now carries an `<input>` at `inset:0pt 10.96pt 0.17pt 67.14pt`, bottom-seated
+on the new rule with ~9.7pt headroom, exactly as every other ruled-blank
+field is. Item 9's second, previously-independent barrier (the knockout
+band's caption run covering the whole knockout box, per W1/F206's own prior
+measurement) is now moot: the caption's own underscore run is no longer
+"unresolved," so it leaves the run entirely instead of blocking the whole
+knockout by its own bounding box.
+
+**Browser-verified, the user's own way**: `page.goto(file://...)`, Tab from
+the page's first input, typed, read back. Cell `p1c214-i` reached at **Tab
+press 64**, typed `SPECIFIED ANSWER`, read back verbatim,
+`text-align: center` inherited from `RuledBlankWriting` like every other
+ruled-blank field.
+
+**Blast radius, measured on the tree this package actually wrote:** ONLY
+`forms/extra/1707-2021/{index.html,form.css,provenance.json}` changed --
+confirmed both by `git diff` against this task's own base commit and by two
+independent `batch.py` regenerations (`forms`, `build/ir`, `build/layout`
+tree digests byte-identical across both runs; `build/html` byte-identical
+once the shared, out-of-scope `fonts/` staging directory is excluded from
+the comparison). Input count moves by exactly +1, corpus-wide: 1707-2021's
+own raw `<input>` count moves 999 -> 1000; `tab_check.py`'s browser-measured
+(live-DOM) total across all 53 forms on this tree is **44,664**, with
+1707-2021 itself green=997. `inputs_over_printed_text` stays 0 forms/0
+offenders. `comb_slots_match_printed` unchanged at 9 forms/13; comb censuses
+unchanged (`comb_referee.py`'s own full run: `combs_expected`/`combs_found`
+4587, `subjects_active` 4557, `subjects_retained_unresolved` 30, `forms_error`
+0). Blue (vacant) census 5, unchanged. Corpus tab-walk **53/53 green**
+(`tab_check.py`, 219.4s, red-skipped 0 / red-order 0 on every form). A full
+`audit.py --assertions-only` run over the regenerated corpus confirms 53
+forms scored.
+
+**Two new source-level mutations**, both against a new, wholly independent
+written-here probe page (`ruled_blank_embedded_probe_ir`, its own check
+`ruled-blank-embedded-subset`, deliberately never sharing pinned state with
+the existing `ruled_blank_probe_ir`/`check_ruled_blank_split` so a mutation
+here can never collide with theirs): `mutate_ruled_blank_embedded_subset_tag`
+lowercases the probe's own good font's spec-shaped subset tag -- MuPDF's own
+rawdict stripping is looser than the PDF spec (measured directly: it also
+strips a lowercase or digit-bearing six-character prefix) but
+`extract.SUBSET_TAG_RE` correctly does not, reproducing F065's exact key
+mismatch for a tag that is not spec-shaped and tripping the check;
+`mutate_ruled_blank_embedded_program` un-corrupts the probe's own
+deliberately-truncated second font (its `glyf` table is shortened so
+`loca`'s own offsets for the underscore glyph run past its end, every other
+table byte-identical to the working one) by replacing it with the working
+program, proving the refusal was genuinely about THIS program's own bytes.
+`prove-fixtures-fail: PASS over 21 source-level mutations` (up from 19), 6
+checks stated as contract-only, unmoved.
+
+**Self-tests, all pass:** `extract.py --self-test` (7 pinned PDFs, now 25
+checks and 25+24 probes, up from 24 and 24+24) and `--self-test --fixtures`
+(6 fixture PDFs, unchanged -- no fixture PDF needed extending, since the new
+shape reaches past `make_fixtures.py` the same way the existing ruled-blank
+and glyph-ink probes already do); `lattice.py --ir
+build/ir/2551q-2018.ir.json` (489/264 slots, unchanged); `emit.py
+--self-test` (every corpus assertion 0 offenders, including the ruled-blank
+corpus check: 53 forms, 59 rule(s) claimed, 0 without a typing surface);
+`comb_referee.py --self-test` and a full run (`forms_error: 0`, censuses
+unmoved); `gate.py --self-test`; `tab_check.py` (53/53 green); `validate_tree.py`
+(7/7); `fixtures/prove_fixtures_fail.py` (21 mutations, above).
+
+**A necessary side fix, unrelated to F065's own subject but exposed by
+adding a 25th check:** `self_test`'s own "did every paint-span contract
+probe run" guard compared `mutations_ran`/`contracts_ran` against
+`len(SELF_TEST_CHECKS)`, which happened to equal `len(PAINT_SPAN_CONTRACT_
+CASES)` (24) by coincidence, not by contract -- the two counts are
+unrelated. Pulled the 24 contract-probe cases out to their own named module
+constant so this guard is keyed to the right count and stays correct as
+`SELF_TEST_CHECKS` grows; no case, tolerance or check moved.
+
+**Pins.** `comb_referee.AUDIT_DEPENDENCY_SHA256["tools/formgen/extract.py"]`
+re-pinned (extract.py's own bytes moved). `comb_referee.
+EXPECTED_HTML_STRUCTURE_SHA256` re-pinned for the one slug whose
+`build/html/<slug>.html` bytes moved (`1707-2021`; the other 52 are
+byte-identical), appended as a new re-pin round per this file's own
+changelog-dict convention. No comb census, extract.py check count beyond the
+one new check, or tolerance moved. `review-findings.json`: F065 closed
+`fixed` with the browser proof above; new finding F229 (minor, open) records
+the general case this package deliberately does not fix -- the fontbuffer
+font-box barrier still blocks real per-glyph outline measurement for 70,963
+glyphs on 49 forms corpus-wide, and widening `embedded_glyph_outline`'s
+scope beyond the one `RULED_BLANK_CODEPOINT` the ruled-blank path needs is
+real, unmeasured reach.
+
+**Determinism:** two full `batch.py` regenerations over the 53-form corpus
+produce byte-identical `forms`, `build/ir` and `build/layout` trees
+(tree digests match exactly: `forms` `b104d8a7b95e`, `build/ir`
+`7d3803fc87b0`, `build/layout` `a13596c21acd`) and byte-identical `build/html`
+once the shared `fonts/` staging directory (populated by a fixed,
+`--work`-independent default path, not per-run output) is excluded from the
+comparison (`build/html` `49fc02e20a00` both runs).
+
 ## r59 — everything agent-closable is closed; the last input is the user's
 
 **Gate r59: 10/13**, determinism byte-identical (`15947889ee6a`). The three

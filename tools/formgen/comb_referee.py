@@ -541,8 +541,22 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # **4,587/4,557/30, unmoved**; input count **45,548, unmoved**; tab-walk
 # **53/53 green, unmoved**; blue census **5, unmoved**. No comb constant,
 # tolerance, or existing assertion weakened.
+# Re-pinned 2026-08-13 (Z1): `REVIEWED_COMB_TOPOLOGY` is populated with TEN
+# reviewed comb-topology facts, each carrying its own source-PDF sha256, page,
+# cell bbox, reviewer, date and the review panel it was read from. Three of the
+# thirteen the user confirmed were WITHDRAWN before commit rather than pinned --
+# 2200a p1c111, 2200c p1c107, 2200p p1c110 -- because measuring them showed the
+# confirmation answered a different question than the registry asks: their slot
+# 0 is 173.66pt wide against a 14.52pt pitch and holds the row's printed
+# caption, and the sheet prints ticks inside that caption region at the same
+# pitch, so the compartment count is genuinely open there (filed as F229).
+# Measured on a clean 53-form audit: `comb_slots_match_printed` 9 forms/13
+# offenders -> 3 forms/3, `decided_by_review` 10, and the three that remain are
+# exactly the withdrawn trio, which also carry `invalid-emission` independently
+# of topology. No producer bytes moved; `EXPECTED_HTML_STRUCTURE_SHA256` is
+# unchanged.
 AUDIT_PRODUCER_SHA256 = (
-    "346e293028c58890b410a69d2f49f14526306f04e39f847d4ad015112499e6c0"
+    "23f0619e7796d64650f69bb89e23317a4293d6979ef8dbacbe3b2c6314ca8b78"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -711,8 +725,38 @@ AUDIT_DEPENDENCY_SHA256 = {
     # bytes below. No rule field, comb census, extract.py check count or
     # tolerance moves; `build/ir/*.ir.json` for the seven real pinned PDFs
     # is untouched.
+    #
+    # Re-pinned 2026-08-13 (Z3, F065): two independent fixes to
+    # `substitutable_faces`/`glyph_ink_box`. (1) A face embedded under a
+    # PDF-spec subset-tagged `/BaseFont` (`SUBSET_TAG_RE`, six uppercase
+    # letters then '+') is now ALSO registered under its tag-stripped name,
+    # additive, never displacing an exact-key hit -- MuPDF's own rawdict
+    # strips that tag from `span["font"]` before this module ever sees it,
+    # so a face registered only under its exact `/BaseFont` was invisible to
+    # every span asking for it the stripped way. Corpus-wide this resolves
+    # 61,781 of the corpus's 62,010 "no face is resolvable for this font"
+    # glyphs (229 unembedded Tahoma remain, this corpus's one genuinely
+    # unresolvable face). (2) New function `embedded_glyph_outline`
+    # hand-parses one glyph's own outline from an embedded TrueType
+    # program's `head`/`loca`/`glyf`/`hmtx` bytes (mirroring `fonts.py`'s
+    # own WOFF2 table-directory reading), because every embedded,
+    # buffer-loaded face answers `glyph_bbox` with its own whole font box,
+    # never a real per-glyph outline -- fed into `ruled_blank_bars` ONLY,
+    # cross-checked against the file's own stated advance. Together these
+    # close F065: 1707-2021's item 9 ruled blank -- the corpus's one ruled-
+    # blank refusal -- now publishes; `ruled_blank_groups`/`published`/
+    # `refused` moves 119/118/1 -> 119/119/0 corpus-wide. Two new self-test
+    # checks (`ruled-blank-embedded-subset`, a new written-here probe page
+    # proving both the golden path and a genuinely unparsable embedded
+    # program) take extract.py from 24 checks to 25 and 24+24 probes to
+    # 25+24; `PAINT_SPAN_CONTRACT_CASES` (24 cases, unmoved) is pulled out
+    # to a module constant so that count stays independent of
+    # `len(SELF_TEST_CHECKS)`, an incidental coupling the 25th check would
+    # otherwise have broken. No comb constant, tolerance, or existing check
+    # count moves. `fixtures/prove_fixtures_fail.py` gains two source-level
+    # mutations against the new check (21 total, up from 19).
     "tools/formgen/extract.py": (
-        "fe1a473ffdcc39e83e2d164588598c2cb60d7e530132931b6db164a236727dc4"
+        "add0df8ca9204d98f095477211d67b477f66a7ddc3c87d522b2ad260453eacaf"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -2353,6 +2397,84 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
     "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
     "1707-2021": "fc7e97da7a5df9b425dc7d251a7859b0c6512b32e73264a924b3292e002b446d",
+    "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
+    "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
+    "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
+    "1801-2018": "ac13a85a821e548045adb9766b0aea027369a4d4a2cf8b38a961f279b372017e",
+    "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
+    "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
+    "2200a-2020": "47f685fd81dbddaae27f171c0dcb93984a64f76805babb9efc6bb76ff0e41c98",
+    "2200an-2018": "b99630b147eb9b2e7e727d96fd48c1909661fca045e7df26967f9b2c67b2f878",
+    "2200c-2018": "ee1defcc41a9b4fc0d344e5a799bf8d85b7c0c060fcf4641ef2af1e7062c51e7",
+    "2200m-2018": "efefd832ce29747d50b2f9cdc55637e339b77dbae6ffb322523b204dbd9b446b",
+    "2200p-2020": "07e5ce960cf57da3adab66db4c674eea5e5a8773cf85b9351448d3050f2c6140",
+    "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
+    "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
+    "2316-2021": "85654caa7382a0932f15d125e2a3af842110e3c8b631d4812864d65db2ded354",
+    "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
+    "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
+    "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
+    "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
+    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
+    "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
+    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
+    # Re-pinned 2026-08-13 (Z3, F065): F065's own stated cause was wrong, and
+    # it was fixable. 1707-2021's item 9 ruled blank is drawn in an EMBEDDED,
+    # subset-tagged TrueType face (`ABCDEE+Arial Narrow`), not an unembedded
+    # unresolvable one; `substitutable_faces` registered it under its exact
+    # `/BaseFont` while every span asked for it by its tag-stripped name
+    # (MuPDF's own rawdict strips the PDF spec's subset prefix,
+    # `extract.SUBSET_TAG_RE`), so the key never matched. Fixed by
+    # registering the stripped name too (additive; an exact-key hit is never
+    # displaced), plus a second, independent fix: every embedded, buffer-
+    # loaded face answers `glyph_bbox` with its own whole font box, never a
+    # real per-glyph outline (`glyph_ink_box`'s own documented barrier,
+    # confirmed corpus-wide by this package), so the underscore's own
+    # outline is instead hand-parsed from the embedded program's own
+    # `head`/`loca`/`glyf`/`hmtx` bytes (`extract.embedded_glyph_outline`),
+    # scoped to the ruled-blank path only, cross-checked against the file's
+    # own stated advance. `ruled_blank_groups`/`published`/`refused` moves
+    # 119/118/1 -> 119/119/0 -- every ruled blank in either corpus now
+    # publishes. One document moves: 1707-2021 (build/html/1707-2021.html;
+    # the tracked bundle is forms/extra/1707-2021, in_corpus=false). The
+    # other 52 are byte-identical. Comb censuses (EXPECTED_COMBS,
+    # EXPECTED_COMBS_BY_SLUG, EXPECTED_RETAINED_SUBJECTS_BY_SLUG) do not
+    # move -- this mechanism never touches a comb cell, verified directly.
+    # Input count 45,548 -> 45,549 (+1). `inputs_over_printed_text` stays 0
+    # forms/0 offenders. Browser-verified: cell p1c214, Tab press 64, typed
+    # and read back verbatim.
+    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
+    "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
+    "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
+    "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
+    "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
+    "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
+    "1600wp-2010": "52c2f96df56e04e7cf91999a7d6ed1d58ebc96767e7fdb085d47f09c31f95862",
+    "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
+    "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
+    "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
+    "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
+    "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
+    "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
+    "1604cf-2008": "b3cc3ea689114f7ca872f9b55588c6ad6c5a2fe72836ac3bfcd945b6b431d4a6",
+    "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
+    "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
+    "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
+    "1621-2019": "36bf4f8cc2a094eb505623a49bbe29dba4b2709364ea224f076200bbb2ef84d3",
+    "1700-2018": "a44b168534770580efb653f3c3fe9f20e35481deac45e0356943a1f468051500",
+    "1701-2018-attachment": "a3827477a27630219b0775b256184102dcc7fe53824354e51aeb97ab39c8803f",
+    "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
+    "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
+    "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
+    "1701ms-2024": "60c93f1c3141615ca0182943750115dd66a8f1dc5c906438f69023ca89ff18e1",
+    "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
+    "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
+    "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
+    "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
+    "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
+    "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
+    "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
+    "1707-2021": "b6f4ef2d3c0a918826d1f3ce00df1067e41a65c373650d6e04dfd6a5c4aceae7",
     "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
     "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
     "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
