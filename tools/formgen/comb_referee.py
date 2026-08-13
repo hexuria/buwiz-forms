@@ -908,6 +908,17 @@ CHARACTER_CELL_MAX_PRINTED_GLYPHS = 1
 SOURCE_CAPTION_BLOCK_CRITERION = (
     "source-printed-caption-block-not-character-cells-v1"
 )
+SOURCE_PARTITION_EDGE_CRITERION = (
+    "source-partition-edge-in-final-picture-v1"
+)
+SOURCE_CROSSING_RULE_CRITERION = (
+    "source-crossing-rule-not-comb-scoped-v1"
+)
+# Half the corpus hairline (0.72pt), the thickest stroke a partition boundary
+# is drawn with here.  A tone sample taken to certify what stands BESIDE an
+# edge must clear the edge's own ink; this is that physical clearance, not a
+# tolerance anyone tunes.
+PARTITION_EDGE_PROBE_OFFSET_PT = 0.36
 # Retained suppression reason tuples this referee can corroborate from the
 # source, and the criterion each is corroborated under.  A tuple is admitted
 # here only when the referee can answer the reason's OWN factual claim out of
@@ -916,6 +927,20 @@ SOURCE_CAPTION_BLOCK_CRITERION = (
 RETAINED_SUPPRESSION_SOURCE_CRITERIA = {
     ("emission-suppressed-caption-block-not-character-cells",):
         SOURCE_CAPTION_BLOCK_CRITERION,
+    # R2a (2026-08-14).  Two more reason tuples whose factual claims Poppler
+    # can answer.  Their corroborations return a VERDICT CERTIFICATE rather
+    # than raising: the obligation is that the question was asked of the
+    # paper, and "the paper does not show it" is an answer -- the subject then
+    # simply stays unevaluable and cannot be retired on source evidence.
+    # Measured before wiring (the probes are the R2a record): of the 18
+    # partition subjects, 17 carry a full-span edge complete in the final
+    # picture and ONE does not -- 1800-2018 p1c4's only full-span edge has a
+    # 42.55pt stretch that is neither painted nor a tone boundary -- and the
+    # sole crossing-rule subject (1600WP p1c36) corroborates.
+    ("emission-suppressed-no-rectangular-owner", "painted-edge-partition"):
+        SOURCE_PARTITION_EDGE_CRITERION,
+    ("emission-suppressed-no-final-visible-band",):
+        SOURCE_CROSSING_RULE_CRITERION,
 }
 # Poppler emits every character as a `use` of a `#glyph-*` path, and `parse_svg`
 # records each one as an unsupported region carrying its transformed bound.
@@ -7759,6 +7784,258 @@ def measured_glyph_boxes(page: SvgPage,
     ]
 
 
+def composited_vertical_segments(x: float,
+                                 all_paints: Sequence[Paint]
+                                 ) -> list[dict[str, Any]]:
+    """Exact final-tone y components on one open vertical slab.
+
+    The vertical mirror of `composited_segments`, with the same last-owner
+    rule: partition at every paint edge and let the highest paint order own
+    each atomic piece, so occluded ink never masquerades as final.
+    """
+    active = [
+        paint for paint in all_paints
+        if paint.x0 <= x <= paint.x1 and paint.y1 - paint.y0 > 1e-9
+    ]
+    endpoints = sorted({
+        coordinate for paint in active for coordinate in (paint.y0, paint.y1)
+    })
+    atomic: list[dict[str, Any]] = []
+    for low, high in zip(endpoints, endpoints[1:]):
+        if high - low <= 1e-9:
+            continue
+        midpoint = (low + high) / 2
+        owners = [
+            paint for paint in active
+            if paint.y0 < midpoint < paint.y1
+        ]
+        if not owners:
+            continue
+        owner = max(owners, key=lambda paint: paint.order)
+        atomic.append({"y0": low, "y1": high, "tone": owner.tone})
+    return atomic
+
+
+def _final_line_profile(page: SvgPage, axis: str, coord: float,
+                        span_a: float, span_b: float,
+                        ) -> list[tuple[float, float, float | None]]:
+    """Atomic (a, b, tone) pieces of one line's final composite; None = paper."""
+    if axis == "h":
+        segments = [
+            (seg["x0"], seg["x1"], seg["tone"])
+            for seg in composited_segments(coord, page.paints)
+        ]
+    else:
+        segments = [
+            (seg["y0"], seg["y1"], seg["tone"])
+            for seg in composited_vertical_segments(coord, page.paints)
+        ]
+    profile: list[tuple[float, float, float | None]] = []
+    cursor = span_a
+    for low, high, tone in sorted(segments):
+        low, high = max(low, span_a), min(high, span_b)
+        if high - low <= 1e-9:
+            continue
+        if low > cursor:
+            profile.append((cursor, low, None))
+        profile.append((low, high, round(float(tone), 6)))
+        cursor = high
+    if cursor < span_b:
+        profile.append((cursor, span_b, None))
+    return profile
+
+
+def _edge_incomplete_gap(page: SvgPage, axis: str, coord: float,
+                         span_a: float, span_b: float) -> float:
+    """Longest stretch of one line that is neither painted nor a boundary.
+
+    A partition edge exists in the FINAL PICTURE wherever the line itself
+    carries non-white ink, or the final tones on its two sides differ -- an
+    edge drawn as a knockout against ink is still an edge (2550M p1c7's
+    0.72pt sliver boundary is exactly that).  What remains is void: final
+    paper on the line and the same final tone on both sides.  Returns the
+    longest void run; 0.0 is a complete edge.
+    """
+    offset = PARTITION_EDGE_PROBE_OFFSET_PT
+    profiles = [
+        _final_line_profile(page, axis, coord, span_a, span_b),
+        _final_line_profile(page, axis, coord - offset, span_a, span_b),
+        _final_line_profile(page, axis, coord + offset, span_a, span_b),
+    ]
+    breakpoints = sorted({
+        value
+        for profile in profiles
+        for a, b, _tone in profile
+        for value in (a, b)
+    } | {span_a, span_b})
+
+    def tone_at(profile: list[tuple[float, float, float | None]],
+                point: float) -> float | None:
+        for a, b, tone in profile:
+            if a <= point <= b:
+                return tone
+        return None
+
+    worst = 0.0
+    run = 0.0
+    for low, high in zip(breakpoints, breakpoints[1:]):
+        if high - low <= 1e-9:
+            continue
+        midpoint = (low + high) / 2
+        on_line = tone_at(profiles[0], midpoint)
+        painted = on_line is not None and on_line < 1.0 - 1e-8
+        differs = (tone_at(profiles[1], midpoint)
+                   != tone_at(profiles[2], midpoint))
+        if painted or differs:
+            run = 0.0
+        else:
+            run += high - low
+            worst = max(worst, run)
+    return worst
+
+
+def partition_edge_corroboration(
+        subject: dict[str, Any],
+        page: SvgPage,
+        label: str,
+        ) -> dict[str, Any]:
+    """Does the final picture draw an edge splitting the legacy rectangle?
+
+    `emission-suppressed-no-rectangular-owner` / `painted-edge-partition`
+    claims the legacy comb's rectangle is no longer one writing surface.  The
+    minimal factual content Poppler can check: at least ONE internal edge of
+    the published mapped partition spans the rectangle fully and is complete
+    in the final picture -- painted, or a tone boundary, at every point
+    (longest void <= POSITION_TOL_PT).  One complete spanning edge proves the
+    rectangle is split; the full decomposition is the producer's ledger
+    arithmetic, checked elsewhere.
+
+    Returns a verdict certificate and NEVER raises on a negative: "the paper
+    does not show it" leaves the subject unevaluable and unretirable, which
+    is exactly what it deserves.  Measured 2026-08-14 over all 18 subjects
+    carrying this reason: 17 corroborate; 1800-2018 p1c4's only full-span
+    edge (h at y=100.24) has a 42.55pt void and stays refused.
+    """
+    ledger = subject["ledger"]
+    bbox = [float(value) for value in ledger["legacy_bbox"]]
+    keys = ledger.get("mapped_partition_subject_keys") or []
+    segments: dict[tuple[str, float], list[tuple[float, float]]] = {}
+    for key in keys:
+        _page_part, rest = str(key).split("@", 1)
+        x0, y0, x1, y1 = (float(value) for value in rest.split(","))
+        for axis, coord, a, b, on_border in (
+                ("v", x0, y0, y1, abs(x0 - bbox[0]) <= 1e-6),
+                ("v", x1, y0, y1, abs(x1 - bbox[2]) <= 1e-6),
+                ("h", y0, x0, x1, abs(y0 - bbox[1]) <= 1e-6),
+                ("h", y1, x0, x1, abs(y1 - bbox[3]) <= 1e-6)):
+            if not on_border:
+                segments.setdefault(
+                    (axis, round(coord, 3)), []).append((a, b))
+    checked = 0
+    certifying = None
+    worst_full_span_gap = None
+    for (axis, coord), spans in sorted(segments.items()):
+        spans.sort()
+        merged = [list(spans[0])]
+        for a, b in spans[1:]:
+            if a <= merged[-1][1] + 1e-6:
+                merged[-1][1] = max(merged[-1][1], b)
+            else:
+                merged.append([a, b])
+        for a, b in merged:
+            lo_lim, hi_lim = ((bbox[0], bbox[2]) if axis == "h"
+                              else (bbox[1], bbox[3]))
+            if a > lo_lim + POSITION_TOL_PT or b < hi_lim - POSITION_TOL_PT:
+                continue
+            checked += 1
+            gap = _edge_incomplete_gap(page, axis, coord, a, b)
+            if worst_full_span_gap is None or gap < worst_full_span_gap:
+                worst_full_span_gap = gap
+            if gap <= POSITION_TOL_PT and certifying is None:
+                certifying = {
+                    "axis": axis, "coord": round(coord, 6),
+                    "span_a": round(a, 6), "span_b": round(b, 6),
+                    "void_pt": round(gap, 6),
+                }
+    return {
+        "criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "corroborated": certifying is not None,
+        "full_span_edges_checked": checked,
+        "certifying_edge": certifying,
+        "least_void_pt": (round(worst_full_span_gap, 6)
+                          if worst_full_span_gap is not None else None),
+    }
+
+
+def crossing_rule_corroboration(
+        subject: dict[str, Any],
+        page: SvgPage,
+        label: str,
+        ) -> dict[str, Any]:
+    """Is every legacy divider a rule that CROSSES the subject, comb-scoped to
+    nothing?
+
+    `emission-suppressed-no-final-visible-band` claims no comb band supports
+    the legacy subject on its owner.  The checkable content: each legacy
+    divider's final ink runs continuously across the subject's whole height
+    AND continues beyond both edges -- a crossing table rule, not a divider
+    hanging inside a band.  A comb-scoped divider would end at or inside the
+    subject; a stroke that crosses and keeps going belongs to the page's
+    table structure, which is exactly why no band exists here.
+
+    Verdict certificate; a negative never raises.  Measured 2026-08-14 on the
+    sole subject carrying this reason (1600WP p1c36): its one divider at
+    x=53.52 spans y 257.45..346.37 finally painted -- the subject is
+    293.84..311.12, so the stroke overruns it by more than 17pt on each side.
+    """
+    ledger = subject["ledger"]
+    bbox = [float(value) for value in ledger["legacy_bbox"]]
+    comb = ledger.get("legacy_comb") or {}
+    dividers = [float(value) for value in comb.get("divider_x") or ()]
+    evidence = []
+    corroborated = bool(dividers)
+    for divider_x in dividers:
+        # The compositor's pieces are ATOMIC -- cut at every paint edge -- so
+        # a continuous rule arrives as many abutting pieces.  Coalesce runs
+        # first (a sub-tolerance seam is endpoint coincidence, the file's one
+        # coincidence rule), then ask whether one run covers and overruns.
+        pieces = sorted(
+            (piece for piece in composited_vertical_segments(
+                divider_x, page.paints)
+             if piece["tone"] < 1.0 - 1e-8),
+            key=lambda piece: piece["y0"])
+        runs: list[list[float]] = []
+        for piece in pieces:
+            if runs and piece["y0"] <= runs[-1][1] + POSITION_TOL_PT:
+                runs[-1][1] = max(runs[-1][1], piece["y1"])
+            else:
+                runs.append([piece["y0"], piece["y1"]])
+        covering = None
+        for run in runs:
+            if (run[0] <= bbox[1] + POSITION_TOL_PT
+                    and run[1] >= bbox[3] - POSITION_TOL_PT):
+                covering = {"y0": run[0], "y1": run[1]}
+                break
+        crosses = bool(
+            covering is not None
+            and covering["y0"] < bbox[1] - POSITION_TOL_PT
+            and covering["y1"] > bbox[3] + POSITION_TOL_PT)
+        corroborated = corroborated and crosses
+        evidence.append({
+            "x": round(divider_x, 6),
+            "crosses": crosses,
+            "final_y0": (round(covering["y0"], 6)
+                         if covering is not None else None),
+            "final_y1": (round(covering["y1"], 6)
+                         if covering is not None else None),
+        })
+    return {
+        "criterion": SOURCE_CROSSING_RULE_CRITERION,
+        "corroborated": corroborated,
+        "dividers": evidence,
+    }
+
+
 def retained_suppression_corroboration(
         subject: dict[str, Any],
         band: dict[str, Any],
@@ -7806,6 +8083,10 @@ def retained_suppression_corroboration(
     and every refusal names the compartment and the whole count vector.
     """
     criterion = subject.get("source_suppression_criterion")
+    if criterion == SOURCE_PARTITION_EDGE_CRITERION:
+        return partition_edge_corroboration(subject, page, label)
+    if criterion == SOURCE_CROSSING_RULE_CRITERION:
+        return crossing_rule_corroboration(subject, page, label)
     if criterion != SOURCE_CAPTION_BLOCK_CRITERION:
         # Unreachable through `validate_comb_ledger`, which only ever stores a
         # value from RETAINED_SUPPRESSION_SOURCE_CRITERIA.  A new tuple added
@@ -13487,7 +13768,11 @@ def self_test() -> int:
         "mapped_partition_subject_keys": [retained_cell["subject_key"]],
         "state": "retained_unresolved",
         "emission": "suppressed",
-        "reason_codes": ["emission-suppressed-no-final-visible-band"],
+        # A reason tuple deliberately OUTSIDE the criteria table -- case (a)
+        # is about untabled reasons carrying no obligation, and the tuple it
+        # first used (no-final-visible-band) became tabled in R2a.
+        "reason_codes": [
+            "emission-suppressed-unproved-multi-row-divider-corridor"],
         "legacy_comb": retained_comb,
         "requires_independent_evidence": True,
         "permitted_transitions": [
@@ -13564,11 +13849,19 @@ def self_test() -> int:
     # The reason tuple is read out of the registry rather than restated, so a
     # second entry added to that table without a fixture of its own trips this
     # pairing instead of quietly riding on the caption block's evidence.
-    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 1
-    caption_reason_codes = list(
-        next(iter(RETAINED_SUPPRESSION_SOURCE_CRITERIA)))
+    # R2a widened the table to three entries; each pairing is pinned here so a
+    # fourth cannot ride on the existing fixtures.
+    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 3
+    caption_reason_codes = [
+        "emission-suppressed-caption-block-not-character-cells"]
     assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[tuple(caption_reason_codes)]
             == SOURCE_CAPTION_BLOCK_CRITERION)
+    assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[(
+        "emission-suppressed-no-rectangular-owner",
+        "painted-edge-partition")] == SOURCE_PARTITION_EDGE_CRITERION)
+    assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[(
+        "emission-suppressed-no-final-visible-band",)]
+        == SOURCE_CROSSING_RULE_CRITERION)
 
     # (a) An unresolved retained topology stays accepted, and stays free of any
     # corroboration obligation: there is no certified shape to corroborate.
@@ -13622,9 +13915,10 @@ def self_test() -> int:
     # the original guard, and it still closes.  Both shapes are covered: a
     # reason that is real but carries no source claim, and an invented one.
     for unrecognised in (
-            ["emission-suppressed-no-final-visible-band"],
-            ["emission-suppressed-no-rectangular-owner",
-             "painted-edge-partition"],
+            # The first two moved INTO the table in R2a; the shapes stay
+            # covered by reasons that remain outside it.
+            ["emission-suppressed-unproved-multi-row-divider-corridor"],
+            ["emission-suppressed-no-rectangular-owner"],
             ["emission-suppressed-because-the-producer-says-so"],
             [*caption_reason_codes, "and-one-more-reason"],
     ):
@@ -13815,6 +14109,98 @@ def self_test() -> int:
         {**caption_published,
          "source_suppression_criterion": "some-future-criterion-v1"},
         prose_page)
+
+    # (e) The two R2a criteria, both verdicts each.  These return verdict
+    # certificates and never raise on a negative: "the paper does not show
+    # it" leaves the subject unevaluable and unretirable, which is the
+    # fail-closed answer at the right level (1800-2018 p1c4 is the measured
+    # negative in the corpus -- its only full-span edge has a 42.55pt void).
+    def partition_subject(keys: list[str]) -> dict[str, Any]:
+        return {
+            "source_suppression_criterion": SOURCE_PARTITION_EDGE_CRITERION,
+            "ledger": {
+                "legacy_bbox": [0.0, 0.0, 40.0, 20.0],
+                "mapped_partition_subject_keys": keys,
+            },
+        }
+
+    split_keys = ["p1@0.0,0.0,40.0,10.0", "p1@0.0,10.0,40.0,20.0"]
+    painted_split = retained_suppression_corroboration(
+        partition_subject(split_keys),
+        {"status": "measured"},
+        SvgPage(100, 100, [
+            Paint(-0.1, 9.9, 40.1, 10.1, 0.0, 5, "stroke", "split-rule"),
+        ], [], "x"),
+        "partition self-test")
+    assert painted_split["criterion"] == SOURCE_PARTITION_EDGE_CRITERION
+    assert painted_split["corroborated"] is True, painted_split
+    assert painted_split["certifying_edge"]["axis"] == "h", painted_split
+
+    # An edge drawn in PAPER: a knockout band below the line against ink
+    # above it.  Nothing is painted ON the line, but the final tones differ
+    # across it -- an edge in the final picture.
+    knockout_split = retained_suppression_corroboration(
+        partition_subject(split_keys),
+        {"status": "measured"},
+        SvgPage(100, 100, [
+            Paint(-0.1, -0.1, 40.1, 10.0, 0.5, 5, "fill", "tint-above"),
+            Paint(-0.1, 10.0, 40.1, 20.1, 1.0, 6, "fill", "knockout-below"),
+        ], [], "x"),
+        "partition self-test")
+    assert knockout_split["corroborated"] is True, knockout_split
+
+    # A void: paper on the line and the same paper on both sides.  Refused,
+    # and refused as a VERDICT -- no exception.
+    void_split = retained_suppression_corroboration(
+        partition_subject(split_keys),
+        {"status": "measured"},
+        SvgPage(100, 100, [], [], "x"),
+        "partition self-test")
+    assert void_split["corroborated"] is False, void_split
+    assert void_split["full_span_edges_checked"] == 1, void_split
+
+    # A painted edge that does NOT span the rectangle certifies nothing: a
+    # partial interior stroke splits a corner, not the subject.
+    tee_keys = ["p1@0.0,0.0,20.0,10.0", "p1@20.0,0.0,40.0,10.0",
+                "p1@0.0,10.0,40.0,20.0"]
+    partial_only = retained_suppression_corroboration(
+        partition_subject(tee_keys),
+        {"status": "measured"},
+        SvgPage(100, 100, [
+            Paint(19.9, -0.1, 20.1, 10.0, 0.0, 5, "stroke", "half-rule"),
+        ], [], "x"),
+        "partition self-test")
+    assert partial_only["corroborated"] is False, partial_only
+
+    def crossing_subject() -> dict[str, Any]:
+        return {
+            "source_suppression_criterion": SOURCE_CROSSING_RULE_CRITERION,
+            "ledger": {
+                "legacy_bbox": [0.0, 10.0, 40.0, 20.0],
+                "legacy_comb": {"divider_x": [15.0]},
+            },
+        }
+
+    crossing = retained_suppression_corroboration(
+        crossing_subject(),
+        {"status": "measured"},
+        SvgPage(100, 100, [
+            Paint(14.9, 0.0, 15.1, 30.0, 0.0, 5, "stroke", "table-rule"),
+        ], [], "x"),
+        "crossing self-test")
+    assert crossing["criterion"] == SOURCE_CROSSING_RULE_CRITERION
+    assert crossing["corroborated"] is True, crossing
+
+    # A divider that ends INSIDE the subject is comb-scoped ink, and the
+    # crossing claim is refused as a verdict.
+    hanging = retained_suppression_corroboration(
+        crossing_subject(),
+        {"status": "measured"},
+        SvgPage(100, 100, [
+            Paint(14.9, 12.0, 15.1, 18.0, 0.0, 5, "stroke", "hanging-tick"),
+        ], [], "x"),
+        "crossing self-test")
+    assert hanging["corroborated"] is False, hanging
 
     # And the accounting that makes the corroboration unskippable: an admitted
     # reason whose re-derivation never ran is an error, not a pass.
