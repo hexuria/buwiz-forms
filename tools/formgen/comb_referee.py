@@ -8888,12 +8888,35 @@ def audit_evidence(
     }
     source_evaluable = (
         counts["combs_checked"] - len(checked_source_unevaluable))
+    # Z1's declared schema change, adjudicated INDEPENDENTLY here -- this is
+    # the referee's own partition, not a mirror of the gate's. A reviewed
+    # decision is a third source-evaluability class: the audit returns such a
+    # cell to held(), so it stops being published as an offender and is not in
+    # checked_source_unevaluable, yet its count came from review rather than
+    # from a U-frame or an unframed certificate, so neither source term covers
+    # it. Disjointness is asserted, not assumed: a cell that is both reviewed
+    # and still published source-unevaluable means the registry failed to
+    # clear it.
+    reviewed_cells = {
+        subject.get("cell") for subject in (reviewed_subjects or ())
+        if isinstance(subject, dict) and isinstance(subject.get("cell"), str)
+    }
+    if len(reviewed_cells) != counts["decided_by_review"]:
+        errors.append(
+            "audit reviewed-topology subjects disagree with their count")
+    if reviewed_cells - expected_set:
+        errors.append(
+            "audit reviewed-topology subject is not a checked cell")
+    if reviewed_cells & checked_source_unevaluable:
+        errors.append(
+            "audit counts a reviewed cell as source unevaluable")
     if (counts["source_u_frame_evaluable"]
             + counts["source_certified_unframed_evaluable"]
+            + len(reviewed_cells)
             != source_evaluable):
         errors.append(
-            "audit source frame/unframed counts do not partition evaluable "
-            "checked cells")
+            "audit source frame/unframed/reviewed counts do not partition "
+            "evaluable checked cells")
     published_u_frame = 0
     published_certified_unframed = 0
     for cell_id, detail in dimensions_by_cell.items():
@@ -14018,6 +14041,76 @@ def self_test() -> int:
     assert independent_audit["offender_count"] == 2
     assert independent_audit["layout_mismatches"] == 1
     assert independent_audit["layout_unevaluable"] == 1
+
+    # Z1: the referee's own three-way source partition. The partition was
+    # previously uncovered here, so a reviewed decision could have been added
+    # to it without anything proving the arithmetic still refuses a forgery.
+    # The accept path proves the third class is genuinely admitted; each
+    # forgery is then refused separately.
+    def reviewed_subject(cell: str = "p1c1") -> dict[str, Any]:
+        return {
+            "cell": cell, "printed": 3, "latticed": 3,
+            "reviewed_comb_topology": {
+                "criterion": "reviewed-comb-topology-v1", "valid": True,
+                "compartments": 3, "source_sha256": "0" * 64,
+                "reviewer": "self-test", "citation": "self-test",
+            },
+        }
+
+    def reviewed_errors(mutate=None, offenders=()) -> list[str]:
+        assertion = comb_assertion(
+            list(offenders), expected_ids=["p1c1", "p1c2"])
+        assertion["decided_by_review"] = 1
+        assertion["decided_by_review_subjects"] = [reviewed_subject()]
+        # A reviewed cell is carried by the reviewed term, so it has to come
+        # OUT of the unframed term or the partition counts it twice.
+        if not offenders:
+            assertion["source_certified_unframed_evaluable"] -= 1
+        if mutate is not None:
+            mutate(assertion)
+        evidence = audit_evidence({
+            "comb_slots_match_printed": not offenders,
+            "assertions": {"comb_slots_match_printed": assertion},
+        }, self_owner_binding(["p1c1", "p1c2"]))
+        return [error for error in evidence["errors"]
+                if "partition" in error or "reviewed" in error]
+
+    assert not reviewed_errors(), (
+        "a correctly partitioned reviewed subject must be accepted: "
+        f"{reviewed_errors()}")
+    reviewed_forgeries: list[tuple[str, Any, str, tuple[Any, ...]]] = [
+        (
+            "u-frame inflated to absorb the reviewed cell",
+            lambda value: value.update({
+                "source_u_frame_evaluable":
+                    value["source_u_frame_evaluable"] + 1}),
+            "source frame/unframed/reviewed counts do not partition",
+            (),
+        ),
+        (
+            "reviewed count disagrees with its subject list",
+            lambda value: value.update({"decided_by_review": 2}),
+            "reviewed-topology subjects disagree with their count",
+            (),
+        ),
+        (
+            "reviewed subject names a cell this form never checked",
+            lambda value: value["decided_by_review_subjects"][0].update({
+                "cell": "p1c9"}),
+            "reviewed-topology subject is not a checked cell",
+            (),
+        ),
+        (
+            "reviewed cell is still published source-unevaluable",
+            None,
+            "counts a reviewed cell as source unevaluable",
+            (source_unevaluable_offender("p1c1"),),
+        ),
+    ]
+    for label, mutate, needle, offenders in reviewed_forgeries:
+        found = reviewed_errors(mutate, offenders)
+        assert any(needle in error for error in found), (
+            f"{label} must be refused; got {found}")
 
     invalid_geometry = layout_mismatch_offender("p1c1")
     invalid_geometry.update({
