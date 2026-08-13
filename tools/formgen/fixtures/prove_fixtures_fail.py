@@ -401,6 +401,54 @@ PROBE_UNRESOLVABLE_FACE_OP = b"/F2 10 Tf"
 PROBE_THICK_RESOLVED_FACE_OP = b"/F1 40 Tf"
 
 
+def mutate_ruled_blank_embedded_subset_tag() -> None:
+    """Give /F1's embedded program a malformed six-character subset tag.
+
+    F065's own fix (`extract.SUBSET_TAG_RE`) strips exactly the PDF spec's
+    subset prefix -- six UPPERCASE LETTERS then '+' (ISO 32000-1 9.6.4) --
+    never a looser pattern. MuPDF's own rawdict stripping is looser: measured
+    directly, it strips a lowercase six-character prefix too (`span["font"]`
+    still comes back `"ProbeSubsetGood"`). Lowercasing /F1's own tag
+    therefore reproduces F065's exact key mismatch for a tag that is NOT
+    spec-shaped -- `substitutable_faces` registers only the exact key, no
+    span ever asks for it by that exact key, and the group that published
+    with the real tag correctly refuses with this one. If `SUBSET_TAG_RE`
+    were ever loosened to match this too, this mutation would stop tripping
+    anything -- which is the property it exists to guard.
+    """
+    name = extract.RULED_BLANK_EMBEDDED_PROBE_GOOD_NAME
+    if extract.SUBSET_TAG_RE.match(name.decode("ascii")) is None:
+        raise SystemExit(f"the subset-embedded probe's good font name "
+                         f"{name!r} does not carry a spec-shaped tag to begin "
+                         f"with")
+    malformed = name[:6].lower() + name[6:]
+    if extract.SUBSET_TAG_RE.match(malformed.decode("ascii")) is not None:
+        raise SystemExit(f"{malformed!r} still reads as a spec-shaped tag; "
+                         f"this mutation proves nothing")
+    extract.RULED_BLANK_EMBEDDED_PROBE_GOOD_NAME = malformed
+
+
+def mutate_ruled_blank_embedded_program() -> None:
+    """Un-corrupt /F2's embedded program: its own `glyf` table becomes /F1's.
+
+    /F2's key resolves exactly as /F1's does -- its own tag is spec-shaped
+    too -- so the ONLY reason its group stays text is that its `glyf` table
+    cannot state the underscore glyph's outline (`extract.
+    embedded_glyph_outline` returns None on it). Replacing its program with
+    /F1's own bytes removes that single defect without touching either
+    font's key, name or tag, so the group that refused with the broken
+    program now publishes with a working one -- proving the refusal was
+    genuinely about the program's own bytes, not a font this check would
+    have refused regardless of what it embedded.
+    """
+    good = extract.RULED_BLANK_EMBEDDED_PROBE_GOOD_TTF
+    broken = extract.RULED_BLANK_EMBEDDED_PROBE_BROKEN_TTF
+    if good == broken:
+        raise SystemExit("the subset-embedded probe's good and broken "
+                         "programs are already identical")
+    extract.RULED_BLANK_EMBEDDED_PROBE_BROKEN_TTF = good
+
+
 def mutate_rule_origin() -> None:
     """Never draw the merge-partner rect, so the underscore run stays isolated.
 
@@ -551,6 +599,11 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
      "hyphens", mutate_ruled_blank_floor),
     ("ruled-blank-fail-closed", "the blank probe's unresolvable face is the "
      "resolvable one at 40pt", mutate_ruled_blank_fail_closed),
+    ("ruled-blank-embedded-subset", "the subset-embedded probe's good font "
+     "gets a malformed, non-spec-shaped subset tag",
+     mutate_ruled_blank_embedded_subset_tag),
+    ("ruled-blank-embedded-subset", "the subset-embedded probe's broken "
+     "program becomes the good one", mutate_ruled_blank_embedded_program),
     ("rule-origin", "the origin probe's merge-partner rect is never drawn",
      mutate_rule_origin),
     ("glyph-ink", "the ink probe's unresolvable face is the resolvable one",
@@ -577,6 +630,8 @@ PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
              (extract, "CLIP_PROBE_STREAM"), (extract, "CAP_PROBE_STREAM"),
              (extract, "RULED_BLANK_PROBE_STREAM"),
+             (extract, "RULED_BLANK_EMBEDDED_PROBE_GOOD_NAME"),
+             (extract, "RULED_BLANK_EMBEDDED_PROBE_BROKEN_TTF"),
              (extract, "RULE_ORIGIN_PROBE_STREAM"),
              (extract, "BASELINE_PROBE_STREAM"),
              (extract, "GLYPH_INK_PROBE_STREAM"))
