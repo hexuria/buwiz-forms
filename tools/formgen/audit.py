@@ -2573,7 +2573,148 @@ class ReviewedCombTopology:
 # reviews it".  SHIPPED EMPTY.  An entry lands in its own reviewed,
 # evidence-carrying commit once the user has confirmed the fact -- never here
 # -- and an empty registry must change nothing this file already reports.
-REVIEWED_COMB_TOPOLOGY: dict[tuple[str, int, str], dict[str, Any]] = {}
+REVIEWED_COMB_TOPOLOGY: dict[tuple[str, int, str], dict[str, Any]] = {
+    ("1604cf-2008", 2, "p2c73"): {
+        "compartments": 2,
+        "source_sha256": "877fbeee071752b2d9af72924647196e6dafa71a2412e74bc9f17897767cc2e7",
+        "page": 2,
+        "cell_id": "p2c73",
+        "bbox": (174.48, 220.32, 269.76, 237.12),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 01: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("1604f-2018", 1, "p1c25"): {
+        "compartments": 36,
+        "source_sha256": "fc34de40dc7e6bc5f7a8cbc3feb5b170cca4bce4f0abd5b7b0dece4e9dd75c4d",
+        "page": 1,
+        "cell_id": "p1c25",
+        "bbox": (14.64, 223.58, 591.46, 241.82),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 02: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("1801-2018", 1, "p1c13"): {
+        "compartments": 4,
+        "source_sha256": "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
+        "page": 1,
+        "cell_id": "p1c13",
+        "bbox": (21.6, 136.7, 247.97, 155.54),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 03: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("1801-2018", 1, "p1c31"): {
+        "compartments": 11,
+        "source_sha256": "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
+        "page": 1,
+        "cell_id": "p1c31",
+        "bbox": (21.6, 259.58, 291.65, 277.85),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 04: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2000-dst-2018", 1, "p1c109"): {
+        "compartments": 14,
+        "source_sha256": "b18ce9d2380d216814f4410c2e132eebb02b93754f7ca0167311f368e100e79f",
+        "page": 1,
+        "cell_id": "p1c109",
+        "bbox": (389.05, 804.58, 585.79, 823.32),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 05: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2200a-2020", 1, "p1c62"): {
+        "compartments": 14,
+        "source_sha256": "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+        "page": 1,
+        "cell_id": "p1c62",
+        "bbox": (392.74, 432.89, 595.32, 448.02),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 06: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2200a-2020", 1, "p1c86"): {
+        "compartments": 14,
+        "source_sha256": "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+        "page": 1,
+        "cell_id": "p1c86",
+        "bbox": (392.74, 614.71, 595.32, 629.97),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 07: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2551m-2002", 1, "p1c82"): {
+        "compartments": 4,
+        "source_sha256": "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e",
+        "page": 1,
+        "cell_id": "p1c82",
+        "bbox": (286.08, 785.07, 326.16, 804.45),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 11: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2551m-2002", 2, "p2c13"): {
+        "compartments": 2,
+        "source_sha256": "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e",
+        "page": 2,
+        "cell_id": "p2c13",
+        "bbox": (22.56, 92.64, 250.08, 104.4),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 12: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2553-1999", 1, "p1c87"): {
+        "compartments": 4,
+        "source_sha256": "e52f96fe48aba2890078f889930744a4e13a4defe1284aa9c5292e2c702a20e5",
+        "page": 1,
+        "cell_id": "p1c87",
+        "bbox": (284.16, 797.79, 324.24, 817.17),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 13: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+}
 
 _COMB_TOPOLOGY_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
