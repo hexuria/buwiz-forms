@@ -200,3 +200,59 @@ asked per slab it regressed eleven 1701-family TIN rows.
 
 Remaining after R1: 62 unevaluable (30 retained + 29 writing-band + 3
 topology-proof) and 1 layout mismatch (2200C p1c6). R2 next.
+
+
+## R2a — LANDED 2026-08-14 (`124662d4`)
+
+All 30 retained subjects now carry source-corroboration obligations, settled
+on every run: 18 partition-edge + 11 caption-block + 1 crossing-rule, proven
+through `validate_comb_ledger` on all 53 layouts. 29 corroborate TRUE; the one
+FALSE is 1800-2018 p1c4 (its only full-span edge has a 42.55pt void — neither
+painted nor a tone boundary). The new criteria return verdict certificates and
+never raise on a negative. Corpus totals byte-identical to R1's; gate r68
+12/13, 31 mismatches unchanged.
+
+## The REAL pass bar, read from gate.py (supersedes the earlier list)
+
+`_comb_referee_outcome` requires ALL of:
+
+    forms ok/measured/expected      53 / 53 / 53, forms_error 0
+    combs expected/found/measured   4,587 each; combs_unevaluable 0;
+                                    combs_source_unevaluable 0  (now 49!)
+    subjects_active                 4,587  — EVERY subject ACTIVE
+    subjects_active_resolved        4,587  — and RESOLVED
+    subjects_active_unresolved      0      (now 85)
+    subjects_retained_unresolved    0      (now 30)
+    ledger_blocking                 0      (now 116)
+    inferences_suppressed           0      (now 1)
+    comparisons.agree               4,587; unevaluable 0
+    referee/emission mismatches     0
+    pending_transitions             0      (now 115)
+    report errors 0; application_status ok; elevation exclusive
+
+**The transition machinery already exists on the checking side.**
+`comb_referee.transition_decision` publishes per cell:
+
+- `active_resolved` → "none" (the 4,472)
+- `active_unresolved` + agree → **"eligible-for-reviewed-resolution"** —
+  "four-way evidence agrees; explicit review is still required" (the 85)
+- `retained_unresolved` → **"explicit-transition-required"** (the 30)
+
+The gate re-derives each expectation (`_transition_for_cell`) and counts
+non-"none" as `pending_transitions`; elevation additionally requires every
+cell's transition_status == "none". What does NOT exist is the review INPUT:
+nothing can yet move a ledger resolution state, and `validate_comb_ledger`
+refuses `retired_proven_false` arriving without certification (proven by its
+own mutation).
+
+**R2b therefore spans three surfaces**: a review registry + certificates
+(the producer publishes states only a registry entry certifies, mirroring
+W8's reviewed-topology design); referee validation of the certificate against
+its own corroborations (a FALSE-corroborated subject is unretirable —
+1800 p1c4 today); and the gate's ledger-binding schema for the new states.
+The retained pins (EXPECTED_RETAINED_SUBJECTS_BY_SLUG) and the active
+denominators move as declared census changes when transitions land.
+
+**Newly scoped population: the 85 active-unresolved subjects.** Their
+comparisons already agree (they are inside the 4,525); each needs a REVIEWED
+RESOLUTION. Review load for the campaign is therefore 115 subjects, not 30.
