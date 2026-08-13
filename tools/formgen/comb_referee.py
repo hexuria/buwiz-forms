@@ -8667,8 +8667,21 @@ def audit_evidence(
                 "owner_certificates_valid", "owner_certificates_invalid",
                 "source_u_frame_evaluable",
                 "source_certified_unframed_evaluable", "emission_invalid",
+                # Z1's declared schema change. This belongs in the SAME
+                # extraction as its siblings: read through `assertion[key]` so
+                # an audit that omits it raises KeyError and fails closed. It
+                # was first mirrored with `counts.get(..., 0)`, which silently
+                # published "no reviewed subjects" for every form and made the
+                # gate's three-way partition false on all 7 forms that carry
+                # one -- a default that answers a question the producer never
+                # actually answered.
+                "decided_by_review",
             )
         }
+        reviewed_subjects = assertion["decided_by_review_subjects"]
+        if not isinstance(reviewed_subjects, list):
+            raise RefereeError(
+                "audit decided by review subjects is not a list")
     except (KeyError, RefereeError) as error:
         errors.append(str(error))
         expected_ids = []
@@ -8677,6 +8690,10 @@ def audit_evidence(
         unexpected_ids = []
         duplicate_layout_ids = []
         duplicate_emitted_ids = []
+        # None, never [] -- an empty list is a claim ("this form has no
+        # reviewed subjects"), and a failed parse is entitled to make none.
+        # The gate refuses a non-list here as malformed source accounting.
+        reviewed_subjects = None
         counts = {
             key: -1 for key in (
                 "combs_expected", "combs_checked", "raw_live_comb_issues",
@@ -8685,6 +8702,7 @@ def audit_evidence(
                 "owner_certificates_valid", "owner_certificates_invalid",
                 "source_u_frame_evaluable",
                 "source_certified_unframed_evaluable", "emission_invalid",
+                "decided_by_review",
             )
         }
     if checked_ids != expected_ids:
@@ -8962,9 +8980,10 @@ def audit_evidence(
         # publication so the gate can compare the two key for key. PROVENANCE
         # only -- the referee still adjudicates a reviewed subject exactly as
         # a measured one, and never treats "decided by review" as agreement.
-        "decided_by_review": counts.get("decided_by_review", 0),
-        "decided_by_review_subjects": list(
-            counts.get("decided_by_review_subjects") or ()),
+        "decided_by_review": counts["decided_by_review"],
+        "decided_by_review_subjects": (
+            list(reviewed_subjects) if reviewed_subjects is not None
+            else None),
         "offender_dimensions": dimensions_by_cell,
         "offenders": offenders,
         "holds": holds,
@@ -13929,6 +13948,11 @@ def self_test() -> int:
             "source_certified_unframed_evaluable": 0,
             "emission_behind_layout": behind_count,
             "emission_invalid": invalid_count,
+            # Z1's declared schema change, in the fixture too: this assertion
+            # is now incomplete without it, and the referee is required to say
+            # so rather than default it to zero.
+            "decided_by_review": 0,
+            "decided_by_review_subjects": [],
         }
         invalid_owner_ids = {
             item.get("cell") for item in offenders
