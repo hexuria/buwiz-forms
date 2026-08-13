@@ -63,6 +63,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+
+import review_registry
 import dataclasses
 import hashlib
 import html.parser
@@ -15819,6 +15821,14 @@ def referee_attestation() -> dict[str, Any]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # R2b: the reviewed-ledger registries are consulted by the producer and
+    # validated here; a malformed registry refuses EVERY run before any form
+    # is read.  Empty registries are valid and change nothing.
+    registry_defects = review_registry.registry_errors()
+    if registry_defects:
+        raise RefereeError(
+            "reviewed-ledger registry is malformed: "
+            + "; ".join(registry_defects[:3]))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=pathlib.Path,
                         default=pathlib.Path.home() / "Downloads/forms")
