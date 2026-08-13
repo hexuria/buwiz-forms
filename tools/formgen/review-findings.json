@@ -3019,9 +3019,9 @@
       "what": "EXPECTED_HTML_STRUCTURE_SHA256 in comb_referee.py contains FIVE duplicate blocks of all 53 slugs -- 265 entries for 53 keys -- and the blocks hold DIFFERENT values. Python keeps the last, so four blocks are dead weight that reads exactly like a live pin.",
       "where": "tools/formgen/comb_referee.py, EXPECTED_HTML_STRUCTURE_SHA256 (lines 2188-2516). Each slug appears at 5 line positions; only the last is live. Example: '1801-2018' at 2224, 2287, 2356, 2420, 2498, and 2224 carried a different sha from the other four.",
       "audit_blind": true,
-      "cause": null,
-      "status": "open",
-      "resolution": null,
+      "cause": "S5",
+      "status": "fixed",
+      "resolution": "Deduplicated: EXPECTED_HTML_STRUCTURE_SHA256 goes from 265 key entries to 53, dropping the 212 dead lines and keeping the last (live) value for every slug. Semantics-preservation was PROVEN, not assumed -- the dict resolved from the source before and after the edit is byte-for-byte the same mapping. Guarded by `source_literal_duplicate_keys`, a new comb_referee self-test assertion that parses THIS FILE with ast and refuses any repeated key in EXPECTED_HTML_STRUCTURE_SHA256 or AUDIT_DEPENDENCY_SHA256. It reads the SOURCE LITERAL precisely because the resolved dict cannot see the defect: proven by inserting a dead duplicate ahead of the live entry, which leaves the resolved mapping IDENTICAL (so a resolved-dict check is structurally blind to it) while the new guard still fails the self-test. A second mutation, a duplicate inserted after the live entry, is caught too.",
       "evidence": "Found 2026-08-13 while re-pinning for Z2: a scripted edit anchored on the FIRST occurrence of each slug and silently updated a dead block, leaving the live pin stale. Caught by re-reading the reported before-values, which did not match the stale-check's. Parsed with ast: 265 key entries, 53 distinct keys, exactly 5 blocks. Nothing detects this today -- a stale-pin check that builds a dict from the source also keeps the last value, so it agrees with the runtime and the dead blocks stay invisible. Same class the repo has logged before: a checker sharing an assumption with its subject. Deduplicating is mechanical but was deliberately NOT bundled into the Z2 producer commit, so it can be reviewed on its own."
     }
   ]

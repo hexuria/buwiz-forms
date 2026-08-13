@@ -62,6 +62,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import hashlib
 import html.parser
@@ -2186,59 +2187,6 @@ HTML_ALLOWED_TAGS = frozenset({
 # and `comb_slots_match_printed` are unmoved (neither touches a cell either
 # assertion's own offender list names).
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "a0cf7a393661f5a841e1372495b9626af3d8d59ff232fe1bdb99f106ad2e92be",
-    "0619e-2018": "837900d7e2ac57faf078290d18666c8f5ffeaee47cc0b956583a5ce3c16b1db9",
-    "0619f-2018": "54900cc9ac9b6a37260d0fda60403bdd99fcc038a751d55ebf5db9d9c4c02a6b",
-    "0620-2019": "1c0af3b694e6f30365cf2b4f35dae6a9719d4eac4f9783c49dbe558f82222310",
-    "1600-pt-2018": "9b97631f332634265123356d229b22ed01907a1a043e772ed815c1e9a1118354",
-    "1600-vt-2018": "c18c25f1f8437b6ee42a044400ce711b00af7e382d4607a355faff03453f1112",
-    "1600wp-2010": "297c10448f2bfc6de436ec3133769636e14a1c2882d128ef93988399938e8260",
-    "1601-fq-2020": "c31babb46b32ac8dee06038649d95cf5365f4d454b99744ff1f10129ee00f943",
-    "1601c-2018": "ea4d9f992e3d979aff777ef0f3d89e38fa17d29b3e8ba679c5056429633a8fc2",
-    "1601eq-2019": "5e8bbaa4aeb944fa3c182086d52ded6574c31736f9866f9d58786cff965c672b",
-    "1602q-2019": "68a6ad8f141f424ca3fa66dd306b19376bcb0e8348aa96f465dcdf52eab3fe7b",
-    "1603q-2018": "85369479fe0b52f8c69d4dc0e3fa4d3572945b0eb450e364db004d2617a22043",
-    "1604c-2018": "926039e8ea538c640951c331f5f4a686b860ebdb40d79bad938b9b880a16b49a",
-    "1604cf-2008": "bd035b490a62ed0e29a79105c2a87271e7a9118add7a1c0c8d342196f4d07c7d",
-    "1604e-2018": "ee84458a8dbfb3b8afb085a0efc29dfee285b6828ae60e501d8ba4b196eee750",
-    "1604f-2018": "fb97d8ab5468d31dfea3762bd82bbbc2de75c0793deb0ea01d7f853def6d22b5",
-    "1606-2018": "6db12ef721b021208d3bf2ee09e00121263f434c750b88852975970073b22d95",
-    "1621-2019": "2833bb7cb1124de06ee5082f342ea1e45178fb8fa7109f4b5f224b630a57cac0",
-    "1700-2018": "369b71635e082ecf9d701d4cc4ae75adee5ca47d979794e36a3d16475ad2462f",
-    "1701-2018-attachment": "2bd26bc1df46ecbdec79838baeb4d1a85ec220f93337aa74842a8943fd1d657c",
-    "1701-2018-conso": "50328a3b780bf2febe70a6f11b2fb37fddce31698db01e9c5a031ca83ab0869a",
-    "1701-2018": "8d5d7d5ab638b3e08dda448c61752cb9af73e221f83f6c0e899bed8752aa83e1",
-    "1701a-2018": "6af2522f16ce0d14f8a036f4db82541ba3357ccf04f9344fbabbd1e546df507b",
-    "1701ms-2024": "b265682998370d994f8907d7c0d4b2cd98991d59bb18f27ee2bdd664022a172a",
-    "1701q-2018": "a53f08e7283b01eefc53296a3e5d76661c157f9143536275482bd14d7381d146",
-    "1702ex-2018": "2c08aa9f66b7e2a1d712d8259b692ab69fc29bda7d0b8e110910d0a51b3e8989",
-    "1702mx-2018c-attachment": "3f6fe65c0feed4814a349e51cabbdf50fce966f6e12cfc5acad2168f885762cd",
-    "1702mx-2018c": "00dcacf57e3afa03dc60313a644891556352ae2f0c0513062537865b79a87110",
-    "1702q-2018": "2f7180e185e1b438430bcaf2e34196e96152e71c875cf53a1c9bd3a91e4a174f",
-    "1702rt-2018c": "3af327f05480a8503aebb6ab6d1895ac2f867ec43ed8b5e1b1c8b627b7a6c9d9",
-    "1706-2018": "3f1b30b8703c80de4b82bd97f566fd9e32769266fd096afb9870b78882cb6bf6",
-    "1707-2021": "5cd686c9e856e4c5ec13233962ce0fbe8e9e1aade7f0de393e43c033d953d7ac",
-    "1707a-2021": "7c6c1098c950f6cf4516586de73c4a32714115da75505208ec1b887034696fb4",
-    "1709-2020": "d641617ad3f958b78c47ab650f50888cc9e6cd5f2c0948723c34fd53fbbf3139",
-    "1800-2018": "9ce67ab3b9002ba253ee8dc335142c419c45fb883b3665b92367159ea2b1d00f",
-    "1801-2018": "903988607f9a6aa0658bbd5b295021c67ce513c0c99934a2c919096833c6fbf3",
-    "2000-dst-2018": "b3b2d41c014a4612539fbbd82b96cfd6e0dea29d3fc27453a87036bf5e0e7d02",
-    "2000-ot-2018": "6f36505be0a0cd57cd46275e70e9b39e040ebf3453b6ff85f43323b815b98c93",
-    "2200a-2020": "edf9ab2debf1836b91d41aaf45f866d09e87f7c3fa2230bdcf53f5529a864226",
-    "2200an-2018": "1e93efa9fcf8e21f544a7d3d797322d214539d2e108efe029be65871f13b8892",
-    "2200c-2018": "4be680a112b2474a05fda74b31003275d0f8d16a85d14433ed633bc31c458e72",
-    "2200m-2018": "0903e71133e6e0c21a433b3880930eae48bbca0cbbdd8fb095776e39904e5ba1",
-    "2200p-2020": "6c558749f0cae83b82bb9484831582807c721dfb507f4e743ba08c2f896b444c",
-    "2200s-2018": "13239ad3f5517842a94a045dd24ca9cacae14ca8ca01cd98d226a98b00a0e722",
-    "2200t-2022": "f3ee644eb874d227a7141ecb89000914ca998f6699de270b4eb16983645d23c7",
-    "2316-2021": "f5a355cbb1e773148bf7d6faf8862ca2294c8c6c8662001b4d67cba30fed65eb",
-    "2550-ds-2025": "71540821b15d77f68aae33504ffb6318e3fba6c9f876dbb90960af08cd36addb",
-    "2550m-2007": "f094117787276fda7ce615299088ac30f860d6f5a98899f1ea71078273ca79c1",
-    "2550q-2024": "b914266a71f01fcf125a087d80b3902a66c7c75ab2e1135a600208d7bea356db",
-    "2551m-2002": "a0757418057108b6d5d45403da6563e955118d4bc82052e4a17e28055e87799f",
-    "2551q-2018": "f061a98a5863c0d41ec1b23ccf623f7e9d9833a4610308b9f6a781a14f980c7a",
-    "2552-2018": "bd0b75cc8531598a2b9e7471ce2d8dfb1b8bec6b8759e747f8b70c1f2abd6d1c",
-    "2553-1999": "eab2dc243a11b17db3a6d8c7672267d16362f302aa69990bf3e4beeb9ce9ca94",
     # Re-pinned 2026-08-12 (W4b, F221 case 1): `emit.SignatureRuleWriting`
     # gives a `label` cell an input when it owns a vector-drawn signature
     # line at its own bottom wall, named by a "Signature over Printed
@@ -2249,59 +2197,6 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     # rule). The other 47 are byte-identical. Comb censuses (EXPECTED_COMBS,
     # EXPECTED_COMBS_BY_SLUG, EXPECTED_RETAINED_SUBJECTS_BY_SLUG) do not
     # move -- this mechanism never touches a comb cell, verified directly.
-    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
-    "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
-    "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
-    "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
-    "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
-    "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
-    "1600wp-2010": "9df4922159a4cfa3fa757d62930dac8eac855ae91db8f45de853c3d8641faef4",
-    "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
-    "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
-    "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
-    "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
-    "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
-    "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "7b82d2d3bbbb64808d06fc20952a96b319b5be6f965cdd64268cab2119f5dce6",
-    "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
-    "1604f-2018": "56e3352c5f5e40f2dd70c88d648b2d786d1aa3f14a16b859df877145354da6ac",
-    "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
-    "1621-2019": "36bf4f8cc2a094eb505623a49bbe29dba4b2709364ea224f076200bbb2ef84d3",
-    "1700-2018": "a44b168534770580efb653f3c3fe9f20e35481deac45e0356943a1f468051500",
-    "1701-2018-attachment": "a3827477a27630219b0775b256184102dcc7fe53824354e51aeb97ab39c8803f",
-    "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
-    "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
-    "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
-    "1701ms-2024": "ec3eb4b25b6764d4131f074192ef3c1498840fa226614129337f16e0a1e3403b",
-    "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
-    "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
-    "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
-    "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
-    "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
-    "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
-    "1706-2018": "63fe313322ce53d95292215ac9b4de9546efb97fbb5860cb83069f326099407e",
-    "1707-2021": "fc7e97da7a5df9b425dc7d251a7859b0c6512b32e73264a924b3292e002b446d",
-    "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
-    "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
-    "1800-2018": "531af9d5df158ed65d31439195f2c45fa8f67298f6e892839e86f6266d899b36",
-    "1801-2018": "ac13a85a821e548045adb9766b0aea027369a4d4a2cf8b38a961f279b372017e",
-    "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
-    "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
-    "2200a-2020": "47f685fd81dbddaae27f171c0dcb93984a64f76805babb9efc6bb76ff0e41c98",
-    "2200an-2018": "6672f63d80650f4e8eb1a6e5594fa4475a3cf109b8f96dce3cef4a8b1188bf73",
-    "2200c-2018": "ee1defcc41a9b4fc0d344e5a799bf8d85b7c0c060fcf4641ef2af1e7062c51e7",
-    "2200m-2018": "efefd832ce29747d50b2f9cdc55637e339b77dbae6ffb322523b204dbd9b446b",
-    "2200p-2020": "b3839e31aec5ff27b792b799331eaef9c995e59d771aeba6158fc1037a4c9489",
-    "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
-    "2200t-2022": "e14e106a282013a336cce8eb637fbd2f47d93a43fc59f22253b33c1eb3ec8fbe",
-    "2316-2021": "34b9a369d30f2fefcf6191f09e9cb485a1ef76a38c91068bbe04ef4b71ffd232",
-    "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
-    "2550m-2007": "73d78714b0221a013af4769fa207d5a3d81293b71f1c8a0dbd85f87350589e53",
-    "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
-    "2551m-2002": "c3383a4a37ed71719f71617cd9465b6112898ad87a9823abc624d4f090abc012",
-    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
-    "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
     # Re-pinned 2026-08-13 (W6, F227): `emit.field_box`'s comb branch now
     # calls `comb_writing_top_clear_of_printed_ink`, the identical ink trim a
     # plain field's own writing box already had, and `intrusions` now reads
@@ -2318,59 +2213,6 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     # EXPECTED_RETAINED_SUBJECTS_BY_SLUG) do not move -- no slot rectangle,
     # divider or slot count changes on any comb; only the INPUT nested inside
     # a slot or a plain field's own box gains or loses an inset.
-    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
-    "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
-    "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
-    "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
-    "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
-    "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
-    "1600wp-2010": "52c2f96df56e04e7cf91999a7d6ed1d58ebc96767e7fdb085d47f09c31f95862",
-    "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
-    "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
-    "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
-    "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
-    "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
-    "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "b3cc3ea689114f7ca872f9b55588c6ad6c5a2fe72836ac3bfcd945b6b431d4a6",
-    "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
-    "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
-    "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
-    "1621-2019": "36bf4f8cc2a094eb505623a49bbe29dba4b2709364ea224f076200bbb2ef84d3",
-    "1700-2018": "a44b168534770580efb653f3c3fe9f20e35481deac45e0356943a1f468051500",
-    "1701-2018-attachment": "a3827477a27630219b0775b256184102dcc7fe53824354e51aeb97ab39c8803f",
-    "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
-    "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
-    "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
-    "1701ms-2024": "60c93f1c3141615ca0182943750115dd66a8f1dc5c906438f69023ca89ff18e1",
-    "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
-    "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
-    "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
-    "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
-    "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
-    "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
-    "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
-    "1707-2021": "fc7e97da7a5df9b425dc7d251a7859b0c6512b32e73264a924b3292e002b446d",
-    "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
-    "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
-    "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
-    "1801-2018": "ac13a85a821e548045adb9766b0aea027369a4d4a2cf8b38a961f279b372017e",
-    "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
-    "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
-    "2200a-2020": "47f685fd81dbddaae27f171c0dcb93984a64f76805babb9efc6bb76ff0e41c98",
-    "2200an-2018": "b99630b147eb9b2e7e727d96fd48c1909661fca045e7df26967f9b2c67b2f878",
-    "2200c-2018": "ee1defcc41a9b4fc0d344e5a799bf8d85b7c0c060fcf4641ef2af1e7062c51e7",
-    "2200m-2018": "efefd832ce29747d50b2f9cdc55637e339b77dbae6ffb322523b204dbd9b446b",
-    "2200p-2020": "07e5ce960cf57da3adab66db4c674eea5e5a8773cf85b9351448d3050f2c6140",
-    "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
-    "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
-    "2316-2021": "871ab20e09c4f994a98a74dd991e5f078327fc2ea2a81b789859da0a178b44b5",
-    "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
-    "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
-    "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
-    "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
-    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
-    "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
     # Re-pinned 2026-08-13 (W9, F226): `emit.SignatureRuleWriting`'s caption
     # search now bridges a small vertical gap between a rule-owning `label`
     # cell and its caption -- smaller than the form's own `glyph_height_pt`
@@ -2382,59 +2224,6 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     # byte-identical. Comb censuses (EXPECTED_COMBS, EXPECTED_COMBS_BY_SLUG,
     # EXPECTED_RETAINED_SUBJECTS_BY_SLUG) do not move -- this mechanism
     # never touches a comb cell, verified directly.
-    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
-    "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
-    "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
-    "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
-    "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
-    "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
-    "1600wp-2010": "52c2f96df56e04e7cf91999a7d6ed1d58ebc96767e7fdb085d47f09c31f95862",
-    "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
-    "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
-    "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
-    "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
-    "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
-    "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "b3cc3ea689114f7ca872f9b55588c6ad6c5a2fe72836ac3bfcd945b6b431d4a6",
-    "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
-    "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
-    "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
-    "1621-2019": "36bf4f8cc2a094eb505623a49bbe29dba4b2709364ea224f076200bbb2ef84d3",
-    "1700-2018": "a44b168534770580efb653f3c3fe9f20e35481deac45e0356943a1f468051500",
-    "1701-2018-attachment": "a3827477a27630219b0775b256184102dcc7fe53824354e51aeb97ab39c8803f",
-    "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
-    "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
-    "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
-    "1701ms-2024": "60c93f1c3141615ca0182943750115dd66a8f1dc5c906438f69023ca89ff18e1",
-    "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
-    "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
-    "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
-    "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
-    "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
-    "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
-    "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
-    "1707-2021": "fc7e97da7a5df9b425dc7d251a7859b0c6512b32e73264a924b3292e002b446d",
-    "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
-    "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
-    "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
-    "1801-2018": "ac13a85a821e548045adb9766b0aea027369a4d4a2cf8b38a961f279b372017e",
-    "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
-    "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
-    "2200a-2020": "47f685fd81dbddaae27f171c0dcb93984a64f76805babb9efc6bb76ff0e41c98",
-    "2200an-2018": "b99630b147eb9b2e7e727d96fd48c1909661fca045e7df26967f9b2c67b2f878",
-    "2200c-2018": "ee1defcc41a9b4fc0d344e5a799bf8d85b7c0c060fcf4641ef2af1e7062c51e7",
-    "2200m-2018": "efefd832ce29747d50b2f9cdc55637e339b77dbae6ffb322523b204dbd9b446b",
-    "2200p-2020": "07e5ce960cf57da3adab66db4c674eea5e5a8773cf85b9351448d3050f2c6140",
-    "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
-    "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
-    "2316-2021": "85654caa7382a0932f15d125e2a3af842110e3c8b631d4812864d65db2ded354",
-    "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
-    "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
-    "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
-    "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
-    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
-    "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
     # Re-pinned 2026-08-13 (Z3, F065): F065's own stated cause was wrong, and
     # it was fixable. 1707-2021's item 9 ruled blank is drawn in an EMBEDDED,
     # subset-tagged TrueType face (`ABCDEE+Arial Narrow`), not an unembedded
@@ -11097,7 +10886,50 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     }
 
 
+def source_literal_duplicate_keys(name: str) -> list[str]:
+    """Keys written more than once in one of this file's own dict LITERALS.
+
+    F231: `EXPECTED_HTML_STRUCTURE_SHA256` had accumulated five full blocks of
+    all 53 slugs, holding DIFFERENT shas. Python keeps the last, so four blocks
+    were dead weight that read exactly like a live pin -- and a scripted re-pin
+    duly updated a dead one and left the live pin stale.
+
+    Nothing caught it, and the reason is the failure mode this repo keeps
+    hitting: a checker that shares an assumption with its subject. Any check
+    that reads the RESOLVED dict -- including the obvious "are the pins
+    current?" check -- also keeps the last value, so it agrees with the runtime
+    and the dead blocks stay invisible. This reads the SOURCE LITERAL with
+    `ast` instead, which is the only place the duplication exists.
+    """
+    tree = ast.parse(pathlib.Path(__file__).read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if getattr(node.targets[0], "id", "") != name:
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        seen: set[Any] = set()
+        duplicates: list[str] = []
+        for key in node.value.keys:
+            value = getattr(key, "value", None)
+            if value in seen:
+                duplicates.append(f"{value} (line {key.lineno})")
+            seen.add(value)
+        return duplicates
+    raise RefereeError(f"no dict literal named {name} in this file")
+
+
 def self_test() -> int:
+    # F231, proven able to fail by the mutation below: a pin dict whose source
+    # literal repeats a key is a silent liar, because only the last one is
+    # live. Asked of the SOURCE, never of the resolved dict.
+    for _pin_dict in ("EXPECTED_HTML_STRUCTURE_SHA256", "AUDIT_DEPENDENCY_SHA256"):
+        _duplicates = source_literal_duplicate_keys(_pin_dict)
+        assert not _duplicates, (
+            f"{_pin_dict} repeats keys, so only the last is live: "
+            f"{_duplicates[:5]}")
+
     # The W6/F227 slot-input style grammar, proven able to FAIL. The accept
     # path is exercised for real by every corpus run (1604CF, 1701MS and 2316
     # ship top-inset slot inputs); these probes prove the REJECT paths exist,
