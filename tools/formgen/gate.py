@@ -2537,12 +2537,46 @@ def _normalise_outer_comb_assertion(
     reviewed_subjects = assertion.get("decided_by_review_subjects")
     if (not _is_count(reviewed_count)
             or not isinstance(reviewed_subjects, list)
-            or len(reviewed_subjects) != reviewed_count
-            or not all(isinstance(item, str) and item
-                       for item in reviewed_subjects)
-            or len(set(reviewed_subjects)) != len(reviewed_subjects)):
+            or len(reviewed_subjects) != reviewed_count):
         raise CombRefereeScopeError(
             "comb audit reviewed-topology publication is malformed")
+    reviewed_cells: list[str] = []
+    for subject in reviewed_subjects:
+        # Each subject carries its own evidence, not just an id, so the record
+        # a reader audits later is self-contained: which cell, what the lattice
+        # and the reviewed fact each said, and the fact's own provenance.
+        # `latticed == printed == compartments` is required HERE rather than
+        # trusted: a reviewed subject that did not actually agree would be an
+        # offender, so it must never reach this list.
+        certificate = (subject or {}).get("reviewed_comb_topology") \
+            if isinstance(subject, dict) else None
+        if (not isinstance(subject, dict)
+                or not isinstance(certificate, dict)
+                or certificate.get("criterion") != "reviewed-comb-topology-v1"
+                or certificate.get("valid") is not True
+                or not isinstance(subject.get("cell"), str)
+                or not subject.get("cell")
+                or not _is_count(subject.get("printed"))
+                or not _is_count(subject.get("latticed"))
+                or subject.get("printed") != subject.get("latticed")
+                or certificate.get("compartments") != subject.get("printed")
+                or not isinstance(certificate.get("source_sha256"), str)
+                or not isinstance(certificate.get("reviewer"), str)
+                or not certificate.get("reviewer")
+                or not isinstance(certificate.get("citation"), str)
+                or not certificate.get("citation")):
+            raise CombRefereeScopeError(
+                "comb audit reviewed-topology publication is malformed")
+        reviewed_cells.append(subject["cell"])
+    if len(set(reviewed_cells)) != len(reviewed_cells):
+        raise CombRefereeScopeError(
+            "comb audit reviewed-topology publication is malformed")
+    expected_cell_ids = assertion.get("expected_comb_ids")
+    if isinstance(expected_cell_ids, list) and any(
+            cell not in expected_cell_ids for cell in reviewed_cells):
+        # The registry cannot smuggle in a cell this form does not have.
+        raise CombRefereeScopeError(
+            "comb audit reviewed-topology publication names an unknown cell")
     reason = assertion.get("reason")
     if (not isinstance(reason, str)
             or (holds and reason != "")
@@ -2728,12 +2762,28 @@ def _normalise_outer_comb_assertion(
     }
     source_evaluable = (
         assertion["combs_checked"] - len(checked_source_unevaluable))
+    # DECLARED SCHEMA CHANGE (Z1): a reviewed-topology decision is a third
+    # evaluability class.  Such a cell is no longer published as an offender,
+    # so it is NOT in checked_source_unevaluable and counts toward
+    # source_evaluable -- yet its compartment count came from review, not from
+    # a U-frame or an unframed certificate, so neither source term covers it.
+    # The partition is therefore three-way.  This does not widen what passes:
+    # every reviewed cell was already validated above to carry a valid
+    # certificate with a named reviewer and citation and printed == latticed,
+    # which is stricter per-cell than either source class.  Disjointness is
+    # asserted rather than assumed -- a cell that is both reviewed and still
+    # published source-unevaluable means the registry failed to clear it.
+    reviewed_set = set(reviewed_cells)
+    if reviewed_set & checked_source_unevaluable:
+        raise CombRefereeScopeError(
+            "comb audit counts a reviewed cell as source-unevaluable")
     if (assertion["source_u_frame_evaluable"]
             + assertion["source_certified_unframed_evaluable"]
+            + len(reviewed_set)
             != source_evaluable):
         raise CombRefereeScopeError(
-            "comb audit source frame/unframed counts do not partition "
-            "evaluable checked cells")
+            "comb audit source frame/unframed/reviewed counts do not "
+            "partition evaluable checked cells")
     published_u_frame = 0
     published_certified_unframed = 0
     for cell_id, relation in dimensions.items():
@@ -4247,6 +4297,16 @@ def validate_comb_referee_report(
             expected_ids = audit_evidence.get("expected_comb_ids")
             checked_ids = audit_evidence.get("checked_comb_ids")
             offender_dimensions = audit_evidence.get("offender_dimensions")
+            # DECLARED SCHEMA CHANGE (Z1): mirrors the three-way partition in
+            # _normalise_outer_comb_assertion.  Reviewed-topology cells are
+            # evaluable by decision, are not offenders, and are covered by
+            # neither source term.
+            reviewed_n = audit_evidence.get("decided_by_review")
+            reviewed_list = audit_evidence.get("decided_by_review_subjects")
+            reviewed_ids = [
+                subject.get("cell") for subject in reviewed_list
+                if isinstance(subject, dict)] if isinstance(
+                    reviewed_list, list) else []
             source_accounting_malformed = bool(
                 not _is_count(source_u_frame)
                 or not _is_count(source_unframed)
@@ -4258,6 +4318,15 @@ def validate_comb_referee_report(
                 or checked_ids != expected_ids
                 or checked_count != len(expected_ids or [])
                 or not isinstance(offender_dimensions, dict)
+                or not _is_count(reviewed_n)
+                or not isinstance(reviewed_list, list)
+                or len(reviewed_list) != reviewed_n
+                or len(reviewed_ids) != reviewed_n
+                or not all(isinstance(cell, str) and cell
+                           for cell in reviewed_ids)
+                or len(set(reviewed_ids)) != len(reviewed_ids)
+                or any(cell not in set(expected_ids or [])
+                       for cell in reviewed_ids)
             )
             checked_source_unevaluable: set[str] = set()
             if not source_accounting_malformed:
@@ -4278,11 +4347,15 @@ def validate_comb_referee_report(
             if source_accounting_malformed:
                 errors.append(
                     f"form audit source accounting is malformed: {slug}")
-            elif (source_u_frame + source_unframed
+            elif set(reviewed_ids) & checked_source_unevaluable:
+                errors.append(
+                    f"form audit counts a reviewed cell as "
+                    f"source-unevaluable: {slug}")
+            elif (source_u_frame + source_unframed + len(reviewed_ids)
                   != checked_count - len(checked_source_unevaluable)):
                 errors.append(
-                    f"form audit source frame/unframed partition is false: "
-                    f"{slug}")
+                    f"form audit source frame/unframed/reviewed partition "
+                    f"is false: {slug}")
         if (not isinstance(emission_inventory, dict)
                 or set(emission_inventory) != EMISSION_INVENTORY_KEYS
                 or not isinstance(emission_inventory.get("complete"), bool)
@@ -12490,15 +12563,87 @@ def self_test() -> int:
         if not mutation_errors(mutator):
             failures.append(f"{label} must fail the exact provenance closure")
 
+    # Z1 renamed this message when the partition became three-way; the
+    # mutation below still proves the same check refuses the same forgery.
     false_report_source_partition = mutation_errors(
         lambda value: value["forms"][0]["audit_evidence"].update({
             "source_u_frame_evaluable": 1,
             "source_certified_unframed_evaluable": 1,
         }))
-    if not any("source frame/unframed partition" in error
+    if not any("source frame/unframed/reviewed partition" in error
                for error in false_report_source_partition):
         failures.append(
             "a false published source frame/unframed partition must fail")
+
+    # Z1: the reviewed-topology term is a third evaluability class, so it is
+    # a third way to forge the partition. Each forgery is refused separately.
+    reviewed_partition_mutations: list[
+        tuple[str, str, Callable[[dict[str, Any]], None]]
+    ] = [
+        (
+            "a reviewed subject with no matching evaluability must fail",
+            "source frame/unframed/reviewed partition",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 1,
+                "decided_by_review_subjects": [{
+                    "cell": value["forms"][0]["audit_evidence"][
+                        "expected_comb_ids"][0],
+                    "printed": 1, "latticed": 1,
+                    "reviewed_comb_topology": {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": True, "compartments": 1,
+                        "source_sha256": "0" * 64,
+                        "reviewer": "self-test", "citation": "self-test",
+                    },
+                }],
+            }),
+        ),
+        (
+            "a reviewed count without subjects must fail",
+            "source accounting is malformed",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 1,
+                "decided_by_review_subjects": [],
+            }),
+        ),
+        (
+            "a reviewed subject outside the checked cells must fail",
+            "source accounting is malformed",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 1,
+                "decided_by_review_subjects": [{
+                    "cell": "p9c999", "printed": 1, "latticed": 1,
+                    "reviewed_comb_topology": {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": True, "compartments": 1,
+                        "source_sha256": "0" * 64,
+                        "reviewer": "self-test", "citation": "self-test",
+                    },
+                }],
+            }),
+        ),
+        (
+            "duplicate reviewed subjects must fail",
+            "source accounting is malformed",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 2,
+                "decided_by_review_subjects": [{
+                    "cell": value["forms"][0]["audit_evidence"][
+                        "expected_comb_ids"][0],
+                    "printed": 1, "latticed": 1,
+                    "reviewed_comb_topology": {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": True, "compartments": 1,
+                        "source_sha256": "0" * 64,
+                        "reviewer": "self-test", "citation": "self-test",
+                    },
+                }] * 2,
+            }),
+        ),
+    ]
+    for label, needle, mutator in reviewed_partition_mutations:
+        if not any(needle in error for error in mutation_errors(mutator)):
+            failures.append(label)
 
     measured_certificate_mutations: list[
         tuple[str, Callable[[dict[str, Any]], None]]
