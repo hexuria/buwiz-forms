@@ -347,7 +347,7 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # re-pin below with a second byte change; 2551m-2002's cell already landed
 # in its correct sorted position and its own bytes are unchanged.
 LATTICE_PRODUCER_SHA256 = (
-    "a335f43015de1eca5cfa375b6b4d17baf5303b8663f45e5caba154624738c0c5"
+    "fe8355dcb05439cbac3ecf8597a6a81c6bb1b65aa2247ea3e5aef38c864b6bea"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -555,8 +555,25 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # exactly the withdrawn trio, which also carry `invalid-emission` independently
 # of topology. No producer bytes moved; `EXPECTED_HTML_STRUCTURE_SHA256` is
 # unchanged.
+# Re-pinned 2026-08-13 (Z2, F229). `comb_rails` gains a SECOND inward trim,
+# `outer_paper_unguided`, for the case the wall trim cannot reach: where the
+# sheet closes a caption off with nothing at all, the rail fell back to the
+# lattice cell's nominal edge and published the caption as a compartment. The
+# rail now moves to the outermost guide TICK when the paper between them holds
+# more than two of the comb's own compartments AND carries none of its guide
+# ink. Measured on the regenerated tree: exactly FOUR combs move -- 2200A
+# p1c111, 2200C p1c107, 2200P p1c110 (29 -> 28, retiring the 173.66pt "box"
+# over "27 Tax Debit Memo") and 1801 p1c13 (4 -> 3, the 183.05pt box over
+# "5 Taxpayer Identification Number (TIN)"). Comb subjects 4,557 unchanged;
+# compartments 39,475 -> 39,471; the <input> census is UNCHANGED, because
+# slot 0 carried no input in any of the four. Exactly 4 emitted documents
+# change, and their four structure pins move below.
+#
+# audit.py moves too, and it is DATA not logic: REVIEWED_COMB_TOPOLOGY gains
+# the three 2200A/C/P entries at 28 compartments and 1801 p1c13 goes 4 -> 3,
+# all four re-reviewed against the sheet's own ink and confirmed by the owner.
 AUDIT_PRODUCER_SHA256 = (
-    "23f0619e7796d64650f69bb89e23317a4293d6979ef8dbacbe3b2c6314ca8b78"
+    "0f0803047cdfc40679a30848de9b1c09ef54a9aebc2c1d99768542abf4aa02af"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -2207,11 +2224,11 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1801-2018": "903988607f9a6aa0658bbd5b295021c67ce513c0c99934a2c919096833c6fbf3",
     "2000-dst-2018": "b3b2d41c014a4612539fbbd82b96cfd6e0dea29d3fc27453a87036bf5e0e7d02",
     "2000-ot-2018": "6f36505be0a0cd57cd46275e70e9b39e040ebf3453b6ff85f43323b815b98c93",
-    "2200a-2020": "a82f8a1a8d5c87be26154977f9899ba97652bb162365c9be3d292ee00af8d2ee",
+    "2200a-2020": "edf9ab2debf1836b91d41aaf45f866d09e87f7c3fa2230bdcf53f5529a864226",
     "2200an-2018": "1e93efa9fcf8e21f544a7d3d797322d214539d2e108efe029be65871f13b8892",
-    "2200c-2018": "507e2a0fd64fb465dfe55f009b09c1fb792f8edcadb67f9730a1eda131f83a6d",
+    "2200c-2018": "4be680a112b2474a05fda74b31003275d0f8d16a85d14433ed633bc31c458e72",
     "2200m-2018": "0903e71133e6e0c21a433b3880930eae48bbca0cbbdd8fb095776e39904e5ba1",
-    "2200p-2020": "80855170e92a685699c93efa2fdd16918abd7f89748dc80d1ac95aaee80c624b",
+    "2200p-2020": "6c558749f0cae83b82bb9484831582807c721dfb507f4e743ba08c2f896b444c",
     "2200s-2018": "13239ad3f5517842a94a045dd24ca9cacae14ca8ca01cd98d226a98b00a0e722",
     "2200t-2022": "f3ee644eb874d227a7141ecb89000914ca998f6699de270b4eb16983645d23c7",
     "2316-2021": "f5a355cbb1e773148bf7d6faf8862ca2294c8c6c8662001b4d67cba30fed65eb",
@@ -2478,14 +2495,14 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
     "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
     "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
-    "1801-2018": "ac13a85a821e548045adb9766b0aea027369a4d4a2cf8b38a961f279b372017e",
+    "1801-2018": "392bd8cca242071af0ef4df9c8b8210228b528e46e4b6ab58487b813a26a1cf9",
     "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
     "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
-    "2200a-2020": "47f685fd81dbddaae27f171c0dcb93984a64f76805babb9efc6bb76ff0e41c98",
+    "2200a-2020": "edf9ab2debf1836b91d41aaf45f866d09e87f7c3fa2230bdcf53f5529a864226",
     "2200an-2018": "b99630b147eb9b2e7e727d96fd48c1909661fca045e7df26967f9b2c67b2f878",
-    "2200c-2018": "ee1defcc41a9b4fc0d344e5a799bf8d85b7c0c060fcf4641ef2af1e7062c51e7",
+    "2200c-2018": "4be680a112b2474a05fda74b31003275d0f8d16a85d14433ed633bc31c458e72",
     "2200m-2018": "efefd832ce29747d50b2f9cdc55637e339b77dbae6ffb322523b204dbd9b446b",
-    "2200p-2020": "07e5ce960cf57da3adab66db4c674eea5e5a8773cf85b9351448d3050f2c6140",
+    "2200p-2020": "6c558749f0cae83b82bb9484831582807c721dfb507f4e743ba08c2f896b444c",
     "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
     "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
     "2316-2021": "85654caa7382a0932f15d125e2a3af842110e3c8b631d4812864d65db2ded354",

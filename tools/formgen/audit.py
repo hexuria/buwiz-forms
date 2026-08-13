@@ -2602,8 +2602,16 @@ REVIEWED_COMB_TOPOLOGY: dict[tuple[str, int, str], dict[str, Any]] = {
             "6x beside our own render of the same region, the cell outlined "
             "in red on both. Confirmed 2026-08-13."),
     },
+    # RE-REVIEWED 2026-08-13 (evening): 4 -> 3. The panel-03 review asked
+    # "does our render match the official sheet?" and the answer was correctly
+    # yes -- our render drew a box over the caption and the sheet has a caption
+    # there. It never asked how many WRITING boxes the sheet prints, which is
+    # what this registry stores, so the pinned 4 counted the caption region as
+    # a compartment. Re-reviewed against the ink and re-confirmed by the owner
+    # from annotated 300-dpi crops. Same defect as the 2200A/C/P trio below,
+    # which was withdrawn for this reason before it was ever pinned.
     ("1801-2018", 1, "p1c13"): {
-        "compartments": 4,
+        "compartments": 3,
         "source_sha256": "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
         "page": 1,
         "cell_id": "p1c13",
@@ -2611,10 +2619,78 @@ REVIEWED_COMB_TOPOLOGY: dict[tuple[str, int, str], dict[str, Any]] = {
         "reviewer": "uriah (repository owner)",
         "date": "2026-08-13",
         "citation": (
-            "Reviewed against the official sheet on the 13-cell topology "
-            "review sheet, panel 03: the pinned source PDF rendered at "
-            "6x beside our own render of the same region, the cell outlined "
-            "in red on both. Confirmed 2026-08-13."),
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner from annotated 300-dpi crops of the "
+            "pinned PDF (sha256 ec49207a..., verified against this IR). The "
+            "row prints 14 black guide marks in this band and EVERY one is "
+            "right of x=204.41; left of it the sheet prints no guide ink at "
+            "all, only the page border at x=20.88 which runs the full 600pt "
+            "height of the page. The unguided paper 21.6->204.65 is 183.05pt "
+            "against the comb's own 14.16pt pitch (12.9 compartments) and "
+            "holds the printed caption runs '5', 'Taxpayer Identification "
+            "Number' and '(TIN)' at x 27.00-182.67. Three writing "
+            "compartments; the caption region is printed matter. The tick run "
+            "continues past this cell to x=446.23, so the rest of the TIN "
+            "lives in neighbouring cells and no digit capacity is lost. "
+            "Supersedes the panel-03 reading of 4."),
+    },
+    # The 2200A/C/P trio (F229). Withdrawn from the 13-panel review because the
+    # panel could not settle the count, then re-reviewed against the ink and
+    # confirmed by the owner 2026-08-13. All three forms print this row to the
+    # same coordinates. The four gray-1.0 marks inside the caption are NOT
+    # erased boxes: they are painted at paint_seq 5629-5638, BEFORE the black
+    # guides at 5727+, with no rule beneath them -- checked directly. They
+    # erase nothing; the bottom guide row simply never extends there.
+    ("2200a-2020", 1, "p1c111"): {
+        "compartments": 28,
+        "source_sha256": "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+        "page": 1,
+        "cell_id": "p1c111",
+        "bbox": (16.32, 807.7, 595.32, 821.64),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner from annotated 300-dpi crops of the "
+            "pinned PDF (sha256 c294bd45..., verified against this IR). The "
+            "band carries 32 black guide marks and every one is right of "
+            "x=189.74. The unguided paper 16.32->189.98 is 173.66pt against "
+            "the comb's own 14.52pt pitch (12.0 compartments) and holds the "
+            "printed caption runs '27' and 'Tax Debit Memo' at x "
+            "28.92-103.82. 28 writing compartments; the caption region is "
+            "printed matter, not a box."),
+    },
+    ("2200c-2018", 1, "p1c107"): {
+        "compartments": 28,
+        "source_sha256": "7b60d517ac6f3697e351aa89c124423d03dd7cac0961c4319b6507dd0ae64ce2",
+        "page": 1,
+        "cell_id": "p1c107",
+        "bbox": (16.32, 805.54, 595.32, 821.88),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner. Same row and same coordinates as "
+            "2200A p1c111: the four gray-1.0 caption marks sit at x 131.90, "
+            "146.42, 160.82 and 175.34, the first black guide is at x=189.74, "
+            "and no black guide ink exists left of it. 28 writing "
+            "compartments."),
+    },
+    ("2200p-2020", 1, "p1c110"): {
+        "compartments": 28,
+        "source_sha256": "7bf29a28a93f45ae7af9ba344d4755540abd324137831d594bc623b4a0c06d2c",
+        "page": 1,
+        "cell_id": "p1c110",
+        "bbox": (16.32, 807.94, 595.32, 821.88),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner. Same row and same coordinates as "
+            "2200A p1c111: the four gray-1.0 caption marks sit at x 131.90, "
+            "146.42, 160.82 and 175.34, the first black guide is at x=189.74, "
+            "and no black guide ink exists left of it. 28 writing "
+            "compartments."),
     },
     ("1801-2018", 1, "p1c31"): {
         "compartments": 11,

@@ -2619,6 +2619,148 @@ def divides_owner_paper(x: float, candidates: Sequence[dict[str, Any]],
             final_paint))
 
 
+# How each outer rail came to be where it is, published beside the comb so that
+# a rail the cell's own edge did NOT decide is inspectable rather than merely
+# different from the cell.
+RAIL_AT_OWNER_EDGE = "owner-edge"
+RAIL_TRIMMED_TO_WALL = "interior-wall"
+RAIL_TRIMMED_TO_UNGUIDED_OUTER_PAPER = "unguided-outer-paper"
+
+# ...and, where the rail stayed on the owner's edge, WHICH clause kept it
+# there. A refusal that does not name itself is indistinguishable from a
+# question never asked, and this is exactly the population an adjudicator has
+# to be able to re-examine: every one of them is a compartment we publish on
+# the cell box rather than on measured ink.
+RAIL_REFUSED_NO_OWNER_PAPER = "no-owner-paper"
+RAIL_REFUSED_NO_TICK_RUN = "no-tick-run"
+RAIL_REFUSED_NO_INTERIOR_PITCH = "comb-has-no-interior-pitch"
+RAIL_REFUSED_WITHIN_PITCH = "outer-paper-within-comb-pitch"
+RAIL_REFUSED_GUIDED = "guided-outer-paper"
+
+
+def comb_interior_pitch(positions: Sequence[float]) -> float | None:
+    """The pitch of one comb's GUIDE RUN, measured between its ticks only.
+
+    Two exclusions, and each is the reason this is not `comb_bands`'s
+    `pitch_pt`:
+
+      * the rails are out, because this is the statistic the rails are DECIDED
+        from (`outer_paper_unguided`) and a rail may not be an input to the
+        measurement that places it;
+      * the WALLS are out, because a wall is a box edge and not a member of
+        the run. The paper the trim asks about is the paper outside the TICK
+        RUN, so the run is what measures it: a comb with one tick and one wall
+        has a gap, but that gap is a box, not a compartment pitch.
+
+    Between the ticks every gap is a compartment the sheet drew two guides
+    for, and the modal gap is chosen exactly the way `comb_bands` chooses the
+    pitch it publishes -- ties to the smaller value, for determinism.
+
+    None where the run has fewer than THREE marks, which is two gaps. One gap
+    is a distance and not a pitch, and the raw legacy reading says so
+    directly: 2550M `p1c89` draws its genuine divider at 260.40 and a stale
+    mark the sheet later replaced at 263.52, and the pair "measures" a 3.12pt
+    pitch that would condemn the 13.44pt of paper beside it -- the same shape
+    `bottom_guide_tick_baseline` refuses on 0605, where a knocked-out mark
+    sits 3.12pt from a genuine centavo divider. Two marks are a pair; a run
+    needs a third before it has said anything twice.
+    """
+    xs = sorted({q(value) for value in positions})
+    if len(xs) < 3:
+        return None
+    gaps = [q(b - a) for a, b in zip(xs, xs[1:])]
+    pitch = min(collections.Counter(gaps).most_common(),
+                key=lambda kv: (-kv[1], kv[0]))[0]
+    return pitch if pitch > 0.0 else None
+
+
+def outer_paper_unguided(rail: float, outermost: float,
+                         ticks: Sequence[float],
+                         extra: Sequence[dict[str, Any]],
+                         band_y0: float, band_y1: float,
+                         final_paint: FinalPaint | None,
+                         ) -> dict[str, Any]:
+    """Evidence that the paper outside a comb's outermost tick is not a slot.
+
+    The wall trim above answers the same question where the sheet CLOSES the
+    caption off: 1801 item 24 rules 366pt of caption before its money comb and
+    the comb's first compartment starts at that rule.  Where the sheet closes
+    nothing the old reading fell back on the cell's nominal edge and published
+    the caption as a compartment -- 2200-A/C/P item 27 hands a 173.66pt "box"
+    to a 14.52pt money comb, over the printed words "Tax Debit Memo", and 1801
+    item 5 hands a 183.05pt one to a 14.16pt TIN comb over "Taxpayer
+    Identification Number".  A rail has to be measured from the ink either way.
+
+    Two things could still make that paper a compartment, and each gets its own
+    clause; the rail moves only where both refuse:
+
+      * it could be ONE compartment the sheet simply drew wider than the rest.
+        So allow it one, of the guide run's own pitch, and ask whether MORE
+        than another whole compartment of paper is still left over: the rail
+        moves only where `width > 2 * pitch`.  It is the same shape as the
+        test `comb_bands` already applies to an unequal pair ("a single
+        divider cannot prove two character compartments when one side can
+        hold at least two copies of the other"), it carries no new constant,
+        and it is measured against this comb's OWN pitch and never a corpus
+        figure.  The strictness at exactly two is not arbitrary: a comb whose
+        outer paper is exactly two of its compartments is this module's own
+        designed negative control (`hung_certificate` in the self-test -- an
+        unrailed comb that owns its whole box), and the corpus separates the
+        two real populations at 1.52 and 2.21 pitches, so no measured sheet
+        rests on the boundary either way.
+      * it could be SEVERAL compartments whose guides this band did not
+        select.  Refused by the sheet's own ink: any structural vertical
+        candidate whose final-visible ink reaches into that paper over this
+        band means the sheet guided it, and the rail stays where it is.  The
+        test is deliberately OVERLAP and not "crosses the whole band" -- a
+        guide tick is short on purpose, so half a tick is still a guide -- and
+        it is asked of `extra`, the page's whole black-column candidate pool,
+        rather than of the boundaries this band happened to select.
+
+    White marks are not ink for this purpose and cannot be: `extra` is built
+    from `role == "structural"` verticals only (`comb_boundary_candidates`),
+    and `final_paint` then drops whatever a later layer erased.  2200-A/C/P
+    paint four `gray: 1.0` knockouts at 131.90/146.42/160.82/175.34 exactly
+    where the missing guides would stand, over no black rule at all; they erase
+    nothing and they guide nothing, and admitting them would republish the
+    caption compartment they are being read as evidence against.
+
+    Always returns the measurement, whichever way it came out, so that the
+    caller can publish WHY the rail is where it is rather than only that it
+    moved. A refusal that does not name its clause cannot be told apart from a
+    question never asked, and the refusals are the population that still
+    publishes a compartment on the cell box instead of on measured ink.
+    """
+    lo, hi = (rail, outermost) if rail <= outermost else (outermost, rail)
+    width = q(hi - lo)
+    measured: dict[str, Any] = {
+        "from_x": q(rail), "to_x": q(outermost), "outer_paper_pt": width,
+    }
+    pitch = comb_interior_pitch(ticks)
+    if pitch is None:
+        return {**measured, "method": RAIL_AT_OWNER_EDGE,
+                "refused": RAIL_REFUSED_NO_INTERIOR_PITCH}
+    measured["comb_pitch_pt"] = pitch
+    measured["outer_paper_pitches"] = q(width / pitch)
+    if width <= 2.0 * pitch:
+        return {**measured, "method": RAIL_AT_OWNER_EDGE,
+                "refused": RAIL_REFUSED_WITHIN_PITCH}
+    guides = sorted(
+        q(centre(ink)) for ink in extra
+        if lo + CLUSTER_TOL_PT < q(centre(ink)) < hi - CLUSTER_TOL_PT
+        and float(ink["y0"]) < band_y1 and float(ink["y1"]) > band_y0
+        and (final_paint is None
+             or (not final_paint.definitely_erased(ink)
+                 and any(a < band_y1 and b > band_y0
+                         for a, b in final_paint.visible_intervals(ink))))
+    )
+    if guides:
+        return {**measured, "method": RAIL_AT_OWNER_EDGE,
+                "refused": RAIL_REFUSED_GUIDED, "guide_ink_x": guides}
+    return {**measured, "method": RAIL_TRIMMED_TO_UNGUIDED_OUTER_PAPER,
+            "guide_ink_x": guides}
+
+
 class CombRails(NamedTuple):
     """One comb's measured outer rails: where each is, and where its ink is.
 
@@ -2630,6 +2772,13 @@ class CombRails(NamedTuple):
     so a compartment laid from it is laid across half the printed rule.  `None`
     on either side means no bar of that rail was measurable over this band, and
     a caller may not invent one.
+
+    `left_trim`/`right_trim` are WHY that side is where it is: the measurement
+    that moved it inward, or -- where it stayed on the owner's own edge -- the
+    clause that kept it there and that clause's own numbers. Always present on
+    both sides, because "the rail is the cell box" is a conclusion and not a
+    default, and a reader that cannot tell a refusal from an unasked question
+    cannot re-examine either.
     """
 
     left_x: float
@@ -2637,6 +2786,8 @@ class CombRails(NamedTuple):
     enclosed: list[dict[str, Any]]
     left_ink: Interval | None
     right_ink: Interval | None
+    left_trim: dict[str, Any]
+    right_trim: dict[str, Any]
 
 
 def comb_rails(boundaries: Sequence[dict[str, Any]],
@@ -2671,9 +2822,24 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
     outside the resulting rails are the neighbouring compartment's, not this
     comb's, and are dropped from it.
 
-    Nothing is trimmed without a wall to trim at, and a comb drawn entirely
-    from walls -- a row of full-height boxes -- keeps every one of them: there
-    is no tick run to sit outside of, so the cell's own edges stay the rails.
+    Where the sheet closes the caption off with nothing at all there is no wall
+    to trim at, and the fallback to the cell's nominal edge published the
+    caption as a compartment anyway (2200-A/C/P item 27, 1801 item 5). So the
+    second trim: outward of the tick run the rail moves to the outermost TICK
+    when the sheet's own ink says no compartment is there --
+    `outer_paper_unguided`, which refuses unless the paper both holds two of
+    this comb's own compartments and carries none of its guide ink. It is the
+    same reading as the wall trim, taken where the sheet drew no wall, and
+    both are reported the same way in `left_trim`/`right_trim`.
+
+    A comb drawn entirely from walls -- a row of full-height boxes -- still
+    keeps every one of them: there is no tick run to sit outside of, so the
+    cell's own edges stay the rails, and neither trim can reach it. That is
+    what separates 1604CF `p2c73` and 2551M `p2c13` (two ruled table columns,
+    68.64 and 156.72pt wide, each closed by a bar crossing the owner's whole
+    paper -- both reviewed and confirmed as 2 compartments) from the four
+    caption cells above, where the outermost mark is a 0.24pt guide tick that
+    closes nothing.
 
     Each rail's own INK is reported beside its position, measured from exactly
     the bars that established that position and from nothing else. Where no bar
@@ -2689,6 +2855,9 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
     right_rail = x1
     left_ink: Interval | None = None
     right_ink: Interval | None = None
+    left_trim: dict[str, Any] = {
+        "method": RAIL_AT_OWNER_EDGE, "refused": RAIL_REFUSED_NO_OWNER_PAPER}
+    right_trim: dict[str, Any] = dict(left_trim)
     if paper is not None:
         # The rail has to rule the band's PAPER, not the rule the band ends
         # inside. 2550M's raw date-box ticks run 0.72pt down into the row's
@@ -2726,26 +2895,61 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
         ]
         ticks = [q(centre(ink))
                  for ink, wall in zip(boundaries, kinds) if not wall]
-        if ticks:
+        if not ticks:
+            # Every boundary closes a box, so there is no tick run for a rail
+            # to sit outside of and neither trim has a subject. 1604CF `p2c73`
+            # and 2551M `p2c13` are the corpus's two: table columns 2.58 and
+            # 2.21 times their neighbour's width, each bounded by a bar that
+            # crosses the owner's whole paper, and each a real writing box.
+            left_trim = {"method": RAIL_AT_OWNER_EDGE,
+                         "refused": RAIL_REFUSED_NO_TICK_RUN}
+            right_trim = dict(left_trim)
+        else:
             walls_left = [q(centre(ink))
                           for ink, wall in zip(boundaries, kinds)
                           if wall and q(centre(ink)) < ticks[0]]
             walls_right = [q(centre(ink))
                            for ink, wall in zip(boundaries, kinds)
                            if wall and q(centre(ink)) > ticks[-1]]
-            # A rail trimmed to an interior wall is a DIFFERENT stroke from the
-            # owner's edge, so its ink is that wall's and never the edge's.
+            # A rail trimmed to a boundary -- an interior wall, or the
+            # outermost tick where the sheet closed the caption off with
+            # nothing -- is a DIFFERENT stroke from the owner's edge, so its
+            # ink is that boundary's and never the edge's.
             if walls_left:
+                left_trim = {
+                    "method": RAIL_TRIMMED_TO_WALL,
+                    "from_x": q(left_rail), "to_x": q(max(walls_left)),
+                }
                 left_rail = max(walls_left)
                 left_ink = ink_envelope(boundary_stack(boundaries, left_rail))
+            else:
+                left_trim = outer_paper_unguided(
+                    left_rail, ticks[0], ticks, extra,
+                    band_y0, band_y1, final_paint)
+                if left_trim["method"] == RAIL_TRIMMED_TO_UNGUIDED_OUTER_PAPER:
+                    left_rail = ticks[0]
+                    left_ink = ink_envelope(
+                        boundary_stack(boundaries, left_rail))
             if walls_right:
+                right_trim = {
+                    "method": RAIL_TRIMMED_TO_WALL,
+                    "from_x": q(right_rail), "to_x": q(min(walls_right)),
+                }
                 right_rail = min(walls_right)
                 right_ink = ink_envelope(
                     boundary_stack(boundaries, right_rail))
+            else:
+                right_trim = outer_paper_unguided(
+                    right_rail, ticks[-1], ticks, extra,
+                    band_y0, band_y1, final_paint)
+                if right_trim["method"] == RAIL_TRIMMED_TO_UNGUIDED_OUTER_PAPER:
+                    right_rail = ticks[-1]
+                    right_ink = ink_envelope(
+                        boundary_stack(boundaries, right_rail))
     enclosed = [ink for ink in boundaries
                 if left_rail < q(centre(ink)) < right_rail]
     return CombRails(q(left_rail), q(right_rail), enclosed, left_ink,
-                     right_ink)
+                     right_ink, left_trim, right_trim)
 
 
 def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]],
@@ -2875,6 +3079,14 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
                 list(rails.left_ink) if rails.left_ink is not None else None),
             "right_rail_ink": (
                 list(rails.right_ink) if rails.right_ink is not None else None),
+            # WHY each rail is where it is: `owner-edge` where the cell's own
+            # edge decided it, and otherwise the measurement `comb_rails` moved
+            # it inward on. A rail that has left the cell box is then readable
+            # as such, with its evidence, instead of having to be inferred from
+            # the coordinate by whoever reads `slot_x` next.
+            "outer_rail_trim": {
+                "left": rails.left_trim, "right": rails.right_trim,
+            },
             "divider_x": xs,
             "divider_thickness_pt": min(thicknesses.most_common(),
                                         key=lambda kv: (-kv[1], kv[0]))[0],
@@ -3024,6 +3236,14 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
                 list(rails.left_ink) if rails.left_ink is not None else None),
             "right_rail_ink": (
                 list(rails.right_ink) if rails.right_ink is not None else None),
+            # Published here as well, and not only in `comb_bands`, because a
+            # preserved legacy contract can BECOME the cell's published comb
+            # (`final-visible-count-regression`). A published comb whose rails
+            # carry no reason would be exactly the silent cell-box fallback
+            # this key exists to make visible.
+            "outer_rail_trim": {
+                "left": rails.left_trim, "right": rails.right_trim,
+            },
             "divider_x": xs,
             "divider_thickness_pt": min(
                 thicknesses.most_common(),
@@ -7670,12 +7890,16 @@ def self_test(ir_path: pathlib.Path) -> int:
         not printed_caption_refutes_comb(printed_rate_comb, printed_rate_runs),
         "1800 p1c68's printed rate comb was refused as a caption block",
     )
-    # The money comb the refusal must NOT take: 2200A `p1c111`'s first
-    # compartment has swallowed the caption "27 Tax Debit Memo" and its other
-    # 28 are empty, so SOME compartment is multi-glyph and EVERY one is not.
-    # The rule is stated over every compartment precisely so this keeps its
-    # money boxes; the swallowed first compartment is a separate segmentation
-    # defect and is not fixed here.
+    # The money comb the refusal must NOT take: 2200A `p1c111` as it was read
+    # before `outer_paper_unguided` -- its first compartment had swallowed the
+    # caption "27 Tax Debit Memo" and its other 28 were empty, so SOME
+    # compartment is multi-glyph and EVERY one is not. The rule is stated over
+    # every compartment precisely so this keeps its money boxes. The swallowed
+    # compartment is a SEGMENTATION defect and is fixed in the rail
+    # derivation, where the sheet's own ink can be measured (`comb_rails`,
+    # section 3b below); the reading is kept here deliberately, because
+    # `printed_caption_refutes_comb` must never be the thing that fixes it --
+    # its cure is to delete every compartment, and 28 of these are real.
     debit_memo_comb = {
         "cells": 29,
         "slot_x": [16.32, 189.98] + [q(189.98 + 14.52 * i)
@@ -8825,6 +9049,284 @@ def self_test(ir_path: pathlib.Path) -> int:
         unowned_rails.left_ink is None and unowned_rails.right_ink is None,
         "an unowned band invented rail ink from its nominal edges",
     )
+    check(
+        unowned_rails.left_trim["refused"] == RAIL_REFUSED_NO_OWNER_PAPER
+        and unowned_rails.right_trim["refused"] == RAIL_REFUSED_NO_OWNER_PAPER,
+        "an unmeasurable rail did not name the clause that kept it on the "
+        "cell box",
+    )
+    #
+    # (3b) WHETHER the paper outside the outermost tick is a compartment at
+    # all, which is the same question the wall trim asks where the sheet drew
+    # no wall. The fixture is 2200-C item 27 at the coordinates the sheet
+    # paints it: the row runs 16.32..595.32 between rules at 805.78 and
+    # 821.64, its bottom guide row is 815.52..821.64, and the row's first
+    # guide stands at 189.98 -- 173.66pt of caption ("27 Tax Debit Memo") in
+    # front of a comb whose own pitch is 14.52. Nothing closes that paper off,
+    # so the rail used to fall back to the cell box and the caption was
+    # published as a 29th compartment, unfillable, over the printed words.
+    caption_paper = (805.78, 821.64)
+    caption_band = (815.52, 821.64)
+    caption_left_edge = synthetic_vertical(16.32, 747.82, 898.32, 1.44, 4989)
+    caption_right_edge = synthetic_vertical(595.32, 747.82, 898.80, 1.44, 4993)
+    caption_ticks = [
+        synthetic_vertical(189.98, 815.52, 822.12, 0.48, 5730),
+        *(synthetic_vertical(x, 815.52, 821.64, 0.24, 5731 + index)
+          for index, x in enumerate((
+              204.53, 219.05, 233.45, 247.97, 262.37, 276.89, 291.41,
+              305.81, 320.33, 334.75, 349.27, 363.67, 378.19, 392.71,
+              407.23, 421.63, 436.15, 450.55, 465.10, 479.50, 494.02,
+              508.54, 522.94, 537.46, 551.86, 566.38, 580.90))),
+    ]
+    # The upper half of the same column, and the 0.48pt white strip the sheet
+    # paints across the junction between them. The strip is what makes 189.98
+    # a guide TICK: without it the column closes the row's paper and is a
+    # wall.
+    caption_upper = synthetic_vertical(189.98, 799.18, 815.04, 0.48, 5468)
+    caption_seam = synthetic_horizontal(
+        815.28, 117.62, 594.60, 0.48, 5631, role="knockout")
+    # The four marks the sheet paints where the missing guides would stand:
+    # gray 1.0, over no black rule at all. They erase nothing and they guide
+    # nothing, and reading them as compartment evidence would republish the
+    # caption box they are evidence against.
+    caption_knockouts = [
+        synthetic_vertical(x, 815.04, 821.64, 0.48, 5632 + index,
+                           role="knockout")
+        for index, x in enumerate((132.14, 146.66, 161.06, 175.58))
+    ]
+    caption_owner = CombOwnerPaper(
+        *caption_paper, [caption_left_edge], [caption_right_edge])
+
+    def caption_rails(boundaries: Sequence[dict[str, Any]],
+                      *added: dict[str, Any]) -> CombRails:
+        pool = [caption_left_edge, caption_right_edge, caption_upper,
+                caption_seam, *caption_knockouts, *boundaries, *added]
+        return comb_rails(
+            list(boundaries), pool, 16.32, 595.32, *caption_band,
+            (1.44, 1.44), caption_owner, FinalPaint(pool))
+
+    caption_trimmed = caption_rails(caption_ticks)
+    check(
+        caption_trimmed.left_x == 189.98
+        and caption_trimmed.left_ink == (189.74, 190.22)
+        and len(caption_trimmed.enclosed) == len(caption_ticks) - 1,
+        f"the caption paper in front of a money comb was still published as "
+        f"a compartment: {caption_trimmed.left_x} "
+        f"{caption_trimmed.left_ink}",
+    )
+    check(
+        caption_trimmed.left_trim["method"]
+        == RAIL_TRIMMED_TO_UNGUIDED_OUTER_PAPER
+        and caption_trimmed.left_trim["outer_paper_pt"] == 173.66
+        and caption_trimmed.left_trim["comb_pitch_pt"] == 14.52
+        and caption_trimmed.left_trim["guide_ink_x"] == [],
+        f"the trimmed rail did not report what moved it: "
+        f"{caption_trimmed.left_trim}",
+    )
+    # The knockouts are in that pool and they are the only marks in the outer
+    # paper. If white ink counted, this comb keeps its phantom compartment.
+    check(
+        caption_trimmed.left_trim["guide_ink_x"] == [],
+        "the sheet's white marks were counted as compartment guides",
+    )
+    # The opposite side of the same comb: 14.42pt of paper against a 14.52pt
+    # pitch is one compartment, and nothing may move that rail.
+    check(
+        caption_trimmed.right_x == 595.32
+        and caption_trimmed.right_trim["refused"] == RAIL_REFUSED_WITHIN_PITCH,
+        f"a comb's own last compartment was trimmed away: "
+        f"{caption_trimmed.right_x} {caption_trimmed.right_trim}",
+    )
+    # One real black guide anywhere in that paper and the rail stays: the
+    # sheet has marked a compartment there, whatever else is printed over it.
+    # (x = 103.82 is where the caption's own last glyph ends, so it is inside
+    # the printed words and outside every mark the sheet actually paints.)
+    caption_guided = caption_rails(
+        caption_ticks,
+        synthetic_vertical(103.82, 815.52, 821.64, 0.24, 5464))
+    check(
+        caption_guided.left_x == 16.32
+        and caption_guided.left_trim["refused"] == RAIL_REFUSED_GUIDED
+        and caption_guided.left_trim["guide_ink_x"] == [103.82],
+        f"a comb guided in its own outer paper was trimmed anyway: "
+        f"{caption_guided.left_x} {caption_guided.left_trim}",
+    )
+    # ...and the same mark, painted out by a later layer, guides nothing. This
+    # is the shape the sheet itself draws four times over at
+    # 132.14/146.66/161.06/175.58, except that there the black stroke was
+    # never laid down at all.
+    caption_erased = caption_rails(
+        caption_ticks,
+        synthetic_vertical(103.82, 815.52, 821.64, 0.24, 5464),
+        synthetic_vertical(103.82, 815.04, 822.12, 0.72, 5700,
+                           role="knockout"))
+    check(
+        caption_erased.left_x == 189.98,
+        "a guide the sheet painted out still held a phantom compartment open",
+    )
+    # More than two compartments' worth of paper is the threshold, and it is
+    # measured against the comb's OWN pitch. Below it the paper may be one
+    # wide compartment and the rail may not move: the same ink with the cell
+    # edge brought in to 175.58 leaves 14.4pt, one compartment, and stays.
+    caption_narrow_edge = synthetic_vertical(
+        175.58, 747.82, 898.32, 1.44, 4989)
+    caption_narrow_pool = [
+        caption_narrow_edge, caption_right_edge, caption_upper, caption_seam,
+        *caption_ticks]
+    caption_narrow = comb_rails(
+        list(caption_ticks), caption_narrow_pool, 175.58, 595.32,
+        *caption_band, (1.44, 1.44),
+        CombOwnerPaper(*caption_paper, [caption_narrow_edge],
+                       [caption_right_edge]),
+        FinalPaint(caption_narrow_pool))
+    check(
+        caption_narrow.left_x == 175.58
+        and caption_narrow.left_trim["refused"] == RAIL_REFUSED_WITHIN_PITCH
+        and caption_narrow.left_trim["outer_paper_pitches"] == 0.99,
+        f"a single wide compartment was trimmed off its own comb: "
+        f"{caption_narrow.left_x} {caption_narrow.left_trim}",
+    )
+    # The SAME sheet without the seam knockout: the column at 189.98 now
+    # closes the row's paper, so it is a wall, and the wall trim -- which
+    # predates this one -- puts the rail in exactly the same place. Two
+    # clauses, one reading of the paper.
+    caption_walled_pool = [caption_left_edge, caption_right_edge,
+                           caption_upper, *caption_ticks]
+    caption_walled = comb_rails(
+        list(caption_ticks), caption_walled_pool, 16.32, 595.32,
+        *caption_band, (1.44, 1.44), caption_owner,
+        FinalPaint(caption_walled_pool))
+    check(
+        caption_walled.left_x == 189.98
+        and caption_walled.left_trim["method"] == RAIL_TRIMMED_TO_WALL,
+        f"the wall trim and the unguided-paper trim disagreed about one "
+        f"sheet: {caption_walled.left_x} {caption_walled.left_trim}",
+    )
+    # A comb whose every boundary closes a box has no tick run for a rail to
+    # sit outside of, and neither trim may reach it. This is 1604CF `p2c73`
+    # and 2551M `p2c13`: two ruled table columns, the wide one 2.58 and 2.21
+    # times its neighbour, each a real writing box the sheet closed on both
+    # sides -- and each reviewed and confirmed as 2 compartments.
+    column_left = synthetic_vertical(174.48, 93.36, 405.60, 0.96, 15)
+    column_middle = synthetic_vertical(243.12, 54.12, 405.00, 0.72, 90)
+    column_right = synthetic_vertical(269.76, 55.80, 406.44, 0.72, 91)
+    column_pool = [column_left, column_middle, column_right]
+    column_rails = comb_rails(
+        [column_middle], column_pool, 174.48, 269.76, 220.80, 236.64,
+        (0.96, 0.72),
+        CombOwnerPaper(220.80, 236.64, [column_left], [column_right]),
+        FinalPaint(column_pool))
+    check(
+        (column_rails.left_x, column_rails.right_x) == (174.48, 269.76)
+        and column_rails.left_trim["refused"] == RAIL_REFUSED_NO_TICK_RUN
+        and column_rails.right_trim["refused"] == RAIL_REFUSED_NO_TICK_RUN,
+        f"a row of full-height boxes lost a column to the tick-run trim: "
+        f"{column_rails.left_x} {column_rails.right_x} "
+        f"{column_rails.left_trim}",
+    )
+    # A pair of marks measures one distance, and one distance is not a pitch.
+    # 2550M `p1c89`'s raw legacy reading is the case: a genuine divider at
+    # 260.40 and a stale mark at 263.52 that the sheet replaced, whose 3.12pt
+    # "pitch" would condemn the 13.44pt of paper beside them and take the
+    # whole subject out of the ledger with it.
+    check(
+        comb_interior_pitch([260.40]) is None
+        and comb_interior_pitch([260.40, 263.52]) is None
+        and comb_interior_pitch([260.40, 263.52, 273.00]) == 3.12
+        and comb_interior_pitch([q(centre(tick)) for tick in caption_ticks])
+        == 14.52,
+        "a comb's own interior pitch was measured from fewer than two gaps",
+    )
+    stale_pair = [
+        synthetic_vertical(260.40, 838.68, 842.28, 0.72, 321),
+        synthetic_vertical(263.52, 838.68, 842.28, 0.72, 244),
+    ]
+    stale_pair_edges = [
+        synthetic_vertical(246.96, 828.96, 841.92, 0.72, 216),
+        synthetic_vertical(273.84, 828.96, 841.92, 0.72, 216),
+    ]
+    stale_pair_pool = [*stale_pair_edges, *stale_pair]
+    stale_pair_rails = comb_rails(
+        stale_pair, stale_pair_pool, 246.96, 273.84, 838.68, 842.28,
+        (0.72, 0.72),
+        CombOwnerPaper(829.32, 841.56, [stale_pair_edges[0]],
+                       [stale_pair_edges[1]]),
+        FinalPaint(stale_pair_pool))
+    check(
+        stale_pair_rails.left_x == 246.96
+        and stale_pair_rails.left_trim["refused"]
+        == RAIL_REFUSED_NO_INTERIOR_PITCH,
+        f"a stale mark beside a divider measured a pitch and ate the row: "
+        f"{stale_pair_rails.left_x} {stale_pair_rails.left_trim}",
+    )
+    #
+    # (3c) The same derivation over the CORPUS, because a clause that never
+    # fires on a real sheet is not a clause. The subject is the layout tree
+    # this producer wrote beside the IR it was handed -- `batch.py` writes
+    # both in one pass, and the gate regenerates before it scores -- and it is
+    # scored on three things: every published rail says which clause put it
+    # there, every trimmed rail's evidence lands on the coordinate the comb
+    # actually publishes, and the trim fires somewhere. An absent or comb-less
+    # tree is a FAILURE and never a skip; unevaluable is not a pass here.
+    layout_dir = ir_path.resolve().parent.parent / "layout"
+    published = (sorted(layout_dir.glob("*.layout.json"))
+                 if layout_dir.is_dir() else [])
+    corpus_combs = 0
+    corpus_trimmed: list[str] = []
+    corpus_unnamed: list[str] = []
+    corpus_unbound: list[str] = []
+    corpus_contradictory: list[str] = []
+    for layout_path in published:
+        document = json.loads(layout_path.read_text(encoding="utf-8"))
+        for corpus_page in document["pages"]:
+            for corpus_cell in corpus_page["cells"]:
+                corpus_comb = corpus_cell.get("comb")
+                if not corpus_comb:
+                    continue
+                corpus_combs += 1
+                slot_x = [float(value) for value in corpus_comb["slot_x"]]
+                trims = corpus_comb.get("outer_rail_trim") or {}
+                for side, rail_x in (("left", slot_x[0]),
+                                     ("right", slot_x[-1])):
+                    where = f"{layout_path.stem}:{corpus_cell['id']}:{side}"
+                    record = trims.get(side)
+                    if not isinstance(record, dict) or "method" not in record:
+                        corpus_unnamed.append(where)
+                        continue
+                    if (record["method"] == RAIL_AT_OWNER_EDGE
+                            and "refused" not in record):
+                        corpus_unnamed.append(where)
+                        continue
+                    trimmed_here = record["method"] != RAIL_AT_OWNER_EDGE
+                    if record["method"] == (
+                            RAIL_TRIMMED_TO_UNGUIDED_OUTER_PAPER):
+                        corpus_trimmed.append(where)
+                        if not (float(record["outer_paper_pt"])
+                                > 2.0 * float(record["comb_pitch_pt"])
+                                and record["guide_ink_x"] == []):
+                            corpus_contradictory.append(where)
+                    if (record.get("refused") == RAIL_REFUSED_WITHIN_PITCH
+                            and float(record["outer_paper_pt"])
+                            > 2.0 * float(record["comb_pitch_pt"])):
+                        corpus_contradictory.append(where)
+                    bound = record.get("to_x" if trimmed_here else "from_x")
+                    if bound is not None and q(float(bound)) != q(rail_x):
+                        corpus_unbound.append(where)
+    check(bool(published) and corpus_combs > 0,
+          f"no published comb to score the rail derivation on: {layout_dir} "
+          f"holds {len(published)} layouts and {corpus_combs} combs")
+    check(not corpus_unnamed,
+          f"{len(corpus_unnamed)} published rails do not say which clause put "
+          f"them where they are: {corpus_unnamed[:5]}")
+    check(not corpus_unbound,
+          f"{len(corpus_unbound)} published rails carry evidence for a "
+          f"coordinate the comb does not publish: {corpus_unbound[:5]}")
+    check(not corpus_contradictory,
+          f"{len(corpus_contradictory)} published rails contradict their own "
+          f"measurement: {corpus_contradictory[:5]}")
+    check(bool(corpus_trimmed),
+          f"the unguided-outer-paper trim fired on none of {corpus_combs} "
+          f"published combs, so nothing in this corpus exercises it")
     #
     # (4) The horizontal writing surface itself: `slot_x` runs rail CENTRE to
     # rail centre, so the outer compartments are inset to those rails' ink.
