@@ -179,3 +179,24 @@ House rules carried into every package: comb_referee.py is single-writer
 forms; every new check gets a load-bearing mutation (proven by neutering);
 never weaken a check or tolerance; no form-code special cases; the gate runs
 alone.
+
+
+## R1 — LANDED 2026-08-14
+
+`refuted_outer_rails` in comb_referee.py: the prose refutation of edge-railed
+outer regions, asked of the CHOSEN topology from the referee's own Poppler
+glyph parse. Corpus acceptance against the r65 baseline: exactly the four F232
+cells change (stop -> agree, 28/28/28/3, positions_match true), 4,534 cells
+differ only by the declared `rail_derivation` key, all 105 reviewed 2551Q
+tuples identical. Totals: stop 4 -> 0, agree 4521 -> 4525, unevaluable 62
+unchanged, referee_layout_mismatches 5 -> 1 (2200C p1c6 remains -- retained
+legacy subject, R2's population). Seven clauses neuter-proven; the gate gained
+`_rail_derivation_errors` and re-derives every published rail basis.
+
+Two per-slab lessons are recorded in the docstrings for whoever follows: the
+glyph window must be the cell's (a comb contract band can be just the tick
+row), and the question belongs to the chosen topology at final assembly --
+asked per slab it regressed eleven 1701-family TIN rows.
+
+Remaining after R1: 62 unevaluable (30 retained + 29 writing-band + 3
+topology-proof) and 1 layout mismatch (2200C p1c6). R2 next.

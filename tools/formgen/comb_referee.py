@@ -6269,6 +6269,51 @@ def classify_band(
             wall_verdicts[key] = verdict
         return verdict
 
+    def outer_region_prose(lo: float, hi: float) -> tuple[int, int]:
+        """Glyphs and divider-tone structure inside one claimed outer region.
+
+        Both counts come from this referee's own parse of Poppler's vectors,
+        never from the lattice: glyph bounds via `measured_glyph_boxes`
+        (containment-conservative -- an error UNDERcounts, which keeps the
+        rectangle edge and today's behaviour), structure from every
+        divider-tone vertical whose centre lies strictly inside the region.
+        The structure pool is deliberately wider than `candidates`: a paint
+        too thick to be a divider candidate is still structure this clause
+        must not silently pave over.
+
+        The vertical window is the CELL's, not the comb contract's, because
+        the claim under refutation is the compartment the cell edge would
+        own, and that claim spans the cell.  The contract band can be just
+        the divider-tick row (2200-A item 27's is 4.92pt tall) while the
+        caption prose stands in the writing area above it; asking only the
+        tick row finds nothing and the phantom compartment survives.  The
+        9,068-side census that grounds the `> 1` boundary was measured on
+        this same cell window.
+        """
+        glyphs = 0
+        for region in measured_glyph_boxes(
+                page, [lo, cell_y0, hi, cell_y1]):
+            centre = (region.x0 + region.x1) / 2.0
+            if lo + POSITION_TOL_PT < centre < hi - POSITION_TOL_PT:
+                glyphs += 1
+        # An endpoint grazing the window is coincidence, not presence: the
+        # row above 2200-A item 27 ends its rule 0.24pt inside this cell's
+        # top, and counting that quarter-point tail as "structure standing in
+        # the region" would turn a caption refutation into a conflict.  The
+        # bound is the file's one coincidence tolerance, not a new constant.
+        structure = sum(
+            1 for item in page.paints
+            if not item.clipped
+            and abs(item.tone - divider_tone) <= 1e-8
+            and item.height > item.width
+            and min(item.y1, cell_y1) - max(item.y0, cell_y0)
+            > POSITION_TOL_PT
+            and lo + POSITION_TOL_PT
+            < (item.x0 + item.x1) / 2.0
+            < hi - POSITION_TOL_PT
+        )
+        return glyphs, structure
+
     def rail_bounded(values: Sequence[float]
                      ) -> tuple[float, float, list[float]]:
         """Split one slab's measured boundaries into rails and dividers.
@@ -6282,7 +6327,12 @@ def classify_band(
         of a compartment is still one of this comb's compartments (1801's TIN
         rules its dash boxes with exactly such walls).  With no wall outside
         the run -- and with no ticks at all, a row of full-height boxes -- the
-        rectangle's own edges stand, exactly as before.
+        rectangle's own edges stand HERE; whether an edge-railed outer region
+        is really a compartment is then asked of the CHOSEN topology by
+        `refuted_outer_rails`, never of a partial slab, because a sub-slab's
+        shorter tick run manufactures an outer region the cell does not
+        claim (eleven 1701-family TIN rows regressed to "ambiguous topology"
+        when this question was asked per slab).
         """
         ticks = [value for value in values if not is_rail(value)]
         left, right = x0, x1
@@ -6298,6 +6348,83 @@ def classify_band(
         return left, right, [
             value for value in values if left < value < right
         ]
+
+    def refuted_outer_rails(band: dict[str, Any]) -> dict[str, Any] | None:
+        """Ask the sheet whether an edge-railed outer region is a compartment.
+
+        Applied to the CHOSEN band only, after topology selection -- the
+        claim under refutation is the compartment count this cell will
+        publish, and the census grounding the `> 1` boundary was measured on
+        chosen topologies.  A partial slab's shorter tick run manufactures an
+        outer region the cell never claims, and asking there poisoned eleven
+        1701-family TIN rows.
+
+        Where a rail sits on the rectangle's edge with a tick run inside it,
+        the region between them is a claimed compartment with no closing
+        evidence.  A compartment is one character wide, so at most one
+        pre-printed glyph fits it; MORE than one is running text -- the same
+        physical statement the caption-block corroboration makes, re-derived
+        from Poppler glyph bounds, a stack lattice.py never reads.  Census
+        over all 9,068 edge-railed sides of the 53-form corpus: 8,948 hold no
+        glyph, 90 hold exactly one, 30 hold more, and nothing lies between 1
+        and 14 glyphs, so `> 1` separates two real populations rather than
+        tuning a constant.  A refuted region moves the rail to the outermost
+        tick and the compartment count follows; prose standing together with
+        divider-tone structure is a conflict this clause must not resolve
+        either way, and the whole cell fails closed (None).
+
+        Rows of full-height boxes never reach the question -- their
+        boundaries are walls, so `ticks` is empty and the edges stand: a
+        walled table compartment legitimately carries text (1604CF `p2c73`,
+        reviewed and pinned at 2 compartments, holds 29 glyphs in its right
+        box).  Retained subjects never reach it either: the caption-block
+        corroboration COUNTS their prose per compartment as the evidence of
+        correct suppression, so trimming it away would destroy the census
+        that corroboration runs on.
+        """
+        values = [float(value) for value in band["source_divider_x"]]
+        rails = [float(value) for value in band["source_rail_x"]]
+        ticks = [value for value in values if not is_rail(value)]
+        derivation: dict[str, Any] = {}
+        for side, index, edge in (("left", 0, x0), ("right", 1, x1)):
+            rail = rails[index]
+            if abs(rail - edge) > 1e-6:
+                derivation[side] = {
+                    "basis": "wall-outside-run",
+                    "wall_x": round(rail, 6),
+                }
+                continue
+            derivation[side] = {"basis": "owner-edge"}
+            if not ticks or ledger_state not in (
+                    None, "active_resolved", "active_unresolved"):
+                continue
+            lo, hi = ((edge, ticks[0]) if side == "left"
+                      else (ticks[-1], edge))
+            if hi - lo <= POSITION_TOL_PT:
+                continue
+            glyphs, structure = outer_region_prose(lo, hi)
+            if glyphs > 1 and structure:
+                return None
+            if glyphs > 1:
+                rails[index] = ticks[0] if side == "left" else ticks[-1]
+                derivation[side] = {
+                    "basis": "prose-refuted-outer-region",
+                    "from_x": round(edge, 6),
+                    "span_pt": round(hi - lo, 6),
+                    "glyphs": glyphs,
+                }
+        enclosed = [value for value in values
+                    if rails[0] < value < rails[1]]
+        if len(enclosed) + 1 < 2:
+            # A refutation that leaves no comb band is a caption block
+            # wrongly active -- the retained ledger's question, not a rail's.
+            return None
+        return {
+            **band,
+            "source_rail_x": [round(rails[0], 6), round(rails[1], 6)],
+            "compartments": len(enclosed) + 1,
+            "rail_derivation": derivation,
+        }
 
     max_width = pitch / 2
     candidates = [
@@ -7537,13 +7664,26 @@ def classify_band(
                     "missing_anchor_x": missing_anchor_x,
                     "missing_anchor_proofs": missing_anchor_proofs,
                 }
+                finalized_partial = refuted_outer_rails(chosen)
+                if finalized_partial is None:
+                    return {
+                        "status": "unevaluable",
+                        "reason": (
+                            "an outer-region prose refutation cannot "
+                            "stand: prose and divider-tone structure "
+                            "conflict, or no comb band would remain"),
+                        **coverage_evidence,
+                        "chosen_topology": list(chosen_topology),
+                        "topology_superset_relations": superset_relations,
+                        "bands": measured,
+                    }
                 return {
                     "status": "measured",
                     "reason": (
                         "ledger-owned active subject has full-band Poppler "
                         "proof of erased lattice anchors"
                     ),
-                    **{key: value for key, value in chosen.items()
+                    **{key: value for key, value in finalized_partial.items()
                        if key != "status"},
                     **coverage_evidence,
                     "chosen_topology": list(chosen_topology),
@@ -7569,10 +7709,24 @@ def classify_band(
             "topology_superset_relations": superset_relations,
             "bands": measured,
         }
+    finalized = refuted_outer_rails(chosen)
+    if finalized is None:
+        return {
+            "status": "unevaluable",
+            "reason": (
+                "an outer-region prose refutation cannot stand: prose and "
+                "divider-tone structure conflict, or no comb band would "
+                "remain"),
+            **coverage_evidence,
+            "chosen_topology": list(chosen_topology),
+            "topology_superset_relations": superset_relations,
+            "bands": measured,
+        }
     return {
         "status": "measured",
         "reason": topology_reason,
-        **{key: value for key, value in chosen.items() if key != "status"},
+        **{key: value for key, value in finalized.items()
+           if key != "status"},
         **coverage_evidence,
         "chosen_topology": list(chosen_topology),
         "topology_superset_relations": superset_relations,
@@ -11248,6 +11402,117 @@ def self_test() -> int:
     assert interior_walled["status"] == "measured", interior_walled
     assert interior_walled["source_rail_x"] == [0.0, 40.0], interior_walled
     assert interior_walled["compartments"] == 4, interior_walled
+
+    # ---- prose-refuted outer regions (R1, F232) -----------------------------
+    #
+    # A tick-drawn comb with no wall outside the run used to keep the
+    # rectangle's edges unconditionally, counting the region between the edge
+    # and the outermost tick as a compartment even where it holds the row's
+    # printed caption.  More than one glyph in that region is running text,
+    # and running text is not a one-character writing compartment; the rail
+    # moves to the outermost tick and says so.  Exactly one glyph is the
+    # pre-printed decoration a compartment may carry, and the edge stands.
+    def glyph(x: float, order: int) -> UnsupportedRegion:
+        return UnsupportedRegion(
+            x - 1.0, 4.0, x + 1.0, 6.0,
+            "glyph use may occlude geometry: fixture",
+            f"glyph-{x}-{order}", tone=0.0, order=order, clipped=False)
+
+    prose_cell = {
+        "id": "p1c1", "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+        "comb": {"cells": 2, "divider_x": [20.0, 30.0],
+                 "pitch_pt": 10.0, "divider_gray": 0.0,
+                 "y0": 2.0, "y1": 8.0},
+    }
+    prose_refuted = classify_band(prose_cell, SvgPage(
+        100, 100, [paint(20), paint(30)],
+        [glyph(6.0, 30), glyph(11.0, 31)], "x"))
+    assert prose_refuted["status"] == "measured", prose_refuted
+    assert prose_refuted["source_rail_x"] == [20.0, 40.0], prose_refuted
+    assert prose_refuted["compartments"] == 2, prose_refuted
+    assert prose_refuted["rail_derivation"]["left"] == {
+        "basis": "prose-refuted-outer-region",
+        "from_x": 0.0, "span_pt": 20.0, "glyphs": 2,
+    }, prose_refuted["rail_derivation"]
+    assert prose_refuted["rail_derivation"]["right"] == {
+        "basis": "owner-edge"}, prose_refuted["rail_derivation"]
+
+    one_glyph = classify_band(prose_cell, SvgPage(
+        100, 100, [paint(20), paint(30)], [glyph(6.0, 30)], "x"))
+    assert one_glyph["status"] == "measured", one_glyph
+    assert one_glyph["source_rail_x"] == [0.0, 40.0], one_glyph
+    assert one_glyph["compartments"] == 3, one_glyph
+    assert one_glyph["rail_derivation"]["left"] == {
+        "basis": "owner-edge"}, one_glyph["rail_derivation"]
+
+    # Prose AND divider-tone structure together is a conflict the clause must
+    # not resolve either way: the paint at x=10 is too thick to be a divider
+    # candidate (width > pitch/2), so it matched nothing, yet it is structure
+    # standing in the region the glyphs would refute.  Fail closed.
+    conflicted = classify_band(prose_cell, SvgPage(
+        100, 100,
+        [paint(20), paint(30),
+         Paint(7.25, 2.0, 12.75, 8.0, 0.0, 5, "fill", "thick-structure")],
+        [glyph(6.0, 30), glyph(15.0, 31)], "x"))
+    assert conflicted["status"] == "unevaluable", conflicted
+    assert "prose refutation cannot stand" in str(
+        conflicted.get("reason")), conflicted
+
+    # A refutation that leaves no comb band is a caption block wrongly
+    # active: refuting BOTH sides of a single-tick run would publish a
+    # one-compartment "comb", which is no comb at all.  Fail closed instead.
+    lone_tick_cell = {
+        "id": "p1c3", "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+        "comb": {"cells": 2, "divider_x": [20.0],
+                 "pitch_pt": 20.0, "divider_gray": 0.0,
+                 "y0": 2.0, "y1": 8.0},
+    }
+    annihilated = classify_band(lone_tick_cell, SvgPage(
+        100, 100, [paint(20)],
+        [glyph(6.0, 30), glyph(11.0, 31),
+         glyph(26.0, 32), glyph(31.0, 33)], "x"))
+    assert annihilated["status"] == "unevaluable", annihilated
+    assert "prose refutation cannot stand" in str(
+        annihilated.get("reason")), annihilated
+
+    # A wall outside the run answers the question before prose is asked: the
+    # region beyond it belongs to whatever the wall closes off, however much
+    # text it carries.
+    walled_prose = classify_band(prose_cell, SvgPage(
+        100, 100,
+        [*source_frame(),
+         Paint(19.9, 0.1, 20.1, 9.9, 0.0, 20, "stroke", "wall-20"),
+         paint(30)],
+        [glyph(4.0, 30), glyph(8.0, 31), glyph(12.0, 32)], "x"))
+    assert walled_prose["status"] == "measured", walled_prose
+    assert walled_prose["source_rail_x"] == [20.0, 40.0], walled_prose
+    assert walled_prose["rail_derivation"]["left"] == {
+        "basis": "wall-outside-run", "wall_x": 20.0,
+    }, walled_prose["rail_derivation"]
+
+    # A row of full-height boxes has no tick run to sit outside of, so the
+    # edges stand and no prose question is asked: a walled table compartment
+    # legitimately carries text (1604CF p2c73, reviewed at 2 compartments,
+    # holds 29 glyphs in its right box).
+    boxes_cell = {
+        "id": "p1c2", "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+        "comb": {"cells": 2, "divider_x": [20.0],
+                 "pitch_pt": 20.0, "divider_gray": 0.0,
+                 "y0": 2.0, "y1": 8.0},
+    }
+    walled_boxes = classify_band(boxes_cell, SvgPage(
+        100, 100,
+        [*source_frame(),
+         Paint(19.9, 0.1, 20.1, 9.9, 0.0, 20, "stroke", "wall-20")],
+        [glyph(4.0, 30), glyph(8.0, 31), glyph(12.0, 32),
+         glyph(24.0, 33), glyph(28.0, 34)], "x"))
+    assert walled_boxes["status"] == "measured", walled_boxes
+    assert walled_boxes["source_rail_x"] == [0.0, 40.0], walled_boxes
+    assert walled_boxes["compartments"] == 2, walled_boxes
+    assert walled_boxes["rail_derivation"] == {
+        "left": {"basis": "owner-edge"},
+        "right": {"basis": "owner-edge"},
+    }, walled_boxes["rail_derivation"]
 
     # `closes_subject_box` itself, on the two joins that are its only
     # tolerances and on the case they must not reach.

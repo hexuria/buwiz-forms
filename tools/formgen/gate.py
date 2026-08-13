@@ -3710,6 +3710,17 @@ MEASURED_REFEREE_KEYS = {
     "open_y0", "open_y1", "contract_span_pt", "seed_span_pt",
     "measured_span_pt", "unmeasured_span_pt", "topology_coverage_pt",
     "ignored_slabs", "chosen_topology", "topology_superset_relations",
+    # DECLARED SCHEMA CHANGE (R1, F232): every measured band now names, per
+    # side, the basis that placed its rail -- "owner-edge",
+    # "wall-outside-run", or "prose-refuted-outer-region".  Before this key a
+    # rail strictly inside the rectangle was indistinguishable from a rail at
+    # its edge, so the gate could not re-derive WHY a rail sat where it did;
+    # _rail_derivation_errors now cross-checks each basis against the
+    # published topology, which is strictly more than it could check before.
+    "rail_derivation",
+}
+RAIL_DERIVATION_BASES = {
+    "owner-edge", "wall-outside-run", "prose-refuted-outer-region",
 }
 # The referee's third measured-source shape: the fail-closed partial-anchor
 # certificate (comb_referee.ACTIVE_PARTIAL_ANCHOR_CRITERION).  It deliberately
@@ -4844,6 +4855,90 @@ def _referee_topology_key(values: Sequence[float]) -> str:
     return ",".join(str(_rounded_six(value)) for value in values)
 
 
+def _rail_derivation_errors(
+        label: str, referee: dict[str, Any], cell: dict[str, Any],
+        ) -> list[str]:
+    """Cross-check each rail's published basis against the topology.
+
+    The referee names why each rail sits where it does (R1, F232).  The gate
+    cannot re-count Poppler glyphs, but every basis makes claims the published
+    numbers must satisfy, and each is re-derived here:
+
+      * "owner-edge" -- the rail IS the rectangle's edge on that side;
+      * "wall-outside-run" -- the rail is a measured boundary strictly inside
+        the rectangle, and wall_x is that rail;
+      * "prose-refuted-outer-region" -- the rail is a measured boundary,
+        from_x is the rectangle edge it refused, span_pt is exactly the paper
+        between them, and more than ONE glyph stood in it (one glyph is the
+        pre-printed decoration a compartment may carry; a refutation claiming
+        less refutes nothing).
+
+    "prose-and-structure-conflict" may never reach a measured band -- the
+    referee publishes that shape only on its own unevaluable verdict.
+    """
+    errors: list[str] = []
+    derivation = referee.get("rail_derivation")
+    rails = referee.get("source_rail_x")
+    source = referee.get("source_divider_x")
+    bbox = cell.get("bbox")
+    if (not isinstance(derivation, dict)
+            or set(derivation) != {"left", "right"}
+            or not _finite_number_list(rails, length=2)
+            or not _finite_number_list(source)
+            or not _finite_number_list(bbox, length=4)):
+        return [f"rail derivation is malformed: {label}"]
+    source_values = {_rounded_six(value) for value in source}
+    for side, rail, edge in (
+            ("left", _rounded_six(rails[0]), _rounded_six(bbox[0])),
+            ("right", _rounded_six(rails[1]), _rounded_six(bbox[2]))):
+        evidence = derivation.get(side)
+        if not isinstance(evidence, dict):
+            errors.append(f"rail derivation side is malformed: {label}/{side}")
+            continue
+        basis = evidence.get("basis")
+        if basis not in RAIL_DERIVATION_BASES:
+            errors.append(
+                f"rail derivation basis is unsupported: {label}/{side}")
+            continue
+        if basis == "owner-edge":
+            if set(evidence) != {"basis"} or rail != edge:
+                errors.append(
+                    f"owner-edge rail is not the owner's edge: {label}/{side}")
+        elif basis == "wall-outside-run":
+            if (set(evidence) != {"basis", "wall_x"}
+                    or not _finite_number(evidence.get("wall_x"))
+                    or _rounded_six(evidence["wall_x"]) != rail
+                    or rail not in source_values):
+                errors.append(
+                    f"wall rail is not a measured boundary: {label}/{side}")
+        else:
+            span = evidence.get("span_pt")
+            glyphs = evidence.get("glyphs")
+            if (set(evidence) != {"basis", "from_x", "span_pt", "glyphs"}
+                    or not _finite_number(evidence.get("from_x"))
+                    or not _finite_number(span)
+                    or _rounded_six(evidence["from_x"]) != edge
+                    or rail not in source_values
+                    or _rounded_six(span) != _rounded_six(abs(rail - edge))
+                    or float(span) <= 0
+                    or not _is_count(glyphs)
+                    or glyphs <= 1):
+                errors.append(
+                    f"prose refutation evidence is false: {label}/{side}")
+    if not errors:
+        # A rail strictly inside the rectangle must say which measurement put
+        # it there; "owner-edge" on an interior rail is a rail that moved
+        # without naming why.
+        for side, rail, edge in (
+                ("left", _rounded_six(rails[0]), _rounded_six(bbox[0])),
+                ("right", _rounded_six(rails[1]), _rounded_six(bbox[2]))):
+            basis = derivation[side].get("basis")
+            if rail != edge and basis == "owner-edge":
+                errors.append(
+                    f"interior rail carries no derivation: {label}/{side}")
+    return errors
+
+
 def _measured_referee_certificate_errors(
         slug: str, cell: dict[str, Any], referee: dict[str, Any],
         ) -> list[str]:
@@ -4855,6 +4950,7 @@ def _measured_referee_certificate_errors(
         return _partial_anchor_referee_certificate_errors(slug, cell, referee)
     if set(referee) != MEASURED_REFEREE_KEYS:
         return [f"measured source certificate schema is unsupported: {label}"]
+    errors.extend(_rail_derivation_errors(label, referee, cell))
     reason = referee.get("reason")
     if reason not in REFEREE_MEASURED_REASONS:
         errors.append(f"measured source reason is not derived: {label}")
@@ -5218,6 +5314,7 @@ def _partial_anchor_referee_certificate_errors(
             or compartments < 2):
         return [*errors,
                 f"partial-anchor source topology is malformed: {label}"]
+    errors.extend(_rail_derivation_errors(label, referee, cell))
     lattice_values = [_rounded_six(value) for value in lattice]
     source_values = [_rounded_six(value) for value in source]
     rail_values = [_rounded_six(value) for value in rails]
@@ -10413,6 +10510,10 @@ def _synthetic_comb_fixture(
             "y1": 10.0,
             "source_divider_x": [5.0],
             "source_rail_x": [0.0, 10.0],
+            "rail_derivation": {
+                "left": {"basis": "owner-edge"},
+                "right": {"basis": "owner-edge"},
+            },
             "extra_divider_x": [],
             "compartments": 2,
             "anchor_matches": [{
@@ -11946,6 +12047,10 @@ def self_test() -> int:
         "y1": 10.0,
         "source_divider_x": [3.0],
         "source_rail_x": [0.0, 10.0],
+        "rail_derivation": {
+            "left": {"basis": "owner-edge"},
+            "right": {"basis": "owner-edge"},
+        },
         "extra_divider_x": [],
         "compartments": 2,
         "anchor_matches": [{
@@ -12653,6 +12758,43 @@ def self_test() -> int:
             lambda value: value["forms"][0]["cells"][0]["referee"].update({
                 "positions_match": False}),
         ),
+        # R1 (F232): rail-derivation forgeries that keep the compartment
+        # arithmetic VALID, so nothing but _rail_derivation_errors can refuse
+        # them -- a mutation another check would also catch proves nothing
+        # about this one.  Rails stay at the owner's edges throughout.
+        (
+            "prose-refutation basis on an edge rail",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "prose-refuted-outer-region",
+                             "from_x": 0.0, "span_pt": 0.0, "glyphs": 3},
+                    "right": {"basis": "owner-edge"},
+                }}),
+        ),
+        (
+            "wall basis whose wall is no measured boundary",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "wall-outside-run", "wall_x": 0.0},
+                    "right": {"basis": "owner-edge"},
+                }}),
+        ),
+        (
+            "rail derivation missing a side",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "owner-edge"},
+                }}),
+        ),
+        (
+            "rail derivation with an unsupported basis",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "prose-and-structure-conflict",
+                             "glyphs": 3, "structure_components": 1},
+                    "right": {"basis": "owner-edge"},
+                }}),
+        ),
         (
             "source coordinates detached from the lattice",
             lambda value: value["forms"][0]["cells"][0]["referee"].update({
@@ -12718,6 +12860,46 @@ def self_test() -> int:
                 "vector_paints": 0}),
         ),
     ]
+    # Direct probes of _rail_derivation_errors for the relations the shared
+    # report fixture cannot express without tripping OTHER checks first: an
+    # interior rail must name its measurement, a one-glyph refutation refutes
+    # nothing, and span arithmetic is re-derived.
+    probe_cell = {"cell": "p1c9", "bbox": [0.0, 0.0, 10.0, 10.0]}
+    def probe_referee(rails, derivation):
+        return {
+            "source_rail_x": rails,
+            "source_divider_x": [5.0],
+            "rail_derivation": derivation,
+        }
+    assert not _rail_derivation_errors(
+        "probe", probe_referee([0.0, 10.0], {
+            "left": {"basis": "owner-edge"},
+            "right": {"basis": "owner-edge"}}), probe_cell)
+    assert not _rail_derivation_errors(
+        "probe", probe_referee([5.0, 10.0], {
+            "left": {"basis": "prose-refuted-outer-region",
+                     "from_x": 0.0, "span_pt": 5.0, "glyphs": 3},
+            "right": {"basis": "owner-edge"}}), probe_cell)
+    assert not _rail_derivation_errors(
+        "probe", probe_referee([5.0, 10.0], {
+            "left": {"basis": "wall-outside-run", "wall_x": 5.0},
+            "right": {"basis": "owner-edge"}}), probe_cell)
+    for broken_rails, broken_derivation in (
+            ([5.0, 10.0], {"left": {"basis": "owner-edge"},
+                           "right": {"basis": "owner-edge"}}),
+            ([5.0, 10.0], {"left": {"basis": "prose-refuted-outer-region",
+                                    "from_x": 0.0, "span_pt": 5.0,
+                                    "glyphs": 1},
+                           "right": {"basis": "owner-edge"}}),
+            ([5.0, 10.0], {"left": {"basis": "prose-refuted-outer-region",
+                                    "from_x": 0.0, "span_pt": 4.0,
+                                    "glyphs": 3},
+                           "right": {"basis": "owner-edge"}}),
+    ):
+        assert _rail_derivation_errors(
+            "probe", probe_referee(broken_rails, broken_derivation),
+            probe_cell), (broken_rails, broken_derivation)
+
     for label, mutator in measured_certificate_mutations:
         if not mutation_errors(mutator):
             failures.append(f"{label} must invalidate measured source evidence")
