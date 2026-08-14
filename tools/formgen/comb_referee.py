@@ -395,8 +395,14 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # Baseline parity was proven before any of it: stock code on this worktree's
 # environment reproduces all 53 shipped pins byte-for-byte. 4,557 comb
 # subjects unchanged; all 53 forms hold every audit assertion.
+# Re-pinned again 2026-08-15 (C3-A step 1): lattice gained
+# `apply_reviewed_transitions` -- the producer half of review_registry's
+# doctrine -- proven a byte-identical no-op on the shipped EMPTY registry
+# (fresh build_layout vs disk on 2551M/1604CF/2200A), with every fail-closed
+# guard fixture-covered and neuter-proven. No layout byte moves until the
+# user signs entries.
 LATTICE_PRODUCER_SHA256 = (
-    "5354083508195183d33e5d2b9c36ab13903b846b1e440428ff48db0eae75a2e9"
+    "dedffb9e52071909fdec59d6af8d9bc615cc5e2ba9be1d36c5f327da1613cea2"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER

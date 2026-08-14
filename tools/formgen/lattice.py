@@ -7340,9 +7340,118 @@ def build_page(page: dict[str, Any],
     }
 
 
+def _load_review_registry():
+    """Load the reviewed-ledger registries by explicit pinned path.
+
+    Same isolation-proof pattern as comb_referee.py: the module beside this
+    file is the only trusted source, importable identically at a shell and
+    under an isolated interpreter.
+    """
+    import importlib.util
+    path = pathlib.Path(__file__).resolve().parent / "review_registry.py"
+    spec = importlib.util.spec_from_file_location("review_registry", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+review_registry = _load_review_registry()
+
+
+def apply_reviewed_transitions(
+        layout: dict[str, Any],
+        transitions: dict[tuple[str, int, str], dict[str, Any]] | None = None,
+        ) -> dict[str, Any]:
+    """Apply user-reviewed retained-subject transitions to a built layout.
+
+    The producer half of review_registry's doctrine: an entry is consumed
+    here and published as `active_composite` WITH a certificate naming it;
+    comb_referee.py independently validates that certificate against the
+    registry and against its own source corroboration.  Everything about
+    this pass fails closed:
+
+      * a registry whose shape validation reports any defect is refused
+        whole -- a partially trusted registry is not a registry;
+      * an entry must bind the exact subject (subject_key) on the exact
+        source bytes (source_sha256) with a transition the subject itself
+        permits, or the build errors rather than skipping it;
+      * `retired_proven_false` is permitted BY THE SUBJECT but expected to
+        stay unused; consuming one here is an error until a package
+        deliberately implements retirement, because silently accepting it
+        would drop a ledger subject with no machinery behind it;
+      * an entry that matches no retained subject on its slug is stale and
+        errors -- a review of bytes that no longer exist certifies nothing;
+      * an entry pointing at a subject that is not retained is an error:
+        resolutions of active subjects live in REVIEWED_LEDGER_RESOLUTIONS,
+        never here.
+
+    With the shipped empty registry this pass is a proven no-op: the layout
+    returns byte-identical.
+    """
+    if transitions is None:
+        transitions = review_registry.REVIEWED_LEDGER_TRANSITIONS
+        shape_errors = review_registry.registry_errors()
+    else:
+        shape_errors = review_registry.registry_errors({}, transitions)
+    if shape_errors:
+        raise ValueError(
+            "reviewed-transition registry is malformed: "
+            + "; ".join(shape_errors[:3]))
+    form = layout["form"]
+    slug = f"{str(form['code']).lower()}-{form['revision']}"
+    source_sha = layout["source"]["sha256"]
+    applied: set[tuple[str, int, str]] = set()
+    for page in layout["pages"]:
+        page_index = int(page["index"])
+        for subject in page.get("comb_subjects", ()):
+            key = (slug, page_index, str(subject["legacy_cell_id"]))
+            entry = transitions.get(key)
+            if entry is None:
+                continue
+            if subject.get("state") != "retained_unresolved":
+                raise ValueError(
+                    f"{key}: a reviewed transition names a subject whose "
+                    f"state is {subject.get('state')!r}, not retained")
+            if entry["subject_key"] != subject["subject_key"]:
+                raise ValueError(
+                    f"{key}: reviewed transition subject_key does not bind "
+                    "this subject")
+            if entry["source_sha256"] != source_sha:
+                raise ValueError(
+                    f"{key}: reviewed transition was made on different "
+                    "source bytes")
+            if entry["transition"] not in (
+                    subject.get("permitted_transitions") or ()):
+                raise ValueError(
+                    f"{key}: transition {entry['transition']!r} is not "
+                    "permitted by the subject")
+            if entry["transition"] != "active_composite":
+                raise ValueError(
+                    f"{key}: transition {entry['transition']!r} has no "
+                    "producer machinery; retirement is deliberately unbuilt")
+            subject["state"] = "active_composite"
+            subject["blocks_gate"] = False
+            subject["transition_certificate"] = {
+                "criterion": review_registry.TRANSITION_CRITERION,
+                "registry_key": [slug, page_index,
+                                 str(subject["legacy_cell_id"])],
+                "transition": entry["transition"],
+                "suppression_criterion": entry["suppression_criterion"],
+                "reviewer": entry["reviewer"],
+                "date": entry["date"],
+            }
+            applied.add(key)
+    stale = [key for key in transitions
+             if key[0] == slug and key not in applied]
+    if stale:
+        raise ValueError(
+            f"reviewed transitions match no retained subject: {stale[:3]}")
+    return layout
+
+
 def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
     fillable_metrics = min_fillable_line_metrics(ir)
-    return {
+    layout = {
         "schema_version": SCHEMA_VERSION,
         "form": ir["form"],
         "source": ir["source"],
@@ -7358,6 +7467,7 @@ def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
             build_page(p, fillable_metrics) for p in ir["pages"]
         ],
     }
+    return apply_reviewed_transitions(layout)
 
 
 # ---------------------------------------------------------------------------
@@ -7374,6 +7484,87 @@ def self_test(ir_path: pathlib.Path) -> int:
     def check(condition: bool, message: str) -> None:
         if not condition:
             failures.append(message)
+
+    # ---- C3-A: reviewed retained-subject transitions -----------------------
+    #
+    # The producer half of review_registry's doctrine, proven on a synthetic
+    # one-subject ledger: a valid entry publishes `active_composite` with the
+    # exact certificate, and every guard that keeps this fail-closed is shown
+    # able to fire.  The shipped registry is empty, so the corpus pass is a
+    # no-op -- asserted against the real layout built above.
+    def c3_layout():
+        return {
+            "form": {"code": "9999X", "revision": "2099"},
+            "source": {"sha256": "ab" * 32},
+            "pages": [{
+                "index": 1,
+                "comb_subjects": [{
+                    "subject_key": "p1@9,9",
+                    "legacy_cell_id": "p1c9",
+                    "state": "retained_unresolved",
+                    "blocks_gate": True,
+                    "permitted_transitions": [
+                        "active_composite", "retired_proven_false"],
+                }],
+            }],
+        }
+
+    def c3_entry(**overrides):
+        entry = {
+            "subject_key": "p1@9,9",
+            "source_sha256": "ab" * 32,
+            "transition": "active_composite",
+            "suppression_criterion": (
+                "source-partition-edge-in-final-picture-v1"),
+            "reviewer": "self-test", "date": "2026-08-15",
+            "citation": "self-test",
+        }
+        entry.update(overrides)
+        return {("9999x-2099", 1, "p1c9"): entry}
+
+    applied = apply_reviewed_transitions(c3_layout(), c3_entry())
+    c3_subject = applied["pages"][0]["comb_subjects"][0]
+    check(c3_subject["state"] == "active_composite"
+          and c3_subject["blocks_gate"] is False
+          and c3_subject["transition_certificate"] == {
+              "criterion": "reviewed-ledger-transition-v1",
+              "registry_key": ["9999x-2099", 1, "p1c9"],
+              "transition": "active_composite",
+              "suppression_criterion": (
+                  "source-partition-edge-in-final-picture-v1"),
+              "reviewer": "self-test", "date": "2026-08-15",
+          }, "C3: a reviewed transition publishes the exact certificate")
+    check(apply_reviewed_transitions(c3_layout(), {})["pages"][0]
+          ["comb_subjects"][0]["state"] == "retained_unresolved",
+          "C3: no entry, no transition")
+
+    def c3_refused(transitions, layout=None) -> bool:
+        try:
+            apply_reviewed_transitions(layout or c3_layout(), transitions)
+        except ValueError:
+            return True
+        return False
+
+    check(c3_refused(c3_entry(subject_key="p1@0,0")),
+          "C3: an entry binding a different subject_key is refused")
+    check(c3_refused(c3_entry(source_sha256="cd" * 32)),
+          "C3: an entry reviewed on different source bytes is refused")
+    check(c3_refused(c3_entry(transition="retired_proven_false")),
+          "C3: retirement is deliberately unbuilt and refused")
+    check(c3_refused(c3_entry(reviewer="")),
+          "C3: a shape-invalid registry is refused whole")
+    wrong_cell = c3_layout()
+    wrong_cell["pages"][0]["comb_subjects"][0]["legacy_cell_id"] = "p1c8"
+    check(c3_refused(c3_entry(), wrong_cell),
+          "C3: an entry matching no retained subject is stale and refused")
+    active = c3_layout()
+    active["pages"][0]["comb_subjects"][0]["state"] = "active_unresolved"
+    check(c3_refused(c3_entry(), active),
+          "C3: an entry naming a non-retained subject is refused")
+    import copy as c3_copy
+    check(apply_reviewed_transitions(
+              c3_copy.deepcopy(layout)) == layout,
+          "C3: the shipped empty registry is a byte-identical no-op")
 
     # ---- C1: the comb writing surface's span-scoped edge weight ------------
     #
