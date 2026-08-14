@@ -63,8 +63,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-
-import review_registry
 import dataclasses
 import hashlib
 import html.parser
@@ -92,6 +90,27 @@ from typing import Any
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
+
+
+def _load_review_registry():
+    """Load the reviewed-ledger registries by explicit pinned path.
+
+    The gate invokes this referee with `-I` (isolated mode), which strips the
+    script directory from sys.path, so a bare `import review_registry` works
+    at a shell and dies inside the gate's child -- gate r69 failed exactly
+    so.  Loading by file location is isolation-proof and says precisely which
+    bytes are trusted: the module beside this file, nothing importable from
+    anywhere else.
+    """
+    import importlib.util
+    path = HERE / "review_registry.py"
+    spec = importlib.util.spec_from_file_location("review_registry", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+review_registry = _load_review_registry()
 
 REPORT_VERSION = 2
 EXPECTED_FORMS = 53
