@@ -378,17 +378,25 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # (-0.39pt: the row above's 0.84pt rule, fused into the boundary line 0.63pt
 # short of this cell, no longer donates its weight) and 1604CF p1c16/p1c21
 # (-0.24pt: the 0.96pt segment lies outside the comb span; the span-local
-# wall is 0.72). The span-overlap threshold is the coincidence tolerance
-# (0.25pt), aligned with the span-end probe rays below, which also converges
-# 1706 p1c122 and 1800 p1c144/147/152/155/165 (-0.24pt: their raw 0.48pt
-# stretch nicks the span within tolerance and the knockout-halved 0.24 wall
-# at the edge decides) -- TWELVE bands across four forms in all, every one
-# from the failing population, every delta equal to the referee's own
-# measurement. Baseline parity was proven first: stock code on this
-# worktree's environment reproduces all 53 shipped pins byte-for-byte.
-# 4,557 comb subjects unchanged; all 53 forms hold every audit assertion.
+# wall is 0.72). A segment qualifies only where it spans one of the comb's
+# own COMPARTMENT MIDPOINTS -- the same rays the referee measures on -- which
+# also converges 1701-MS p1c117/120/123/126/129/132/135 (-0.30: the 0.5pt
+# caption stretch spans no compartment midpoint; the 0.2pt wall over the
+# compartments decides), 1706 p1c122 and 1800 p1c144/147/152/155/165 (-0.24:
+# knockout-halved walls) -- NINETEEN bands across five forms in all, every
+# one from the failing population, every delta equal to the referee's own
+# midpoint measurement, and 2316 p1c40 (-0.39 bottom: the row below's 0.84
+# rule, wholly outside the cell band, is no candidate under the referee's
+# own overlap rule, now mirrored -- its old inset left 0.23pt of the true
+# 0.45 wall's ink inside the writing band). TWENTY bands, five forms. A
+# span-overlap tolerance plus referee span-end rays was tried first and
+# REVERTED: the extra rays crossed shared-boundary junctions, refused 249
+# cells, and moved the reviewed 2551Q control digest.
+# Baseline parity was proven before any of it: stock code on this worktree's
+# environment reproduces all 53 shipped pins byte-for-byte. 4,557 comb
+# subjects unchanged; all 53 forms hold every audit assertion.
 LATTICE_PRODUCER_SHA256 = (
-    "17c8ac4f4df5d231699762a5526ea45fa3a89cff713c1497c2a2359bf1e544e8"
+    "5354083508195183d33e5d2b9c36ab13903b846b1e440428ff48db0eae75a2e9"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -2343,7 +2351,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
     "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
     "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
-    "1701ms-2024": "60c93f1c3141615ca0182943750115dd66a8f1dc5c906438f69023ca89ff18e1",
+    "1701ms-2024": "adb7a7d24eb443c33b7ae72679be5a298f63bd79a916f15f3018c9e99e6b829d",
     "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
     "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
     "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
@@ -2365,7 +2373,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2200p-2020": "6c558749f0cae83b82bb9484831582807c721dfb507f4e743ba08c2f896b444c",
     "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
     "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
-    "2316-2021": "38db8c0051597f258d75a51614a95ffc8205e0295b286339b1b5858258c8dbef",
+    "2316-2021": "42e9979b5032e1eb77de4ae7290b68cd6fabfdb2168b86d93f4261356741d674",
     "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
     "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
@@ -6110,24 +6118,17 @@ def source_wall_thickness(
                 f"the source paints no {edge} wall of the declared tone over "
                 "every compartment")
         nearest = min(candidates, key=separation)
-        nearest_separation = separation(nearest)
-        equally_near = [
-            run for run in candidates
-            if abs(separation(run) - nearest_separation) <= 1e-9
-        ]
-        # Equal separations resolve to the HEAVIER run: the writing surface
-        # must stand under the heavier claim, and the producer's span-scoped
-        # inset takes the same maximum.  The old refusal ("two walls of
-        # different weight are equally near") protected a question this
-        # corroboration does not ask -- WHICH wall bounds the box -- and it
-        # refused 1702-MX's four cells whose walls are honestly drawn 0.24pt
-        # over some compartments and 0.48pt over others.
-        chosen = max(
-            equally_near,
-            key=lambda run: layout_quantized(run[1] - run[0]))
-        thickness = layout_quantized(chosen[1] - chosen[0])
-        if (chosen[0] <= window_y0 + 1e-9
-                or chosen[1] >= window_y1 - 1e-9):
+        thickness = layout_quantized(nearest[1] - nearest[0])
+        if any(
+            abs(separation(run) - separation(nearest)) <= 1e-9
+            and layout_quantized(run[1] - run[0]) != thickness
+            for run in candidates
+        ):
+            return None, (
+                f"two source {edge} walls of different weight are equally "
+                "near the cell edge")
+        if (nearest[0] <= window_y0 + 1e-9
+                or nearest[1] >= window_y1 - 1e-9):
             return None, (
                 f"the source {edge} wall is not bounded inside the cell's own "
                 "neighbourhood")
@@ -6185,14 +6186,14 @@ def writing_band_corroboration(
     probes = [
         (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
     ]
-    # Span-end rays, POSITION_TOL inside each end: the producer's inset takes
-    # the maximum over every segment overlapping the span by more than that
-    # tolerance, so a heavier wall that only nicks the span's first sliver
-    # (1701-MS's 0.5pt caption stretch, 1800's unhalved 0.48) is part of the
-    # relation, and midpoint rays alone never cross it.
-    if slot_x[-1] - slot_x[0] > 2 * POSITION_TOL_PT:
-        probes = [slot_x[0] + POSITION_TOL_PT, *probes,
-                  slot_x[-1] - POSITION_TOL_PT]
+    # The COMPARTMENT MIDPOINTS are the relation, on both sides: the producer
+    # counts a border segment only where it spans one of these same rays, so
+    # the two measurers qualify identical ink by construction.  Span-end rays
+    # were tried and REVERTED: at shared boundaries they crossed junction
+    # corners the old probes never touched, refused 249 cells corpus-wide,
+    # and moved the human-reviewed 2551Q control tuples -- the fail-closed
+    # digest caught it.  A heavier stretch that spans no compartment midpoint
+    # bounds no compartment's writing surface.
     walls: dict[str, float] = {}
     for edge in ("top", "bottom"):
         record = border.get(edge) if isinstance(border, dict) else None
@@ -13175,18 +13176,16 @@ def self_test() -> int:
         band_page(band_top_wall, band_bottom_wall,
                   band_wall(0.0, 0.5, 2, "knockout", tone=1.0)))
     # Mutation: two walls of different weight sit equally near the cell edge.
-    # C1 v2: an outer 1.5pt bar ending AT the edge and the 1.0pt wall starting
-    # there are equally near, and the census now resolves to the HEAVIER run
-    # rather than refusing -- the writing surface must stand under the heavier
-    # claim.  The layout's 1.0 inset is therefore refused as too thin, which
-    # is a stronger verdict than the old ambiguity refusal: it names the inset
-    # the paper demands.
-    equal_near = band_verdict(band_cell(), band_page(
-        band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
-        band_bottom_wall))
-    assert equal_near["status"] == "uncorroborated", equal_near
-    assert "the source walls inset this cell to 1.5..9" in (
-        equal_near["reason"]), equal_near["reason"]
+    # Two walls of DIFFERENT weight equally near the edge stay refused: which
+    # of them bounds the box is genuinely ambiguous at that ray, and a census
+    # that picked either would corroborate an inset the paper does not
+    # establish.  (A tie-break to the heavier run was tried in C1 and
+    # REVERTED: at shared-boundary junctions it refused 249 cells and moved
+    # the reviewed 2551Q control digest.)
+    band_refuses(
+        band_cell(), "equally near the cell edge",
+        band_page(band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
+                  band_bottom_wall))
     # Mutation: the wall runs past the neighbourhood the cell can vouch for.
     band_refuses(
         band_cell(), "not bounded inside the cell's own neighbourhood",

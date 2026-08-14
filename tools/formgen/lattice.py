@@ -4716,7 +4716,9 @@ def comb_writing_surface(cell: dict[str, Any],
         if comb is None or not isinstance(segments, list):
             return float(record.get("thickness_pt") or 0.0)
         slot_x = [float(value) for value in comb["slot_x"]]
-        span0, span1 = slot_x[0], slot_x[-1]
+        midpoints = [
+            (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
+        ]
         # The NEAREST segment to the edge decides, exactly the referee's own
         # qualifying rule (`source_wall_thickness` takes the run nearest the
         # edge by separation) -- a fixed reach distance was tried first and
@@ -4725,20 +4727,32 @@ def comb_writing_surface(cell: dict[str, Any],
         # 1.44pt bars 0.60pt each side of the edge).  Producer and referee
         # must measure the same relation or the corroboration compares two
         # different physical quantities; that mismatch was C1's entire
-        # population.  Equal separations take the THICKEST segment: the
-        # writing surface has to stand under the heavier claim, and the
-        # referee's v2 census takes the same maximum.
+        # population.  A segment qualifies only where it SPANS one of the
+        # comb's own compartment midpoints -- the same rays the referee
+        # measures on -- so the two sides qualify identical ink by
+        # construction.  A span-overlap tolerance was tried instead and
+        # REVERTED: a heavier stretch nicking the span's first sliver bounds
+        # no compartment, and counting it forced span-end probe rays into the
+        # referee that refused 249 cells at shared-boundary junctions and
+        # moved the human-reviewed 2551Q control tuples.
         nearest: float | None = None
         best = 0.0
+        cell_y0, cell_y1 = float(cell["y0"]), float(cell["y1"])
         for segment in segments:
-            # More than a coincidence tolerance of overlap, so every segment
-            # this side counts is guaranteed visible to the referee's span-end
-            # probe rays (placed POSITION_TOL inside the span): two measurers
-            # of one relation must qualify the same ink.
-            if (segment["a1"] <= span0 + 0.25
-                    or segment["a0"] >= span1 - 0.25):
+            if not any(segment["a0"] <= x <= segment["a1"]
+                       for x in midpoints):
                 continue
             c0, c1 = float(segment["c0"]), float(segment["c1"])
+            # The referee's own candidate rule, mirrored: a run must overlap
+            # the CELL's band within the coincidence tolerance.  2316 p1c40's
+            # bottom border line carries the row below's 0.84pt rule, wholly
+            # outside this cell with 0.43pt of paper between -- the referee
+            # never considers it, and a nearest-by-separation pick without
+            # this filter chose it over the 0.45pt wall actually standing at
+            # the edge, leaving 0.23pt of that wall's ink inside the writing
+            # band.
+            if c0 >= cell_y1 + 0.25 or c1 <= cell_y0 - 0.25:
+                continue
             separation = (0.0 if c0 <= edge_y <= c1
                           else min(abs(c0 - edge_y), abs(c1 - edge_y)))
             thickness = float(segment["thickness_pt"])
@@ -7413,20 +7427,33 @@ def self_test(ir_path: pathlib.Path) -> int:
          "thickness_pt": 1.0, "gray": 0.0},
     ]) == q(1.5), "C1: equal separations take the heavier segment")
 
-    # 1701-MS's shape: the heavier stretch that only nicks the span within
-    # the coincidence tolerance is out; overlapping beyond it, it counts.
+    # 1701-MS's shape: a heavier stretch that spans NO compartment midpoint
+    # bounds no compartment and is out, however far it reaches into the span;
+    # one that covers a midpoint counts.  The midpoints are the same rays the
+    # referee measures on -- the two sides qualify identical ink by
+    # construction (comb span 0..40, midpoints 10 and 30).
     check(c1_top_inset([
-        {"a0": -10.0, "a1": 0.2, "c0": -0.25, "c1": 0.25,
+        {"a0": -10.0, "a1": 9.0, "c0": -0.25, "c1": 0.25,
          "thickness_pt": 0.5, "gray": 0.0},
-        {"a0": 0.2, "a1": 40.0, "c0": -0.1, "c1": 0.1,
+        {"a0": 9.0, "a1": 40.0, "c0": -0.1, "c1": 0.1,
          "thickness_pt": 0.2, "gray": 0.0},
-    ]) == q(0.2), "C1: a segment nicking the span within tolerance is out")
+    ]) == q(0.2), "C1: a segment spanning no compartment midpoint is out")
     check(c1_top_inset([
-        {"a0": -10.0, "a1": 0.5, "c0": -0.25, "c1": 0.25,
+        {"a0": -10.0, "a1": 10.5, "c0": -0.25, "c1": 0.25,
          "thickness_pt": 0.5, "gray": 0.0},
-        {"a0": 0.5, "a1": 40.0, "c0": -0.1, "c1": 0.1,
+        {"a0": 10.5, "a1": 40.0, "c0": -0.1, "c1": 0.1,
          "thickness_pt": 0.2, "gray": 0.0},
-    ]) == q(0.5), "C1: a segment overlapping beyond tolerance counts")
+    ]) == q(0.5), "C1: a segment covering a midpoint counts")
+
+    # 2316 p1c40's shape: a heavier rule wholly OUTSIDE the cell band (the
+    # row below's), nearer to the edge than the true wall by paper distance,
+    # is not a candidate at all -- the referee's own overlap rule, mirrored.
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -1.27, "c1": -0.43,
+         "thickness_pt": 0.84, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": 0.62, "c1": 1.07,
+         "thickness_pt": 0.45, "gray": 0.0},
+    ]) == q(0.45), "C1: a run outside the cell band is no candidate")
 
     # No segment geometry (legacy layouts, plain callers): the fused record
     # thickness stands, which is exactly the pre-C1 behaviour.
