@@ -308,3 +308,17 @@ R2b-2 lattice consumption + gate schema; empty registries must leave the
 corpus byte-identical and gate r-next at 12/13. R2b-3 the 115-subject
 evidence-panel generator, panels delivered for user review. R2b-4 populate
 per review; comparisons move; nothing else does.
+
+
+## Status 2026-08-14: campaign detached from the feature branch
+
+User decision ("go do it"): the feature ships at gate 12/13 with this
+campaign as the NEXT objective. Landed on the feature branch before
+detaching: R1 (tick-bounded rails, F232 closed), R2a (all 30 retained
+subjects source-corroborated, 29 TRUE / 1800 p1c4 FALSE), R2b-1 (reviewed
+registries, shipped empty, isolation-proof loader), and the full design.
+Remaining here: R2b-2/3/4, R3, R4, R5 — with the 115 reviews batched into
+two sittings as the only user-input dependency. The comb-referee check stays
+computed and reported on every gate run in the meantime; its permitted
+remainder is itemized in the feature branch's shipping amendment and any
+motion outside that remainder fails the gate.

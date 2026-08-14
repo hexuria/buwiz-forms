@@ -1,3 +1,19 @@
+# STATUS — shipped at gate 12/13 by user direction, 2026-08-14
+
+The feature (the 53-form fillable-HTML corpus with the user's whole visual
+review closed) ships at **gate r71: 12 of 13 checks PASS**, the 13th
+(`comb-referee`) failing only on its itemized, evidenced remainder — the 30
+retained ledger subjects plus one double-count — per the user-directed
+amendment in GOAL.md. The check stays computed and reported on every run;
+closing it is the next objective (`COMB-REFEREE-CAMPAIGN.md`), which is
+structurally gated on 115 user reviews and two measurement programs.
+
+Feature facts at ship (all measured, none inherited): 53/53 forms, corpus
+tab-walk green, 45,549 inputs, `inputs_over_printed_text` 0/0, all 10 audit
+assertions hold on 53 forms, findings ledger 0 open blocker+major (232 filed,
+150 blocker+major all resolved), determinism byte-identical `b9d71850a8c6`
+across r65–r70, CI 11/11 green.
+
 # STATUS — formgen, measured state
 
 **Update rule: any commit that moves a number below updates this file in the
