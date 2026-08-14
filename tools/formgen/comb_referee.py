@@ -923,6 +923,7 @@ LATTICE_GENERATOR_CONTRACT = {
 COMB_SUBJECT_STATES = frozenset({
     "active_resolved",
     "active_unresolved",
+    "active_composite",
     "retained_unresolved",
 })
 COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
@@ -5422,12 +5423,18 @@ def validate_comb_ledger(
                 subject.get("reason_codes"), f"{label} reason_codes",
                 nonempty=state != "active_resolved")
             blocks_gate = subject.get("blocks_gate")
+            # active_composite carries blocks_gate False: its certificate is
+            # validated below against the review registry byte-for-byte, and
+            # its MEASUREMENT (the R2a source corroboration) is what the
+            # comparison scores -- a composite the paper refutes still fails
+            # the gate through its own comparison row, never silently.
             if (not isinstance(blocks_gate, bool)
-                    or blocks_gate != (state != "active_resolved")):
+                    or blocks_gate != (state not in {
+                        "active_resolved", "active_composite"})):
                 raise RefereeError(
                     f"{label} state/blocks_gate contract disagrees")
 
-            if state.startswith("active_"):
+            if state in {"active_resolved", "active_unresolved"}:
                 cell_id = subject.get("cell_id")
                 mapped_ids = subject.get("mapped_partition_cell_ids")
                 if (not isinstance(cell_id, str)
@@ -5558,6 +5565,54 @@ def validate_comb_ledger(
                     and "comb" in cells_by_subject[subject_key]):
                 raise RefereeError(
                     f"{label} retained subject still has an active comb")
+            certificate = subject.get("transition_certificate")
+            if state == "active_composite":
+                # The adjudicator half of review_registry's doctrine: the
+                # producer's certificate is re-validated here against the
+                # registry byte-for-byte, and the criterion it names must be
+                # the criterion the subject's own reason tuple tables --
+                # review cannot substitute a different factual claim than the
+                # paper's.  Every mismatch is an ERROR, not a downgrade.
+                registry_key = (slug, page_index, legacy_cell_id)
+                entry = review_registry.REVIEWED_LEDGER_TRANSITIONS.get(
+                    registry_key)
+                source_sha = str(
+                    (layout.get("source") or {}).get("sha256") or "")
+                if (not isinstance(certificate, dict)
+                        or set(certificate) != {
+                            "criterion", "registry_key", "transition",
+                            "suppression_criterion", "reviewer", "date"}
+                        or certificate["criterion"]
+                        != review_registry.TRANSITION_CRITERION
+                        or certificate["registry_key"]
+                        != [slug, page_index, legacy_cell_id]
+                        or entry is None
+                        or entry["subject_key"] != subject_key
+                        or entry["source_sha256"] != source_sha
+                        or entry["transition"] != "active_composite"
+                        or certificate["transition"] != entry["transition"]
+                        or certificate["suppression_criterion"]
+                        != entry["suppression_criterion"]
+                        or certificate["reviewer"] != entry["reviewer"]
+                        or certificate["date"] != entry["date"]):
+                    raise RefereeError(
+                        f"{label} composite transition certificate does not "
+                        "match the review registry")
+                if (suppression_criterion is None
+                        or certificate["suppression_criterion"]
+                        != suppression_criterion):
+                    raise RefereeError(
+                        f"{label} composite certificate names a criterion "
+                        "the subject's reason codes do not table")
+            elif certificate is not None:
+                raise RefereeError(
+                    f"{label} carries a transition certificate without the "
+                    "transitioned state")
+            elif (slug, page_index, legacy_cell_id
+                    ) in review_registry.REVIEWED_LEDGER_TRANSITIONS:
+                raise RefereeError(
+                    f"{label} has a reviewed transition the producer did "
+                    "not apply")
             retained_legacy_ids.add(legacy_cell_id)
             published_subjects.append({
                 "page": page_index,
@@ -5565,7 +5620,8 @@ def validate_comb_ledger(
                 "legacy_cell_id": legacy_cell_id,
                 "cell_id": None,
                 "state": state,
-                "blocks_gate": True,
+                "blocks_gate": blocks_gate,
+                "transition_certificate": certificate,
                 "reason_codes": reason_codes,
                 "legacy_bbox": legacy_bbox,
                 "source_cell": {
@@ -5705,10 +5761,14 @@ def validate_comb_ledger(
             subject.get("blocks_gate") is True for subject in subjects)
         inference_blockers = sum(
             inference.get("blocks_gate") is True for inference in inferences)
+        page_composite = sum(
+            subject.get("state") == "active_composite"
+            for subject in subjects)
         expected_stats = {
             "comb_cells": len(comb_cells),
             "comb_subjects": len(subjects),
-            "comb_subjects_active": active_resolved + active_unresolved,
+            "comb_subjects_active": (
+                active_resolved + active_unresolved + page_composite),
             "comb_subjects_active_resolved": active_resolved,
             "comb_subjects_active_unresolved": active_unresolved,
             "comb_subjects_retained_unresolved": retained,
@@ -5740,6 +5800,9 @@ def validate_comb_ledger(
     active_resolved = sum(
         subject["state"] == "active_resolved"
         for subject in published_subjects)
+    active_composite = sum(
+        subject["state"] == "active_composite"
+        for subject in published_subjects)
     active_unresolved = sum(
         subject["state"] == "active_unresolved"
         for subject in published_subjects)
@@ -5747,9 +5810,18 @@ def validate_comb_ledger(
         subject["state"] == "retained_unresolved"
         for subject in published_subjects)
     expected_retained = EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(slug, 0)
-    if retained != expected_retained:
+    # The pin counts SUPPRESSED subjects -- subjects with no active cell of
+    # their own -- and a reviewed composite transition changes a subject's
+    # state, never its suppressed emission or its ledger membership (Path A:
+    # nothing leaves the books).  The census therefore counts retained AND
+    # composite together against the same unmoved pin, and the composite
+    # slice is bounded by the registry itself: every composite subject was
+    # already proven above to match a registry entry byte-for-byte.
+    if retained + active_composite != expected_retained:
         raise RefereeError(
-            f"{slug}: subject ledger retains {retained} suppressed subjects, "
+            f"{slug}: subject ledger retains "
+            f"{retained + active_composite} suppressed subjects "
+            f"({retained} retained, {active_composite} composite), "
             f"expected pinned {expected_retained}")
     expected_active = expected_total - expected_retained
     if active_resolved + active_unresolved != expected_active:
@@ -5778,9 +5850,10 @@ def validate_comb_ledger(
         "suppression_obligations": suppression_obligations,
         "counts": {
             "subjects": len(published_subjects),
-            "active": active_resolved + active_unresolved,
+            "active": active_resolved + active_unresolved + active_composite,
             "active_resolved": active_resolved,
             "active_unresolved": active_unresolved,
+            "active_composite": active_composite,
             "retained_unresolved": retained,
             "inferences_suppressed": len(published_inferences),
             "blocking": blockers,
@@ -13759,6 +13832,7 @@ def self_test() -> int:
         "active": fixture_subjects,
         "active_resolved": fixture_subjects,
         "active_unresolved": 0,
+        "active_composite": 0,
         "retained_unresolved": 0,
         "inferences_suppressed": 0,
         "blocking": 0,
@@ -13963,6 +14037,129 @@ def self_test() -> int:
     retained_result = validate_comb_ledger(
         retained_fixture_slug, retained_ledger, lattice_producer_bytes)
     assert retained_result["counts"]["retained_unresolved"] == 1
+
+    # ---- C3-A step 2: the composite transition, adjudicator half ----------
+    #
+    # A user-signed registry entry lets the producer publish
+    # `active_composite`; this referee re-validates the certificate against
+    # the registry byte-for-byte and refuses every forgery.  The fixture
+    # subject uses a TABLED reason tuple (the R2a partition-edge criterion),
+    # because a composite of an untabled claim has no source corroboration
+    # to measure and must refuse.
+    composite_ledger = clone(retained_ledger)
+    composite_ledger["source"] = {"sha256": "ab" * 32}
+    composite_subject = composite_ledger["pages"][0]["comb_subjects"][0]
+    composite_subject["reason_codes"] = [
+        "emission-suppressed-no-rectangular-owner",
+        "painted-edge-partition",
+    ]
+    composite_subject["state"] = "active_composite"
+    composite_subject["blocks_gate"] = False
+    # The page stats transition exactly as lattice.py's own would: composite
+    # counts in `comb_subjects_active` (state startswith "active_"), leaves
+    # the retained count, and stops blocking.
+    composite_stats = composite_ledger["pages"][0]["stats"]
+    composite_stats["comb_subjects_active"] += 1
+    composite_stats["comb_subjects_retained_unresolved"] -= 1
+    composite_stats["comb_subjects_blocking"] -= 1
+    composite_stats["comb_evidence_blocking"] -= 1
+    composite_key = (
+        retained_fixture_slug, 1, composite_subject["legacy_cell_id"])
+    composite_entry = {
+        "subject_key": composite_subject["subject_key"],
+        "source_sha256": "ab" * 32,
+        "transition": "active_composite",
+        "suppression_criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "reviewer": "self-test", "date": "2026-08-15",
+        "citation": "self-test",
+    }
+    composite_subject["transition_certificate"] = {
+        "criterion": review_registry.TRANSITION_CRITERION,
+        "registry_key": list(composite_key),
+        "transition": "active_composite",
+        "suppression_criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "reviewer": "self-test", "date": "2026-08-15",
+    }
+
+    def with_registry(entries, work):
+        saved = dict(review_registry.REVIEWED_LEDGER_TRANSITIONS)
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.update(entries)
+        try:
+            return work()
+        finally:
+            review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+            review_registry.REVIEWED_LEDGER_TRANSITIONS.update(saved)
+
+    composite_result = with_registry(
+        {composite_key: composite_entry},
+        lambda: validate_comb_ledger(
+            retained_fixture_slug, composite_ledger, lattice_producer_bytes))
+    assert composite_result["counts"]["active_composite"] == 1
+    assert composite_result["counts"]["retained_unresolved"] == 0
+    assert composite_result["counts"]["blocking"] == 0
+    published_composite = [
+        subject for subject in composite_result["subjects"]
+        if subject["state"] == "active_composite"]
+    assert len(published_composite) == 1
+    assert (published_composite[0]["transition_certificate"]
+            == composite_subject["transition_certificate"])
+    assert published_composite[0]["blocks_gate"] is False
+    assert (published_composite[0]["source_suppression_criterion"]
+            == SOURCE_PARTITION_EDGE_CRITERION)
+
+    def composite_refused(name, entries=None, mutate=None):
+        broken_ledger = clone(composite_ledger)
+        if mutate is not None:
+            mutate(broken_ledger)
+        try:
+            with_registry(
+                {composite_key: composite_entry}
+                if entries is None else entries,
+                lambda: validate_comb_ledger(
+                    retained_fixture_slug, broken_ledger,
+                    lattice_producer_bytes))
+        except RefereeError:
+            return
+        raise AssertionError(f"composite forgery was accepted: {name}")
+
+    composite_refused("no registry entry at all", entries={})
+    composite_refused(
+        "registry names a different reviewer",
+        entries={composite_key: {**composite_entry, "reviewer": "someone"}})
+    composite_refused(
+        "registry reviewed different source bytes",
+        entries={composite_key: {
+            **composite_entry, "source_sha256": "cd" * 32}})
+
+    def strip_certificate(value):
+        value["pages"][0]["comb_subjects"][0].pop("transition_certificate")
+        value["pages"][0]["comb_subjects"][0]["state"] = "retained_unresolved"
+        value["pages"][0]["comb_subjects"][0]["blocks_gate"] = True
+    composite_refused(
+        "reviewed transition the producer did not apply",
+        mutate=strip_certificate)
+
+    def untabled_reasons(value):
+        value["pages"][0]["comb_subjects"][0]["reason_codes"] = [
+            "emission-suppressed-unproved-multi-row-divider-corridor"]
+    composite_refused(
+        "certificate names a criterion the reasons do not table",
+        mutate=untabled_reasons)
+
+    def composite_blocks(value):
+        value["pages"][0]["comb_subjects"][0]["blocks_gate"] = True
+    composite_refused(
+        "a composite subject claiming to block the gate",
+        mutate=composite_blocks)
+
+    def certificate_without_state(value):
+        value["pages"][0]["comb_subjects"][0]["state"] = "retained_unresolved"
+        value["pages"][0]["comb_subjects"][0]["blocks_gate"] = True
+    composite_refused(
+        "certificate carried by a retained state",
+        mutate=certificate_without_state)
+
     retained_emission = {
         subject["cell_id"]: {"valid": True}
         for subject in retained_result["subjects"]
