@@ -2012,7 +2012,9 @@ def bridge_knockout_bites(lattice: Lattice,
 
 
 def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str, Any]],
-                        lo: float, hi: float, axis: str) -> tuple[float, float, list[float]]:
+                        lo: float, hi: float, axis: str
+                        ) -> tuple[float, float, list[float],
+                                   list[dict[str, Any]]]:
     """Weight and tone of the ink on lattice line `index` over span lo..hi.
 
     Thickness is the maximum: where a border thins to 0.24 crossing a comb
@@ -2025,6 +2027,7 @@ def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str
     tolerance, and a distance-only scan would report the boundary as absent.
     """
     a0, a1 = ("x0", "x1") if axis == "h" else ("y0", "y1")
+    c0, c1 = ("y0", "y1") if axis == "h" else ("x0", "x1")
     position = lattice.positions[index]
     own = {id(r) for r in lattice.members[index]}
     hits = [r for r in all_ink
@@ -2034,7 +2037,21 @@ def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str
         hits = lattice.members[index]
     thicknesses = sorted({r["thickness_pt"] for r in hits})
     grays = [r["gray"] for r in hits if r["gray"] is not None]
-    return (max(thicknesses), min(grays) if grays else 0.0, thicknesses)
+    # The per-segment geometry, published beside the fused maximum so a comb
+    # can later ask what stands over ITS OWN span (C1): each hit's extent
+    # along the line and its ink band across it.  The fused thickness answers
+    # "how heavy is this border"; the segments answer "which ink is where".
+    segments = [
+        {
+            "a0": q(float(r[a0])), "a1": q(float(r[a1])),
+            "c0": q(float(r[c0])), "c1": q(float(r[c1])),
+            "thickness_pt": float(r["thickness_pt"]),
+            "gray": r["gray"],
+        }
+        for r in sorted(hits, key=lambda r: (float(r[a0]), float(r[c0])))
+    ]
+    return (max(thicknesses), min(grays) if grays else 0.0, thicknesses,
+            segments)
 
 
 # ---------------------------------------------------------------------------
@@ -4635,7 +4652,9 @@ def dividers_within(comb: dict[str, Any], rails: Interval) -> int:
     )
 
 
-def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
+def comb_writing_surface(cell: dict[str, Any],
+                         comb: dict[str, Any] | None = None,
+                         ) -> tuple[float, float] | None:
     """The vertical paper a comb's compartments are written on.
 
     A divider tick is a GUIDE MARK, not a wall.  `comb_bands` measures the band
@@ -4667,10 +4686,70 @@ def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
     y0 = float(cell["y0"])
     y1 = float(cell["y1"])
     border = cell.get("border") or {}
-    top_border = border.get("top") or {}
-    bottom_border = border.get("bottom") or {}
-    top = float(top_border.get("thickness_pt") or 0.0)
-    bottom = float(bottom_border.get("thickness_pt") or 0.0)
+
+    def edge_weight(record: dict[str, Any] | None, edge_y: float) -> float:
+        """The wall weight the COMB's own paper stands under (C1).
+
+        The border record's fused `thickness_pt` is the right weight for
+        DRAWING the border -- "where a border thins to 0.24 crossing a comb
+        band its real weight is the 0.48 it carries everywhere else" -- but
+        the writing surface is paper, and paper only cares about the ink
+        actually over it.  Two scopes, both physical, neither a tolerance:
+
+          * along the line, only segments overlapping the comb's own span
+            (`slot_x[0]..slot_x[-1]`) count -- 1701-MS draws its top border
+            0.5pt over the caption stretch and 0.2pt over the comb, and the
+            comb's writing surface sits under the 0.2;
+          * across the line, a segment must REACH this cell's edge within
+            the clustering tolerance -- 2316 fuses the row above's 0.84pt
+            rule into the boundary line although its ink stops 0.63pt short
+            of this cell, and an inset borrowed from it pushes the writing
+            surface 0.39pt below the wall that is actually there.
+
+        Falls back to the fused thickness when the comb or the segment
+        geometry is absent (plain fields, legacy layouts), which is exactly
+        the pre-C1 behaviour.
+        """
+        if not record:
+            return 0.0
+        segments = record.get("segments")
+        if comb is None or not isinstance(segments, list):
+            return float(record.get("thickness_pt") or 0.0)
+        slot_x = [float(value) for value in comb["slot_x"]]
+        span0, span1 = slot_x[0], slot_x[-1]
+        # The NEAREST segment to the edge decides, exactly the referee's own
+        # qualifying rule (`source_wall_thickness` takes the run nearest the
+        # edge by separation) -- a fixed reach distance was tried first and
+        # broke every DOUBLED rule in the corpus, whose bars legitimately sit
+        # half a white core away from the boundary (0619-E's date boxes:
+        # 1.44pt bars 0.60pt each side of the edge).  Producer and referee
+        # must measure the same relation or the corroboration compares two
+        # different physical quantities; that mismatch was C1's entire
+        # population.  Equal separations take the THICKEST segment: the
+        # writing surface has to stand under the heavier claim, and the
+        # referee's v2 census takes the same maximum.
+        nearest: float | None = None
+        best = 0.0
+        for segment in segments:
+            # More than a coincidence tolerance of overlap, so every segment
+            # this side counts is guaranteed visible to the referee's span-end
+            # probe rays (placed POSITION_TOL inside the span): two measurers
+            # of one relation must qualify the same ink.
+            if (segment["a1"] <= span0 + 0.25
+                    or segment["a0"] >= span1 - 0.25):
+                continue
+            c0, c1 = float(segment["c0"]), float(segment["c1"])
+            separation = (0.0 if c0 <= edge_y <= c1
+                          else min(abs(c0 - edge_y), abs(c1 - edge_y)))
+            thickness = float(segment["thickness_pt"])
+            if nearest is None or separation < nearest - 1e-9:
+                nearest, best = separation, thickness
+            elif abs(separation - nearest) <= 1e-9:
+                best = max(best, thickness)
+        return best
+
+    top = edge_weight(border.get("top"), y0)
+    bottom = edge_weight(border.get("bottom"), y1)
     if top + bottom >= y1 - y0:
         top = bottom = 0.0
     surface_y0, surface_y1 = q(y0 + top), q(y1 - bottom)
@@ -5248,10 +5327,11 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             if not present:
                 border[side] = None
                 continue
-            thickness, gray, all_t = line_thickness_gray(
+            thickness, gray, all_t, segments = line_thickness_gray(
                 lat, index, ink, lo, hi, "h" if side in ("top", "bottom") else "v")
             border[side] = {"thickness_pt": thickness, "gray": gray,
-                            "thicknesses_pt": all_t}
+                            "thicknesses_pt": all_t,
+                            "segments": segments}
             if track_geometry_uncertainty and unresolved_geometry_ids:
                 own = {id(rule) for rule in lat.members[index]}
                 a0, a1 = (
@@ -6417,12 +6497,21 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         # taken, so the selection is not always one of `combs`.  Restate the
         # inventory once and reuse the same object for the selection when it
         # is there, so the two keys never disagree about one physical band.
+        # Each band gets ITS OWN surface: the walls over one band's span can
+        # differ from another's, and from the cell-wide fused weight (C1).
+        def band_surface(band: dict[str, Any]) -> tuple[float, float]:
+            band_value = comb_writing_surface(cell, band)
+            if band_value is None:
+                raise ValueError(
+                    f"{cell['id']}: comb owner has no writing surface")
+            return band_value
+
         restated = {
-            id(band): comb_on_writing_surface(band, surface)
+            id(band): comb_on_writing_surface(band, band_surface(band))
             for band in cell.get("combs") or ()
         }
         selected = restated.get(id(comb))
-        cell["comb"] = (comb_on_writing_surface(comb, surface)
+        cell["comb"] = (comb_on_writing_surface(comb, band_surface(comb))
                         if selected is None else selected)
         if "combs" in cell:
             cell["combs"] = [restated[id(band)] for band in cell["combs"]]
@@ -7271,6 +7360,88 @@ def self_test(ir_path: pathlib.Path) -> int:
     def check(condition: bool, message: str) -> None:
         if not condition:
             failures.append(message)
+
+    # ---- C1: the comb writing surface's span-scoped edge weight ------------
+    #
+    # Each clause is a physical statement proven here against synthetic
+    # segment geometry, and each was forced by a real corpus shape named in
+    # the assertion.  The weights come from `border[edge]["segments"]`; the
+    # relation is the referee's own qualifying rule (nearest run by
+    # separation, heavier claim on ties), so both measurers of one relation
+    # qualify the same ink.
+    def c1_cell(segments, thickness=1.0, comb_span=(0.0, 40.0)):
+        return ({
+            "y0": 0.0, "y1": 20.0,
+            "border": {
+                "top": {"thickness_pt": thickness, "gray": 0.0,
+                        "thicknesses_pt": [thickness],
+                        "segments": segments},
+                "bottom": None,
+            },
+        }, {"slot_x": [comb_span[0], sum(comb_span) / 2, comb_span[1]]})
+
+    def c1_top_inset(segments, **kwargs):
+        cell, comb = c1_cell(segments, **kwargs)
+        surface = comb_writing_surface(cell, comb)
+        assert surface is not None
+        return surface[0]
+
+    # 2316's shape: the row above's 0.84pt rule is fused into the boundary
+    # line but its ink stops 0.63pt short of this cell; the 0.45pt wall at
+    # the edge decides.
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -1.47, "c1": -0.63,
+         "thickness_pt": 0.84, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": -0.22, "c1": 0.23,
+         "thickness_pt": 0.45, "gray": 0.0},
+    ]) == q(0.45), "C1: a nearer wall must out-rank a farther heavier one")
+
+    # A doubled rule: two 1.44pt bars 0.60pt each side of the edge, equally
+    # near -- the full bar weight stands (0619-E's date boxes).
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -2.04, "c1": -0.6,
+         "thickness_pt": 1.44, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": 0.6, "c1": 2.04,
+         "thickness_pt": 1.44, "gray": 0.0},
+    ]) == q(1.44), "C1: a doubled rule keeps its bar weight")
+
+    # Equal separations of DIFFERENT weight resolve to the heavier claim.
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -1.5, "c1": 0.0,
+         "thickness_pt": 1.5, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": 0.0, "c1": 1.0,
+         "thickness_pt": 1.0, "gray": 0.0},
+    ]) == q(1.5), "C1: equal separations take the heavier segment")
+
+    # 1701-MS's shape: the heavier stretch that only nicks the span within
+    # the coincidence tolerance is out; overlapping beyond it, it counts.
+    check(c1_top_inset([
+        {"a0": -10.0, "a1": 0.2, "c0": -0.25, "c1": 0.25,
+         "thickness_pt": 0.5, "gray": 0.0},
+        {"a0": 0.2, "a1": 40.0, "c0": -0.1, "c1": 0.1,
+         "thickness_pt": 0.2, "gray": 0.0},
+    ]) == q(0.2), "C1: a segment nicking the span within tolerance is out")
+    check(c1_top_inset([
+        {"a0": -10.0, "a1": 0.5, "c0": -0.25, "c1": 0.25,
+         "thickness_pt": 0.5, "gray": 0.0},
+        {"a0": 0.5, "a1": 40.0, "c0": -0.1, "c1": 0.1,
+         "thickness_pt": 0.2, "gray": 0.0},
+    ]) == q(0.5), "C1: a segment overlapping beyond tolerance counts")
+
+    # No segment geometry (legacy layouts, plain callers): the fused record
+    # thickness stands, which is exactly the pre-C1 behaviour.
+    legacy_cell, legacy_comb = c1_cell(None, thickness=0.75)
+    legacy_cell["border"]["top"].pop("segments")
+    legacy_surface = comb_writing_surface(legacy_cell, legacy_comb)
+    check(legacy_surface is not None and legacy_surface[0] == q(0.75),
+          "C1: absent segment geometry falls back to the fused thickness")
+
+    # A null border insets nothing, comb or no comb.
+    null_cell, null_comb = c1_cell([])
+    null_cell["border"]["top"] = None
+    null_surface = comb_writing_surface(null_cell, null_comb)
+    check(null_surface is not None and null_surface[0] == q(0.0),
+          "C1: a null border insets nothing")
 
     def synthetic_vertical(x: float, y0: float, y1: float,
                            thickness: float, sequence: int,

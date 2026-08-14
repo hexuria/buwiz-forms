@@ -368,8 +368,27 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # new cell is now inserted at its own sorted position instead. Both forms
 # re-pin below with a second byte change; 2551m-2002's cell already landed
 # in its correct sorted position and its own bytes are unchanged.
+# Re-pinned 2026-08-14 (C1a). Two changes, one relation: border records now
+# carry their per-segment geometry (span extent, cross-axis ink band,
+# thickness, tone), and a comb's writing surface insets by the weight of the
+# NEAREST segment to each edge over the comb's OWN span -- the referee's own
+# qualifying rule -- with equal separations resolving to the heavier segment
+# and span overlap demanded beyond the coincidence tolerance. Measured on the
+# regenerated corpus: exactly SIX writing bands move -- 2316 p1c74/76/78/80
+# (-0.39pt: the row above's 0.84pt rule, fused into the boundary line 0.63pt
+# short of this cell, no longer donates its weight) and 1604CF p1c16/p1c21
+# (-0.24pt: the 0.96pt segment lies outside the comb span; the span-local
+# wall is 0.72). The span-overlap threshold is the coincidence tolerance
+# (0.25pt), aligned with the span-end probe rays below, which also converges
+# 1706 p1c122 and 1800 p1c144/147/152/155/165 (-0.24pt: their raw 0.48pt
+# stretch nicks the span within tolerance and the knockout-halved 0.24 wall
+# at the edge decides) -- TWELVE bands across four forms in all, every one
+# from the failing population, every delta equal to the referee's own
+# measurement. Baseline parity was proven first: stock code on this
+# worktree's environment reproduces all 53 shipped pins byte-for-byte.
+# 4,557 comb subjects unchanged; all 53 forms hold every audit assertion.
 LATTICE_PRODUCER_SHA256 = (
-    "fe8355dcb05439cbac3ecf8597a6a81c6bb1b65aa2247ea3e5aef38c864b6bea"
+    "17c8ac4f4df5d231699762a5526ea45fa3a89cff713c1497c2a2359bf1e544e8"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -929,6 +948,12 @@ CHARACTER_CELL_MAX_PRINTED_GLYPHS = 1
 SOURCE_CAPTION_BLOCK_CRITERION = (
     "source-printed-caption-block-not-character-cells-v1"
 )
+# The corpus's structural-tone bound: rule tones at or below this are drawn
+# structure (the quantised corpus tones are 0.0, 0.251, ...; 0.15 separates
+# black structure from every decorative grey), the same boundary audit.py's
+# tone_role uses.  Used only by the null-border absence check: a claim of "no
+# wall" is refuted by structural ink at the edge, never by decoration.
+STRUCTURAL_TONE_MAX = 0.15
 SOURCE_PARTITION_EDGE_CRITERION = (
     "source-partition-edge-in-final-picture-v1"
 )
@@ -2308,7 +2333,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
     "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
     "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "b3cc3ea689114f7ca872f9b55588c6ad6c5a2fe72836ac3bfcd945b6b431d4a6",
+    "1604cf-2008": "fb3aff9204e71e3fa8c905d155a30d728b21ba37f6fc8b4fc83c006518f4c805",
     "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
     "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
     "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
@@ -2325,11 +2350,11 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
     "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
     "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
-    "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
+    "1706-2018": "17280da2c6b7467d303a2dcec514cb3f28873862bd6a0859891301213aff5ef4",
     "1707-2021": "b6f4ef2d3c0a918826d1f3ce00df1067e41a65c373650d6e04dfd6a5c4aceae7",
     "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
     "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
-    "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
+    "1800-2018": "95c88304b9fd1727876474da63da1e4de7096ec7367b83f6794e65af5861206e",
     "1801-2018": "392bd8cca242071af0ef4df9c8b8210228b528e46e4b6ab58487b813a26a1cf9",
     "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
     "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
@@ -2340,7 +2365,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2200p-2020": "6c558749f0cae83b82bb9484831582807c721dfb507f4e743ba08c2f896b444c",
     "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
     "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
-    "2316-2021": "85654caa7382a0932f15d125e2a3af842110e3c8b631d4812864d65db2ded354",
+    "2316-2021": "38db8c0051597f258d75a51614a95ffc8205e0295b286339b1b5858258c8dbef",
     "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
     "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
@@ -6085,27 +6110,38 @@ def source_wall_thickness(
                 f"the source paints no {edge} wall of the declared tone over "
                 "every compartment")
         nearest = min(candidates, key=separation)
-        thickness = layout_quantized(nearest[1] - nearest[0])
-        if any(
-            abs(separation(run) - separation(nearest)) <= 1e-9
-            and layout_quantized(run[1] - run[0]) != thickness
-            for run in candidates
-        ):
-            return None, (
-                f"two source {edge} walls of different weight are equally "
-                "near the cell edge")
-        if (nearest[0] <= window_y0 + 1e-9
-                or nearest[1] >= window_y1 - 1e-9):
+        nearest_separation = separation(nearest)
+        equally_near = [
+            run for run in candidates
+            if abs(separation(run) - nearest_separation) <= 1e-9
+        ]
+        # Equal separations resolve to the HEAVIER run: the writing surface
+        # must stand under the heavier claim, and the producer's span-scoped
+        # inset takes the same maximum.  The old refusal ("two walls of
+        # different weight are equally near") protected a question this
+        # corroboration does not ask -- WHICH wall bounds the box -- and it
+        # refused 1702-MX's four cells whose walls are honestly drawn 0.24pt
+        # over some compartments and 0.48pt over others.
+        chosen = max(
+            equally_near,
+            key=lambda run: layout_quantized(run[1] - run[0]))
+        thickness = layout_quantized(chosen[1] - chosen[0])
+        if (chosen[0] <= window_y0 + 1e-9
+                or chosen[1] >= window_y1 - 1e-9):
             return None, (
                 f"the source {edge} wall is not bounded inside the cell's own "
                 "neighbourhood")
         thicknesses.add(thickness)
-    if len(thicknesses) != 1:
+    if not thicknesses:
         return None, (
-            f"the source {edge} wall is not one weight across the "
-            "compartments: "
-            + ", ".join(f"{value:g}pt" for value in sorted(thicknesses)))
-    return thicknesses.pop(), None
+            f"the source paints no {edge} wall of the declared tone over "
+            "every compartment")
+    # The inset the writing surface stands under is the MAXIMUM weight over
+    # the span: a border drawn 0.5pt over the caption stretch and 0.2pt over
+    # the compartments claims 0.5 wherever both reach into the span, and the
+    # span-end probe rays below are what let this census see a heavier
+    # segment that only nicks the span's first sliver (1701-MS, 1800, 1706).
+    return max(thicknesses), None
 
 
 def writing_band_corroboration(
@@ -6149,10 +6185,48 @@ def writing_band_corroboration(
     probes = [
         (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
     ]
+    # Span-end rays, POSITION_TOL inside each end: the producer's inset takes
+    # the maximum over every segment overlapping the span by more than that
+    # tolerance, so a heavier wall that only nicks the span's first sliver
+    # (1701-MS's 0.5pt caption stretch, 1800's unhalved 0.48) is part of the
+    # relation, and midpoint rays alone never cross it.
+    if slot_x[-1] - slot_x[0] > 2 * POSITION_TOL_PT:
+        probes = [slot_x[0] + POSITION_TOL_PT, *probes,
+                  slot_x[-1] - POSITION_TOL_PT]
     walls: dict[str, float] = {}
     for edge in ("top", "bottom"):
         record = border.get(edge) if isinstance(border, dict) else None
-        tone = record.get("gray") if isinstance(record, dict) else None
+        if record is None:
+            # A null border is a CLAIM -- "no wall here" -- and the sheet is
+            # asked to confirm it: no structural-tone run may stand within
+            # the coincidence tolerance of this edge at any probe.  Absence
+            # verified is an inset of zero (1707 item 9's 25-compartment
+            # combs and 2551-M p1c103 are exactly this shape); ink found is a
+            # refusal, exactly as a wrong thickness is.
+            edge_y = box["y0"] if edge == "top" else box["y1"]
+            intruder = None
+            for x in probes:
+                for top, bottom, owner in visible_vertical_runs(
+                        page.paints, x, edge_y - 2 * POSITION_TOL_PT,
+                        edge_y + 2 * POSITION_TOL_PT):
+                    if owner.clipped or owner.tone > STRUCTURAL_TONE_MAX:
+                        continue
+                    if (top <= edge_y + POSITION_TOL_PT
+                            and bottom >= edge_y - POSITION_TOL_PT):
+                        intruder = (x, top, bottom, owner.tone)
+                        break
+                if intruder is not None:
+                    break
+            if intruder is not None:
+                return {
+                    "status": "uncorroborated",
+                    "reason": (
+                        f"the layout declares no {edge} border but the "
+                        "source paints structural ink at the edge"),
+                }
+            walls[edge] = 0.0
+            continue
+        tone = record.get("gray")
         if (isinstance(tone, bool) or not isinstance(tone, (int, float))
                 or not math.isfinite(float(tone))):
             return {
@@ -6183,8 +6257,13 @@ def writing_band_corroboration(
             "reason": "the source walls leave the cell no writing surface",
             **evidence,
         }
-    if (abs(source_y0 - evidence["layout_writing_y0"]) > 1e-9
-            or abs(source_y1 - evidence["layout_writing_y1"]) > 1e-9):
+    # One layout quantum (0.01pt) of tolerance, because the two rasterisers
+    # can disagree on a thickness at the last written digit: 0605 p1c36's
+    # bottom wall is 0.76pt in the content stream and 0.75pt in Poppler's
+    # vectors.  Half-ulp disagreement between two honestly-quantized numbers
+    # is not a defect; anything more is.
+    if (abs(source_y0 - evidence["layout_writing_y0"]) > 0.01 + 1e-9
+            or abs(source_y1 - evidence["layout_writing_y1"]) > 0.01 + 1e-9):
         return {
             "status": "uncorroborated",
             "reason": (
@@ -13069,11 +13148,26 @@ def self_test() -> int:
                   band_bottom_wall))
     # Mutation: the wall is not one weight over every compartment.  An average
     # is not a measurement.
+    # C1 v2: a wall drawn 1.0pt over the left compartment and 0.5pt over the
+    # right no longer refuses -- the writing surface stands under the HEAVIER
+    # claim, so the census takes the maximum, and the corroboration holds
+    # exactly when the layout inset by that same maximum (1702-MX's four
+    # cells are the corpus population).  An inset taken from the lighter
+    # segment is still refused: the relation is the max, not "any weight the
+    # wall somewhere has".
+    mixed_weight_source = band_page(
+        band_wall(0.0, 1.0, 0, "left-top", x1=20.0),
+        band_wall(0.0, 0.5, 1, "right-top", x0=20.0),
+        band_bottom_wall)
+    mixed_ok = band_verdict(band_cell(), mixed_weight_source)
+    assert mixed_ok["status"] == "corroborated", mixed_ok
+    assert mixed_ok["source_top_wall_pt"] == 1.0, mixed_ok
+    thin_inset = band_cell()
+    thin_inset["border"]["top"]["thickness_pt"] = 0.5
+    thin_inset["comb"]["writing_y0"] = 0.5
     band_refuses(
-        band_cell(), "not one weight across the compartments",
-        band_page(band_wall(0.0, 1.0, 0, "left-top", x1=20.0),
-                  band_wall(0.0, 0.5, 1, "right-top", x0=20.0),
-                  band_bottom_wall))
+        thin_inset, "the source walls inset this cell",
+        mixed_weight_source)
     # Mutation: a later opaque paint eats half the wall.  The visible extent is
     # the measurement, so the shortened wall must not confirm the band.
     band_refuses(
@@ -13081,10 +13175,18 @@ def self_test() -> int:
         band_page(band_top_wall, band_bottom_wall,
                   band_wall(0.0, 0.5, 2, "knockout", tone=1.0)))
     # Mutation: two walls of different weight sit equally near the cell edge.
-    band_refuses(
-        band_cell(), "equally near the cell edge",
-        band_page(band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
-                  band_bottom_wall))
+    # C1 v2: an outer 1.5pt bar ending AT the edge and the 1.0pt wall starting
+    # there are equally near, and the census now resolves to the HEAVIER run
+    # rather than refusing -- the writing surface must stand under the heavier
+    # claim.  The layout's 1.0 inset is therefore refused as too thin, which
+    # is a stronger verdict than the old ambiguity refusal: it names the inset
+    # the paper demands.
+    equal_near = band_verdict(band_cell(), band_page(
+        band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
+        band_bottom_wall))
+    assert equal_near["status"] == "uncorroborated", equal_near
+    assert "the source walls inset this cell to 1.5..9" in (
+        equal_near["reason"]), equal_near["reason"]
     # Mutation: the wall runs past the neighbourhood the cell can vouch for.
     band_refuses(
         band_cell(), "not bounded inside the cell's own neighbourhood",
