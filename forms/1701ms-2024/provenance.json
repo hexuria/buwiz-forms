@@ -26,10 +26,10 @@
     "Calibri"
   ],
   "rules": 1486,
-  "text_runs": 407,
+  "text_runs": 405,
   "images": 3,
-  "cells": 474,
-  "comb_cells": 136,
+  "cells": 452,
+  "comb_cells": 140,
   "growables": [],
   "sources": [
     {
@@ -90,7 +90,7 @@
       "1701-MS Guide August 2024 ENCS_Final.pdf"
     ]
   },
-  "html_bytes": 766234,
+  "html_bytes": 798163,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

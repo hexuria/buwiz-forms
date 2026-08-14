@@ -123,6 +123,38 @@ unused:
 test:
     cargo test --locked --workspace
 
+# Automated tab-walk over the generated form corpus (tools/formgen/tab_check.py).
+# Omit the slug to walk every form in forms/. Artifacts (tab.json, page-<N>.png
+# per page, and a review index.html) land in forms/review/ -- see that
+# module's own docstring for what green/red mean and, just as importantly,
+# what this walk cannot see.
+tab-check slug="":
+    python3 tools/formgen/tab_check.py {{slug}}
+
+# Clear tab_check's review artifacts. forms/review is tracked-tree-adjacent
+# but not gitignored, and the migration audit gate requires a clean tree, so
+# these have to be cleared (or committed) before a gate run.
+[unix]
+review-clean:
+    rm -rf forms/review
+    @echo "forms/review cleared -- the gate needs a clean tree, so commit or clear this before running it."
+
+[windows]
+review-clean:
+    #!pwsh -NoProfile
+    if (Test-Path forms/review) { Remove-Item forms/review -Recurse -Force }
+    Write-Host "forms/review cleared -- the gate needs a clean tree, so commit or clear this before running it."
+
+# Serve forms/ (not forms/review/) so both a generated form's index.html AND
+# tab_check's forms/review/<slug>/tab.json sit under ONE server root: the
+# ?debug=tab overlay in forms/<slug>/index.html fetches
+# ../review/<slug>/tab.json relative to itself, which only resolves if both
+# trees share a root. This also still serves tab_check's page-<N>.png
+# artifacts and forms/review/index.html without tabbing anything and without
+# a file:// path -- from a phone on the same network if need be.
+review-serve:
+    cd forms && python3 -m http.server 4190 --bind 127.0.0.1
+
 # Build the tracked-contract, local-only HTML renderer before any package copies
 # the assets directory. The generated bundle stays ignored, so clean packages
 # cannot accidentally reuse stale developer output.

@@ -23,11 +23,11 @@
     "ArialNarrow",
     "TimesNewRomanPSMT"
   ],
-  "rules": 721,
-  "text_runs": 173,
+  "rules": 722,
+  "text_runs": 172,
   "images": 2,
-  "cells": 198,
-  "comb_cells": 77,
+  "cells": 193,
+  "comb_cells": 79,
   "growables": [],
   "sources": [
     {
@@ -41,7 +41,7 @@
     "inline_pages": [],
     "standalone_pdfs": []
   },
-  "html_bytes": 388288,
+  "html_bytes": 416126,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

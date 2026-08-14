@@ -2,7 +2,7 @@
 """Build the synthetic PDF corpus extract.py's --self-test measures in CI.
 
 `extract.py --self-test` is the strongest check this pipeline has, and none of
-it could run anywhere but this laptop: every assertion is pinned against six
+it could run anywhere but this laptop: every assertion is pinned against seven
 official BIR PDFs that are deliberately untracked (`*.pdf` is gitignored, they
 are official documents, and they are pinned by sha256 precisely so a swapped
 file fails loudly). A CI job that skipped it would print a green tick having
@@ -13,7 +13,7 @@ So this builds a second corpus that *is* trackable. Each file here is the
 smallest PDF that still exercises one property the real corpus taught us about,
 and the docstring on each builder names the real form it stands in for. The
 fixtures do not replace the real pins: a fixture can only ever encode what this
-module already believes, whereas the six official files are evidence. Both pin
+module already believes, whereas the seven official files are evidence. Both pin
 tables live in extract.py and both are still runnable; `--self-test` alone reads
 the real one.
 
@@ -64,6 +64,59 @@ GREY_MID = 0.6509
 WHITE = 1.0
 BLACK = 0.0
 
+# F210's checkbox square: a closed box of four DECORATIVE rules (frame) around
+# a KNOCKOUT interior (the source's own "write here"), reproduced at the
+# corpus's own scale. The frame is painted GREY_MID, the SAME live constant
+# every other decorative rule in this fixture uses (not a snapshot), so
+# `mutate_tone`'s corpus-wide "paint every decorative rule black" reaches it
+# too, exactly as it reaches the rest of the corpus's decorative ink.
+CHECKBOX_SQUARE_THICKNESS_PT = THICKNESSES_PT[1]
+
+# How far prove_fixtures_fail.py's mutate_checkbox_square slides the knockout
+# fill off the frame's own centreline. Zero in every built fixture; a
+# dedicated constant rather than an inline literal so the mutation can reach
+# it without editing the drawing call.
+CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT = 0.0
+
+# F211/F212's two captions, reproduced from 2551Q page 1 verbatim (the
+# in-box one) and abbreviated (the one below, which only needs the two words
+# `emit._signature_line_caption` tests for). Both set at the corpus's own
+# modal body size.
+SIGNATURE_BOX_CAPTION = "For Individual: "
+SIGNATURE_LINE_CAPTION = "Signature over Printed Name of Taxpayer"
+SIGNATURE_BOX_FONT_SIZE_PT = 9.0
+
+# How far prove_fixtures_fail.py's mutate_signature_box/mutate_signature_line
+# slide each caption's own baseline, in points, positive downward. Zero in
+# every built fixture; dedicated constants rather than inline literals so
+# each mutation can reach one caption without touching the drawing call or
+# the other caption.
+SIGNATURE_BOX_CAPTION_DRIFT_PT = 0.0
+SIGNATURE_LINE_CAPTION_DRIFT_PT = 0.0
+
+# F151's row-number rule (P2): a bare row number -- "1", nothing else -- in a
+# bordered `label` cell sharing its row with a bordered `field` cell, with
+# paper beside it wide enough to be a description surface too. The bound is
+# the form's own `line_width_pt` (`lattice.min_fillable_line_metrics`, two em
+# squares of the smallest two-glyph body run) at 1.0x -- no new constant --
+# and in this fixture that body run is `SIGNATURE_BOX_CAPTION` /
+# `SIGNATURE_LINE_CAPTION` at `SIGNATURE_BOX_FONT_SIZE_PT` (9pt), the only
+# other text this file's IR states, giving `line_width_pt` = 18pt. The
+# numeral is one glyph, so it never enters that measurement itself (the
+# metric demands two or more non-whitespace glyphs) -- it only ever sits
+# beside the paper the metric bounds.
+#
+# `ROW_NUMBER_LABEL_WIDTH_PT` is the label cell's own width, wide enough at
+# 60pt that the paper trailing the numeral clears 18pt several times over.
+# prove_fixtures_fail.py's mutate_row_number shrinks it below the bound
+# without moving the numeral's own ink, any rule, or the field cell's own
+# width, so that mutation trips the row-number rule alone.
+ROW_NUMBER_LABEL_WIDTH_PT = 60.0
+ROW_NUMBER_FIELD_WIDTH_PT = 190.0
+ROW_NUMBER_ROW_HEIGHT_PT = 24.0
+ROW_NUMBER_TEXT = "1"
+ROW_NUMBER_FONT_SIZE_PT = SIGNATURE_BOX_FONT_SIZE_PT
+
 # A stroked separator that leans less than its own stroke width. 2316 draws
 # twelve of these; an exact-alignment test demoted every one of them out of
 # `rules`, taking real box sides out of lattice.py's reach. 0.17pt of lean
@@ -79,6 +132,113 @@ LEAN_STROKE_PT = 0.44
 # exactly like content. That is 2550M and 2553's defect, reproduced.
 UNMAPPED_CODE = 0xA7
 UNMAPPED_GLYPH_NAME = "gexotic"
+
+# F064's comb-band-reunification shape (W3, `lattice._reunify_comb_band`): a
+# bordered row whose comb only partly reaches the row's own top rule -- the
+# comb's own left rail is drawn from mid-row down, exactly as 1707-2021's own
+# v255/v256 continue an existing border rather than hanging free -- so the
+# row's own DSU component is genuinely non-rectangular only when something
+# ELSE inside the row also fails to reach a wall (1707-2021's own item 8/9
+# checkboxes). `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT` is that something: a
+# small bordered notch box, left of the comb, entirely inside the row. At
+# 0.0 (every built fixture) nothing is drawn there, the row's own component
+# stays rectangular, `source_owned_comb_frame` owns it directly, and the
+# comb resolves through the ordinary path with no `retained_unresolved`
+# subject at all. `prove_fixtures_fail.py`'s `mutate_comb_band_reunification`
+# sets it to 12.0, drawing the notch: the row's own component becomes
+# non-rectangular, `no-rectangular-owner` appears (F064's own ledger state),
+# and `lattice._reunify_comb_band` correctly DECLINES to absorb it -- the
+# notch's own two internal walls match none of the comb's own divider
+# positions, which is exactly the "never swallow paper this mechanism does
+# not understand" refusal the mechanism exists to make.
+COMB_BAND_REUNIFICATION_ROW_WIDTH_PT = 300.0
+COMB_BAND_REUNIFICATION_ROW_HEIGHT_PT = 40.0
+COMB_BAND_REUNIFICATION_RAIL_INSET_PT = 60.0
+COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT = 15.0
+COMB_BAND_REUNIFICATION_SLOTS = 4
+COMB_BAND_REUNIFICATION_BAND_TOP_INSET_PT = 25.0
+COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT = 0.0
+
+# F221 case 1's shape (`emit.SignatureRuleWriting`): a bordered `label` cell
+# (the jurat declaration's own item number, nothing else) rules a VECTOR
+# signature line across its own bottom wall, and a SEPARATE `label` cell
+# directly below carries the "Signature over Printed Name..." caption that
+# names it -- 0605-1999, 1604cf-2008, 2550m-2007, 2551m-2002 and 2553-1999's
+# own item pairs, reproduced at the corpus's own scale. The signature bar
+# spans the row's own full available width (between its left/right borders)
+# rather than a narrower slice the way 2550M's own two-per-row rules do,
+# because a narrower one would not, by itself, give the row's shared wall
+# enough coverage to become a lattice boundary in a single-column fixture --
+# on the real forms that coverage comes from OTHER columns in the same page-
+# wide row, which a minimal fixture has no reason to reproduce. The straddle
+# ownership test (`rule["y0"] <= cell["y1"] <= rule["y1"]`) and the caption
+# match are exercised exactly the same either way.
+#
+# `SIGNATURE_RULE_CAPTION_TEXT` is its own constant, not a reuse of
+# `SIGNATURE_LINE_CAPTION` above, so `prove_fixtures_fail.py`'s
+# `mutate_signature_rule` can change it without touching the unrelated
+# F212 fixture `signature_box()` builds. Mutated to 0605-1999's own real
+# residue -- "Title/Position of Signatory", the identical geometry beside a
+# caption that names no signature -- so the mutation is drawn from a real,
+# already-measured refusal rather than invented.
+SIGNATURE_RULE_ROW_WIDTH_PT = 260.0
+SIGNATURE_RULE_ROW_HEIGHT_PT = 30.0
+SIGNATURE_RULE_CAPTION_ROW_HEIGHT_PT = 20.0
+SIGNATURE_RULE_ITEM_TEXT = "27"
+SIGNATURE_RULE_CAPTION_TEXT = "Signature over Printed Name of Taxpayer"
+
+# F226's own sliver-gap shape (`emit.SignatureRuleWriting`'s caption search,
+# extended): the caption naming a rule-owning `label` cell's own vector line
+# is not in the cell sharing its bottom wall -- it is one further row down,
+# across a genuinely blank sliver cell 2316-2021's own item 53 measures at
+# 1.32pt (`p1c324` -> `p1c326`'s own blank sliver -> `p1c327`'s caption).
+# `SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT` is the sliver's own height, well
+# under `rules.pdf`'s own measured `glyph_height_pt`: `prove_fixtures_fail.py`'s
+# `mutate_signature_rule_gap` raises it past that metric (a real wall move,
+# `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT`'s own precedent for mutating a
+# fixture's geometry rather than a caption's own text) so the gap this class
+# bridges becomes too tall to bridge, the fail-closed half of F226's own
+# height-AND-ink guard.
+SIGNATURE_RULE_GAP_ROW_WIDTH_PT = 260.0
+SIGNATURE_RULE_GAP_ROW_HEIGHT_PT = 30.0
+SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT = 3.0
+SIGNATURE_RULE_GAP_CAPTION_ROW_HEIGHT_PT = 20.0
+SIGNATURE_RULE_GAP_ITEM_TEXT = "53"
+SIGNATURE_RULE_GAP_CAPTION_TEXT = (
+    "Present Employer/Authorized Agent Signature over Printed Name")
+
+# F227's shape (`emit.comb_writing_top_clear_of_printed_ink`): a caption's
+# own descender genuinely hangs into a COMB's shared writing top -- 1604CF's
+# "8 Telephone No." over its phone comb, reproduced at the corpus's own
+# scale and with the corpus's own words. The comb's divider ticks are drawn
+# confined to a band `INK_TRIM_COMB_BAND_TOP_INSET_PT` below the row's own
+# top wall, never spanning the row's full height: a divider that reaches the
+# top wall reads to the grid-building pass as a genuine COLUMN boundary and
+# splits the row into `INK_TRIM_COMB_SLOTS` separate FIELD cells instead of
+# one comb, measured directly against this fixture -- the mirror, on the
+# divider side, of the same fact `comb_writing_rect`'s own docstring states
+# on the writing-rectangle side ("A tick is a guide mark *under* the box,
+# not the box").
+#
+# `INK_TRIM_CAPTION_GAP_PT` is the caption's own baseline, measured UP from
+# the row's own top wall, at 0.0 drift (every built fixture): 1.0pt puts the
+# 'p' of "Telephone" 0.24pt inside the comb's own writing top
+# (`emit.comb_writing_top_clear_of_printed_ink`, measured directly against
+# this fixture), the same order of magnitude 1604CF's own real defect
+# measures (0.71pt) and comfortably clear of float noise.
+# `INK_TRIM_CAPTION_DRIFT_PT` is its own constant, zero in every built
+# fixture like every other DRIFT constant here: `prove_fixtures_fail.py`'s
+# `mutate_ink_trim_comb` raises it enough to lift the caption's baseline
+# clear of the comb's own writing top entirely, without moving the row's
+# own walls, dividers or slot count.
+INK_TRIM_COMB_ROW_WIDTH_PT = 200.0
+INK_TRIM_COMB_ROW_HEIGHT_PT = 24.0
+INK_TRIM_COMB_SLOTS = 7
+INK_TRIM_COMB_BAND_TOP_INSET_PT = 14.0
+INK_TRIM_CAPTION_TEXT = "Telephone No."
+INK_TRIM_CAPTION_FONT_SIZE_PT = 9.0
+INK_TRIM_CAPTION_GAP_PT = 1.0
+INK_TRIM_CAPTION_DRIFT_PT = 0.0
 
 
 def gray(value: float) -> tuple[float, float, float]:
@@ -195,6 +355,264 @@ def comb_band(page: fitz.Page, rect: fitz.Rect, slots: int,
         bar(page, x, rect.y0, x + thickness, rect.y1, BLACK)
 
 
+def checkbox_square(page: fitz.Page, x0: float, y0: float, x1: float,
+                    y1: float) -> None:
+    """F210's checkbox square: four DECORATIVE rules around a KNOCKOUT fill.
+
+    `x0,y0,x1,y1` is the KNOCKOUT interior -- the box a taxpayer marks -- not
+    the frame. The frame is drawn OUTWARD from it, exactly the relationship
+    the real corpus's 22 squares measure: each rule's own centre sits ON the
+    knockout's edge (so the knockout is the frame's centreline rectangle,
+    never independently placed), and each side's LENGTH runs half the frame's
+    own thickness past the interior's corner so the two perpendicular bars
+    close the corner rather than leaving a gap. `checkbox_square_boxes` in
+    emit.py matches a candidate rule to a knockout fill on precisely this
+    tolerance -- see its docstring.
+
+    The knockout is offset by `CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT`, zero in
+    every built fixture: prove_fixtures_fail.py's mutate_checkbox_square sets
+    it non-zero to slide the fill off the frame's centreline without
+    touching any rule's tone, so that mutation trips `checkbox-square` alone
+    -- `check_tone`'s corpus-wide decorative census, which owns
+    `mutate_tone`, never sees a changed gray value.
+    """
+    thickness = CHECKBOX_SQUARE_THICKNESS_PT
+    half = thickness / 2.0
+    tone = GREY_MID
+    drift = CHECKBOX_SQUARE_KNOCKOUT_DRIFT_PT
+    bar(page, x0 - half, y0 - half, x1 + half, y0 + half, tone)   # top
+    bar(page, x0 - half, y1 - half, x1 + half, y1 + half, tone)   # bottom
+    bar(page, x0 - half, y0 - half, x0 + half, y1 + half, tone)   # left
+    bar(page, x1 - half, y0 - half, x1 + half, y1 + half, tone)   # right
+    bar(page, x0 + drift, y0, x1 + drift, y1, WHITE)              # knockout
+
+
+def signature_box(page: fitz.Page, x0: float, y0: float, x1: float,
+                  y1: float) -> None:
+    """F211/F212's signature box: a bordered box, a top-left caption confined
+    to its own top band, and a SEPARATE caption directly below it naming
+    "Signature over Printed Name...".
+
+    `x0,y0,x1,y1` is the box itself, framed by `merged_box`. Its BOTTOM
+    border is the one wall two things share, exactly the shape the real
+    corpus's 54 signature boxes measure: 2551Q page 1's "For Individual:"
+    box and the "Signature over Printed Name of Taxpayer..." caption below
+    it are drawn against the identical rule, one cell's bottom and the
+    next one's top. `emit.SignatureBoxWriting` reads the top-left caption
+    (confined to the box's own top `emit.SIGNATURE_BOX_CAPTION_BAND`);
+    `emit.SignatureLineBinding` reads the caption below it (bound to the
+    box the same wall it sits under also bounds) -- the `BureauReservation`
+    precedent, reversed.
+
+    The in-box caption is set 12pt below the box's own top edge -- inside
+    the pinned 40% band for any box taller than 30pt, this one included --
+    and the caption below is set 12pt under the box's own bottom edge, both
+    at the corpus's own modal 9pt body size.
+
+    Each caption's own baseline carries its own drift
+    (`SIGNATURE_BOX_CAPTION_DRIFT_PT` / `SIGNATURE_LINE_CAPTION_DRIFT_PT`),
+    zero in every built fixture: prove_fixtures_fail.py's mutate_signature_box
+    and mutate_signature_line set one non-zero at a time to slide a single
+    caption without touching the box, any rule's tone, or the other caption
+    -- so each mutation trips its own check alone.
+    """
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), THICKNESSES_PT[1], BLACK)
+    page.insert_text(
+        fitz.Point(x0 + 6, y0 + 12 + SIGNATURE_BOX_CAPTION_DRIFT_PT),
+        SIGNATURE_BOX_CAPTION,
+        fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+    page.insert_text(
+        fitz.Point(x0 + 6, y1 + 12 + SIGNATURE_LINE_CAPTION_DRIFT_PT),
+        SIGNATURE_LINE_CAPTION,
+        fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+
+
+def row_number_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F151's row-number shape (P2): a bordered row split into a bare-numeral
+    label cell and a blank field cell beside it.
+
+    `x0,y0` anchors the row's own top-left corner. The row is one bordered
+    box (`merged_box`, the same shape every other bordered region in this
+    fixture uses) split by ONE vertical rule into two cells: a label cell
+    `ROW_NUMBER_LABEL_WIDTH_PT` wide, holding only `ROW_NUMBER_TEXT`, and a
+    field cell `ROW_NUMBER_FIELD_WIDTH_PT` wide, empty. lattice.py cuts
+    those at the divider, the way it cuts any two-column table row; the
+    numeral sits at the label cell's own left edge, matching the real
+    corpus's own row-number columns (`p2c132`... on 1701-2018-conso).
+
+    Row height is fixed at `ROW_HEIGHT_PT`, comfortably taller than one line
+    of the fixture's own 9pt body face, so neither cell is a sliver.
+    """
+    x1 = x0 + ROW_NUMBER_LABEL_WIDTH_PT + ROW_NUMBER_FIELD_WIDTH_PT
+    y1 = y0 + ROW_NUMBER_ROW_HEIGHT_PT
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), THICKNESSES_PT[1], BLACK,
+              pieces=2)
+    divider = x0 + ROW_NUMBER_LABEL_WIDTH_PT
+    bar(page, divider, y0, divider + THICKNESSES_PT[1], y1, BLACK)
+    page.insert_text(fitz.Point(x0 + 6, y0 + 14), ROW_NUMBER_TEXT,
+                     fontname="helv", fontsize=ROW_NUMBER_FONT_SIZE_PT)
+
+
+def comb_band_reunification_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F064's shape (W3): a comb band whose row is genuinely non-rectangular
+    only when something ELSE in the row also fails to reach a wall.
+
+    `x0,y0` anchors a bordered row. The comb's own left rail is drawn only
+    from `COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT` down -- like
+    1707-2021's own v255/v256, which continue an EXISTING border rather
+    than hang free, so `split_verticals` classifies it as a border (a
+    rail), never a hanging comb divider. With
+    `COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT` at 0 (every built fixture)
+    nothing else is drawn left of the rail: the row's own component stays
+    rectangular, `source_owned_comb_frame` owns it directly, and the comb
+    resolves through the ordinary path. `prove_fixtures_fail.py`'s
+    `mutate_comb_band_reunification` draws a small bordered notch there
+    instead, entirely inside the row -- the row's own component becomes
+    non-rectangular (a hole neither the notch's own borders nor the row's
+    outer ones reach), F064's own `no-rectangular-owner` ledger state
+    appears, and `lattice._reunify_comb_band` must correctly decline it:
+    the notch's own two internal walls match none of the comb's own
+    divider positions.
+    """
+    x1 = x0 + COMB_BAND_REUNIFICATION_ROW_WIDTH_PT
+    y1 = y0 + COMB_BAND_REUNIFICATION_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), thickness, BLACK, pieces=2)
+
+    if COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT > 0.0:
+        notch = COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT
+        merged_box(
+            page,
+            fitz.Rect(x0 + 10.0, y0 + 4.0, x0 + 10.0 + notch,
+                     y0 + 4.0 + notch * 0.6),
+            thickness, BLACK, pieces=1)
+
+    comb_x0 = x0 + COMB_BAND_REUNIFICATION_RAIL_INSET_PT
+    step = (x1 - comb_x0) / COMB_BAND_REUNIFICATION_SLOTS
+    band_y0 = y0 + COMB_BAND_REUNIFICATION_BAND_TOP_INSET_PT
+    for index in range(1, COMB_BAND_REUNIFICATION_SLOTS):
+        divider_x = comb_x0 + index * step
+        bar(page, divider_x, band_y0, divider_x + THICKNESSES_PT[0], y1,
+            BLACK)
+
+    rail_y0 = y0 + COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT
+    bar(page, comb_x0, rail_y0, comb_x0 + thickness, y1, BLACK)
+
+
+def signature_rule_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F221 case 1's shape (`emit.SignatureRuleWriting`): a `label` cell's
+    own vector-drawn signature line, straddling the wall it shares with a
+    caption cell below.
+
+    `x0,y0` anchors the upper cell's own top-left corner. Two abutting
+    bordered cells, sharing one frame and one internal wall (drawn as plain
+    bars, not `merged_box`'s four-sided box, because the wall a real form
+    draws there is not the CELL's own reported border either --
+    2550M's `p1c181` measures `border_count: 2`, not 4): the upper cell
+    carries `SIGNATURE_RULE_ITEM_TEXT`, the item number that is its own
+    only OTHER ink (what makes it `label`, not `blank`); the lower cell
+    carries `SIGNATURE_RULE_CAPTION_TEXT`. Between them, straddling the
+    wall, is the vector signature line itself -- the one piece of ink
+    `emit.SignatureRuleWriting`'s own ownership test
+    (`rule["y0"] <= cell["y1"] <= rule["y1"]`) reads, drawn the same way
+    every rule in this fixture is (a filled bar, `bar()`), never as
+    underscore glyphs (`RuledBlankWriting`'s own population, a different
+    shape this class explicitly excludes).
+    """
+    x1 = x0 + SIGNATURE_RULE_ROW_WIDTH_PT
+    wall_y = y0 + SIGNATURE_RULE_ROW_HEIGHT_PT
+    caption_y1 = wall_y + SIGNATURE_RULE_CAPTION_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    half = thickness / 2.0
+    bar(page, x0, y0, x0 + thickness, caption_y1, BLACK)
+    bar(page, x1 - thickness, y0, x1, caption_y1, BLACK)
+    bar(page, x0, y0, x1, y0 + thickness, BLACK)
+    bar(page, x0, caption_y1 - thickness, x1, caption_y1, BLACK)
+    page.insert_text(fitz.Point(x0 + 6, y0 + 14), SIGNATURE_RULE_ITEM_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+    bar(page, x0 + thickness, wall_y - half, x1 - thickness, wall_y + half,
+        BLACK)
+    page.insert_text(fitz.Point(x0 + 10, wall_y + 12),
+                     SIGNATURE_RULE_CAPTION_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+
+
+def signature_rule_gap_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F226's shape (`emit.SignatureRuleWriting`'s sliver-gap extension): a
+    `label` cell's own vector-drawn signature line at its own bottom wall,
+    with the caption naming it not directly adjacent -- one further row
+    down, across a genuinely blank sliver cell no caption occupies.
+
+    `x0,y0` anchors the upper (rule-owning) cell's own top-left corner.
+    THREE stacked bordered cells sharing one frame: the upper cell carries
+    `SIGNATURE_RULE_GAP_ITEM_TEXT`, the middle sliver carries no ink at all
+    (`lattice.classify_cell`'s own `kind == "blank"`, exactly `p1c326`'s own
+    measured fact), and the lower cell carries
+    `SIGNATURE_RULE_GAP_CAPTION_TEXT`. The vector signature line straddles
+    the wall between the upper cell and the sliver -- the rule-owner's own
+    bottom wall, `emit.SignatureRuleWriting`'s own ownership test
+    (`rule["y0"] <= cell["y1"] <= rule["y1"]`) -- and a second, ordinary
+    wall (never a signature line, just a ROW boundary) separates the sliver
+    from the caption cell below it, reproducing 2316-2021's own item 53
+    (`p1c324`'s own rule h180 -> `p1c326`'s own 1.32pt blank sliver ->
+    `p1c327`'s own caption) at this fixture's own scale.
+    """
+    x1 = x0 + SIGNATURE_RULE_GAP_ROW_WIDTH_PT
+    wall_y = y0 + SIGNATURE_RULE_GAP_ROW_HEIGHT_PT
+    sliver_y1 = wall_y + SIGNATURE_RULE_GAP_SLIVER_HEIGHT_PT
+    caption_y1 = sliver_y1 + SIGNATURE_RULE_GAP_CAPTION_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    half = thickness / 2.0
+    bar(page, x0, y0, x0 + thickness, caption_y1, BLACK)
+    bar(page, x1 - thickness, y0, x1, caption_y1, BLACK)
+    bar(page, x0, y0, x1, y0 + thickness, BLACK)
+    # The sliver's own bottom wall -- an ordinary row boundary, not a
+    # signature line -- separates the blank sliver from the caption cell.
+    bar(page, x0, sliver_y1 - thickness, x1, sliver_y1, BLACK)
+    bar(page, x0, caption_y1 - thickness, x1, caption_y1, BLACK)
+    page.insert_text(fitz.Point(x0 + 6, y0 + 14), SIGNATURE_RULE_GAP_ITEM_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+    bar(page, x0 + thickness, wall_y - half, x1 - thickness, wall_y + half,
+        BLACK)
+    page.insert_text(fitz.Point(x0 + 10, sliver_y1 + 12),
+                     SIGNATURE_RULE_GAP_CAPTION_TEXT,
+                     fontname="helv", fontsize=SIGNATURE_BOX_FONT_SIZE_PT)
+
+
+def ink_trim_comb_row(page: fitz.Page, x0: float, y0: float) -> None:
+    """F227's shape (`emit.comb_writing_top_clear_of_printed_ink`): a
+    caption's own descender genuinely hangs into a comb's own shared
+    writing top, and the comb -- unlike a plain field -- was never offered
+    that evidence at all before this session.
+
+    `x0,y0` anchors the comb's own top-left corner. One bordered box
+    (`merged_box`, the row's own four walls), its divider ticks confined to
+    a band `INK_TRIM_COMB_BAND_TOP_INSET_PT` below the row's own top wall
+    rather than spanning the row's full height -- see the module comment
+    above `INK_TRIM_COMB_ROW_WIDTH_PT` for why that confinement is what
+    lets the row resolve as one comb instead of `INK_TRIM_COMB_SLOTS`
+    separate field cells. `INK_TRIM_CAPTION_TEXT` is set above the row's
+    own top wall, `INK_TRIM_CAPTION_GAP_PT` plus `INK_TRIM_CAPTION_DRIFT_PT`
+    above it, so its own 'p' reaches -- or, once `prove_fixtures_fail.py`'s
+    `mutate_ink_trim_comb` raises the drift, does not reach -- past the
+    comb's own writing top the identical way 1604CF's "8 Telephone No."
+    does over its real phone comb.
+    """
+    x1 = x0 + INK_TRIM_COMB_ROW_WIDTH_PT
+    y1 = y0 + INK_TRIM_COMB_ROW_HEIGHT_PT
+    thickness = THICKNESSES_PT[1]
+    merged_box(page, fitz.Rect(x0, y0, x1, y1), thickness, BLACK, pieces=2)
+    step = (x1 - x0) / INK_TRIM_COMB_SLOTS
+    band_y0 = y0 + INK_TRIM_COMB_BAND_TOP_INSET_PT
+    for index in range(1, INK_TRIM_COMB_SLOTS):
+        divider_x = x0 + index * step
+        bar(page, divider_x, band_y0, divider_x + THICKNESSES_PT[0], y1,
+            BLACK)
+    baseline = y0 - INK_TRIM_CAPTION_GAP_PT - INK_TRIM_CAPTION_DRIFT_PT
+    page.insert_text(fitz.Point(x0 + 4, baseline), INK_TRIM_CAPTION_TEXT,
+                     fontname="helv", fontsize=INK_TRIM_CAPTION_FONT_SIZE_PT)
+
+
 def checkerboard(width: int, height: int, rgb: tuple[int, int, int],
                  alpha: Callable[[int, int], int]) -> fitz.Pixmap:
     """A tiny RGBA image. `alpha` decides the soft mask fitz will write."""
@@ -245,7 +663,21 @@ def build_rules() -> fitz.Document:
     first.draw_rect(fitz.Rect(64, 428, 200, 446), color=gray(BLACK),
                     fill=gray(WHITE), width=THICKNESSES_PT[1])
 
+    # F210's checkbox square: a closed box of four DECORATIVE rules around a
+    # KNOCKOUT interior, drawn as four separate filled bars plus a fill --
+    # never a single stroked rect -- because that is how the BIR generator
+    # draws it (see checkbox_square()'s own docstring). Placed clear of the
+    # tint band above (which ends at y452) and the comb below (which starts
+    # at y480).
+    checkbox_square(first, 500, 460, 511, 471)
+
     comb_band(first, fitz.Rect(48, 480, 480, 504), slots=12, group_after=4)
+
+    # F211/F212's signature box: a bordered box with a top-left caption
+    # (see signature_box()'s own docstring) and a separate caption below it
+    # on the box's own bottom rule. Placed clear of the comb above (which
+    # ends at y504).
+    signature_box(first, 48, 560, 300, 600)
 
     # Page 2 exists so the paper assertion has more than one page to measure,
     # and carries drawings of its own so nothing on it is vacuously clean.
@@ -253,6 +685,28 @@ def build_rules() -> fitz.Document:
     bar(second, 48, 170, 564, 170 + THICKNESSES_PT[0], GREY_MID)
     second.draw_rect(fitz.Rect(48, 200, 300, 240), color=None,
                      fill=gray(GREY_LIGHT), width=0)
+
+    # F151's row-number shape (P2): placed clear of the grey band above
+    # (which ends at y240).
+    row_number_row(second, 48, 280)
+
+    # F064's comb-band-reunification shape (W3): placed clear of the
+    # row-number row above (which ends at y304).
+    comb_band_reunification_row(second, 48, 340)
+
+    # F221 case 1's own vector-drawn signature line (`emit.
+    # SignatureRuleWriting`): placed clear of the comb-band-reunification
+    # row above (which ends at y380).
+    signature_rule_row(second, 48, 400)
+
+    # F227's own shape (`emit.comb_writing_top_clear_of_printed_ink`):
+    # placed clear of the signature-rule row above (which ends at y450).
+    ink_trim_comb_row(second, 48, 480)
+
+    # F226's own sliver-gap shape (`emit.SignatureRuleWriting`'s extended
+    # caption search): placed clear of the ink-trim comb above (which ends
+    # at y504).
+    signature_rule_gap_row(second, 48, 560)
     return doc
 
 

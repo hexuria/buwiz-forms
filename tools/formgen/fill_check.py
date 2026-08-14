@@ -339,6 +339,22 @@ def check_combs(candidate: dict[str, Any], cells: Sequence[tuple[int, dict[str, 
         if not comb or page_ir is None or cell["id"] not in present:
             continue
         slot_x = [float(v) for v in comb["slot_x"]]
+        # Measure against the compartment a taxpayer actually types in. Since
+        # the horizontal writing surface landed, `slot_x`'s OUTER values are no
+        # longer where the first and last compartments are: they run wall-CENTRE
+        # to wall-centre, while the emitted ends are inset to the rails' own
+        # painted ink. `emit.comb_slot_edges` reads exactly this pair, and this
+        # file must ask its question of the same rectangle.
+        #
+        # Left on `slot_x`, 2,046 of the corpus's 9,108 outer-compartment
+        # centres exceed this file's own 0.25pt tolerance and get named as bad
+        # slot landings that are not real. Interior dividers are untouched, so
+        # only the two ends move; a comb whose rails were not derivable
+        # publishes no writing surface and keeps `slot_x`, which is the same
+        # fail-closed direction the producer takes.
+        if "writing_x0" in comb and "writing_x1" in comb:
+            slot_x = [float(comb["writing_x0"]), *slot_x[1:-1],
+                      float(comb["writing_x1"])]
         band_y0 = float(comb.get("y0", cell["y0"]))
         band_y1 = float(comb.get("y1", cell["y1"]))
         expected = comb_value(int(comb["cells"]))

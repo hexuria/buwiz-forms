@@ -22,11 +22,11 @@
     "Calibri",
     "Times New Roman"
   ],
-  "rules": 832,
+  "rules": 834,
   "text_runs": 330,
   "images": 3,
   "cells": 463,
-  "comb_cells": 87,
+  "comb_cells": 86,
   "growables": [],
   "sources": [
     {
@@ -78,7 +78,7 @@
       "2200-AN Jan 2018 ENCS guidelines final.pdf"
     ]
   },
-  "html_bytes": 577774,
+  "html_bytes": 609662,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

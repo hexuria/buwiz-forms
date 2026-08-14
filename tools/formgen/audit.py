@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import bisect
 import collections
 import contextlib
 import copy
@@ -297,6 +298,32 @@ RETAINED_PARTITION_REASON_CODES = (
 RETAINED_NO_BAND_REASON_CODES = (
     "emission-suppressed-no-final-visible-band",
 )
+# The third retained shape, and it is the SAME shape as the one above: one
+# legacy subject, its own rectangle, an identity mapping onto itself, comb
+# removed, emission suppressed, gate blocked. It is published by lattice.py
+# when a cell's own printed text refutes the claim that its compartments are
+# character cells (`lattice.REFUTED_CAPTION_BLOCK_REASON_CODE`, kept spelled
+# out here rather than imported, because this file must not take a producer's
+# word for the vocabulary it adjudicates).
+#
+# This tuple is added because the shape it names EXISTS -- 1606 p2's statutory
+# rate table and the excise mastheads -- and because a retained subject the
+# registry does not recognise fails the WHOLE form's registry
+# (`comb-owner-registry-invalid`), not just its own record. Nothing here
+# weakens the record: it is validated through exactly the identity branch
+# RETAINED_NO_BAND_REASON_CODES goes through, so a refuted subject that is not
+# an identity mapping onto its own still-present layout cell is rejected the
+# same way, and `retained_unresolved subject still owns an active comb` above
+# still fails it if the comb was left on the cell.
+RETAINED_REFUTED_CAPTION_REASON_CODES = (
+    "emission-suppressed-caption-block-not-character-cells",
+)
+# The retained reason tuples that map a subject onto its own layout cell,
+# one-to-one, rather than onto a partition of other cells.
+RETAINED_IDENTITY_REASON_CODES = frozenset({
+    RETAINED_NO_BAND_REASON_CODES,
+    RETAINED_REFUTED_CAPTION_REASON_CODES,
+})
 # emit.py serialises point geometry to four decimals. Two rounded endpoints can
 # differ by at most two ten-thousandths of a point.
 EMITTED_GEOMETRY_EPS_PT = 0.0002
@@ -323,6 +350,90 @@ POSITION_TOL_PT = 0.25
 # "pre-printed".
 PREPRINTED_COVERAGE = 0.5
 
+# What the SOURCE itself already put in a comb compartment, and therefore which
+# compartments cannot be blanks. Re-derived here from the source PDF's own text
+# and paint operators; see `SourceSlotOracle`. The three bounds are copied, not
+# invented -- lattice.py carries the tone pair as SHADED_PAPER_MAX_GRAY /
+# SHADED_PAPER_MIN_COVERAGE and comb_referee.py repeats both -- because a
+# compartment must not be "occupied" to one producer and "blank" to another.
+# The lower tone bound is extract.classify_tone's structural/decorative
+# boundary: a black rule that happens to cover a compartment is ink the sheet
+# draws, never paper the sheet shaded, and must not excuse a missing input.
+SOURCE_SHADING_MAX_TONE = 0.87
+SOURCE_SHADING_MIN_TONE = 0.15
+SOURCE_SHADING_MIN_COVERAGE = 0.70
+
+# --------------------------------------------------------------------------
+# The field-layer bounds (assertions 9 and 10).
+#
+# Both assertions exist because the audit was structurally blind to the FIELD
+# layer: 171 of 172 ledger findings carry `audit_blind: true`, and 137 of the
+# 138 defects a 51-form visual sweep found sat on pages this audit scored
+# 100% rules / 100% text / 0 missing / 0 extra.  The reason is stated once,
+# here, because it decides every bound below: the two assertions that come
+# closest to the field layer take their CANDIDATE POPULATION from the producer
+# that made the mistake.  `check_money_boxes_have_inputs` enumerates from
+# `b.layout_cells` and accepts only `kind == "field"`, so a printed box the
+# lattice mis-read as a label never enters the population -- and a `field` cell
+# with zero inputs occurs 0 times in 9,971, which is the mechanism, not a
+# clean bill of health.  `check_comb_slots_match_printed` opens with
+# `if b.layout is None: return broken(...)` and takes its inventory from the
+# layout's comb subjects, so a printed comb the lattice never recognised is not
+# in it.  Neither assertion below reads `b.layout`, `b.plan`, emit.py's
+# markers, or the IR: their whole expectation comes from the pinned PDF's own
+# composited paint stream (`ordered_vector_paints`) and its own text operators
+# (`drawn_glyph_boxes`), scored against the emitted DOM's `input_boxes`.
+#
+# A source vertical counts as a printed compartment divider when it is dark,
+# thin, materially taller than it is wide, and still visible after the page has
+# composited.  The visibility clause is not decoration: 2550M draws a comb tick
+# and then paints a white 44 x 13pt rectangle over it, and 2553, 2551M and 0605
+# do the same.  Dropping the clause inflates the offender count from 79 to 111
+# with 32 dividers that are not on the printed page at all.  The clause was
+# checked against the rasteriser rather than trusted: over 38,650 candidates on
+# 53 page-1s, the compositor's visible/not-visible verdict agrees with the
+# rendered raster 38,650 times and disagrees 0 times.
+DIVIDER_MAX_TONE = 0.5
+DIVIDER_MAX_WIDTH_PT = 1.6
+DIVIDER_MIN_HEIGHT_PT = 2.0
+# Anisotropy, not height alone: a 1.5 x 2.2pt speck is not a divider.
+DIVIDER_MIN_ANISOTROPY_PT = 2.0
+# How far inside an input's own edges a divider must lie before it is a
+# divider the input SPANS rather than the input's own wall.  A box drawn
+# edge-to-edge over its printed frame must never be reported against itself.
+DIVIDER_INTERIOR_PT = 0.5
+DIVIDER_MIN_Y_OVERLAP_PT = 1.0
+
+# The source-derived printed-box inventory (assertion 10).  A box is four
+# covered sides around white paper: grid lines are clustered from thin dark
+# paint, a side counts as drawn when no gap along it exceeds
+# PRINTED_BOX_SIDE_MAX_GAP_PT, and the box survives only if its inset interior
+# holds no source glyph and is overwhelmingly paper.  The glyph and paper
+# clauses are what keep a caption cell and an official grey "no entry applies"
+# band out of a population that says "a taxpayer should be able to type here".
+PRINTED_RULE_MAX_TONE = 0.5
+PRINTED_RULE_MAX_THICKNESS_PT = 2.5
+PRINTED_RULE_MIN_LENGTH_PT = 2.0
+PRINTED_RULE_CLUSTER_PT = 1.0
+PRINTED_BOX_SIDE_MAX_GAP_PT = 1.2
+PRINTED_BOX_MIN_SIDE_PT = 5.0
+PRINTED_BOX_MAX_SIDE_PT = 400.0
+PRINTED_BOX_INSET_PT = 1.0
+PRINTED_BOX_PAPER_MIN_TONE = 0.95
+PRINTED_BOX_PAPER_MIN_FRACTION = 0.95
+PRINTED_BOX_SAMPLE_PITCH_PT = 1.5
+PRINTED_BOX_SAMPLE_MAX = 8
+# When does an emitted input "fill" a printed box?  Measured against the
+# SMALLER of the two areas, so a comb's individual slot counts (the slot lies
+# wholly inside the box) and a single wide input spanning several boxes counts
+# for each of them (the box lies wholly inside the input) -- a taxpayer can
+# type in both.  Per-input width fractions do not work: 2316's RDO comb fills
+# its box with three 12.6pt slots inside a 38pt box and would read as empty.
+PRINTED_BOX_FILL_MIN_FRACTION = 0.5
+# Bucket edge for the point-tone index.  Purely a lookup granularity; it can
+# never change a composited answer, only how many paints are considered.
+TONE_BUCKET_PT = 24.0
+
 # Default offender preview limit. Assertions that need exhaustive evidence may
 # opt out explicitly; the comb assertion does because its full disagreement set
 # is the evidence the referee needs.
@@ -341,6 +452,8 @@ ASSERTION_KEYS = (
     "reflow_rate_without_description",
     "image_transform_applied",
     "no_invented_codepoints",
+    "inputs_span_no_printed_divider",
+    "printed_box_peers_all_fillable",
 )
 
 INPUT_MANIFEST_SCHEMA = "formgen-audit-input-manifest-v1"
@@ -392,6 +505,188 @@ class InkIndex:
         return None
 
 
+# --------------------------------------------------------------------------
+# The ink band of a glyph -- and why the box extract.py records is not it.
+#
+# THE MEASURED ANSWER, where the source states one.
+#
+# `glyph_ink_em` is the outline box of the face that drew the glyph, published
+# per run by extract.py's `run_glyph_ink` and resolved by the machinery
+# `ruled_blank_bars` already used: the glyph id `get_texttrace()` says was
+# drawn, the faces `pdf_clean_font_name` says the page could be drawing, the
+# advance the file itself states, and MuPDF's own bound on where that text op
+# inks. It is not a convention, a table written here, or a font installed on
+# this machine. Where it is present this file uses it for all four edges, and
+# both over-reaches below are then simply gone: the box is the ink.
+#
+# It is present for 78.4% of this corpus's glyphs -- 279,101 of 356,092. The
+# other 76,991 keep the advance box described below, which is what they always
+# had -- extract.py counts every one of them by reason in `glyph_ink_refusals`,
+# and the largest reason by far is a face MuPDF's own name cleaner does not
+# resolve (Arial Narrow, Ebrima, Nirmala UI: 62,010 glyphs on 50 of the 53
+# forms). A band that cannot be measured is never guessed.
+#
+# THE FALLBACK, for the 19%.
+#
+# extract.py stores a run's y-extent as MuPDF's span bbox, and that bbox is the
+# font's LINE box rather than its ink. Measured over all 19,333 runs of this
+# corpus: `y0 == baseline_y - ascender * size_pt` and
+# `y1 == baseline_y - descender * size_pt` (19,105 runs exact on the lower
+# edge, every other run inside 0.01pt bar 123 runs of one face whose reported
+# descender rounds 0.22pt short). Scoring an emitted input against that box
+# charges EVERY glyph in a run with the full descender depth of its face,
+# whether or not the character has a descender -- so an input placed just
+# under a caption set entirely in capitals is reported as sitting on printed
+# text when the paper between them is blank. 15 of the 147 offenders this
+# assertion published were exactly that, and every one of them clears by a
+# margin re-measured against the real face outlines: worst case -0.39pt, most
+# of them -0.7pt to -1.5pt of blank paper between the ink and the input.
+#
+# What is removed here is therefore blank paper, not a collision. Note what is
+# NOT removed: a caption whose word carries a descender still collides, because
+# the descender really does hang into the box. Eleven cells that a per-run
+# reading of this same defect had written off as false positives keep failing
+# for exactly that reason (1604CF p1c16/20/31/32 'p','g'; 2316 p1c62/83 'y';
+# 1600WP p1c63/64 and 2316 p1c38/39 '(' and ')'; 1701MS p1c287 'g'), with real
+# ink overlaps of +0.20pt to +0.90pt. The rule is per GLYPH, never per run.
+#
+# Those overlaps are this path's numbers, and the measured path revises three of
+# them DOWNWARD and one class of them upward. A face's declared descender is not
+# a bound on its glyphs' ink: Helvetica's 'p' and 'y' reach 0.2172 em where the
+# span reports -0.210, and Arial-ItalicMT's 'g' likewise, so on 2316 p1c62/p1c83
+# and 1701MS p1c287 -- three inputs the emitter had placed flush against the
+# line box, at exactly 0.0000pt of overlap -- the outline is 0.0548pt and
+# 0.0660pt inside the box, and those cells fail on the measured path having held
+# on this one. Nothing about them changed; the line box was 0.05pt short of the
+# ink it was standing in for.
+#
+# On this path the upper edge stays where extract.py put it (the ascent line):
+# no character reaches above it, so keeping it can only over-report. It cannot
+# be tightened by a constant the way the lower edge can, and for the same
+# reason the horizontal edges cannot: cap height, x-height and side bearings
+# are per-character and per-face quantities, while the descent this removes is
+# a single figure the whole face shares.
+#
+# The horizontal over-reach is the same shape. `char_widths_pt[i]` is
+# `bbox[2] - bbox[0]` of MuPDF's per-character box, and that box is the ADVANCE
+# box, side bearings included: over the 437,615 characters of this corpus it
+# equals `char_advances_pt[i]` to within the IR's own 0.005pt quantisation, and
+# `page.get_texttrace()` -- the file's own operator stream, read independently
+# by `drawn_glyph_boxes` -- reports the same x-extent to the millipoint.
+# Neither view records a side bearing, and it cannot be bounded by a constant
+# either: measured across the eleven real faces these PDFs name, the smallest
+# left bearing of a character this corpus sets is -0.0015em (Arial 'A'), so the
+# only sound uniform bound is zero and removes nothing. That is why the
+# horizontal edges could not be tightened FROM THE IR AS IT WAS, and why the
+# answer had to come from the face's own outline instead of from this file.
+#
+# GLYPH_BASELINE_OVERSHOOT_EM is that overshoot, measured rather than chosen.
+# Over Arial, Arial Bold, Arial Italic, Arial Bold Italic, Arial Narrow, Arial
+# Narrow Bold, Times New Roman, Times New Roman Bold, Times New Roman Italic,
+# Tahoma and Tahoma Bold, the deepest any character in BASELINE_SEATED_INK
+# reaches below its baseline is 0.0308em ('%', Arial Bold Italic); the round
+# letters that motivate the allowance at all sit at 0.0117-0.0171em. It
+# ENLARGES the ink band, so an error in it errs towards reporting a collision.
+# Every character in DESCENDING_INK measures 0.1582em ('/', Tahoma) or deeper
+# -- a fivefold gap on either side of the split, which is why no per-face table
+# is needed and why widening the constant several times over would not move a
+# single character across.
+GLYPH_BASELINE_OVERSHOOT_EM = 0.0308
+
+# Characters whose ink descends. `J` and `Q` are in it although the eleven
+# faces measured keep `J` on the baseline: both descend in faces this corpus
+# does set but that were not measurable here (Calibri, Berlin Sans FB Demi),
+# and the failure direction of a wrong guess is what decides the membership --
+# calling a descender baseline-seated hides ink, the reverse only keeps a
+# report nobody needed.
+DESCENDING_INK = frozenset("(),/;@JQ[]_gjpqy")
+# `f` is the one character in this corpus whose descender is a property of the
+# face rather than the character: it measures 0.2158em in Times New Roman
+# Italic and exactly 0.0000em in Arial, Arial Bold, Arial Italic, Arial Narrow,
+# Times New Roman and Tahoma. Splitting it out is what lets 2316 p1c37 stop
+# reporting the `f` of "Date of Birth" -- set in upright Arial, 0.38pt of blank
+# paper -- while an italic face keeps the full line box, which is wider than
+# the italic descender actually needs and so cannot hide one.
+ITALIC_ONLY_DESCENDING_INK = frozenset("f")
+# Characters measured to stop at the baseline (within the overshoot above).
+# This is an evidence list, not a character class: it holds exactly the
+# characters this corpus prints whose depth was measured, so any character a
+# new form introduces falls through to the full line box until it is measured
+# too. U+F0A7 and U+FFFD are absent on purpose -- one is a Wingdings private
+# use code and the other is a glyph whose encoding failed, and neither names a
+# shape whose ink can be looked up.
+BASELINE_SEATED_INK = frozenset(
+    "0123456789"
+    "ABCDEFGHIKLMNOPRSTUVWXYZ"
+    "abcdefhiklmnorstuvwxz"
+    "\"%&'*+-.:=?"
+    "½–’“”•…●"
+)
+# A symbol-encoded face draws something other than the character its code
+# names, so a character-indexed ink table cannot be applied to it. Named
+# independently of fonts.py: this file must not take a producer's word for
+# which faces those are.
+SYMBOL_ENCODED_INK_FAMILIES = frozenset({
+    "Symbol", "Wingdings", "Wingdings 2", "Wingdings 3", "Webdings",
+    "ZapfDingbats", "Marlett",
+})
+
+
+def published_glyph_ink(run: dict, char: str
+                        ) -> tuple[float, float, float, float] | None:
+    """The em outline box the IR states for this character, or None.
+
+    None is the fail-closed answer and the caller must fall back to the advance
+    box on it. The shape is validated rather than trusted: a producer that
+    published a degenerate or non-finite box would otherwise hand `overlaps` a
+    rectangle it silently reads as "no collision", which is the one direction a
+    checker must never fail in. A rotated run is refused here as well as in
+    extract.py -- the box is in font space, and the matrix that would place it
+    on the page is not in the IR.
+    """
+    table = run.get("glyph_ink_em")
+    if not isinstance(table, dict):
+        return None
+    box = table.get(char)
+    if not isinstance(box, (list, tuple)) or len(box) != 4:
+        return None
+    if any(isinstance(value, bool) or not isinstance(value, (int, float))
+           or not math.isfinite(value) for value in box):
+        return None
+    if box[2] <= box[0] or box[3] <= box[1]:
+        return None
+    if run.get("rotated") or not run.get("size_pt"):
+        return None
+    if run.get("baseline_y") is None:
+        return None
+    return (float(box[0]), float(box[1]), float(box[2]), float(box[3]))
+
+
+def glyph_ink_bottom(run: dict, char: str) -> float | None:
+    """Lowest y this character's ink can reach, or None when that is unknown.
+
+    The FALLBACK path's answer, for a glyph whose outline the source did not
+    state. None is the fail-closed answer and every caller must fall back to
+    the run's own recorded line box on it. It is returned whenever the
+    reasoning above does not apply: a run without the metrics the derivation
+    needs, a rotated run whose baseline is not horizontal, a symbol-encoded
+    face, a character that has not been measured, or a character that descends.
+    """
+    if char in DESCENDING_INK or char not in BASELINE_SEATED_INK:
+        return None
+    if char in ITALIC_ONLY_DESCENDING_INK and run.get("italic"):
+        return None
+    if run.get("rotated"):
+        return None
+    if run.get("family") in SYMBOL_ENCODED_INK_FAMILIES:
+        return None
+    baseline = run.get("baseline_y")
+    size = run.get("size_pt")
+    if baseline is None or not size:
+        return None
+    return float(baseline) + GLYPH_BASELINE_OVERSHOOT_EM * float(size)
+
+
 def glyph_boxes(run: dict) -> list[Rect]:
     """One box per *inked* glyph in a text run.
 
@@ -399,7 +694,15 @@ def glyph_boxes(run: dict) -> list[Rect]:
     A label like `'Yes            No'` is one run whose bbox spans the checkbox
     drawn in the gap between the two words; scored by bbox it reports a collision
     that is not there, and 269 of the 362 bbox collisions in this corpus are that
-    artefact. A glyph's own advance box is where the ink is.
+    artefact.
+
+    Where the source states the glyph's outline, that outline IS the box, on all
+    four edges: the em box hung off the baseline and origin the run states, at
+    the size it states. Where it does not, the glyph keeps the advance box --
+    its own advance horizontally, and `glyph_ink_bottom` vertically -- which is
+    wider than the ink on both axes and so can only over-report. The two are
+    never mixed within one glyph: a measured glyph is measured on every edge,
+    and a fallback glyph falls back on every edge.
     """
     out: list[Rect] = []
     offsets = run.get("char_origin_offsets_pt") or ()
@@ -409,11 +712,27 @@ def glyph_boxes(run: dict) -> list[Rect]:
         # returning it, so the assertion errs towards reporting a collision.
         return [(run["x0"], run["y0"], run["x1"], run["y1"])]
     origin = run.get("origin_x", run["x0"])
+    top = run["y0"]
+    line_bottom = run["y1"]
     for char, offset, width in zip(run["text"], offsets, widths):
         if not char.strip():
             continue
         x = origin + offset
-        out.append((x, run["y0"], x + width, run["y1"]))
+        ink = published_glyph_ink(run, char)
+        if ink is not None:
+            size = float(run["size_pt"])
+            baseline = float(run["baseline_y"])
+            # Font space counts y up from the baseline; the page counts it down.
+            out.append((x + size * ink[0], baseline - size * ink[3],
+                        x + size * ink[2], baseline - size * ink[1]))
+            continue
+        ink_bottom = glyph_ink_bottom(run, char)
+        # A band that does not reach below the ascent line is not a measurement
+        # of anything; fall back rather than publish a degenerate box, which
+        # `overlaps` would silently read as "no collision".
+        bottom = (line_bottom if ink_bottom is None or ink_bottom <= top
+                  else min(line_bottom, ink_bottom))
+        out.append((x, top, x + width, bottom))
     return out
 
 
@@ -989,8 +1308,21 @@ def slot_boxes(cell: Cell) -> list[tuple[int, Rect, bool]]:
     return out
 
 
-def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
-    """Physical emitted-comb state without falling back to layout metadata."""
+def emitted_comb_evidence(cells: Sequence[Cell],
+                          source: SourceSlotOracle | None = None,
+                          ) -> dict[str, Any]:
+    """Physical emitted-comb state without falling back to layout metadata.
+
+    `source` answers the one question this evidence cannot answer from the
+    emitted document: whether a compartment carrying no input is a compartment
+    the SOURCE already filled in. Every compartment of an editable comb must
+    offer a typing surface EXCEPT the ones the official sheet printed a
+    constant into or shaded, and those are read from the source PDF's own
+    operators (`SourceSlotOracle`) rather than from anything the emitter says
+    about itself. Passing None -- an ambiguous owner, a comb with no layout
+    subject at all -- means that evidence was not established, and then no
+    compartment is excused.
+    """
     occurrences = len(cells)
     if occurrences == 0:
         return {
@@ -1104,6 +1436,28 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
                 input_index = int(index_match.group(1)) if index_match else None
                 within_slot.append(input_index)
             input_indexes.append(within_slot)
+    # The compartment a taxpayer would type into, so the source is asked about
+    # that exact rectangle. An excuse cannot carry a comb whose boxes are not
+    # where the sheet prints them: whenever the emitted partition is not the
+    # source's own the comb is an offender anyway, on
+    # `emission-printed-mismatch` for a different compartment count, on
+    # `emission-source-position-mismatch` for edges past the referee's
+    # position bound, and on `source-topology-unevaluable` where the source
+    # partition could not be derived at all. The excuse only ever decides
+    # whether `invalid-emission` joins those, never whether the comb passes.
+    #
+    # Beside it, the same compartment over its printed ROW: the walls stay the
+    # source's dividers and the top and bottom become the cell's, which the
+    # sheet drew, instead of the writing rectangle's, which emit chose. That is
+    # the rectangle the glyph question is asked of; `SourceSlotOracle` states
+    # why, and measures what it costs (nothing) and what it buys (85 identical
+    # money bullets that answered differently from their 7 twins).
+    slot_rects = {index: box for index, box, _live in slot_boxes(cell)}
+    slot_rows = {
+        index: (box[0], cell.rect[1], box[2], cell.rect[3])
+        for index, box in slot_rects.items()
+    }
+    source_filled: dict[int, dict[str, Any]] = {}
     for slot_index, within_slot in zip(indexes, input_indexes):
         for input_index in within_slot:
             if input_index != slot_index:
@@ -1118,11 +1472,30 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
                 "reason": "multiple editable inputs in one physical slot",
             })
         if "f" in cell.classes.split() and not within_slot:
+            occupancy = (
+                source.occupancy(
+                    slot_rects.get(slot_index), slot_rows.get(slot_index))
+                if source is not None else None
+            )
+            if occupancy is not None:
+                source_filled[slot_index] = occupancy
+                continue
+            if source is not None and source.available:
+                why_not = (
+                    "the source prints no glyph or shading in that "
+                    "compartment")
+            else:
+                unavailable = (
+                    source.unavailable_reason if source is not None else None)
+                why_not = (
+                    "source compartment occupancy is unevaluable: "
+                    + (unavailable or "no source evidence was supplied"))
             bad_input_indexes.append({
                 "slot": slot_index,
                 "input_slot_index": None,
                 "reason": (
-                    "editable comb slot has no live input element"),
+                    "editable comb slot has no live input element and "
+                    + why_not),
             })
     nested_input_count = sum(len(items) for items in input_indexes)
     if dom_slots is None:
@@ -1150,6 +1523,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
             "occurrences": occurrences,
             "slot_indexes": indexes,
             "input_slot_indexes": input_indexes,
+            "source_filled_slots": source_filled,
             "reason": (
                 "one or more comb inputs do not identify their owning slot: "
                 f"{bad_input_indexes}"),
@@ -1227,6 +1601,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
             "slot_indexes": indexes,
             "input_slot_indexes": input_indexes,
             "slot_geometry": geometry,
+            "source_filled_slots": source_filled,
             "reason": (
                 "emitted slots must be finite positive, vertically present "
                 "after clipping, and form one ordered contiguous x partition "
@@ -1243,6 +1618,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
             "slot_indexes": indexes,
             "input_slot_indexes": input_indexes,
             "slot_geometry": geometry,
+            "source_filled_slots": source_filled,
             "reason": (
                 f"emitted comb declares {declared} slot(s) but renders "
                 f"{physical} physical slots"),
@@ -1257,6 +1633,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
         "slot_indexes": indexes,
         "input_slot_indexes": input_indexes,
         "slot_geometry": geometry,
+        "source_filled_slots": source_filled,
         "reason": "",
     }
 
@@ -1371,19 +1748,70 @@ def _outer_position_evidence(
     return evidence
 
 
+def _comb_input_insets(
+        cell: Cell) -> dict[int, tuple[float, float, float, float] | None]:
+    """Per slot number, the inset the input inside it declares for ITSELF.
+
+    A comb input carries `inset:0` today, so the slot div and the box a
+    taxpayer types in are the same rectangle -- but nothing enforced that, and
+    the difference is not cosmetic: an input inset inside its slot is exactly
+    the shape a producer-side fix takes, and a judge that scores the SLOT can
+    neither see such a fix nor catch a producer that widened the input back out
+    over printed ink.
+
+    `None` means "read this slot's own rectangle", and it is returned for every
+    case this cannot resolve unambiguously -- no inset declared, or more than
+    one editable input attributed to one slot number. That is the fail-closed
+    direction on purpose: the slot is the larger rectangle, so an unresolvable
+    inset can only make an overlap MORE visible, never less.
+    """
+    insets: dict[int, list[tuple[float, float, float, float] | None]] = {}
+    if cell.dom_record is not None:
+        positions = {
+            position: slot.index
+            for position, slot in enumerate(cell.dom_record.slots)
+        }
+        for input_record in cell.dom_record.inputs:
+            if input_record.owning_slot is None or not input_record.editable:
+                continue
+            number = positions.get(input_record.owning_slot[1])
+            if number is None:
+                continue
+            insets.setdefault(number, []).append(input_record.inset)
+    else:
+        for match in SLOT_RE.finditer(cell.inner):
+            number = int(match.group(1))
+            for input_match in INPUT_RE.finditer(match.group(6)):
+                found = INSET_RE.search(input_match.group(1))
+                insets.setdefault(number, []).append(
+                    tuple(float(found.group(index)) for index in (1, 2, 3, 4))
+                    if found is not None else None)
+    return {
+        number: values[0] if len(values) == 1 else None
+        for number, values in insets.items()
+    }
+
+
 def input_boxes(cell: Cell) -> list[Rect]:
     """Every editable box this cell renders, in page coordinates.
 
-    Comb inputs live inside their slot div and fill it; a plain text input fills
-    the cell minus its declared inset. Both are absolute numbers in the markup,
-    so no layout pass is needed to know where a taxpayer can type. A comb slot
-    is clipped to its parent cell because `.f` uses `overflow:hidden`; geometry
-    outside that box cannot paint typed text over the page.
+    Comb inputs live inside their slot div, inset by whatever they declare for
+    themselves; a plain text input fills the cell minus its declared inset.
+    Both are absolute numbers in the markup, so no layout pass is needed to know
+    where a taxpayer can type. A comb slot is clipped to its parent cell because
+    `.f` uses `overflow:hidden`; geometry outside that box cannot paint typed
+    text over the page.
     """
     left, top, right, bottom = cell.rect
     out: list[Rect] = []
-    for _, box, has_input in slot_boxes(cell):
+    slot_insets = _comb_input_insets(cell)
+    for number, box, has_input in slot_boxes(cell):
         if has_input:
+            inset = slot_insets.get(number)
+            if inset is not None:
+                inset_top, inset_right, inset_bottom, inset_left = inset
+                box = (box[0] + inset_left, box[1] + inset_top,
+                       box[2] - inset_right, box[3] - inset_bottom)
             clipped = (max(left, box[0]), max(top, box[1]),
                        min(right, box[2]), min(bottom, box[3]))
             if clipped[2] > clipped[0] and clipped[3] > clipped[1]:
@@ -1494,7 +1922,18 @@ class VectorPaint:
 
 @dataclasses.dataclass(frozen=True)
 class UnsupportedVectorPaint:
-    """A source paint whose final topology cannot be represented exactly."""
+    """A source paint whose final topology cannot be represented exactly.
+
+    `exact_regions` is populated only for a "chromatic vector fill" whose OWN
+    geometry (its `re`/`qu` items) parses exactly rectilinear -- the same
+    parse the grey-fill path already runs, just gated on colour rather than
+    shape. When present, `tone` is that fill's measured luminance and
+    `fill_rule` is its own even-odd/nonzero rule, letting a caller that has
+    independently decided a chromatic colour is not disqualifying reconstruct
+    the exact regions this paint would have contributed had it been grey.
+    Never populated for any other reason: a genuinely non-rectilinear or
+    unbounded fill has no exact regions to offer.
+    """
 
     rect: Rect
     order: int
@@ -1502,6 +1941,8 @@ class UnsupportedVectorPaint:
     tone: float | None = None
     opacity: float | None = None
     trace_rects: tuple[Rect, ...] = ()
+    exact_regions: tuple[tuple[Rect, int], ...] = ()
+    fill_rule: str = "union"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1889,7 +2330,7 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                 if (not isinstance(reason_codes_value, list)
                         or tuple(reason_codes_value) not in {
                             RETAINED_PARTITION_REASON_CODES,
-                            RETAINED_NO_BAND_REASON_CODES,
+                            *RETAINED_IDENTITY_REASON_CODES,
                         }):
                     return fail(
                         "retained_unresolved suppression reason evidence is "
@@ -1946,7 +2387,8 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                         and retained_cell.get("comb") is not None):
                     return fail(
                         "retained_unresolved subject still owns an active comb")
-                if tuple(reason_codes_value) == RETAINED_NO_BAND_REASON_CODES:
+                if (tuple(reason_codes_value)
+                        in RETAINED_IDENTITY_REASON_CODES):
                     if (mapped_ids != [legacy_cell_id]
                             or mapped_keys != [subject_key]
                             or retained_cell is None
@@ -1955,8 +2397,7 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                                 [retained_cell.get(name) for name in (
                                     "x0", "y0", "x1", "y1")])):
                         return fail(
-                            "retained_unresolved no-band identity mapping is "
-                            "stale")
+                            "retained_unresolved identity mapping is stale")
                 elif retained_cell is not None:
                     return fail(
                         "retained_unresolved partition subject still has a "
@@ -2076,6 +2517,381 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
     return CombOwnerRegistry(certificates, {})
 
 
+# --------------------------------------------------------------------------
+# reviewed comb topology (W8) -- human review for subjects the source
+# genuinely cannot settle, consulted ONLY where `printed_compartments` has
+# already raised on its own evidence
+# --------------------------------------------------------------------------
+
+
+COMB_TOPOLOGY_REVIEW_FIELDS = (
+    "compartments", "source_sha256", "page", "cell_id", "bbox",
+    "reviewer", "date", "citation",
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class ReviewedCombTopology:
+    """One human-reviewed printed-compartment count for one subject.
+
+    Never a substitute for measurement, and never consulted for a subject
+    `printed_compartments` can decide on its own: `resolve_reviewed_comb_topology`
+    reads this only after that function has already raised for this EXACT
+    (slug, page, cell_id).  It supplies a compartment COUNT only -- never
+    divider positions, which stay unevaluable exactly as they do today.
+    """
+
+    compartments: int
+    source_sha256: str
+    page: int
+    cell_id: str
+    bbox: tuple[float, float, float, float]
+    reviewer: str
+    date: str
+    citation: str
+
+    def evidence(self) -> dict[str, Any]:
+        return {
+            "criterion": "reviewed-comb-topology-v1",
+            "valid": True,
+            "compartments": self.compartments,
+            "source_sha256": self.source_sha256,
+            "page": self.page,
+            "cell_id": self.cell_id,
+            "bbox": list(self.bbox),
+            "reviewer": self.reviewer,
+            "date": self.date,
+            "citation": self.citation,
+        }
+
+
+# Keyed by (slug, page, cell_id).  Consulted only for a subject the audit has
+# already decided it cannot evaluate from vector data alone -- never for a
+# subject it can decide (see the sibling guard at the call site).  Follows the
+# exact discipline `scripts/audit_html_form_migration.py` already uses for its
+# trusted-producer registries: "a producer is registered only after the user
+# reviews it".  SHIPPED EMPTY.  An entry lands in its own reviewed,
+# evidence-carrying commit once the user has confirmed the fact -- never here
+# -- and an empty registry must change nothing this file already reports.
+REVIEWED_COMB_TOPOLOGY: dict[tuple[str, int, str], dict[str, Any]] = {
+    ("1604cf-2008", 2, "p2c73"): {
+        "compartments": 2,
+        "source_sha256": "877fbeee071752b2d9af72924647196e6dafa71a2412e74bc9f17897767cc2e7",
+        "page": 2,
+        "cell_id": "p2c73",
+        "bbox": (174.48, 220.32, 269.76, 237.12),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 01: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("1604f-2018", 1, "p1c25"): {
+        "compartments": 36,
+        "source_sha256": "fc34de40dc7e6bc5f7a8cbc3feb5b170cca4bce4f0abd5b7b0dece4e9dd75c4d",
+        "page": 1,
+        "cell_id": "p1c25",
+        "bbox": (14.64, 223.58, 591.46, 241.82),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 02: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    # RE-REVIEWED 2026-08-13 (evening): 4 -> 3. The panel-03 review asked
+    # "does our render match the official sheet?" and the answer was correctly
+    # yes -- our render drew a box over the caption and the sheet has a caption
+    # there. It never asked how many WRITING boxes the sheet prints, which is
+    # what this registry stores, so the pinned 4 counted the caption region as
+    # a compartment. Re-reviewed against the ink and re-confirmed by the owner
+    # from annotated 300-dpi crops. Same defect as the 2200A/C/P trio below,
+    # which was withdrawn for this reason before it was ever pinned.
+    ("1801-2018", 1, "p1c13"): {
+        "compartments": 3,
+        "source_sha256": "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
+        "page": 1,
+        "cell_id": "p1c13",
+        "bbox": (21.6, 136.7, 247.97, 155.54),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner from annotated 300-dpi crops of the "
+            "pinned PDF (sha256 ec49207a..., verified against this IR). The "
+            "row prints 14 black guide marks in this band and EVERY one is "
+            "right of x=204.41; left of it the sheet prints no guide ink at "
+            "all, only the page border at x=20.88 which runs the full 600pt "
+            "height of the page. The unguided paper 21.6->204.65 is 183.05pt "
+            "against the comb's own 14.16pt pitch (12.9 compartments) and "
+            "holds the printed caption runs '5', 'Taxpayer Identification "
+            "Number' and '(TIN)' at x 27.00-182.67. Three writing "
+            "compartments; the caption region is printed matter. The tick run "
+            "continues past this cell to x=446.23, so the rest of the TIN "
+            "lives in neighbouring cells and no digit capacity is lost. "
+            "Supersedes the panel-03 reading of 4."),
+    },
+    # The 2200A/C/P trio (F229). Withdrawn from the 13-panel review because the
+    # panel could not settle the count, then re-reviewed against the ink and
+    # confirmed by the owner 2026-08-13. All three forms print this row to the
+    # same coordinates. The four gray-1.0 marks inside the caption are NOT
+    # erased boxes: they are painted at paint_seq 5629-5638, BEFORE the black
+    # guides at 5727+, with no rule beneath them -- checked directly. They
+    # erase nothing; the bottom guide row simply never extends there.
+    ("2200a-2020", 1, "p1c111"): {
+        "compartments": 28,
+        "source_sha256": "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+        "page": 1,
+        "cell_id": "p1c111",
+        "bbox": (16.32, 807.7, 595.32, 821.64),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner from annotated 300-dpi crops of the "
+            "pinned PDF (sha256 c294bd45..., verified against this IR). The "
+            "band carries 32 black guide marks and every one is right of "
+            "x=189.74. The unguided paper 16.32->189.98 is 173.66pt against "
+            "the comb's own 14.52pt pitch (12.0 compartments) and holds the "
+            "printed caption runs '27' and 'Tax Debit Memo' at x "
+            "28.92-103.82. 28 writing compartments; the caption region is "
+            "printed matter, not a box."),
+    },
+    ("2200c-2018", 1, "p1c107"): {
+        "compartments": 28,
+        "source_sha256": "7b60d517ac6f3697e351aa89c124423d03dd7cac0961c4319b6507dd0ae64ce2",
+        "page": 1,
+        "cell_id": "p1c107",
+        "bbox": (16.32, 805.54, 595.32, 821.88),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner. Same row and same coordinates as "
+            "2200A p1c111: the four gray-1.0 caption marks sit at x 131.90, "
+            "146.42, 160.82 and 175.34, the first black guide is at x=189.74, "
+            "and no black guide ink exists left of it. 28 writing "
+            "compartments."),
+    },
+    ("2200p-2020", 1, "p1c110"): {
+        "compartments": 28,
+        "source_sha256": "7bf29a28a93f45ae7af9ba344d4755540abd324137831d594bc623b4a0c06d2c",
+        "page": 1,
+        "cell_id": "p1c110",
+        "bbox": (16.32, 807.94, 595.32, 821.88),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Re-reviewed against the official sheet's own ink 2026-08-13 and "
+            "confirmed by the owner. Same row and same coordinates as "
+            "2200A p1c111: the four gray-1.0 caption marks sit at x 131.90, "
+            "146.42, 160.82 and 175.34, the first black guide is at x=189.74, "
+            "and no black guide ink exists left of it. 28 writing "
+            "compartments."),
+    },
+    ("1801-2018", 1, "p1c31"): {
+        "compartments": 11,
+        "source_sha256": "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
+        "page": 1,
+        "cell_id": "p1c31",
+        "bbox": (21.6, 259.58, 291.65, 277.85),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 04: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2000-dst-2018", 1, "p1c109"): {
+        "compartments": 14,
+        "source_sha256": "b18ce9d2380d216814f4410c2e132eebb02b93754f7ca0167311f368e100e79f",
+        "page": 1,
+        "cell_id": "p1c109",
+        "bbox": (389.05, 804.58, 585.79, 823.32),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 05: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2200a-2020", 1, "p1c62"): {
+        "compartments": 14,
+        "source_sha256": "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+        "page": 1,
+        "cell_id": "p1c62",
+        "bbox": (392.74, 432.89, 595.32, 448.02),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 06: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2200a-2020", 1, "p1c86"): {
+        "compartments": 14,
+        "source_sha256": "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+        "page": 1,
+        "cell_id": "p1c86",
+        "bbox": (392.74, 614.71, 595.32, 629.97),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 07: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2551m-2002", 1, "p1c82"): {
+        "compartments": 4,
+        "source_sha256": "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e",
+        "page": 1,
+        "cell_id": "p1c82",
+        "bbox": (286.08, 785.07, 326.16, 804.45),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 11: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2551m-2002", 2, "p2c13"): {
+        "compartments": 2,
+        "source_sha256": "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e",
+        "page": 2,
+        "cell_id": "p2c13",
+        "bbox": (22.56, 92.64, 250.08, 104.4),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 12: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+    ("2553-1999", 1, "p1c87"): {
+        "compartments": 4,
+        "source_sha256": "e52f96fe48aba2890078f889930744a4e13a4defe1284aa9c5292e2c702a20e5",
+        "page": 1,
+        "cell_id": "p1c87",
+        "bbox": (284.16, 797.79, 324.24, 817.17),
+        "reviewer": "uriah (repository owner)",
+        "date": "2026-08-13",
+        "citation": (
+            "Reviewed against the official sheet on the 13-cell topology "
+            "review sheet, panel 13: the pinned source PDF rendered at "
+            "6x beside our own render of the same region, the cell outlined "
+            "in red on both. Confirmed 2026-08-13."),
+    },
+}
+
+_COMB_TOPOLOGY_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def resolve_reviewed_comb_topology(
+        slug: Any, page_index: int, cell: dict[str, Any], source_sha256: Any,
+        ) -> tuple[ReviewedCombTopology | None, str | None]:
+    """Consult REVIEWED_COMB_TOPOLOGY for one already-unevaluable subject.
+
+    Returns (entry, None) when a valid reviewed fact applies. Returns
+    (None, None) when no entry exists for this exact (slug, page, cell_id) --
+    the subject stays `source-topology-unevaluable`, exactly as it does with
+    an empty registry. Returns (None, reason) when an entry exists but fails
+    a guard: the caller MUST publish this as an ERROR, never silently treat
+    it as "no entry".
+    """
+    cell_id = cell.get("id")
+    if not isinstance(slug, str) or not isinstance(cell_id, str):
+        return None, None
+    raw = REVIEWED_COMB_TOPOLOGY.get((slug, page_index, cell_id))
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, (
+            f"reviewed comb topology entry for {cell_id} on page "
+            f"{page_index} is not a record")
+    missing = sorted(
+        field for field in COMB_TOPOLOGY_REVIEW_FIELDS if field not in raw)
+    if missing:
+        return None, (
+            f"reviewed comb topology entry for {cell_id} on page "
+            f"{page_index} is missing required field(s): "
+            f"{', '.join(missing)}")
+    compartments = raw["compartments"]
+    entry_sha256 = raw["source_sha256"]
+    entry_page = raw["page"]
+    entry_cell_id = raw["cell_id"]
+    bbox = raw["bbox"]
+    reviewer = raw["reviewer"]
+    date = raw["date"]
+    citation = raw["citation"]
+    if (isinstance(compartments, bool) or not isinstance(compartments, int)
+            or compartments <= 0):
+        return None, (
+            "reviewed comb topology entry compartments must be a positive "
+            f"integer for {cell_id} on page {page_index}")
+    if (not isinstance(entry_sha256, str)
+            or _COMB_TOPOLOGY_SHA256_RE.fullmatch(entry_sha256) is None):
+        return None, (
+            "reviewed comb topology entry source_sha256 must be a "
+            f"64-character lowercase hex digest for {cell_id} on page "
+            f"{page_index}")
+    if isinstance(entry_page, bool) or entry_page != page_index:
+        return None, (
+            "reviewed comb topology entry page does not match its own "
+            f"registry key for {cell_id} on page {page_index}")
+    if entry_cell_id != cell_id:
+        return None, (
+            "reviewed comb topology entry cell_id does not match its own "
+            f"registry key for {cell_id} on page {page_index}")
+    if (not isinstance(bbox, (list, tuple)) or len(bbox) != 4
+            or any(isinstance(value, bool)
+                   or not isinstance(value, (int, float))
+                   or not math.isfinite(value) for value in bbox)
+            or not (bbox[2] > bbox[0] and bbox[3] > bbox[1])):
+        return None, (
+            "reviewed comb topology entry bbox must be four finite numbers "
+            f"with positive area for {cell_id} on page {page_index}")
+    try:
+        cell_bbox = tuple(
+            float(cell[name]) for name in ("x0", "y0", "x1", "y1"))
+    except (KeyError, TypeError, ValueError):
+        cell_bbox = None
+    if cell_bbox is None or any(
+            abs(float(entry_value) - live_value) > 1e-6
+            for entry_value, live_value in zip(bbox, cell_bbox)):
+        return None, (
+            "reviewed comb topology entry bbox does not match the active "
+            f"layout cell geometry for {cell_id} on page {page_index}")
+    if (not isinstance(reviewer, str) or not reviewer.strip()
+            or not isinstance(date, str) or not date.strip()
+            or not isinstance(citation, str) or not citation.strip()):
+        return None, (
+            "reviewed comb topology entry reviewer/date/citation must be "
+            f"non-empty text for {cell_id} on page {page_index}")
+    if not isinstance(source_sha256, str) or entry_sha256 != source_sha256:
+        return None, (
+            "reviewed comb topology entry source_sha256 does not match the "
+            f"current IR's source.sha256 for {cell_id} on page {page_index}")
+    return ReviewedCombTopology(
+        compartments=compartments,
+        source_sha256=entry_sha256,
+        page=entry_page,
+        cell_id=entry_cell_id,
+        bbox=tuple(float(value) for value in bbox),
+        reviewer=reviewer,
+        date=date,
+        citation=citation,
+    ), None
+
+
 def _axis_aligned_quad_box(quad: Any) -> Rect | None:
     points = (quad.ul, quad.ur, quad.ll, quad.lr)
     xs = [float(point.x) for point in points]
@@ -2090,6 +2906,59 @@ def _axis_aligned_quad_box(quad: Any) -> Rect | None:
     if {(round(x, 6), round(y, 6)) for x, y in zip(xs, ys)} != corners:
         return None
     return x0, y0, x1, y1
+
+
+def _rectilinear_fill_regions(
+        drawing: dict[str, Any],
+        ) -> tuple[list[tuple[Rect, int]], str] | None:
+    """One drawing's exact axis-aligned fill regions, or None if it has none.
+
+    Shared by the grey-fill path (which paints these regions immediately) and
+    a chromatic fill (W5 mechanism 1): a chromatic fill is refused only when
+    its OWN `re`/`qu` items are not exactly rectilinear, never merely for its
+    colour -- colour and geometry are independent questions, and this answers
+    only the geometry one.
+    """
+    fill_supported = True
+    fill_regions: list[tuple[Rect, int]] = []
+    parts = drawing.get("items") or ()
+    for item in parts:
+        if item[0] == "re":
+            rect = item[1]
+            winding = int(item[2]) if len(item) > 2 else 1
+            if winding == 0:
+                fill_supported = False
+            else:
+                fill_regions.append((_rect_tuple(rect), winding))
+        elif item[0] == "qu":
+            box = _axis_aligned_quad_box(item[1])
+            if box is None or len(parts) != 1:
+                fill_supported = False
+            else:
+                fill_regions.append((box, 1))
+        else:
+            fill_supported = False
+    if not fill_supported or not fill_regions:
+        return None
+    fill_rule = "evenodd" if bool(drawing.get("even_odd")) else "nonzero"
+    return fill_regions, fill_rule
+
+
+def _perceptual_luminance(color: Sequence[float]) -> float:
+    """ITU-R BT.601 luma: the scalar brightness of a genuinely chromatic fill.
+
+    `extract.to_gray` refuses a colour whose channel spread exceeds 1e-3
+    because it is not this codebase's near-neutral BIR grey; that refusal is
+    correct for the structural/decorative/knockout tone bands, which assume
+    near-neutral ink. It is not a reason to treat a chromatic colour as
+    unmeasurable -- every colour has a standard scalar luma, computed here
+    with the same published coefficients used throughout image processing to
+    collapse RGB to grayscale, not a constant invented for this file. The
+    downstream tone comparisons (final-tone equality, the existing cutoffs)
+    apply to the result exactly as they do to any other tone.
+    """
+    r, g, b = (float(channel) for channel in color[:3])
+    return max(0.0, min(1.0, 0.299 * r + 0.587 * g + 0.114 * b))
 
 
 def _rect_tuple(rect: Any) -> Rect:
@@ -2312,7 +3181,11 @@ def ordered_vector_paints(page: Any) -> VectorPage:
 
     def add_unsupported_rect(rect: Rect, ordinal: int, reason: str,
                              pad: float = 0.0,
-                             clip: Rect | None = None) -> None:
+                             clip: Rect | None = None,
+                             tone: float | None = None,
+                             opacity: float | None = None,
+                             exact_regions: tuple[tuple[Rect, int], ...] = (),
+                             fill_rule: str = "union") -> None:
         padded = (rect[0] - pad, rect[1] - pad,
                   rect[2] + pad, rect[3] + pad)
         if clip is not None:
@@ -2324,15 +3197,22 @@ def ordered_vector_paints(page: Any) -> VectorPage:
             return
         if not all(math.isfinite(value) for value in padded):
             raise ValueError(f"{reason} has a non-finite source rectangle")
-        unsupported.append(UnsupportedVectorPaint(padded, ordinal, reason))
+        unsupported.append(UnsupportedVectorPaint(
+            padded, ordinal, reason, tone, opacity, (),
+            exact_regions, fill_rule))
 
     def add_unsupported(drawing: dict[str, Any], ordinal: int,
                         reason: str, pad: float = 0.0,
-                        clip: Rect | None = None) -> None:
+                        clip: Rect | None = None,
+                        tone: float | None = None,
+                        opacity: float | None = None,
+                        exact_regions: tuple[tuple[Rect, int], ...] = (),
+                        fill_rule: str = "union") -> None:
         rect_value = drawing.get("rect")
         if rect_value is None:
             raise ValueError(f"{reason} has no bounded source rectangle")
-        add_unsupported_rect(_rect_tuple(rect_value), ordinal, reason, pad, clip)
+        add_unsupported_rect(_rect_tuple(rect_value), ordinal, reason, pad,
+                             clip, tone, opacity, exact_regions, fill_rule)
 
     def expect_bbox_kind(ordinal: int, wanted: str) -> None:
         if not 0 <= ordinal < len(bboxlog):
@@ -2388,35 +3268,33 @@ def ordered_vector_paints(page: Any) -> VectorPage:
         half = stroke_width / 2
 
         if fill_colour is not None and fill_tone is None:
-            add_unsupported(
-                drawing, fill_order, "chromatic vector fill", clip=context.clip)
+            # A chromatic colour is refused only for having no exact
+            # rectilinear geometry to offer, never for being chromatic on its
+            # own: `_perceptual_luminance` gives every colour a measurable
+            # scalar tone, and a caller that independently decides this fill
+            # cannot hide a comb divider (F225/W5 mechanism 1) reconstructs
+            # these exact regions rather than approximating a shape.
+            parsed = _rectilinear_fill_regions(drawing)
+            if parsed is None:
+                add_unsupported(
+                    drawing, fill_order, "chromatic vector fill",
+                    clip=context.clip)
+            else:
+                regions, fill_rule = parsed
+                add_unsupported(
+                    drawing, fill_order, "chromatic vector fill",
+                    clip=context.clip,
+                    tone=round(_perceptual_luminance(fill_colour), 4),
+                    opacity=fill_opacity,
+                    exact_regions=tuple(regions), fill_rule=fill_rule)
         elif fill_order >= 0 and fill_tone is not None:
-            fill_supported = True
-            fill_regions: list[tuple[Rect, int]] = []
-            parts = drawing.get("items") or ()
-            for item in drawing["items"]:
-                if item[0] == "re":
-                    rect = item[1]
-                    winding = int(item[2]) if len(item) > 2 else 1
-                    if winding == 0:
-                        fill_supported = False
-                    else:
-                        fill_regions.append((_rect_tuple(rect), winding))
-                elif item[0] == "qu":
-                    box = _axis_aligned_quad_box(item[1])
-                    if box is None or len(parts) != 1:
-                        fill_supported = False
-                    else:
-                        fill_regions.append((box, 1))
-                else:
-                    fill_supported = False
-            if not fill_supported or not fill_regions:
+            parsed = _rectilinear_fill_regions(drawing)
+            if parsed is None:
                 add_unsupported(drawing, fill_order,
                                 "non-rectilinear or unbounded vector fill",
                                 clip=context.clip)
             else:
-                fill_rule = ("evenodd" if bool(drawing.get("even_odd"))
-                             else "nonzero")
+                fill_regions, fill_rule = parsed
                 for rect, winding in fill_regions:
                     add_rect(
                         rect, fill_tone, fill_opacity, fill_order,
@@ -3326,6 +4204,27 @@ def _baseline_contact_segments(
     )
 
 
+def _junction_sample_y(
+        member_y0: float, member_y1: float,
+        base_y0: float, base_y1: float) -> float:
+    """Where to measure the ink at one vertical/baseline junction.
+
+    Inside the overlap when the two rectangles overlap. When they only touch,
+    their intersection is empty and its midpoint lies inside neither: 2200-A's
+    comb rails end at y=432.6499939 where the baseline starts at
+    y=432.6500244, three hundredths of a thousandth of a point apart, and
+    sampling between them found no ink at all -- no comb on that sheet had a
+    frame. The caller has already refused any gap wider than source-coordinate
+    noise, so the touch is a junction; measure it on the rule's own side of
+    the touch, where a knockout that erases the junction erases it too.
+    """
+    contact_y0 = max(member_y0, base_y0)
+    contact_y1 = min(member_y1, base_y1)
+    if contact_y1 >= contact_y0:
+        return (contact_y0 + contact_y1) / 2.0
+    return (base_y0 + base_y1) / 2.0
+
+
 def _vertical_baseline_contact_intervals(
         page: VectorPage,
         tone: float,
@@ -3360,9 +4259,8 @@ def _vertical_baseline_contact_intervals(
             right = min(member.x1, base_right)
             if right < left - SOURCE_COORD_EPS_PT:
                 continue
-            contact_y0 = max(member.y0, base_y0)
-            contact_y1 = min(member.y1, base_y1)
-            sample_y = (contact_y0 + contact_y1) / 2.0
+            sample_y = _junction_sample_y(
+                member.y0, member.y1, base_y0, base_y1)
             active = [
                 paint for paint in page.paints
                 if (paint.y0 <= sample_y + SOURCE_COORD_EPS_PT
@@ -3619,6 +4517,39 @@ def _published_vertical_geometry(
     }
 
 
+def _adds_no_ink_outside_rule(
+        owner: VectorPaint, rule: VectorPaint) -> bool:
+    """A same-tone paint confined to one rule's own thickness buries nothing.
+
+    Official rule chains are emitted segment by segment, with a square junction
+    block wherever a divider crosses the rule (1707's date box, 2200A's comb
+    baseline: 0.48pt wide by 0.48pt tall).  Such a block is neither wider than
+    tall nor tall enough to read as a divider, so neither of the other two
+    ownership clauses recognises it -- and because consecutive segments of one
+    chain overlap by source-coordinate noise (0.004pt on 1707), one junction
+    block was enough to discard the 13.3pt segment beside it and cut the chain
+    in half.
+
+    Burial is what this ownership test exists to catch: a later broad fill that
+    swallows a narrow rule leaves nothing a reader could call a rule.  A paint
+    that adds no ink above or below the rule's own thickness cannot do that --
+    the visible top and bottom edge of the ink stay exactly where the rule drew
+    them -- so it is the same rule, however far it runs sideways.
+    """
+    return (round(owner.tone, 4) == round(rule.tone, 4)
+            and owner.y0 >= rule.y0 - SOURCE_COORD_EPS_PT
+            and owner.y1 <= rule.y1 + SOURCE_COORD_EPS_PT)
+
+
+def _is_rule_shaped(paint: VectorPaint) -> bool:
+    """Paint that lies ALONG a rule rather than across it.
+
+    Materially taller than wide is a stroke crossing the rule; anything else
+    lies along it, the square junction block where a divider meets it included.
+    """
+    return (paint.y1 - paint.y0) - (paint.x1 - paint.x0) <= SOURCE_COORD_EPS_PT
+
+
 def _baseline_spans(
         page: VectorPage, band_y1: float, tone: float,
         ) -> list[_SourceBaselineSpan]:
@@ -3629,14 +4560,20 @@ def _baseline_spans(
     frame endpoints, making a shrunk layout self-validating. Each returned run
     therefore retains its source-operation lineage and its real merged source
     endpoints.
+
+    The shape test rejects paint that is MATERIALLY taller than wide. A rule
+    chain's junction blocks are square to the last bit -- 2000-DST paints the
+    same 0.48pt block at x=206.33 with width 0.4799957 and at x=262.37 with
+    width 0.4799805, one either side of its 0.4799805 height -- so a strict
+    `width <= height` decided whether a 39-divider baseline chain survived on
+    1.5e-5pt of float noise. Which side of a float the two identical blocks
+    land on is not a fact about the paper.
     """
     wanted_tone = round(tone, 4)
     raw: list[VectorPaint] = []
     for paint in page.paints:
-        width = paint.x1 - paint.x0
-        height = paint.y1 - paint.y0
-        if (width <= height
-                or height > COMB_MAX_WIDTH_PT
+        if (not _is_rule_shaped(paint)
+                or paint.y1 - paint.y0 > COMB_MAX_WIDTH_PT
                 or round(paint.tone, 4) != wanted_tone
                 or band_y1 < paint.y0 - COMB_YSLACK_PT
                 or band_y1 > paint.y1 + COMB_YSLACK_PT):
@@ -3675,6 +4612,7 @@ def _baseline_spans(
                     and owner.x1 - owner.x0 > owner.y1 - owner.y0
                 )
                 or _is_comb_vertical(owner)
+                or _adds_no_ink_outside_rule(owner, paint)
                 for owner in owners
             )
             if (right > left
@@ -3699,6 +4637,74 @@ def _baseline_spans(
     return spans
 
 
+def _components_cut_at_source_walls(
+        page: VectorPage,
+        tone: float,
+        band_y0: float,
+        band_y1: float,
+        components: Sequence[_SourceBaselineSpan],
+        ) -> list[_SourceBaselineSpan]:
+    """Each baseline chain, plus the cells the source's own walls cut it into.
+
+    A chain is a run of ink, not a box. On 2200-A the comb's baseline is the
+    bottom rule of a full-width table row and runs from x=15.6 to x=596.04,
+    so the run's endpoints are page furniture and the rails that bound the
+    comb -- x=392.71 and x=595.32 -- are interior to it. Requiring the outer
+    rails to stand on the chain's own ends therefore rejected a comb the sheet
+    prints perfectly clearly.
+
+    Cutting at walls fixes that without loosening the endpoint requirement:
+    each cut is a source-painted box edge (``_carries_band_into_rule_above``),
+    the cell's ends are that edge, and a rail must still stand exactly on the
+    end of the piece it bounds. The uncut chain is retained beside the pieces,
+    so a comb whose baseline really does end at its rails is unaffected.
+    """
+    expanded: list[_SourceBaselineSpan] = []
+    for component in components:
+        expanded.append(component)
+        cuts = _source_wall_partition(
+            page, tone, band_y0, band_y1,
+            component.left, component.right, component)
+        if len(cuts) < 3:
+            continue
+        for cut_left, cut_right in zip(cuts, cuts[1:]):
+            if cut_right - cut_left <= 2 * COMB_MERGE_PT:
+                continue
+            segments = tuple(sorted({
+                (max(left, cut_left), min(right, cut_right), y0, y1)
+                for left, right, y0, y1 in _baseline_segments(component)
+                if right > cut_left and left < cut_right
+            }))
+            if not segments:
+                continue
+            expanded.append(_SourceBaselineSpan(
+                y=component.y,
+                y0=min(segment[2] for segment in segments),
+                y1=max(segment[3] for segment in segments),
+                left=cut_left,
+                right=cut_right,
+                operations=component.operations,
+                segments=segments,
+            ))
+    return expanded
+
+
+def _rule_ink_meets(
+        left_x0: float, left_x1: float, left_y0: float, left_y1: float,
+        right_x0: float, right_x1: float, right_y0: float, right_y1: float,
+        ) -> bool:
+    """Do two collinear rule segments' ink meet, at the ink's own scale?
+
+    Overlap and exact touch always meet. Beyond that the only admitted gap is
+    one strictly narrower than the thinner of the two strokes: a break that
+    cannot be as wide as the rule is thick cannot be seen as a break in it.
+    """
+    gap = max(right_x0 - left_x1, left_x0 - right_x1, 0.0)
+    if gap <= SOURCE_COORD_EPS_PT:
+        return True
+    return gap < min(left_y1 - left_y0, right_y1 - right_y0)
+
+
 def _segmented_u_frame_candidates(
         page: VectorPage,
         baselines: Sequence[_SourceBaselineSpan],
@@ -3720,6 +4726,15 @@ def _segmented_u_frame_candidates(
     A large non-comb table cell sharing that y is separated by its incompatible
     pitch, while group-separator variation remains inside a 30% source-derived
     pitch envelope.
+
+    Segments join where their ink meets, and the bound on "meets" is the ink's
+    own thickness rather than a fixed slack. Two official sheets leave a gap in
+    an otherwise exact chain -- 2000-DST at x=206.324/206.330 and x=473.134/
+    473.140, 2200-A at x=464.014/464.020 -- 0.006pt of paper interrupting a
+    0.48pt rule, one twentieth of a pixel at 600dpi. A break narrower than the
+    stroke it interrupts cannot print as a break, so it is not one; a gap as
+    wide as the rule is thick still separates two rules, which is what keeps a
+    missing junction block from being bridged into existence.
     """
     remaining = list(sorted(
         baselines,
@@ -3738,10 +4753,12 @@ def _segmented_u_frame_candidates(
                 connected = any(
                     any(
                         (
-                            candidate_left
-                            <= member_right + SOURCE_COORD_EPS_PT
-                            and candidate_right
-                            >= member_left - SOURCE_COORD_EPS_PT
+                            _rule_ink_meets(
+                                candidate_left, candidate_right,
+                                candidate_y0, candidate_y1,
+                                member_left, member_right,
+                                member_y0, member_y1,
+                            )
                             and candidate_y0
                             <= member_y1 + SOURCE_COORD_EPS_PT
                             and candidate_y1
@@ -3788,7 +4805,8 @@ def _segmented_u_frame_candidates(
         ))
 
     candidates = []
-    for component in components:
+    for component in _components_cut_at_source_walls(
+            page, tone, band_y0, band_y1, components):
         if component.y0 <= band_y0 + SOURCE_COORD_EPS_PT:
             continue
         verticals = _stable_source_verticals(
@@ -3912,6 +4930,350 @@ def _segmented_u_frame_candidates(
     return candidates
 
 
+def _erasure_ends_run(owners: Sequence[VectorPaint]) -> bool:
+    """Is the break in this stroke PAINTED, rather than merely unreached?
+
+    The two look identical from the stroke's end and are opposite facts.
+    2200-A knocks the rule above its comb out with a white rectangle 0.48pt
+    tall across a 0.48pt stroke: that is the sheet saying the stroke stops
+    there, at any size. 1700's walls simply miss each other by 0.006pt with
+    nothing drawn in between: that is two operations meeting, and the paper
+    in the gap was never claimed by anybody.
+    """
+    return bool(owners)
+
+
+def _stroke_break_ends_run(
+        gap: float, reachable: Sequence[tuple[float, float]]) -> bool:
+    """Is a break ALONG a stroke long enough to read as a break in it?
+
+    ``_rule_ink_meets`` turned through a right angle. The stroke's own width
+    is the scale: 1700 draws each date-box wall as two operations that miss
+    each other by 0.006pt across a 0.24pt stroke, and no printer resolves
+    that. A break as long as the stroke is wide still ends the run, which is
+    what stops a divider from reaching over the paper above it and claiming
+    the rule that closes some other box.
+    """
+    return gap > min(right - left for left, right in reachable)
+
+
+def _carries_band_into_rule_above(
+        page: VectorPage, tone: float, rail: dict[str, Any] | None,
+        band_y0: float) -> bool:
+    """Does this vertical carry the comb band up into a rule above it?
+
+    This is the source's own difference between a compartment divider and a
+    wall, and it is visible in the content stream without asking anybody what
+    the box is supposed to be. A divider hangs from the baseline and stops
+    inside the field: above the band there is paper (1600WP's date ticks stop
+    at the box's white fill), or a knockout (2200-A erases the rule above its
+    comb), or nothing at all. A wall carries on until it joins the rule that
+    closes the box above -- and joining a rule is exactly what shows up here,
+    because at that level the connected same-tone ink stops being a stroke and
+    starts running sideways.
+
+    The walk is slab by slab upward from the band, keeping only ink connected
+    to what the slab below reached, so an unrelated rule crossing this x at
+    some higher level cannot be claimed by a divider that never reaches it.
+    "Runs sideways" is measured against ``COMB_MAX_WIDTH_PT``, already this
+    file's bound on how wide a comb stroke may be: a 1.44pt thousands
+    separator stays a stroke, a rule does not.
+
+    A wall is often two operations meeting at the band's own top edge, and
+    official sheets miss that meeting by a hair -- 1700's date-box walls stop
+    0.006pt above the band their own ticks start at. The gap bound is the same
+    one ``_rule_ink_meets`` applies along a rule, turned through a right
+    angle: a break shorter than the stroke is wide cannot print as a break.
+    Anything longer ends the walk, which is what keeps a divider from
+    claiming the rule that happens to run above the field it stops inside.
+    """
+    if rail is None:
+        return False
+    centre_x = float(rail["center_x"])
+    seed = (float(rail["ink_x0"]), float(rail["ink_x1"]))
+    wanted_tone = round(tone, 4)
+    window_x0 = centre_x - COMB_MAX_WIDTH_PT
+    window_x1 = centre_x + COMB_MAX_WIDTH_PT
+    relevant = [
+        paint for paint in page.paints
+        if paint.x1 >= window_x0
+        and paint.x0 <= window_x1
+        and paint.y0 < band_y0 - SOURCE_COORD_EPS_PT
+    ]
+    if not relevant:
+        return False
+    edges = {band_y0}
+    for paint in relevant:
+        edges.add(paint.y0)
+        edges.add(min(paint.y1, band_y0))
+    slabs = [
+        (a, b)
+        for a, b in zip(sorted(edges), sorted(edges)[1:])
+        if b - a > SOURCE_COORD_EPS_PT and b <= band_y0 + SOURCE_COORD_EPS_PT
+    ]
+    reachable: list[tuple[float, float]] = [seed]
+    last_ink_y = band_y0
+    for a, b in sorted(slabs, reverse=True):
+        sample_y = (a + b) / 2.0
+        active = [
+            paint for paint in relevant
+            if paint.y0 <= sample_y <= paint.y1
+        ]
+        x_edges = {window_x0, window_x1}
+        for paint in active:
+            clipped_left = max(window_x0, paint.x0)
+            clipped_right = min(window_x1, paint.x1)
+            if clipped_right >= clipped_left:
+                x_edges.update((clipped_left, clipped_right))
+        visible: list[tuple[float, float]] = []
+        ordered_x = sorted(x_edges)
+        for left, right in zip(ordered_x, ordered_x[1:]):
+            if right <= left:
+                continue
+            final_tone = _final_tone(active, (left + right) / 2.0, sample_y)
+            if round(final_tone, 4) == wanted_tone:
+                visible.append((left, right))
+        visible = _merge_intervals(visible, SOURCE_COORD_EPS_PT)
+        connected = [
+            interval for interval in visible
+            if any(
+                interval[0] <= prior[1] + SOURCE_COORD_EPS_PT
+                and interval[1] >= prior[0] - SOURCE_COORD_EPS_PT
+                for prior in reachable
+            )
+        ]
+        if not connected:
+            if _erasure_ends_run(
+                    _final_tone_and_owner(active, centre_x, sample_y)[1]):
+                return False
+            continue
+        if _stroke_break_ends_run(last_ink_y - b, reachable):
+            return False
+        if any(right - left > COMB_MAX_WIDTH_PT for left, right in connected):
+            return True
+        reachable = connected
+        last_ink_y = a
+    return False
+
+
+def _stroke_column_break_is_erased(
+        page: VectorPage,
+        ink_x0: float, ink_x1: float,
+        gap_y0: float, gap_y1: float,
+        ) -> bool:
+    """Is this break in a stroke column an erasure OF THAT STROKE?
+
+    ``_erasure_ends_run`` asks whether a break was painted; this asks whose
+    break it is, and the sheet answers in the erasure's own width. 2000-DST
+    stops its middle wall 1.56pt above the comb band with a white rectangle at
+    x 192.14..192.62 -- exactly the 0.48pt stroke it covers and nothing else --
+    and 2200-C does the same at x 30.60..31.08 over its own 0.48pt stroke. An
+    erasure cut to one stroke's width is that stroke's own edit, so the ink
+    above it belongs to the same column. Paint that reaches beyond the stroke
+    is somebody else's: a grey band, a knocked-out row, a white field fill, all
+    of which cross this x on their way somewhere else and none of which say
+    anything about what stands above. Requiring full opacity keeps a
+    see-through overlay from bridging a column it cannot actually replace.
+
+    Bounding the bridge by the stroke's own width is also what keeps the reach
+    below finite without a magic window: to walk further up the page the sheet
+    has to have deliberately erased every point of the way at this exact width.
+    """
+    covered = _merge_intervals([
+        (max(gap_y0, paint.y0), min(gap_y1, paint.y1))
+        for paint in page.paints
+        if paint.opacity == 1.0
+        and paint.x0 >= ink_x0 - SOURCE_COORD_EPS_PT
+        and paint.x1 <= ink_x1 + SOURCE_COORD_EPS_PT
+        and paint.y1 > gap_y0
+        and paint.y0 < gap_y1
+    ], SOURCE_COORD_EPS_PT)
+    return any(
+        low <= gap_y0 + SOURCE_COORD_EPS_PT
+        and high >= gap_y1 - SOURCE_COORD_EPS_PT
+        for low, high in covered
+    )
+
+
+def _source_stroke_column_reach(
+        page: VectorPage,
+        tone: float,
+        rail: dict[str, Any] | None,
+        band_y0: float,
+        ) -> float:
+    """How far above the band this vertical's OWN source strokes stand.
+
+    The extent half of the wall relation, and the only place here that reads a
+    source stroke the final composite has covered. It is deliberately narrow:
+    a stroke belongs to this column only if it carries the same tone, is a
+    comb vertical rather than a rule chain's junction block, and is painted
+    within this stroke's own ink width -- 2000-DST's 0.48pt wall is three
+    operations all at x 192.14..192.62, while the 0.48pt-square block that
+    joins the rule above it to its neighbours is not a vertical at all. Breaks
+    are crossed only through ``_stroke_column_break_is_erased``.
+
+    Returned as the topmost y the column reaches, so smaller is higher; the
+    band top itself when nothing stands above it.
+    """
+    if rail is None:
+        return band_y0
+    ink_x0 = float(rail["ink_x0"])
+    ink_x1 = float(rail["ink_x1"])
+    wanted_tone = round(tone, 4)
+    column = _merge_intervals([
+        (paint.y0, paint.y1)
+        for paint in page.paints
+        if _is_comb_vertical(paint)
+        and round(paint.tone, 4) == wanted_tone
+        and paint.x0 >= ink_x0 - SOURCE_COORD_EPS_PT
+        and paint.x1 <= ink_x1 + SOURCE_COORD_EPS_PT
+    ], SOURCE_COORD_EPS_PT)
+    reach = band_y0
+    while True:
+        above = [
+            interval for interval in column
+            if interval[0] < reach - SOURCE_COORD_EPS_PT
+        ]
+        if not above:
+            return reach
+        low, high = max(above, key=lambda interval: (interval[1], interval[0]))
+        if (high < reach - SOURCE_COORD_EPS_PT
+                and not _stroke_column_break_is_erased(
+                    page, ink_x0, ink_x1, high, reach)):
+            return reach
+        reach = low
+
+
+def _stroke_stands_at_border_weight(
+        page: VectorPage,
+        tone: float,
+        rail: dict[str, Any] | None,
+        band_y0: float,
+        divider_weight: float,
+        divider_reach: float,
+        ) -> bool:
+    """Is this interior vertical drawn as a box side rather than a divider?
+
+    ``_carries_band_into_rule_above`` reads the wall's own connection to the
+    rule that closes the box, which is the strongest witness there is and stays
+    first. It cannot answer when the sheet erases that connection: 2000-DST and
+    2200-C both stop their walls a point and a half short of the comb band, so
+    the wall is final-visible for the whole band and cut off just above it,
+    exactly as 2200-A's knocked-out DIVIDER is. Ink presence above the cut
+    therefore decides nothing, and the sheets separate the two cases on how the
+    strokes are DRAWN instead -- both axes, never one:
+
+    | sheet, band                 | dividers stand      | the odd stroke      |
+    | --------------------------- | ------------------- | ------------------- |
+    | 2000-DST p1, y122.18-129.02 | 4 x 0.24pt, 1.08pt  | 0.48pt, 12.00pt     |
+    |                             | above the band      | above the band      |
+    | 2200-C p1, y126.50-132.14   | 1 x 0.24pt, 1.08pt  | 0.48pt, 10.80pt     |
+    |                             | above the band      | above the band      |
+    | 2200-A p1, erased divider   | 0.24pt              | 0.24pt (same)       |
+    | 2551-M p1, y800.28-803.88   | 0.72pt              | 0.72pt (same)       |
+    | 2200-C p1, y403.49-409.61   | 0.24pt, NOT above   | 0.48pt, 9.60pt      |
+    |   (a money row)             | the band at all     | above the band      |
+
+    Twice the weight and ten times the reach on the two sheets that partition;
+    no weight separation at all on the two whose odd stroke is a divider. So a
+    wall is a stroke strictly THICKER than the thinnest strokes of its own span
+    AND standing strictly HIGHER than every one of them. Either test alone is a
+    known misreading: weight alone promotes a money comb's thousands separator,
+    which is thicker than its digit dividers and hangs from the same baseline to
+    the same height, into a box wall; reach alone promotes 2200-A's divider,
+    which is cut off from the rule above by a knockout as thick as itself.
+
+    The last row is why the dividers, and not the band, must supply the scale.
+    2200-C's money rows carry real column walls -- 0.48pt, 9.6pt above the band,
+    bounding the sheet's grey N/A blocks -- beside digit dividers that stop dead
+    at the band's own top edge. With no divider standing above the band the
+    sheet has said nothing about how high a divider may stand, "higher than
+    every divider" collapses into "above the band at all", and that is the
+    reading 2200-A refutes. So the comparison is refused outright unless the
+    dividers themselves demonstrate the height a divider reaches. A span whose
+    verticals are all one weight, or whose dividers all stop at the band, yields
+    no wall here: the frame stays whole and an owner inside it stays
+    unevaluable, which is the fail-closed direction.
+    """
+    if rail is None or divider_reach >= band_y0 - SOURCE_COORD_EPS_PT:
+        return False
+    thickness = float(rail["ink_x1"]) - float(rail["ink_x0"])
+    if thickness <= divider_weight + SOURCE_COORD_EPS_PT:
+        return False
+    return (_source_stroke_column_reach(page, tone, rail, band_y0)
+            < divider_reach - SOURCE_COORD_EPS_PT)
+
+
+def _source_wall_partition(
+        page: VectorPage,
+        tone: float,
+        band_y0: float,
+        band_y1: float,
+        left: float,
+        right: float,
+        baseline: _SourceBaselineSpan,
+        ) -> list[float]:
+    """The source's own walls inside one U-frame, left rail to right rail.
+
+    A U-frame proves a rail pair and a baseline. It does not prove that the
+    span between them is ONE box: 1600WP's date field is a single stroked
+    rectangle carrying three sub-boxes (MM, DD, YYYY) on full-height interior
+    verticals, and 1707 draws the same shape as one row rule with the box
+    walls standing on it. Each interior wall is source paint that reaches both
+    the baseline and the rule above (``_carries_band_into_rule_above``), or is
+    drawn to border weight and stands above every divider of the same span
+    (``_stroke_stands_at_border_weight``) where the sheet has erased that
+    reach. Either way the partition is read off the page, never off a claimed
+    rectangle.
+    """
+    interior: list[tuple[float, dict[str, Any] | None]] = []
+    for source_x in _stable_source_verticals(
+            page,
+            left - COMB_MAX_WIDTH_PT,
+            right + COMB_MAX_WIDTH_PT,
+            band_y0,
+            baseline.y0,
+            tone):
+        if (source_x <= left + COMB_MERGE_PT
+                or source_x >= right - COMB_MERGE_PT):
+            continue
+        geometry = _source_vertical_ink_geometry(
+            page, source_x, band_y0, band_y1, tone)
+        if not _vertical_has_connected_baseline_contact(
+                page, tone, geometry, band_y0, source_x, baseline):
+            continue
+        interior.append((source_x, geometry))
+
+    # The divider population of THIS span, measured rather than assumed: the
+    # thinnest strokes standing between these two rails, and the highest any
+    # of them reaches. Both bounds come from the same source operators the
+    # candidate walls are measured against.
+    weights = [
+        float(geometry["ink_x1"]) - float(geometry["ink_x0"])
+        for _source_x, geometry in interior
+        if geometry is not None
+    ]
+    divider_weight = min(weights) if weights else 0.0
+    divider_reach = min(
+        (
+            _source_stroke_column_reach(page, tone, geometry, band_y0)
+            for _source_x, geometry in interior
+            if geometry is not None
+            and float(geometry["ink_x1"]) - float(geometry["ink_x0"])
+            <= divider_weight + SOURCE_COORD_EPS_PT
+        ),
+        default=band_y0,
+    )
+
+    walls = sorted(
+        source_x for source_x, geometry in interior
+        if _carries_band_into_rule_above(page, tone, geometry, band_y0)
+        or _stroke_stands_at_border_weight(
+            page, tone, geometry, band_y0, divider_weight, divider_reach)
+    )
+    return [left, *walls, right]
+
+
 def _local_baseline_spans(
         page: VectorPage, x0: float, x1: float, band_y1: float,
         tone: float,
@@ -3980,6 +5342,68 @@ def _local_baseline_spans(
                 group_spans, verify.DEFAULT_POSITION_TOL_PT)
         )
     return spans
+
+
+def _frame_cut_at_source_walls(
+        page: VectorPage,
+        tone: float,
+        band_y0: float,
+        band_y1: float,
+        x0: float,
+        x1: float,
+        topology: Sequence[float],
+        candidate: tuple[
+            float, float, tuple[float, ...], _SourceBaselineSpan,
+            tuple[float, ...], tuple[tuple[int, int], ...],
+        ],
+        ) -> tuple[
+            float, float, tuple[float, ...], _SourceBaselineSpan,
+            tuple[float, ...], tuple[tuple[int, int], ...],
+        ]:
+    """Reduce one U-frame to the source cell of it the owner claims.
+
+    Maximality is what stops a shrunk rectangle from nominating two of its own
+    dividers as counterfeit rails, and it stays: this cuts ONLY at walls the
+    source itself paints, so every endpoint offered here was drawn as a box
+    edge on the sheet. What it removes is the assumption that one rail pair
+    bounds one comb. Official sheets draw a row of boxes as a single rule with
+    walls standing on it, and the maximal frame then spans the whole row --
+    1707's MM|DD|YYYY, 1600WP's three date boxes inside one stroked rectangle.
+    Reporting those as "the owner cropped a wider frame" said nothing about
+    the owner and hid the compartment count behind an unevaluable verdict.
+
+    An owner that does not coincide with one source cell keeps its original
+    frame, so cropping a genuine comb and absorbing a neighbouring one are
+    still reported exactly as before.
+    """
+    left, right, interior, baseline, _external, lineage = candidate
+    cuts = _source_wall_partition(
+        page, tone, band_y0, band_y1, left, right, baseline)
+    if len(cuts) < 3:
+        return candidate
+    claimed = [
+        (cut_left, cut_right)
+        for cut_left, cut_right in zip(cuts, cuts[1:])
+        if abs(cut_left - x0) <= COMB_MERGE_PT
+        and abs(cut_right - x1) <= COMB_MERGE_PT
+    ]
+    if len(claimed) != 1:
+        return candidate
+    cut_left, cut_right = claimed[0]
+    cut_interior = tuple(
+        divider for divider in interior
+        if divider > cut_left + COMB_MERGE_PT
+        and divider < cut_right - COMB_MERGE_PT
+    )
+    if not cut_interior:
+        return candidate
+    cut_external = tuple(
+        divider for divider in topology
+        if (divider < cut_left - COMB_MERGE_PT
+            or divider > cut_right + COMB_MERGE_PT)
+    )
+    return (
+        cut_left, cut_right, cut_interior, baseline, cut_external, lineage)
 
 
 def _source_u_frame(
@@ -4067,6 +5491,12 @@ def _source_u_frame(
     ))
     if not candidates:
         return None
+
+    candidates = [
+        _frame_cut_at_source_walls(
+            page, tone, band_y0, band_y1, x0, x1, topology, candidate)
+        for candidate in candidates
+    ]
 
     widest = max(
         right - left
@@ -4301,6 +5731,48 @@ def printed_compartments(
             "comb owner certificate does not bind this exact cell identity")
 
     owner = (x0, y0, x1, y1)
+    # W5 mechanism 1: a chromatic fill the extractor could parse exactly
+    # rectilinear (`exact_regions` populated -- see `_rectilinear_fill_regions`)
+    # is promoted from refused paint to ordinary paint for this comb's OWN
+    # evaluation only. This never touches `page.paints`/`page.unsupported`
+    # themselves -- `page` is rebound to a new `VectorPage` local to this
+    # call, so `inputs_over_printed_text` and every other reader of the
+    # shared bundle-wide vector page is unaffected. Scoped to paint
+    # intersecting the owner rect: paint that never comes near this comb
+    # cannot change what it prints.
+    chromatic_promotions = [
+        unsupported for unsupported in page.unsupported
+        if unsupported.reason == "chromatic vector fill"
+        and unsupported.exact_regions
+        and unsupported.tone is not None
+        and _rects_intersect(owner, unsupported.rect)
+    ]
+    if chromatic_promotions:
+        promoted_paints = tuple(
+            VectorPaint(
+                *region_rect, float(item.tone),
+                item.opacity if item.opacity is not None else 1.0,
+                item.order, "fill-region", item.order, item.fill_rule,
+                winding,
+            )
+            for item in chromatic_promotions
+            for region_rect, winding in item.exact_regions
+        )
+        promoted = set(chromatic_promotions)
+        page = dataclasses.replace(
+            page,
+            paints=tuple(sorted(
+                (*page.paints, *promoted_paints),
+                key=lambda paint: (
+                    paint.order, paint.operation, paint.kind,
+                    paint.x0, paint.y0, paint.x1, paint.y1,
+                    paint.fill_rule, paint.winding),
+            )),
+            unsupported=tuple(
+                item for item in page.unsupported
+                if item not in promoted
+            ),
+        )
     bands, first_source_order = _source_band_candidates(page, owner)
     if not bands:
         relevant = sorted({
@@ -4321,7 +5793,8 @@ def printed_compartments(
         "unmodeled source stroke-text paint",
     }
     image_reason = "unmodeled source fill-image paint"
-    deferred_reasons = {*text_reasons, image_reason}
+    stroke_reason = "non-rectilinear vector stroke"
+    deferred_reasons = {*text_reasons, image_reason, stroke_reason}
     image_hits = sorted(
         (
             unsupported for unsupported in page.unsupported
@@ -4359,7 +5832,8 @@ def printed_compartments(
             },
         )
     blocked: set[str] = set()
-    for band_y0, band_y1 in bands:
+
+    def process_band(band_y0: float, band_y1: float) -> None:
         subject = (x0, band_y0, x1, band_y1)
         nonforeign_hits = [
             unsupported for unsupported in page.unsupported
@@ -4368,9 +5842,30 @@ def printed_compartments(
         ]
         if nonforeign_hits:
             blocked.update(hit.reason for hit in nonforeign_hits)
-            continue
+            return
         for tone, topology in _band_topologies(
                 page, x0, x1, band_y0, band_y1):
+            # W5 mechanism 2: a non-rectilinear (bezier/diagonal) stroke's own
+            # bounding geometry -- pymupdf's extrema-derived `rect`, already
+            # exact and already computed at extraction time -- is what decides
+            # whether it can BE one of this band's dividers, exactly as an
+            # unmodeled text paint's rect already decides for `text_hits`
+            # below. One that never straddles a divider this band's own
+            # rectilinear ink establishes is refuted as a divider candidate,
+            # not left unevaluable; one that does still blocks exactly as
+            # before -- this never admits a curve as ink, it only ever
+            # excuses one that cannot be a divider from blocking the ones
+            # that are.
+            stroke_hits = [
+                unsupported for unsupported in page.unsupported
+                if unsupported.reason == stroke_reason
+                and _rects_intersect(subject, unsupported.rect)
+                and any(unsupported.rect[0] <= divider_x <= unsupported.rect[2]
+                        for divider_x in topology)
+            ]
+            if stroke_hits:
+                blocked.update(hit.reason for hit in stroke_hits)
+                continue
             text_hits = [
                 unsupported for unsupported in page.unsupported
                 if unsupported.reason in text_reasons
@@ -4408,6 +5903,30 @@ def printed_compartments(
                 normalized, frame_key = frame
             results.append((
                 band_y0, band_y1, tone, normalized, frame_key))
+
+    for band_y0, band_y1 in bands:
+        process_band(band_y0, band_y1)
+
+    # W5 mechanism 4: F064 lets a candidate band own the full painted extent
+    # of a vertical mark so a genuinely shared multi-row divider is read as
+    # one continuous topology. The strict-majority test inside
+    # `_band_topologies` must then clear that FULL extent, which is right
+    # when the extent really is one row's own comb and wrong when the
+    # claimed owner is only a fraction of a taller seed -- a short comb row
+    # whose own divider ink sits inside a much taller shared column rule.
+    # Retried only when the unclipped pass decided nothing at all and hit no
+    # blocking paint either: a band clipped to the claimed owner's own
+    # rectangle is measured by the exact same strict-majority rule in
+    # `_band_topologies`, unmodified, just windowed to the row actually being
+    # asked about instead of every row the same physical stroke also serves.
+    if not blocked and not results:
+        clipped_bands = sorted({
+            (max(band_y0, y0), min(band_y1, y1))
+            for band_y0, band_y1 in bands
+            if max(band_y0, y0) < min(band_y1, y1) - COMB_MINLEN_PT
+        } - set(bands))
+        for band_y0, band_y1 in clipped_bands:
+            process_band(band_y0, band_y1)
 
     if blocked:
         raise ValueError(
@@ -4569,6 +6088,550 @@ def drawn_codepoints(page) -> dict[tuple[float, float], set[int]]:
             key = (round(char[2][0], 2), round(char[2][1], 2))
             seen.setdefault(key, set()).add(char[0])
     return seen
+
+
+@dataclasses.dataclass(frozen=True)
+class SourceGlyph:
+    """One glyph the source page's own text operators draw, and where."""
+
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+def drawn_glyph_boxes(page) -> tuple[SourceGlyph, ...]:
+    """Every visible glyph the page draws, with the box the file gives it.
+
+    The same `get_texttrace()` view `drawn_codepoints` reads, for the same
+    reason: it reports what the font's encoding actually yields rather than
+    rawdict's plausible substitute, and it is the source file's own operator
+    stream rather than any IR derived from it. A glyph whose encoding failed
+    arrives as U+FFFD and is simply not alphanumeric, so it can never be read
+    as a printed constant.
+
+    Whitespace and degenerate boxes are dropped: a space occupies a
+    compartment the way an empty compartment does, which is to say not at all.
+    """
+    glyphs: list[SourceGlyph] = []
+    for span in page.get_texttrace():
+        for char in span.get("chars") or ():
+            if len(char) < 4:
+                continue
+            text = chr(char[0]) if char[0] else ""
+            if not text.strip():
+                continue
+            box = tuple(float(value) for value in char[3])
+            if not all(math.isfinite(value) for value in box):
+                continue
+            if box[2] <= box[0] or box[3] <= box[1]:
+                continue
+            glyphs.append(SourceGlyph(text, *box))
+    return tuple(glyphs)
+
+
+# The sheet's own words for "this blank is not yours". Quoted from the paper,
+# including 0605's missing "by" -- a match list that silently corrected the
+# Bureau's typo would not match the Bureau's form.
+#
+# Written WITHOUT spaces because they are matched against a text operator
+# stream, not against prose: `drawn_glyph_boxes` drops whitespace glyphs
+# (a space occupies a compartment the way an empty compartment does), so the
+# only faithful comparison is between the visible characters on both sides.
+#
+# ANYWHERE for the parenthetical, which 0605 sets at the end of a longer
+# caption line; LINE_START for the two bottom-of-sheet band headings, because
+# guide prose discusses those boxes mid-sentence ("The machine validation
+# shall reflect the date of payment") and an anywhere rule would read a
+# paragraph as a reservation. A caption STARTS with its subject; prose does
+# not.
+BUREAU_RESERVING_ANYWHERE = (
+    "tobefilledupbythebir",
+    "tobefilledupthebir",
+    "forbiruseonly",
+)
+BUREAU_RESERVING_LINE_START = (
+    "machinevalidation",
+    "stampofreceiving",
+    "stampofauthorized",
+)
+# A caption is set against the blank it governs. 0605's clears its BCS box by
+# 5.3pt against its own 8.1pt line, so the bound is the caption's OWN height:
+# one line of separation at most, measured rather than chosen.
+BUREAU_CAPTION_LINE_TOLERANCE_PT = 1.0
+
+
+def source_bureau_reservations(
+        glyphs: Sequence[SourceGlyph]) -> tuple[Rect, ...]:
+    """Every caption the SOURCE PAGE prints reserving a blank for the Bureau.
+
+    Assembled from the pinned PDF's own text operators (`drawn_glyph_boxes`)
+    and from nothing else. `emit.py` answers the same question from
+    `extract.py`'s IR runs and binds it through the page's walls; this reads
+    the file directly and binds it geometrically, so the two share the words
+    the Bureau printed and share no producer, no code path and no
+    intermediate. That is the point: an emitter that reserved a box the sheet
+    does not reserve still has to answer to this, because this never asks the
+    emitter anything.
+
+    Glyphs are grouped into printed lines by their own box band and ordered by
+    x, which is the only structure a texttrace gives. **The rectangle reported
+    is the matching phrase's own glyphs, never the line's** -- 0605 sets
+    "Return Period (MM/DD/YYYY)" and "BCS No./Item No. (To be filled up by the
+    BIR)" on ONE baseline, and a line-wide rectangle would hand the taxpayer's
+    Return Period boxes the Bureau's excuse.
+    """
+    lines: dict[tuple[float, float], list[SourceGlyph]] = (
+        collections.defaultdict(list))
+    for glyph in glyphs:
+        lines[(round(glyph.y0, 1), round(glyph.y1, 1))].append(glyph)
+    captions: list[Rect] = []
+    for key in sorted(lines):
+        ordered = sorted(lines[key], key=lambda glyph: glyph.x0)
+        text = "".join(glyph.text for glyph in ordered).lower()
+        spans: list[tuple[int, int]] = []
+        for phrase in BUREAU_RESERVING_ANYWHERE:
+            start = text.find(phrase)
+            while start >= 0:
+                spans.append((start, start + len(phrase)))
+                start = text.find(phrase, start + 1)
+        for phrase in BUREAU_RESERVING_LINE_START:
+            if text.startswith(phrase):
+                spans.append((0, len(phrase)))
+        for start, stop in spans:
+            matched = ordered[start:stop]
+            if not matched:
+                continue
+            captions.append((
+                min(glyph.x0 for glyph in matched),
+                min(glyph.y0 for glyph in matched),
+                max(glyph.x1 for glyph in matched),
+                max(glyph.y1 for glyph in matched),
+            ))
+    return tuple(captions)
+
+
+def bureau_reserved_box(box: Rect, captions: Sequence[Rect]) -> bool:
+    """Whether a printed blank carries a Bureau reservation on the paper.
+
+    Two placements, both of which the corpus prints:
+
+      * the caption is set INSIDE the blank -- 2200-A/C/P's bottom band draws
+        one wide rectangle split into "Machine Validation" and "Stamp of
+        Receiving Office", each carrying its heading at its own top edge; and
+      * the caption is set DIRECTLY ABOVE the blank, within the caption's own
+        height, horizontally overlapping it -- 0605's
+        "BCS No./Item No. (To be filled up by the BIR)".
+
+    This can only ever REMOVE an offender, so the count it removes is
+    published by every caller. It is deliberately silent about a caption that
+    is merely near: a reservation the paper does not place on the box is a
+    guess, and a guess here would hide exactly the class of defect these
+    assertions exist to find.
+    """
+    for caption in captions:
+        if (caption[0] >= box[0] - OVERLAP_EPS_PT
+                and caption[2] <= box[2] + OVERLAP_EPS_PT
+                and caption[1] >= box[1] - OVERLAP_EPS_PT
+                and caption[3] <= box[3] + OVERLAP_EPS_PT):
+            return True
+        overlap = min(caption[2], box[2]) - max(caption[0], box[0])
+        if overlap <= 0:
+            continue
+        gap = box[1] - caption[3]
+        height = caption[3] - caption[1]
+        if -OVERLAP_EPS_PT <= gap <= height + BUREAU_CAPTION_LINE_TOLERANCE_PT:
+            return True
+    return False
+
+
+class PointToneIndex:
+    """Composited final tone at an arbitrary point of one source page.
+
+    A bucketed view over `VectorPage.paints` so a point query does not rescan
+    the page.  The bucket is a lookup device only: `_final_tone` is handed
+    every paint whose rectangle contains the point, which is the same set it
+    would receive from a full scan, so the answer it returns is identical --
+    `_stable_source_verticals` already narrows its `active` list the same way.
+
+    `None` means the page cannot be composited at that point (one operation
+    with conflicting tone or opacity).  Every caller treats `None` as
+    unevaluable and publishes it; none treats it as paper.
+    """
+
+    __slots__ = ("_buckets",)
+
+    def __init__(self, paints: Sequence[VectorPaint]) -> None:
+        buckets: dict[tuple[int, int], list[VectorPaint]] = (
+            collections.defaultdict(list))
+        for paint in paints:
+            for bx in range(int(paint.x0 // TONE_BUCKET_PT),
+                            int(paint.x1 // TONE_BUCKET_PT) + 1):
+                for by in range(int(paint.y0 // TONE_BUCKET_PT),
+                                int(paint.y1 // TONE_BUCKET_PT) + 1):
+                    buckets[(bx, by)].append(paint)
+        self._buckets = dict(buckets)
+
+    def tone(self, x: float, y: float) -> float | None:
+        candidates = self._buckets.get(
+            (int(x // TONE_BUCKET_PT), int(y // TONE_BUCKET_PT)))
+        if not candidates:
+            return 1.0
+        active = [paint for paint in candidates
+                  if paint.x0 <= x <= paint.x1 and paint.y0 <= y <= paint.y1]
+        if not active:
+            return 1.0
+        try:
+            return _final_tone(active, x, y)
+        except ValueError:
+            return None
+
+
+def source_printed_dividers(
+        page: VectorPage, tones: PointToneIndex,
+        ) -> tuple[tuple[float, VectorPaint], ...]:
+    """Every compartment divider the SOURCE page still shows, by x centre.
+
+    Dark, thin, materially taller than wide, and -- the clause that matters --
+    still visible once the page has composited.  See the DIVIDER_* block for
+    why the visibility clause is load bearing and how it was checked against
+    the rasteriser rather than assumed.
+    """
+    out: list[tuple[float, VectorPaint]] = []
+    for paint in page.paints:
+        if paint.tone > DIVIDER_MAX_TONE:
+            continue
+        width = paint.x1 - paint.x0
+        height = paint.y1 - paint.y0
+        if width > DIVIDER_MAX_WIDTH_PT or height < DIVIDER_MIN_HEIGHT_PT:
+            continue
+        if height - width < DIVIDER_MIN_ANISOTROPY_PT:
+            continue
+        centre_x = (paint.x0 + paint.x1) / 2.0
+        tone = tones.tone(centre_x, (paint.y0 + paint.y1) / 2.0)
+        if tone is None or tone > DIVIDER_MAX_TONE:
+            continue
+        out.append((centre_x, paint))
+    out.sort(key=lambda item: (item[0], item[1].y0, item[1].y1, item[1].order))
+    return tuple(out)
+
+
+def _covered_without_gap(spans: Sequence[tuple[float, float]],
+                         low: float, high: float,
+                         gap: float = PRINTED_BOX_SIDE_MAX_GAP_PT) -> bool:
+    """Is [low, high] drawn by `spans`, leaving no gap wider than `gap`?"""
+    cursor = low
+    for span_low, span_high in spans:
+        if span_high <= cursor:
+            continue
+        if span_low > high:
+            break
+        if span_low > cursor + gap:
+            return False
+        cursor = max(cursor, span_high)
+        if cursor >= high:
+            return True
+    return cursor >= high - gap
+
+
+def _source_grid_lines(
+        page: VectorPage,
+        ) -> tuple[tuple[tuple[float, list[tuple[float, float]]], ...],
+                   tuple[tuple[float, list[tuple[float, float]]], ...]]:
+    """Clustered horizontal and vertical source rule lines, with their extents.
+
+    A "line" is every thin dark paint sharing a coordinate to within
+    PRINTED_RULE_CLUSTER_PT, and its extent is the union of those paints'
+    spans.  Rules are drawn in pieces -- a table's top edge is one operation
+    per column on most of these sheets -- so the union, not any single paint,
+    is what says whether a side exists.
+    """
+    horizontal: list[tuple[float, float, float]] = []
+    vertical: list[tuple[float, float, float]] = []
+    for paint in page.paints:
+        if paint.tone > PRINTED_RULE_MAX_TONE:
+            continue
+        width = paint.x1 - paint.x0
+        height = paint.y1 - paint.y0
+        if (height <= PRINTED_RULE_MAX_THICKNESS_PT
+                and width >= PRINTED_RULE_MIN_LENGTH_PT and width > height):
+            horizontal.append(((paint.y0 + paint.y1) / 2.0, paint.x0, paint.x1))
+        elif (width <= PRINTED_RULE_MAX_THICKNESS_PT
+                and height >= PRINTED_RULE_MIN_LENGTH_PT and height > width):
+            vertical.append(((paint.x0 + paint.x1) / 2.0, paint.y0, paint.y1))
+
+    def cluster(items: list[tuple[float, float, float]]
+                ) -> tuple[tuple[float, list[tuple[float, float]]], ...]:
+        groups: list[list[Any]] = []
+        for coord, low, high in sorted(items):
+            if groups and coord - groups[-1][0] <= PRINTED_RULE_CLUSTER_PT:
+                groups[-1][0] = coord
+                groups[-1][1].append((low, high))
+            else:
+                groups.append([coord, [(low, high)]])
+        return tuple((round(coord, 4), _merge_intervals(spans, 0.0))
+                     for coord, spans in groups)
+
+    return cluster(horizontal), cluster(vertical)
+
+
+def source_printed_boxes(
+        page: VectorPage, glyphs: Sequence[SourceGlyph],
+        tones: PointToneIndex,
+        ) -> tuple[tuple[Rect, ...], int]:
+    """Blank enclosed boxes the SOURCE page draws, and how many were unevaluable.
+
+    Minimal by construction: for each top-left grid intersection the first
+    right edge and then the first bottom edge that close a fully drawn
+    rectangle win, so a box is never reported nested inside a larger one that
+    shares its corner.  Survivors must be blank -- no source glyph inside the
+    1pt inset interior, and at least PRINTED_BOX_PAPER_MIN_FRACTION of the
+    sampled interior at paper tone.  Both clauses are about the claim the
+    inventory makes: these are boxes a taxpayer is meant to write in, not
+    captions and not the official grey bands that say no entry applies.
+
+    The second return value counts boxes whose interior could not be
+    composited.  They are excluded from the inventory and published, never
+    silently treated as paper.
+    """
+    horizontal, vertical = _source_grid_lines(page)
+    boxes: list[Rect] = []
+    unevaluable = 0
+    for i in range(len(vertical) - 1):
+        x0, left = vertical[i]
+        for j in range(len(horizontal) - 1):
+            y0, top = horizontal[j]
+            closed: tuple[float, float] | None = None
+            for k in range(i + 1, len(vertical)):
+                x1, right = vertical[k]
+                if x1 - x0 < PRINTED_BOX_MIN_SIDE_PT:
+                    continue
+                if x1 - x0 > PRINTED_BOX_MAX_SIDE_PT:
+                    break
+                if not _covered_without_gap(
+                        right, y0, y0 + PRINTED_BOX_MIN_SIDE_PT):
+                    continue
+                for m in range(j + 1, len(horizontal)):
+                    y1, bottom = horizontal[m]
+                    if y1 - y0 < PRINTED_BOX_MIN_SIDE_PT:
+                        continue
+                    if y1 - y0 > PRINTED_BOX_MAX_SIDE_PT:
+                        break
+                    if (_covered_without_gap(top, x0, x1)
+                            and _covered_without_gap(bottom, x0, x1)
+                            and _covered_without_gap(left, y0, y1)
+                            and _covered_without_gap(right, y0, y1)):
+                        closed = (x1, y1)
+                        break
+                if closed is not None:
+                    break
+            if closed is None:
+                continue
+            x1, y1 = closed
+            ix0 = x0 + PRINTED_BOX_INSET_PT
+            iy0 = y0 + PRINTED_BOX_INSET_PT
+            ix1 = x1 - PRINTED_BOX_INSET_PT
+            iy1 = y1 - PRINTED_BOX_INSET_PT
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+            if any(glyph.x1 > ix0 and glyph.x0 < ix1
+                   and glyph.y1 > iy0 and glyph.y0 < iy1 for glyph in glyphs):
+                continue
+            columns = min(PRINTED_BOX_SAMPLE_MAX, max(
+                2, int((ix1 - ix0) // PRINTED_BOX_SAMPLE_PITCH_PT) + 1))
+            rows = min(PRINTED_BOX_SAMPLE_MAX, max(
+                2, int((iy1 - iy0) // PRINTED_BOX_SAMPLE_PITCH_PT) + 1))
+            sampled = paper = 0
+            broke = False
+            for column in range(columns):
+                for row in range(rows):
+                    tone = tones.tone(
+                        ix0 + (ix1 - ix0) * (column + 0.5) / columns,
+                        iy0 + (iy1 - iy0) * (row + 0.5) / rows)
+                    if tone is None:
+                        broke = True
+                        break
+                    sampled += 1
+                    if tone >= PRINTED_BOX_PAPER_MIN_TONE:
+                        paper += 1
+                if broke:
+                    break
+            if broke:
+                unevaluable += 1
+                continue
+            if not sampled or paper / sampled < PRINTED_BOX_PAPER_MIN_FRACTION:
+                continue
+            boxes.append((x0, y0, x1, y1))
+    boxes.sort()
+    return tuple(boxes), unevaluable
+
+
+@dataclasses.dataclass(frozen=True)
+class SourceSlotOracle:
+    """Which comb compartments the SOURCE has already filled in, and how.
+
+    A comb compartment the official sheet printed a value into is not a blank,
+    and emitting a text box over it lets a taxpayer overtype a statutory
+    constant -- the ATC codes `II 011` and `XC 010`, the century `2 0`, the TIN
+    branch code `0 0 0 0 0`. The emitter now refuses those compartments an
+    input, which is a change to what "a complete comb emission" means, and this
+    is the assertion's independent re-derivation of that same fact. It reads
+    the source PDF's own text and paint operators -- never emit.py's decision,
+    never a marker emit publishes, and never the absence of the input, all
+    three of which would make the check a mirror of its subject.
+
+    Two ways the source occupies a compartment, answered in this order because
+    that is the order they are painted in:
+
+      * **A printed glyph.** Exactly one glyph overlaps the compartment's own
+        printed ROW, and it lies wholly inside that rectangle. One glyph,
+        because a value is typeset AT the comb's pitch, one character per box,
+        to look like a filled-in form; a caption the lattice swallowed into the
+        same cell lands 9 to 87 glyphs in a single compartment (measured: 1801
+        p1c110 carries 87). Wholly inside, because a neighbouring caption can
+        clip one glyph across a compartment wall.
+      * **Decorative shading.** The topmost source fill covering the
+        compartment is grey at the copied `SOURCE_SHADING_*` bounds. This is
+        the same statement made with tone instead of glyphs -- BIR shades a
+        box to say NO ENTRY APPLIES -- and it is what accounts for the
+        swallowed captions. Topmost, because the sheet paints a grey band
+        across a row and then knocks white boxes back out of it for the blanks;
+        reading the band alone would excuse every real field on that row.
+
+    **The compartment is asked about over its printed row, not over the
+    emitted writing rectangle.** The compartment's left and right walls are the
+    source's own dividers -- an emitted partition that is not the source's is
+    an offender anyway, on `emission-printed-mismatch`,
+    `emission-source-position-mismatch` or `source-topology-unevaluable`, so an
+    excuse can never carry a comb whose boxes are not where the sheet prints
+    them. Its top and bottom are nothing the source drew: they are the writing
+    rectangle emit chose. Containing the glyph's font box in THAT made the
+    answer a function of the emitter's typography, and the corpus shows the
+    cost exactly: of 92 identical money bullets, 7 were called occupied and 85
+    blank paper, the only difference being that the bullet's descent line falls
+    0.03-0.41pt below the writing rectangle's floor. The row -- the compartment
+    stretched to the top and bottom of the cell whose walls the sheet drew --
+    is a rectangle the source is responsible for, and it keeps every rejection
+    the old test made: over the whole corpus's 375 inputless compartments, the
+    row rectangle admits every compartment the writing rectangle admitted and
+    loses none.
+
+    **Character class is not the question, and the C4 reasoning that said it
+    was does not survive its own measurement.** The old rule demanded an
+    ALPHANUMERIC glyph, on the reasoning that `.` `,` `-` `%` and the money
+    bullet are drawn INSIDE a field to shape what is typed there rather than to
+    state a value, and that excusing them would put back C4 -- a money comb
+    with no way to enter an amount at all. A compartment is one character wide
+    and the source has already put a character in it; whatever that character
+    means, the compartment is SPENT, and an input there is a typing surface
+    laid on printed ink that no taxpayer can use. What actually protects C4 is
+    that only an OCCUPIED compartment is ever excused, which is a per-
+    compartment fact the source answers: measured over this corpus, the
+    non-alphanumeric population is 92 money bullets, each ONE compartment of a
+    14-, 29- or 33-compartment comb, every one of them the third from the right
+    with the two centavos compartments to its right and centred in its own
+    compartment to within 0.2pt (2000-DST 16, 2200A 20, 2200C 20, 2200P 20,
+    2200S 16); the 2 that complete the printed rate `0 %` on 1800 p1c68 and
+    2550-DS p1c79, 2-compartment combs the source fills entirely and which are
+    not money boxes; and 7 grey TIN group separators printing `-` or `.` that
+    the shading branch below already excused. No digit compartment anywhere in
+    the corpus loses its input. The kind is still published per compartment --
+    `printed-constant` for an alphanumeric glyph, `printed-mark` for one that
+    is not -- so a report can still tell a statutory value from a separator.
+
+    `available` is False when either evidence is missing (no glyph operators
+    for the page, no modelled source paint, a rotated page whose text operators
+    are not in the paint's coordinate space). An unavailable oracle excuses
+    nothing: a compartment with no input and no readable source evidence stays
+    an offender, because "we could not look" is not "the source filled it in".
+    """
+
+    glyphs: tuple[SourceGlyph, ...] | None
+    paints: tuple[VectorPaint, ...] | None
+    unavailable_reason: str | None = None
+
+    @property
+    def available(self) -> bool:
+        return (self.glyphs is not None and self.paints is not None
+                and self.unavailable_reason is None)
+
+    def occupancy(self, box: Rect | None,
+                  row: Rect | None = None) -> dict[str, Any] | None:
+        """What the source put in this compartment, or None for nothing.
+
+        `box` is the compartment a taxpayer would type into, and it is what the
+        shading question is asked of -- tone is a fact about the paper directly
+        under the box. `row` is that same compartment stretched to its printed
+        row, and it is what the glyph question is asked of, for the reason the
+        class docstring gives. A caller that cannot supply the row supplies no
+        glyph evidence and gets none: the oracle fails closed rather than
+        falling back to a rectangle whose vertical edges the emitter chose.
+        """
+        if not self.available or box is None:
+            return None
+        x0, y0, x1, y1 = (float(value) for value in box)
+        if not all(math.isfinite(value) for value in (x0, y0, x1, y1)):
+            return None
+        if x1 <= x0 or y1 <= y0:
+            return None
+        glyph = self._printed_glyph(row)
+        if glyph is not None:
+            return {
+                "kind": ("printed-constant" if glyph.isalnum()
+                         else "printed-mark"),
+                "text": glyph,
+            }
+        tone = self._covering_shading(x0, y0, x1, y1)
+        if tone is not None:
+            return {"kind": "decorative-shading", "tone": tone}
+        return None
+
+    def _printed_glyph(self, row: Rect | None) -> str | None:
+        if row is None:
+            return None
+        x0, y0, x1, y1 = (float(value) for value in row)
+        if not all(math.isfinite(value) for value in (x0, y0, x1, y1)):
+            return None
+        if x1 <= x0 or y1 <= y0:
+            return None
+        found: SourceGlyph | None = None
+        for glyph in self.glyphs or ():
+            if min(x1, glyph.x1) <= max(x0, glyph.x0):
+                continue
+            if min(y1, glyph.y1) <= max(y0, glyph.y0):
+                continue
+            if found is not None:
+                return None
+            found = glyph
+        if found is None:
+            return None
+        if found.x0 < x0 or found.x1 > x1 or found.y0 < y0 or found.y1 > y1:
+            return None
+        return found.text
+
+    def _covering_shading(self, x0: float, y0: float,
+                          x1: float, y1: float) -> float | None:
+        area = (x1 - x0) * (y1 - y0)
+        needed = area * SOURCE_SHADING_MIN_COVERAGE
+        best: VectorPaint | None = None
+        best_key: tuple[int, int] = (-1, -1)
+        for index, paint in enumerate(self.paints or ()):
+            width = min(x1, paint.x1) - max(x0, paint.x0)
+            height = min(y1, paint.y1) - max(y0, paint.y0)
+            if width <= 0.0 or height <= 0.0 or width * height < needed:
+                continue
+            # The source's own paint order decides what the paper is; the
+            # enumeration index only breaks a tie between two paints of one
+            # operation, so the answer stays a pure function of the file.
+            key = (paint.order, index)
+            if key > best_key:
+                best, best_key = paint, key
+        if best is None or best.kind != "fill-region" or best.opacity != 1.0:
+            return None
+        if not SOURCE_SHADING_MIN_TONE < best.tone <= SOURCE_SHADING_MAX_TONE:
+            return None
+        return best.tone
 
 
 def transform_signature(matrix: Sequence[float]) -> tuple[int, int, bool]:
@@ -4984,7 +7047,7 @@ class _TreeClosure:
             self.entries, separators=(",", ":"), ensure_ascii=True)
         return {
             "logical_root": logical_root,
-            "algorithm": "sha256(canonical-json(path,type,bytes,digest))",
+            "algorithm": TREE_CLOSURE_ALGORITHM,
             "files": sum(1 for item in self.entries if item[1] == "file"),
             "symlinks": sum(
                 1 for item in self.entries if item[1] == "symlink"),
@@ -4996,11 +7059,39 @@ class _TreeClosure:
         }
 
 
+TREE_CLOSURE_ALGORITHM = "sha256(canonical-json(path,type,bytes,digest))"
+# Bytecode caches are excluded from every runtime tree closure, and the
+# exclusion is published rather than assumed.  The gate materialises each
+# approved runtime dependency into a private byte-verified view whose
+# inventory deliberately omits `__pycache__` and `*.pyc`
+# (gate.ISOLATED_PYTHON_BOOTSTRAP's `tree_records`), and it runs this audit
+# with `-B`, `PYTHONDONTWRITEBYTECODE=1` and a redirected `pycache_prefix`,
+# so inside that view no in-tree cache exists and none could be loaded if it
+# did.  Hashing the same set on both sides is what lets an independent
+# verifier re-derive this closure from the installed package rather than from
+# the gate's temporary copy of it, which is the whole point of publishing it.
+BYTECODE_CACHE_EXCLUSION_REASON = (
+    "__pycache__ directories and .pyc files are excluded so the closure is "
+    "re-derivable from the installed package; the gate's approved-dependency "
+    "view omits them and its audit runs with bytecode writing disabled and a "
+    "redirected pycache prefix, so no in-tree cache is loadable"
+)
+
+
+def _is_bytecode_cache(logical: str) -> bool:
+    return (
+        "__pycache__" in pathlib.PurePosixPath(logical).parts
+        or logical.endswith(".pyc")
+    )
+
+
 def _snapshot_tree(root: pathlib.Path) -> _TreeClosure:
     root = root.resolve(strict=True)
     entries: list[tuple[str, str, int | None, str]] = []
     for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
         logical = path.relative_to(root).as_posix()
+        if _is_bytecode_cache(logical):
+            continue
         if path.is_symlink():
             target = os.readlink(path)
             try:
@@ -5190,6 +7281,107 @@ def roundtrip_runtime_provenance() -> dict[str, Any]:
         return copy.deepcopy(runtime.provenance)
 
 
+APPLICATION_PACKAGE_NAMES = ("fitz", "pymupdf")
+NATIVE_LIBRARY_SUFFIXES = (".dylib", ".so", ".dll", ".pyd")
+APPLICATION_CLOSURE_SCOPE = (
+    "interpreter-binaries-and-application-package-trees-v1")
+
+
+def _resolve_package_root(
+        name: str, search_path: Sequence[str]) -> pathlib.Path:
+    """The single directory ``name`` would be imported from, or an error.
+
+    Resolution runs over `sys.path`, so the closure covers the tree this
+    process ACTUALLY imports from -- under the gate that is its private
+    byte-verified dependency view, not the installed package.  comb_referee.py
+    resolves the installed package instead, from the interpreter's own
+    configuration, and the two answers have to agree byte for byte.
+    """
+    spec = importlib.machinery.PathFinder.find_spec(name, list(search_path))
+    locations = list(getattr(spec, "submodule_search_locations", None) or ())
+    if spec is None or len(locations) != 1:
+        raise RuntimeError(
+            f"application package has no single resolved root: {name}")
+    return pathlib.Path(locations[0]).resolve(strict=True)
+
+
+@functools.lru_cache(maxsize=1)
+def _application_closure_snapshot(
+        ) -> tuple[tuple[str, _TreeClosure], ...]:
+    """Snapshot every file in the package trees this process imports from.
+
+    Enumerating the tree rather than the loaded module list is what makes the
+    closure complete AND independently re-derivable: a verifier cannot know
+    which submodules this process happened to import, but it can resolve the
+    same package root and hash the same files.  The bundled native libraries
+    PyMuPDF loads through the dynamic linker rather than through an import --
+    `libmupdf.dylib` and `libmupdfcpp.so` -- live in that tree and are bound
+    here for the first time; the loaded-module inventory never saw them.
+    """
+    return tuple(
+        (name, _snapshot_tree(_resolve_package_root(name, sys.path)))
+        for name in APPLICATION_PACKAGE_NAMES
+    )
+
+
+def validate_application_closure() -> None:
+    for name, closure in _application_closure_snapshot():
+        if _resolve_package_root(name, sys.path) != closure.root:
+            raise RuntimeError(
+                f"application package root was substituted: {name}")
+        _validate_tree_closure(closure, f"in the {name} application closure")
+
+
+def _application_closure_manifest() -> dict[str, Any]:
+    """Publish the application closure, and whether it is complete.
+
+    `complete` is a measured relation, not a declaration: every loaded
+    application module must fall inside a package root that was resolved from
+    the interpreter's own configuration.  A module imported from anywhere else
+    -- an injected path entry, a zip importer, an editable checkout -- leaves
+    the tree unable to account for it, and says so instead of claiming a
+    completeness it cannot support.
+    """
+    closures = _application_closure_snapshot()
+    modules: list[dict[str, Any]] = []
+    unbound: list[str] = []
+    for logical, path, size, digest in _base_runtime_snapshot():
+        if not logical.startswith("module/"):
+            continue
+        for name, closure in closures:
+            try:
+                relative = path.relative_to(closure.root).as_posix()
+            except ValueError:
+                continue
+            modules.append({
+                "module": logical[len("module/"):],
+                "file": f"{name}/{relative}",
+                "bytes": size,
+                "sha256": digest,
+            })
+            break
+        else:
+            unbound.append(logical)
+    native = [
+        {"file": f"{name}/{logical}", "bytes": size, "sha256": digest}
+        for name, closure in closures
+        for logical, kind, size, digest in closure.entries
+        if kind == "file" and logical.endswith(NATIVE_LIBRARY_SUFFIXES)
+    ]
+    return {
+        "scope": APPLICATION_CLOSURE_SCOPE,
+        "algorithm": TREE_CLOSURE_ALGORITHM,
+        "bytecode_caches_excluded": True,
+        "exclusion_reason": BYTECODE_CACHE_EXCLUSION_REASON,
+        "packages": [closure.manifest(name) for name, closure in closures],
+        "modules": sorted(modules, key=lambda item: item["file"]),
+        "native_libraries": sorted(native, key=lambda item: item["file"]),
+        "unbound_modules": sorted(unbound),
+        "validated_before_after": True,
+        "complete": not unbound,
+    }
+
+
 def _runtime_bound_paths() -> dict[str, pathlib.Path]:
     paths = {"python/executable": pathlib.Path(sys.executable).resolve()}
     library = sysconfig.get_config_var("LDLIBRARY")
@@ -5229,6 +7421,7 @@ def validate_base_runtime() -> None:
         if size != expected_size or digest != expected_sha:
             raise RuntimeError(
                 f"bound Python/PyMuPDF runtime changed: {logical}")
+    validate_application_closure()
 
 
 @functools.lru_cache(maxsize=1)
@@ -5268,12 +7461,16 @@ def _runtime_provenance_snapshot() -> dict[str, Any]:
             ],
             "validated_before_after": True,
         },
+        "application_closure": _application_closure_manifest(),
         "stdlib_and_system_shared_libraries_bound": False,
         "scope_complete": False,
         "incomplete_reason": (
-            "standalone audit binds the interpreter executable, runtime "
-            "library, and loaded PyMuPDF application modules, not every "
-            "standard-library or operating-system shared library"
+            "the application closure binds the interpreter executable, "
+            "runtime library, every loaded PyMuPDF application module and "
+            "every file in the fitz/pymupdf package trees including their "
+            "bundled native libraries; the Python standard library and the "
+            "operating system's own shared libraries stay in the host trusted "
+            "computing base and are not bound by any scope here"
         ),
     }
 
@@ -5399,18 +7596,27 @@ def snapshot_inputs(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
     if render_errors:
         missing.append("render_dependencies")
     producer = producer_fingerprint()
+    runtime = runtime_provenance()
+    # What this manifest claims, and what it deliberately does not.  The claim
+    # is about the PUBLISHED evidence: every input and every member of the
+    # application runtime closure is named with a logical identity, a byte
+    # count and a digest that an independent verifier can resolve and rehash
+    # from scratch.  `producer["standalone_attestation_complete"]` stays False
+    # forever and is not part of this relation -- standalone self-attestation
+    # is what this audit cannot do, which is precisely why the closure is
+    # published for somebody else to check.  comb_referee.py rehashes every
+    # member and rejects this claim outright when its own derivation
+    # disagrees, so claiming it here without earning it fails the referee.
+    closure_complete = bool(runtime["application_closure"]["complete"])
     manifest = {
         "schema": INPUT_MANIFEST_SCHEMA,
         "algorithm": "sha256",
         "producer": producer,
-        "runtime": runtime_provenance(),
+        "runtime": runtime,
         "inputs_complete": not missing,
-        "attestation_complete": bool(
-            not missing and producer["standalone_attestation_complete"]),
-        "enforceable": bool(
-            not missing and producer["standalone_attestation_complete"]),
-        "complete": bool(
-            not missing and producer["standalone_attestation_complete"]),
+        "attestation_complete": bool(not missing and closure_complete),
+        "enforceable": bool(not missing and closure_complete),
+        "complete": bool(not missing and closure_complete),
         "missing_required": missing,
         "inputs": entries,
         "render": {
@@ -5534,6 +7740,27 @@ class Bundle:
         return {index: ordered_vector_paints(self.doc[index - 1])
                 for index in self.pages}
 
+    @functools.cached_property
+    def source_glyphs(self) -> dict[int, tuple[SourceGlyph, ...]]:
+        """Glyphs the source pages draw, in the same space as their paint.
+
+        A page is ABSENT from this map rather than empty when its text
+        operators cannot be compared with `vector_pages` -- today that is a
+        page the file rotates, whose text trace is reported in the unrotated
+        space. Absent means unevaluable, and every reader here fails closed on
+        it; there is no such page in this corpus (134 of 134 are unrotated) and
+        the day one appears it must not be answered with a guess.
+        """
+        if self.doc is None:
+            return {}
+        out: dict[int, tuple[SourceGlyph, ...]] = {}
+        for index in self.pages:
+            page = self.doc[index - 1]
+            if int(getattr(page, "rotation", 0) or 0):
+                continue
+            out[index] = drawn_glyph_boxes(page)
+        return out
+
     def run_text(self, page: int, index: int) -> str:
         runs = self.pages.get(page, {}).get("text_runs", [])
         return runs[index]["text"] if 0 <= index < len(runs) else ""
@@ -5629,6 +7856,25 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     regeneration and a fix. Layout and emission relations are published
     independently; a malformed or duplicate emitted comb remains an offender
     even when the source and lattice counts agree.
+
+    A compartment the source itself filled in -- a printed statutory constant,
+    the money bullet or a printed `%` in a compartment of its own, or shading
+    that says no entry applies -- is emitted without an input on purpose, and
+    this assertion reads that fact from the same place it reads the printed
+    topology: the source PDF's own operators, through `SourceSlotOracle`. It is deliberately NOT read from emit.py's verdict, nor
+    from any marker emit could publish, nor inferred from the missing input
+    itself; a check that takes the emitter's word for why the emitter did
+    something is a mirror, not a check. Everything else about a compartment
+    with no input is unchanged: with no source evidence, or with source
+    evidence that the compartment is blank paper, it is still an offender.
+
+    W8: when `printed_compartments` itself raises -- the source genuinely
+    cannot settle the topology from vector data alone -- `REVIEWED_COMB_TOPOLOGY`
+    is consulted for this exact subject before the verdict is published. A
+    reviewed fact decides only a compartment COUNT, never divider positions,
+    and a subject it resolves is published with `layout_relation
+    == "decided-by-review"`, never silently indistinguishable from one this
+    function measured itself. See `resolve_reviewed_comb_topology`.
     """
     if b.layout is None:
         return broken("no layout to read comb geometry from")
@@ -5636,6 +7882,40 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         return broken("source PDF not resolved; printed compartments unknown")
     owner_registry = reviewed_comb_owner_registry(b)
     form_html = getattr(b, "form_html", None)
+    # One oracle per page, built once and only from the source file: the
+    # glyphs its text operators draw and the paint `printed_compartments`
+    # already reads. A bundle that publishes no glyph operators at all, or a
+    # page missing from either view, yields an oracle that excuses nothing.
+    source_glyph_pages = getattr(b, "source_glyphs", None)
+    source_oracles: dict[int, SourceSlotOracle] = {}
+
+    def source_oracle(page_index: int) -> SourceSlotOracle:
+        oracle = source_oracles.get(page_index)
+        if oracle is not None:
+            return oracle
+        glyphs = (
+            source_glyph_pages.get(page_index)
+            if isinstance(source_glyph_pages, dict) else None
+        )
+        vector = b.vector_pages.get(page_index)
+        reason: str | None = None
+        if not isinstance(source_glyph_pages, dict):
+            reason = "bundle publishes no source glyph operators"
+        elif glyphs is None:
+            reason = (
+                f"page {page_index} has no source glyph operators in the "
+                "source paint's coordinate space")
+        elif vector is None:
+            reason = f"page {page_index} has no source vector paint"
+        oracle = SourceSlotOracle(
+            glyphs=glyphs if reason is None else None,
+            paints=vector.paints if reason is None and vector is not None
+            else None,
+            unavailable_reason=reason,
+        )
+        source_oracles[page_index] = oracle
+        return oracle
+
     emitted_by_id: dict[str, list[Cell]] = collections.defaultdict(list)
     for emitted_cell in b.cells:
         emitted_by_id[emitted_cell.id].append(emitted_cell)
@@ -5712,6 +7992,12 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     owner_certificates_invalid = 0
     source_u_frame_evaluable = 0
     source_certified_unframed_evaluable = 0
+    decided_by_review = 0
+    decided_by_review_subjects: list[dict[str, Any]] = []
+    source_sha256 = (
+        (getattr(b, "ir", None) or {}).get("source") or {}
+    ).get("sha256")
+    bundle_slug = getattr(b, "slug", None)
     if owner_registry.binding_error is not None:
         # Registry integrity is assertion-wide. It must fail even when every
         # active comb is relocated, or when a malformed retained-only ledger
@@ -5745,7 +8031,14 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     for cell_id in expected_ids:
         subjects = layout_subjects[cell_id]
         checked_ids.append(cell_id)
-        emission = emitted_comb_evidence(emitted_by_id.get(cell_id, ()))
+        # A comb with two layout owners has no settled page, so it gets no
+        # source oracle and no compartment of it is excused. It is already an
+        # offender on `duplicate-layout-subject`; the point is that ambiguous
+        # ownership must not become a way to excuse a missing input.
+        emission = emitted_comb_evidence(
+            emitted_by_id.get(cell_id, ()),
+            source_oracle(subjects[0][0]) if len(subjects) == 1 else None,
+        )
         slots = emission["slots"]
         base_stale_emission = (
             not emission["valid"]
@@ -5843,21 +8136,38 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             actual_slot_edges[1:-1]
             if actual_slot_edges is not None else None)
         layout_slot_x = cell["comb"].get("slot_x")
-        layout_all_edges: list[float] | None = None
         layout_internal_edges: list[float] | None = None
         layout_position_reason: str | None = None
         if (isinstance(layout_slot_x, list)
                 and len(layout_slot_x) == int(cell["comb"]["cells"]) + 1):
             try:
-                layout_all_edges = [
-                    float(value) for value in layout_slot_x]
-                layout_internal_edges = layout_all_edges[1:-1]
+                layout_internal_edges = [
+                    float(value) for value in layout_slot_x][1:-1]
             except (TypeError, ValueError):
                 layout_position_reason = (
                     "layout comb slot_x contains a non-numeric coordinate")
         else:
             layout_position_reason = (
                 "layout comb lacks the complete cells-plus-one slot_x vector")
+        # The OUTER edges are a different published quantity from `slot_x`'s
+        # own outer values, and the difference is half a printed wall.  `slot_x`
+        # runs rail CENTRE to rail centre; `writing_x0`/`writing_x1` are those
+        # rails' ink edges, which is where the sheet leaves paper to write on
+        # and therefore what the emitted outer compartments are laid on.  A
+        # layout that publishes no writing edges is not excused here -- the
+        # comparison stays comparable and fails with this reason, because a
+        # comb whose typing surface cannot be located is not a comb that passes.
+        layout_outer_edges: list[float] | None = None
+        layout_outer_reason: str | None = None
+        try:
+            layout_outer_edges = [
+                float(cell["comb"]["writing_x0"]),
+                float(cell["comb"]["writing_x1"]),
+            ]
+        except (KeyError, TypeError, ValueError):
+            layout_outer_reason = (
+                "layout comb publishes no numeric writing_x0/writing_x1 "
+                "horizontal writing surface")
         layout_position = _position_evidence(
             actual_internal_edges,
             layout_internal_edges,
@@ -5874,14 +8184,11 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 [actual_slot_edges[0], actual_slot_edges[-1]]
                 if actual_slot_edges is not None else None
             ),
-            (
-                [layout_all_edges[0], layout_all_edges[-1]]
-                if layout_all_edges is not None else None
-            ),
+            layout_outer_edges,
             comparable=bool(
                 emission["valid"] and slots == cell["comb"]["cells"]),
             unavailable_reason=(
-                layout_position_reason
+                layout_outer_reason
                 or ("emitted/layout slot counts differ"
                     if slots != cell["comb"]["cells"]
                     else "emitted slot geometry is invalid")),
@@ -5921,6 +8228,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         failure_kinds: list[str] = []
         reasons: list[str] = []
         source_frame: dict[str, Any] | None = None
+        printed_positions_available = True
         if owner_certificate is None:
             printed = None
             xs = []
@@ -5958,7 +8266,70 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if isinstance(exc, CombTopologyError):
                     evidence["source_topology_evidence"] = exc.evidence
                 layout_unevaluable += 1
+                # W8: the source cannot settle this from vector data alone --
+                # consult the reviewed-topology registry for this EXACT
+                # subject. An empty registry (the ship state) always returns
+                # (None, None) here and this whole branch is a no-op.
+                reviewed_topology, reviewed_topology_error = (
+                    resolve_reviewed_comb_topology(
+                        bundle_slug, page_index, cell, source_sha256))
+                if reviewed_topology_error is not None:
+                    failure_kinds.append("reviewed-comb-topology-invalid")
+                    reasons.append(reviewed_topology_error)
+                    evidence["reviewed_comb_topology"] = {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": False,
+                        "reason": reviewed_topology_error,
+                    }
+                elif reviewed_topology is not None:
+                    layout_unevaluable -= 1
+                    decided_by_review += 1
+                    printed = reviewed_topology.compartments
+                    printed_positions_available = False
+                    layout_relation = "decided-by-review"
+                    failure_kinds = [
+                        kind for kind in failure_kinds
+                        if kind != "source-topology-unevaluable"
+                    ]
+                    reasons = [
+                        reason for reason in reasons
+                        if not reason.startswith(
+                            "unevaluable final-paint topology")
+                    ]
+                    evidence["reviewed_comb_topology"] = (
+                        reviewed_topology.evidence())
+                    if latticed != printed:
+                        layout_mismatches += 1
+                        failure_kinds.append("layout-printed-mismatch")
+                        reasons.append(
+                            f"layout has {latticed} slots but the reviewed "
+                            f"source topology prints {printed} compartments")
+                    decided_by_review_subjects.append({
+                        "cell": cell_id,
+                        "page": page_index,
+                        "latticed": latticed,
+                        "printed": printed,
+                        "reviewed_comb_topology":
+                            reviewed_topology.evidence(),
+                    })
             else:
+                # W8's load-bearing guard: a reviewed fact must never be
+                # entered for a subject the audit can already decide for
+                # itself. A stray entry here is an integrity ERROR, not a
+                # silently-ignored fact.
+                if (bundle_slug, page_index, cell_id) in REVIEWED_COMB_TOPOLOGY:
+                    failure_kinds.append("reviewed-comb-topology-invalid")
+                    reasons.append(
+                        "reviewed comb topology registry has an entry for "
+                        f"{cell_id} on page {page_index}, but the source "
+                        "topology is independently decidable; a reviewed "
+                        "fact must never be entered for a subject the audit "
+                        "can already evaluate")
+                    evidence["reviewed_comb_topology"] = {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": False,
+                        "reason": reasons[-1],
+                    }
                 if source_frame is None:
                     source_certified_unframed_evaluable += 1
                 else:
@@ -5975,15 +8346,21 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
 
         source_position = _position_evidence(
             actual_internal_edges,
-            xs if printed is not None else None,
+            xs if printed is not None and printed_positions_available
+            else None,
             comparable=bool(
                 emission["valid"]
                 and printed is not None
+                and printed_positions_available
                 and slots == printed
             ),
             unavailable_reason=(
                 "source topology is unevaluable"
                 if printed is None else
+                "source topology was decided by the reviewed-comb-topology "
+                "registry, which supplies only a compartment count, not "
+                "divider positions"
+                if not printed_positions_available else
                 "emitted/source slot counts differ"
                 if slots != printed else
                 "emitted slot geometry is invalid"
@@ -5991,10 +8368,21 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             tolerance_pt=POSITION_TOL_PT,
         )
         evidence["emission_source_position"] = source_position
+        # The rails' INK edges, not their centres.  A rail is a painted stroke
+        # and its centre runs down the middle of that stroke, so an outer
+        # compartment placed on the centre is placed across half the printed
+        # rule -- with the label the sheet tucks under that rule beneath it
+        # (F208).  The two quantities differ by 0.36-0.48pt here, and against
+        # the centre 38.7% of this corpus's 8,306 flush outer edges exceed
+        # POSITION_TOL_PT, so comparing a writing edge to a centre is comparing
+        # unlike things rather than measuring a defect.  Nothing else moves:
+        # the tolerance, the internal-divider comparison and the compartment
+        # count are untouched, and `ink_x0`/`ink_x1` are already published here
+        # from the source's own paint stream.
         source_outer_edges = (
             [
-                float(source_frame["left_rail"]["center_x"]),
-                float(source_frame["right_rail"]["center_x"]),
+                float(source_frame["left_rail"]["ink_x1"]),
+                float(source_frame["right_rail"]["ink_x0"]),
             ]
             if source_frame is not None else None
         )
@@ -6020,10 +8408,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             tolerance_pt=POSITION_TOL_PT,
         )
         layout_source_outer_position = _outer_position_evidence(
-            (
-                [layout_all_edges[0], layout_all_edges[-1]]
-                if layout_all_edges is not None else None
-            ),
+            layout_outer_edges,
             source_outer_edges,
             comparable=bool(
                 printed is not None
@@ -6035,7 +8420,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if source_frame is None else
                 "layout/source slot counts differ"
                 if latticed != printed else
-                layout_position_reason
+                layout_outer_reason
             ),
             tolerance_pt=POSITION_TOL_PT,
         )
@@ -6073,7 +8458,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             failure_kinds.append("emission-layout-outer-position-mismatch")
             reasons.append(
                 "emitted physical outer slot edges do not match layout "
-                f"comb.slot_x within {EMITTED_GEOMETRY_EPS_PT}pt")
+                "comb.writing_x0/writing_x1 within "
+                f"{EMITTED_GEOMETRY_EPS_PT}pt")
         if (source_position["comparable"]
                 and not source_position["matches"]):
             binding_invalid = True
@@ -6087,15 +8473,15 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             binding_invalid = True
             failure_kinds.append("emission-source-outer-position-mismatch")
             reasons.append(
-                "emitted physical outer slot edges do not match source "
-                f"U-frame rails within {POSITION_TOL_PT}pt")
+                "emitted physical outer slot edges do not match the source "
+                f"U-frame rails' own ink edges within {POSITION_TOL_PT}pt")
         if (layout_source_outer_position["comparable"]
                 and not layout_source_outer_position["matches"]):
             binding_invalid = True
             failure_kinds.append("layout-source-outer-position-mismatch")
             reasons.append(
-                "layout comb.slot_x outer edges do not match source U-frame "
-                f"rails within {POSITION_TOL_PT}pt")
+                "layout comb writing edges do not match the source U-frame "
+                f"rails' own ink edges within {POSITION_TOL_PT}pt")
         evidence["effective_emission_state"] = (
             "container-binding-invalid"
             if any(kind.startswith("emission-container-")
@@ -6148,6 +8534,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             })
 
     for cell_id in unexpected_emitted_ids:
+        # No non-relocated layout subject owns this comb, so nothing certifies
+        # which source rectangle its compartments are. It gets no oracle.
         emission = emitted_comb_evidence(emitted_by_id[cell_id])
         stale_emission += 1
         emission_invalid += int(not emission["valid"])
@@ -6283,6 +8671,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             source_certified_unframed_evaluable),
         "emission_behind_layout": stale_emission,
         "emission_invalid": emission_invalid,
+        "decided_by_review": decided_by_review,
+        "decided_by_review_subjects": decided_by_review_subjects,
     }
     if offenders:
         return broken(
@@ -6385,6 +8775,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
             emitted_cell_binding_issues=len(binding_issues),
         )
     offenders, checked, fully_inked, preprinted = [], 0, 0, 0
+    bureau_reserved = 0
+    # Read from the pinned PDF's own text operators, never from the layout
+    # this assertion's population comes from, so a lattice or emitter mistake
+    # cannot manufacture its own excuse. A page whose captions cannot be read
+    # yields none, and a box with no reservation is reported exactly as
+    # before: the failure direction is to report, never to excuse.
+    bureau_captions: dict[int, tuple[Rect, ...]] = {
+        page_index: source_bureau_reservations(glyphs)
+        for page_index, glyphs in (b.source_glyphs or {}).items()
+    }
     by_id = {cell.id: cell for cell in b.cells}
     for cell_id, layout_cell in b.layout_cells.items():
         if cell_id in b.relocated_cells:
@@ -6393,6 +8793,7 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
         if cell is None:
             continue
         index = b.ink.get(cell.page)
+        captions = bureau_captions.get(cell.page, ())
         comb = layout_cell.get("comb")
         if comb:
             slots = slot_boxes(cell)
@@ -6408,7 +8809,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                 fully_inked += 1
                 continue
             checked += 1
-            missing = [i for i, _, has in free if not has]
+            # A compartment the sheet's own caption reserves for the Bureau is
+            # not a money box. 2200-A/C/P's bottom band is one wide rectangle
+            # the lattice reads as a two-slot comb, and each half carries its
+            # own heading -- "Machine Validation", "Stamp of Receiving
+            # Office/AAB" -- printed inside the compartment it governs.
+            missing = [i for i, box, has in free
+                       if not has and not bureau_reserved_box(box, captions)]
+            reserved = [i for i, box, has in free
+                        if not has and bureau_reserved_box(box, captions)]
+            bureau_reserved += len(reserved)
             if missing:
                 offenders.append({"cell": cell_id, "page": cell.page,
                                   "why": "comb slots with no input",
@@ -6433,16 +8843,26 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                 continue
             checked += 1
             if not input_boxes(cell):
+                box = (float(layout_cell["x0"]), float(layout_cell["y0"]),
+                       float(layout_cell["x1"]), float(layout_cell["y1"]))
+                # Still counted in `checked`: the box was examined and the
+                # sheet answered for it. Only the demand for an input is
+                # dropped, and `boxes_bureau_reserved` publishes how often.
+                if bureau_reserved_box(box, captions):
+                    bureau_reserved += 1
+                    continue
                 offenders.append({"cell": cell_id, "page": cell.page,
                                   "why": "enclosed empty box, no input"})
     if offenders:
         return broken(f"{len(offenders)} of {checked} printed boxes are not fillable",
                       offenders, boxes_checked=checked, combs_fully_inked=fully_inked,
-                      boxes_preprinted=preprinted)
+                      boxes_preprinted=preprinted,
+                      boxes_bureau_reserved=bureau_reserved)
     return held(
         boxes_checked=checked,
         combs_fully_inked=fully_inked,
         boxes_preprinted=preprinted,
+        boxes_bureau_reserved=bureau_reserved,
         emitted_cell_binding_issues=0,
     )
 
@@ -6786,6 +9206,237 @@ def check_no_invented_codepoints(b: Bundle) -> dict[str, Any]:
     return held(characters_examined=examined)
 
 
+# --------------------------------------------------------------------------
+# assertion 9 -- no input spans a printed compartment divider
+# --------------------------------------------------------------------------
+
+
+def check_inputs_span_no_printed_divider(b: Bundle) -> dict[str, Any]:
+    """C5's other half: one wide box where the sheet printed several.
+
+    `comb_slots_match_printed` cannot see this, and the reason is structural
+    rather than a tuning miss: its inventory is the LAYOUT's comb subjects, so
+    a printed comb the lattice never recognised as one is not in the
+    population at all.  This assertion has no inventory.  It walks the
+    emitted inputs and asks the pinned PDF whether it drew a compartment
+    divider inside any of them -- 2550Q's `p1c41` is a single 437pt input
+    lying across 30 printed compartments, and nothing in the layout says so.
+
+    A divider is counted only when its x centre is more than
+    DIVIDER_INTERIOR_PT inside BOTH of the input's edges, so an input drawn
+    edge-to-edge over its own printed frame is never reported against its own
+    walls, and only when it shares at least DIVIDER_MIN_Y_OVERLAP_PT of the
+    input's height, so the tick of the row above does not count.
+
+    The offender is the INPUT, not the divider: one box across thirty
+    compartments is one defect, and publishing thirty would bury it.
+    """
+    if b.form_html is None:
+        return broken("no emitted form document to check",
+                      inputs_checked=0, printed_dividers_detected=0)
+    if b.doc is None:
+        return broken(
+            "source PDF not resolved; printed compartment dividers unknown",
+            inputs_checked=0, printed_dividers_detected=0)
+    binding_issues = emitted_cell_binding_issues(b)
+    if binding_issues:
+        return broken(
+            f"{len(binding_issues)} emitted cell binding issue(s)",
+            binding_issues,
+            offender_limit=None,
+            inputs_checked=0,
+            printed_dividers_detected=0,
+            emitted_cell_binding_issues=len(binding_issues),
+        )
+    per_page: dict[int, tuple[tuple[tuple[float, VectorPaint], ...],
+                              list[float]]] = {}
+    detected = 0
+    checked = 0
+    offenders: list[dict[str, Any]] = []
+    for cell in b.cells:
+        page = b.vector_pages.get(cell.page)
+        if page is None:
+            continue
+        if cell.page not in per_page:
+            dividers = source_printed_dividers(page, PointToneIndex(page.paints))
+            per_page[cell.page] = (dividers, [x for x, _ in dividers])
+            detected += len(dividers)
+        dividers, centres = per_page[cell.page]
+        for box in input_boxes(cell):
+            checked += 1
+            low = bisect.bisect_left(centres, box[0] + DIVIDER_INTERIOR_PT)
+            high = bisect.bisect_right(centres, box[2] - DIVIDER_INTERIOR_PT)
+            spanned = [
+                round(centre, 2) for centre, paint in dividers[low:high]
+                if min(box[3], paint.y1) - max(box[1], paint.y0)
+                >= DIVIDER_MIN_Y_OVERLAP_PT
+            ]
+            if spanned:
+                offenders.append({
+                    "cell": cell.id,
+                    "page": cell.page,
+                    "input": [round(value, 2) for value in box],
+                    "printed_dividers_spanned": len(spanned),
+                    "divider_x": spanned[:8],
+                })
+    if offenders:
+        return broken(
+            f"{len(offenders)} input(s) span a printed compartment divider",
+            offenders,
+            inputs_checked=checked,
+            printed_dividers_detected=detected,
+            emitted_cell_binding_issues=0,
+        )
+    return held(
+        inputs_checked=checked,
+        printed_dividers_detected=detected,
+        emitted_cell_binding_issues=0,
+    )
+
+
+# --------------------------------------------------------------------------
+# assertion 10 -- a printed box whose row peers are fillable must be fillable
+# --------------------------------------------------------------------------
+
+
+def check_printed_box_peers_all_fillable(b: Bundle) -> dict[str, Any]:
+    """C4/G03: the box the lattice called a label, so no input was ever made.
+
+    `money_boxes_have_inputs` cannot see this one either, and again for a
+    structural reason: it enumerates candidates from `b.layout_cells` and
+    accepts only `layout_cell["kind"] == "field"`, so a printed box the
+    lattice mis-classified as `label` never enters its population.  A `field`
+    cell with zero inputs occurs 0 times in 9,971 -- the population is clean
+    because the mistake removes its members from it.
+
+    So the population here comes from the source instead
+    (`source_printed_boxes`), and the expectation comes from the source's own
+    layout: if a row of the sheet draws several identical blank boxes -- same
+    top edge, same bottom edge -- and some of them carry an emitted input,
+    then a taxpayer is plainly meant to be able to write in all of them.  A
+    row where NONE is fillable proves nothing and is not reported: it may
+    legitimately be Bureau-only, and this assertion refuses to guess.  That
+    self-denial is what makes the ones it does report unambiguous -- the two
+    that opened this class, 0619-E and 0620's Amended-Return YES box, are the
+    single offender on their whole sheet.
+    """
+    if b.form_html is None:
+        return broken("no emitted form document to check",
+                      printed_boxes_checked=0, peer_rows_checked=0)
+    if b.doc is None:
+        return broken("source PDF not resolved; printed boxes unknown",
+                      printed_boxes_checked=0, peer_rows_checked=0)
+    binding_issues = emitted_cell_binding_issues(b)
+    if binding_issues:
+        return broken(
+            f"{len(binding_issues)} emitted cell binding issue(s)",
+            binding_issues,
+            offender_limit=None,
+            printed_boxes_checked=0,
+            peer_rows_checked=0,
+            boxes_unevaluable=0,
+            emitted_cell_binding_issues=len(binding_issues),
+        )
+    inputs_by_page: dict[int, list[tuple[str, Rect]]] = (
+        collections.defaultdict(list))
+    for cell in b.cells:
+        for box in input_boxes(cell):
+            inputs_by_page[cell.page].append((cell.id, box))
+    offenders: list[dict[str, Any]] = []
+    checked = 0
+    peer_rows = 0
+    unevaluable = 0
+    bureau_reserved = 0
+    for page_index in sorted(b.pages):
+        page = b.vector_pages.get(page_index)
+        if page is None:
+            continue
+        glyphs = b.source_glyphs.get(page_index)
+        if glyphs is None:
+            return broken(
+                f"page {page_index} draws text this audit cannot place; "
+                "printed boxes unknown",
+                printed_boxes_checked=checked,
+                peer_rows_checked=peer_rows,
+                boxes_unevaluable=unevaluable,
+            )
+        captions = source_bureau_reservations(glyphs)
+        boxes, page_unevaluable = source_printed_boxes(
+            page, glyphs, PointToneIndex(page.paints))
+        unevaluable += page_unevaluable
+        checked += len(boxes)
+        emitted = inputs_by_page.get(page_index, ())
+        filled_by: dict[Rect, str | None] = {}
+        for box in boxes:
+            box_area = (box[2] - box[0]) * (box[3] - box[1])
+            owner: str | None = None
+            for cell_id, rect in emitted:
+                width = min(box[2], rect[2]) - max(box[0], rect[0])
+                height = min(box[3], rect[3]) - max(box[1], rect[1])
+                if width <= 0 or height <= 0:
+                    continue
+                smaller = min(box_area,
+                              (rect[2] - rect[0]) * (rect[3] - rect[1]))
+                if (smaller > 0
+                        and width * height
+                        >= PRINTED_BOX_FILL_MIN_FRACTION * smaller):
+                    owner = cell_id
+                    break
+            filled_by[box] = owner
+        rows: dict[tuple[float, float], list[Rect]] = (
+            collections.defaultdict(list))
+        for box in boxes:
+            rows[(round(box[1], 2), round(box[3], 2))].append(box)
+        for key in sorted(rows):
+            group = rows[key]
+            if len(group) < 2:
+                continue
+            peer_rows += 1
+            filled = [box for box in group if filled_by[box] is not None]
+            if not filled:
+                continue
+            for box in group:
+                if filled_by[box] is not None:
+                    continue
+                # This assertion's premise is that the SHEET has already said
+                # these boxes are the same kind of thing. Where the sheet
+                # itself says one of them is the Bureau's, the premise is
+                # false for that box: 0605's BCS blank shares its row with
+                # four taxpayer boxes and is captioned "(To be filled up by
+                # the BIR)" in the source's own text operators. Removing it is
+                # not a relaxation -- an input there is finding F147, a
+                # blocker. The removals are counted and published, so the
+                # exclusion can never be silent.
+                if bureau_reserved_box(box, captions):
+                    bureau_reserved += 1
+                    continue
+                offenders.append({
+                    "page": page_index,
+                    "box": [round(value, 2) for value in box],
+                    "row_peers": len(group),
+                    "row_peers_with_input": len(filled),
+                    "peer_with_input": filled_by[filled[0]],
+                })
+    if offenders:
+        return broken(
+            f"{len(offenders)} printed box(es) have no input while a row peer "
+            "does",
+            offenders,
+            printed_boxes_checked=checked,
+            peer_rows_checked=peer_rows,
+            boxes_unevaluable=unevaluable,
+            boxes_bureau_reserved=bureau_reserved,
+            emitted_cell_binding_issues=0,
+        )
+    return held(
+        printed_boxes_checked=checked,
+        peer_rows_checked=peer_rows,
+        boxes_unevaluable=unevaluable,
+        boxes_bureau_reserved=bureau_reserved,
+        emitted_cell_binding_issues=0,
+    )
+
+
 CHECKS = {
     "inputs_over_printed_text": check_inputs_over_printed_text,
     "comb_slots_match_printed": check_comb_slots_match_printed,
@@ -6795,12 +9446,16 @@ CHECKS = {
     "reflow_rate_without_description": check_reflow_rate_without_description,
     "image_transform_applied": check_image_transform_applied,
     "no_invented_codepoints": check_no_invented_codepoints,
+    "inputs_span_no_printed_divider": check_inputs_span_no_printed_divider,
+    "printed_box_peers_all_fillable": check_printed_box_peers_all_fillable,
 }
-assert tuple(CHECKS) == ASSERTION_KEYS, "GOAL.md names these eight, in this order"
+assert tuple(CHECKS) == ASSERTION_KEYS, (
+    "GOAL.md names the first eight, in this order; the two field-layer "
+    "assertions follow them")
 
 
 def evaluate_assertions(bundle: Bundle) -> dict[str, Any]:
-    """Run all eight and flatten them into the per-form record.
+    """Run every assertion and flatten it into the per-form record.
 
     A raising check is a failing check. It cannot be a passing one: an assertion
     that throws has not looked at the form, and "we did not look" is the exact
@@ -7777,18 +10432,47 @@ def score(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
             record["error"] = reason
             record["provenance_validation"]["error"] = reason
     input_manifest = record.get("input_manifest") or {}
-    reasons = []
     producer = input_manifest.get("producer") or {}
     base_runtime = input_manifest.get("runtime") or {}
+    application_closure = base_runtime.get("application_closure") or {}
     roundtrip_runtime = record.get("roundtrip_runtime") or {}
-    if not producer.get("standalone_attestation_complete"):
-        reasons.append(producer.get(
-            "incomplete_reason", "producer execution is not fully bound"))
-    if not base_runtime.get("scope_complete"):
-        reasons.append(base_runtime.get(
-            "incomplete_reason", "base runtime scope is incomplete"))
-    if roundtrip and not roundtrip_runtime.get("scope_complete"):
-        reasons.append(roundtrip_runtime.get(
+    validated_before_after = bool(
+        record["provenance_validation"]["validated_before"]
+        and record["provenance_validation"]["validated_after"])
+    roundtrip_closure_published = bool(
+        roundtrip_runtime.get("dependency_closure")
+        and roundtrip_runtime.get("chromium"))
+    # Two lists, because they answer two different questions.  `reasons` is
+    # why this attestation is not complete and must be empty when it is;
+    # `boundaries` is what the attestation deliberately never covered, is
+    # never empty, and is republished on every record no matter how green it
+    # is.  Collapsing them is how a permanent scope boundary would come to
+    # read as a temporary defect, or a temporary defect as a boundary.
+    reasons: list[str] = []
+    if not input_manifest.get("inputs_complete"):
+        reasons.append("one or more required inputs are missing")
+    if not application_closure.get("complete"):
+        reasons.append(
+            "application runtime closure does not account for every loaded "
+            "module: "
+            + ", ".join(application_closure.get("unbound_modules") or ())
+        )
+    if not validated_before_after:
+        reasons.append(
+            "producer and runtime provenance were not revalidated before and "
+            "after this record")
+    if roundtrip and not roundtrip_closure_published:
+        reasons.append(
+            "round trip ran without publishing its Playwright/Chromium "
+            "closure")
+    boundaries = [
+        producer.get(
+            "incomplete_reason", "producer execution is not fully bound"),
+        base_runtime.get(
+            "incomplete_reason", "base runtime scope is incomplete"),
+    ]
+    if roundtrip:
+        boundaries.append(roundtrip_runtime.get(
             "incomplete_reason", "roundtrip runtime scope is incomplete"))
     record["attestation"] = {
         "inputs_complete": bool(input_manifest.get("inputs_complete")),
@@ -7800,12 +10484,13 @@ def score(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
             bool(roundtrip_runtime.get("scope_complete"))
             if roundtrip else None
         ),
-        "validated_before_after": bool(
-            record["provenance_validation"]["validated_before"]
-            and record["provenance_validation"]["validated_after"]),
-        "complete": False,
-        "enforceable": False,
+        "application_closure_complete": bool(
+            application_closure.get("complete")),
+        "validated_before_after": validated_before_after,
+        "complete": not reasons,
+        "enforceable": not reasons,
         "incomplete_reasons": reasons,
+        "declared_out_of_scope": boundaries,
         "future_gate_required": (
             "clean audit.py git-blob/bootstrap and native host/runtime binding"),
     }
@@ -7967,10 +10652,11 @@ def self_test() -> int:
     # 6: the guide's only row has an empty description and a 3% rate.
     check("reflow_rate_without_description must fail on a rate with no description",
           results["reflow_rate_without_description"] is False)
-    # 2, 7, 8 need the source PDF, which this fixture deliberately lacks:
-    # unevaluable must read as failure, not as a pass.
+    # 2, 7, 8, 9 and 10 need the source PDF, which this fixture deliberately
+    # lacks: unevaluable must read as failure, not as a pass.
     for key in ("comb_slots_match_printed", "image_transform_applied",
-                "no_invented_codepoints"):
+                "no_invented_codepoints", "inputs_span_no_printed_divider",
+                "printed_box_peers_all_fillable"):
         check(f"{key} must fail when the source PDF cannot be resolved",
               results[key] is False and "not resolved" in results["assertions"][key]["reason"])
     check("every assertion must name offenders or a reason",
@@ -8151,11 +10837,13 @@ def self_test() -> int:
 
         first = snapshot_inputs(
             slug, ir_dir, html_dir, layout_dir, guide_dir, str(source_dir))
+        first_closure = first.manifest["runtime"]["application_closure"]
         check("input manifest binds every required byte source",
               first.manifest["inputs_complete"] is True
-              and first.manifest["complete"] is False
-              and first.manifest["attestation_complete"] is False
-              and first.manifest["enforceable"] is False
+              and first_closure["complete"] is True
+              and first.manifest["complete"] is True
+              and first.manifest["attestation_complete"] is True
+              and first.manifest["enforceable"] is True
               and first.manifest["missing_required"] == []
               and set(first.manifest["inputs"]) == {
                   "ir", "layout", "html", "guide", "guide_html",
@@ -8213,6 +10901,48 @@ def self_test() -> int:
               and first.manifest["runtime"]["python"]["version"]
               and first.manifest["runtime"]["pymupdf"]["package_version"]
               and first.manifest["runtime"]["pymupdf"]["version_bind"])
+        check("application closure names each package tree independently",
+              [item["logical_root"] for item in first_closure["packages"]]
+              == list(APPLICATION_PACKAGE_NAMES)
+              and all(re.fullmatch(r"[0-9a-f]{64}", item["tree_sha256"])
+                      and item["files"] > 0 and item["bytes"] > 0
+                      and item["algorithm"] == TREE_CLOSURE_ALGORITHM
+                      for item in first_closure["packages"])
+              and first_closure["bytecode_caches_excluded"] is True
+              and first_closure["unbound_modules"] == [])
+        check("application closure hashes the bundled native libraries",
+              first_closure["native_libraries"] != []
+              and all(
+                  item["file"].endswith(NATIVE_LIBRARY_SUFFIXES)
+                  and item["bytes"] > 0
+                  and re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                  for item in first_closure["native_libraries"]))
+        check("every loaded application module is bound inside a package tree",
+              {item["module"] for item in first_closure["modules"]}
+              == {logical[len("module/"):]
+                  for logical, _path, _size, _sha in _base_runtime_snapshot()
+                  if logical.startswith("module/")}
+              and all(
+                  item["file"].split("/", 1)[0] in APPLICATION_PACKAGE_NAMES
+                  for item in first_closure["modules"]))
+        # The completeness claim has to be able to collapse, or publishing it
+        # would be decoration. A module loaded from outside every resolved
+        # package tree is exactly the case the tree cannot account for.
+        real_base_runtime_snapshot = _base_runtime_snapshot
+        globals()["_base_runtime_snapshot"] = lambda: (
+            *real_base_runtime_snapshot(),
+            ("module/pymupdf.injected",
+             pathlib.Path("/nonexistent/injected/pymupdf.py"), 7, "0" * 64),
+        )
+        try:
+            injected_closure = _application_closure_manifest()
+        finally:
+            globals()["_base_runtime_snapshot"] = real_base_runtime_snapshot
+        check("an out-of-tree application module withdraws the closure claim",
+              injected_closure["complete"] is False
+              and injected_closure["unbound_modules"]
+              == ["module/pymupdf.injected"]
+              and _application_closure_manifest()["complete"] is True)
 
         snapshotted_bundle = load_bundle(
             slug, ir_dir, html_dir, layout_dir, guide_dir, str(source_dir),
@@ -8718,6 +11448,120 @@ def self_test() -> int:
     check("an input over its own cell's printed run still fails",
           check_inputs_over_printed_text(owned)["holds"] is False)
 
+    # The ink band, end to end. One caption set 10pt on a baseline at y=60 in
+    # a face whose ascender is 0.9 and descender -0.2, so its LINE box runs
+    # 51..62 while its capitals stop inking at 60. An input whose top edge is
+    # at 61 sits in the 1pt of blank paper between the two, which is the shape
+    # of 15 of the 147 offenders this assertion used to publish.
+    def ink_band_bundle(text: str, input_top: float,
+                        **run_over: Any) -> Bundle:
+        run = {
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": 10.0,
+            "color": 0, "x0": 10.0, "y0": 51.0,
+            "x1": 10.0 + 3.0 * len(text), "y1": 62.0,
+            "origin_x": 10.0, "baseline_y": 60.0,
+            "ascender": 0.9, "descender": -0.2, "rotated": False,
+            "bold": False, "italic": False,
+            "char_origin_offsets_pt": [3.0 * i for i in range(len(text))],
+            "char_widths_pt": [3.0] * len(text),
+        }
+        run.update(run_over)
+        ink_ir = {
+            "form": {"code": "INK", "revision": "0000"},
+            "source": {"file": "external:none.pdf", "sha256": "0" * 64},
+            "paper": {"width_pt": 100.0, "height_pt": 100.0},
+            "pages": [{
+                "index": 1, "width_pt": 100.0, "height_pt": 100.0,
+                "rotation": 0, "rules": [], "area_fills": [], "images": [],
+                "text_runs": [run], "stats": {},
+            }],
+        }
+        ink_html = (
+            '<div class="page page-1" id="page-1" '
+            'style="width:100pt;height:100pt">'
+            '<div class="layer-text"><div class="t" id="p1t0" '
+            'style="left:10pt;top:51pt;color:#000000">'
+            + text.replace("&", "&amp;").replace("<", "&lt;") +
+            '</div></div>'
+            '<div id="p1c0" class="c f" data-cell-kind="field" '
+            'data-field-kind="text" '
+            f'style="left:8pt;top:{input_top}pt;width:30pt;height:8pt">'
+            '<input type="text" class="fi" id="p1c0-i" name="p1c0" '
+            'style="inset:0pt 0pt 0pt 0pt"></div></div>')
+        return Bundle(slug="ink", ir=ink_ir, layout=None, plan=None,
+                      form_html=ink_html, guide_html=None, pdf=None)
+
+    def ink_holds(text: str, input_top: float, **run_over: Any) -> bool:
+        return check_inputs_over_printed_text(
+            ink_band_bundle(text, input_top, **run_over))["holds"]
+
+    check("an input in the blank band below capitals is not a collision",
+          ink_holds("DN", 61.0) is True)
+    check("an input on the cap ink of the same caption is a collision",
+          ink_holds("DN", 55.0) is False)
+    check("a descender in the caption reaches the same blank band",
+          ink_holds("Dg", 61.0) is False)
+    check("a descender is caught through its own glyph, not its neighbours'",
+          ink_holds("g", 61.0) is False and ink_holds("D", 61.0) is True)
+    check("an unmeasured character is never assumed to clear an input",
+          ink_holds("\uf0a7", 61.0) is False)
+    check("a symbol-encoded face is never read through the character table",
+          ink_holds("DN", 61.0, family="Wingdings") is False)
+    check("a rotated run is never seated on a horizontal baseline",
+          ink_holds("DN", 61.0, rotated=True) is False)
+    check("an italic f still reaches below the baseline",
+          ink_holds("f", 61.0) is True
+          and ink_holds("f", 61.0, italic=True) is False)
+    # The overshoot allowance is load-bearing: round letters ink below the
+    # baseline, and an input butted straight onto it is still a collision.
+    check("a round letter's baseline overshoot is still ink",
+          ink_holds("o", 60.1) is False)
+
+    # Mutation test. Each entry weakens the ink band in one way; the fixture
+    # named beside it must stop failing, which is what proves the fixture --
+    # and therefore the rule -- is doing the work. A mutation that changes
+    # nothing means the check above is decoration.
+    _measured_ink_bottom = glyph_ink_bottom
+
+    def _ink_bottom_without_rotation_guard(
+            run: dict, char: str) -> float | None:
+        return _measured_ink_bottom({**run, "rotated": False}, char)
+
+    ink_mutations = (
+        ("descenders read as baseline-seated",
+         {"DESCENDING_INK": frozenset(),
+          "BASELINE_SEATED_INK": BASELINE_SEATED_INK | DESCENDING_INK},
+         lambda: ink_holds("Dg", 61.0)),
+        ("unmeasured characters read as baseline-seated",
+         {"BASELINE_SEATED_INK": BASELINE_SEATED_INK | {"\uf0a7"}},
+         lambda: ink_holds("\uf0a7", 61.0)),
+        ("symbol-encoded faces read through the character table",
+         {"SYMBOL_ENCODED_INK_FAMILIES": frozenset()},
+         lambda: ink_holds("DN", 61.0, family="Wingdings")),
+        ("rotated runs seated on a horizontal baseline",
+         {"glyph_ink_bottom": _ink_bottom_without_rotation_guard},
+         lambda: ink_holds("DN", 61.0, rotated=True)),
+        ("baseline overshoot removed",
+         {"GLYPH_BASELINE_OVERSHOOT_EM": 0.0},
+         lambda: ink_holds("o", 60.1)),
+        ("italic f read as upright",
+         {"ITALIC_ONLY_DESCENDING_INK": frozenset()},
+         lambda: ink_holds("f", 61.0, italic=True)),
+    )
+    module = globals()
+    for label, patches, probe in ink_mutations:
+        restore = {name: module[name] for name in patches}
+        module.update(patches)
+        try:
+            weakened = probe()
+        finally:
+            module.update(restore)
+        check(f"weakening the ink band ({label}) is caught by the suite",
+              weakened is True)
+    check("the ink band is restored after the mutation sweep",
+          ink_holds("Dg", 61.0) is False
+          and ink_holds("DN", 61.0) is True)
+
     # The live page's last cell is immediately followed by inert band template
     # markup. An input inside that template must not be attributed to the cell.
     template_html = (
@@ -8780,6 +11624,82 @@ def self_test() -> int:
             == "enclosed empty box, no input"
             and not input_boxes(inert_plain_bundle.cells[0]),
         )
+
+    # ------------------------------------------------------------------
+    # A blank the SHEET reserves for the Bureau, read from the source's own
+    # glyph stream. Driven at the predicate rather than through a bundle,
+    # because what has to hold is a property of the paper: the phrase, its
+    # rectangle, and which blank that rectangle governs.
+    # ------------------------------------------------------------------
+    def _glyph_line(text: str, x0: float, y0: float,
+                    advance: float = 4.0, height: float = 8.07):
+        """One printed line, one glyph per visible character.
+
+        Spaces are omitted exactly as `drawn_glyph_boxes` omits them, which is
+        why the match phrases carry no spaces either.
+        """
+        out, pen = [], x0
+        for character in text:
+            if character == " ":
+                pen += advance
+                continue
+            out.append(SourceGlyph(character, pen, y0,
+                                   pen + advance, y0 + height))
+            pen += advance
+        return out
+
+    # 0605's real shape: two captions on ONE baseline, the Bureau's second.
+    bcs_line = _glyph_line(
+        "Return Period (MM/DD/YYYY)     BCS No./Item No. "
+        "(To be filled up by the BIR)", 200.0, 173.23)
+    bcs_captions = source_bureau_reservations(bcs_line)
+    check(
+        "the reservation's rectangle is the phrase's, not its whole line",
+        len(bcs_captions) == 1
+        and bcs_captions[0][0] > bcs_line[0].x0
+        and bcs_captions[0][2] <= bcs_line[-1].x1 + OVERLAP_EPS_PT,
+    )
+    reserved_box = (bcs_captions[0][0] - 4.0, 186.6,
+                    bcs_captions[0][2] + 40.0, 205.56)
+    taxpayer_box = (bcs_line[0].x0, 186.6, bcs_line[0].x0 + 60.0, 205.56)
+    check(
+        "the blank under the reservation is reserved and its row peer is not",
+        bureau_reserved_box(reserved_box, bcs_captions)
+        and not bureau_reserved_box(taxpayer_box, bcs_captions),
+    )
+    check(
+        "a blank a full line further down is not claimed by that caption",
+        not bureau_reserved_box(
+            (reserved_box[0], 200.0, reserved_box[2], 218.0), bcs_captions),
+    )
+    # The bottom-of-sheet band: the heading is printed INSIDE the compartment
+    # it governs, and the compartment beside it is a different box.
+    band_captions = source_bureau_reservations(
+        _glyph_line("Machine Validation", 20.0, 848.0))
+    check(
+        "a heading printed inside its own compartment reserves it",
+        bureau_reserved_box((16.32, 847.08, 392.71, 897.72), band_captions)
+        and not bureau_reserved_box(
+            (392.71, 847.08, 595.32, 897.72), band_captions),
+    )
+    # Prose about those boxes is not a reservation. The guide sentence is the
+    # exact text this rule exists to refuse.
+    check(
+        "guide prose that merely mentions the band reserves nothing",
+        source_bureau_reservations(_glyph_line(
+            "The machine validation shall reflect the date of payment",
+            40.0, 400.0)) == ()
+        and source_bureau_reservations(_glyph_line(
+            "Machine Validation/Revenue Official Receipt Details",
+            20.0, 400.0)) != (),
+    )
+    check(
+        "the sheet's own missing 'by' is matched as the sheet prints it",
+        source_bureau_reservations(
+            _glyph_line("(To be filled up the BIR)", 10.0, 10.0)) != ()
+        and source_bureau_reservations(
+            _glyph_line("(To be filled up by the taxpayer)", 10.0, 10.0)) == (),
+    )
 
     moved_plain_ir = copy.deepcopy(ir)
     moved_page = copy.deepcopy(ir["pages"][0])
@@ -9011,6 +11931,16 @@ def self_test() -> int:
                     cell["subject_key"] = subject_key
                     if not isinstance(cell.get("comb"), dict):
                         continue
+                    # Every real layout publishes the horizontal writing
+                    # surface beside `slot_x`. A fixture that omitted it would
+                    # be testing the absence branch by accident in every other
+                    # assertion, so the fail-closed value -- the rails' own
+                    # centres, which is what a comb whose rail ink could not be
+                    # measured publishes -- is filled in here unless the fixture
+                    # states one deliberately.
+                    comb = cell["comb"]
+                    comb.setdefault("writing_x0", float(comb["slot_x"][0]))
+                    comb.setdefault("writing_x1", float(comb["slot_x"][-1]))
                     subjects.append({
                         "subject_key": subject_key,
                         "legacy_cell_id": cell["id"],
@@ -9333,6 +12263,183 @@ def self_test() -> int:
             in frame_offender["failure_kinds"],
         )
 
+    # ---- the outer edges are the rails' INK, never their centres (F208) ----
+    #
+    # A rail is a painted stroke, so "where the rail is" and "where the paper
+    # a taxpayer may write on starts" are half a stroke apart. The rails above
+    # are 0.24pt wide, where the two answers are 0.12pt apart and the referee
+    # bound cannot tell them apart; these are 1.2pt, where they are 0.6pt apart
+    # and it must. On this sheet the outer compartments run 5.60..14.40 and
+    # 25.60..34.40 between rails CENTRED on 5.0 and 35.0.
+    THICK = 0.6
+
+    def writing_edge_fixture(
+            *,
+            emitted_outer: tuple[float, float] = (5.6, 34.4),
+            layout_writing: tuple[float, float] | None = (5.6, 34.4),
+            ) -> CombEmissionFixture:
+        dividers = (15.0, 25.0)
+        edges = (emitted_outer[0], *dividers, emitted_outer[1])
+        geometry = [
+            (float(left), 0.0, float(right - left), 10.0)
+            for left, right in zip(edges, edges[1:])
+        ]
+        emitted = dataclasses.replace(
+            emitted_comb_cell(
+                slot_indexes=tuple(range(len(geometry))),
+                geometry=geometry,
+            ),
+            attrs=(
+                f' data-comb-slots="{len(geometry)}" '
+                'style="left:0pt;top:0pt;width:40pt;height:10pt"'
+            ),
+            rect=(0.0, 0.0, 40.0, 10.0),
+        )
+        fixture = CombEmissionFixture([emitted], count=len(geometry))
+        comb: dict[str, Any] = {
+            "cells": len(geometry),
+            "divider_x": [float(value) for value in dividers],
+            # `slot_x` stays the RAILS' own centres, which is what it means.
+            "slot_x": [5.0, *(float(value) for value in dividers), 35.0],
+        }
+        if layout_writing is not None:
+            comb["writing_x0"] = float(layout_writing[0])
+            comb["writing_x1"] = float(layout_writing[1])
+        fixture.layout_pages = {1: {"cells": [{
+            "id": "p1c0",
+            "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+            "comb": comb,
+        }]}}
+        fixture._bind_owner_registry()
+        if layout_writing is None:
+            # `_bind_owner_registry` fills the fail-closed value in for every
+            # other fixture; this one is testing that its ABSENCE is a failure,
+            # so the keys are removed after binding.
+            for page in fixture.layout["pages"]:
+                for cell in page["cells"]:
+                    cell["comb"].pop("writing_x0", None)
+                    cell["comb"].pop("writing_x1", None)
+            fixture._snapshot_layout()
+        paints = [
+            VectorPaint(
+                value - THICK, 2.0, value + THICK, 8.0,
+                0.0, 1.0, index, "writing-edge-frame",
+            )
+            for index, value in enumerate((5.0, 35.0))
+        ]
+        paints.extend(
+            VectorPaint(
+                value - 0.12, 2.0, value + 0.12, 8.0,
+                0.0, 1.0, 10 + index, "writing-edge-divider",
+            )
+            for index, value in enumerate(dividers)
+        )
+        paints.append(VectorPaint(
+            5.0, 7.88, 35.0, 8.12,
+            0.0, 1.0, 20, "writing-edge-baseline",
+        ))
+        fixture.vector_pages = {1: VectorPage(tuple(paints), ())}
+        return fixture
+
+    on_the_ink = check_comb_slots_match_printed(writing_edge_fixture())
+    check(
+        "outer compartments laid on the rails' ink edges are accepted",
+        on_the_ink["holds"] is True,
+    )
+    # The discriminating mutation: the SAME comb laid on the rails' centres,
+    # which is exactly what every comb in this corpus used to be laid on. Both
+    # outer relations must reject it -- the emitted document against the layout
+    # it claims to render, and the emitted document against the sheet itself.
+    on_the_centres = check_comb_slots_match_printed(
+        writing_edge_fixture(emitted_outer=(5.0, 35.0)))
+    centres_offender = (
+        on_the_centres["offenders"][0] if on_the_centres["offenders"] else {})
+    check(
+        "an outer compartment laid on the rail's centre sits on printed ink",
+        on_the_centres["holds"] is False
+        and centres_offender.get(
+            "emission_layout_outer_position", {}).get("deltas_pt")
+        == [-0.6, 0.6]
+        and centres_offender.get(
+            "emission_source_outer_position", {}).get("deltas_pt")
+        == [-0.6, 0.6]
+        and "emission-layout-outer-position-mismatch"
+        in centres_offender.get("failure_kinds", ())
+        and "emission-source-outer-position-mismatch"
+        in centres_offender.get("failure_kinds", ()),
+    )
+    # A layout that states no horizontal writing surface cannot be scored on
+    # one, and an unscoreable comb is an offender rather than a pass.
+    no_writing_surface = check_comb_slots_match_printed(
+        writing_edge_fixture(layout_writing=None))
+    absent_offender = (
+        no_writing_surface["offenders"][0]
+        if no_writing_surface["offenders"] else {})
+    check(
+        "a comb with no published writing surface fails closed, by name",
+        no_writing_surface["holds"] is False
+        and absent_offender.get(
+            "emission_layout_outer_position", {}).get("matches") is False
+        and absent_offender.get(
+            "layout_source_outer_position", {}).get("matches") is False
+        and "writing_x0/writing_x1" in (absent_offender.get(
+            "emission_layout_outer_position", {}).get("unavailable_reason")
+            or "")
+        and "emission-layout-outer-position-mismatch"
+        in absent_offender.get("failure_kinds", ())
+        and "layout-source-outer-position-mismatch"
+        in absent_offender.get("failure_kinds", ()),
+    )
+    # ...and a layout whose writing surface is not on the sheet's own rail ink
+    # is caught even when the emitter renders it faithfully.
+    displaced_writing = check_comb_slots_match_printed(
+        writing_edge_fixture(emitted_outer=(5.9, 34.4),
+                             layout_writing=(5.9, 34.4)))
+    displaced_writing_offender = (
+        displaced_writing["offenders"][0]
+        if displaced_writing["offenders"] else {})
+    check(
+        "a writing surface off the sheet's own rail ink is caught in the layout",
+        displaced_writing["holds"] is False
+        and displaced_writing_offender.get(
+            "emission_layout_outer_position", {}).get("matches") is True
+        and displaced_writing_offender.get(
+            "layout_source_outer_position", {}).get("deltas_pt")
+        == [0.3, 0.0]
+        and "layout-source-outer-position-mismatch"
+        in displaced_writing_offender.get("failure_kinds", ()),
+    )
+
+    # ---- the judge reads the INPUT's own inset, not only its slot (F208) ----
+    #
+    # Every comb input in this corpus fills its slot exactly, and nothing said
+    # so. Scoring the slot div made any producer-side move inside a slot
+    # invisible: an input inset off printed ink would score as though it were
+    # still on it, and an input widened back out over that ink would score as
+    # though it were not.
+    inset_slot_cell = parse_cells(
+        '<div class="page page-1">'
+        '<div id="p1c0" class="c f" data-cell-kind="field" '
+        'data-comb-slots="1" style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<input type="text" class="fi fc" data-slot-index="0" '
+        'style="inset:1pt 2pt 3pt 4pt"></div></div>'
+        "</div>")[0]
+    flush_slot_cell = parse_cells(
+        '<div class="page page-1">'
+        '<div id="p1c0" class="c f" data-cell-kind="field" '
+        'data-comb-slots="1" style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<input type="text" class="fi fc" data-slot-index="0"></div></div>'
+        "</div>")[0]
+    check(
+        "a comb input's own inset moves the box the judge scores",
+        input_boxes(inset_slot_cell) == [(4.0, 1.0, 18.0, 7.0)]
+        and input_boxes(flush_slot_cell) == [(0.0, 0.0, 20.0, 10.0)],
+    )
+
     def emitted_cell_markup(cell: Cell) -> str:
         return (
             f'<div id="{cell.id}" class="{cell.classes}"{cell.attrs}>'
@@ -9502,6 +12609,313 @@ def self_test() -> int:
             == [0, 1, 2],
         )
 
+    # A compartment the SOURCE already filled in is emitted with no input on
+    # purpose -- the statutory ATC codes, the century, the TIN branch code --
+    # and the assertion re-derives that from the source file's own operators.
+    # Every fixture below decides the same emitted markup (slot 1 carries no
+    # input) purely on what the source is holding under it, which is the whole
+    # point: the emitter's own verdict is never consulted.
+    def first_offender(result: dict[str, Any]) -> dict[str, Any]:
+        """The first published offender, or an empty record if none.
+
+        A verdict that publishes no offender at all is the failure these
+        fixtures exist to catch, and it has to read as one rather than as an
+        IndexError three frames away from the assertion that caught it.
+        """
+        offenders = result.get("offenders") or ()
+        return offenders[0] if offenders else {}
+
+    def source_filled_fixture(
+            *,
+            omit: Sequence[int] = (),
+            glyphs: Sequence[SourceGlyph] = (),
+            extra_paints: Sequence[VectorPaint] = (),
+            publish_glyphs: bool = True,
+            paints: Sequence[VectorPaint] | None = None,
+            slot_top: float = 0.0,
+            slot_height: float = 10.0,
+            ) -> CombEmissionFixture:
+        # `slot_top`/`slot_height` are the WRITING rectangle, which emit sizes
+        # from the comb's typography and which is shorter than the cell on
+        # every real comb in the corpus. The default keeps them equal so the
+        # fixtures that are not about that distinction stay unchanged.
+        markup = "".join(
+            f'<div class="s" data-slot="{index}" '
+            f'style="left:{index * 10}pt;top:{slot_top}pt;'
+            f'width:10pt;height:{slot_height}pt">'
+            + ("" if index in omit
+               else '<input type="text" class="fi fc" '
+                    f'data-slot-index="{index}">')
+            + "</div>"
+            for index in range(3)
+        )
+        filled_html = (
+            '<div class="page page-1">'
+            + emitted_cell_markup(
+                dataclasses.replace(valid_three, inner=markup))
+            + "</div>"
+        )
+        fixture = CombEmissionFixture(parse_cells(filled_html))
+        fixture.form_html = filled_html
+        if paints is not None:
+            fixture.vector_pages = {1: VectorPage(tuple(paints), ())}
+        elif extra_paints:
+            fixture.vector_pages = {1: VectorPage(
+                (*fixture.vector_pages[1].paints, *extra_paints), ())}
+        if publish_glyphs:
+            fixture.source_glyphs = {1: tuple(glyphs)}
+        return fixture
+
+    def source_oracle_for(
+            fixture: CombEmissionFixture) -> SourceSlotOracle:
+        published = getattr(fixture, "source_glyphs", None)
+        page = fixture.vector_pages.get(1)
+        return SourceSlotOracle(
+            glyphs=published.get(1) if isinstance(published, dict) else None,
+            paints=page.paints if page is not None else None,
+            unavailable_reason=(
+                None if isinstance(published, dict) and page is not None
+                else "fixture publishes no source evidence"),
+        )
+
+    # The second compartment of `0 0 0`: one alphanumeric glyph, at the comb's
+    # own pitch, wholly inside that compartment's walls.
+    printed_constant = source_filled_fixture(
+        omit=(1,), glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),))
+    printed_constant_result = check_comb_slots_match_printed(printed_constant)
+    printed_constant_evidence = emitted_comb_evidence(
+        printed_constant.cells, source_oracle_for(printed_constant))
+    check(
+        "a compartment the source printed a constant into is legitimately "
+        "inputless",
+        printed_constant_result["holds"] is True
+        and printed_constant_result["emission_invalid"] == 0
+        and printed_constant_evidence["valid"] is True
+        and printed_constant_evidence["state"] == "physical-slots"
+        and printed_constant_evidence["source_filled_slots"]
+        == {1: {"kind": "printed-constant", "text": "0"}},
+    )
+
+    # The rule this whole change must not become. Same markup, blank paper.
+    blank_compartment = source_filled_fixture(omit=(1,))
+    blank_result = check_comb_slots_match_printed(blank_compartment)
+    blank_offender = first_offender(blank_result)
+    check(
+        "a compartment with neither an input nor source occupancy still fails",
+        blank_result["holds"] is False
+        and blank_result["emission_invalid"] == 1
+        and blank_offender["emission_state"] == "slot-input-index-mismatch"
+        and "invalid-emission" in blank_offender["failure_kinds"]
+        and "no live input element" in blank_offender["why"]
+        and "prints no glyph or shading" in blank_offender["why"]
+        and emitted_comb_evidence(
+            blank_compartment.cells,
+            source_oracle_for(blank_compartment),
+        )["source_filled_slots"] == {},
+    )
+
+    # Three ways a compartment can hold source ink and still not be occupied by
+    # it. Each is a population the corpus separates on; none of them is a
+    # character class.
+    for ink_label, ink_glyphs in (
+            ("a swallowed caption is a segmentation fault, not occupancy",
+             (SourceGlyph("Z", 11.0, 2.0, 13.0, 8.0),
+              SourceGlyph("I", 13.5, 2.0, 15.0, 8.0))),
+            ("a glyph clipped across the compartment wall is not occupancy",
+             (SourceGlyph("0", 9.0, 2.0, 13.0, 8.0),)),
+            ("a glyph printed outside the compartment's row is not occupancy",
+             (SourceGlyph("0", 13.0, 12.0, 17.0, 18.0),))):
+        ink_result = check_comb_slots_match_printed(
+            source_filled_fixture(omit=(1,), glyphs=ink_glyphs))
+        check(
+            ink_label,
+            ink_result["holds"] is False
+            and first_offender(ink_result)["emission_state"]
+            == "slot-input-index-mismatch",
+        )
+
+    # The character class is NOT one of them, and this is the control that used
+    # to say the opposite ("a decimal point is decoration, not a constant").
+    # It was refuted by measuring the population it was reasoning about: the
+    # money bullet is not drawn inside a digit box, it holds a compartment of
+    # its own -- 92 of them corpus-wide, every one the third from the right of
+    # a 14-, 29- or 33-compartment money comb with the two centavos
+    # compartments to its right. A compartment is one character wide and the
+    # source has already spent it.
+    for mark_label, mark_text in (
+            ("the money bullet occupies its own compartment", "●"),
+            ("a printed per-cent sign occupies its own compartment", "%"),
+            ("a printed group separator occupies its own compartment", "-")):
+        mark_fixture = source_filled_fixture(
+            omit=(1,), glyphs=(SourceGlyph(mark_text, 13.0, 2.0, 17.0, 8.0),))
+        mark_result = check_comb_slots_match_printed(mark_fixture)
+        check(
+            mark_label + " and is not a live typing surface",
+            mark_result["holds"] is True
+            and mark_result["emission_invalid"] == 0
+            and emitted_comb_evidence(
+                mark_fixture.cells, source_oracle_for(mark_fixture),
+            )["source_filled_slots"]
+            == {1: {"kind": "printed-mark", "text": mark_text}},
+        )
+
+    # What actually protects C4 -- a money comb with no way to enter an amount
+    # at all -- is that only an OCCUPIED compartment is ever excused. One
+    # printed mark cannot carry the compartments either side of it, so an
+    # emitter that empties a whole comb still fails on both of them.
+    emptied_comb = source_filled_fixture(
+        omit=(0, 1, 2), glyphs=(SourceGlyph("●", 13.0, 2.0, 17.0, 8.0),))
+    emptied_offender = first_offender(
+        check_comb_slots_match_printed(emptied_comb))
+    emptied_evidence = emitted_comb_evidence(
+        emptied_comb.cells, source_oracle_for(emptied_comb))
+    check(
+        "one printed mark does not excuse the compartments beside it",
+        emptied_offender.get("emission_state") == "slot-input-index-mismatch"
+        and "invalid-emission" in emptied_offender.get("failure_kinds", ())
+        and "'slot': 0" in emptied_offender.get("why", "")
+        and "'slot': 2" in emptied_offender.get("why", "")
+        and "'slot': 1" not in emptied_offender.get("why", "")
+        and emitted_comb_evidence(
+            emptied_comb.cells, source_oracle_for(emptied_comb),
+        )["source_filled_slots"]
+        == {1: {"kind": "printed-mark", "text": "●"}}
+        and emptied_evidence["source_filled_slots"].keys() == {1},
+    )
+
+    # The rectangle the glyph question is asked of is the compartment's printed
+    # ROW, never the writing rectangle emit sized. Here the writing rectangle
+    # is 8pt inside a 10pt cell -- the corpus shape -- and the bullet's descent
+    # falls 0.18pt below its floor, which is exactly what separated 85 corpus
+    # money bullets from their 7 identical twins. Asking over the writing
+    # rectangle instead reports this compartment as blank paper.
+    descended = source_filled_fixture(
+        omit=(1,), slot_top=0.72, slot_height=8.0,
+        glyphs=(SourceGlyph("●", 13.0, 3.0, 17.0, 8.9),))
+    descended_result = check_comb_slots_match_printed(descended)
+    check(
+        "a glyph descending past the writing rectangle is still printed in "
+        "its row",
+        descended_result["holds"] is True
+        and descended_result["emission_invalid"] == 0
+        and emitted_comb_evidence(
+            descended.cells, source_oracle_for(descended),
+        )["source_filled_slots"]
+        == {1: {"kind": "printed-mark", "text": "●"}},
+    )
+
+    # And the row is a rectangle the SOURCE is responsible for, so it does not
+    # reach past the cell: the same glyph moved below the cell's own floor is
+    # a neighbour's, and excuses nothing.
+    for row_label, row_glyph in (
+            ("above", SourceGlyph("●", 13.0, -6.0, 17.0, -0.1)),
+            ("below", SourceGlyph("●", 13.0, 10.1, 17.0, 16.0))):
+        outside_row = check_comb_slots_match_printed(source_filled_fixture(
+            omit=(1,), slot_top=0.72, slot_height=8.0, glyphs=(row_glyph,)))
+        check(
+            f"a glyph printed {row_label} the cell is not this row's ink",
+            outside_row["holds"] is False
+            and first_offender(outside_row)["emission_state"]
+            == "slot-input-index-mismatch",
+        )
+
+    # A caller that cannot say which row a compartment belongs to gets no glyph
+    # evidence at all, rather than a fallback onto the emitted rectangle.
+    check(
+        "the oracle refuses to answer the glyph question without a row",
+        SourceSlotOracle(
+            glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),),
+            paints=(),
+        ).occupancy((10.0, 0.0, 20.0, 10.0)) is None,
+    )
+
+    # Tone says the same thing glyphs do -- BIR shades a box to state that no
+    # entry applies -- and it is read the same way: topmost covering fill.
+    shading_paint = VectorPaint(
+        10.0, 0.0, 20.0, 10.0, 0.8509, 1.0, 900, "fill-region")
+    shaded = source_filled_fixture(omit=(1,), extra_paints=(shading_paint,))
+    shaded_result = check_comb_slots_match_printed(shaded)
+    check(
+        "a compartment the source shaded is legitimately inputless",
+        shaded_result["holds"] is True
+        and emitted_comb_evidence(
+            shaded.cells, source_oracle_for(shaded),
+        )["source_filled_slots"]
+        == {1: {"kind": "decorative-shading", "tone": 0.8509}},
+    )
+    for tone_label, tone_paints in (
+            ("a structural rule covering a compartment is ink, not shading",
+             (dataclasses.replace(shading_paint, tone=0.0),)),
+            ("a knockout painted back over the band leaves a real blank",
+             (shading_paint,
+              VectorPaint(10.0, 0.0, 20.0, 10.0, 0.9899, 1.0, 901,
+                          "fill-region"))),
+            ("a translucent fill is not the measured tone",
+             (dataclasses.replace(shading_paint, opacity=0.5),)),
+            ("shading short of the coverage bound does not fill a "
+             "compartment",
+             (dataclasses.replace(shading_paint, x0=16.0),))):
+        tone_result = check_comb_slots_match_printed(
+            source_filled_fixture(omit=(1,), extra_paints=tone_paints))
+        check(
+            tone_label,
+            tone_result["holds"] is False
+            and first_offender(tone_result)["emission_state"]
+            == "slot-input-index-mismatch",
+        )
+
+    # "We could not look" is not "the source filled it in".
+    unreadable = source_filled_fixture(
+        omit=(1,), glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),),
+        publish_glyphs=False)
+    unreadable_result = check_comb_slots_match_printed(unreadable)
+    check(
+        "an unevaluable source excuses no compartment",
+        unreadable_result["holds"] is False
+        and first_offender(unreadable_result)["emission_state"]
+        == "slot-input-index-mismatch"
+        and "unevaluable" in first_offender(unreadable_result).get("why", ""),
+    )
+
+    # The population this change must leave exactly where it was: a comb that
+    # fails for a source-topology reason keeps failing for that reason, with
+    # its emission valid and its state `physical-slots`, whether or not one of
+    # its compartments is excused. Fourteen corpus offenders have this shape.
+    for topology_label, topology_omit in (
+            ("with every compartment editable", ()),
+            ("with one compartment the source filled", (1,))):
+        topology_result = check_comb_slots_match_printed(
+            source_filled_fixture(
+                omit=topology_omit,
+                glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),),
+                paints=(),
+            ))
+        topology_offender = first_offender(topology_result)
+        check(
+            "an unevaluable source topology still fails as itself "
+            + topology_label,
+            topology_result["holds"] is False
+            and topology_result["emission_invalid"] == 0
+            and topology_offender["emission_state"] == "physical-slots"
+            and topology_offender["failure_kinds"]
+            == ["source-topology-unevaluable"],
+        )
+
+    # An excused compartment changes nothing about a comb that has its inputs:
+    # the oracle is asked only where an input is missing, so a constant printed
+    # under a live input is not this assertion's business and is reported by
+    # `inputs_over_printed_text` instead.
+    inked_live = source_filled_fixture(
+        glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),))
+    inked_live_result = check_comb_slots_match_printed(inked_live)
+    check(
+        "a source constant under a live input leaves the emission valid",
+        inked_live_result["holds"] is True
+        and emitted_comb_evidence(
+            inked_live.cells, source_oracle_for(inked_live),
+        )["source_filled_slots"] == {},
+    )
+
     duplicate_cells = check_comb_slots_match_printed(
         CombEmissionFixture([valid_three, valid_three]))
     duplicate_offender = duplicate_cells["offenders"][0]
@@ -9647,6 +13061,43 @@ def self_test() -> int:
         wrong_owner["holds"] is False
         and wrong_owner["offenders"][0]["emission_state"]
         == "slot-input-index-mismatch",
+    )
+
+    out_of_range_owner = check_comb_slots_match_printed(
+        CombEmissionFixture(
+            [emitted_comb_cell(
+                slot_indexes=(0, 1), input_indexes=(0, 7), declared=2)],
+            count=2,
+        ))
+    check(
+        "an input index outside the comb's own compartments fails",
+        out_of_range_owner["holds"] is False
+        and out_of_range_owner["offenders"][0]["emission_state"]
+        == "slot-input-index-mismatch"
+        and "'input_slot_index': 7"
+        in out_of_range_owner["offenders"][0]["why"],
+    )
+
+    # The assertion's first question, and the one an excused compartment must
+    # never be able to answer for the comb: a comb that emits fewer boxes than
+    # the sheet prints fails on the count, whatever is or is not inside them.
+    short_comb = check_comb_slots_match_printed(
+        CombEmissionFixture(
+            [emitted_comb_cell(
+                slot_indexes=(0, 1), declared=2,
+                geometry=((0.0, 0.0, 15.0, 10.0),
+                          (15.0, 0.0, 15.0, 10.0)))],
+            count=3,
+        ))
+    short_offender = first_offender(short_comb)
+    check(
+        "a comb short of the printed compartment count still fails on the "
+        "count",
+        short_comb["holds"] is False
+        and short_offender["printed"] == 3
+        and short_offender["slots"] == 2
+        and "emission-printed-mismatch" in short_offender["failure_kinds"]
+        and "emission-layout-mismatch" in short_offender["failure_kinds"],
     )
 
     zero_width_slot = check_comb_slots_match_printed(
@@ -9892,6 +13343,126 @@ def self_test() -> int:
         == ["comb-owner-registry-invalid"],
     )
 
+    # W8: the reviewed-topology registry. Every check above already proves
+    # "no entry -> stays unevaluable exactly as today", because none of them
+    # registers anything in `REVIEWED_COMB_TOPOLOGY`, which ships EMPTY. These
+    # tests inject synthetic entries directly and remove them again in a
+    # `finally`, so the module returns to its shipped-empty state once
+    # self-test finishes, whether a check below passes or fails.
+    review_fixture = source_filled_fixture(
+        glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),), paints=())
+    review_fixture.slug = "w8-review-fixture"
+    review_fixture.ir = {"source": {"sha256": "b" * 64}}
+    review_key = ("w8-review-fixture", 1, "p1c0")
+    review_bbox = [0.0, 0.0, 30.0, 10.0]
+
+    def complete_review_entry(**over: Any) -> dict[str, Any]:
+        entry = {
+            "compartments": 3,
+            "source_sha256": "b" * 64,
+            "page": 1,
+            "cell_id": "p1c0",
+            "bbox": list(review_bbox),
+            "reviewer": "uriah",
+            "date": "2026-08-13",
+            "citation": "W8 self-test synthetic fixture, not a real review",
+        }
+        entry.update(over)
+        return entry
+
+    REVIEWED_COMB_TOPOLOGY[review_key] = complete_review_entry()
+    try:
+        decided_result = check_comb_slots_match_printed(review_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[review_key]
+    decided_subject = (
+        decided_result["decided_by_review_subjects"][0]
+        if decided_result.get("decided_by_review_subjects") else {}
+    )
+    check(
+        "a valid reviewed entry decides an otherwise-unevaluable subject",
+        decided_result["holds"] is True
+        and decided_result["layout_unevaluable"] == 0
+        and decided_result["decided_by_review"] == 1
+        and decided_subject.get("cell") == "p1c0"
+        and decided_subject.get("printed") == 3
+        and decided_subject.get("latticed") == 3
+        and decided_subject.get("reviewed_comb_topology", {}).get(
+            "compartments") == 3
+        and decided_subject.get("reviewed_comb_topology", {}).get(
+            "reviewer") == "uriah",
+    )
+
+    decidable_fixture = CombEmissionFixture([valid_three])
+    decidable_fixture.slug = "w8-decidable-fixture"
+    decidable_key = ("w8-decidable-fixture", 1, "p1c0")
+    REVIEWED_COMB_TOPOLOGY[decidable_key] = complete_review_entry()
+    try:
+        decidable_result = check_comb_slots_match_printed(decidable_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[decidable_key]
+    decidable_offender = first_offender(decidable_result)
+    check(
+        "a reviewed entry for a subject the audit can already decide is an "
+        "ERROR -- the load-bearing guard against overruling a real "
+        "disagreement",
+        decidable_result["holds"] is False
+        and "reviewed-comb-topology-invalid"
+        in decidable_offender.get("failure_kinds", ())
+        and "independently decidable" in decidable_offender.get("why", ""),
+    )
+
+    REVIEWED_COMB_TOPOLOGY[review_key] = complete_review_entry(
+        source_sha256="c" * 64)
+    try:
+        mismatched_sha_result = check_comb_slots_match_printed(review_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[review_key]
+    mismatched_sha_offender = first_offender(mismatched_sha_result)
+    check(
+        "a reviewed entry whose sha256 does not match the current source is "
+        "an ERROR, not a stale-but-usable fact",
+        mismatched_sha_result["holds"] is False
+        and mismatched_sha_result["decided_by_review"] == 0
+        and "reviewed-comb-topology-invalid"
+        in mismatched_sha_offender.get("failure_kinds", ())
+        and "source-topology-unevaluable"
+        in mismatched_sha_offender.get("failure_kinds", ())
+        and "does not match the current IR's source.sha256"
+        in mismatched_sha_offender.get("why", ""),
+    )
+
+    incomplete_entry = complete_review_entry()
+    del incomplete_entry["citation"]
+    REVIEWED_COMB_TOPOLOGY[review_key] = incomplete_entry
+    try:
+        missing_field_result = check_comb_slots_match_printed(review_fixture)
+    finally:
+        del REVIEWED_COMB_TOPOLOGY[review_key]
+    missing_field_offender = first_offender(missing_field_result)
+    check(
+        "a reviewed entry missing a required field is an ERROR, not a "
+        "skipped entry",
+        missing_field_result["holds"] is False
+        and missing_field_result["decided_by_review"] == 0
+        and "reviewed-comb-topology-invalid"
+        in missing_field_offender.get("failure_kinds", ())
+        and "missing required field(s): citation"
+        in missing_field_offender.get("why", ""),
+    )
+
+    unregistered_result = check_comb_slots_match_printed(review_fixture)
+    unregistered_offender = first_offender(unregistered_result)
+    check(
+        "no reviewed entry leaves a genuinely unevaluable subject exactly "
+        "where it was",
+        review_key not in REVIEWED_COMB_TOPOLOGY
+        and unregistered_result["holds"] is False
+        and unregistered_result["decided_by_review"] == 0
+        and unregistered_offender.get("failure_kinds")
+        == ["source-topology-unevaluable"],
+    )
+
     # Geometry helpers, where an off-by-one epsilon would silently disable an
     # assertion rather than break it.
     check("touching edges do not overlap", not overlaps((0, 0, 10, 10), (10, 0, 20, 10)))
@@ -9901,6 +13472,96 @@ def self_test() -> int:
                            "origin_x": 0.0,
                            "char_origin_offsets_pt": [0.0, 3.0, 6.0],
                            "char_widths_pt": [3.0, 3.0, 3.0]})) == 2)
+
+    # The ink band. A run of "Dg" set 10pt on a baseline at y=100 in a face
+    # whose ascender is 0.9 and descender -0.2: the line box is 91..102, the
+    # 'D' stops on the baseline plus the measured overshoot, and the 'g'
+    # keeps the whole line box because its ink really does go there.
+    def ink_run(text: str, **over: Any) -> dict:
+        offsets = [3.0 * i for i in range(len(text))]
+        run = {
+            "text": text, "family": "Arial", "size_pt": 10.0,
+            "x0": 0.0, "y0": 91.0, "x1": 3.0 * len(text), "y1": 102.0,
+            "origin_x": 0.0, "baseline_y": 100.0,
+            "ascender": 0.9, "descender": -0.2, "rotated": False,
+            "bold": False, "italic": False,
+            "char_origin_offsets_pt": offsets,
+            "char_widths_pt": [3.0] * len(text),
+        }
+        run.update(over)
+        return run
+
+    seated = 100.0 + GLYPH_BASELINE_OVERSHOOT_EM * 10.0
+    mixed = glyph_boxes(ink_run("Dg"))
+    check("a baseline-seated glyph's ink stops at the baseline, not the descent",
+          len(mixed) == 2 and abs(mixed[0][3] - seated) < 1e-9)
+    check("a descending glyph in the same run keeps the whole line box",
+          len(mixed) == 2 and mixed[1][3] == 102.0)
+    check("the ink band never rises above the run's own ascent line",
+          all(box[1] == 91.0 for box in mixed))
+    check("a character with no measured ink depth keeps the line box",
+          glyph_boxes(ink_run("\uf0a7"))[0][3] == 102.0
+          and glyph_boxes(ink_run("\ufffd"))[0][3] == 102.0)
+    check("a symbol-encoded face cannot be read through a character table",
+          glyph_boxes(ink_run("D", family="Wingdings"))[0][3] == 102.0)
+    check("a rotated run has no horizontal baseline to seat ink on",
+          glyph_boxes(ink_run("D", rotated=True))[0][3] == 102.0)
+    check("a run without a baseline or size falls back to the line box",
+          glyph_boxes(ink_run("D", baseline_y=None))[0][3] == 102.0
+          and glyph_boxes(ink_run("D", size_pt=0.0))[0][3] == 102.0)
+    check("f descends in an italic face and not in an upright one",
+          glyph_boxes(ink_run("f"))[0][3] == seated
+          and glyph_boxes(ink_run("f", italic=True))[0][3] == 102.0)
+    check("a baseline overshoot is carried, not rounded away",
+          GLYPH_BASELINE_OVERSHOOT_EM * 10.0 > OVERLAP_EPS_PT)
+
+    # The measured path. The same run, now with the source's own outline for
+    # `D`: Helvetica states 0.077..0.723 em across and 0.0..0.729 em up, so at
+    # 10pt on a baseline of 100 the ink is x 0.77..7.23 and y 92.71..100.0 --
+    # inside the 0..3 advance box on neither edge, and 8.31pt short of the
+    # 102.0 the line box charged it with.
+    measured = glyph_boxes(ink_run("D", glyph_ink_em={
+        "D": [0.077, 0.0, 0.723, 0.729]}))
+    check("a stated outline is used on all four edges",
+          len(measured) == 1
+          and all(abs(got - want) < 1e-9 for got, want
+                  in zip(measured[0], (0.77, 92.71, 7.23, 100.0))))
+    check("a glyph the run states no outline for keeps the advance box",
+          glyph_boxes(ink_run("Dg", glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[1] == (3.0, 91.0, 6.0, 102.0))
+    check("an outline is never applied to a run whose placement is not published",
+          glyph_boxes(ink_run("D", rotated=True, glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[0] == (0.0, 91.0, 3.0, 102.0)
+          and glyph_boxes(ink_run("D", size_pt=0.0, glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[0] == (0.0, 91.0, 3.0, 102.0)
+          and glyph_boxes(ink_run("D", baseline_y=None, glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[0] == (0.0, 91.0, 3.0, 102.0))
+    check("a malformed outline is refused rather than read as no collision",
+          all(glyph_boxes(ink_run("D", glyph_ink_em=table))[0]
+              == (0.0, 91.0, 3.0, seated)
+              for table in ({"D": [0.7, 0.0, 0.7, 0.729]},
+                            {"D": [0.077, 0.729, 0.723, 0.0]},
+                            {"D": [0.077, 0.0, 0.723]},
+                            {"D": [0.077, 0.0, 0.723, float("inf")]},
+                            {"D": [0.077, 0.0, 0.723, True]},
+                            {"D": "0.077 0 0.723 0.729"},
+                            {"D": None})))
+    check("an outline table that is not a table is not read",
+          glyph_boxes(ink_run("D", glyph_ink_em=[0.077, 0.0, 0.723, 0.729]))[0]
+          == (0.0, 91.0, 3.0, seated))
+    check("a stated outline overrules the character table, both ways",
+          # `g` descends, so the fallback would give it the line box; the
+          # source says its ink stops 0.218 em under the baseline instead.
+          abs(glyph_boxes(ink_run("g", glyph_ink_em={
+              "g": [0.035, -0.218, 0.481, 0.539]}))[0][3] - 102.18) < 1e-9
+          # and `D` is baseline-seated, so the fallback would stop it at the
+          # overshoot; the source says it reaches 0.06 em under.
+          and abs(glyph_boxes(ink_run("D", glyph_ink_em={
+              "D": [0.077, -0.06, 0.723, 0.729]}))[0][3] - 100.6) < 1e-9)
+    check("every character measured as baseline-seated is measured only once",
+          not (DESCENDING_INK & BASELINE_SEATED_INK)
+          and ITALIC_ONLY_DESCENDING_INK <= BASELINE_SEATED_INK
+          and not (ITALIC_ONLY_DESCENDING_INK & DESCENDING_INK))
     check("an upright placement needs no SVG transform",
           transform_signature((10.0, 0.0, 0.0, 10.0, 0.0, 0.0)) == svg_signature(None))
     check("a y-flipped placement needs a negative y scale",
@@ -10285,6 +13946,74 @@ def self_test() -> int:
             and phrase in fixture[3],
         )
 
+    # The third retained shape: a comb the cell's own printed text refutes.
+    # It is admitted through the SAME identity branch as the no-band shape, so
+    # both directions are asserted here -- an unrecognised reason code fails
+    # the whole form's registry rather than its own record, which is why the
+    # tuple has to be named, and an identity mapping is what it has to be.
+    refuted_registry = owner_registry_fixture(
+        layout_mutator=corrupt_retained(
+            "reason_codes",
+            ["emission-suppressed-caption-block-not-character-cells"]))
+    check(
+        "a refuted caption block is a retained shape the registry knows",
+        refuted_registry[2] is not None
+        and refuted_registry[0].binding_error is None,
+    )
+
+    def corrupt_refuted(field: str, value: Any) -> Any:
+        def mutate(layout_fixture: dict[str, Any]) -> None:
+            append_valid_retained(layout_fixture)
+            subject = layout_fixture["pages"][0]["comb_subjects"][-1]
+            subject["reason_codes"] = [
+                "emission-suppressed-caption-block-not-character-cells"]
+            subject[field] = value
+        return mutate
+
+    def refuted_mapped_elsewhere(layout_fixture: dict[str, Any]) -> None:
+        """A refuted subject mapped onto a cell that is not its own.
+
+        Both halves of the mapping move together, onto the fixture's other
+        cell, so the pair stays internally consistent and the record reaches
+        the identity branch instead of failing the reverse-mapping check
+        first. That is what makes this a test OF the identity branch.
+        """
+        append_valid_retained(layout_fixture)
+        page = layout_fixture["pages"][0]
+        other = page["cells"][0]
+        subject = page["comb_subjects"][-1]
+        subject["reason_codes"] = [
+            "emission-suppressed-caption-block-not-character-cells"]
+        subject["mapped_partition_cell_ids"] = [other["id"]]
+        subject["mapped_partition_subject_keys"] = [other["subject_key"]]
+
+    refuted_corruptions = (
+        (
+            "identity mapping",
+            owner_registry_fixture(layout_mutator=refuted_mapped_elsewhere),
+            "identity mapping is stale",
+        ),
+        (
+            "suppression evidence",
+            owner_registry_fixture(layout_mutator=corrupt_refuted(
+                "emission", "emitted")),
+            "suppression/blocking/transition",
+        ),
+    )
+    for label, fixture, phrase in refuted_corruptions:
+        check(
+            f"a refuted caption block with a broken {label} is rejected",
+            fixture[2] is None
+            and fixture[3] is not None
+            and phrase in fixture[3],
+        )
+    check(
+        "an unnamed retained reason code fails the registry, never passes it",
+        owner_registry_fixture(layout_mutator=corrupt_retained(
+            "reason_codes", ["emission-suppressed-invented"]))[3]
+        is not None,
+    )
+
     def append_noncontiguous_page(layout_fixture: dict[str, Any]) -> None:
         append_valid_retained(layout_fixture)
         layout_fixture["pages"].append({
@@ -10604,6 +14333,190 @@ def self_test() -> int:
                     f"{image_order}",
                     between_divider_image_failed,
                 )
+
+        # W5 mechanism 1: a chromatic fill is refused only when it has no
+        # exact rectilinear regions to offer, never merely for its colour.
+        chromatic_regions = (((35.0, 2.0, 38.0, 8.0), 1),)
+        chromatic_tone = round(_perceptual_luminance((0.2, 0.4, 0.9)), 4)
+        away_from_divider_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        away_from_divider_page = VectorPage(
+            away_from_divider_page.paints,
+            (UnsupportedVectorPaint(
+                (35.0, 2.0, 38.0, 8.0), 99, "chromatic vector fill",
+                tone=chromatic_tone, opacity=1.0,
+                exact_regions=chromatic_regions, fill_rule="nonzero"),),
+        )
+        try:
+            chromatic_resolved = printed_compartments(
+                away_from_divider_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except Exception:  # noqa: BLE001 - must not raise at all
+            chromatic_resolved = None
+        check(
+            "a rectilinear chromatic fill away from any divider does not "
+            "block (W5 mechanism 1)",
+            chromatic_resolved == (3, [10.0, 20.0]),
+        )
+        unparseable_chromatic_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        unparseable_chromatic_page = VectorPage(
+            unparseable_chromatic_page.paints,
+            (UnsupportedVectorPaint(
+                (35.0, 2.0, 38.0, 8.0), 99, "chromatic vector fill"),),
+        )
+        try:
+            printed_compartments(
+                unparseable_chromatic_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except ValueError as exc:
+            unparseable_chromatic_failed = (
+                "chromatic vector fill" in str(exc))
+        else:
+            unparseable_chromatic_failed = False
+        check(
+            "a chromatic fill with no exact rectilinear regions still "
+            "blocks (W5 mechanism 1 boundary)",
+            unparseable_chromatic_failed,
+        )
+
+        # W5 mechanism 2: a non-rectilinear stroke's own bounding geometry
+        # decides whether it can be a divider, never its colour or shape
+        # otherwise.
+        stroke_away_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        stroke_away_page = VectorPage(
+            stroke_away_page.paints,
+            (UnsupportedVectorPaint(
+                (35.0, 2.0, 38.0, 8.0), 99, "non-rectilinear vector stroke"),),
+        )
+        try:
+            stroke_resolved = printed_compartments(
+                stroke_away_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except Exception:  # noqa: BLE001 - must not raise at all
+            stroke_resolved = None
+        check(
+            "a non-rectilinear stroke away from any divider does not block "
+            "(W5 mechanism 2)",
+            stroke_resolved == (3, [10.0, 20.0]),
+        )
+        stroke_on_divider_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        stroke_on_divider_page = VectorPage(
+            stroke_on_divider_page.paints,
+            (UnsupportedVectorPaint(
+                (9.0, 2.0, 11.0, 8.0), 99, "non-rectilinear vector stroke"),),
+        )
+        try:
+            printed_compartments(
+                stroke_on_divider_page, valid_owner_cell,
+                owner_certificate=valid_owner)
+        except ValueError as exc:
+            stroke_on_divider_failed = (
+                "non-rectilinear vector stroke" in str(exc))
+        else:
+            stroke_on_divider_failed = False
+        check(
+            "a non-rectilinear stroke straddling a divider still blocks "
+            "(W5 mechanism 2 boundary)",
+            stroke_on_divider_failed,
+        )
+
+        # W5 mechanism 4: F064 lets a candidate band own the full painted
+        # extent of a shared vertical mark, so its strict-majority test can
+        # fail for a row that is only a fraction of that extent even though
+        # the row's own slice is unambiguous. One continuous divider at
+        # x=20 runs y 0..200 -- far beyond the claimed owner's own row
+        # (y 90..100) -- interrupted every 10pt by a differently-toned
+        # crossing EXCEPT across the owner's own row, which stays clean.
+        def crossed_divider_page(
+                extra_interruptions: tuple[float, ...] = (),
+                ) -> VectorPage:
+            divider = VectorPaint(
+                19.88, 0.0, 20.12, 200.0, 0.0, 1.0, 0, "test")
+            interrupters = []
+            order = 1
+            y = 9.85
+            while y < 200.0:
+                if not (85.0 < y < 100.0):
+                    interrupters.append(VectorPaint(
+                        15.0, y, 25.0, y + 0.3, 0.35, 1.0, order, "test"))
+                    order += 1
+                y += 10.0
+            for extra_y in extra_interruptions:
+                interrupters.append(VectorPaint(
+                    15.0, extra_y, 25.0, extra_y + 0.3, 0.35, 1.0,
+                    order, "test"))
+                order += 1
+            rails = (
+                VectorPaint(-0.12, 0.0, 0.12, 200.0, 0.0, 1.0, 900, "test"),
+                VectorPaint(39.88, 0.0, 40.12, 200.0, 0.0, 1.0, 901, "test"),
+            )
+            return VectorPage(tuple(sorted(
+                (divider, *interrupters, *rails),
+                key=lambda paint: paint.order,
+            )), ())
+
+        crossed_owner_cell = comb_subject(cell_y0=90.0, cell_y1=100.0)
+        _, _, crossed_owner_certificate, crossed_owner_reason = (
+            owner_registry_fixture(crossed_owner_cell))
+        if crossed_owner_certificate is not None:
+            no_majority_page = crossed_divider_page()
+            no_majority_bands, _ = _source_band_candidates(
+                no_majority_page, (0.0, 90.0, 40.0, 100.0))
+            no_majority_full_band_empty = all(
+                not _band_topologies(no_majority_page, 0.0, 40.0, b0, b1)
+                for b0, b1 in no_majority_bands
+                if (b0, b1) == (0.0, 200.0)
+            )
+            check(
+                "the unclipped full-extent band alone finds no majority "
+                "(fixture sanity check)",
+                any((b0, b1) == (0.0, 200.0) for b0, b1 in no_majority_bands)
+                and no_majority_full_band_empty,
+            )
+            clipped_retry_result = printed_compartments(
+                no_majority_page, crossed_owner_cell,
+                owner_certificate=crossed_owner_certificate)
+            check(
+                "a band clipped to the claimed owner's own row decides the "
+                "divider a page-wide band could not (W5 mechanism 4)",
+                clipped_retry_result == (2, [20.0]),
+            )
+            # Two further interruptions squarely inside the owner's own row
+            # fragment it below strict majority there too -- the fallback
+            # must not force an answer when the row itself is genuinely
+            # undecided.
+            still_undecided_page = crossed_divider_page((93.0, 96.5))
+            try:
+                printed_compartments(
+                    still_undecided_page, crossed_owner_cell,
+                    owner_certificate=crossed_owner_certificate)
+            except CombTopologyError as exc:
+                still_undecided_failed = (
+                    "no strict-majority topology" in str(exc))
+            else:
+                still_undecided_failed = False
+            check(
+                "a row genuinely fragmented even after clipping stays "
+                "unevaluable (W5 mechanism 4 boundary)",
+                still_undecided_failed,
+            )
+        check(
+            "the W5 mechanism 4 fixture certifies its own owner",
+            crossed_owner_certificate is not None
+            and crossed_owner_reason is None,
+        )
+
+    check(
+        "perceptual luminance uses the standard BT.601 coefficients",
+        abs(_perceptual_luminance((1.0, 0.0, 0.0)) - 0.299) < 1e-9
+        and abs(_perceptual_luminance((0.0, 1.0, 0.0)) - 0.587) < 1e-9
+        and abs(_perceptual_luminance((0.0, 0.0, 1.0)) - 0.114) < 1e-9
+        and abs(_perceptual_luminance((1.0, 1.0, 1.0)) - 1.0) < 1e-9
+        and _perceptual_luminance((0.0, 0.0, 0.0)) == 0.0,
+    )
 
     unframed_expansion_page = source_page(
         source_paint(10), source_paint(20), source_paint(45),
@@ -11718,6 +15631,535 @@ def self_test() -> int:
             6, [10.0, 15.0, 20.0, 25.0, 30.0]),
     )
 
+    # ---------------------------------------------------------------- #
+    # Rule chains, junction blocks and the source's own walls.
+    #
+    # Five relations that all answer one question the sheets forced: what
+    # counts as ONE printed comb when the ink that proves it is emitted in
+    # dozens of pieces and shared with the table around it. Each has its own
+    # fixture below and its own mutation in the sweep that follows, and the
+    # plain comb is carried through every mutation as a control.
+    # ---------------------------------------------------------------- #
+
+    def chain_comb_page(*segments: tuple[float, float, float, float],
+                        order: int = 40) -> VectorPage:
+        """A 6-slot comb whose baseline is drawn as the given ink pieces."""
+        return source_page(
+            *(
+                source_paint(x, order=index)
+                for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+            ),
+            *(
+                VectorPaint(
+                    left, y0, right, y1, 0.0, 1.0, order + index,
+                    "chain-baseline-piece")
+                for index, (left, y0, right, y1) in enumerate(segments)
+            ),
+            framed=False,
+        )
+
+    def block_chain(block_width: float, *, overlap: float = 0.0,
+                    ) -> tuple[tuple[float, float, float, float], ...]:
+        """One rule chain: a junction block per divider, ink between them.
+
+        The chain runs rail centre to rail centre, so its own ends are the
+        frame's rails and only the interior junctions are blocks. `overlap`
+        pushes each run a hair into the block that follows it, which is what
+        1707 does at 0.004pt.
+        """
+        edges: list[tuple[float, float]] = [(5.0, 5.0)]
+        for divider in (10.0, 15.0, 20.0, 25.0, 30.0):
+            edges.append((
+                divider - block_width / 2.0, divider + block_width / 2.0))
+        edges.append((35.0, 35.0))
+        pieces = [
+            (left, 8.0, right, 8.75) for left, right in edges[1:-1]
+        ]
+        for index, ((_left, run_start), (run_end, _right)) in enumerate(
+                zip(edges, edges[1:])):
+            reach = 0.0 if index == len(edges) - 2 else overlap
+            pieces.append((run_start, 8.0, run_end + reach, 8.75))
+        return tuple(pieces)
+
+    def frame_resolves(page: VectorPage, expected: tuple[int, list[float]],
+                       subject: dict[str, Any] | None = None) -> bool:
+        try:
+            resolved = printed_compartments(
+                page, comb_subject() if subject is None else subject)
+        except ValueError:
+            return False
+        return resolved == expected
+
+    plain_comb_page = source_page(
+        *(
+            source_paint(x, order=index)
+            for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+        ),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 40, "plain-baseline"),
+        framed=False,
+    )
+    six_slots = (6, [10.0, 15.0, 20.0, 25.0, 30.0])
+    check(
+        "one unsegmented baseline still frames a plain comb",
+        frame_resolves(plain_comb_page, six_slots),
+    )
+
+    # 1707 overlaps consecutive pieces of one chain by 0.004pt. The junction
+    # block owning that sliver is neither wider than tall nor long enough to
+    # read as a divider, so it used to hide the 13pt piece beside it.
+    noisy_overlap_chain_page = chain_comb_page(
+        *block_chain(0.752, overlap=0.004))
+    check(
+        "a junction block does not hide the chain piece it overlaps",
+        frame_resolves(noisy_overlap_chain_page, six_slots),
+    )
+
+    # 2000-DST paints the same block at two x with widths either side of its
+    # own height. Both are junctions; neither is a stroke across the rule.
+    square_block_chain_page = chain_comb_page(*block_chain(0.75))
+    check(
+        "an exactly square junction block belongs to its rule chain",
+        frame_resolves(square_block_chain_page, six_slots),
+    )
+
+    # 2000-DST and 2200-A each leave one 0.006pt gap in an otherwise exact
+    # chain. A break narrower than the rule is thick cannot print as a break.
+    hairline_gap_chain_page = chain_comb_page(
+        (5.0, 8.0, 10.0, 8.75),
+        (10.01, 8.0, 35.0, 8.75),
+    )
+    check(
+        "a gap narrower than the rule is thick does not cut its chain",
+        frame_resolves(hairline_gap_chain_page, six_slots),
+    )
+    wide_gap_chain_page = chain_comb_page(
+        (5.0, 8.0, 10.0, 8.75),
+        (10.75, 8.0, 35.0, 8.75),
+    )
+    check(
+        "a gap as wide as the rule is thick still cuts its chain",
+        not frame_resolves(wide_gap_chain_page, six_slots),
+    )
+
+    # 1600WP draws MM|DD|YYYY as one stroked rectangle carrying two
+    # full-height interior walls. The maximal frame is the rectangle; the comb
+    # is the cell of it between two walls.
+    nested_cell_page = source_page(
+        *(source_paint(x, order=index) for index, x in enumerate((10, 20, 30))),
+        source_paint(5, a=0.5, b=8.0, order=10),
+        source_paint(15, a=0.5, b=8.0, order=11),
+        source_paint(25, a=0.5, b=8.0, order=12),
+        source_paint(35, a=0.5, b=8.0, order=13),
+        VectorPaint(5.0, 0.5, 35.0, 0.75, 0.0, 1.0, 20, "nested-top-rule"),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 21, "nested-baseline"),
+        framed=False,
+    )
+    nested_subject = comb_subject(x0=5.0, x1=15.0)
+    check(
+        "a comb inside a walled rectangle is the cell its owner claims",
+        frame_resolves(nested_cell_page, (2, [10.0]), nested_subject),
+    )
+    check(
+        "an owner spanning two walled cells keeps its wider-frame verdict",
+        not frame_resolves(
+            nested_cell_page, (3, [10.0, 20.0]),
+            comb_subject(x0=5.0, x1=25.0)),
+    )
+
+    # 1700 draws each date-box wall as two operations that miss each other by
+    # 0.006pt exactly where the comb band starts.
+    split_wall_page = source_page(
+        *(source_paint(x, order=index) for index, x in enumerate((10, 20, 30))),
+        *(
+            paint
+            for index, x in enumerate((5.0, 15.0, 25.0, 35.0))
+            for paint in (
+                source_paint(x, a=0.5, b=1.994, order=10 + 2 * index),
+                source_paint(x, a=2.0, b=8.0, order=11 + 2 * index),
+            )
+        ),
+        VectorPaint(5.0, 0.5, 35.0, 0.75, 0.0, 1.0, 20, "split-wall-top-rule"),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 21, "split-wall-baseline"),
+        framed=False,
+    )
+    check(
+        "a wall drawn as two operations a hair apart is still one wall",
+        frame_resolves(split_wall_page, (2, [10.0]), nested_subject),
+    )
+
+    # 2200-A's comb sits on the bottom rule of a full-width table row, so the
+    # chain's own ends are page furniture and the rails are interior to it.
+    row_rule_page = source_page(
+        *(
+            source_paint(x, order=index)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(5, a=0.5, b=8.0, order=10),
+        source_paint(35, a=0.5, b=8.0, order=11),
+        VectorPaint(0.0, 0.5, 50.0, 0.75, 0.0, 1.0, 20, "row-top-rule"),
+        VectorPaint(0.0, 8.0, 50.0, 8.75, 0.0, 1.0, 21, "row-bottom-rule"),
+        framed=False,
+    )
+    row_subject = comb_subject(x0=5.0, x1=35.0, cell_y1=9.0)
+    check(
+        "a comb standing on a row rule is framed by its own walls",
+        frame_resolves(row_rule_page, six_slots, row_subject),
+    )
+
+    # 2200-A knocks the rule above its comb out with a white rectangle as
+    # thick as the stroke it erases. A divider whose upper half is cut off
+    # that way is a divider, whatever stands above the cut.
+    erased_wall_page = source_page(
+        *(
+            source_paint(x, order=index)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(5, a=0.5, b=8.0, order=10),
+        source_paint(35, a=0.5, b=8.0, order=11),
+        source_paint(20, a=0.5, b=1.9, order=12),
+        VectorPaint(
+            19.88, 1.9, 20.12, 2.0, 1.0, 1.0, 13, "erased-wall-knockout"),
+        VectorPaint(0.0, 0.5, 50.0, 0.75, 0.0, 1.0, 20, "erased-wall-top-rule"),
+        VectorPaint(0.0, 8.0, 50.0, 8.75, 0.0, 1.0, 21, "erased-wall-baseline"),
+        framed=False,
+    )
+    check(
+        "a divider cut off from the rule above it is not a wall",
+        frame_resolves(erased_wall_page, six_slots, row_subject),
+    )
+
+    # 2000-DST and 2200-C stop the wall BETWEEN two comb boxes the same way,
+    # with a white rectangle cut to the wall's own width a point and a half
+    # above the band. Ink above the cut therefore proves nothing either way and
+    # the sheets separate the two cases on how the strokes are drawn: the wall
+    # is twice the weight of the dividers beside it and stands ten times higher,
+    # while 2200-A's erased divider is the same weight as its neighbours. Both
+    # axes, always, and the dividers -- never the band -- fix the height a
+    # divider reaches: see `_stroke_stands_at_border_weight` for the measured
+    # separation on all five sheets.
+    #
+    # Every page below carries the sheets' own rule chain, one junction block
+    # per vertical, because a comb whose baseline is a single unbroken paint
+    # never asks this question: its rails are found directly and the frame
+    # never spans more than the owner claims.
+    BOX_TOP, BOX_BOTTOM = 1.0, 20.0      # the walled box's own rules
+    BAND_TOP, DIVIDER_TOP = 12.5, 11.4   # the comb band, and how high a
+    CUT_TOP = 11.0                       # divider stands; the wall's erasure
+
+    def rule_chain(left_end: float, right_end: float, *verticals: float,
+                   y0: float = BOX_BOTTOM) -> tuple[VectorPaint, ...]:
+        """One rule drawn as official sheets draw it: a junction block per
+        vertical with a run of rule between them."""
+        edges = [(left_end, left_end)]
+        edges.extend((x - 0.376, x + 0.376) for x in verticals)
+        edges.append((right_end, right_end))
+        pieces = list(edges[1:-1])
+        pieces.extend(
+            (run_start, run_end)
+            for (_left, run_start), (run_end, _right) in zip(edges, edges[1:])
+        )
+        return tuple(
+            VectorPaint(left, y0, right, y0 + 0.75, 0.0, 1.0, 70 + index,
+                        "rule-chain-piece")
+            for index, (left, right) in enumerate(sorted(pieces))
+        )
+
+    def walled_box(*interior: VectorPaint) -> VectorPage:
+        """One stroked rectangle 5..35 with border-weight sides."""
+        return source_page(
+            VectorPaint(5.0, 0.5, 35.0, BOX_TOP, 0.0, 1.0, 60, "box-top-rule"),
+            *rule_chain(5.0, 35.0, 10.0, 15.0, 20.0, 25.0, 30.0),
+            source_paint(5.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=1),
+            source_paint(35.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=2),
+            *interior,
+            framed=False,
+        )
+
+    def box_dividers(*xs: float, width: float = 0.24, order: int = 10,
+                     flush: bool = False) -> tuple[VectorPaint, ...]:
+        """Strokes hanging from the box's baseline, stopping inside the box.
+
+        They stand `DIVIDER_TOP` above the band as 2000-DST's and 2200-C's do,
+        unless `flush`, which is 2200-C's money row: dividers that stop dead at
+        the band's own top edge and so say nothing about a divider's height.
+        """
+        return tuple(
+            paint
+            for index, x in enumerate(xs)
+            for paint in (
+                (source_paint(x, a=DIVIDER_TOP, b=BAND_TOP, width=width,
+                              order=order + 2 * index),)
+                if not flush else ()
+            ) + (
+                source_paint(x, a=BAND_TOP, b=BOX_BOTTOM, width=width,
+                             order=order + 2 * index + 1),
+            )
+        )
+
+    def cut_stroke(x: float, width: float,
+                   order: int) -> tuple[VectorPaint, ...]:
+        """A stroke spanning the whole box, erased at its own width just above
+        the band."""
+        return (
+            source_paint(x, a=BOX_TOP, b=CUT_TOP, width=width, order=order),
+            VectorPaint(x - width / 2, CUT_TOP, x + width / 2, BAND_TOP,
+                        1.0, 1.0, order + 1, "stroke-knockout"),
+            source_paint(x, a=BAND_TOP, b=BOX_BOTTOM, width=width,
+                         order=order + 2),
+        )
+
+    left_cell = comb_subject(x0=5.0, x1=20.0, cell_y1=21.0)
+    right_cell = comb_subject(x0=20.0, x1=35.0, cell_y1=21.0)
+
+    knocked_out_wall_page = walled_box(
+        *box_dividers(10.0, 15.0, 25.0, 30.0), *cut_stroke(20.0, 0.48, 30))
+    check(
+        "a border-weight wall the sheet cut off still partitions its frame",
+        frame_resolves(knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            knocked_out_wall_page, (3, [25.0, 30.0]), right_cell),
+    )
+    check(
+        "an owner spanning a cut-off wall keeps its wider-frame verdict",
+        not frame_resolves(
+            knocked_out_wall_page, (5, [10.0, 15.0, 20.0, 25.0]),
+            comb_subject(x0=5.0, x1=30.0, cell_y1=21.0)),
+    )
+
+    # A money comb's thousands separator is thicker than its digit dividers and
+    # hangs from the same baseline to the same height. Weight alone would make
+    # it a box wall and cut the comb in two.
+    heavy_divider_page = walled_box(
+        *box_dividers(10.0, 25.0, 30.0),
+        *box_dividers(15.0, width=0.48, order=40),
+        *cut_stroke(20.0, 0.48, 30))
+    check(
+        "a heavier stroke standing no higher than its neighbours is a divider",
+        frame_resolves(heavy_divider_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # The same wall, its break covered by a page-wide knockout rather than an
+    # erasure cut to the stroke. Paint crossing this x on its way somewhere
+    # else says nothing about what stands above.
+    broad_overpaint_page = walled_box(
+        *box_dividers(10.0, 15.0, 25.0, 30.0),
+        source_paint(20.0, a=BOX_TOP, b=CUT_TOP, width=0.48, order=30),
+        VectorPaint(5.0, CUT_TOP, 35.0, BAND_TOP, 1.0, 1.0, 31,
+                    "broad-overpaint"),
+        source_paint(20.0, a=BAND_TOP, b=BOX_BOTTOM, width=0.48, order=32),
+    )
+    check(
+        "a break the sheet did not erase at this stroke leaves it unjoined",
+        not frame_resolves(
+            broad_overpaint_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # 2200-A's erased divider restated inside a walled box: divider weight, cut
+    # off from the rule above exactly as the wall beside it is.
+    cut_divider_page = walled_box(
+        *box_dividers(10.0, 25.0, 30.0),
+        source_paint(20.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=30),
+        *cut_stroke(15.0, 0.24, 40),
+    )
+    check(
+        "a divider-weight stroke standing above the band is not a wall",
+        frame_resolves(cut_divider_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # A divider under a grey band with an unrelated stroke of its own width
+    # above it. The band is not this stroke's erasure, so the two do not join
+    # and the divider does not drag the frame's wall detection down with it.
+    bridged_divider_page = walled_box(
+        *box_dividers(10.0, 15.0, 25.0, 30.0), *cut_stroke(20.0, 0.48, 30),
+        source_paint(25.0, a=BOX_TOP, b=CUT_TOP, order=50),
+        VectorPaint(5.0, CUT_TOP, 35.0, DIVIDER_TOP, 0.8509, 1.0, 51,
+                    "grey-band"),
+    )
+    check(
+        "a grey band does not join a divider to the stroke above it",
+        frame_resolves(bridged_divider_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # 2200-C's money rows: real column walls bounding the sheet's grey N/A
+    # blocks, beside digit dividers that stop dead at the band's top edge. The
+    # comb is the whole row and must stay whole, so the wall relation has to
+    # refuse rather than guess when no divider stands above the band.
+    whole_row = comb_subject(x0=5.0, x1=35.0, cell_y1=21.0)
+    flush_divider_page = source_page(
+        VectorPaint(0.0, 0.5, 50.0, BOX_TOP, 0.0, 1.0, 60, "row-top-rule"),
+        *rule_chain(0.0, 50.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0),
+        source_paint(5.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=1),
+        source_paint(35.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=2),
+        *box_dividers(10.0, 15.0, 25.0, 30.0, flush=True),
+        *cut_stroke(20.0, 0.48, 30),
+        framed=False,
+    )
+    check(
+        "dividers flush with the band leave a heavier stroke unproven",
+        frame_resolves(
+            flush_divider_page, (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+            whole_row),
+    )
+
+    # 2200-A's rails stop 3e-5pt short of the baseline they stand on. The
+    # midpoint of that non-overlap is inside neither rectangle.
+    touching_rail_page = source_page(
+        *(
+            source_paint(x, b=8.0 - 0.0001, order=index)
+            for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+        ),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 40, "touching-baseline"),
+        framed=False,
+    )
+    check(
+        "a rail that stops a hair short of its baseline still meets it",
+        frame_resolves(touching_rail_page, six_slots),
+    )
+
+    # Mutation test, in the style of the ink-band sweep above: each entry
+    # restores the behaviour the fixture beside it was written to refute, and
+    # that fixture must stop resolving. The plain comb is re-measured under
+    # every mutation, so a mutation that simply breaks comb framing outright
+    # is not mistaken for a mutation the fixture caught.
+    _measured_rule_shaped = _is_rule_shaped
+    _measured_junction_sample = _junction_sample_y
+
+    def _shape_without_noise_allowance(paint: VectorPaint) -> bool:
+        return paint.x1 - paint.x0 > paint.y1 - paint.y0
+
+    def _meets_only_on_touch(
+            left_x0: float, left_x1: float, left_y0: float, left_y1: float,
+            right_x0: float, right_x1: float,
+            right_y0: float, right_y1: float) -> bool:
+        return max(right_x0 - left_x1, left_x0 - right_x1, 0.0) \
+            <= SOURCE_COORD_EPS_PT
+
+    def _sample_intersection_midpoint(
+            member_y0: float, member_y1: float,
+            base_y0: float, base_y1: float) -> float:
+        return (max(member_y0, base_y0) + min(member_y1, base_y1)) / 2.0
+
+    frame_mutations = (
+        ("a junction block hides the chain piece it overlaps",
+         {"_adds_no_ink_outside_rule": lambda owner, rule: False},
+         lambda: frame_resolves(noisy_overlap_chain_page, six_slots)),
+        ("a square junction block reads as a stroke across its rule",
+         {"_is_rule_shaped": _shape_without_noise_allowance},
+         lambda: frame_resolves(square_block_chain_page, six_slots)),
+        ("any gap at all cuts a rule chain",
+         {"_rule_ink_meets": _meets_only_on_touch},
+         lambda: frame_resolves(hairline_gap_chain_page, six_slots)),
+        ("no vertical is ever a wall",
+         {"_carries_band_into_rule_above":
+          lambda page, tone, rail, band_y0: False},
+         lambda: frame_resolves(nested_cell_page, (2, [10.0]),
+                                nested_subject)),
+        ("a chain is never cut into the cells its walls make",
+         {"_components_cut_at_source_walls":
+          lambda page, tone, band_y0, band_y1, components: list(components)},
+         lambda: frame_resolves(row_rule_page, six_slots, row_subject)),
+        ("a frame is never reduced to the cell its owner claims",
+         {"_frame_cut_at_source_walls":
+          lambda page, tone, band_y0, band_y1, x0, x1, topology, candidate:
+          candidate},
+         lambda: frame_resolves(nested_cell_page, (2, [10.0]),
+                                nested_subject)),
+        ("a junction is measured between two rectangles that only touch",
+         {"_junction_sample_y": _sample_intersection_midpoint},
+         lambda: frame_resolves(touching_rail_page, six_slots)),
+        ("any break at all ends a stroke's run",
+         {"_stroke_break_ends_run":
+          lambda gap, reachable: gap > SOURCE_COORD_EPS_PT},
+         lambda: frame_resolves(split_wall_page, (2, [10.0]),
+                                nested_subject)),
+        ("a painted break in a stroke reads as unclaimed paper",
+         {"_erasure_ends_run": lambda owners: False},
+         lambda: frame_resolves(erased_wall_page, six_slots, row_subject)),
+        ("a wall the sheet cut off is never re-read from its own strokes",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach:
+          False},
+         lambda: frame_resolves(
+             knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)),
+        ("a stroke column stops at every break, erased or not",
+         {"_stroke_column_break_is_erased":
+          lambda page, ink_x0, ink_x1, gap_y0, gap_y1: False},
+         lambda: frame_resolves(
+             knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)),
+        ("any paint at all bridges a break in a stroke column",
+         {"_stroke_column_break_is_erased":
+          lambda page, ink_x0, ink_x1, gap_y0, gap_y1: True},
+         lambda: frame_resolves(
+             bridged_divider_page, (3, [10.0, 15.0]), left_cell)),
+        ("border weight alone makes a wall",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach: (
+              rail is not None
+              and float(rail["ink_x1"]) - float(rail["ink_x0"])
+              > divider_weight + SOURCE_COORD_EPS_PT)},
+         lambda: frame_resolves(
+             heavy_divider_page, (3, [10.0, 15.0]), left_cell)),
+        ("standing above the band alone makes a wall",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach: (
+              _source_stroke_column_reach(page, tone, rail, band_y0)
+              < band_y0 - SOURCE_COORD_EPS_PT)},
+         lambda: frame_resolves(
+             cut_divider_page, (3, [10.0, 15.0]), left_cell)),
+        ("the band supplies the scale the dividers did not",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach: (
+              rail is not None
+              and float(rail["ink_x1"]) - float(rail["ink_x0"])
+              > divider_weight + SOURCE_COORD_EPS_PT
+              and _source_stroke_column_reach(page, tone, rail, band_y0)
+              < min(divider_reach, band_y0) - SOURCE_COORD_EPS_PT)},
+         lambda: frame_resolves(
+             flush_divider_page, (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+             whole_row)),
+    )
+    frame_module = globals()
+    for label, patches, probe in frame_mutations:
+        restore = {name: frame_module[name] for name in patches}
+        frame_module.update(patches)
+        try:
+            still_resolves = probe()
+            control_resolves = frame_resolves(plain_comb_page, six_slots)
+        finally:
+            frame_module.update(restore)
+        check(
+            f"weakening source comb framing ({label}) is caught by the suite",
+            still_resolves is False,
+        )
+        check(
+            f"weakening source comb framing ({label}) leaves the plain comb",
+            control_resolves is True,
+        )
+    check(
+        "source comb framing is restored after the mutation sweep",
+        frame_resolves(plain_comb_page, six_slots)
+        and frame_resolves(noisy_overlap_chain_page, six_slots)
+        and frame_resolves(square_block_chain_page, six_slots)
+        and frame_resolves(hairline_gap_chain_page, six_slots)
+        and frame_resolves(touching_rail_page, six_slots)
+        and frame_resolves(nested_cell_page, (2, [10.0]), nested_subject)
+        and frame_resolves(split_wall_page, (2, [10.0]), nested_subject)
+        and frame_resolves(row_rule_page, six_slots, row_subject)
+        and frame_resolves(erased_wall_page, six_slots, row_subject)
+        and frame_resolves(
+            knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            knocked_out_wall_page, (3, [25.0, 30.0]), right_cell)
+        and frame_resolves(heavy_divider_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(cut_divider_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            bridged_divider_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            flush_divider_page, (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+            whole_row),
+    )
+    _ = (_measured_rule_shaped, _measured_junction_sample)
+
     expanded_frame_page = source_page(
         *maximal_frame_page.paints,
         source_paint(45, order=30),
@@ -12274,6 +16716,182 @@ def self_test() -> int:
         source_page(*many), comb_subject(x1=88.0))
     check("printed divider evidence is exhaustive beyond sixteen entries",
           many_count == 21 and many_xs == [float(x) for x in range(4, 84, 4)])
+
+    # ----------------------------------------------------------------------
+    # assertions 9 and 10 -- the field layer.
+    #
+    # These two fixtures are built as a REAL PDF and run through the real
+    # `ordered_vector_paints` / `drawn_glyph_boxes` / `input_boxes` path,
+    # because the whole point of both assertions is that their expectation
+    # comes from the source file's own operators.  A hand-built VectorPage
+    # would let the fixture agree with the assertion about what the source
+    # says, which is the defect class this file keeps finding.
+    #
+    # The page draws, at y 20..40:
+    #   A  10..60   an enclosed blank box with ONE printed compartment
+    #               divider at x=30
+    #   B  80..110  an enclosed blank box, no divider
+    #   C  130..160 an enclosed blank box whose divider at x=145 is then
+    #               painted over in white -- present in the operator stream,
+    #               absent from the page
+    # and at y 60..80:
+    #   D  10..60   an enclosed box with the glyphs "TOTAL" inside it
+    #   E  80..110  an enclosed box filled mid grey
+    # A, B and C are row peers.  D and E are the false-positive guards for
+    # the inventory: a caption box and an official "no entry applies" band
+    # must never be claimed as boxes a taxpayer should be able to type in.
+    field_doc = fitz.open()
+    field_page = field_doc.new_page(width=200, height=100)
+    field_shape = field_page.new_shape()
+    for frame in (fitz.Rect(10, 20, 60, 40), fitz.Rect(80, 20, 110, 40),
+                  fitz.Rect(130, 20, 160, 40), fitz.Rect(10, 60, 60, 80),
+                  fitz.Rect(80, 60, 110, 80)):
+        field_shape.draw_rect(frame)
+    field_shape.finish(color=(0.0, 0.0, 0.0), width=0.5)
+    field_shape.draw_line(fitz.Point(30, 32), fitz.Point(30, 40))
+    field_shape.draw_line(fitz.Point(145, 32), fitz.Point(145, 40))
+    field_shape.finish(color=(0.0, 0.0, 0.0), width=0.72)
+    field_shape.draw_rect(fitz.Rect(131, 21, 159, 39))
+    field_shape.finish(color=None, fill=(1.0, 1.0, 1.0))
+    field_shape.draw_rect(fitz.Rect(81, 61, 109, 79))
+    field_shape.finish(color=None, fill=(0.6, 0.6, 0.6))
+    # A 1.4 x 3.0pt dark speck inside box B. Dark and narrow, but not
+    # materially taller than it is wide, so it is not a compartment divider.
+    # 109 paints across 15 corpus forms are excluded by exactly this clause.
+    field_shape.draw_rect(fitz.Rect(94.3, 28.0, 95.7, 31.0))
+    field_shape.finish(color=None, fill=(0.0, 0.0, 0.0))
+    field_shape.commit()
+    field_page.insert_text(fitz.Point(20, 74), "TOTAL", fontsize=8)
+    field_pdf = field_doc.tobytes()
+    field_doc.close()
+
+    def field_ir() -> dict[str, Any]:
+        return {
+            "form": {"code": "FIELD", "revision": "0000"},
+            "source": {"file": "external:none.pdf", "sha256": "0" * 64},
+            "paper": {"width_pt": 200.0, "height_pt": 100.0},
+            "pages": [{
+                "index": 1, "width_pt": 200.0, "height_pt": 100.0,
+                "rotation": 0, "rules": [], "area_fills": [], "images": [],
+                "text_runs": [], "stats": {},
+            }],
+        }
+
+    def field_cell(cell_id: str, rect: Rect, inner: str) -> str:
+        left, top, right, bottom = rect
+        return (
+            f'<div id="{cell_id}" class="c f" data-cell-kind="field" '
+            f'data-field-kind="text" style="left:{left}pt;top:{top}pt;'
+            f'width:{right - left}pt;height:{bottom - top}pt">{inner}</div>')
+
+    def field_input(cell_id: str, rect: Rect, inset: Rect) -> str:
+        top, right, bottom, left = inset
+        return field_cell(cell_id, rect, (
+            f'<input type="text" class="fi" id="{cell_id}-i" name="{cell_id}" '
+            f'style="inset:{top}pt {right}pt {bottom}pt {left}pt">'))
+
+    def field_bundle(cells: Sequence[tuple[str, Rect, str]]) -> Bundle:
+        return Bundle(
+            slug="field-fixture", ir=field_ir(),
+            layout={"pages": [{"index": 1, "cells": [
+                {"id": cell_id, "x0": rect[0], "y0": rect[1],
+                 "x1": rect[2], "y1": rect[3],
+                 "border": {"top": {}, "bottom": {}, "left": {}, "right": {}},
+                 "is_empty": True, "rectangular": True, "kind": "field",
+                 "text_run_ids": []}
+                for cell_id, rect, _ in cells]}]},
+            plan={"inline": []},
+            form_html=(
+                '<div class="page page-1" id="page-1" '
+                'style="width:200pt;height:100pt">'
+                + "".join(markup for _, _, markup in cells)
+                + '</div>'),
+            guide_html=None, pdf=field_pdf)
+
+    # The three peers, each with its own input.  A1 must hold (no input
+    # reaches inside A's divider), and A2 must hold (every peer is fillable).
+    clean_cells = [
+        ("p1c0", (10.0, 20.0, 29.4, 40.0),
+         field_input("p1c0", (10.0, 20.0, 29.4, 40.0), (2.0, 1.0, 2.0, 1.0))),
+        ("p1c1", (30.6, 20.0, 60.0, 40.0),
+         field_input("p1c1", (30.6, 20.0, 60.0, 40.0), (2.0, 1.0, 2.0, 1.0))),
+        ("p1c2", (80.0, 20.0, 110.0, 40.0),
+         field_input("p1c2", (80.0, 20.0, 110.0, 40.0), (0.0, 0.0, 0.0, 0.0))),
+        ("p1c3", (130.0, 20.0, 160.0, 40.0),
+         field_input("p1c3", (130.0, 20.0, 160.0, 40.0), (0.0, 0.0, 0.0, 0.0))),
+    ]
+    clean_bundle = field_bundle(clean_cells)
+    clean_divider = check_inputs_span_no_printed_divider(clean_bundle)
+    clean_peers = check_printed_box_peers_all_fillable(clean_bundle)
+    check(
+        "a comb split at its printed divider holds, and the divider is seen",
+        clean_divider["holds"] is True
+        and clean_divider["inputs_checked"] == 4
+        and clean_divider["printed_dividers_detected"] >= 3,
+    )
+    # p1c2's input is drawn edge to edge over box B's own printed frame and
+    # over the speck inside it, and p1c3's over box C's white-knocked-out
+    # divider.  None of the three may be reported: an input is not guilty of
+    # its own walls, a blob is not a divider, and a divider the page does not
+    # show is not a divider.
+    check(
+        "an input over its own printed frame is not its own offender",
+        clean_divider["holds"] is True,
+    )
+    check(
+        "three fillable printed peers hold, and captions and grey bands are "
+        "not in the inventory",
+        clean_peers["holds"] is True
+        and clean_peers["printed_boxes_checked"] == 3
+        and clean_peers["peer_rows_checked"] == 1
+        and clean_peers["boxes_unevaluable"] == 0,
+    )
+
+    # One input across the whole of box A: it spans A's printed divider.
+    spanning_cells = list(clean_cells)
+    spanning_cells[0:2] = [(
+        "p1c0", (10.0, 20.0, 60.0, 40.0),
+        field_input("p1c0", (10.0, 20.0, 60.0, 40.0), (2.0, 2.0, 2.0, 2.0)))]
+    spanning = check_inputs_span_no_printed_divider(field_bundle(spanning_cells))
+    check(
+        "inputs_span_no_printed_divider must fail on one box over two "
+        "printed compartments",
+        spanning["holds"] is False
+        and spanning["offender_count"] == 1
+        and spanning["offenders"][0]["cell"] == "p1c0"
+        and spanning["offenders"][0]["printed_dividers_spanned"] == 1
+        and spanning["offenders"][0]["divider_x"] == [30.0],
+    )
+
+    # Box B loses its own input and keeps only the neighbouring cell's, which
+    # clips 2 of its 30pt.  An input next door is not an input in this box --
+    # if it were, the assertion would report nothing on any crowded sheet.
+    unfilled_cells = [row for row in clean_cells if row[0] != "p1c2"]
+    unfilled_cells.append((
+        "p1c4", (74.0, 20.0, 82.0, 40.0),
+        field_input("p1c4", (74.0, 20.0, 82.0, 40.0), (0.0, 0.0, 0.0, 0.0))))
+    unfilled = check_printed_box_peers_all_fillable(
+        field_bundle(unfilled_cells))
+    check(
+        "printed_box_peers_all_fillable must fail on a printed peer with no "
+        "input",
+        unfilled["holds"] is False
+        and unfilled["offender_count"] == 1
+        and unfilled["offenders"][0]["box"] == [80.0, 20.0, 110.0, 40.0]
+        and unfilled["offenders"][0]["row_peers"] == 3
+        and unfilled["offenders"][0]["row_peers_with_input"] == 2,
+    )
+
+    # The false-positive guard that decides whether this assertion can be
+    # trusted at all: a row where NOTHING is fillable proves nothing about
+    # the Bureau's intent, and must be silent rather than opinionated.
+    silent = check_printed_box_peers_all_fillable(field_bundle([]))
+    check(
+        "a printed row with no fillable peer at all is not an offence",
+        silent["holds"] is True
+        and silent["printed_boxes_checked"] == 3
+        and silent["peer_rows_checked"] == 1,
+    )
 
     for name in failures:
         print(f"FAIL {name}", file=sys.stderr)

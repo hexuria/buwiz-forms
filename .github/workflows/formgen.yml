@@ -238,6 +238,36 @@ jobs:
             exit 1
           fi
 
+      # ---------------------------------------------------------------------
+      # Tab-order walk over the corpus
+      # ---------------------------------------------------------------------
+
+      # tab_check.py automates what a person used to do by hand: start at the
+      # first input, press Tab until nothing more focuses, and note which
+      # boxes were never reached. It reads nothing but the live DOM of the
+      # tracked forms/ tree (see the module's own docstring for why), so it
+      # needs neither build/ nor a pinned PDF and runs here for real -- it is
+      # not one of the NOT COVERED lines below. Chromium is already installed
+      # above. Its own self-test runs first, on synthetic pages, for the same
+      # reason every self-test in this job runs before its subject is
+      # trusted: a check that has never been proven able to fail is not
+      # evidence.
+      #
+      # F209 (emit.py appended a growable band's rendered rows after the
+      # page's entire static cell layer, so a band that was not the last
+      # thing on its page got tabbed to after content that sits below it on
+      # paper) is CLOSED -- the corpus is 53/53 green on this walk. There is
+      # no tolerated-red form here, and there must not be one waved through
+      # by a stale "expected failure" comment beside this gate ever again
+      # (F216: this note itself, left in place two commits after the fix
+      # landed, was found stale by a review sweep). This step fails the job
+      # on ANY red, full stop.
+      - name: Tab-order walk over the tracked forms/ corpus
+        run: |
+          set -euo pipefail
+          python3 tools/formgen/tab_check.py --self-test
+          python3 tools/formgen/tab_check.py
+
       # extract.py is the strongest check in the pipeline and, until the
       # synthetic corpus existed, the least runnable: every assertion was pinned
       # against six official BIR PDFs that will never be committed. The fixture

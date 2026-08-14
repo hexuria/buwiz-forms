@@ -21,10 +21,10 @@
     "Arial Narrow",
     "Calibri"
   ],
-  "rules": 1380,
-  "text_runs": 350,
+  "rules": 1377,
+  "text_runs": 349,
   "images": 3,
-  "cells": 429,
+  "cells": 430,
   "comb_cells": 134,
   "growables": [],
   "sources": [
@@ -71,7 +71,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 741013,
+  "html_bytes": 768494,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

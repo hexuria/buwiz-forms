@@ -63,6 +63,14 @@ FINDINGS = HERE / "review-findings.json"
 COMB_REFEREE_REPORT = BUILD / "comb-referee.json"
 COMB_REFEREE_ATTESTATION = BUILD / "comb-referee-attested.json"
 COMB_REFEREE_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
+# Stage 2 (ARCHITECTURE.md). The corrected tree, its ledger, and the report a
+# fidelity run over that tree must write. The last of the three DOES NOT EXIST
+# yet and is named here on purpose: `check_corrected_tree` fails when a
+# divergence is declared and no report publishes it, so naming the path is what
+# makes that failure legible instead of mysterious.
+CORRECTED_TREE = REPO / "forms-corrected"
+CORRECTED_MANIFEST = REPO / "forms-corrected.manifest.json"
+CORRECTED_FIDELITY_REPORT = BUILD / "corrected-fidelity.json"
 
 # Corpus census. Pins, not thresholds: a form that appears or disappears has to
 # be declared here, in a commit that says which one and why. 51 -> 53 and
@@ -77,7 +85,24 @@ EXPECTED_EXTRA_FORMS = 15
 # the comb writing-surface and painted-wall fixes -- and nothing noticed, because
 # only a FULL gate run reads this one. Two files pinning one number is the
 # defect; until they are unified, changing either means changing both.
-EXPECTED_COMB_SUBJECTS = 4540
+# 4540 -> 4521 (2026-08-07, r14), moved together with comb_referee.EXPECTED_COMBS
+# and its 13 per-slug values. The cause is 21e0630's shaded-paper fix, which was
+# committed without its census: the HEAD lattice already produced 4,521 before
+# this session touched anything. See the note on comb_referee.EXPECTED_COMBS.
+# 4521 -> 4543 (2026-08-07, r20). TWO causes, and the first one was already live
+# at HEAD: r19 corrected comb_referee.EXPECTED_COMBS to 4,538 and did NOT move
+# this twin, so validate_comb_referee_report was comparing the referee's
+# `combs_expected` of 4,538 against 4,521 and could only ever have failed. That
+# is the very defect this comment describes, repeating in the same pair of
+# files, one revision later. The second cause is r20's own: extract.py's
+# line-cap model takes the measured ledger denominator to 4,543.
+# 4543 -> 4583 (2026-08-07, r21), moved in the same commit as its twin
+# comb_referee.EXPECTED_COMBS: lattice.py's bottom-guide-tick recognition adds
+# 40 subjects on nine slugs (see the cause note at that pin).
+# 4583 -> 4587 on 2026-08-10 (r41): F201/P1b bridges the legacy lattice too, so
+# 2200C gains 3 comb subjects and 2000-DST 1. Zero cells move; see comb_referee's
+# LATTICE_PRODUCER_SHA256 note.
+EXPECTED_COMB_SUBJECTS = 4587
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"
@@ -145,9 +170,33 @@ SELF_TEST_MODULES = (
 )
 SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
-# The eight assertions from GOAL.md. gate.py does not implement them: audit.py
+# A checker-of-checkers, not a module self-test: it proves every `extract.py`
+# check is reachable from a SOURCE-LEVEL mutation -- a change to a fixture PDF's
+# own content stream that makes the check fail -- or carries a stated reason it
+# cannot be. It lives under `fixtures/` and takes no `--self-test` flag, so the
+# module loop above cannot reach it.
+#
+# Added 2026-08-10, and the reason is the point: three ruled-blank checks landed
+# unproven and survived gates r37 and r38 GREEN, because this script ran only in
+# CI. A gate that scores ten modules' self-tests while the thing that proves
+# those tests can fail runs somewhere else is a gate with a hole in it. It was
+# found by chance -- an agent ran the script unprompted -- which is not a
+# detection mechanism.
+PROVE_FIXTURES_SCRIPT = "fixtures/prove_fixtures_fail.py"
+
+# The assertions the gate demands. gate.py does not implement them: audit.py
 # owns them, and the gate's job is to demand them. Each maps to the key audit.py
 # must publish per form in its record.
+#
+# GOAL.md named eight. The last two are G10's, and they exist because the other
+# eight are structurally blind to the FIELD layer: 171 of 172 ledger findings
+# carry `audit_blind: true`, and a 51-form visual sweep found 138 defects of
+# which 137 sat on pages this gate scored 100% rules / 100% text / 0 missing /
+# 0 extra. The two assertions that came closest each take their candidate
+# population from the producer that made the mistake -- `money_boxes_have_inputs`
+# enumerates from the layout's `field` cells, `comb_slots_match_printed` from
+# the layout's comb subjects -- so a printed box the lattice mis-read is not in
+# either population. The two below take their population from the pinned PDF.
 REQUIRED_ASSERTIONS = {
     "inputs_over_printed_text": "No <input> overlaps a pre-printed text run's bbox",
     "comb_slots_match_printed": "Every comb's slot count equals its printed compartment count",
@@ -157,6 +206,8 @@ REQUIRED_ASSERTIONS = {
     "reflow_rate_without_description": "No relocated table row has an empty description and a rate",
     "image_transform_applied": "Every non-positive-diagonal image transform is emitted",
     "no_invented_codepoints": "No IR run holds a character the source did not state",
+    "inputs_span_no_printed_divider": "No <input> spans a compartment divider the source printed inside it",
+    "printed_box_peers_all_fillable": "No printed box lacks an input while an identical row peer has one",
 }
 AUDIT_DEPENDENT_CHECKS = {
     "rules", "paper", "artwork", "text", "assertions",
@@ -2131,6 +2182,15 @@ AUDIT_ASSERTION_SUMMARY_KEYS = (
     "owner_certificates_valid", "owner_certificates_invalid",
     "source_u_frame_evaluable", "source_certified_unframed_evaluable",
     "emission_behind_layout", "emission_invalid",
+    # DECLARED SCHEMA CHANGE (Z1, 2026-08-13): audit.py publishes, for every
+    # form and unconditionally, how many comb subjects it settled from the
+    # reviewed comb-topology registry and which ones. PROVENANCE, not verdict:
+    # a reviewed subject is compared exactly as a measured one, and a reviewed
+    # count that disagrees with the emitted count is still an offender. Listed
+    # here so every consumer that enumerates the summary keys -- including this
+    # file's own fixtures -- carries them, which is what makes the validator
+    # below reachable on a well-formed record.
+    "decided_by_review", "decided_by_review_subjects",
 )
 AUDIT_POSITION_FAILURE_KINDS = {
     "emission-layout-position-mismatch",
@@ -2473,6 +2533,50 @@ def _normalise_outer_comb_assertion(
     if set(assertion) != expected_keys:
         raise CombRefereeScopeError(
             "comb audit assertion schema is incomplete or unsupported")
+    reviewed_count = assertion.get("decided_by_review")
+    reviewed_subjects = assertion.get("decided_by_review_subjects")
+    if (not _is_count(reviewed_count)
+            or not isinstance(reviewed_subjects, list)
+            or len(reviewed_subjects) != reviewed_count):
+        raise CombRefereeScopeError(
+            "comb audit reviewed-topology publication is malformed")
+    reviewed_cells: list[str] = []
+    for subject in reviewed_subjects:
+        # Each subject carries its own evidence, not just an id, so the record
+        # a reader audits later is self-contained: which cell, what the lattice
+        # and the reviewed fact each said, and the fact's own provenance.
+        # `latticed == printed == compartments` is required HERE rather than
+        # trusted: a reviewed subject that did not actually agree would be an
+        # offender, so it must never reach this list.
+        certificate = (subject or {}).get("reviewed_comb_topology") \
+            if isinstance(subject, dict) else None
+        if (not isinstance(subject, dict)
+                or not isinstance(certificate, dict)
+                or certificate.get("criterion") != "reviewed-comb-topology-v1"
+                or certificate.get("valid") is not True
+                or not isinstance(subject.get("cell"), str)
+                or not subject.get("cell")
+                or not _is_count(subject.get("printed"))
+                or not _is_count(subject.get("latticed"))
+                or subject.get("printed") != subject.get("latticed")
+                or certificate.get("compartments") != subject.get("printed")
+                or not isinstance(certificate.get("source_sha256"), str)
+                or not isinstance(certificate.get("reviewer"), str)
+                or not certificate.get("reviewer")
+                or not isinstance(certificate.get("citation"), str)
+                or not certificate.get("citation")):
+            raise CombRefereeScopeError(
+                "comb audit reviewed-topology publication is malformed")
+        reviewed_cells.append(subject["cell"])
+    if len(set(reviewed_cells)) != len(reviewed_cells):
+        raise CombRefereeScopeError(
+            "comb audit reviewed-topology publication is malformed")
+    expected_cell_ids = assertion.get("expected_comb_ids")
+    if isinstance(expected_cell_ids, list) and any(
+            cell not in expected_cell_ids for cell in reviewed_cells):
+        # The registry cannot smuggle in a cell this form does not have.
+        raise CombRefereeScopeError(
+            "comb audit reviewed-topology publication names an unknown cell")
     reason = assertion.get("reason")
     if (not isinstance(reason, str)
             or (holds and reason != "")
@@ -2658,12 +2762,28 @@ def _normalise_outer_comb_assertion(
     }
     source_evaluable = (
         assertion["combs_checked"] - len(checked_source_unevaluable))
+    # DECLARED SCHEMA CHANGE (Z1): a reviewed-topology decision is a third
+    # evaluability class.  Such a cell is no longer published as an offender,
+    # so it is NOT in checked_source_unevaluable and counts toward
+    # source_evaluable -- yet its compartment count came from review, not from
+    # a U-frame or an unframed certificate, so neither source term covers it.
+    # The partition is therefore three-way.  This does not widen what passes:
+    # every reviewed cell was already validated above to carry a valid
+    # certificate with a named reviewer and citation and printed == latticed,
+    # which is stricter per-cell than either source class.  Disjointness is
+    # asserted rather than assumed -- a cell that is both reviewed and still
+    # published source-unevaluable means the registry failed to clear it.
+    reviewed_set = set(reviewed_cells)
+    if reviewed_set & checked_source_unevaluable:
+        raise CombRefereeScopeError(
+            "comb audit counts a reviewed cell as source-unevaluable")
     if (assertion["source_u_frame_evaluable"]
             + assertion["source_certified_unframed_evaluable"]
+            + len(reviewed_set)
             != source_evaluable):
         raise CombRefereeScopeError(
-            "comb audit source frame/unframed counts do not partition "
-            "evaluable checked cells")
+            "comb audit source frame/unframed/reviewed counts do not "
+            "partition evaluable checked cells")
     published_u_frame = 0
     published_certified_unframed = 0
     for cell_id, relation in dimensions.items():
@@ -3547,6 +3667,9 @@ AUDIT_EVIDENCE_KEYS = {
     "owner_certificates_valid", "owner_certificates_invalid",
     "source_u_frame_evaluable", "source_certified_unframed_evaluable",
     "emission_behind_layout", "emission_invalid", "offender_dimensions",
+    # Z1's declared schema change: the referee mirrors the audit's reviewed-
+    # topology provenance so the gate can compare them key for key.
+    "decided_by_review", "decided_by_review_subjects",
     "holds", "input_manifest_verified", "input_manifest_reason",
     "manifest_binding", "ledger_binding", "evidence_published",
     "byte_and_relation_binding_valid",
@@ -3555,6 +3678,7 @@ AUDIT_EVIDENCE_KEYS = {
 MANIFEST_BINDING_KEYS = {
     "binding_valid", "manifest_inputs_complete", "attestation_complete",
     "enforceable", "complete", "reason", "errors", "blockers",
+    "host_scope_boundaries",
     "producer_sha256", "runtime_tree_sha256",
     "runtime_manifest_self_consistent",
     "base_runtime_closure_independently_attested",
@@ -3579,14 +3703,71 @@ FORM_PAGE_KEYS = {
     "page", "svg_sha256", "vector_paints", "unsupported_regions",
 }
 MEASURED_REFEREE_KEYS = {
-    "status", "reason", "y0", "y1", "source_divider_x",
+    "status", "reason", "y0", "y1", "source_divider_x", "source_rail_x",
     "extra_divider_x", "compartments", "anchor_matches",
     "positions_match", "anchors_complete", "subject_gap_proofs",
     "unproven_subject_gaps", "components", "contract_y0", "contract_y1",
     "open_y0", "open_y1", "contract_span_pt", "seed_span_pt",
     "measured_span_pt", "unmeasured_span_pt", "topology_coverage_pt",
     "ignored_slabs", "chosen_topology", "topology_superset_relations",
+    # DECLARED SCHEMA CHANGE (R1, F232): every measured band now names, per
+    # side, the basis that placed its rail -- "owner-edge",
+    # "wall-outside-run", or "prose-refuted-outer-region".  Before this key a
+    # rail strictly inside the rectangle was indistinguishable from a rail at
+    # its edge, so the gate could not re-derive WHY a rail sat where it did;
+    # _rail_derivation_errors now cross-checks each basis against the
+    # published topology, which is strictly more than it could check before.
+    "rail_derivation",
 }
+RAIL_DERIVATION_BASES = {
+    "owner-edge", "wall-outside-run", "prose-refuted-outer-region",
+}
+# The referee's third measured-source shape: the fail-closed partial-anchor
+# certificate (comb_referee.ACTIVE_PARTIAL_ANCHOR_CRITERION).  It deliberately
+# omits subject_gap_proofs/unproven_subject_gaps — those proofs are only
+# computed on the full-anchor path, and publishing empty lists here would
+# assert "no unproven gaps" for a test that never ran — and instead carries
+# the erased-anchor inventory plus the erasure certificate the gate
+# independently re-derives in _partial_anchor_referee_certificate_errors.
+PARTIAL_ANCHOR_REFEREE_KEYS = (
+    MEASURED_REFEREE_KEYS - {"subject_gap_proofs", "unproven_subject_gaps"}
+) | {"missing_anchor_x", "active_partial_anchor_certificate"}
+PARTIAL_ANCHOR_CRITERION = (
+    "active-full-band-partial-anchor-source-topology-v1"
+)
+PARTIAL_ANCHOR_CERTIFICATE_KEYS = {
+    "criterion", "valid", "ledger_state", "subject_ownership_basis",
+    "independent_source_enclosure_proven", "divider_count_basis",
+    "missing_anchor_basis", "anchor_corridor_clipped_paint_elements",
+    "anchor_corridor_unsupported_region_elements", "open_y0", "open_y1",
+    "coverage_pt", "source_divider_x", "observed_anchor_x",
+    "missing_anchor_x", "missing_anchor_proofs",
+}
+PARTIAL_ANCHOR_PROOF_KEYS = {
+    "layout_x", "corridor_x0", "corridor_x1", "proof_x0", "proof_x1",
+    "open_y0", "open_y1", "raw_anchor_rails", "raw_rail_identity_valid",
+    "proof_top_role_ambiguities", "erasure_slabs", "erasure_owner_roles",
+    "clipped_paint_elements", "final_target_tone_segments",
+    "unsupported_region_elements",
+}
+PARTIAL_ANCHOR_RAIL_KEYS = {
+    "element", "order", "kind", "x0", "x1", "center_x", "delta_pt",
+    "y0", "y1", "tone", "clipped",
+}
+PARTIAL_ANCHOR_SLAB_KEYS = {
+    "y0", "y1", "sample_y", "raw_rail_elements", "raw_intervals",
+    "final_owner_segments", "ambiguous_top_roles",
+}
+PARTIAL_ANCHOR_SEGMENT_KEYS = {
+    "x0", "x1", "element", "order", "kind", "tone", "clipped",
+}
+PARTIAL_ANCHOR_ROLE_KEYS = {"element", "order", "kind", "tone"}
+PARTIAL_ANCHOR_OWNERSHIP_BASIS = "active_unresolved lattice ledger"
+PARTIAL_ANCHOR_COUNT_BASIS = "final-composited Poppler vector topology"
+PARTIAL_ANCHOR_MISSING_BASIS = (
+    "raw target-tone rail exhaustively replaced by one supported "
+    "unclipped non-target final owner"
+)
 LEDGER_STATES = {
     "active_resolved", "active_unresolved", "retained_unresolved",
 }
@@ -3622,22 +3803,33 @@ RAW_REFEREE_INCOMPLETE_REASONS = [
 ]
 RAW_REFEREE_FUTURE_GATE = (
     "trusted clean-source and host/runtime closure binding")
-RAW_AUDIT_SCOPE_BLOCKERS = [
-    "audit producer/runtime attestation is incomplete",
-    "audit evidence is not yet enforceable",
-    "audit input manifest is intentionally non-gating",
-    "audit base runtime scope is incomplete",
-    (
-        "audit PyMuPDF/application runtime closure is manifest-self-consistent "
-        "only; the referee independently rehashes the Python executable but "
-        "not every named module or native dependency"
-    ),
-    "audit roundtrip native runtime scope is incomplete",
-    (
-        "audit Playwright/Chromium closure is manifest-schema checked but not "
-        "independently rehashed by the standalone referee"
-    ),
-]
+# Empty because the referee now closes what these blockers described, not
+# because the strings were deleted to make a check pass. Until 2026-08-10 this
+# list carried seven entries, and every audit binding carried all seven:
+#
+#   audit producer/runtime attestation is incomplete
+#   audit evidence is not yet enforceable
+#   audit input manifest is intentionally non-gating
+#   audit base runtime scope is incomplete
+#   audit PyMuPDF/application runtime closure is manifest-self-consistent
+#     only; the referee independently rehashes the Python executable but not
+#     every named module or native dependency
+#   audit roundtrip native runtime scope is incomplete
+#   audit Playwright/Chromium closure is manifest-schema checked but not
+#     independently rehashed by the standalone referee
+#
+# comb_referee.verify_published_closure and
+# comb_referee.verify_published_roundtrip_closure now resolve every named
+# module, every bundled native library and the whole Playwright/Chromium tree
+# from the installed package and rehash them, so the referee reaches a verdict
+# instead of refusing to. Each blocker string still exists in comb_referee.py
+# and reappears here the moment its own condition holds again -- a failed
+# rehash, a withheld round trip, an audit that declines to claim what was
+# verified. What the closure never covered (the Python standard library, the
+# interpreter's dynamic libraries and the operating system's own) is published
+# per binding under `host_scope_boundaries` and is the host TCB this gate
+# already declares in its audit application envelope.
+RAW_AUDIT_SCOPE_BLOCKERS: list[str] = []
 
 
 def _raw_referee_attestation_errors(value: Any) -> list[str]:
@@ -3797,8 +3989,14 @@ def _comparison_for_cell(
     referee = cell.get("referee")
     if emitted != lattice or cell.get("emitted_indexes_valid") is not True:
         return "stale-generation", "emitted physical slots disagree with lattice"
-    if not audit_complete or cell.get("audit_printed") is None:
+    if not audit_complete:
         return "unevaluable", "audit evidence is incomplete"
+    if cell.get("audit_printed") is None:
+        return (
+            "unevaluable",
+            "audit published this subject as an offender with no printed "
+            "topology",
+        )
     if not isinstance(referee, dict) or referee.get("status") != "measured":
         reason = referee.get("reason", "no reason") if isinstance(
             referee, dict) else "no reason"
@@ -4110,6 +4308,16 @@ def validate_comb_referee_report(
             expected_ids = audit_evidence.get("expected_comb_ids")
             checked_ids = audit_evidence.get("checked_comb_ids")
             offender_dimensions = audit_evidence.get("offender_dimensions")
+            # DECLARED SCHEMA CHANGE (Z1): mirrors the three-way partition in
+            # _normalise_outer_comb_assertion.  Reviewed-topology cells are
+            # evaluable by decision, are not offenders, and are covered by
+            # neither source term.
+            reviewed_n = audit_evidence.get("decided_by_review")
+            reviewed_list = audit_evidence.get("decided_by_review_subjects")
+            reviewed_ids = [
+                subject.get("cell") for subject in reviewed_list
+                if isinstance(subject, dict)] if isinstance(
+                    reviewed_list, list) else []
             source_accounting_malformed = bool(
                 not _is_count(source_u_frame)
                 or not _is_count(source_unframed)
@@ -4121,6 +4329,15 @@ def validate_comb_referee_report(
                 or checked_ids != expected_ids
                 or checked_count != len(expected_ids or [])
                 or not isinstance(offender_dimensions, dict)
+                or not _is_count(reviewed_n)
+                or not isinstance(reviewed_list, list)
+                or len(reviewed_list) != reviewed_n
+                or len(reviewed_ids) != reviewed_n
+                or not all(isinstance(cell, str) and cell
+                           for cell in reviewed_ids)
+                or len(set(reviewed_ids)) != len(reviewed_ids)
+                or any(cell not in set(expected_ids or [])
+                       for cell in reviewed_ids)
             )
             checked_source_unevaluable: set[str] = set()
             if not source_accounting_malformed:
@@ -4141,11 +4358,15 @@ def validate_comb_referee_report(
             if source_accounting_malformed:
                 errors.append(
                     f"form audit source accounting is malformed: {slug}")
-            elif (source_u_frame + source_unframed
+            elif set(reviewed_ids) & checked_source_unevaluable:
+                errors.append(
+                    f"form audit counts a reviewed cell as "
+                    f"source-unevaluable: {slug}")
+            elif (source_u_frame + source_unframed + len(reviewed_ids)
                   != checked_count - len(checked_source_unevaluable)):
                 errors.append(
-                    f"form audit source frame/unframed partition is false: "
-                    f"{slug}")
+                    f"form audit source frame/unframed/reviewed partition "
+                    f"is false: {slug}")
         if (not isinstance(emission_inventory, dict)
                 or set(emission_inventory) != EMISSION_INVENTORY_KEYS
                 or not isinstance(emission_inventory.get("complete"), bool)
@@ -4585,12 +4806,17 @@ FORM_SOURCE_KEYS = {"file", "sha256", "bytes", "page_count", "layout_pin"}
 HTML_GEOMETRY_EPSILON_PT = 0.0002
 REFEREE_POSITION_TOLERANCE_PT = 0.25
 REFEREE_ROUNDING_EPSILON_PT = 0.00001
+REFEREE_PARTIAL_ANCHOR_REASON = (
+    "ledger-owned active subject has full-band Poppler proof of erased "
+    "lattice anchors"
+)
 REFEREE_MEASURED_REASONS = {
     "one source topology contains every recognised anchor",
     (
         "one richer source topology contains every other slab and "
         "occupies a strict majority of the comb band"
     ),
+    REFEREE_PARTIAL_ANCHOR_REASON,
 }
 
 
@@ -4629,6 +4855,90 @@ def _referee_topology_key(values: Sequence[float]) -> str:
     return ",".join(str(_rounded_six(value)) for value in values)
 
 
+def _rail_derivation_errors(
+        label: str, referee: dict[str, Any], cell: dict[str, Any],
+        ) -> list[str]:
+    """Cross-check each rail's published basis against the topology.
+
+    The referee names why each rail sits where it does (R1, F232).  The gate
+    cannot re-count Poppler glyphs, but every basis makes claims the published
+    numbers must satisfy, and each is re-derived here:
+
+      * "owner-edge" -- the rail IS the rectangle's edge on that side;
+      * "wall-outside-run" -- the rail is a measured boundary strictly inside
+        the rectangle, and wall_x is that rail;
+      * "prose-refuted-outer-region" -- the rail is a measured boundary,
+        from_x is the rectangle edge it refused, span_pt is exactly the paper
+        between them, and more than ONE glyph stood in it (one glyph is the
+        pre-printed decoration a compartment may carry; a refutation claiming
+        less refutes nothing).
+
+    "prose-and-structure-conflict" may never reach a measured band -- the
+    referee publishes that shape only on its own unevaluable verdict.
+    """
+    errors: list[str] = []
+    derivation = referee.get("rail_derivation")
+    rails = referee.get("source_rail_x")
+    source = referee.get("source_divider_x")
+    bbox = cell.get("bbox")
+    if (not isinstance(derivation, dict)
+            or set(derivation) != {"left", "right"}
+            or not _finite_number_list(rails, length=2)
+            or not _finite_number_list(source)
+            or not _finite_number_list(bbox, length=4)):
+        return [f"rail derivation is malformed: {label}"]
+    source_values = {_rounded_six(value) for value in source}
+    for side, rail, edge in (
+            ("left", _rounded_six(rails[0]), _rounded_six(bbox[0])),
+            ("right", _rounded_six(rails[1]), _rounded_six(bbox[2]))):
+        evidence = derivation.get(side)
+        if not isinstance(evidence, dict):
+            errors.append(f"rail derivation side is malformed: {label}/{side}")
+            continue
+        basis = evidence.get("basis")
+        if basis not in RAIL_DERIVATION_BASES:
+            errors.append(
+                f"rail derivation basis is unsupported: {label}/{side}")
+            continue
+        if basis == "owner-edge":
+            if set(evidence) != {"basis"} or rail != edge:
+                errors.append(
+                    f"owner-edge rail is not the owner's edge: {label}/{side}")
+        elif basis == "wall-outside-run":
+            if (set(evidence) != {"basis", "wall_x"}
+                    or not _finite_number(evidence.get("wall_x"))
+                    or _rounded_six(evidence["wall_x"]) != rail
+                    or rail not in source_values):
+                errors.append(
+                    f"wall rail is not a measured boundary: {label}/{side}")
+        else:
+            span = evidence.get("span_pt")
+            glyphs = evidence.get("glyphs")
+            if (set(evidence) != {"basis", "from_x", "span_pt", "glyphs"}
+                    or not _finite_number(evidence.get("from_x"))
+                    or not _finite_number(span)
+                    or _rounded_six(evidence["from_x"]) != edge
+                    or rail not in source_values
+                    or _rounded_six(span) != _rounded_six(abs(rail - edge))
+                    or float(span) <= 0
+                    or not _is_count(glyphs)
+                    or glyphs <= 1):
+                errors.append(
+                    f"prose refutation evidence is false: {label}/{side}")
+    if not errors:
+        # A rail strictly inside the rectangle must say which measurement put
+        # it there; "owner-edge" on an interior rail is a rail that moved
+        # without naming why.
+        for side, rail, edge in (
+                ("left", _rounded_six(rails[0]), _rounded_six(bbox[0])),
+                ("right", _rounded_six(rails[1]), _rounded_six(bbox[2]))):
+            basis = derivation[side].get("basis")
+            if rail != edge and basis == "owner-edge":
+                errors.append(
+                    f"interior rail carries no derivation: {label}/{side}")
+    return errors
+
+
 def _measured_referee_certificate_errors(
         slug: str, cell: dict[str, Any], referee: dict[str, Any],
         ) -> list[str]:
@@ -4636,19 +4946,24 @@ def _measured_referee_certificate_errors(
     cell_id = cell.get("cell")
     label = f"{slug}/{cell_id}"
     errors: list[str] = []
+    if set(referee) == PARTIAL_ANCHOR_REFEREE_KEYS:
+        return _partial_anchor_referee_certificate_errors(slug, cell, referee)
     if set(referee) != MEASURED_REFEREE_KEYS:
         return [f"measured source certificate schema is unsupported: {label}"]
+    errors.extend(_rail_derivation_errors(label, referee, cell))
     reason = referee.get("reason")
     if reason not in REFEREE_MEASURED_REASONS:
         errors.append(f"measured source reason is not derived: {label}")
 
     lattice = cell.get("lattice_divider_x")
     source = referee.get("source_divider_x")
+    rails = referee.get("source_rail_x")
     extras = referee.get("extra_divider_x")
     chosen = referee.get("chosen_topology")
     compartments = referee.get("compartments")
     if (not _finite_number_list(lattice)
             or not _finite_number_list(source)
+            or not _finite_number_list(rails, length=2)
             or not _finite_number_list(extras)
             or not _finite_number_list(chosen)
             or not _is_count(compartments)
@@ -4656,25 +4971,48 @@ def _measured_referee_certificate_errors(
         return [*errors, f"measured source topology is malformed: {label}"]
     lattice_values = [_rounded_six(value) for value in lattice]
     source_values = [_rounded_six(value) for value in source]
+    rail_values = [_rounded_six(value) for value in rails]
     extra_values = [_rounded_six(value) for value in extras]
     chosen_values = [_rounded_six(value) for value in chosen]
     if (any(float(value) != rounded for value, rounded in zip(
                 source, source_values))
             or any(float(value) != rounded for value, rounded in zip(
+                rails, rail_values))
+            or any(float(value) != rounded for value, rounded in zip(
                 extras, extra_values))
             or any(float(value) != rounded for value, rounded in zip(
                 chosen, chosen_values))):
         errors.append(f"measured source coordinates exceed fixed precision: {label}")
+    # A comb is bounded by the RAILS the referee measured, not by the subject
+    # rectangle: one rectangle can rule a caption or a dash box beside the
+    # comb. So the compartment count is the count between those rails, and the
+    # rails must be a pair the published dividers actually sit inside.
+    enclosed_values = [
+        value for value in source_values
+        if rail_values[0] < value < rail_values[1]
+    ]
     if (source_values != sorted(set(source_values))
             or extra_values != sorted(set(extra_values))
             or chosen_values != source_values
-            or compartments != len(source_values) + 1):
+            or rail_values[0] >= rail_values[1]
+            or compartments != len(enclosed_values) + 1):
         errors.append(f"measured source topology relation is false: {label}")
     bbox = cell.get("bbox")
-    if (_finite_number_list(bbox, length=4)
-            and any(not (float(bbox[0]) < value < float(bbox[2]))
-                    for value in source_values)):
-        errors.append(f"measured source divider lies outside its owner: {label}")
+    if _finite_number_list(bbox, length=4):
+        if any(not (float(bbox[0]) < value < float(bbox[2]))
+               for value in source_values):
+            errors.append(
+                f"measured source divider lies outside its owner: {label}")
+        # A rail is either a boundary the source drew inside the rectangle or
+        # the rectangle's own edge; it is never outside, and never a value the
+        # referee did not measure.
+        if any(
+            not (float(bbox[0]) <= value <= float(bbox[2]))
+            or (float(bbox[0]) < value < float(bbox[2])
+                and value not in source_values)
+            for value in rail_values
+        ):
+            errors.append(f"measured source rail is not the owner's: {label}")
 
     anchor_matches = referee.get("anchor_matches")
     anchor_sources: list[float] = []
@@ -4933,6 +5271,473 @@ def _measured_referee_certificate_errors(
     return errors
 
 
+def _partial_anchor_referee_certificate_errors(
+        slug: str, cell: dict[str, Any], referee: dict[str, Any],
+        ) -> list[str]:
+    """Independently re-derive the partial-anchor acceptance proof.
+
+    The referee's third measured-source shape claims a lattice anchor is
+    ABSENT from the paper: the raw target-tone rail Poppler exposes at the
+    anchor is exhaustively erased by one supported, unclipped, non-target
+    final owner across the whole open band.  The gate must PROVE that claim
+    from the published SVG-derived evidence rather than accept the
+    certificate's own ``valid`` flag; every relation below is recomputed and
+    any gap fails closed.  ``anchors_complete: false`` and
+    ``positions_match: false`` are accepted for this kind ONLY — a declared
+    anchor with no source position cannot match, and the referee holds both
+    False deliberately.
+    """
+    cell_id = cell.get("cell")
+    label = f"{slug}/{cell_id}"
+    errors: list[str] = []
+    epsilon = REFEREE_ROUNDING_EPSILON_PT
+    if referee.get("reason") != REFEREE_PARTIAL_ANCHOR_REASON:
+        errors.append(f"partial-anchor source reason is not derived: {label}")
+    if cell.get("ledger_state") != "active_unresolved":
+        errors.append(
+            f"partial-anchor subject is not ledger-owned active: {label}")
+
+    lattice = cell.get("lattice_divider_x")
+    source = referee.get("source_divider_x")
+    rails = referee.get("source_rail_x")
+    extras = referee.get("extra_divider_x")
+    chosen = referee.get("chosen_topology")
+    missing = referee.get("missing_anchor_x")
+    compartments = referee.get("compartments")
+    if (not _finite_number_list(lattice)
+            or not _finite_number_list(source)
+            or not _finite_number_list(rails, length=2)
+            or not _finite_number_list(extras)
+            or not _finite_number_list(chosen)
+            or not _finite_number_list(missing)
+            or not _is_count(compartments)
+            or compartments < 2):
+        return [*errors,
+                f"partial-anchor source topology is malformed: {label}"]
+    errors.extend(_rail_derivation_errors(label, referee, cell))
+    lattice_values = [_rounded_six(value) for value in lattice]
+    source_values = [_rounded_six(value) for value in source]
+    rail_values = [_rounded_six(value) for value in rails]
+    chosen_values = [_rounded_six(value) for value in chosen]
+    missing_values = [_rounded_six(value) for value in missing]
+    if (any(float(value) != rounded for value, rounded in zip(
+                source, source_values))
+            or any(float(value) != rounded for value, rounded in zip(
+                rails, rail_values))
+            or any(float(value) != rounded for value, rounded in zip(
+                chosen, chosen_values))
+            or any(float(value) != rounded for value, rounded in zip(
+                missing, missing_values))):
+        errors.append(
+            f"partial-anchor coordinates exceed fixed precision: {label}")
+    # Same relation as the full-anchor path: the count is the compartments
+    # between the measured rails, not across the subject rectangle.
+    enclosed_values = [
+        value for value in source_values
+        if rail_values[0] < value < rail_values[1]
+    ]
+    if (source_values != sorted(set(source_values))
+            or chosen_values != source_values
+            or rail_values[0] >= rail_values[1]
+            or compartments != len(enclosed_values) + 1):
+        errors.append(
+            f"partial-anchor source topology relation is false: {label}")
+    if list(extras):
+        # The partial path maps every interior source group one-to-one to a
+        # declared anchor; an undeclared extra divider has no place here.
+        errors.append(
+            f"partial-anchor topology carries an extra divider: {label}")
+    if not missing_values or missing_values != sorted(set(missing_values)):
+        errors.append(
+            f"partial-anchor missing-anchor inventory is invalid: {label}")
+    bbox = cell.get("bbox")
+    if _finite_number_list(bbox, length=4):
+        if any(not (float(bbox[0]) < value < float(bbox[2]))
+               for value in source_values):
+            errors.append(
+                f"partial-anchor source divider lies outside its owner: "
+                f"{label}")
+        if any(
+            not (float(bbox[0]) <= value <= float(bbox[2]))
+            or (float(bbox[0]) < value < float(bbox[2])
+                and value not in source_values)
+            for value in rail_values
+        ):
+            errors.append(
+                f"partial-anchor source rail is not the owner's: {label}")
+
+    anchor_matches = referee.get("anchor_matches")
+    matched_layout: list[float] = []
+    matched_sources: list[float] = []
+    if (not isinstance(anchor_matches, list)
+            or len(anchor_matches) + len(missing_values)
+            != len(lattice_values)):
+        return [*errors,
+                f"partial-anchor anchor inventory is incomplete: {label}"]
+    for match in anchor_matches:
+        if (not isinstance(match, dict)
+                or set(match) != {"layout_x", "source_x", "delta_pt"}
+                or not all(_finite_number(match.get(key)) for key in (
+                    "layout_x", "source_x", "delta_pt"))):
+            return [*errors,
+                    f"partial-anchor anchor evidence is malformed: {label}"]
+        layout_x = _rounded_six(match["layout_x"])
+        source_x = _rounded_six(match["source_x"])
+        delta = _rounded_six(match["delta_pt"])
+        if (float(match["layout_x"]) != layout_x
+                or float(match["source_x"]) != source_x
+                or float(match["delta_pt"]) != delta
+                or delta != _rounded_six(source_x - layout_x)
+                or abs(delta) > REFEREE_POSITION_TOLERANCE_PT):
+            errors.append(
+                f"partial-anchor anchor relation is false: {label}")
+        matched_layout.append(layout_x)
+        matched_sources.append(source_x)
+    observed_layout = sorted(matched_layout)
+    if (len(set(matched_layout)) != len(matched_layout)
+            or sorted({*matched_layout, *missing_values})
+            != lattice_values
+            or set(matched_layout) & set(missing_values)):
+        errors.append(
+            f"partial-anchor inventory does not partition the lattice: "
+            f"{label}")
+    if (len(set(matched_sources)) != len(matched_sources)
+            or sorted(matched_sources) != source_values):
+        errors.append(
+            f"partial-anchor source divider inventory is false: {label}")
+    if referee.get("anchors_complete") is not False:
+        errors.append(
+            f"partial-anchor completeness flag is not honest: {label}")
+    if referee.get("positions_match") is not False:
+        errors.append(
+            f"partial-anchor position verdict is not honest: {label}")
+
+    components = referee.get("components")
+    component_x: list[float] = []
+    component_tones: list[float] = []
+    if not isinstance(components, list) or not components:
+        errors.append(f"partial-anchor source components are missing: {label}")
+    else:
+        for component in components:
+            if (not isinstance(component, dict)
+                    or set(component) != {
+                        "x", "x0", "x1", "tone", "elements", "clipped"}
+                    or not all(_finite_number(component.get(key)) for key in (
+                        "x", "x0", "x1", "tone"))
+                    or not isinstance(component.get("elements"), list)
+                    or not component["elements"]
+                    or not all(isinstance(item, str) and item
+                               for item in component["elements"])
+                    or len(component["elements"])
+                    != len(set(component["elements"]))
+                    or component.get("clipped") is not False):
+                errors.append(
+                    f"partial-anchor source component is malformed: {label}")
+                continue
+            x = _rounded_six(component["x"])
+            x0 = _rounded_six(component["x0"])
+            x1 = _rounded_six(component["x1"])
+            tone = float(component["tone"])
+            if (x0 >= x1 or x != _rounded_six((x0 + x1) / 2)
+                    or not 0.0 <= tone <= 1.0):
+                errors.append(
+                    f"partial-anchor source component relation is false: "
+                    f"{label}")
+            component_x.append(x)
+            component_tones.append(tone)
+        if component_x != sorted(component_x):
+            errors.append(
+                f"partial-anchor source components are not ordered: {label}")
+        if (any(not any(abs(component - divider)
+                        <= REFEREE_POSITION_TOLERANCE_PT
+                        for divider in source_values)
+                for component in component_x)
+                or any(not any(abs(component - divider)
+                               <= REFEREE_POSITION_TOLERANCE_PT
+                               for component in component_x)
+                       for divider in source_values)):
+            errors.append(
+                f"partial-anchor components do not bind the topology: {label}")
+    if component_tones and any(
+            abs(tone - component_tones[0]) > 1e-8
+            for tone in component_tones):
+        errors.append(
+            f"partial-anchor divider tone is not singular: {label}")
+    divider_tone = component_tones[0] if component_tones else None
+
+    vertical_names = (
+        "y0", "y1", "contract_y0", "contract_y1", "open_y0", "open_y1",
+        "contract_span_pt", "seed_span_pt", "measured_span_pt",
+        "unmeasured_span_pt",
+    )
+    if not all(_finite_number(referee.get(name)) for name in vertical_names):
+        return [*errors,
+                f"partial-anchor span evidence is malformed: {label}"]
+    y0, y1, contract_y0, contract_y1, open_y0, open_y1 = (
+        float(referee[name]) for name in vertical_names[:6])
+    contract_span = float(referee["contract_span_pt"])
+    seed_span = float(referee["seed_span_pt"])
+    measured_span = float(referee["measured_span_pt"])
+    unmeasured_span = float(referee["unmeasured_span_pt"])
+    if (not contract_y0 <= open_y0 < open_y1 <= contract_y1
+            or not open_y0 <= y0 < y1 <= open_y1
+            or y1 - y0 <= REFEREE_POSITION_TOLERANCE_PT
+            or _rounded_six(contract_span)
+            != _rounded_six(contract_y1 - contract_y0)
+            or _rounded_six(seed_span) != _rounded_six(open_y1 - open_y0)
+            or measured_span <= 0
+            or measured_span > seed_span + epsilon
+            or _rounded_six(unmeasured_span)
+            != _rounded_six(max(0.0, seed_span - measured_span))):
+        errors.append(
+            f"partial-anchor span relation is false: {label}")
+    # The absence proof is only exhaustive over the COMPLETE open band:
+    # every slab measured, one topology, nothing ignored.
+    if (abs(measured_span - seed_span) > epsilon
+            or unmeasured_span > epsilon):
+        errors.append(
+            f"partial-anchor coverage is not the full band: {label}")
+    if referee.get("ignored_slabs") != []:
+        errors.append(
+            f"partial-anchor band has ignored slabs: {label}")
+    if referee.get("topology_superset_relations") != []:
+        errors.append(
+            f"partial-anchor topology relations are not singular: {label}")
+
+    coverage = referee.get("topology_coverage_pt")
+    chosen_key = _referee_topology_key(source_values)
+    if (not isinstance(coverage, dict)
+            or set(coverage) != {chosen_key}
+            or not _finite_number(coverage.get(chosen_key))
+            or abs(float(coverage[chosen_key]) - measured_span) > epsilon):
+        errors.append(
+            f"partial-anchor topology coverage is not singular: {label}")
+
+    certificate = referee.get("active_partial_anchor_certificate")
+    if (not isinstance(certificate, dict)
+            or set(certificate) != PARTIAL_ANCHOR_CERTIFICATE_KEYS):
+        return [*errors,
+                f"partial-anchor certificate schema is unsupported: {label}"]
+    fixed_relations = {
+        "criterion": PARTIAL_ANCHOR_CRITERION,
+        "valid": True,
+        "ledger_state": "active_unresolved",
+        "subject_ownership_basis": PARTIAL_ANCHOR_OWNERSHIP_BASIS,
+        "independent_source_enclosure_proven": False,
+        "divider_count_basis": PARTIAL_ANCHOR_COUNT_BASIS,
+        "missing_anchor_basis": PARTIAL_ANCHOR_MISSING_BASIS,
+        "anchor_corridor_clipped_paint_elements": [],
+        "anchor_corridor_unsupported_region_elements": [],
+        "open_y0": referee["open_y0"],
+        "open_y1": referee["open_y1"],
+        "coverage_pt": referee["measured_span_pt"],
+        "source_divider_x": source_values,
+        "observed_anchor_x": observed_layout,
+        "missing_anchor_x": missing_values,
+    }
+    for key, expected in fixed_relations.items():
+        if certificate.get(key) != expected:
+            errors.append(
+                f"partial-anchor certificate relation is false: "
+                f"{label}/{key}")
+
+    proofs = certificate.get("missing_anchor_proofs")
+    if (not isinstance(proofs, list)
+            or len(proofs) != len(missing_values)):
+        return [*errors,
+                f"partial-anchor erasure proofs are incomplete: {label}"]
+    for anchor, proof in zip(missing_values, proofs):
+        if not isinstance(proof, dict) or set(proof) != PARTIAL_ANCHOR_PROOF_KEYS:
+            errors.append(
+                f"partial-anchor erasure proof is malformed: {label}")
+            continue
+        if (proof.get("layout_x") != anchor
+                or proof.get("open_y0") != referee["open_y0"]
+                or proof.get("open_y1") != referee["open_y1"]
+                or proof.get("raw_rail_identity_valid") is not True
+                or proof.get("proof_top_role_ambiguities") != []
+                or proof.get("clipped_paint_elements") != []
+                or proof.get("final_target_tone_segments") != []
+                or proof.get("unsupported_region_elements") != []):
+            errors.append(
+                f"partial-anchor erasure proof relation is false: {label}")
+        if (not _finite_number(proof.get("corridor_x0"))
+                or not _finite_number(proof.get("corridor_x1"))
+                or not _finite_number(proof.get("proof_x0"))
+                or not _finite_number(proof.get("proof_x1"))
+                or abs(float(proof["corridor_x0"])
+                       - (anchor - REFEREE_POSITION_TOLERANCE_PT)) > epsilon
+                or abs(float(proof["corridor_x1"])
+                       - (anchor + REFEREE_POSITION_TOLERANCE_PT)) > epsilon):
+            errors.append(
+                f"partial-anchor corridor geometry is false: {label}")
+            continue
+        rails = proof.get("raw_anchor_rails")
+        if not isinstance(rails, list) or len(rails) != 1:
+            # The absence proof requires exactly one raw rail whose identity
+            # at the anchor is unambiguous.
+            errors.append(
+                f"partial-anchor raw rail is not singular: {label}")
+            continue
+        rail = rails[0]
+        if (not isinstance(rail, dict)
+                or set(rail) != PARTIAL_ANCHOR_RAIL_KEYS
+                or not all(_finite_number(rail.get(key)) for key in (
+                    "x0", "x1", "center_x", "delta_pt", "y0", "y1", "tone"))
+                or not isinstance(rail.get("element"), str)
+                or not rail["element"]
+                or not isinstance(rail.get("kind"), str) or not rail["kind"]
+                or not _is_count(rail.get("order"))):
+            errors.append(
+                f"partial-anchor raw rail is malformed: {label}")
+            continue
+        rail_x0 = float(rail["x0"])
+        rail_x1 = float(rail["x1"])
+        rail_tone = float(rail["tone"])
+        if (rail_x0 >= rail_x1
+                or abs(float(rail["center_x"]) - (rail_x0 + rail_x1) / 2)
+                > epsilon
+                or abs(float(rail["delta_pt"])
+                       - (float(rail["center_x"]) - anchor)) > epsilon
+                or abs(float(rail["center_x"]) - anchor)
+                > REFEREE_POSITION_TOLERANCE_PT
+                or rail.get("clipped") is not False
+                or not 0.0 <= rail_tone <= 1.0
+                or (divider_tone is not None
+                    and abs(rail_tone - divider_tone) > 1e-8)):
+            # The erased rail must sit at the missing anchor, unclipped, in
+            # the same target tone as the observed dividers.
+            errors.append(
+                f"partial-anchor raw rail relation is false: {label}")
+        if (float(rail["y0"]) > open_y0 + epsilon
+                or float(rail["y1"]) < open_y1 - epsilon):
+            errors.append(
+                f"partial-anchor raw rail does not span the open band: "
+                f"{label}")
+        if (abs(float(proof["proof_x0"])
+                - min(float(proof["corridor_x0"]), rail_x0)) > epsilon
+                or abs(float(proof["proof_x1"])
+                       - max(float(proof["corridor_x1"]), rail_x1))
+                > epsilon):
+            errors.append(
+                f"partial-anchor proof window is false: {label}")
+
+        slabs = proof.get("erasure_slabs")
+        if not isinstance(slabs, list) or not slabs:
+            errors.append(
+                f"partial-anchor erasure slabs are missing: {label}")
+            continue
+        owner_roles: set[tuple[str, int, str, float]] = set()
+        slabs_valid = True
+        previous_y1 = open_y0
+        for index, slab in enumerate(slabs):
+            if (not isinstance(slab, dict)
+                    or set(slab) != PARTIAL_ANCHOR_SLAB_KEYS
+                    or not _finite_number(slab.get("y0"))
+                    or not _finite_number(slab.get("y1"))
+                    or not _finite_number(slab.get("sample_y"))):
+                errors.append(
+                    f"partial-anchor erasure slab is malformed: {label}")
+                slabs_valid = False
+                continue
+            slab_y0 = float(slab["y0"])
+            slab_y1 = float(slab["y1"])
+            if (slab_y0 >= slab_y1
+                    or abs(slab_y0 - previous_y1) > epsilon
+                    or (index == len(slabs) - 1
+                        and abs(slab_y1 - open_y1) > epsilon)
+                    or abs(float(slab["sample_y"])
+                           - (slab_y0 + slab_y1) / 2) > epsilon):
+                # The slabs must tile the complete open band in order; a gap
+                # would leave a stretch of the rail with no erasure evidence.
+                errors.append(
+                    f"partial-anchor erasure slabs do not tile the band: "
+                    f"{label}")
+                slabs_valid = False
+            previous_y1 = slab_y1
+            if (slab.get("raw_rail_elements") != [rail["element"]]
+                    or slab.get("ambiguous_top_roles") != []):
+                errors.append(
+                    f"partial-anchor erasure slab evidence is false: {label}")
+                slabs_valid = False
+            intervals = slab.get("raw_intervals")
+            if (not isinstance(intervals, list) or len(intervals) != 1
+                    or not _finite_number_list(intervals[0], length=2)
+                    or abs(float(intervals[0][0]) - rail_x0) > epsilon
+                    or abs(float(intervals[0][1]) - rail_x1) > epsilon):
+                errors.append(
+                    f"partial-anchor raw interval is not the rail: {label}")
+                slabs_valid = False
+                continue
+            segments = slab.get("final_owner_segments")
+            if not isinstance(segments, list) or not segments:
+                errors.append(
+                    f"partial-anchor final owners are missing: {label}")
+                slabs_valid = False
+                continue
+            previous_x1 = rail_x0
+            slab_roles: set[tuple[str, int, str, float]] = set()
+            for position, segment in enumerate(segments):
+                if (not isinstance(segment, dict)
+                        or set(segment) != PARTIAL_ANCHOR_SEGMENT_KEYS
+                        or not _finite_number(segment.get("x0"))
+                        or not _finite_number(segment.get("x1"))
+                        or not _finite_number(segment.get("tone"))
+                        or not isinstance(segment.get("element"), str)
+                        or not segment["element"]
+                        or not isinstance(segment.get("kind"), str)
+                        or not segment["kind"]
+                        or not _is_count(segment.get("order"))):
+                    errors.append(
+                        f"partial-anchor final owner is malformed: {label}")
+                    slabs_valid = False
+                    continue
+                segment_x0 = float(segment["x0"])
+                segment_x1 = float(segment["x1"])
+                if (segment_x0 >= segment_x1
+                        or abs(segment_x0 - previous_x1) > epsilon
+                        or (position == len(segments) - 1
+                            and abs(segment_x1 - rail_x1) > epsilon)):
+                    # The final owners must tile the raw rail exhaustively;
+                    # an uncovered sliver means the rail reaches paper.
+                    errors.append(
+                        f"partial-anchor erasure does not cover the rail: "
+                        f"{label}")
+                    slabs_valid = False
+                previous_x1 = segment_x1
+                if (segment.get("clipped") is not False
+                        or abs(float(segment["tone"]) - rail_tone) <= 1e-8
+                        or int(segment["order"]) <= int(rail["order"])):
+                    # A clipped, target-tone, or underpainted owner does not
+                    # erase the rail.
+                    errors.append(
+                        f"partial-anchor final owner does not erase the "
+                        f"rail: {label}")
+                    slabs_valid = False
+                slab_roles.add((
+                    segment["element"], int(segment["order"]),
+                    segment["kind"], float(segment["tone"])))
+            if len(slab_roles) != 1:
+                errors.append(
+                    f"partial-anchor final owner is not singular: {label}")
+                slabs_valid = False
+            owner_roles.update(slab_roles)
+        if slabs_valid and len(owner_roles) != 1:
+            errors.append(
+                f"partial-anchor final owner is not singular: {label}")
+        expected_roles = [
+            {
+                "element": role[0], "order": role[1],
+                "kind": role[2], "tone": role[3],
+            }
+            for role in sorted(owner_roles)
+        ]
+        if slabs_valid and proof.get("erasure_owner_roles") != expected_roles:
+            errors.append(
+                f"partial-anchor owner roles are not derived: {label}")
+    return errors
+
+
 def _project_layout_topology(
         comb: Any, bbox: list[float], label: str,
         ) -> dict[str, Any]:
@@ -4950,10 +5755,18 @@ def _project_layout_topology(
         raise CombRefereeScopeError(f"{label} has invalid comb counts/edges")
     dividers = [float(value) for value in raw_dividers]
     slots = [float(value) for value in raw_slots]
+    # The outer values of slot_x are the comb's own printed RAILS, and they are
+    # not the subject rectangle. That rectangle's x is a fused lattice position
+    # -- the mean centre of every collinear bar on the line -- while the rail is
+    # the bar crossing this band; and one rectangle may rule a caption or a
+    # dash box beside the comb, which the comb does not own. What must hold is
+    # that every COMPARTMENT is this subject's, i.e. that its centre lies
+    # inside the rectangle; a compartment centred outside it belongs to the
+    # subject next door.
     if (any(right <= left for left, right in zip(slots, slots[1:]))
             or not _same_finite_numbers(slots[1:-1], dividers)
-            or not _same_finite_numbers(
-                [slots[0], slots[-1]], [bbox[0], bbox[2]])):
+            or not all(bbox[0] < (left + right) / 2.0 < bbox[2]
+                       for left, right in zip(slots, slots[1:]))):
         raise CombRefereeScopeError(f"{label} comb edges are inconsistent")
     y0 = comb.get("y0")
     y1 = comb.get("y1")
@@ -4992,8 +5805,20 @@ def _emission_geometry_from_layout(
     top = float(box["y0"])
     right = float(box["x1"])
     bottom = float(box["y1"])
-    band_top = float(comb["y0"])
-    band_bottom = float(comb["y1"])
+    # The writing surface, not the guide-tick band.  comb["y0"]/["y1"] is the
+    # short tick the source paints at the cell's foot (~2.88pt tall); a typed
+    # character goes on comb["writing_y0"]/["writing_y1"], which is what emit
+    # renders.  Subscript, not .get(): a layout missing the writing band is an
+    # error here, never a silently tolerated pass.
+    band_top = float(comb["writing_y0"])
+    band_bottom = float(comb["writing_y1"])
+    # The same distinction horizontally, and subscripted for the same reason.
+    # comb["slot_x"]'s outer values are the RAIL CENTRES -- half a printed
+    # stroke outside the paper -- and comb["writing_x0"]/["writing_x1"] are
+    # those rails' ink edges, which is what emit lays the first and last
+    # compartments on.  Everything between them stays the measured dividers.
+    edges = [float(comb["writing_x0"]), *slot_x[1:-1],
+             float(comb["writing_x1"])]
     return {
         "page_index": page_index,
         "left": left,
@@ -5009,7 +5834,7 @@ def _emission_geometry_from_layout(
                 "height": band_bottom - band_top,
             }
             for index, (slot_left, slot_right) in enumerate(
-                zip(slot_x, slot_x[1:]))
+                zip(edges, edges[1:]))
         ],
     }
 
@@ -5743,13 +6568,35 @@ def form_binding_errors(form: dict[str, Any],
                 if actual_audit != expected_audit:
                     errors.append(
                         f"cell audit relation is not bound: {slug}/{cell_id}")
+        # Three clauses below read a SHAPE the audit does not publish for a
+        # holding assertion, and until the runtime attestation landed they
+        # could never run: `audit_evidence["complete"]` was False on every
+        # form, so this branch was dead code that had never once been
+        # evaluated. The moment it went live it fired on all 53 forms,
+        # including every form whose comb assertion holds with each counter
+        # clean.
+        #
+        #   * `offender_count` and `offender_dimensions` are set by `broken()`
+        #     and NOT by `held()`, which publishes `offenders: []` instead. On
+        #     a passing assertion they are absent, so `!= 0` and `!= {}` were
+        #     comparing None. Absent means none, and is now read that way.
+        #   * `expected_comb_ids` and `emitted_comb_ids` are the same SET in
+        #     two different orders -- expected in lattice order, emitted
+        #     lexicographic. Measured across the corpus: 53 of 53 forms have
+        #     identical membership, 0 have a member difference. A sequence
+        #     comparison was therefore reporting a defect that does not exist.
+        #     Compared SORTED rather than as sets, so a duplicate still fails.
+        #
+        # Not a weakening: the claim is that the expected comb inventory equals
+        # the emitted one, which is a question about membership and
+        # multiplicity and never about order.
         if audit_evidence.get("complete") is True and (
                 assertion_relation.get("holds") is not True
                 or assertion_relation.get("inventory_complete") is not True
-                or assertion_relation.get("offender_count") != 0
-                or assertion_relation.get("offender_dimensions") != {}
-                or assertion_relation.get("expected_comb_ids")
-                != assertion_relation.get("emitted_comb_ids")
+                or (assertion_relation.get("offender_count") or 0) != 0
+                or (assertion_relation.get("offender_dimensions") or {}) != {}
+                or sorted(assertion_relation.get("expected_comb_ids") or ())
+                != sorted(assertion_relation.get("emitted_comb_ids") or ())
                 or assertion_relation.get("owner_certificates_invalid") != 0
                 or assertion_relation.get("owner_certificates_valid")
                 != assertion_relation.get("combs_checked")
@@ -5775,13 +6622,16 @@ def form_binding_errors(form: dict[str, Any],
     if (not isinstance(manifest_binding, dict)
             or manifest_binding.get("binding_valid") is not True
             or manifest_binding.get("manifest_inputs_complete") is not True
-            or manifest_binding.get("attestation_complete") is not False
-            or manifest_binding.get("enforceable") is not False
-            or manifest_binding.get("complete") is not False
+            or manifest_binding.get("attestation_complete") is not True
+            or manifest_binding.get("enforceable") is not True
+            or manifest_binding.get("complete") is not True
             or manifest_binding.get(
-                "base_runtime_closure_independently_attested") is not False
+                "base_runtime_closure_independently_attested") is not True
             or manifest_binding.get(
-                "roundtrip_runtime_closure_independently_attested") is not False
+                "roundtrip_runtime_closure_independently_attested") is not True
+            or not isinstance(
+                manifest_binding.get("host_scope_boundaries"), list)
+            or not manifest_binding.get("host_scope_boundaries")
             or manifest_binding.get("producer_sha256")
             != snapshot["producers"]["tools/formgen/audit.py"]["sha256"]):
         errors.append(f"form audit manifest binding is invalid: {slug}")
@@ -5801,11 +6651,12 @@ def form_binding_errors(form: dict[str, Any],
     if (audit_evidence.get("input_manifest_reason")
             != (manifest_binding or {}).get("reason")):
         errors.append(f"form audit manifest reason is not bound: {slug}")
-    if (audit_evidence.get("runtime_closure_independently_attested") is not False
-            or audit_evidence.get("integrity_valid") is not False
-            or audit_evidence.get("complete") is not False):
+    if (audit_evidence.get("runtime_closure_independently_attested")
+            is not True
+            or audit_evidence.get("integrity_valid") is not True
+            or audit_evidence.get("complete") is not True):
         errors.append(
-            f"raw form audit overclaims standalone runtime closure: {slug}")
+            f"raw form audit runtime closure is not attested: {slug}")
     form_poppler = form.get("poppler")
     snapshot_poppler = snapshot.get("runtime", {}).get("pdftocairo", {})
     if (not isinstance(form_poppler, dict)
@@ -5841,11 +6692,22 @@ def derive_application_scope_elevation(
         ) -> tuple[list[str], dict[str, Any] | None]:
     """Derive the sole allowed raw-exit-2 elevation from outer evidence.
 
-    The child intentionally refuses to attest its own host/runtime closure and
-    therefore treats otherwise exhaustive audit evidence as truncated.  The
-    gate may replace only that narrow uncertainty: its separately persisted
-    audit application envelope must be current, and every deterministic,
-    audit, ledger, emission, and source relation must independently be green.
+    The child refuses to attest ITS OWN host/runtime closure -- it is not
+    bound to a reviewed clean revision and does not rehash the standard
+    library, the dynamic libraries or the operating system it runs on -- so a
+    corpus where every subject agrees still exits unevaluable.  The gate may
+    replace only that narrow uncertainty: its separately persisted audit
+    application envelope must be current, and every deterministic, audit,
+    ledger, emission and source relation must independently be green.
+
+    Until 2026-08-10 this function also replaced a second uncertainty: the
+    referee could not rehash the audit's own runtime closure, so it published
+    every subject as `unevaluable`/"audit evidence is incomplete" and the gate
+    counted them as agreeing on the strength of the outer envelope.  It no
+    longer does.  The referee rehashes that closure itself and reaches a real
+    verdict, so the raw report now has to CARRY the agreement rather than be
+    credited with it, and the only reason left for the raw exit is the
+    referee's own host attestation.
     """
     errors: list[str] = []
     audit_snapshot = snapshot.get("audit")
@@ -5856,7 +6718,6 @@ def derive_application_scope_elevation(
         return ["outer audit application execution is not attested"], None
     if report.get("status") != "unevaluable" or report.get(
             "status_reasons") != [
-                "corpus coverage or one or more forms are unevaluable",
                 (
                     "standalone referee runtime/application attestation is "
                     "incomplete and non-enforceable"
@@ -5890,35 +6751,36 @@ def derive_application_scope_elevation(
             errors.append(f"layout owner registry is invalid: {slug}: {error}")
             layout_owner_ids = None
         if (not isinstance(audit_evidence, dict)
-                or audit_evidence.get("complete") is not False
-                or audit_evidence.get("integrity_valid") is not False
+                or audit_evidence.get("complete") is not True
+                or audit_evidence.get("integrity_valid") is not True
                 or audit_evidence.get(
-                    "runtime_closure_independently_attested") is not False
+                    "runtime_closure_independently_attested") is not True
                 or audit_evidence.get("assertion_valid") is not True
                 or audit_evidence.get("errors") != []
                 or audit_evidence.get("input_manifest_verified") is not True
                 or audit_evidence.get("evidence_published") is not True
                 or audit_evidence.get("byte_and_relation_binding_valid")
                 is not True):
-            errors.append(f"raw audit evidence has a non-scope failure: {slug}")
+            errors.append(f"raw audit evidence has a failure: {slug}")
         if (not isinstance(manifest, dict)
                 or manifest.get("binding_valid") is not True
                 or manifest.get("manifest_inputs_complete") is not True
                 or manifest.get("errors") != []
                 or manifest.get("blockers") != RAW_AUDIT_SCOPE_BLOCKERS
-                or manifest.get("reason") != "; ".join(
-                    f"blocked: {item}" for item in RAW_AUDIT_SCOPE_BLOCKERS)
-                or manifest.get("attestation_complete") is not False
-                or manifest.get("enforceable") is not False
-                or manifest.get("complete") is not False
+                or manifest.get("reason") != "complete"
+                or not isinstance(manifest.get("host_scope_boundaries"), list)
+                or not manifest.get("host_scope_boundaries")
+                or manifest.get("attestation_complete") is not True
+                or manifest.get("enforceable") is not True
+                or manifest.get("complete") is not True
                 or manifest.get("runtime_manifest_self_consistent") is not True
                 or manifest.get("base_runtime_closure_independently_attested")
-                is not False
+                is not True
                 or manifest.get(
                     "roundtrip_runtime_closure_independently_attested")
-                is not False
+                is not True
                 or manifest.get("roundtrip_present") is not True):
-            errors.append(f"raw audit manifest has a non-scope failure: {slug}")
+            errors.append(f"raw audit manifest has a failure: {slug}")
         if (not isinstance(ledger, dict)
                 or ledger.get("binding_valid") is not True
                 or ledger.get("reason") != "complete"
@@ -6001,7 +6863,7 @@ def derive_application_scope_elevation(
                     referee.get("compartments")
                     if isinstance(referee, dict) else None),
                 "lattice": cell.get("latticed"),
-                "audit": None,
+                "audit": cell.get("audit_printed"),
                 "emitted": cell.get("emitted"),
             }
             if (cell.get("ledger_state") != "active_resolved"
@@ -6012,15 +6874,15 @@ def derive_application_scope_elevation(
                     or referee.get("compartments") != cell.get("latticed")
                     or cell.get("emitted") != cell.get("latticed")
                     or cell.get("emitted_indexes_valid") is not True
-                    or cell.get("audit_printed") is not None
-                    or cell.get("audit_relation") != "unknown-truncated"
-                    or cell.get("comparison_status") != "unevaluable"
+                    or cell.get("audit_printed") != cell.get("latticed")
+                    or cell.get("audit_relation") != "complete-non-offender"
+                    or cell.get("comparison_status") != "agree"
                     or cell.get("comparison_reason")
-                    != "audit evidence is incomplete"
+                    != "referee, lattice, audit, and emitted agree"
                     or cell.get("transition_status") != "none"
                     or cell.get("four_way") != expected_raw_four_way):
                 errors.append(
-                    f"cell has a non-audit-scope blocker: "
+                    f"cell is not a four-way agreement: "
                     f"{slug}/{cell.get('cell')}")
         effective_subjects += len(cells)
 
@@ -6029,8 +6891,11 @@ def derive_application_scope_elevation(
     raw_totals = report.get("totals")
     if not isinstance(raw_totals, dict):
         return ["raw totals are missing"], None
-    effective_totals = dict(raw_totals)
-    effective_totals.update({
+    # The raw report has to CARRY these now; the elevation no longer supplies
+    # them. It used to overwrite `comparisons` with an all-agree distribution
+    # because the referee could not adjudicate at all, which meant the numbers
+    # the gate scored were the gate's own. They are the referee's again.
+    expected_totals = {
         "combs_unevaluable": 0,
         "forms_ok": len(forms),
         "forms_disagreement": 0,
@@ -6040,8 +6905,17 @@ def derive_application_scope_elevation(
             name: effective_subjects if name == "agree" else 0
             for name in COMPARISON_NAMES
         },
-    })
-    return [], effective_totals
+    }
+    mismatched = [
+        key for key, value in expected_totals.items()
+        if raw_totals.get(key) != value
+    ]
+    if mismatched:
+        return [
+            "raw totals do not carry the adjudicated relation: "
+            + ", ".join(mismatched)
+        ], None
+    return [], dict(raw_totals)
 
 
 def report_binding_errors(report: dict[str, Any],
@@ -6645,8 +7519,9 @@ BATCH_RECORD_KEYS = {
 AUDIT_ATTESTATION_KEYS = {
     "inputs_complete", "producer_execution_bound",
     "base_runtime_scope_complete", "roundtrip_runtime_scope_complete",
-    "validated_before_after", "complete", "enforceable",
-    "incomplete_reasons", "future_gate_required",
+    "application_closure_complete", "validated_before_after", "complete",
+    "enforceable", "incomplete_reasons", "declared_out_of_scope",
+    "future_gate_required",
 }
 AUDIT_INPUT_MANIFEST_KEYS = {
     "schema", "algorithm", "producer", "runtime", "inputs_complete",
@@ -6656,14 +7531,33 @@ AUDIT_INPUT_MANIFEST_KEYS = {
 BASIC_ASSERTION_COUNT_FIELDS = {
     "inputs_over_printed_text": (
         ("cells_checked",), ("emitted_cell_binding_issues",)),
+    # `boxes_bureau_reserved` counts the blanks the SHEET's own caption
+    # reserves for the Bureau and which the producer therefore did not demand
+    # an input in. It is optional for the same reason `boxes_preprinted` is:
+    # the early unresolved-source returns publish neither. Declaring it here
+    # is what stops the exclusion being silent -- an undeclared count field
+    # reads as `detail has unsupported fields` and fails the gate.
     "money_boxes_have_inputs": (
         ("boxes_checked", "combs_fully_inked"),
-        ("boxes_preprinted", "emitted_cell_binding_issues")),
+        ("boxes_preprinted", "boxes_bureau_reserved",
+         "emitted_cell_binding_issues")),
     "rules_below_guide_cut": (("cuts",), ("area_fills_below_cut",)),
     "run_colour_matches_ir": (("runs_checked",), ()),
     "reflow_rate_without_description": (("rate_tables",), ("rows_checked",)),
     "image_transform_applied": (("placements",), ("relocated_placements",)),
     "no_invented_codepoints": (("characters_examined",), ()),
+    # Required = the counts every return path of the producer publishes, so a
+    # record that omits one is a producer that did not run the check. Both
+    # of G10's assertions publish their denominators unconditionally; only the
+    # two early source-unresolved returns drop `boxes_unevaluable` and the
+    # binding-issue count, which is why those two are optional.
+    "inputs_span_no_printed_divider": (
+        ("inputs_checked", "printed_dividers_detected"),
+        ("emitted_cell_binding_issues",)),
+    "printed_box_peers_all_fillable": (
+        ("printed_boxes_checked", "peer_rows_checked"),
+        ("boxes_unevaluable", "boxes_bureau_reserved",
+         "emitted_cell_binding_issues")),
 }
 BASIC_ASSERTION_PUBLICATION_KEYS = {
     "offender_count", "offenders_published", "offenders_omitted",
@@ -7156,7 +8050,7 @@ AUDIT_PRODUCER_DEPENDENCY_KEYS = {
     "executed_from_snapshotted_source",
 }
 AUDIT_RUNTIME_KEYS = {
-    "python", "pymupdf", "loaded_application_files",
+    "python", "pymupdf", "loaded_application_files", "application_closure",
     "stdlib_and_system_shared_libraries_bound", "scope_complete",
     "incomplete_reason",
 }
@@ -7164,6 +8058,122 @@ AUDIT_RUNTIME_FILES_KEYS = {
     "algorithm", "files", "bytes", "tree_sha256", "members",
     "validated_before_after",
 }
+AUDIT_APPLICATION_CLOSURE_KEYS = {
+    "scope", "algorithm", "bytecode_caches_excluded", "exclusion_reason",
+    "packages", "modules", "native_libraries", "unbound_modules",
+    "validated_before_after", "complete",
+}
+AUDIT_APPLICATION_CLOSURE_SCOPE = (
+    "interpreter-binaries-and-application-package-trees-v1")
+AUDIT_TREE_CLOSURE_ALGORITHM = (
+    "sha256(canonical-json(path,type,bytes,digest))")
+AUDIT_APPLICATION_PACKAGE_KEYS = {
+    "logical_root", "algorithm", "files", "symlinks", "bytes", "tree_sha256",
+}
+
+
+def _audit_application_closure_errors(
+        closure: Any, members: Sequence[tuple[str, int, str]], slug: str,
+        ) -> list[str]:
+    """Shape and internal relations only; comb_referee.py does the rehash.
+
+    The gate deliberately does not re-derive these digests: the independent
+    rehash is the referee's job and binding the referee's report is this
+    gate's. What it does insist on is that the record cannot be internally
+    inconsistent -- an unaccounted module, a completeness flag that disagrees
+    with its own unbound list, or a module inventory that does not match the
+    loaded-file inventory it was derived from.
+    """
+    errors: list[str] = []
+    if not isinstance(closure, dict) or set(
+            closure) != AUDIT_APPLICATION_CLOSURE_KEYS:
+        return [f"audit application closure is malformed: {slug}"]
+    if (closure.get("scope") != AUDIT_APPLICATION_CLOSURE_SCOPE
+            or closure.get("algorithm") != AUDIT_TREE_CLOSURE_ALGORITHM
+            or closure.get("bytecode_caches_excluded") is not True
+            or not isinstance(closure.get("exclusion_reason"), str)
+            or not closure.get("exclusion_reason")
+            or closure.get("validated_before_after") is not True):
+        errors.append(f"audit application closure declaration is false: {slug}")
+    packages = closure.get("packages")
+    if (not isinstance(packages, list) or not packages
+            or not all(
+                isinstance(item, dict)
+                and set(item) == AUDIT_APPLICATION_PACKAGE_KEYS
+                and item.get("algorithm") == AUDIT_TREE_CLOSURE_ALGORITHM
+                and isinstance(item.get("logical_root"), str)
+                and item.get("logical_root")
+                and _is_count(item.get("files")) and item.get("files") > 0
+                and _is_count(item.get("symlinks"))
+                and _is_count(item.get("bytes")) and item.get("bytes") > 0
+                and _is_sha256(item.get("tree_sha256"))
+                for item in packages)):
+        errors.append(f"audit application package trees are malformed: {slug}")
+        packages = []
+    roots = [
+        item.get("logical_root") for item in packages
+        if isinstance(item, dict)
+    ]
+    if roots != sorted(set(roots)):
+        errors.append(f"audit application package roots are not exact: {slug}")
+    native = closure.get("native_libraries")
+    if (not isinstance(native, list) or not native
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"file", "bytes", "sha256"}
+                and isinstance(item.get("file"), str)
+                and item.get("file").split("/", 1)[0] in roots
+                and _is_count(item.get("bytes")) and item.get("bytes") > 0
+                and _is_sha256(item.get("sha256"))
+                for item in native)
+            or [item.get("file") for item in native]
+            != sorted(item.get("file") for item in native)):
+        errors.append(
+            f"audit bundled native library inventory is malformed: {slug}")
+    modules = closure.get("modules")
+    if (not isinstance(modules, list)
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"module", "file", "bytes", "sha256"}
+                and isinstance(item.get("module"), str)
+                and item.get("module")
+                and isinstance(item.get("file"), str)
+                and item.get("file").split("/", 1)[0] in roots
+                and _is_count(item.get("bytes"))
+                and _is_sha256(item.get("sha256"))
+                for item in modules)
+            or [item.get("file") for item in modules]
+            != sorted(item.get("file") for item in modules)):
+        errors.append(f"audit application module inventory is malformed: {slug}")
+        return errors
+    unbound = closure.get("unbound_modules")
+    if (not isinstance(unbound, list)
+            or unbound != sorted(unbound)
+            or not all(isinstance(item, str) and item for item in unbound)):
+        errors.append(f"audit unbound module inventory is malformed: {slug}")
+        return errors
+    if closure.get("complete") is not (not unbound):
+        errors.append(
+            f"audit application closure completeness relation is false: {slug}")
+    loaded_modules = {
+        logical[len("module/"):]: (size, digest)
+        for logical, size, digest in members
+        if logical.startswith("module/")
+    }
+    published = {item["module"]: (item["bytes"], item["sha256"])
+                 for item in modules}
+    accounted = set(published) | {
+        item[len("module/"):] for item in unbound
+        if item.startswith("module/")
+    }
+    if (len(published) != len(modules)
+            or accounted != set(loaded_modules)
+            or any(published[name] != loaded_modules[name]
+                   for name in published if name in loaded_modules)):
+        errors.append(
+            f"audit application closure does not account for the loaded "
+            f"application modules: {slug}")
+    return errors
 AUDIT_INPUT_ROLES = {"ir", "layout", "html", "guide", "guide_html", "source_pdf"}
 AUDIT_INPUT_FILE_KEYS = {"file", "required", "present", "bytes", "sha256"}
 AUDIT_SOURCE_INPUT_KEYS = {
@@ -7186,9 +8196,9 @@ def _audit_input_manifest_shape_errors(
     if (manifest.get("schema") != "formgen-audit-input-manifest-v1"
             or manifest.get("algorithm") != "sha256"
             or manifest.get("inputs_complete") is not True
-            or manifest.get("attestation_complete") is not False
-            or manifest.get("enforceable") is not False
-            or manifest.get("complete") is not False
+            or manifest.get("attestation_complete") is not True
+            or manifest.get("enforceable") is not True
+            or manifest.get("complete") is not True
             or manifest.get("missing_required") != []):
         errors.append(f"audit input manifest verdict is malformed: {slug}")
 
@@ -7294,6 +8304,8 @@ def _audit_input_manifest_shape_errors(
                     or member_tuples != sorted(
                         member_tuples, key=lambda item: item[0])):
                 errors.append(f"audit runtime member relation is false: {slug}")
+            errors.extend(_audit_application_closure_errors(
+                runtime.get("application_closure"), member_tuples, slug))
 
     inputs = manifest.get("inputs")
     if not isinstance(inputs, dict) or set(inputs) != AUDIT_INPUT_ROLES:
@@ -7585,6 +8597,12 @@ def full_audit_payload_errors(
                 or provenance.get("validated_after") is not True
                 or provenance.get("error") is not None):
             errors.append(f"audit provenance relation is malformed: {slug}")
+        # `complete` here is the audit's claim over its published application
+        # closure, and it must be exactly the conjunction it is derived from --
+        # a record that claims it while any of the three inputs is false is
+        # malformed, not merely optimistic. The scope boundaries it never
+        # covered stay published in `declared_out_of_scope`, which is why that
+        # list is still required to be non-empty on a fully green record.
         if (not isinstance(attestation, dict)
                 or set(attestation) != AUDIT_ATTESTATION_KEYS
                 or attestation.get("inputs_complete") is not True
@@ -7592,13 +8610,18 @@ def full_audit_payload_errors(
                 or attestation.get("base_runtime_scope_complete") is not False
                 or attestation.get(
                     "roundtrip_runtime_scope_complete") is not False
+                or attestation.get(
+                    "application_closure_complete") is not True
                 or attestation.get("validated_before_after") is not True
-                or attestation.get("complete") is not False
-                or attestation.get("enforceable") is not False
-                or not isinstance(attestation.get("incomplete_reasons"), list)
-                or not attestation.get("incomplete_reasons")
-                or not all(isinstance(item, str) and item
-                           for item in attestation.get("incomplete_reasons", []))
+                or attestation.get("complete") is not True
+                or attestation.get("enforceable") is not True
+                or attestation.get("incomplete_reasons") != []
+                or not isinstance(
+                    attestation.get("declared_out_of_scope"), list)
+                or not attestation.get("declared_out_of_scope")
+                or not all(
+                    isinstance(item, str) and item
+                    for item in attestation.get("declared_out_of_scope", []))
                 or not isinstance(attestation.get("future_gate_required"), str)
                 or not attestation.get("future_gate_required")):
             errors.append(f"audit attestation is malformed: {slug}")
@@ -8435,13 +9458,22 @@ def check_self_tests() -> Result:
         code, _ = runner(args, timeout=900)
         if code != 0:
             failures.append(module)
+    prover = HERE / PROVE_FIXTURES_SCRIPT
+    if not prover.is_file():
+        missing.append(PROVE_FIXTURES_SCRIPT)
+    else:
+        # It rebuilds and re-pins the fixture corpus once per mutation, so it is
+        # slower than any single module's self-test and gets its own budget.
+        code, _ = run([str(prover)], timeout=1800)
+        if code != 0:
+            failures.append("prove-fixtures-fail")
     if missing:
         return Result("self-tests", Verdict.UNEVALUABLE,
                       f"cannot run: {', '.join(missing)}")
     if failures:
         return Result("self-tests", Verdict.FAIL, f"failing: {', '.join(failures)}")
     return Result("self-tests", Verdict.PASS,
-                  f"{len(SELF_TEST_MODULES)} modules pass")
+                  f"{len(SELF_TEST_MODULES)} modules pass, mutations proven")
 
 
 def check_conversion() -> Result:
@@ -8855,6 +9887,150 @@ def check_no_tracked_deletions() -> Result:
     return _tracked_deletion_result(proc.stdout)
 
 
+def corrected_tree_result(*, tree_exists: bool, manifest_exists: bool,
+                          verify_code: int | None, verify_output: str,
+                          divergence_reports: list[str],
+                          fidelity_text: str | None) -> Result:
+    """ARCHITECTURE.md rule 4, in the half that is checkable today.
+
+    The rule: "The gate runs on BOTH trees. On forms-corrected/, fidelity must
+    fail ONLY at the declared divergences, each named per rule 1; an undeclared
+    diff between the trees is a build failure, not a shrug."
+
+    Pure, so the fixtures in `self_test` drive every branch without a
+    filesystem or a subprocess. What it does NOT do is as important as what it
+    does, so it is stated rather than implied:
+
+      * **No corrected tree -> PASS.** Stage 2 is unbuilt. That is a true
+        statement about a tree that does not exist, not a check that was
+        skipped, and it is the one branch where absence is an answer -- because
+        nothing downstream reads a tree that is not there.
+      * **A corrected tree with no manifest -> FAIL.** Bytes nobody can
+        re-derive from a named batch are exactly the parallel corpus rule 2
+        forbids.
+      * **A manifest `correct.py verify` cannot re-derive -> FAIL.** That
+        command is the independent re-derivation: it rebuilds copy(batch) +
+        records from the batch and the ledger and treats the tree on disk as a
+        suspect. This check does not re-implement it; re-implementing it here
+        would be a second opinion that shares this file's assumptions.
+      * **A verified manifest declaring NO divergence -> PASS.**
+      * **A declared divergence with no fidelity report naming it -> FAIL.**
+        This is the branch that must never become a pass. A correction whose
+        divergence nothing publishes is precisely the silent override rule 1
+        exists to forbid, and `correct.build_manifest` generates the exact
+        sentence a report has to print so a downstream reporter cannot
+        paraphrase it into a green tick. There is no fidelity report over
+        forms-corrected/ yet, so today this branch means "declare a correction
+        and the gate goes red until the report exists" -- the fail-closed
+        direction, and the reason this check can land before that report does.
+    """
+    if not tree_exists:
+        return Result("corrected-tree", Verdict.PASS,
+                      "forms-corrected/ does not exist; stage 2 is unbuilt")
+    if not manifest_exists:
+        return Result("corrected-tree", Verdict.FAIL,
+                      "forms-corrected/ exists with no manifest, so nothing "
+                      "says which batch it came from or what was applied")
+    if verify_code != 0:
+        tail = " ".join((verify_output or "").split())[-160:]
+        return Result("corrected-tree", Verdict.FAIL,
+                      "correct.py verify does not re-derive the corrected "
+                      f"tree: {tail or 'no output'}")
+    if not divergence_reports:
+        return Result("corrected-tree", Verdict.PASS,
+                      "manifest verifies; no divergence declared")
+    if fidelity_text is None:
+        return Result(
+            "corrected-tree", Verdict.FAIL,
+            f"{len(divergence_reports)} declared divergence(s) and no fidelity "
+            f"report at {CORRECTED_FIDELITY_REPORT.name} to publish them")
+    missing = [report for report in divergence_reports
+               if report not in fidelity_text]
+    if missing:
+        return Result(
+            "corrected-tree", Verdict.FAIL,
+            f"{len(missing)}/{len(divergence_reports)} declared divergence(s) "
+            f"absent from the fidelity report: {'; '.join(missing[:2])[:140]}")
+    return Result(
+        "corrected-tree", Verdict.PASS,
+        f"manifest verifies; all {len(divergence_reports)} declared "
+        f"divergence(s) named in the fidelity report")
+
+
+def check_corrected_tree() -> Result:
+    tree_exists = CORRECTED_TREE.is_dir()
+    manifest_exists = CORRECTED_MANIFEST.is_file()
+    if not tree_exists or not manifest_exists:
+        return corrected_tree_result(
+            tree_exists=tree_exists, manifest_exists=manifest_exists,
+            verify_code=None, verify_output="", divergence_reports=[],
+            fidelity_text=None)
+    code, output = run([str(HERE / "correct.py"), "--verify",
+                        "--manifest", str(CORRECTED_MANIFEST)])
+    reports: list[str] = []
+    try:
+        manifest = json.loads(CORRECTED_MANIFEST.read_text(encoding="utf-8"))
+        declared = manifest.get("divergences")
+        if isinstance(declared, list):
+            reports = [str(entry.get("report")) for entry in declared
+                       if isinstance(entry, dict)]
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        # An unreadable manifest is `correct.py verify`'s failure to report,
+        # not this function's to guess at. If verify somehow passed on it, an
+        # empty divergence list is not treated as "no divergence": the verify
+        # branch above has already decided, and a manifest this file cannot
+        # parse is named here so the two can never disagree silently.
+        return Result("corrected-tree", Verdict.FAIL,
+                      "the corrected tree's manifest cannot be read as JSON, "
+                      "so its declared divergences cannot be checked")
+    return corrected_tree_result(
+        tree_exists=True, manifest_exists=True, verify_code=code,
+        verify_output=output, divergence_reports=reports,
+        fidelity_text=fidelity_report_text())
+
+
+def _json_strings(value: Any, out: list[str]) -> None:
+    if isinstance(value, str):
+        out.append(value)
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            out.append(str(key))
+            _json_strings(child, out)
+    elif isinstance(value, list):
+        for child in value:
+            _json_strings(child, out)
+
+
+def fidelity_report_text() -> str | None:
+    """The corrected tree's fidelity report, as text a sentence can be found in.
+
+    The report's FORMAT is not fixed yet -- it is the half of rule 4 that does
+    not exist -- so this reads it both ways and never depends on the choice. If
+    it parses as JSON, every string it contains is decoded and joined, because
+    the divergence sentence `correct.build_manifest` generates contains double
+    quotes and would not survive a raw substring search against the escaped
+    bytes. That was not a hypothetical: the first end-to-end run of this check
+    reported a sentence as absent from a report that plainly contained it. If
+    it is not JSON, the raw text is used unchanged.
+    """
+    if not CORRECTED_FIDELITY_REPORT.is_file():
+        return None
+    try:
+        raw = CORRECTED_FIDELITY_REPORT.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        # Unreadable is not absent, and it is certainly not "published".
+        # Returning empty text keeps the caller on the FAIL branch that names
+        # the missing sentences rather than the one that names a missing file.
+        return ""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    strings: list[str] = []
+    _json_strings(parsed, strings)
+    return "\n".join(strings)
+
+
 CHECKS: dict[str, Callable[[], Result]] = {
     "self-tests": check_self_tests,
     "conversion": check_conversion,
@@ -8866,6 +10042,7 @@ CHECKS: dict[str, Callable[[], Result]] = {
     "comb-referee": check_comb_referee,
     "findings": check_findings,
     "tracked-files": check_no_tracked_deletions,
+    "corrected-tree": check_corrected_tree,
 }
 
 
@@ -8988,6 +10165,27 @@ def _synthetic_comb_fixture(
     }
     fixture_topology = _project_layout_topology(
         fixture_comb, [0.0, 0.0, 10.0, 10.0], "fixture topology")
+    # A comb is bounded by its own printed rails, so slot_x's outer values need
+    # not be the subject rectangle: it may start inside it, and it may sit a
+    # fraction of a point beyond it, because that rectangle's x is the mean
+    # centre of every collinear bar on the line. What it may not do is own a
+    # compartment centred outside the rectangle.
+    for railed in ([2.0, 5.0, 10.0], [0.0, 5.0, 8.0],
+                   [-0.4, 5.0, 10.4], [2.0, 5.0, 8.0]):
+        _project_layout_topology(
+            {**fixture_comb, "slot_x": railed, "divider_x": [railed[1]]},
+            [0.0, 0.0, 10.0, 10.0], "railed fixture topology")
+    for stolen in ([-5.0, 0.0, 5.0], [5.0, 10.0, 15.0],
+                   [10.0, 15.0, 20.0], [-10.0, -5.0, 0.0]):
+        try:
+            _project_layout_topology(
+                {**fixture_comb, "slot_x": stolen, "divider_x": [stolen[1]]},
+                [0.0, 0.0, 10.0, 10.0], "stolen fixture topology")
+        except CombRefereeScopeError:
+            continue
+        raise AssertionError(
+            "a comb with a compartment centred outside its subject passed: "
+            f"{stolen}")
     fixture_emission_geometry = {
         "page_index": 1,
         "left": 0.0,
@@ -9047,6 +10245,9 @@ def _synthetic_comb_fixture(
         "source_certified_unframed_evaluable": 1,
         "emission_behind_layout": 0,
         "emission_invalid": 0,
+        # Z1's declared schema change (see AUDIT_ASSERTION_SUMMARY_KEYS).
+        "decided_by_review": 0,
+        "decided_by_review_subjects": [],
         "offender_count": 0,
         "offenders_published": 0,
         "offenders_omitted": 0,
@@ -9246,23 +10447,24 @@ def _synthetic_comb_fixture(
             "relations": [source_relation],
         },
     }
-    fixture_manifest_reason = "; ".join(
-        f"blocked: {blocker}" for blocker in RAW_AUDIT_SCOPE_BLOCKERS)
+    fixture_manifest_reason = "complete"
     fixture_manifest_binding = {
         "binding_valid": True,
         "manifest_inputs_complete": True,
-        "attestation_complete": False,
-        "enforceable": False,
-        "complete": False,
+        "attestation_complete": True,
+        "enforceable": True,
+        "complete": True,
         "reason": fixture_manifest_reason,
         "errors": [],
         "blockers": list(RAW_AUDIT_SCOPE_BLOCKERS),
+        "host_scope_boundaries": [
+            "fixture host trusted computing base is out of scope"],
         "producer_sha256": producer_records[
             "tools/formgen/audit.py"]["sha256"],
         "runtime_tree_sha256": sha256_bytes(b"audit-runtime-tree"),
         "runtime_manifest_self_consistent": True,
-        "base_runtime_closure_independently_attested": False,
-        "roundtrip_runtime_closure_independently_attested": False,
+        "base_runtime_closure_independently_attested": True,
+        "roundtrip_runtime_closure_independently_attested": True,
         "render_dependency_count": 1,
         "render_dependencies": [fixture_render_dependency],
         "roundtrip_present": True,
@@ -9276,7 +10478,7 @@ def _synthetic_comb_fixture(
         "legacy_alias_count": 1,
     }
     comparisons = {name: 0 for name in COMPARISON_NAMES}
-    comparisons["unevaluable"] = 1
+    comparisons["agree"] = 1
     cell = {
         "cell": "p1c1",
         "subject_key": "p1@0,0,10,10",
@@ -9294,10 +10496,10 @@ def _synthetic_comb_fixture(
         "emitted": 2,
         "emitted_indexes_valid": True,
         "emitted_evidence": fixture_emitted_evidence,
-        "audit_printed": None,
-        "audit_relation": "unknown-truncated",
-        "comparison_reason": "audit evidence is incomplete",
-        "comparison_status": "unevaluable",
+        "audit_printed": 2,
+        "audit_relation": "complete-non-offender",
+        "comparison_reason": "referee, lattice, audit, and emitted agree",
+        "comparison_status": "agree",
         "transition_status": "none",
         "transition_reason": "active ledger subject is already resolved",
         "referee": {
@@ -9307,6 +10509,11 @@ def _synthetic_comb_fixture(
             "y0": 0.0,
             "y1": 10.0,
             "source_divider_x": [5.0],
+            "source_rail_x": [0.0, 10.0],
+            "rail_derivation": {
+                "left": {"basis": "owner-edge"},
+                "right": {"basis": "owner-edge"},
+            },
             "extra_divider_x": [],
             "compartments": 2,
             "anchor_matches": [{
@@ -9340,7 +10547,7 @@ def _synthetic_comb_fixture(
             "topology_superset_relations": [],
         },
         "four_way": {
-            "referee": 2, "lattice": 2, "audit": None, "emitted": 2,
+            "referee": 2, "lattice": 2, "audit": 2, "emitted": 2,
         },
     }
     form_counts = {
@@ -9354,7 +10561,7 @@ def _synthetic_comb_fixture(
         "ledger_blocking": 0,
         "measured": 1,
         "source_unevaluable": 0,
-        "unevaluable": 1,
+        "unevaluable": 0,
         "referee_layout_mismatches": 0,
         "referee_layout_position_mismatches": 0,
         "emission_layout_mismatches": 0,
@@ -9370,10 +10577,8 @@ def _synthetic_comb_fixture(
     }
     form = {
         "slug": "fixture-1",
-        "status": "unevaluable",
-        "reason": (
-            f"audit evidence incomplete: {fixture_manifest_reason}, "
-            "1 combs unevaluable"),
+        "status": "ok",
+        "reason": "all combs measured",
         "source": {
             "file": "fixture.pdf",
             "sha256": source_digest,
@@ -9401,8 +10606,8 @@ def _synthetic_comb_fixture(
         }],
         "audit_evidence": {
             **assertion_relation,
-            "complete": False,
-            "reason": fixture_manifest_reason,
+            "complete": True,
+            "reason": "complete",
             "errors": [],
             "assertion_valid": True,
             "input_manifest_verified": True,
@@ -9411,8 +10616,8 @@ def _synthetic_comb_fixture(
             "byte_and_relation_binding_valid": True,
             "manifest_binding": fixture_manifest_binding,
             "ledger_binding": fixture_ledger_binding,
-            "runtime_closure_independently_attested": False,
-            "integrity_valid": False,
+            "runtime_closure_independently_attested": True,
+            "integrity_valid": True,
         },
         "emission_inventory": {
             "complete": True,
@@ -9481,7 +10686,6 @@ def _synthetic_comb_fixture(
         },
         "status": "unevaluable",
         "status_reasons": [
-            "corpus coverage or one or more forms are unevaluable",
             "standalone referee runtime/application attestation is incomplete "
             "and non-enforceable",
         ],
@@ -9500,7 +10704,7 @@ def _synthetic_comb_fixture(
             "combs_expected": 1,
             "combs_found": 1,
             "combs_measured": 1,
-            "combs_unevaluable": 1,
+            "combs_unevaluable": 0,
             "combs_source_unevaluable": 0,
             "subjects_active": 1,
             "subjects_active_resolved": 1,
@@ -9511,10 +10715,10 @@ def _synthetic_comb_fixture(
             "referee_layout_mismatches": 0,
             "referee_layout_position_mismatches": 0,
             "comparisons": comparisons,
-            "forms_ok": 0,
+            "forms_ok": 1,
             "forms_disagreement": 0,
-            "forms_unevaluable": 1,
-            "audit_evidence_complete_forms": 0,
+            "forms_unevaluable": 0,
+            "audit_evidence_complete_forms": 1,
             "referee_attestation_complete": False,
             "referee_enforceable": False,
         },
@@ -9633,6 +10837,11 @@ def _synthetic_audit_record(
         "source_certified_unframed_evaluable": 0,
         "emission_behind_layout": 0,
         "emission_invalid": 0,
+        # Z1's declared schema change: published unconditionally by audit.py,
+        # so the fixture must carry it or the validator that now requires it
+        # would never be exercised on a well-formed record.
+        "decided_by_review": 0,
+        "decided_by_review_subjects": [],
     }
     basic_counts = {
         "inputs_over_printed_text": {
@@ -9649,6 +10858,12 @@ def _synthetic_audit_record(
         "image_transform_applied": {
             "placements": 0, "relocated_placements": 0},
         "no_invented_codepoints": {"characters_examined": 0},
+        "inputs_span_no_printed_divider": {
+            "inputs_checked": 0, "printed_dividers_detected": 0,
+            "emitted_cell_binding_issues": 0},
+        "printed_box_peers_all_fillable": {
+            "printed_boxes_checked": 0, "peer_rows_checked": 0,
+            "boxes_unevaluable": 0, "emitted_cell_binding_issues": 0},
     }
     assertions = {
         key: (comb_assertion if key == "comb_slots_match_printed" else {
@@ -9765,6 +10980,42 @@ def _synthetic_audit_record(
         for member in runtime_members]
     runtime_payload = json.dumps(
         runtime_tuples, separators=(",", ":")).encode("ascii")
+    application_closure = {
+        "scope": AUDIT_APPLICATION_CLOSURE_SCOPE,
+        "algorithm": AUDIT_TREE_CLOSURE_ALGORITHM,
+        "bytecode_caches_excluded": True,
+        "exclusion_reason": "synthetic closure mirrors the published exclusion",
+        "packages": [
+            {
+                "logical_root": name,
+                "algorithm": AUDIT_TREE_CLOSURE_ALGORITHM,
+                "files": 2,
+                "symlinks": 0,
+                "bytes": 64,
+                "tree_sha256": sha256_bytes(
+                    f"synthetic-{name}-tree".encode("ascii")),
+            }
+            for name in ("fitz", "pymupdf")
+        ],
+        "modules": [
+            {
+                "module": member["file"][len("module/"):],
+                "file": f"{member['file'][len('module/'):]}/__init__.py",
+                "bytes": member["bytes"],
+                "sha256": member["sha256"],
+            }
+            for member in runtime_members
+            if member["file"].startswith("module/")
+        ],
+        "native_libraries": [{
+            "file": "pymupdf/libmupdf.dylib",
+            "bytes": 32,
+            "sha256": sha256_bytes(b"synthetic-libmupdf"),
+        }],
+        "unbound_modules": [],
+        "validated_before_after": True,
+        "complete": True,
+    }
     runtime = {
         "python": dict(python_identity),
         "pymupdf": {"package_version": "fixture", "version_bind": "fixture"},
@@ -9776,6 +11027,7 @@ def _synthetic_audit_record(
             "members": runtime_members,
             "validated_before_after": True,
         },
+        "application_closure": application_closure,
         "stdlib_and_system_shared_libraries_bound": False,
         "scope_complete": False,
         "incomplete_reason": "synthetic host runtime scope is incomplete",
@@ -9860,9 +11112,9 @@ def _synthetic_audit_record(
             "producer": producer,
             "runtime": runtime,
             "inputs_complete": True,
-            "attestation_complete": False,
-            "enforceable": False,
-            "complete": False,
+            "attestation_complete": True,
+            "enforceable": True,
+            "complete": True,
             "missing_required": [],
             "inputs": inputs,
             "render": render,
@@ -9879,10 +11131,12 @@ def _synthetic_audit_record(
             "producer_execution_bound": False,
             "base_runtime_scope_complete": False,
             "roundtrip_runtime_scope_complete": False,
+            "application_closure_complete": True,
             "validated_before_after": True,
-            "complete": False,
-            "enforceable": False,
-            "incomplete_reasons": ["synthetic host scope is incomplete"],
+            "complete": True,
+            "enforceable": True,
+            "incomplete_reasons": [],
+            "declared_out_of_scope": ["synthetic host scope is out of scope"],
             "future_gate_required": "outer application wrapper",
         },
         "roundtrip_runtime": roundtrip_runtime,
@@ -9990,6 +11244,48 @@ def self_test() -> int:
     if not findings_payload_errors(findings_fixture):
         failures.append("an empty findings ledger must fail closed")
 
+    # ARCHITECTURE.md rule 4. Six fixtures, one per branch, and the two that
+    # matter are the ones that must never go green: a corrected tree whose
+    # manifest does not re-derive, and a declared divergence no fidelity report
+    # publishes. The absent-tree branch is the only PASS on absence, and it is
+    # asserted explicitly so that a later edit widening it is a test change
+    # rather than a silent one.
+    def _corrected(**over: Any) -> Result:
+        fixture: dict[str, Any] = {
+            "tree_exists": True, "manifest_exists": True,
+            "verify_code": 0, "verify_output": "",
+            "divergence_reports": [], "fidelity_text": None,
+        }
+        fixture.update(over)
+        return corrected_tree_result(**fixture)
+
+    declared = ["diverges by declared override C001, authorised by RR 11-2018"]
+    corrected_cases: tuple[tuple[str, Result, Verdict], ...] = (
+        ("an unbuilt stage 2 is not a skipped check",
+         _corrected(tree_exists=False, manifest_exists=False), Verdict.PASS),
+        ("a corrected tree with no manifest is a build failure",
+         _corrected(manifest_exists=False), Verdict.FAIL),
+        ("a manifest that does not re-derive is a build failure",
+         _corrected(verify_code=1,
+                    verify_output="manifest does not re-derive: files[3]"),
+         Verdict.FAIL),
+        ("a verified manifest declaring nothing passes",
+         _corrected(), Verdict.PASS),
+        ("a declared divergence with no fidelity report is a build failure",
+         _corrected(divergence_reports=declared), Verdict.FAIL),
+        ("a declared divergence absent from the report is a build failure",
+         _corrected(divergence_reports=declared,
+                    fidelity_text="{\"forms\": []}"), Verdict.FAIL),
+        ("a declared divergence the report names passes",
+         _corrected(divergence_reports=declared,
+                    fidelity_text=f"report: {declared[0]}"), Verdict.PASS),
+    )
+    for label, result, expected in corrected_cases:
+        if result.verdict is not expected or result.name != "corrected-tree":
+            failures.append(f"corrected-tree rule 4: {label}")
+    if "corrected-tree" not in CHECKS:
+        failures.append("rule 4 is not wired into the gate's check inventory")
+
     huge_json_integer = ("[" + "9" * 5000 + "]").encode("ascii")
     try:
         huge_json_errors = validate_audit_application_envelope(
@@ -10008,9 +11304,17 @@ def self_test() -> int:
     if summarise([Result("probe", Verdict.PASS, "x")]) != 0:
         failures.append("an all-PASS run must exit 0")
 
-    if len(REQUIRED_ASSERTIONS) != 8:
-        failures.append(f"GOAL.md names 8 assertions, gate has "
+    # 8 from GOAL.md + G10's two field-layer assertions. The literal is here so
+    # that adding a name to REQUIRED_ASSERTIONS without declaring its count
+    # contract and its fixture entry fails the self-test rather than a 60-minute
+    # gate run.
+    if len(REQUIRED_ASSERTIONS) != 10:
+        failures.append(f"GOAL.md names 8 assertions and G10 adds 2, gate has "
                         f"{len(REQUIRED_ASSERTIONS)}")
+    if set(REQUIRED_ASSERTIONS) - set(BASIC_ASSERTION_COUNT_FIELDS) != {
+            "comb_slots_match_printed"}:
+        failures.append("every non-comb required assertion needs a declared "
+                        "count contract")
     if "comb_referee" not in SELF_TEST_MODULES:
         failures.append("comb_referee.py must be included in module self-tests")
 
@@ -10670,6 +11974,7 @@ def self_test() -> int:
             "occupies a strict majority of the comb band"),
         "y1": 6.0,
         "source_divider_x": [3.0, 7.0],
+        "source_rail_x": [0.0, 10.0],
         "extra_divider_x": [],
         "compartments": 3,
         "anchor_matches": [
@@ -10722,6 +12027,294 @@ def self_test() -> int:
             forged_subset_relations):
         failures.append(
             "forged topology-superset evidence must still fail closed")
+
+    # The referee's third measured-source shape: the fail-closed
+    # partial-anchor certificate.  An active_unresolved subject proves a
+    # lattice anchor ABSENT because Poppler shows the raw rail exhaustively
+    # erased by one supported, unclipped, non-target final owner across the
+    # whole open band.  The gate re-derives that proof; it never accepts the
+    # certificate's own valid flag.
+    partial_anchor_cell = clone(report["forms"][0]["cells"][0])
+    partial_anchor_cell.update({
+        "ledger_state": "active_unresolved",
+        "latticed": 3,
+        "lattice_divider_x": [3.0, 7.0],
+    })
+    partial_anchor_referee = {
+        "status": "measured",
+        "reason": REFEREE_PARTIAL_ANCHOR_REASON,
+        "y0": 0.0,
+        "y1": 10.0,
+        "source_divider_x": [3.0],
+        "source_rail_x": [0.0, 10.0],
+        "rail_derivation": {
+            "left": {"basis": "owner-edge"},
+            "right": {"basis": "owner-edge"},
+        },
+        "extra_divider_x": [],
+        "compartments": 2,
+        "anchor_matches": [{
+            "layout_x": 3.0, "source_x": 3.0, "delta_pt": 0.0,
+        }],
+        "positions_match": False,
+        "anchors_complete": False,
+        "missing_anchor_x": [7.0],
+        "components": [{
+            "x": 3.0, "x0": 2.9, "x1": 3.1, "tone": 0.0,
+            "elements": ["fixture-divider"], "clipped": False,
+        }],
+        "contract_y0": 0.0,
+        "contract_y1": 10.0,
+        "open_y0": 0.0,
+        "open_y1": 10.0,
+        "contract_span_pt": 10.0,
+        "seed_span_pt": 10.0,
+        "measured_span_pt": 10.0,
+        "unmeasured_span_pt": 0.0,
+        "topology_coverage_pt": {"3.0": 10.0},
+        "ignored_slabs": [],
+        "chosen_topology": [3.0],
+        "topology_superset_relations": [],
+        "active_partial_anchor_certificate": {
+            "criterion": PARTIAL_ANCHOR_CRITERION,
+            "valid": True,
+            "ledger_state": "active_unresolved",
+            "subject_ownership_basis": PARTIAL_ANCHOR_OWNERSHIP_BASIS,
+            "independent_source_enclosure_proven": False,
+            "divider_count_basis": PARTIAL_ANCHOR_COUNT_BASIS,
+            "missing_anchor_basis": PARTIAL_ANCHOR_MISSING_BASIS,
+            "anchor_corridor_clipped_paint_elements": [],
+            "anchor_corridor_unsupported_region_elements": [],
+            "open_y0": 0.0,
+            "open_y1": 10.0,
+            "coverage_pt": 10.0,
+            "source_divider_x": [3.0],
+            "observed_anchor_x": [3.0],
+            "missing_anchor_x": [7.0],
+            "missing_anchor_proofs": [{
+                "layout_x": 7.0,
+                "corridor_x0": 6.75,
+                "corridor_x1": 7.25,
+                "proof_x0": 6.75,
+                "proof_x1": 7.25,
+                "open_y0": 0.0,
+                "open_y1": 10.0,
+                "raw_anchor_rails": [{
+                    "element": "fixture-erased-rail",
+                    "order": 1,
+                    "kind": "stroke",
+                    "x0": 6.9,
+                    "x1": 7.1,
+                    "center_x": 7.0,
+                    "delta_pt": 0.0,
+                    "y0": 0.0,
+                    "y1": 10.0,
+                    "tone": 0.0,
+                    "clipped": False,
+                }],
+                "raw_rail_identity_valid": True,
+                "proof_top_role_ambiguities": [],
+                "erasure_slabs": [{
+                    "y0": 0.0,
+                    "y1": 10.0,
+                    "sample_y": 5.0,
+                    "raw_rail_elements": ["fixture-erased-rail"],
+                    "raw_intervals": [[6.9, 7.1]],
+                    "final_owner_segments": [{
+                        "x0": 6.9,
+                        "x1": 7.1,
+                        "element": "fixture-white-erasure",
+                        "order": 2,
+                        "kind": "fill",
+                        "tone": 1.0,
+                        "clipped": False,
+                    }],
+                    "ambiguous_top_roles": [],
+                }],
+                "erasure_owner_roles": [{
+                    "element": "fixture-white-erasure",
+                    "order": 2,
+                    "kind": "fill",
+                    "tone": 1.0,
+                }],
+                "clipped_paint_elements": [],
+                "final_target_tone_segments": [],
+                "unsupported_region_elements": [],
+            }],
+        },
+    }
+    partial_anchor_cell["referee"] = partial_anchor_referee
+    partial_accept_errors = _measured_referee_certificate_errors(
+        "partial-anchor-shape", partial_anchor_cell, partial_anchor_referee)
+    if partial_accept_errors:
+        failures.append(
+            "a proven partial-anchor certificate must be evaluable: "
+            + "; ".join(partial_accept_errors[:3]))
+
+    def partial_anchor_guard(
+            mutator: Callable[[dict[str, Any], dict[str, Any]], None],
+            ) -> list[str]:
+        mutated_cell = clone(partial_anchor_cell)
+        mutator(mutated_cell, mutated_cell["referee"])
+        return _measured_referee_certificate_errors(
+            "partial-anchor-guard", mutated_cell, mutated_cell["referee"])
+
+    def _first_proof(referee_value: dict[str, Any]) -> dict[str, Any]:
+        return referee_value["active_partial_anchor_certificate"][
+            "missing_anchor_proofs"][0]
+
+    def uncovered_rail(_cell: dict[str, Any],
+                       referee_value: dict[str, Any]) -> None:
+        # The SVG shows the final owner stopping short of the rail: an
+        # uncovered sliver of target-tone rail still reaches paper.
+        _first_proof(referee_value)["erasure_slabs"][0][
+            "final_owner_segments"][0]["x1"] = 7.0
+
+    def target_tone_owner(_cell: dict[str, Any],
+                          referee_value: dict[str, Any]) -> None:
+        # The final owner is itself target tone: nothing was erased.
+        proof = _first_proof(referee_value)
+        proof["erasure_slabs"][0]["final_owner_segments"][0]["tone"] = 0.0
+        proof["erasure_owner_roles"][0]["tone"] = 0.0
+
+    def clipped_owner(_cell: dict[str, Any],
+                      referee_value: dict[str, Any]) -> None:
+        _first_proof(referee_value)["erasure_slabs"][0][
+            "final_owner_segments"][0]["clipped"] = True
+
+    def underpainted_owner(_cell: dict[str, Any],
+                           referee_value: dict[str, Any]) -> None:
+        # An owner painted before the rail cannot be the final owner.
+        proof = _first_proof(referee_value)
+        proof["erasure_slabs"][0]["final_owner_segments"][0]["order"] = 1
+        proof["erasure_owner_roles"][0]["order"] = 1
+
+    def short_rail(_cell: dict[str, Any],
+                   referee_value: dict[str, Any]) -> None:
+        # The raw rail does not span the open band, so full-band absence
+        # was never shown.
+        _first_proof(referee_value)["raw_anchor_rails"][0]["y1"] = 6.0
+
+    def short_slab(_cell: dict[str, Any],
+                   referee_value: dict[str, Any]) -> None:
+        # The erasure slabs leave part of the band without evidence.
+        _first_proof(referee_value)["erasure_slabs"][0]["y1"] = 6.0
+
+    def partial_band_coverage(_cell: dict[str, Any],
+                              referee_value: dict[str, Any]) -> None:
+        # A minority band cannot prove absence, however self-consistent.
+        referee_value.update({
+            "y1": 6.0,
+            "measured_span_pt": 6.0,
+            "unmeasured_span_pt": 4.0,
+            "topology_coverage_pt": {"3.0": 6.0},
+        })
+        referee_value["active_partial_anchor_certificate"][
+            "coverage_pt"] = 6.0
+
+    def ineligible_ledger(cell_value: dict[str, Any],
+                          _referee_value: dict[str, Any]) -> None:
+        cell_value["ledger_state"] = "active_resolved"
+
+    def forged_position_verdict(_cell: dict[str, Any],
+                                referee_value: dict[str, Any]) -> None:
+        # The referee holds positions_match False deliberately for this
+        # kind: a declared anchor with no source position cannot match.
+        referee_value["positions_match"] = True
+
+    def no_missing_anchor(_cell: dict[str, Any],
+                          referee_value: dict[str, Any]) -> None:
+        referee_value["missing_anchor_x"] = []
+        referee_value["active_partial_anchor_certificate"].update({
+            "missing_anchor_x": [], "missing_anchor_proofs": [],
+        })
+
+    for guard_label, guard in (
+            ("an erasure the SVG does not support (uncovered rail)",
+             uncovered_rail),
+            ("a target-tone final owner", target_tone_owner),
+            ("a clipped final owner", clipped_owner),
+            ("an owner painted before the rail", underpainted_owner),
+            ("a raw rail short of the open band", short_rail),
+            ("erasure slabs short of the open band", short_slab),
+            ("partial band coverage", partial_band_coverage),
+            ("an ineligible ledger state", ineligible_ledger),
+            ("a forged position verdict", forged_position_verdict),
+            ("an empty missing-anchor inventory", no_missing_anchor)):
+        if not partial_anchor_guard(guard):
+            failures.append(
+                f"a partial-anchor certificate with {guard_label} "
+                "must fail closed")
+
+    # The same shape must also flow through the report totals: a
+    # partial-anchor cell disagrees with its lattice count, so the form and
+    # report mismatch totals recompute to 1/1 without any schema error.
+    partial_report = clone(report)
+    partial_form = partial_report["forms"][0]
+    report_partial_cell = clone(partial_anchor_cell)
+    report_partial_cell.update({
+        "ledger_blocks_gate": True,
+        "ledger_reason_codes": ["fixture-final-count-regression"],
+        "emitted": 3,
+        "audit_printed": 3,
+        "audit_relation": "complete-non-offender",
+        "comparison_status": "stop",
+        "comparison_reason": "referee positions disagree with lattice anchors",
+        "transition_status": "blocked",
+        "transition_reason": (
+            "active unresolved ledger subject remains blocking while "
+            "comparison status is stop"),
+        "four_way": {
+            "referee": 2, "lattice": 3, "audit": 3, "emitted": 3,
+        },
+    })
+    partial_form["cells"][0] = report_partial_cell
+    partial_form["counts"].update({
+        "subjects_active_resolved": 0,
+        "subjects_active_unresolved": 1,
+        "ledger_blocking": 1,
+        "referee_layout_mismatches": 1,
+        "referee_layout_position_mismatches": 1,
+        "comparisons": {
+            **{name: 0 for name in COMPARISON_NAMES}, "stop": 1},
+    })
+    partial_form["status"] = "unevaluable"
+    partial_form["reason"] = "1 lattice-ledger blockers"
+    partial_report["status_reasons"] = [
+        "corpus coverage or one or more forms are unevaluable",
+        *partial_report["status_reasons"],
+    ]
+    partial_report["totals"].update({
+        "subjects_active_resolved": 0,
+        "subjects_active_unresolved": 1,
+        "ledger_blocking": 1,
+        "referee_layout_mismatches": 1,
+        "referee_layout_position_mismatches": 1,
+        "forms_ok": 0,
+        "forms_unevaluable": 1,
+        "comparisons": {
+            **{name: 0 for name in COMPARISON_NAMES}, "stop": 1},
+    })
+    _resign_for_self_test(partial_report)
+    partial_report_errors, partial_report_stats = validate_comb_referee_report(
+        partial_report, child_exit=2, expected_forms=1, expected_subjects=1)
+    if (partial_report_errors
+            or partial_report_stats["referee_layout_mismatches"] != 1
+            or partial_report_stats["referee_layout_position_mismatches"]
+            != 1):
+        failures.append(
+            "a partial-anchor cell must recompute the report mismatch "
+            "totals: " + "; ".join(partial_report_errors[:3]))
+    forged_partial_totals = clone(partial_report)
+    forged_partial_totals["totals"]["referee_layout_mismatches"] = 0
+    _resign_for_self_test(forged_partial_totals)
+    if not any(
+            "referee_layout_mismatches" in error
+            for error in validate_comb_referee_report(
+                forged_partial_totals, child_exit=2,
+                expected_forms=1, expected_subjects=1)[0]):
+        failures.append(
+            "a forged partial-anchor mismatch total must be UNEVALUABLE")
     envelope_errors = validate_comb_referee_envelope(
         envelope, raw_payload, report, snapshot)
     if envelope_errors:
@@ -10927,7 +12520,7 @@ def self_test() -> int:
         failures.append("a fabricated per-form status must be UNEVALUABLE")
     if not mutation_errors(
             lambda value: value["totals"].update(
-                {"audit_evidence_complete_forms": 1})):
+                {"audit_evidence_complete_forms": 0})):
         failures.append("a false audit-completeness aggregate must be UNEVALUABLE")
     if not mutation_errors(
             lambda value: value["totals"].update(
@@ -11075,15 +12668,87 @@ def self_test() -> int:
         if not mutation_errors(mutator):
             failures.append(f"{label} must fail the exact provenance closure")
 
+    # Z1 renamed this message when the partition became three-way; the
+    # mutation below still proves the same check refuses the same forgery.
     false_report_source_partition = mutation_errors(
         lambda value: value["forms"][0]["audit_evidence"].update({
             "source_u_frame_evaluable": 1,
             "source_certified_unframed_evaluable": 1,
         }))
-    if not any("source frame/unframed partition" in error
+    if not any("source frame/unframed/reviewed partition" in error
                for error in false_report_source_partition):
         failures.append(
             "a false published source frame/unframed partition must fail")
+
+    # Z1: the reviewed-topology term is a third evaluability class, so it is
+    # a third way to forge the partition. Each forgery is refused separately.
+    reviewed_partition_mutations: list[
+        tuple[str, str, Callable[[dict[str, Any]], None]]
+    ] = [
+        (
+            "a reviewed subject with no matching evaluability must fail",
+            "source frame/unframed/reviewed partition",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 1,
+                "decided_by_review_subjects": [{
+                    "cell": value["forms"][0]["audit_evidence"][
+                        "expected_comb_ids"][0],
+                    "printed": 1, "latticed": 1,
+                    "reviewed_comb_topology": {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": True, "compartments": 1,
+                        "source_sha256": "0" * 64,
+                        "reviewer": "self-test", "citation": "self-test",
+                    },
+                }],
+            }),
+        ),
+        (
+            "a reviewed count without subjects must fail",
+            "source accounting is malformed",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 1,
+                "decided_by_review_subjects": [],
+            }),
+        ),
+        (
+            "a reviewed subject outside the checked cells must fail",
+            "source accounting is malformed",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 1,
+                "decided_by_review_subjects": [{
+                    "cell": "p9c999", "printed": 1, "latticed": 1,
+                    "reviewed_comb_topology": {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": True, "compartments": 1,
+                        "source_sha256": "0" * 64,
+                        "reviewer": "self-test", "citation": "self-test",
+                    },
+                }],
+            }),
+        ),
+        (
+            "duplicate reviewed subjects must fail",
+            "source accounting is malformed",
+            lambda value: value["forms"][0]["audit_evidence"].update({
+                "decided_by_review": 2,
+                "decided_by_review_subjects": [{
+                    "cell": value["forms"][0]["audit_evidence"][
+                        "expected_comb_ids"][0],
+                    "printed": 1, "latticed": 1,
+                    "reviewed_comb_topology": {
+                        "criterion": "reviewed-comb-topology-v1",
+                        "valid": True, "compartments": 1,
+                        "source_sha256": "0" * 64,
+                        "reviewer": "self-test", "citation": "self-test",
+                    },
+                }] * 2,
+            }),
+        ),
+    ]
+    for label, needle, mutator in reviewed_partition_mutations:
+        if not any(needle in error for error in mutation_errors(mutator)):
+            failures.append(label)
 
     measured_certificate_mutations: list[
         tuple[str, Callable[[dict[str, Any]], None]]
@@ -11092,6 +12757,43 @@ def self_test() -> int:
             "false source-position boolean",
             lambda value: value["forms"][0]["cells"][0]["referee"].update({
                 "positions_match": False}),
+        ),
+        # R1 (F232): rail-derivation forgeries that keep the compartment
+        # arithmetic VALID, so nothing but _rail_derivation_errors can refuse
+        # them -- a mutation another check would also catch proves nothing
+        # about this one.  Rails stay at the owner's edges throughout.
+        (
+            "prose-refutation basis on an edge rail",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "prose-refuted-outer-region",
+                             "from_x": 0.0, "span_pt": 0.0, "glyphs": 3},
+                    "right": {"basis": "owner-edge"},
+                }}),
+        ),
+        (
+            "wall basis whose wall is no measured boundary",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "wall-outside-run", "wall_x": 0.0},
+                    "right": {"basis": "owner-edge"},
+                }}),
+        ),
+        (
+            "rail derivation missing a side",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "owner-edge"},
+                }}),
+        ),
+        (
+            "rail derivation with an unsupported basis",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "rail_derivation": {
+                    "left": {"basis": "prose-and-structure-conflict",
+                             "glyphs": 3, "structure_components": 1},
+                    "right": {"basis": "owner-edge"},
+                }}),
         ),
         (
             "source coordinates detached from the lattice",
@@ -11114,6 +12816,29 @@ def self_test() -> int:
             lambda value: value["forms"][0]["cells"][0]["referee"][
                 "unproven_subject_gaps"].append({"reason": "forged"}),
         ),
+        # A comb is counted between the rails the referee measured. Counting
+        # it across the whole rectangle again is the defect this key exists to
+        # close, and each way of forging a rail is refused separately.
+        (
+            "compartments counted across the rectangle, not the rails",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [5.0, 10.0]}),
+        ),
+        (
+            "a rail the referee never measured",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [4.0, 10.0]}),
+        ),
+        (
+            "a rail outside the owner",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [-1.0, 10.0]}),
+        ),
+        (
+            "rails that do not enclose anything",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [10.0, 0.0]}),
+        ),
         (
             "zero measured span",
             lambda value: value["forms"][0]["cells"][0]["referee"].update({
@@ -11135,6 +12860,46 @@ def self_test() -> int:
                 "vector_paints": 0}),
         ),
     ]
+    # Direct probes of _rail_derivation_errors for the relations the shared
+    # report fixture cannot express without tripping OTHER checks first: an
+    # interior rail must name its measurement, a one-glyph refutation refutes
+    # nothing, and span arithmetic is re-derived.
+    probe_cell = {"cell": "p1c9", "bbox": [0.0, 0.0, 10.0, 10.0]}
+    def probe_referee(rails, derivation):
+        return {
+            "source_rail_x": rails,
+            "source_divider_x": [5.0],
+            "rail_derivation": derivation,
+        }
+    assert not _rail_derivation_errors(
+        "probe", probe_referee([0.0, 10.0], {
+            "left": {"basis": "owner-edge"},
+            "right": {"basis": "owner-edge"}}), probe_cell)
+    assert not _rail_derivation_errors(
+        "probe", probe_referee([5.0, 10.0], {
+            "left": {"basis": "prose-refuted-outer-region",
+                     "from_x": 0.0, "span_pt": 5.0, "glyphs": 3},
+            "right": {"basis": "owner-edge"}}), probe_cell)
+    assert not _rail_derivation_errors(
+        "probe", probe_referee([5.0, 10.0], {
+            "left": {"basis": "wall-outside-run", "wall_x": 5.0},
+            "right": {"basis": "owner-edge"}}), probe_cell)
+    for broken_rails, broken_derivation in (
+            ([5.0, 10.0], {"left": {"basis": "owner-edge"},
+                           "right": {"basis": "owner-edge"}}),
+            ([5.0, 10.0], {"left": {"basis": "prose-refuted-outer-region",
+                                    "from_x": 0.0, "span_pt": 5.0,
+                                    "glyphs": 1},
+                           "right": {"basis": "owner-edge"}}),
+            ([5.0, 10.0], {"left": {"basis": "prose-refuted-outer-region",
+                                    "from_x": 0.0, "span_pt": 4.0,
+                                    "glyphs": 3},
+                           "right": {"basis": "owner-edge"}}),
+    ):
+        assert _rail_derivation_errors(
+            "probe", probe_referee(broken_rails, broken_derivation),
+            probe_cell), (broken_rails, broken_derivation)
+
     for label, mutator in measured_certificate_mutations:
         if not mutation_errors(mutator):
             failures.append(f"{label} must invalidate measured source evidence")
@@ -11155,9 +12920,25 @@ def self_test() -> int:
             "clipped": False,
         })
         cell["four_way"]["referee"] = 3
+        cell["comparison_status"] = "stop"
+        cell["comparison_reason"] = (
+            "lattice and audit agree against the independent referee")
         form = value["forms"][0]
         form["counts"]["referee_layout_mismatches"] = 1
+        form["counts"]["comparisons"]["agree"] = 0
+        form["counts"]["comparisons"]["stop"] = 1
+        form["status"] = "disagreement"
+        form["reason"] = "one or more four-way comparisons disagree"
         value["totals"]["referee_layout_mismatches"] = global_total
+        value["totals"]["comparisons"]["agree"] = 0
+        value["totals"]["comparisons"]["stop"] = 1
+        value["totals"]["forms_ok"] = 0
+        value["totals"]["forms_disagreement"] = 1
+        value["status_reasons"] = [
+            "one or more four-way form comparisons disagree",
+            "standalone referee runtime/application attestation is incomplete "
+            "and non-enforceable",
+        ]
 
     missing_global = clone(report)
     layout_disagreement(missing_global, global_total=0)
@@ -11224,19 +13005,17 @@ def self_test() -> int:
         form["counts"]["comparisons"]["stale-generation"] = 1
         form["counts"]["comparisons"]["unevaluable"] = 0
         form["counts"]["unevaluable"] = 0
-        form["status"] = "unevaluable"
-        form["reason"] = (
-            "audit evidence incomplete: "
-            + form["audit_evidence"]["reason"])
+        form["status"] = "disagreement"
+        form["reason"] = "one or more four-way comparisons disagree"
         value["totals"]["comparisons"]["agree"] = 0
         value["totals"]["comparisons"]["stale-generation"] = 1
         value["totals"]["comparisons"]["unevaluable"] = 0
         value["totals"]["combs_unevaluable"] = 0
         value["totals"]["forms_ok"] = 0
-        value["totals"]["forms_disagreement"] = 0
-        value["totals"]["forms_unevaluable"] = 1
+        value["totals"]["forms_disagreement"] = 1
+        value["totals"]["forms_unevaluable"] = 0
         value["status_reasons"] = [
-            "corpus coverage or one or more forms are unevaluable",
+            "one or more four-way form comparisons disagree",
             "standalone referee runtime/application attestation is incomplete "
             "and non-enforceable",
         ]
@@ -11334,14 +13113,24 @@ def self_test() -> int:
         "sha256"] = "a" * 64
     if not form_binding_errors(bound_form, mutated_outer_audit):
         failures.append("a mutated outer audit input must be UNEVALUABLE")
+    # A cell may publish only the topology the outer offender ledger supports:
+    # for a non-offender that is its own lattice count, so any other number is
+    # fabricated no matter how confidently the relation is labelled.
     fabricated_cell_audit = clone(bound_form)
-    fabricated_cell_audit["cells"][0]["audit_printed"] = 2
+    fabricated_cell_audit["cells"][0]["audit_printed"] = 5
     fabricated_cell_audit["cells"][0]["audit_relation"] = (
         "complete-non-offender")
-    fabricated_cell_audit["cells"][0]["four_way"]["audit"] = 2
+    fabricated_cell_audit["cells"][0]["four_way"]["audit"] = 5
     if not form_binding_errors(fabricated_cell_audit, snapshot):
         failures.append(
             "cell audit topology must bind to the outer offender ledger")
+    withheld_cell_audit = clone(bound_form)
+    withheld_cell_audit["cells"][0]["audit_printed"] = None
+    withheld_cell_audit["cells"][0]["audit_relation"] = "unknown-truncated"
+    withheld_cell_audit["cells"][0]["four_way"]["audit"] = None
+    if not form_binding_errors(withheld_cell_audit, snapshot):
+        failures.append(
+            "a withheld cell audit topology must be UNEVALUABLE")
     orphan_snapshot = clone(snapshot)
     orphan_relation = orphan_snapshot["audit"]["forms"]["fixture-1"][
         "assertion_relation"]
@@ -11594,6 +13383,8 @@ def self_test() -> int:
         "offenders": [invalid_physical_offender],
         "emission_behind_layout": 1,
         "emission_invalid": 1,
+        "decided_by_review": 0,
+        "decided_by_review_subjects": [],
     })
     try:
         _normalise_outer_comb_assertion(
@@ -12072,6 +13863,62 @@ def self_test() -> int:
     sanitized = _sanitized_referee_environment(snapshot, environment_probe)
     if "PYTHONPATH" in sanitized or "PYTHONHOME" in sanitized:
         failures.append("comb referee environment must remove Python path/home")
+
+    # A comb's expected emission band is the WRITING surface, never the guide
+    # tick.  Both this gate and comb_referee.py re-derive that band from the
+    # same layout independently, and for a time both read comb["y0"]/["y1"] --
+    # the ~2.88pt tick the source paints at the cell's foot -- while emit
+    # rendered comb["writing_y0"]/["writing_y1"].  Nothing caught it: the two
+    # producers agreed with each other, and neither self-test named the field.
+    # The geometry below is 0605-1999 p1c3 verbatim, where the two bands are
+    # 15.34pt apart, so reading the wrong one cannot round to the right one.
+    #
+    # The same holds on the OTHER axis and is the same trap: `slot_x`'s outer
+    # values are the rails' CENTRES (82.31 / 109.08) and the compartments are
+    # laid on those rails' ink edges (82.69 / 108.71), 0.38pt and 0.37pt
+    # further in -- half the printed wall, which is where this sheet prints the
+    # `)` of "(  MM / YYYY )".  Every internal edge stays the measured divider.
+    band_cell = {
+        "comb": {
+            "slot_x": [82.31, 95.64, 109.08],
+            "y0": 165.6, "y1": 168.48,
+            "writing_y0": 150.26, "writing_y1": 167.72,
+            "writing_x0": 82.69, "writing_x1": 108.71,
+        },
+    }
+    band_box = {"x0": 82.31, "y0": 149.51, "x1": 109.08, "y1": 168.47}
+    band_slots = _emission_geometry_from_layout(1, band_cell, band_box)["slots"]
+    if (len(band_slots) != 2
+            or any(abs(slot["top"] - 0.75) > 1e-9
+                   or abs(slot["height"] - 17.46) > 1e-9
+                   for slot in band_slots)):
+        failures.append(
+            "expected comb emission geometry must follow the writing band")
+    if any(abs(slot["top"] - 16.09) <= 1e-6
+           or abs(slot["height"] - 2.88) <= 1e-6 for slot in band_slots):
+        failures.append(
+            "expected comb emission geometry must not follow the guide tick")
+    if (len(band_slots) != 2
+            or abs(band_slots[0]["left"] - 0.38) > 1e-9
+            or abs(band_slots[0]["width"] - 12.95) > 1e-9
+            or abs(band_slots[1]["left"] - 13.33) > 1e-9
+            or abs(band_slots[1]["width"] - 13.07) > 1e-9):
+        failures.append(
+            "expected comb emission geometry must follow the writing edges")
+    if any(abs(slot["left"]) <= 1e-6 for slot in band_slots):
+        failures.append(
+            "expected comb emission geometry must not follow the rail centres")
+    for absent in ("writing_y0", "writing_y1", "writing_x0", "writing_x1"):
+        starved = {"comb": {
+            name: value for name, value in band_cell["comb"].items()
+            if name != absent}}
+        try:
+            _emission_geometry_from_layout(1, starved, band_box)
+        except KeyError:
+            pass
+        else:
+            failures.append(
+                f"a layout comb missing {absent} must fail closed")
 
     with tempfile.TemporaryDirectory(prefix="formgen-gate-self-test-") as tmp:
         root = pathlib.Path(tmp)
