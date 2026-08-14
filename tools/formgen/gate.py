@@ -2502,6 +2502,8 @@ def _layout_audit_owner_ids(layout_binding: Any) -> list[str]:
         if (cell.get("ledger_state") in {
                 "active_resolved", "active_unresolved"}
                 and cell.get("expected_emission_geometry") is not None)
+        # active_composite is deliberately absent: a composite emits nothing
+        # of its own, so it owns no emission geometry to register.
     ]
     if audit_ids != owner_ids:
         raise CombRefereeScopeError(
@@ -3729,6 +3731,15 @@ RAIL_DERIVATION_BASES = {
 # assert "no unproven gaps" for a test that never ran — and instead carries
 # the erased-anchor inventory plus the erasure certificate the gate
 # independently re-derives in _partial_anchor_referee_certificate_errors.
+# DECLARED SCHEMA (C3-A): a reviewed composite subject has no comb, so it
+# publishes no band measurement.  Its certificate is the source corroboration
+# of the suppression the review confirmed, and these are its exact keys.
+COMPOSITE_REFEREE_KEYS = {"status", "criterion", "corroborated", "reason"}
+COMPOSITE_SUPPRESSION_CRITERIA = {
+    "source-caption-block-not-character-cells-v1",
+    "source-partition-edge-in-final-picture-v1",
+    "source-crossing-rule-not-comb-scoped-v1",
+}
 PARTIAL_ANCHOR_REFEREE_KEYS = (
     MEASURED_REFEREE_KEYS - {"subject_gap_proofs", "unproven_subject_gaps"}
 ) | {"missing_anchor_x", "active_partial_anchor_certificate"}
@@ -3769,7 +3780,8 @@ PARTIAL_ANCHOR_MISSING_BASIS = (
     "unclipped non-target final owner"
 )
 LEDGER_STATES = {
-    "active_resolved", "active_unresolved", "retained_unresolved",
+    "active_resolved", "active_unresolved", "active_composite",
+    "retained_unresolved",
 }
 INFERENCE_STATE = "suppressed_unreviewed_inference"
 RAW_REFEREE_ATTESTATION_KEYS = {
@@ -3869,6 +3881,8 @@ def _transition_for_cell(ledger_state: str, comparison_status: str
                          ) -> tuple[str, str]:
     if ledger_state == "active_resolved":
         return "none", "active ledger subject is already resolved"
+    if ledger_state == "active_composite":
+        return "none", "reviewed composite transition is already applied"
     if ledger_state == "active_unresolved":
         if comparison_status == "agree":
             return (
@@ -3979,6 +3993,33 @@ def _comparison_for_cell(
         ) -> tuple[str, str]:
     """Mirror comb_referee.comparison; published labels are never trusted."""
     ledger_state = cell.get("ledger_state")
+    if ledger_state == "active_composite":
+        # Mirror of comb_referee.composite_comparison.  A reviewed composite
+        # has no comb, so it is scored on the source corroboration of its
+        # suppression -- and a corroboration that came back FALSE stops the
+        # gate, because review can never overrule the paper.
+        referee = cell.get("referee") or {}
+        if cell.get("emitted") is not None:
+            return (
+                "stop",
+                "a composite subject emitted physical slots of its own",
+            )
+        if referee.get("status") != "composite":
+            return (
+                "unevaluable",
+                "composite subject carries no corroboration measurement",
+            )
+        if not referee.get("corroborated"):
+            return (
+                "stop",
+                "the source refutes the reviewed composite's suppression "
+                "claim",
+            )
+        return (
+            "agree",
+            "the source corroborates the reviewed composite's suppression "
+            "claim",
+        )
     if ledger_state not in {"active_resolved", "active_unresolved"}:
         return (
             "unevaluable",
@@ -4441,6 +4482,7 @@ def validate_comb_referee_report(
         cell_comparisons = {name: 0 for name in COMPARISON_NAMES}
         state_counts = {state: 0 for state in LEDGER_STATES}
         measured_cells = source_unevaluable_cells = pending = 0
+        composite_cells = 0
         blocking_cells = layout_mismatches = position_mismatches = 0
         emission_mismatches = 0
         form_cell_ids: set[str] = set()
@@ -4485,23 +4527,29 @@ def validate_comb_referee_report(
                 errors.append(f"cell ledger state is invalid: {slug}/{published_id}")
             else:
                 state_counts[ledger_state] += 1
-                expected_block = ledger_state != "active_resolved"
+                # A reviewed composite keeps the SUPPRESSED shape it had as a
+                # retained subject -- no active cell id, reported under its
+                # legacy id -- because the review changed its state, not its
+                # emission.  What the review does change is that it stops
+                # blocking, on a certificate this gate re-derives above.
+                suppressed_shape = ledger_state in {
+                    "retained_unresolved", "active_composite"}
+                expected_block = ledger_state not in {
+                    "active_resolved", "active_composite"}
                 if blocks_gate is not expected_block:
                     errors.append(
                         f"cell ledger blocking relation is false: {slug}/{published_id}")
                 if blocks_gate is True:
                     blocking_cells += 1
-                if (ledger_state == "retained_unresolved"
-                        and active_id is not None):
+                if suppressed_shape and active_id is not None:
                     errors.append(
                         f"retained cell publishes an active ID: {slug}/{published_id}")
-                if (ledger_state != "retained_unresolved"
+                if (not suppressed_shape
                         and (not isinstance(active_id, str)
                              or active_id != published_id)):
                     errors.append(
                         f"active cell identity is invalid: {slug}/{published_id}")
-                if (ledger_state == "retained_unresolved"
-                        and published_id != legacy_id):
+                if suppressed_shape and published_id != legacy_id:
                     errors.append(
                         f"retained cell identity is invalid: {slug}/{published_id}")
                 if not _string_list(
@@ -4576,6 +4624,28 @@ def validate_comb_referee_report(
             if not isinstance(referee, dict) or referee.get("status") not in {
                     "measured", "unevaluable"}:
                 errors.append(f"cell source result is malformed: {slug}")
+            elif referee["status"] == "composite":
+                # A composite is MEASURED -- on its corroboration, not on a
+                # band -- so it must never be filed as source-unevaluable.
+                # Its schema is re-derived here rather than trusted.
+                composite_cells += 1
+                if set(referee) != COMPOSITE_REFEREE_KEYS:
+                    errors.append(
+                        f"composite source certificate schema is "
+                        f"unsupported: {slug}/{published_id}")
+                elif (referee["criterion"]
+                        not in COMPOSITE_SUPPRESSION_CRITERIA):
+                    errors.append(
+                        f"composite certificate names an untabled criterion: "
+                        f"{slug}/{published_id}")
+                elif not isinstance(referee["corroborated"], bool):
+                    errors.append(
+                        f"composite certificate publishes no boolean verdict: "
+                        f"{slug}/{published_id}")
+                elif cell.get("ledger_state") != "active_composite":
+                    errors.append(
+                        f"composite certificate on a non-composite subject: "
+                        f"{slug}/{published_id}")
             elif referee["status"] == "measured":
                 measured_cells += 1
                 source_page = next((
@@ -4668,10 +4738,12 @@ def validate_comb_referee_report(
         active_resolved = state_counts["active_resolved"]
         active_unresolved = state_counts["active_unresolved"]
         retained = state_counts["retained_unresolved"]
+        composite = state_counts["active_composite"]
         derived_counts = {
             "combs": len(cells),
             "subjects": len(cells),
-            "subjects_active": active_resolved + active_unresolved,
+            "subjects_active": (
+                active_resolved + active_unresolved + composite),
             "subjects_active_resolved": active_resolved,
             "subjects_active_unresolved": active_unresolved,
             "subjects_retained_unresolved": retained,
@@ -4687,8 +4759,15 @@ def validate_comb_referee_report(
         for key, actual in derived_counts.items():
             if counts.get(key) != actual:
                 errors.append(f"form total disagrees with evidence: {slug}/{key}")
-        if (len(cells) != active_resolved + active_unresolved + retained
-                or measured_cells + source_unevaluable_cells != len(cells)
+        # Both partitions must still account for EVERY cell exactly once, so
+        # a composite has to be counted on both axes -- by ledger state and by
+        # measurement kind.  Leaving it out of either would let a whole class
+        # of subject pass through unreconciled, which is the fault this
+        # identity exists to catch.
+        if (len(cells) != (active_resolved + active_unresolved + retained
+                           + composite)
+                or (measured_cells + source_unevaluable_cells
+                    + composite_cells) != len(cells)
                 or sum(cell_comparisons.values()) != len(cells)):
             errors.append(f"form subject partitions are inconsistent: {slug}")
         stats["pending_transitions"] += pending
@@ -12903,6 +12982,49 @@ def self_test() -> int:
     for label, mutator in measured_certificate_mutations:
         if not mutation_errors(mutator):
             failures.append(f"{label} must invalidate measured source evidence")
+
+    # ---- C3-A: the gate's own composite mirror ---------------------------
+    #
+    # These are the gate's independent re-derivations, never the referee's
+    # published labels: a reviewed composite is scored on its corroboration,
+    # and every way that certificate can be wrong is proven to be caught.
+    def composite_gate_cell(**overrides):
+        value = {
+            "ledger_state": "active_composite",
+            "emitted": None,
+            "latticed": 4,
+            "audit_printed": None,
+            "referee": {
+                "status": "composite",
+                "criterion": "source-partition-edge-in-final-picture-v1",
+                "corroborated": True,
+                "reason": "the source corroborates the reviewed composite's "
+                          "suppression claim",
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert _comparison_for_cell(composite_gate_cell(), True)[0] == "agree"
+    assert _comparison_for_cell(composite_gate_cell(), False)[0] == "agree"
+    assert _comparison_for_cell(composite_gate_cell(referee={
+        "status": "composite",
+        "criterion": "source-partition-edge-in-final-picture-v1",
+        "corroborated": False,
+        "reason": "refuted"}), True)[0] == "stop"
+    assert _comparison_for_cell(
+        composite_gate_cell(emitted=4), True)[0] == "stop"
+    assert _comparison_for_cell(composite_gate_cell(referee={
+        "status": "unevaluable", "reason": "x"}), True)[0] == "unevaluable"
+    assert _transition_for_cell("active_composite", "agree") == (
+        "none", "reviewed composite transition is already applied")
+    assert "active_composite" in LEDGER_STATES
+    # The composite certificate schema the cell walk enforces.
+    assert COMPOSITE_REFEREE_KEYS == {
+        "status", "criterion", "corroborated", "reason"}
+    assert all(
+        criterion.endswith("-v1")
+        for criterion in COMPOSITE_SUPPRESSION_CRITERIA)
 
     def layout_disagreement(value: dict[str, Any], *, global_total: int) -> None:
         cell = value["forms"][0]["cells"][0]

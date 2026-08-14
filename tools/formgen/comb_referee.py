@@ -10978,8 +10978,41 @@ def audit_relation_for_subject(
     return None, "unknown-truncated"
 
 
+def composite_comparison(cell: dict[str, Any]) -> tuple[str, str]:
+    """Score a reviewed composite on the only claim it makes.
+
+    Its claim is not a compartment count -- it has no comb -- but that the
+    source suppresses the legacy comb for the tabled reason the review
+    confirmed.  Review cannot overrule the paper: a corroboration that comes
+    back FALSE is a `stop`, exactly as a four-way disagreement is, and the
+    registry entry behind it is then wrong rather than stronger.
+    """
+    referee = cell["referee"]
+    if cell.get("emitted") is not None:
+        return (
+            "stop",
+            "a composite subject emitted physical slots of its own",
+        )
+    if referee.get("status") != "composite":
+        return (
+            "unevaluable",
+            "composite subject carries no corroboration measurement",
+        )
+    if not referee.get("corroborated"):
+        return (
+            "stop",
+            "the source refutes the reviewed composite's suppression claim",
+        )
+    return (
+        "agree",
+        "the source corroborates the reviewed composite's suppression claim",
+    )
+
+
 def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     ledger_state = cell.get("ledger_state")
+    if ledger_state == "active_composite":
+        return composite_comparison(cell)
     if ledger_state not in {"active_resolved", "active_unresolved"}:
         return (
             "unevaluable",
@@ -11026,6 +11059,11 @@ def transition_decision(
     ledger_state = cell.get("ledger_state")
     if ledger_state == "active_resolved":
         return "none", "active ledger subject is already resolved"
+    if ledger_state == "active_composite":
+        # The transition this state names has already been made, under a
+        # reviewed certificate this run re-validated.  There is nothing left
+        # to become eligible for.
+        return "none", "reviewed composite transition is already applied"
     if ledger_state == "active_unresolved":
         if comparison_status == "agree":
             return (
@@ -11285,6 +11323,7 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             source_cell = subject["source_cell"]
             result = classify_band(
                 source_cell, svg, ledger_state=subject["state"])
+            corroboration = None
             if subject["source_suppression_criterion"] is not None:
                 corroboration = retained_suppression_corroboration(
                     subject, result, svg,
@@ -11292,6 +11331,42 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                     f"{subject['legacy_cell_id']}")
                 suppression_corroborations[subject["legacy_cell_id"]] = (
                     corroboration["criterion"])
+            if subject["state"] == "active_composite":
+                # A composite subject has NO comb of its own -- that is what
+                # the review certified -- so measuring its legacy band would
+                # score a claim nobody makes.  Its measurement is the source
+                # corroboration of the suppression itself, which is the only
+                # thing about it the paper can answer.  The partition cells it
+                # maps to carry their own comparison rows, so their
+                # correctness is scored there and never double-counted here.
+                label = (f"{slug} page {page_index} "
+                         f"{subject['legacy_cell_id']}")
+                if corroboration is None:
+                    raise RefereeError(
+                        f"{label} composite subject has no tabled suppression "
+                        "criterion to corroborate")
+                if "corroborated" in corroboration:
+                    corroborated = bool(corroboration["corroborated"])
+                elif (corroboration["criterion"]
+                        == SOURCE_CAPTION_BLOCK_CRITERION):
+                    # That criterion RAISES on every failure, so a returned
+                    # census is its affirmative verdict.
+                    corroborated = True
+                else:
+                    raise RefereeError(
+                        f"{label} composite corroboration published no "
+                        "verdict")
+                result = {
+                    "status": "composite",
+                    "criterion": corroboration["criterion"],
+                    "corroborated": corroborated,
+                    "reason": (
+                        "the source corroborates the reviewed composite's "
+                        "suppression claim"
+                        if corroborated else
+                        "the source REFUTES the reviewed composite's "
+                        "suppression claim"),
+                }
             report_cell_id = (
                 subject["cell_id"] or subject["legacy_cell_id"])
             # An emitted subject whose writing band the source refuses to
@@ -14159,6 +14234,42 @@ def self_test() -> int:
     composite_refused(
         "certificate carried by a retained state",
         mutate=certificate_without_state)
+
+    # The composite's own comparison: it is scored on the suppression
+    # corroboration, never on a compartment count it does not have.
+    def composite_cell(**overrides):
+        value = {
+            "ledger_state": "active_composite",
+            "latticed": 4,
+            "emitted": None,
+            "audit_printed": None,
+            "emitted_indexes_valid": False,
+            "referee": {
+                "status": "composite",
+                "criterion": SOURCE_PARTITION_EDGE_CRITERION,
+                "corroborated": True,
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert comparison(composite_cell(), True)[0] == "agree"
+    # Audit completeness is irrelevant to a subject with no printed topology:
+    # the corroboration is the whole measurement.
+    assert comparison(composite_cell(), False)[0] == "agree"
+    # Review cannot overrule the paper.
+    refuted_composite = comparison(composite_cell(referee={
+        "status": "composite",
+        "criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "corroborated": False}), True)
+    assert refuted_composite[0] == "stop", refuted_composite
+    assert "refutes" in refuted_composite[1]
+    # A composite that emitted slots of its own contradicts its own claim.
+    assert comparison(composite_cell(emitted=4), True)[0] == "stop"
+    # An unmeasured composite is unevaluable, never a pass.
+    assert comparison(composite_cell(referee={"status": "unevaluable"}),
+                      True)[0] == "unevaluable"
+    assert transition_decision(composite_cell(), "agree")[0] == "none"
 
     retained_emission = {
         subject["cell_id"]: {"valid": True}
