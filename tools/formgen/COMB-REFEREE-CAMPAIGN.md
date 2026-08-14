@@ -322,3 +322,36 @@ two sittings as the only user-input dependency. The comb-referee check stays
 computed and reported on every gate run in the meantime; its permitted
 remainder is itemized in the feature branch's shipping amendment and any
 motion outside that remainder fails the gate.
+
+
+## C-series: the executable closure plan (2026-08-14, post-merge)
+
+PR #14 is merged (`a4b69f17`); the campaign now runs on
+`gol/comb-referee-campaign` off merged main. The full remainder is
+decomposed with no unknowns left -- including the three numbers earlier
+sections flagged as unscoped:
+
+- The **49 `combs_source_unevaluable`** = the 29 band cells + 3 proof cells
+  (all active, = C1+C2) + 17 retained subjects whose bands are also
+  unmeasurable (8 ambiguous-slabs, 4 unsupported-SVG-geometry, 3
+  strict-majority, 1 no-common-band, 1 single-frame) -- superseded by the
+  composite schema in C3, not measured around.
+- The **116 `ledger_blocking`** = the 115 blocks_gate subjects (30 retained
+  + 85 active-unresolved) + **1 suppressed inference**: 0605-1999 `p1c177`,
+  reason `no-legacy-subject` -- an inferred comb with no ledger ancestor,
+  needing its own admit-or-refute review (folded into C3/C5).
+- **R5/elevation is already designed and implemented**
+  (`derive_application_scope_elevation`): the referee deliberately refuses
+  to attest its own host runtime, and the gate replaces exactly that one
+  uncertainty with the outer audit envelope -- but only once the raw
+  report's sole unevaluable reason is that host attestation. C6 is the
+  first time it can ever fire; that is the campaign's tail risk, bounded
+  and named.
+
+Packages C0-C7 with acceptance criteria live in the campaign worktree's
+`.claude/GOAL.md` (the /goal loop's plan of record). Sequence: C0 done ->
+C1 (29 band cells; the defect-finding core -- real form fixes ship to main
+immediately as small PRs) -> C2 (3 proofs) -> C3 (composite machinery +
+inference path; empty registries must be byte-identical) -> C4 (panels) ->
+C5 (the user's two review sittings; 116 decisions total) -> C6 (elevation)
+-> C7 (gate 13/13, campaign PR).
