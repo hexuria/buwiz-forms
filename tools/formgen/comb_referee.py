@@ -7019,13 +7019,25 @@ def classify_band(
             # void could be two separate comb runs joined by a bad lattice
             # subject.
             if not between:
+                # Occlusion is asked of THIS SLAB, not of the whole cell.  The
+                # claim under proof is "no divider crosses this slab in this
+                # gap", and a divider that crosses the slab is visible in the
+                # slab unless something covers it THERE.  Ink elsewhere in the
+                # cell cannot hide it here, and citing that ink refused
+                # 1604F p1c25 on glyphs 2.16pt above the slab they were
+                # charged against.  The protection is unweakened where it
+                # bears: ink actually overlapping the slab still refuses, and
+                # a divider hidden under such ink still leaves that slab's
+                # topology disagreeing with its neighbours', which the
+                # majority rule catches.  The single-frame certificate stays
+                # cell-scoped -- a frame is a property of the subject.
                 gap_unsupported = [
                     region for region in page.unsupported
                     if region.x1 > left and region.x0 < right
-                    and region.y1 > proof_y0 and region.y0 < proof_y1
+                    and region.y1 > a and region.y0 < b
                     and min(region.x1, right) - max(region.x0, left)
                     > POSITION_TOL_PT
-                    and min(region.y1, proof_y1) - max(region.y0, proof_y0)
+                    and min(region.y1, b) - max(region.y0, a)
                     > POSITION_TOL_PT
                 ]
                 subject_frame_elements = single_source_frame_elements()
