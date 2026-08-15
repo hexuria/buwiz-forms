@@ -965,10 +965,15 @@ REVIEWED_UNEVALUABLE_EXCEPTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
     # The third designed review path, and the narrowest. The other two say
     # "the reviewer confirms what the paper shows"; this one says "the
     # reviewer accepts that the paper CANNOT show it" -- for subjects whose
-    # claim is true but unprovable from the sheet alone (1604F p1c25: the
-    # sheet draws no frame around the rectangle at all; 2551M p2c13: the
-    # contract band is the whole table; 1800 p1c4: the only full-span edge
-    # has a 42.6pt unpainted stretch).
+    # claim is true but unprovable from the sheet alone.
+    #
+    # An entry appears here ONLY for a subject the user has decided by name.
+    # The corpus currently refuses four subjects; exactly one of them has
+    # been put to review and decided (F234, 1800-2018 p1c4, "exception").
+    # The other three (1604f-2018 p1c25 and p1c36, 2551m-2002 p2c13) are
+    # NOT registered: they have never been through a review sitting, and a
+    # producer that excepts its own undecidable subjects has certified its
+    # own promotion. They stay blocking until reviewed or fixed.
     #
     # `reason` is load-bearing and is why this cannot become a blanket
     # silencer: comb_referee.py honours an exception ONLY while the live
@@ -977,6 +982,32 @@ REVIEWED_UNEVALUABLE_EXCEPTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
     # exception no longer matches and becomes an ERROR, not a pass. An
     # exception excuses one named, measured, unchanged verdict and nothing
     # else.
+    ("1800-2018", 1, "p1c4"): {
+        "subject_key": "p1@186.62,97.46,584.56,119.30",
+        "source_sha256":
+            "e2e837852680196d0e9aa9a513f55c7a6e4924493b5440548e46217166cc085e",
+        "reason": "ledger subject has no active topology for adjudication",
+        "evidence":
+            "The sheet cannot corroborate this subject's suppression, and "
+            "the measurement says why. Of the corpus's 30 retained "
+            "subjects, 29 corroborate; this one alone cannot, because its "
+            "partition has no full-span vertical edge -- the item 2/3/4 "
+            "header's middle band leaves label cells straddling the rules "
+            "the sheet paints at x=342.19, 470.62 and 541.18 -- so "
+            "corroboration falls back to the sole full-span horizontal "
+            "edge at y=100.24, which the sheet leaves unpainted across the "
+            "DN 010 column for 42.60pt of its 397.94pt width. The rules "
+            "are drawn in four fragments (y 98.18..100.10, 100.58..109.82, "
+            "110.06..116.30, 116.30..118.58) separated by 0.48pt and "
+            "0.24pt of bare paper. No knockout was painted over them, so "
+            "bridge_knockout_bites correctly declines rather than fails; "
+            "and a collinear small-gap bridging clause was refuted by "
+            "census -- it would close 698 corpus-wide gaps to join the 2 "
+            "here. The claim is true and the paper cannot show it.",
+        "reviewer": "user",
+        "date": "2026-08-15",
+        "citation": "F234; verdict 'DECISION 2 - F234: exception'",
+    },
 }
 
 

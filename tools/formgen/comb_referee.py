@@ -152,6 +152,15 @@ EXPECTED_FORMS = 53
 # compartments (2316's TINs, 0605's return-period boxes, 1600WP's item 5)
 # become combs again.
 EXPECTED_COMBS = 4587
+# The comparison vocabulary, in ONE place. It was duplicated -- inline in
+# the per-form counts and again in the corpus aggregate -- and the second
+# copy silently dropped `excepted`, so a corpus total under-reported an
+# entire comparison kind while every per-form count was right. A vocabulary
+# that exists twice is a vocabulary that will disagree with itself.
+COMPARISON_NAMES = (
+    "agree", "excepted", "repair-lattice", "repair-audit",
+    "stale-generation", "stop", "unevaluable",
+)
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
 # `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
@@ -11605,10 +11614,7 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     ]
     comparison_counts = {
         name: sum(cell["comparison_status"] == name for cell in cells)
-        for name in (
-            "agree", "excepted", "repair-lattice", "repair-audit",
-            "stale-generation", "stop", "unevaluable",
-        )
+        for name in COMPARISON_NAMES
     }
     status = "ok"
     reasons: list[str] = []
@@ -16713,13 +16719,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             form["counts"]["referee_layout_position_mismatches"]
             for form in forms
         )
-        comparison_names = (
-            "agree", "repair-lattice", "repair-audit", "stale-generation",
-            "stop", "unevaluable",
-        )
         comparison_totals = {
             name: sum(form["counts"]["comparisons"][name] for form in forms)
-            for name in comparison_names
+            for name in COMPARISON_NAMES
         }
         expected_comb_total = sum(
             EXPECTED_COMBS_BY_SLUG[slug] for slug in selected_slugs)
