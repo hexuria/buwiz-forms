@@ -2196,6 +2196,33 @@ def _signature_line_caption(text: str) -> bool:
     return "signature" in normalised and "printed name" in normalised
 
 
+def _signatory_detail_caption(text: str) -> bool:
+    """Whether this run is one of BIR's signatory-detail captions -- the
+    words the corpus sets under the OTHER ruled lines of a jurat strip
+    (user decision, 2026-08-16: the Title/Position line of 0605's item 22A
+    strip "needs to have its own input field", generalised to the caption
+    family, never to one form). Three phrasings, measured corpus-wide
+    (build/ir, 53 bundles): "Title/Position of Signatory" on 8 runs (0605,
+    1600WP, 1604CF x2, 2550M x2, 2551M, 2553), "Title of Signatory" on 8
+    (the 1702 family, whose strips are field cells that already carry
+    inputs, so no binding arises there), "TIN of Signatory" on 5 (1600WP,
+    1604CF x2, 2550M x2).
+
+    A FULL match on the normalised run, never containment: 1604-E and
+    1604-F page 2 set the words "title of signatory and" INSIDE an
+    instruction paragraph, and a containment test would dedicate whatever
+    rule that paragraph happens to sit over. Normalisation collapses
+    1604CF's double-spaced "TIN of  Signatory" and strips 2553's leading
+    spaces; nothing else in the corpus comes close.
+    """
+    normalised = " ".join(text.split()).lower()
+    return normalised in {
+        "title/position of signatory",
+        "title of signatory",
+        "tin of signatory",
+    }
+
+
 # Float fuzz only, not a tuned tolerance: a caption's owning cell and the box
 # above it share the identical lattice wall coordinate, so the measured gap
 # over all 75 real bindings in this corpus is exactly 0.0pt -- see
@@ -2360,12 +2387,17 @@ class SignatureRuleWriting:
     A rule is claimed only when exactly one caption in a cell directly below
     (sharing this cell's own bottom wall, `SignatureLineBinding`'s own
     `SIGNATURE_LINE_ADJACENCY_EPSILON_PT`) names it -- its x-centre inside
-    the rule's own x-extent. 0605 rules three lines at this cell's own
-    bottom, and only two have any caption below them at all ("Title/Position
-    of Signatory" is not a signature caption); 2551M and 2553 each rule two,
-    and only one of the two has a caption below it. `RuledBlankWriting`'s own
-    precedent for ownership that does not resolve to exactly one claimant:
-    refused, not guessed at.
+    the rule's own x-extent. A claiming caption is either a signature
+    caption (`_signature_line_caption`) or a signatory-detail caption
+    (`_signatory_detail_caption`: "Title/Position of Signatory", "Title of
+    Signatory", "TIN of Signatory") -- the second family added by the
+    user's 2026-08-16 decision that the other ruled lines of a jurat strip
+    earn a typing surface exactly the way the signature line always has.
+    0605 rules three lines at this cell's own bottom: two signature
+    captions and one title caption, all three claimed; 2551M and 2553 each
+    rule two, the second under its own "Title/Position of Signatory".
+    `RuledBlankWriting`'s own precedent for ownership that does not resolve
+    to exactly one claimant still holds: refused, not guessed at.
 
     Where the box is drawn: reused whole, not re-derived --
     `ruled_blank_field_box`'s "the box sits ABOVE its rule, seated on it" is
@@ -2375,12 +2407,16 @@ class SignatureRuleWriting:
     it). `field_verdict` calls that function directly with this class's own
     claims; there is no second field-box function to keep in step with it.
 
-    Measured over this corpus (build/ir + build/layout, 53 bundles): 8 rules
-    across the 5 forms named above, plus a 9th this class reaches without
-    being told to look for it -- `2316-2021`'s own item 55 ("I declare...
-    qualified under substituted filing...") sets its rule and its caption's
-    owning cell directly adjacent, the identical shape, so it is claimed the
-    same way, not special-cased for the form.
+    Measured over this corpus (build/ir + build/layout, 53 bundles): 8
+    signature rules across the 5 forms named above, plus a 9th this class
+    reaches without being told to look for it -- `2316-2021`'s own item 55
+    ("I declare... qualified under substituted filing...") sets its rule
+    and its caption's owning cell directly adjacent, the identical shape,
+    so it is claimed the same way, not special-cased for the form. The
+    signatory-detail family adds 12 more, every one at an exact 0.0pt
+    shared wall, no new ambiguity anywhere: 0605 1 (the title line the
+    user asked after), 1600WP 2, 1604CF 3, 2550M 4, 2551M 1, 2553 1 --
+    23 claimed rules in all, with the two F226 gap sites below.
 
     **F226: the caption need not share the rule-owner's own wall exactly --
     it may sit across a small vertical GAP, provided nothing is printed in
@@ -2485,7 +2521,8 @@ class SignatureRuleWriting:
                         run for rid in (other.get("text_run_ids") or ())
                         for run in (runs_by_id.get(rid),)
                         if (run is not None
-                            and _signature_line_caption(run["text"])
+                            and (_signature_line_caption(run["text"])
+                                 or _signatory_detail_caption(run["text"]))
                             and rx0 <= (float(run["x0"]) + float(run["x1"])) / 2.0 <= rx1)
                     ]
                     if not captions:
@@ -10535,12 +10572,34 @@ def signature_rule_writing_assertions(plan: dict[str, Any],
            "a signature caption directly below it, is claimed",
            f"{base}", failures)
 
-    no_caption = claim([OWNER, CAPTION_CELL], [owned_rule()],
-                       [caption_run("Title/Position of Signatory")])
-    _check(not no_caption,
-           "the identical rule with no signature caption below it (0605's "
-           "own \"Title/Position of Signatory\" line) is refused",
-           f"{no_caption}", failures)
+    title_caption = claim([OWNER, CAPTION_CELL], [owned_rule()],
+                          [caption_run("Title/Position of Signatory")])
+    _check(list(title_caption) == [owned_rule()],
+           "the identical rule under a signatory-detail caption (0605's own "
+           "\"Title/Position of Signatory\" line) is claimed too -- the "
+           "user's 2026-08-16 decision",
+           f"{title_caption}", failures)
+
+    prose = claim([OWNER, CAPTION_CELL], [owned_rule()],
+                  [caption_run(
+                      "provide the necessary details (e.g. title of "
+                      "signatory and TIN)")])
+    _check(not prose,
+           "an instruction paragraph CONTAINING \"title of signatory\" "
+           "(1604-E/F page 2's own text) is refused -- the detail test is "
+           "a full match, never containment",
+           f"{prose}", failures)
+
+    both_cell = {**CAPTION_CELL,
+                 "text_run_ids": [run_id(page_index, 0),
+                                  run_id(page_index, 1)]}
+    two_captions = claim([OWNER, both_cell], [owned_rule()],
+                         [caption_run(),
+                          caption_run("Title/Position of Signatory")])
+    _check(not two_captions,
+           "one rule named by BOTH a signature and a detail caption is "
+           "still ambiguous: refused, not guessed at",
+           f"{two_captions}", failures)
 
     underscore = claim([OWNER, CAPTION_CELL], [owned_rule(origin="text-underscore")],
                        [caption_run()])
