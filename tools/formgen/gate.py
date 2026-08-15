@@ -3659,6 +3659,10 @@ CELL_KEYS = {
     # promotion by omitting the field, and this gate re-derives the signed
     # four-way for any cell that carries one.
     "resolution_certificate",
+    # DECLARED SCHEMA CHANGE: the transition certificate's sibling, published
+    # on every cell for the same reason -- a key whose PRESENCE carries no
+    # information cannot be used to hide a promotion by omission.
+    "transition_certificate",
 }
 INFERENCE_KEYS = {
     "page", "subject_key", "cell_id", "state", "blocks_gate",
@@ -10721,6 +10725,7 @@ def _synthetic_comb_fixture(
         # C4a: every cell publishes the key; null means "no reviewed
         # resolution promoted this subject".
         "resolution_certificate": None,
+        "transition_certificate": None,
         "referee": {
             "status": "measured",
             "reason": (

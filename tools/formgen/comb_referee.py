@@ -11486,6 +11486,14 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 "audit_relation": audit_relation,
                 "resolution_certificate": subject.get(
                     "resolution_certificate"),
+                # Published for the SAME reason as its sibling above, and it
+                # was omitted here while the sibling was not: gate's
+                # corpus-coverage guard reads certificates off these cells,
+                # so 29 correctly-applied transitions read as "applied
+                # nowhere". The certificate lived on the ledger subject the
+                # whole time -- what was missing was the report saying so.
+                "transition_certificate": subject.get(
+                    "transition_certificate"),
                 "referee": result,
             })
 
