@@ -4646,7 +4646,14 @@ def validate_comb_referee_report(
             if not isinstance(indexes_valid, bool):
                 errors.append(
                     f"cell emitted-index flag is invalid: {slug}/{published_id}")
-            if emitted != cell.get("latticed") or indexes_valid is not True:
+            if cell.get("ledger_state") in LEDGER_SUPPRESSED_STATES:
+                # A suppressed subject emits NOTHING by design -- that is
+                # what suppression means, and the emission inventory already
+                # accounts for it. Counting emitted=None against its legacy
+                # comb count filed all 29 composites plus the one retained
+                # subject as emission mismatches the moment they existed.
+                pass
+            elif emitted != cell.get("latticed") or indexes_valid is not True:
                 emission_mismatches += 1
 
             referee = cell.get("referee")
