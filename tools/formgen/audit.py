@@ -269,6 +269,30 @@ COMB_OWNER_REVIEWED_STATES = frozenset({
     "active_resolved",
     "active_unresolved",
 })
+# REVIEW BUNDLE (user-approved 2026-08-15). This judge already NAMES
+# `active_composite` -- it is half of RETAINED_COMB_TRANSITIONS below, the
+# set of destinations a retained subject is permitted to reach. What it
+# lacked was any way to accept a subject that had ARRIVED there, so the
+# first reviewed transition invalidated its form's whole comb-owner
+# registry and every comb on that form failed inventory binding. Measured
+# before the change: 16 forms carry a composite, the same 16 failed, and
+# the two sets were identical.
+#
+# A composite is a SUPPRESSED subject, exactly like a retained one -- no
+# active cell of its own, its legacy comb kept, its partition mapped. The
+# single difference is that a reviewer has certified the transition, so it
+# no longer blocks. It is admitted here on that certificate and on nothing
+# else: `validate_comb_owner_registry` demands the certificate's shape, and
+# comb_referee.py independently re-derives it against the review registry
+# and against its own source corroboration. The producer cannot mint one.
+COMB_SUPPRESSED_STATES = frozenset({
+    "retained_unresolved",
+    "active_composite",
+})
+COMPOSITE_TRANSITION_CERTIFICATE_KEYS = frozenset({
+    "criterion", "registry_key", "transition",
+    "suppression_criterion", "reviewer", "date",
+})
 RETAINED_COMB_SUBJECT_KEYS = frozenset({
     "subject_key",
     "legacy_cell_id",
@@ -2282,7 +2306,8 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                 return fail(
                     f"layout page {page_index} contains a malformed comb_subject")
             state = subject.get("state")
-            if state not in (*COMB_OWNER_REVIEWED_STATES, "retained_unresolved"):
+            if state not in (*COMB_OWNER_REVIEWED_STATES,
+                             *COMB_SUPPRESSED_STATES):
                 return fail(
                     f"layout page {page_index} comb_subject has unknown state")
             cell_id = subject.get("cell_id")
@@ -2309,22 +2334,47 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
             subject_keys.add(subject_key)
             legacy_cell_ids.add(legacy_cell_id)
 
-            if state == "retained_unresolved":
+            if state in COMB_SUPPRESSED_STATES:
+                composite = state == "active_composite"
                 subject_key_set = set(subject)
-                if (not RETAINED_COMB_SUBJECT_KEYS <= subject_key_set
-                        or subject_key_set - RETAINED_COMB_SUBJECT_KEYS
-                        - RETAINED_COMB_SUBJECT_OPTIONAL_KEYS):
+                allowed = set(RETAINED_COMB_SUBJECT_KEYS)
+                optional = set(RETAINED_COMB_SUBJECT_OPTIONAL_KEYS)
+                if composite:
+                    # The certificate is REQUIRED, not optional: it is the
+                    # only thing separating a composite from a retained
+                    # subject that simply stopped blocking, and that
+                    # difference must never be assertable by omission.
+                    allowed = allowed | {"transition_certificate"}
+                if (not allowed <= subject_key_set
+                        or subject_key_set - allowed - optional):
                     return fail(
-                        "retained_unresolved comb_subject schema is malformed")
+                        f"{state} comb_subject schema is malformed")
+                if composite:
+                    certificate = subject.get("transition_certificate")
+                    if (not isinstance(certificate, dict)
+                            or set(certificate)
+                            != COMPOSITE_TRANSITION_CERTIFICATE_KEYS
+                            or certificate.get("transition")
+                            != "active_composite"
+                            or not isinstance(certificate.get("reviewer"), str)
+                            or not certificate.get("reviewer")
+                            or not isinstance(certificate.get("date"), str)
+                            or not certificate.get("date")
+                            or not isinstance(
+                                certificate.get("suppression_criterion"), str)
+                            or not certificate.get("suppression_criterion")):
+                        return fail(
+                            "active_composite transition certificate is "
+                            "malformed")
                 if (cell_id is not None
                         or subject.get("emission") != "suppressed"
                         or subject.get("requires_independent_evidence") is not True
-                        or subject.get("blocks_gate") is not True
+                        or subject.get("blocks_gate") is not (not composite)
                         or tuple(subject.get("permitted_transitions") or ())
                         != RETAINED_COMB_TRANSITIONS
                         or not isinstance(subject.get("legacy_comb"), dict)):
                     return fail(
-                        "retained_unresolved suppression/blocking/transition "
+                        f"{state} suppression/blocking/transition "
                         "evidence is incomplete")
                 reason_codes_value = subject.get("reason_codes")
                 if (not isinstance(reason_codes_value, list)
@@ -2333,7 +2383,7 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                             *RETAINED_IDENTITY_REASON_CODES,
                         }):
                     return fail(
-                        "retained_unresolved suppression reason evidence is "
+                        f"{state} suppression reason evidence is "
                         "malformed")
                 mapped_ids = subject.get("mapped_partition_cell_ids")
                 mapped_keys = subject.get("mapped_partition_subject_keys")
@@ -13852,6 +13902,8 @@ def self_test() -> int:
             f"{label} invalidates the exhaustive ownership registry",
             certificate is None and reason is not None and phrase in reason,
         )
+    _DROP = object()
+
     def append_valid_retained(layout_fixture: dict[str, Any]) -> None:
         page = layout_fixture["pages"][0]
         retained_cell = {
@@ -13901,6 +13953,95 @@ def self_test() -> int:
         and retained_reason is not None
         and "no exact unique reviewed" in retained_reason,
     )
+
+    # ---- REVIEW BUNDLE: the composite arrival, and its own corruptions ----
+    #
+    # A composite is the retained shape plus a reviewer's certificate, minus
+    # the blocking. Both differences are asserted here, and each is proven
+    # load-bearing by its own corruption below -- without these fixtures the
+    # certificate requirement and the certificate schema were dead code that
+    # could be deleted with no test noticing, which is exactly what the
+    # neuter-proof reported before they were written.
+    COMPOSITE_CERT = {
+        "criterion": "reviewed-ledger-transition-v1",
+        "registry_key": ["fixture-1999", 1, "p1c1"],
+        "transition": "active_composite",
+        "suppression_criterion": "source-partition-edge-in-final-picture-v1",
+        "reviewer": "fixture-reviewer", "date": "2026-08-15",
+    }
+
+    def append_valid_composite(layout_fixture: dict[str, Any]) -> None:
+        append_valid_retained(layout_fixture)
+        subject = layout_fixture["pages"][0]["comb_subjects"][-1]
+        subject["state"] = "active_composite"
+        subject["blocks_gate"] = False
+        subject["transition_certificate"] = dict(COMPOSITE_CERT)
+
+    composite_fixture = owner_registry_fixture(
+        layout_mutator=append_valid_composite)
+    composite_registry = composite_fixture[0]
+    composite_certificate, composite_reason = composite_registry.resolve(
+        1, retained_cell)
+    check(
+        "a reviewed composite does not invalidate the ownership registry",
+        composite_fixture[2] is not None
+        and composite_registry.binding_error is None,
+    )
+    check(
+        "a composite subject still cannot certify a cell of its own",
+        composite_certificate is None
+        and composite_reason is not None
+        and "no exact unique reviewed" in composite_reason,
+    )
+
+    def corrupt_composite(field: str, value: Any) -> Any:
+        def mutate(layout_fixture: dict[str, Any]) -> None:
+            append_valid_composite(layout_fixture)
+            subject = layout_fixture["pages"][0]["comb_subjects"][-1]
+            if value is _DROP:
+                subject.pop(field, None)
+            else:
+                subject[field] = value
+        return mutate
+
+    for label, mutator, phrase in (
+        ("a composite with NO certificate",
+         corrupt_composite("transition_certificate", _DROP),
+         "schema is malformed"),
+        ("a composite whose certificate is not a dict",
+         corrupt_composite("transition_certificate", "reviewed"),
+         "transition certificate is malformed"),
+        ("a composite whose certificate has an unknown field",
+         corrupt_composite("transition_certificate",
+                           {**COMPOSITE_CERT, "approved": True}),
+         "transition certificate is malformed"),
+        ("a composite whose certificate is missing a field",
+         corrupt_composite("transition_certificate",
+                           {k: v for k, v in COMPOSITE_CERT.items()
+                            if k != "reviewer"}),
+         "transition certificate is malformed"),
+        ("a composite whose certificate names another transition",
+         corrupt_composite("transition_certificate",
+                           {**COMPOSITE_CERT,
+                            "transition": "retired_proven_false"}),
+         "transition certificate is malformed"),
+        ("a composite whose certificate has an empty reviewer",
+         corrupt_composite("transition_certificate",
+                           {**COMPOSITE_CERT, "reviewer": ""}),
+         "transition certificate is malformed"),
+        ("a composite that still claims to block the gate",
+         corrupt_composite("blocks_gate", True),
+         "suppression/blocking/transition"),
+        ("a composite that grew an active cell id",
+         corrupt_composite("cell_id", "p1c1"),
+         "suppression/blocking/transition"),
+    ):
+        registry, _cell, certificate, reason = owner_registry_fixture(
+            layout_mutator=mutator)
+        check(
+            f"{label} invalidates the exhaustive ownership registry",
+            certificate is None and reason is not None and phrase in reason,
+        )
 
     def corrupt_retained(
             field: str, value: Any,
