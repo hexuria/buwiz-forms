@@ -11625,6 +11625,9 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 ledger["counts"]["inferences_suppressed"]),
             "ledger_blocking": ledger["counts"]["blocking"],
             "measured": len(source_measured),
+            "composite": sum(
+                1 for cell in cells
+                if cell["referee"]["status"] == "composite"),
             "source_unevaluable": len(source_unevaluable),
             "unevaluable": len(unevaluable),
             "referee_layout_mismatches": len(layout_mismatches),
@@ -16692,6 +16695,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "combs_expected": expected_comb_total,
                 "combs_found": combs,
                 "combs_measured": measured,
+                "combs_composite": sum(
+                    form["counts"]["composite"] for form in forms),
                 "combs_unevaluable": unevaluable,
                 "combs_source_unevaluable": source_unevaluable,
                 "subjects_active": active,

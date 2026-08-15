@@ -3622,7 +3622,7 @@ REPORT_AUDIT_CHILD_DEPENDENCIES = (
 )
 TOTAL_KEYS = {
     "forms_expected", "forms_measured", "forms_error", "combs_expected",
-    "combs_found", "combs_measured", "combs_unevaluable",
+    "combs_found", "combs_measured", "combs_composite", "combs_unevaluable",
     "combs_source_unevaluable", "subjects_active",
     "subjects_active_resolved", "subjects_active_unresolved",
     "subjects_retained_unresolved", "inferences_suppressed",
@@ -3640,7 +3640,7 @@ FORM_KEYS = {
 FORM_COUNT_KEYS = {
     "combs", "subjects", "subjects_active", "subjects_active_resolved",
     "subjects_active_unresolved", "subjects_retained_unresolved",
-    "inferences_suppressed", "ledger_blocking", "measured",
+    "inferences_suppressed", "ledger_blocking", "measured", "composite",
     "source_unevaluable", "unevaluable", "referee_layout_mismatches",
     "referee_layout_position_mismatches", "emission_layout_mismatches",
     "comparisons",
@@ -4341,7 +4341,7 @@ def validate_comb_referee_report(
     corpus_cell_ids: set[str] = set()
     corpus_subject_keys: set[str] = set()
     recomputed = {
-        "combs": 0, "measured": 0, "source_unevaluable": 0,
+        "combs": 0, "measured": 0, "composite": 0, "source_unevaluable": 0,
         "unevaluable": 0, "ledger_blocking": 0,
         "subjects_active": 0, "subjects_active_resolved": 0,
         "subjects_active_unresolved": 0,
@@ -4808,6 +4808,7 @@ def validate_comb_referee_report(
             "inferences_suppressed": len(inferences),
             "ledger_blocking": blocking_cells + inference_blockers,
             "measured": measured_cells,
+            "composite": composite_cells,
             "source_unevaluable": source_unevaluable_cells,
             "unevaluable": cell_comparisons["unevaluable"],
             "referee_layout_mismatches": layout_mismatches,
@@ -4856,6 +4857,7 @@ def validate_comb_referee_report(
         "forms_error": len(raw_errors),
         "combs_found": recomputed["combs"],
         "combs_measured": recomputed["measured"],
+        "combs_composite": recomputed["composite"],
         "combs_source_unevaluable": recomputed["source_unevaluable"],
         "combs_unevaluable": recomputed["unevaluable"],
         "ledger_blocking": recomputed["ledger_blocking"],
@@ -4888,6 +4890,7 @@ def validate_comb_referee_report(
         errors.append("report corpus identity is incomplete")
     if (sum(comparisons.values()) != totals.get("combs_found")
             or totals.get("combs_measured", 0)
+            + totals.get("combs_composite", 0)
             + totals.get("combs_source_unevaluable", 0)
             != totals.get("combs_found")):
         errors.append("report subject partition is inconsistent")
@@ -10793,6 +10796,7 @@ def _synthetic_comb_fixture(
         "inferences_suppressed": 0,
         "ledger_blocking": 0,
         "measured": 1,
+        "composite": 0,
         "source_unevaluable": 0,
         "unevaluable": 0,
         "referee_layout_mismatches": 0,
@@ -10937,6 +10941,7 @@ def _synthetic_comb_fixture(
             "combs_expected": 1,
             "combs_found": 1,
             "combs_measured": 1,
+            "combs_composite": 0,
             "combs_unevaluable": 0,
             "combs_source_unevaluable": 0,
             "subjects_active": 1,
