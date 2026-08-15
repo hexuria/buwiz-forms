@@ -3747,7 +3747,10 @@ RAIL_DERIVATION_BASES = {
 # of the suppression the review confirmed, and these are its exact keys.
 COMPOSITE_REFEREE_KEYS = {"status", "criterion", "corroborated", "reason"}
 COMPOSITE_SUPPRESSION_CRITERIA = {
-    "source-caption-block-not-character-cells-v1",
+    # The exact strings comb_referee.py tables; the first was declared here
+    # from memory, wrong ("source-caption-block-..."), and the schema guard
+    # rejected the real certificate on 1606 p2c135 -- fixed to the real one.
+    "source-printed-caption-block-not-character-cells-v1",
     "source-partition-edge-in-final-picture-v1",
     "source-crossing-rule-not-comb-scoped-v1",
 }

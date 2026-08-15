@@ -11529,8 +11529,13 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
 
     source_measured = [
         cell for cell in cells if cell["referee"]["status"] == "measured"]
+    # A composite IS measured -- on its corroboration, not on a band -- so
+    # it belongs in neither bucket: not "measured" (no band measurement) and
+    # never "source_unevaluable" (the source answered its question). The
+    # gate partitions cells the same three ways and cross-checks this count.
     source_unevaluable = [
-        cell for cell in cells if cell["referee"]["status"] != "measured"]
+        cell for cell in cells
+        if cell["referee"]["status"] not in ("measured", "composite")]
     unevaluable = [
         cell for cell in cells
         if cell["comparison_status"] == "unevaluable"]
