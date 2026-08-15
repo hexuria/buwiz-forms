@@ -158,8 +158,11 @@ COMB_REFEREE_ARTIFACT_TREES = {
     "guides": BUILD / "guides",
 }
 COMPARISON_NAMES = (
-    "agree", "repair-lattice", "repair-audit", "stale-generation", "stop",
-    "unevaluable",
+    # `excepted` (S2) is its own kind and is NEVER folded into `agree`: the
+    # report must always state how many verdicts a reviewer excused, and the
+    # pass bar below has to name them explicitly rather than inherit them.
+    "agree", "excepted", "repair-lattice", "repair-audit",
+    "stale-generation", "stop", "unevaluable",
 )
 
 # Modules that expose --self-test. lattice and fonts need an --ir argument, so
@@ -4666,6 +4669,36 @@ def validate_comb_referee_report(
                     f"{error}")
                 expected_comparison = (
                     "unevaluable", "comparison evidence is malformed")
+            # Mirror of comb_referee.reviewed_exception_status. A reviewed
+            # exception excuses ONE named unevaluable verdict on ONE subject,
+            # so the gate re-derives that verdict itself and requires the
+            # registry entry to name exactly it. An exception can never
+            # launder a `stop`, and one whose recorded refusal no longer
+            # matches the live one is STALE -- an error, not a pass.
+            if cell.get("comparison_status") == "excepted":
+                entry = _load_review_registry(
+                    ).REVIEWED_UNEVALUABLE_EXCEPTIONS.get(
+                    (str(slug), int(cell.get("page") or 0),
+                     str(cell.get("cell_id") or cell.get("legacy_cell_id"))))
+                underlying = expected_comparison
+                if entry is None:
+                    errors.append(
+                        f"cell claims an exception no registry names: "
+                        f"{slug}/{published_id}")
+                elif underlying[0] != "unevaluable":
+                    errors.append(
+                        f"an exception excuses a non-unevaluable verdict: "
+                        f"{slug}/{published_id}")
+                elif entry.get("reason") != underlying[1]:
+                    errors.append(
+                        f"reviewed exception is stale: {slug}/{published_id}")
+                elif entry.get("subject_key") != cell.get("subject_key"):
+                    errors.append(
+                        f"reviewed exception binds another subject: "
+                        f"{slug}/{published_id}")
+                else:
+                    expected_comparison = (
+                        "excepted", f"reviewed exception: {underlying[1]}")
             actual_comparison = (
                 cell.get("comparison_status"), cell.get("comparison_reason"))
             if actual_comparison != expected_comparison:
@@ -7550,9 +7583,13 @@ def _comb_referee_outcome(report: dict[str, Any],
         f"{key}={totals.get(key)} (expected {expected})"
         for key, expected in required.items() if totals.get(key) != expected
     ]
-    if comparisons["agree"] != expected_subjects:
+    # Every subject must be agreed OR explicitly excused by a reviewed
+    # exception, and the excused ones are counted out loud.
+    decided = comparisons["agree"] + comparisons["excepted"]
+    if decided != expected_subjects:
         incomplete.append(
             f"comparisons.agree={comparisons['agree']} "
+            f"+ excepted={comparisons['excepted']} "
             f"(expected {expected_subjects})")
     if comparisons["unevaluable"]:
         incomplete.append(f"comparisons.unevaluable={comparisons['unevaluable']}")

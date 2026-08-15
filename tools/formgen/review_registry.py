@@ -953,6 +953,33 @@ REVIEWED_LEDGER_TRANSITIONS: dict[tuple[str, int, str], dict[str, Any]] = {
 }
 
 
+REVIEWED_UNEVALUABLE_EXCEPTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
+    # (slug, page, cell_id or legacy_cell_id): {
+    #     "subject_key": ...,
+    #     "source_sha256": ...,
+    #     "reason": ...,     # the EXACT refusal string being excepted
+    #     "evidence": ...,   # why the paper cannot decide it
+    #     "reviewer": ..., "date": ..., "citation": ...,
+    # }
+    #
+    # The third designed review path, and the narrowest. The other two say
+    # "the reviewer confirms what the paper shows"; this one says "the
+    # reviewer accepts that the paper CANNOT show it" -- for subjects whose
+    # claim is true but unprovable from the sheet alone (1604F p1c25: the
+    # sheet draws no frame around the rectangle at all; 2551M p2c13: the
+    # contract band is the whole table; 1800 p1c4: the only full-span edge
+    # has a 42.6pt unpainted stretch).
+    #
+    # `reason` is load-bearing and is why this cannot become a blanket
+    # silencer: comb_referee.py honours an exception ONLY while the live
+    # refusal string still equals the one recorded here. If the measurement
+    # drifts -- a fix lands, a pin moves, the paper is re-read -- the
+    # exception no longer matches and becomes an ERROR, not a pass. An
+    # exception excuses one named, measured, unchanged verdict and nothing
+    # else.
+}
+
+
 def _entry_errors(key: Any, value: Any, kind: str) -> list[str]:
     errors: list[str] = []
     if (not isinstance(key, tuple) or len(key) != 3
@@ -972,7 +999,17 @@ def _entry_errors(key: Any, value: Any, kind: str) -> list[str]:
     if isinstance(sha, str) and (
             len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha)):
         errors.append(f"{label} source_sha256 is not a lowercase sha256")
-    if kind == "resolution":
+    if kind == "exception":
+        for field in ("reason", "evidence"):
+            item = value.get(field)
+            if not isinstance(item, str) or not item:
+                errors.append(f"{label} {field} is missing or empty")
+        extra = set(value) - {
+            "subject_key", "source_sha256", "reason", "evidence",
+            "reviewer", "date", "citation"}
+        if extra:
+            errors.append(f"{label} carries unknown fields: {sorted(extra)}")
+    elif kind == "resolution":
         four_way = value.get("four_way")
         if (not isinstance(four_way, dict)
                 or set(four_way) != {"lattice", "audit", "emitted", "referee"}
@@ -1003,22 +1040,34 @@ def _entry_errors(key: Any, value: Any, kind: str) -> list[str]:
 def registry_errors(
         resolutions: dict[Any, Any] | None = None,
         transitions: dict[Any, Any] | None = None,
+        exceptions: dict[Any, Any] | None = None,
         ) -> list[str]:
-    """Every shape defect in both registries; empty registries are valid."""
+    """Every shape defect in all three registries; empty ones are valid."""
     resolutions = (REVIEWED_LEDGER_RESOLUTIONS
                    if resolutions is None else resolutions)
     transitions = (REVIEWED_LEDGER_TRANSITIONS
                    if transitions is None else transitions)
+    exceptions = (REVIEWED_UNEVALUABLE_EXCEPTIONS
+                  if exceptions is None else exceptions)
     errors: list[str] = []
     for key, value in resolutions.items():
         errors.extend(_entry_errors(key, value, "resolution"))
     for key, value in transitions.items():
         errors.extend(_entry_errors(key, value, "transition"))
+    for key, value in exceptions.items():
+        errors.extend(_entry_errors(key, value, "exception"))
     overlap = set(resolutions) & set(transitions)
     if overlap:
         errors.append(
             "a subject may carry a resolution or a transition, never both: "
             f"{sorted(overlap)[:3]}")
+    # An exception excuses an UNEVALUABLE verdict; a resolution or transition
+    # asserts the paper decided it. Holding both is a contradiction.
+    contradiction = set(exceptions) & (set(resolutions) | set(transitions))
+    if contradiction:
+        errors.append(
+            "a subject cannot be both decided and excepted as undecidable: "
+            f"{sorted(contradiction)[:3]}")
     return errors
 
 
@@ -1094,6 +1143,45 @@ def self_test() -> int:
         registry.clear()
         registry[("0605-1999", 0, "p1c66")] = value
     broken("resolution", bad_key)
+
+    good_exception = {
+        ("1800-2018", 1, "p1c4"): {
+            "subject_key": "p1@1,2,3,4",
+            "source_sha256": "0" * 64,
+            "reason": "referee: the source does not corroborate",
+            "evidence": "self-test",
+            "reviewer": "self-test", "date": "2026-08-16",
+            "citation": "self-test",
+        },
+    }
+    assert registry_errors({}, {}, good_exception) == []
+
+    def broken_exception(mutate) -> None:
+        import copy as _copy
+        registry = _copy.deepcopy(good_exception)
+        mutate(registry)
+        assert registry_errors({}, {}, registry), mutate.__doc__
+
+    def no_reason(registry):
+        """an exception with no named refusal excuses everything"""
+        next(iter(registry.values()))["reason"] = ""
+    broken_exception(no_reason)
+
+    def no_evidence(registry):
+        """an exception with no evidence is an assertion, not a review"""
+        next(iter(registry.values()))["evidence"] = ""
+    broken_exception(no_evidence)
+
+    def exception_extra(registry):
+        """unknown field"""
+        next(iter(registry.values()))["override"] = True
+    broken_exception(exception_extra)
+
+    contradiction = registry_errors(
+        good_resolution, {},
+        {("0605-1999", 1, "p1c66"): dict(next(iter(good_exception.values())))})
+    assert any("both decided and excepted" in error
+               for error in contradiction), contradiction
 
     both = registry_errors(good_resolution, {
         ("0605-1999", 1, "p1c66"): dict(

@@ -11073,6 +11073,45 @@ def composite_comparison(cell: dict[str, Any]) -> tuple[str, str]:
     )
 
 
+def reviewed_exception_status(cell: dict[str, Any], slug: str,
+                              source_sha: str, status: str, reason: str
+                              ) -> tuple[str, str]:
+    """Apply a reviewed exception, and ONLY to the verdict it names.
+
+    The third review path (S2). The other two say "the reviewer confirms
+    what the paper shows"; this one says "the reviewer accepts that the
+    paper CANNOT show it". It is deliberately the narrowest of the three:
+
+      * it applies only to an `unevaluable` comparison -- an exception can
+        never turn a `stop` (an active disagreement) into a pass;
+      * the entry records the EXACT refusal string it excuses, and this
+        honours it only while the live refusal still equals it. A fix, a
+        re-pin or a re-read that changes the refusal makes the exception
+        STALE, which is an error, not a silent pass;
+      * the result is published as its own comparison kind, `excepted`,
+        never folded into `agree`, so the report always states how many
+        verdicts were excused and the pass bar has to name them.
+    """
+    if status != "unevaluable":
+        return status, reason
+    key = (slug, int(cell["page"]),
+           str(cell.get("cell_id") or cell["legacy_cell_id"]))
+    entry = review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.get(key)
+    if entry is None:
+        return status, reason
+    if entry["source_sha256"] != source_sha:
+        return status, reason
+    if entry["subject_key"] != cell["subject_key"]:
+        raise RefereeError(
+            f"{key}: reviewed exception subject_key does not bind this "
+            "subject")
+    if entry["reason"] != reason:
+        raise RefereeError(
+            f"{key}: reviewed exception is stale -- it excuses "
+            f"{entry['reason']!r} but the source now says {reason!r}")
+    return "excepted", f"reviewed exception: {reason}"
+
+
 def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     ledger_state = cell.get("ledger_state")
     if ledger_state == "active_composite":
@@ -11509,8 +11548,12 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         slug, ledger["suppression_obligations"], suppression_corroborations)
     if slug == "2551q-2018":
         validate_2551q_referee_golden(cells)
+    source_sha_for_exceptions = str(
+        (layout.get("source") or {}).get("sha256") or "")
     for cell in cells:
         status, reason = comparison(cell, bool(audit.get("complete")))
+        status, reason = reviewed_exception_status(
+            cell, slug, source_sha_for_exceptions, status, reason)
         cell["comparison_status"] = status
         cell["comparison_reason"] = reason
         transition_status, transition_reason = transition_decision(
@@ -11539,6 +11582,9 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     unevaluable = [
         cell for cell in cells
         if cell["comparison_status"] == "unevaluable"]
+    excepted = [
+        cell for cell in cells
+        if cell["comparison_status"] == "excepted"]
     layout_mismatches = [
         cell for cell in source_measured
         if int(cell["referee"]["compartments"]) != int(cell["latticed"])
@@ -11560,8 +11606,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     comparison_counts = {
         name: sum(cell["comparison_status"] == name for cell in cells)
         for name in (
-            "agree", "repair-lattice", "repair-audit", "stale-generation",
-            "stop", "unevaluable",
+            "agree", "excepted", "repair-lattice", "repair-audit",
+            "stale-generation", "stop", "unevaluable",
         )
     }
     status = "ok"
@@ -14395,6 +14441,64 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     assert comparison(composite_cell(referee={"status": "unevaluable"}),
                       True)[0] == "unevaluable"
     assert transition_decision(composite_cell(), "agree")[0] == "none"
+
+    # ---- S2: the reviewed exception, the narrowest of the three paths ----
+    exc_cell = {"page": 1, "cell_id": "p1c9", "legacy_cell_id": "p1c9",
+                "subject_key": "p1@9,9"}
+    exc_key = ("fixture-1999", 1, "p1c9")
+    exc_entry = {
+        "subject_key": "p1@9,9", "source_sha256": "ab" * 32,
+        "reason": "referee: chosen source topology lacks a proof",
+        "evidence": "self-test", "reviewer": "self-test",
+        "date": "2026-08-16", "citation": "self-test"}
+
+    def with_exceptions(entries, work):
+        saved = dict(review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS)
+        review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.clear()
+        review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.update(entries)
+        try:
+            return work()
+        finally:
+            review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.clear()
+            review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.update(saved)
+
+    excused = with_exceptions({exc_key: exc_entry}, lambda:
+        reviewed_exception_status(exc_cell, "fixture-1999", "ab" * 32,
+                                  "unevaluable", exc_entry["reason"]))
+    assert excused[0] == "excepted", excused
+    assert "reviewed exception" in excused[1]
+    # An exception NEVER converts an active disagreement.
+    stopped = with_exceptions({exc_key: exc_entry}, lambda:
+        reviewed_exception_status(exc_cell, "fixture-1999", "ab" * 32,
+                                  "stop", exc_entry["reason"]))
+    assert stopped[0] == "stop", stopped
+    # Different document sharing the slug: not ours, left alone.
+    sibling = with_exceptions({exc_key: exc_entry}, lambda:
+        reviewed_exception_status(exc_cell, "fixture-1999", "cd" * 32,
+                                  "unevaluable", exc_entry["reason"]))
+    assert sibling[0] == "unevaluable", sibling
+    # STALE: the refusal moved, so the exception no longer describes reality.
+    for bad_reason, needle in (
+            ("referee: something else entirely", "stale"),
+    ):
+        try:
+            with_exceptions({exc_key: exc_entry}, lambda:
+                reviewed_exception_status(exc_cell, "fixture-1999", "ab" * 32,
+                                          "unevaluable", bad_reason))
+        except RefereeError as error:
+            assert needle in str(error), error
+        else:
+            raise AssertionError("a stale exception was honoured")
+    # Wrong subject bound to the key.
+    try:
+        with_exceptions({exc_key: {**exc_entry, "subject_key": "p1@0,0"}},
+                        lambda: reviewed_exception_status(
+                            exc_cell, "fixture-1999", "ab" * 32,
+                            "unevaluable", exc_entry["reason"]))
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError("an exception bound to another subject passed")
 
     # ---- C4a: a reviewed resolution is scored against THIS run's evidence --
     def resolved_cell(**overrides):
