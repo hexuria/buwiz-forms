@@ -11549,8 +11549,13 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     ]
     emission_mismatches = [
         cell for cell in cells
-        if cell["emitted"] != cell["latticed"]
-        or not cell["emitted_indexes_valid"]
+        # A suppressed subject (retained or reviewed composite) emits
+        # nothing BY DESIGN; the emission inventory accounts for it, and
+        # the gate derives this count with the same exclusion.
+        if cell["ledger_state"] not in (
+            "retained_unresolved", "active_composite")
+        and (cell["emitted"] != cell["latticed"]
+             or not cell["emitted_indexes_valid"])
     ]
     comparison_counts = {
         name: sum(cell["comparison_status"] == name for cell in cells)
