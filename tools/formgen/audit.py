@@ -11986,6 +11986,14 @@ def self_test() -> int:
         "a WHITE dedicated fill (a writing knockout) is never decoration",
         white_money["holds"] is False,
     )
+    # sub-glyph: the fixture IR prints runs ~8pt tall; a 2pt box is shorter
+    # than anything the document prints, so it is the sheet's own framing.
+    tiny_money = check_money_boxes_have_inputs(rider_fixture(
+        run_text="Wages", cell_height=2.0))
+    check(
+        "a box shorter than the document's smallest glyph is decoration",
+        tiny_money["holds"] is True and tiny_money["boxes_decoration"] == 1,
+    )
 
     # A placement the guide plan relocated is subtracted from the source's
     # expectation -- the reflowed guide drops images by documented design --

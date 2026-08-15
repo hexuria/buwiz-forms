@@ -643,7 +643,7 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Flip census: EXACTLY 8 inputs corpus-wide (45,708 -> 45,700), the approved
 # cells and nothing else.
 AUDIT_PRODUCER_SHA256 = (
-    "5d21a845ae63e9b28f92f06c695a52ce632d4cfcfd62407b5571c3b66661b86e"
+    "a293a64e786eff20376d9ebb7bc4b039a20f16b1b7c903fbb256b175c62f2a72"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
