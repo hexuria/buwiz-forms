@@ -7759,7 +7759,13 @@ BASIC_ASSERTION_COUNT_FIELDS = {
     # reads as `detail has unsupported fields` and fails the gate.
     "money_boxes_have_inputs": (
         ("boxes_checked", "combs_fully_inked"),
-        ("boxes_preprinted", "boxes_bureau_reserved",
+        # `boxes_decoration` (F235/F237 rider, user-approved 2026-08-15)
+        # counts the cells the sheet DECORATES -- separator fills between
+        # combs, printed ATC constants, sub-glyph strips. Declared here for
+        # the same reason its siblings are: an undeclared count would read
+        # as "unsupported fields" and fail the gate, and an exclusion that
+        # is not published is an exclusion that can hide.
+        ("boxes_preprinted", "boxes_bureau_reserved", "boxes_decoration",
          "emitted_cell_binding_issues")),
     "rules_below_guide_cut": (("cuts",), ("area_fills_below_cut",)),
     "run_colour_matches_ir": (("runs_checked",), ()),
