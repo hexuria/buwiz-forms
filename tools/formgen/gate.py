@@ -3790,6 +3790,14 @@ LEDGER_STATES = {
     "active_resolved", "active_unresolved", "active_composite",
     "retained_unresolved",
 }
+# Declared ONCE and consumed everywhere, because this contract has now been
+# discovered three separate times in three files by watching it fail. A
+# SUPPRESSED subject has no active cell of its own and emits nothing; a
+# NON-BLOCKING one does not hold the gate. A reviewed composite is both,
+# which is exactly what makes it easy to miss in a test written against
+# either property alone.
+LEDGER_SUPPRESSED_STATES = {"retained_unresolved", "active_composite"}
+LEDGER_NONBLOCKING_STATES = {"active_resolved", "active_composite"}
 INFERENCE_STATE = "suppressed_unreviewed_inference"
 RAW_REFEREE_ATTESTATION_KEYS = {
     "schema", "producer_and_declared_dependency_bytes_bound",
@@ -4569,10 +4577,9 @@ def validate_comb_referee_report(
                 # legacy id -- because the review changed its state, not its
                 # emission.  What the review does change is that it stops
                 # blocking, on a certificate this gate re-derives above.
-                suppressed_shape = ledger_state in {
-                    "retained_unresolved", "active_composite"}
-                expected_block = ledger_state not in {
-                    "active_resolved", "active_composite"}
+                suppressed_shape = ledger_state in LEDGER_SUPPRESSED_STATES
+                expected_block = (
+                    ledger_state not in LEDGER_NONBLOCKING_STATES)
                 if blocks_gate is not expected_block:
                     errors.append(
                         f"cell ledger blocking relation is false: {slug}/{published_id}")
@@ -6175,20 +6182,26 @@ def _layout_binding_projection(
             bbox_raw = subject.get("legacy_bbox")
             reason_codes = subject.get("reason_codes")
             blocks_gate = subject.get("blocks_gate")
+            # A reviewed composite keeps its reason codes (they say WHY the
+            # comb was suppressed, which the review confirmed rather than
+            # erased) but stops blocking, on a certificate this gate
+            # re-derives corpus-wide. Enumerated with every other site
+            # carrying this contract rather than patched where it surfaced.
+            suppressed_shape = state in LEDGER_SUPPRESSED_STATES
             if (state not in LEDGER_STATES
                     or not isinstance(subject_key, str) or not subject_key
                     or not isinstance(legacy_id, str) or not legacy_id
                     or not _finite_number_list(bbox_raw, length=4)
                     or not _string_list(
                         reason_codes, nonempty=state != "active_resolved")
-                    or blocks_gate is not (state != "active_resolved")):
+                    or blocks_gate is not (state not in LEDGER_NONBLOCKING_STATES)):
                 raise CombRefereeScopeError(
                     f"layout subject relation is malformed: {slug}/{legacy_id}")
             bbox = [float(value) for value in bbox_raw]
             if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
                 raise CombRefereeScopeError(
                     f"layout subject bbox is invalid: {slug}/{legacy_id}")
-            if state == "retained_unresolved":
+            if suppressed_shape:
                 if active_id is not None:
                     raise CombRefereeScopeError(
                         f"retained subject has active id: {slug}/{legacy_id}")
@@ -6569,7 +6582,7 @@ def form_binding_errors(form: dict[str, Any],
         if isinstance(inventory, dict) and inventory.get("complete") is True:
             active_ids = sorted(
                 cell_id for cell_id, expected_cell in expected_cells.items()
-                if expected_cell.get("ledger_state") != "retained_unresolved")
+                if expected_cell.get("ledger_state") not in LEDGER_SUPPRESSED_STATES)
             exact_inventory = {
                 "complete": True,
                 "reason": "complete",
@@ -6837,7 +6850,7 @@ def form_binding_errors(form: dict[str, Any],
             or ledger_binding.get("active_subject_ids") != [
                 cell_id for cell_id, expected in _ordered_layout_cell_items(
                     layout_binding["cells"])
-                if expected.get("ledger_state") != "retained_unresolved"]
+                if expected.get("ledger_state") not in LEDGER_SUPPRESSED_STATES]
             or ledger_binding.get("emitted_ids") != sorted(
                 cell_id for cell_id, expected in layout_binding["cells"].items()
                 if expected.get("expected_emission_geometry") is not None)
