@@ -627,8 +627,14 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # audit.py moves too, and it is DATA not logic: REVIEWED_COMB_TOPOLOGY gains
 # the three 2200A/C/P entries at 28 compartments and 1801 p1c13 goes 4 -> 3,
 # all four re-reviewed against the sheet's own ink and confirmed by the owner.
+# Re-pinned 2026-08-15: the user-approved review bundle admitted the
+# reviewed composite arrival to the judge (16 failing assertions -> 0, none
+# newly broken). The referee's own validation of the same certificate is
+# unchanged and independent -- it re-derives it against the review registry
+# and against its own Poppler corroboration, so this pin records WHICH judge
+# bytes were bound, never a delegation of judgement to them.
 AUDIT_PRODUCER_SHA256 = (
-    "0f0803047cdfc40679a30848de9b1c09ef54a9aebc2c1d99768542abf4aa02af"
+    "bde7a0a773ff10792718eecda46622300b08e3f5effe8df12c53010d5bc4a7fa"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
