@@ -2914,6 +2914,96 @@ def row_number_band(cell: dict[str, Any], runs_by_id: dict[str, dict[str, Any]],
     return (ink_x1, y0, x1, y1)
 
 
+ATC_CONSTANT_RE = re.compile(r"^[A-Z]{2} ?[0-9]{3}$")
+
+
+class PrintedDecoration:
+    """Cells the sheet DECORATES rather than offers for writing (F235/F237).
+
+    Three relations, every one census-first, every census recorded in the
+    findings ledger before a clause was written, and the user approved the
+    populations on the official sheets (2026-08-15 decisions page):
+
+    * **comb-separator-fill** -- a cell carrying a DEDICATED non-white fill
+      (the fill's own rectangle is the cell's, within 1pt) that sits BETWEEN
+      two character combs in its own row. 6 cells corpus-wide, all TIN group
+      separators: 2553-1999 p1c19/21/23 (peach rgb 1.0,0.8,0.6) and
+      1604cf-2008 p1c8/10/12 (grey 0.8902). Neither colour nor width is the
+      signal -- 1604CF's are as wide as real character boxes -- the signal is
+      decoration drawn FOR a cell between combs. Refuted on the way here:
+      width-alone (misses 1604CF), has-fill (strips 2,061 legitimate money
+      boxes on tint), dedicated-fill-alone (1,619 white writing knockouts),
+      dedicated-non-white-alone (2200AN's two writable schedule cells).
+    * **printed-constant** -- a cell INTERSECTED by a printed ATC-format
+      constant. Exactly 1 corpus-wide: 1800-2018 p1c186, the sliver the row
+      mosaic cut from the bottom of the sheet's ONE undivided 'DN 010' box.
+      The three legitimate ATC write-ins (1702MX/Q/RT second row) sit 3.5pt
+      BELOW their example constants with no overlap and are untouched.
+      Refuted on the way here: crossed-by-any-run (10 hits, mostly 2550M
+      payment boxes under caption leader dots -- real fields).
+    * **sub-glyph-height** -- a cell shorter than the smallest glyph the
+      document itself prints. Exactly 1 corpus-wide: 2551q-2018 p1c168,
+      0.88pt tall, an input nobody could see or use, surfaced by this
+      census rather than by a user.
+
+    The flip budget is EXACTLY 8 inputs corpus-wide and is asserted by the
+    corpus census below; a ninth flip is a regression, not a bonus.
+    """
+
+    def __init__(self, cells: "Sequence[dict[str, Any]]",
+                 fills: "Sequence[dict[str, Any]]",
+                 runs: "Sequence[dict[str, Any]] | None",
+                 min_glyph_height_pt: float | None):
+        self._reasons: dict[str, str] = {}
+        rows: dict[tuple[float, float], list[dict[str, Any]]] = {}
+        for cell in cells:
+            key = (round(float(cell["y0"]), 1), round(float(cell["y1"]), 1))
+            rows.setdefault(key, []).append(cell)
+        constants = [
+            run for run in (runs or ())
+            if ATC_CONSTANT_RE.fullmatch(str(run.get("text", "")).strip())
+        ]
+        for row in rows.values():
+            row.sort(key=lambda item: float(item["x0"]))
+            for index, cell in enumerate(row):
+                if isinstance(cell.get("comb"), dict):
+                    continue
+                x0, y0 = float(cell["x0"]), float(cell["y0"])
+                x1, y1 = float(cell["x1"]), float(cell["y1"])
+                cell_id = str(cell["id"])
+                if (min_glyph_height_pt is not None
+                        and y1 - y0 < min_glyph_height_pt):
+                    self._reasons[cell_id] = "sub-glyph-height"
+                    continue
+                if any(min(x1, float(r["x1"])) - max(x0, float(r["x0"])) > 1.0
+                       and min(y1, float(r["y1"])) - max(y0, float(r["y0"]))
+                       > 0.75
+                       for r in constants):
+                    self._reasons[cell_id] = "printed-constant"
+                    continue
+                dedicated = any(
+                    abs(float(f["x0"]) - x0) <= 1.0
+                    and abs(float(f["x1"]) - x1) <= 1.0
+                    and abs(float(f["y0"]) - y0) <= 1.0
+                    and abs(float(f["y1"]) - y1) <= 1.0
+                    and not (
+                        (f.get("gray") is not None and float(f["gray"]) >= 0.99)
+                        or (f.get("rgb")
+                            and all(float(v) >= 0.99 for v in f["rgb"])))
+                    for f in fills)
+                if not dedicated:
+                    continue
+                left = row[index - 1] if index > 0 else None
+                right = row[index + 1] if index + 1 < len(row) else None
+                if (left is not None and isinstance(left.get("comb"), dict)
+                        and right is not None
+                        and isinstance(right.get("comb"), dict)):
+                    self._reasons[cell_id] = "comb-separator-fill"
+
+    def reason(self, cell_id: str) -> str | None:
+        return self._reasons.get(str(cell_id))
+
+
 class RowNumberWriting:
     """Which `label` cells a bare row number earns an input beside (F151).
 
@@ -3792,6 +3882,7 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   knockout_specify: "KnockoutSpecifyWriting | None" = None,
                   row_numbers: "RowNumberWriting | None" = None,
                   signature_rules: "SignatureRuleWriting | None" = None,
+                  decoration: "PrintedDecoration | None" = None,
                   ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
@@ -3957,6 +4048,13 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                 float(cell["x1"]), float(cell["y1"])):
             return False, "bureau"
         return True, "ruled-blank"
+    if decoration is not None:
+        decoration_reason = decoration.reason(cell["id"])
+        if decoration_reason is not None:
+            # F235/F237, FIRST: these are refutations by the sheet's own
+            # geometry (its fill, its printed constant, its own smallest
+            # glyph), not competing claims -- no later branch may overrule.
+            return False, decoration_reason
     if (cell["kind"] == "label" and signature_rules is not None
             and signature_rules.for_cell(cell["id"])):
         # F221 case 1: routed through BOTH `BureauReservation` and `shading`
@@ -4263,11 +4361,15 @@ class FieldPlan:
                 SignatureRuleWriting(page["cells"], page_index, rules, runs,
                                      fillable_metrics)
                 if rules is not None and runs is not None else None)
+            decoration = PrintedDecoration(
+                page["cells"], fills or (), runs,
+                (fillable_metrics or {}).get("glyph_height_pt"))
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
                                                  ruled_blanks, checkbox_squares,
                                                  signature_boxes, knockout_specify,
-                                                 row_numbers, signature_rules)
+                                                 row_numbers, signature_rules,
+                                                 decoration)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -9287,6 +9389,11 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
         p["cells"], int(p["index"]), rules_by_page.get(int(p["index"]), ()),
         runs_by_page.get(int(p["index"]), ()), fillable_metrics)
         for p in layout["pages"]}
+    decoration = {int(p["index"]): PrintedDecoration(
+        p["cells"], fills_by_page.get(int(p["index"]), ()),
+        runs_by_page.get(int(p["index"]), ()),
+        (fillable_metrics or {}).get("glyph_height_pt"))
+        for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
                                  shading.get(int(p["index"])),
@@ -9296,7 +9403,8 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
                                  signature_boxes=signature_boxes.get(int(p["index"])),
                                  knockout_specify=knockout_specify.get(int(p["index"])),
                                  row_numbers=row_numbers.get(int(p["index"])),
-                                 signature_rules=signature_rules.get(int(p["index"])))[0]]
+                                 signature_rules=signature_rules.get(int(p["index"])),
+                                 decoration=decoration.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)

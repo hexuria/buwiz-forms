@@ -417,6 +417,59 @@ SOURCE_SHADING_MIN_COVERAGE = 0.70
 # checked against the rasteriser rather than trusted: over 38,650 candidates on
 # 53 page-1s, the compositor's visible/not-visible verdict agrees with the
 # rendered raster 38,650 times and disagrees 0 times.
+# REVIEW BUNDLE RIDER (user-approved 2026-08-15, decisions page): three
+# relations under which an enclosed empty field cell is the sheet's own
+# DECORATION rather than a writing box, so no input is demanded of it. Each
+# population was censused corpus-wide, refuting weaker rules on the way (the
+# refutations live in findings F235/F237), and the user approved every cell
+# on the official sheets: the 6 TIN group separators (2553's peach three,
+# 1604CF's grey three), the 1800 ATC sliver the row mosaic cut from the ONE
+# undivided 'DN 010' box, and 2551Q's 0.88pt-tall invisible strip. Exactly 8
+# cells corpus-wide; a ninth match is a regression to investigate, which is
+# why every exclusion is published in the assertion's own counts.
+ATC_CONSTANT_RE = re.compile(r"^[A-Z]{2} ?[0-9]{3}$")
+
+
+def printed_decoration_reason(cell_id: str,
+                              layout_cells_by_row: dict,
+                              layout_cell: dict,
+                              fills, runs,
+                              min_glyph_height_pt) -> str | None:
+    x0, y0 = float(layout_cell["x0"]), float(layout_cell["y0"])
+    x1, y1 = float(layout_cell["x1"]), float(layout_cell["y1"])
+    if (min_glyph_height_pt is not None
+            and y1 - y0 < float(min_glyph_height_pt)):
+        return "sub-glyph-height"
+    for run in runs or ():
+        if not ATC_CONSTANT_RE.fullmatch(str(run.get("text", "")).strip()):
+            continue
+        if (min(x1, float(run["x1"])) - max(x0, float(run["x0"])) > 1.0
+                and min(y1, float(run["y1"])) - max(y0, float(run["y0"]))
+                > 0.75):
+            return "printed-constant"
+    dedicated = any(
+        abs(float(f["x0"]) - x0) <= 1.0 and abs(float(f["x1"]) - x1) <= 1.0
+        and abs(float(f["y0"]) - y0) <= 1.0 and abs(float(f["y1"]) - y1) <= 1.0
+        and not ((f.get("gray") is not None and float(f["gray"]) >= 0.99)
+                 or (f.get("rgb")
+                     and all(float(v) >= 0.99 for v in f["rgb"])))
+        for f in fills or ())
+    if not dedicated:
+        return None
+    row = layout_cells_by_row.get(
+        (round(y0, 1), round(y1, 1)), [])
+    index = next((i for i, c in enumerate(row)
+                  if str(c["id"]) == str(cell_id)), None)
+    if index is None:
+        return None
+    left = row[index - 1] if index > 0 else None
+    right = row[index + 1] if index + 1 < len(row) else None
+    if (left is not None and isinstance(left.get("comb"), dict)
+            and right is not None and isinstance(right.get("comb"), dict)):
+        return "comb-separator-fill"
+    return None
+
+
 DIVIDER_MAX_TONE = 0.5
 DIVIDER_MAX_WIDTH_PT = 1.6
 DIVIDER_MIN_HEIGHT_PT = 2.0
@@ -8826,6 +8879,24 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
         )
     offenders, checked, fully_inked, preprinted = [], 0, 0, 0
     bureau_reserved = 0
+    decoration = 0
+    # Rows keyed exactly as the emitter keys them, per page, so both sides of
+    # the rider group the same neighbours.
+    rows_by_page: dict[int, dict] = {}
+    for page_index, layout_page in b.layout_pages.items():
+        page_rows = rows_by_page.setdefault(int(page_index), {})
+        for lc in layout_page.get("cells") or ():
+            key = (round(float(lc["y0"]), 1), round(float(lc["y1"]), 1))
+            page_rows.setdefault(key, []).append(lc)
+        for row in page_rows.values():
+            row.sort(key=lambda item: float(item["x0"]))
+    min_glyph_by_page: dict[int, float] = {}
+    for page_index, page_ir in b.pages.items():
+        heights = [float(r["y1"]) - float(r["y0"])
+                   for r in page_ir.get("text_runs") or ()
+                   if float(r["y1"]) - float(r["y0"]) > 0.5]
+        if heights:
+            min_glyph_by_page[page_index] = min(heights)
     # Read from the pinned PDF's own text operators, never from the layout
     # this assertion's population comes from, so a lattice or emitter mistake
     # cannot manufacture its own excuse. A page whose captions cannot be read
@@ -8891,6 +8962,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                     > PREPRINTED_COVERAGE):
                 preprinted += 1
                 continue
+            decoration_kind = printed_decoration_reason(
+                cell_id, rows_by_page.get(cell.page, {}), layout_cell,
+                b.pages.get(cell.page, {}).get("area_fills") or (),
+                runs, min_glyph_by_page.get(cell.page))
+            if decoration_kind is not None:
+                # RIDER: the sheet decorates this cell (its own fill between
+                # two combs, its printed ATC constant, or a strip shorter
+                # than its own smallest glyph). Counted, never silent.
+                decoration += 1
+                continue
             checked += 1
             if not input_boxes(cell):
                 box = (float(layout_cell["x0"]), float(layout_cell["y0"]),
@@ -8905,10 +8986,12 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                                   "why": "enclosed empty box, no input"})
     if offenders:
         return broken(f"{len(offenders)} of {checked} printed boxes are not fillable",
-                      offenders, boxes_checked=checked, combs_fully_inked=fully_inked,
+                      offenders, boxes_decoration=decoration,
+                      boxes_checked=checked, combs_fully_inked=fully_inked,
                       boxes_preprinted=preprinted,
                       boxes_bureau_reserved=bureau_reserved)
     return held(
+        boxes_decoration=decoration,
         boxes_checked=checked,
         combs_fully_inked=fully_inked,
         boxes_preprinted=preprinted,
@@ -11795,7 +11878,7 @@ def self_test() -> int:
     def preprinted_box_fixture(run_y0: float, run_y1: float) -> Bundle:
         covered_ir = copy.deepcopy(ir)
         covered_ir["pages"][0]["text_runs"] = [{
-            "text": "XP010", "font": "Arial", "size_pt": 8.0, "color": 0,
+            "text": "Wages", "font": "Arial", "size_pt": 8.0, "color": 0,
             "x0": 9.0, "y0": run_y0, "x1": 34.0, "y1": run_y1,
             "origin_x": 9.0, "baseline_y": run_y1 - 2.0,
             "char_origin_offsets_pt": [0.0, 5.0, 10.0, 15.0, 20.0],
@@ -11829,6 +11912,79 @@ def self_test() -> int:
         and grazed_money["boxes_preprinted"] == 0
         and grazed_money["offenders"][0]["why"]
         == "enclosed empty box, no input",
+    )
+
+    # ---- RIDER (F235/F237, user-approved): decoration exclusions ---------
+    #
+    # The generic-graze principle above holds for ordinary text ("Wages").
+    # A printed ATC-format constant is different: on the whole corpus it
+    # intersects exactly ONE input cell (1800's DN 010 sliver, cut by the
+    # row mosaic from the constant's own undivided box), and the three
+    # legitimate ATC write-ins sit BELOW their constants with no overlap.
+    # The exclusion is published (`boxes_decoration`), never silent.
+    def rider_fixture(*, run_text=None, cell_height=12.0, fill=None,
+                      combs=False) -> Bundle:
+        rider_ir = copy.deepcopy(ir)
+        runs = []
+        if run_text is not None:
+            runs.append({
+                "text": run_text, "font": "Arial", "size_pt": 8.0,
+                "color": 0, "x0": 9.0, "y0": 2.0, "x1": 34.0, "y1": 10.0,
+                "origin_x": 9.0, "baseline_y": 8.0,
+                "char_origin_offsets_pt": [0.0, 5.0, 10.0, 15.0, 20.0],
+                "char_widths_pt": [5.0, 5.0, 5.0, 5.0, 5.0],
+            })
+        rider_ir["pages"][0]["text_runs"] = runs
+        if fill is not None:
+            rider_ir["pages"][0]["area_fills"] = [dict(
+                x0=8.0, y0=8.0, x1=38.0, y1=8.0 + cell_height, **fill)]
+        rider_layout = copy.deepcopy(enclosed_plain_layout)
+        target = rider_layout["pages"][0]["cells"][0]
+        target["y1"] = target["y0"] + cell_height
+        if combs:
+            comb = {"cells": 2, "divider_x": [3.0],
+                    "slot_x": [0.0, 3.0, 6.0], "pitch_pt": 3.0}
+            rider_layout["pages"][0]["cells"] += [
+                {"id": "p1c90", "subject_key": "p1@0,8,8,20", "x0": 0.0,
+                 "y0": target["y0"], "x1": 8.0, "y1": target["y1"],
+                 "kind": "field", "comb": dict(comb)},
+                {"id": "p1c91", "subject_key": "p1@38,8,44,20", "x0": 38.0,
+                 "y0": target["y0"], "x1": 44.0, "y1": target["y1"],
+                 "kind": "field", "comb": dict(comb)},
+            ]
+        rider_html = (
+            '<div class="page page-1" id="page-1" '
+            'style="width:100pt;height:100pt">'
+            '<div id="p1c0" class="c f" data-cell-kind="field" '
+            f'style="left:8pt;top:8pt;width:30pt;height:{cell_height}pt">'
+            '</div></div>')
+        return Bundle(
+            slug="rider-fixture", ir=rider_ir, layout=rider_layout,
+            plan=None, form_html=rider_html, guide_html=None, pdf=None)
+
+    atc_money = check_money_boxes_have_inputs(rider_fixture(run_text="DN 010"))
+    check(
+        "an ATC constant intersecting the box excludes it, published",
+        atc_money["holds"] is True and atc_money["boxes_decoration"] == 1
+        and atc_money["boxes_checked"] == 0,
+    )
+    sep_money = check_money_boxes_have_inputs(rider_fixture(
+        fill={"gray": None, "rgb": [1.0, 0.8, 0.6]}, combs=True))
+    check(
+        "a dedicated non-white fill between two combs excludes it, published",
+        sep_money["holds"] is True and sep_money["boxes_decoration"] == 1,
+    )
+    unflanked_money = check_money_boxes_have_inputs(rider_fixture(
+        fill={"gray": None, "rgb": [1.0, 0.8, 0.6]}, combs=False))
+    check(
+        "the same fill WITHOUT comb neighbours keeps its fillability check",
+        unflanked_money["holds"] is False,
+    )
+    white_money = check_money_boxes_have_inputs(rider_fixture(
+        fill={"gray": 1.0, "rgb": [1.0, 1.0, 1.0]}, combs=True))
+    check(
+        "a WHITE dedicated fill (a writing knockout) is never decoration",
+        white_money["holds"] is False,
     )
 
     # A placement the guide plan relocated is subtracted from the source's

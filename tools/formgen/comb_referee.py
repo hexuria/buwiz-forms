@@ -638,8 +638,12 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # unchanged and independent -- it re-derives it against the review registry
 # and against its own Poppler corroboration, so this pin records WHICH judge
 # bytes were bound, never a delegation of judgement to them.
+# Audit + 4 structure pins re-pinned 2026-08-15 (user-approved F235/F237
+# package): PrintedDecoration in emit + the decoration rider in the judge.
+# Flip census: EXACTLY 8 inputs corpus-wide (45,708 -> 45,700), the approved
+# cells and nothing else.
 AUDIT_PRODUCER_SHA256 = (
-    "bde7a0a773ff10792718eecda46622300b08e3f5effe8df12c53010d5bc4a7fa"
+    "5d21a845ae63e9b28f92f06c695a52ce632d4cfcfd62407b5571c3b66661b86e"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -2359,7 +2363,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
     "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
     "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "fb3aff9204e71e3fa8c905d155a30d728b21ba37f6fc8b4fc83c006518f4c805",
+    "1604cf-2008": "aa5f405c2af515ba035b2c68e9c1214d98f39823efefe6fa41a94d25b2a44332",
     "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
     "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
     "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
@@ -2380,7 +2384,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1707-2021": "b6f4ef2d3c0a918826d1f3ce00df1067e41a65c373650d6e04dfd6a5c4aceae7",
     "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
     "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
-    "1800-2018": "95c88304b9fd1727876474da63da1e4de7096ec7367b83f6794e65af5861206e",
+    "1800-2018": "a3efcf1b2f0738afd9fd103b269bccff01f5ed02187a8ee18495a5cc4c2fb21d",
     "1801-2018": "392bd8cca242071af0ef4df9c8b8210228b528e46e4b6ab58487b813a26a1cf9",
     "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
     "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
@@ -2396,9 +2400,9 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
     "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
-    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
+    "2551q-2018": "10389fc047d04e83a6b3175f0c37ca4b7ad99015d17f873b88bf71254d669ba3",
     "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
+    "2553-1999": "e2236e7f7ee1f0404482b8b34ea62040b11c45bcf7e89f7bbbe42d0c5743e1fb",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
