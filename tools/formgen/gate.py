@@ -4307,6 +4307,14 @@ def validate_comb_referee_report(
         errors.append(
             f"report is partial: {len(forms)}/{expected_forms} forms")
 
+    # Corpus-scoped: every reviewed registry entry applied exactly once,
+    # across ALL documents. See `_reviewed_registry_coverage_errors` -- the
+    # per-document half of this guard cannot be completed from one layout.
+    errors.extend(_reviewed_registry_coverage_errors(
+        cell for form in forms if isinstance(form, dict)
+        for cell in (form.get("cells") or [])
+        if isinstance(cell, dict)))
+
     slugs: set[str] = set()
     corpus_cell_ids: set[str] = set()
     corpus_subject_keys: set[str] = set()
@@ -4961,6 +4969,86 @@ def _referee_topology_contains(
 
 def _referee_topology_key(values: Sequence[float]) -> str:
     return ",".join(str(_rounded_six(value)) for value in values)
+
+
+_REVIEW_REGISTRY = None
+
+
+def _load_review_registry():
+    """Load the reviewed-ledger registries by explicit pinned path.
+
+    Same isolation-proof pattern the referee uses: this gate runs children
+    with `-I`, and a bare import would resolve differently (or not at all)
+    depending on how it was invoked.
+    """
+    global _REVIEW_REGISTRY
+    if _REVIEW_REGISTRY is None:
+        import importlib.util
+        path = HERE / "review_registry.py"
+        spec = importlib.util.spec_from_file_location("review_registry", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _REVIEW_REGISTRY = module
+    # ONE module instance for the process. Re-executing the file per call
+    # would hand every caller its own copy of the registries, so a test that
+    # emptied them would be emptying a copy nobody else reads -- which is
+    # exactly what happened when this was written without the cache.
+    return _REVIEW_REGISTRY
+
+
+def _reviewed_registry_coverage_errors(cells: "Iterable[dict[str, Any]]"
+                                       ) -> list[str]:
+    """Every reviewed entry applied EXACTLY ONCE across the whole corpus.
+
+    This is the corpus half of a guard that cannot be completed per document.
+    A form CODE plus revision is not a document identity -- 1701's main
+    sheet, its attachment and its consolidation all publish code 1701
+    revision 2018 -- so `lattice.apply_reviewed_*` passes over entries whose
+    pinned source bytes are not its own, unable to tell a sibling document
+    from a re-pinned PDF from where it stands.  Here every document is
+    visible at once, so the question becomes answerable and is answered:
+
+      * an entry that landed NOWHERE is a review of bytes the corpus no
+        longer contains, or of a subject that no longer exists;
+      * an entry that landed TWICE means two documents accepted the same
+        decision, which the sha scoping is supposed to make impossible;
+      * a published certificate naming no entry is a forged promotion.
+
+    All three are errors.  Reported from the report's own published
+    certificates, never from the layouts, so a producer that lied about what
+    it applied is caught rather than believed.
+    """
+    registry = _load_review_registry()
+    wanted: set[tuple[str, ...]] = set()
+    for key in registry.REVIEWED_LEDGER_RESOLUTIONS:
+        wanted.add(("resolution", str(key[0]), str(key[1]), str(key[2])))
+    for key in registry.REVIEWED_LEDGER_TRANSITIONS:
+        wanted.add(("transition", str(key[0]), str(key[1]), str(key[2])))
+    seen: dict[tuple[str, ...], int] = {}
+    for cell in cells:
+        for kind, field in (("resolution", "resolution_certificate"),
+                            ("transition", "transition_certificate")):
+            certificate = cell.get(field)
+            if not isinstance(certificate, dict):
+                continue
+            raw = certificate.get("registry_key")
+            if (not isinstance(raw, list) or len(raw) != 3):
+                return [f"certificate publishes no registry key: "
+                        f"{cell.get('cell')}"]
+            item = (kind, str(raw[0]), str(raw[1]), str(raw[2]))
+            seen[item] = seen.get(item, 0) + 1
+    errors: list[str] = []
+    for item in sorted(wanted - set(seen)):
+        errors.append("reviewed entry was applied nowhere in the corpus: "
+                      f"{item[0]} {item[1]}/p{item[2]}/{item[3]}")
+    for item in sorted(set(seen) - wanted):
+        errors.append("published certificate names no reviewed entry: "
+                      f"{item[0]} {item[1]}/p{item[2]}/{item[3]}")
+    for item, count in sorted(seen.items()):
+        if item in wanted and count != 1:
+            errors.append(f"reviewed entry applied {count} times: "
+                          f"{item[0]} {item[1]}/p{item[2]}/{item[3]}")
+    return errors
 
 
 def _rail_derivation_errors(
@@ -11273,6 +11361,27 @@ def _synthetic_audit_record(
 
 
 def self_test() -> int:
+    """Run the fixtures against EMPTY reviewed registries.
+
+    The registries hold real user decisions (112 of them after the C4b
+    sitting), while these fixtures build synthetic reports that contain none
+    of the named cells -- so the corpus coverage guard would report every
+    real entry as applied nowhere, inside a fixture that never claimed to
+    apply it. The guard is exercised deliberately by its own fixtures below.
+    """
+    registry = _load_review_registry()
+    saved_r = dict(registry.REVIEWED_LEDGER_RESOLUTIONS)
+    saved_t = dict(registry.REVIEWED_LEDGER_TRANSITIONS)
+    registry.REVIEWED_LEDGER_RESOLUTIONS.clear()
+    registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+    try:
+        return _self_test_body()
+    finally:
+        registry.REVIEWED_LEDGER_RESOLUTIONS.update(saved_r)
+        registry.REVIEWED_LEDGER_TRANSITIONS.update(saved_t)
+
+
+def _self_test_body() -> int:
     """Prove the gate can fail, and that it treats absence as failure.
 
     A gate that cannot fail is worthless, and one that passes on a missing check
@@ -13076,6 +13185,27 @@ def self_test() -> int:
         assert "moved since this resolution was reviewed" in drifted[1]
     assert _comparison_for_cell(gate_resolved_cell(resolution_certificate={
         "criterion": "reviewed-ledger-resolution-v1"}), True)[0] == "stop"
+    # C4b coverage guard, proven able to fail in all three directions.
+    def cov(cells): return _reviewed_registry_coverage_errors(cells)
+    _reg = _load_review_registry()
+    _k = ("fixture-1999", 1, "p1c7")
+    _reg.REVIEWED_LEDGER_RESOLUTIONS[_k] = {
+        "subject_key": "p1@0,0,1,1", "source_sha256": "ab" * 32,
+        "four_way": {"lattice": 2, "audit": 2, "emitted": 2, "referee": 2},
+        "reviewer": "self-test", "date": "2026-08-15", "citation": "self-test"}
+    try:
+        _cert = {"registry_key": [_k[0], _k[1], _k[2]]}
+        _one = [{"cell": _k[2], "resolution_certificate": _cert}]
+        assert cov(_one) == [], cov(_one)
+        assert any("applied 2 times" in e for e in cov(_one + _one))
+        assert any("applied nowhere" in e for e in cov([]))
+        forged = [{"cell": "p9c9", "resolution_certificate":
+                   {"registry_key": ["no-such-form", 1, "p9c9"]}}]
+        errs = cov(forged)
+        assert any("names no reviewed entry" in e for e in errs), errs
+        assert any("applied nowhere" in e for e in errs), errs
+    finally:
+        _reg.REVIEWED_LEDGER_RESOLUTIONS.pop(_k, None)
     assert "active_composite" in LEDGER_STATES
     # The composite certificate schema the cell walk enforces.
     assert COMPOSITE_REFEREE_KEYS == {

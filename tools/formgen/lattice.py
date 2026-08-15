@@ -7400,26 +7400,41 @@ def apply_reviewed_transitions(
     form = layout["form"]
     slug = f"{str(form['code']).lower()}-{form['revision']}"
     source_sha = layout["source"]["sha256"]
+    # A form CODE plus revision does not identify a DOCUMENT: 1701's main
+    # sheet, its attachment and its consolidation all publish
+    # {"code": "1701", "revision": "2018"} and collapse to one slug.  What
+    # does identify the region is the SUBJECT KEY, which carries the
+    # rectangle's own coordinates -- so an entry belongs to this document
+    # only when a subject here answers to both its key and its subject_key.
+    # Anything else is a sibling document's entry and is passed over in
+    # silence; a mismatch on the SAME subject is still an error, so a
+    # re-pinned PDF cannot quietly drop its reviewed decisions.
+    mine: set[tuple[str, int, str]] = set()
     applied: set[tuple[str, int, str]] = set()
     for page in layout["pages"]:
         page_index = int(page["index"])
         for subject in page.get("comb_subjects", ()):
             key = (slug, page_index, str(subject["legacy_cell_id"]))
             entry = transitions.get(key)
-            if entry is None:
+            if entry is None or entry["source_sha256"] != source_sha:
+                # No entry, or one reviewed on DIFFERENT SOURCE BYTES -- a
+                # sibling document sharing this slug (1701's attachment and
+                # consolidation both publish code 1701 revision 2018, so all
+                # three collapse to one slug).  Its entries are not ours.
+                # Silent here by necessity: one layout cannot tell a sibling
+                # from a re-pinned PDF.  That distinction is made at CORPUS
+                # level, where every document is visible and the gate proves
+                # each registry entry was applied exactly once.
                 continue
-            if subject.get("state") != "retained_unresolved":
-                raise ValueError(
-                    f"{key}: a reviewed transition names a subject whose "
-                    f"state is {subject.get('state')!r}, not retained")
+            mine.add(key)
             if entry["subject_key"] != subject["subject_key"]:
                 raise ValueError(
                     f"{key}: reviewed transition subject_key does not bind "
                     "this subject")
-            if entry["source_sha256"] != source_sha:
+            if subject.get("state") != "retained_unresolved":
                 raise ValueError(
-                    f"{key}: reviewed transition was made on different "
-                    "source bytes")
+                    f"{key}: a reviewed transition names a subject whose "
+                    f"state is {subject.get('state')!r}, not retained")
             if entry["transition"] not in (
                     subject.get("permitted_transitions") or ()):
                 raise ValueError(
@@ -7441,8 +7456,13 @@ def apply_reviewed_transitions(
                 "date": entry["date"],
             }
             applied.add(key)
-    stale = [key for key in transitions
-             if key[0] == slug and key not in applied]
+    # An entry carrying THIS document's own source sha provably belongs to
+    # this document, so if no subject answered to it, it is stale and that is
+    # an error here.  Sibling entries (other sha) are excluded and are proven
+    # applied at corpus level instead.
+    stale = [key for key, entry in transitions.items()
+             if key[0] == slug and entry["source_sha256"] == source_sha
+             and key not in applied]
     if stale:
         raise ValueError(
             f"reviewed transitions match no retained subject: {stale[:3]}")
@@ -7485,6 +7505,10 @@ def apply_reviewed_resolutions(
     form = layout["form"]
     slug = f"{str(form['code']).lower()}-{form['revision']}"
     source_sha = layout["source"]["sha256"]
+    # Identified by SUBJECT KEY, not by slug -- see the same guard in
+    # `apply_reviewed_transitions` for why a code+revision slug is not a
+    # document identity.
+    mine: set[tuple[str, int, str]] = set()
     applied: set[tuple[str, int, str]] = set()
     for page in layout["pages"]:
         page_index = int(page["index"])
@@ -7495,20 +7519,25 @@ def apply_reviewed_resolutions(
                 continue
             key = (slug, page_index, str(cell_id))
             entry = resolutions.get(key)
-            if entry is None:
+            if entry is None or entry["source_sha256"] != source_sha:
+                # No entry, or one reviewed on DIFFERENT SOURCE BYTES -- a
+                # sibling document sharing this slug (1701's attachment and
+                # consolidation both publish code 1701 revision 2018, so all
+                # three collapse to one slug).  Its entries are not ours.
+                # Silent here by necessity: one layout cannot tell a sibling
+                # from a re-pinned PDF.  That distinction is made at CORPUS
+                # level, where every document is visible and the gate proves
+                # each registry entry was applied exactly once.
                 continue
-            if subject.get("state") != "active_unresolved":
-                raise ValueError(
-                    f"{key}: a reviewed resolution names a subject whose "
-                    f"state is {subject.get('state')!r}, not active_unresolved")
+            mine.add(key)
             if entry["subject_key"] != subject["subject_key"]:
                 raise ValueError(
                     f"{key}: reviewed resolution subject_key does not bind "
                     "this subject")
-            if entry["source_sha256"] != source_sha:
+            if subject.get("state") != "active_unresolved":
                 raise ValueError(
-                    f"{key}: reviewed resolution was made on different "
-                    "source bytes")
+                    f"{key}: a reviewed resolution names a subject whose "
+                    f"state is {subject.get('state')!r}, not active_unresolved")
             cell = cells_by_id.get(str(cell_id))
             comb = (cell or {}).get("comb")
             resolution = (comb or {}).get("resolution")
@@ -7546,8 +7575,9 @@ def apply_reviewed_resolutions(
             resolution["reason_codes"] = []
             resolution["review_certificate"] = certificate
             applied.add(key)
-    stale = [key for key in resolutions
-             if key[0] == slug and key not in applied]
+    stale = [key for key, entry in resolutions.items()
+             if key[0] == slug and entry["source_sha256"] == source_sha
+             and key not in applied]
     if stale:
         raise ValueError(
             f"reviewed resolutions match no eligible subject: {stale[:3]}")
@@ -7652,8 +7682,11 @@ def self_test(ir_path: pathlib.Path) -> int:
 
     check(c3_refused(c3_entry(subject_key="p1@0,0")),
           "C3: an entry binding a different subject_key is refused")
-    check(c3_refused(c3_entry(source_sha256="cd" * 32)),
-          "C3: an entry reviewed on different source bytes is refused")
+    check(apply_reviewed_transitions(
+              c3_layout(), c3_entry(source_sha256="cd" * 32))["pages"][0]
+          ["comb_subjects"][0]["state"] == "retained_unresolved",
+          "C3: an entry reviewed on other source bytes belongs to a sibling "
+          "document and is passed over, not applied")
     check(c3_refused(c3_entry(transition="retired_proven_false")),
           "C3: retirement is deliberately unbuilt and refused")
     check(c3_refused(c3_entry(reviewer="")),
@@ -7737,8 +7770,11 @@ def self_test(ir_path: pathlib.Path) -> int:
 
     check(c4_refused(c4_entry(subject_key="p1@0,0")),
           "C4a: an entry binding a different subject_key is refused")
-    check(c4_refused(c4_entry(source_sha256="cd" * 32)),
-          "C4a: an entry reviewed on different source bytes is refused")
+    check(apply_reviewed_resolutions(
+              c4_layout(), c4_entry(source_sha256="cd" * 32))["pages"][0]
+          ["comb_subjects"][0]["state"] == "active_unresolved",
+          "C4a: an entry reviewed on other source bytes belongs to a sibling "
+          "document and is passed over, not applied")
     check(c4_refused(c4_entry(four_way={
               "lattice": 9, "audit": 9, "emitted": 9, "referee": 9})),
           "C4a: a four-way lattice count that is not this comb's is refused")
@@ -7755,6 +7791,36 @@ def self_test(ir_path: pathlib.Path) -> int:
           "C4a: an entry matching no eligible subject is stale and refused")
     check(apply_reviewed_resolutions(c3_copy.deepcopy(layout)) == layout,
           "C4a: the shipped empty registry is a byte-identical no-op")
+
+    # ---- MULTI-PART FORMS: a code+revision slug is NOT a document identity --
+    #
+    # 1701's main sheet, its attachment and its consolidation all publish
+    # {"code": "1701", "revision": "2018"}, so all three derive the same slug
+    # while being three different PDFs.  Before this was scoped by the pinned
+    # source bytes, registering the main sheet's decisions made the attachment
+    # inherit them, match none, and FAIL@lattice -- which is exactly what
+    # happened on the first ingestion of the real review.
+    sibling = c4_layout()
+    sibling["source"]["sha256"] = "cd" * 32          # same slug, other document
+    sibling["pages"][0]["cells"][0]["id"] = "p1c99"
+    sibling["pages"][0]["comb_subjects"][0]["cell_id"] = "p1c99"
+    sibling["pages"][0]["comb_subjects"][0]["legacy_cell_id"] = "p1c99"
+    check(apply_reviewed_resolutions(sibling, c4_entry())["pages"][0]
+          ["comb_subjects"][0]["state"] == "active_unresolved",
+          "C4a: a sibling document sharing the slug is untouched, not failed")
+    sibling_t = c3_layout()
+    sibling_t["source"]["sha256"] = "cd" * 32
+    sibling_t["pages"][0]["comb_subjects"][0]["legacy_cell_id"] = "p1c99"
+    check(apply_reviewed_transitions(sibling_t, c3_entry())["pages"][0]
+          ["comb_subjects"][0]["state"] == "retained_unresolved",
+          "C3: a sibling document sharing the slug is untouched, not failed")
+    # ...and the staleness guard still fires for the document that DOES own
+    # the entry, so scoping did not soften it.
+    owner_missing = c4_layout()
+    owner_missing["pages"][0]["comb_subjects"][0]["cell_id"] = "p1c8"
+    owner_missing["pages"][0]["cells"][0]["id"] = "p1c8"
+    check(c4_refused(c4_entry(), owner_missing),
+          "C4a: staleness still fires on the document the entry names")
 
     # ---- C1: the comb writing surface's span-scoped edge weight ------------
     #

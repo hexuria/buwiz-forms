@@ -402,7 +402,7 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # guard fixture-covered and neuter-proven. No layout byte moves until the
 # user signs entries.
 LATTICE_PRODUCER_SHA256 = (
-    "577f092811f410f8c4ecfc16f723b68c7710bdbd71e67a0fb737409f7d16e3fd"
+    "4088b625797110362e0fdb66333eb4937bd28ed0f5b6a0661b274479fda78242"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -11690,6 +11690,28 @@ def source_literal_duplicate_keys(name: str) -> list[str]:
 
 
 def self_test() -> int:
+    # The registries are user data, not fixture data: the C4b sitting filled
+    # them with real reviewed decisions, and the synthetic ledgers below reuse
+    # real slugs (1604e-2018 is the fixture slug), so an entry for a real cell
+    # would hit the fail-closed "reviewed resolution the producer did not
+    # apply" guard inside a fixture that never claimed to have applied it.
+    # Empty both for the duration of the fixtures -- the guard itself is
+    # exercised deliberately by the composite fixtures via with_registry --
+    # and restore whatever was registered before returning.
+    _saved_resolutions = dict(review_registry.REVIEWED_LEDGER_RESOLUTIONS)
+    _saved_transitions = dict(review_registry.REVIEWED_LEDGER_TRANSITIONS)
+    review_registry.REVIEWED_LEDGER_RESOLUTIONS.clear()
+    review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+    try:
+        return _self_test_body(_saved_resolutions, _saved_transitions)
+    finally:
+        review_registry.REVIEWED_LEDGER_RESOLUTIONS.clear()
+        review_registry.REVIEWED_LEDGER_RESOLUTIONS.update(_saved_resolutions)
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.update(_saved_transitions)
+
+
+def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     # F231, proven able to fail by the mutation below: a pin dict whose source
     # literal repeats a key is a silent liar, because only the last one is
     # live. Asked of the SOURCE, never of the resolved dict.
