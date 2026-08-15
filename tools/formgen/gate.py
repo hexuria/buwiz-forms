@@ -4318,10 +4318,17 @@ def validate_comb_referee_report(
     # Corpus-scoped: every reviewed registry entry applied exactly once,
     # across ALL documents. See `_reviewed_registry_coverage_errors` -- the
     # per-document half of this guard cannot be completed from one layout.
-    errors.extend(_reviewed_registry_coverage_errors(
-        cell for form in forms if isinstance(form, dict)
-        for cell in (form.get("cells") or [])
-        if isinstance(cell, dict)))
+    #
+    # Only asked of a COMPLETE report. On a partial one every absent form's
+    # entries look "applied nowhere", which is true of the report and false
+    # of the corpus -- it would bury the real fault (the partiality, already
+    # reported above) under a list of its consequences. Skipping is safe
+    # precisely because a partial report can never reach PASS.
+    if len(forms) == expected_forms:
+        errors.extend(_reviewed_registry_coverage_errors(
+            cell for form in forms if isinstance(form, dict)
+            for cell in (form.get("cells") or [])
+            if isinstance(cell, dict)))
 
     slugs: set[str] = set()
     corpus_cell_ids: set[str] = set()

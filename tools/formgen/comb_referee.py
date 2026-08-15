@@ -401,8 +401,13 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # (fresh build_layout vs disk on 2551M/1604CF/2200A), with every fail-closed
 # guard fixture-covered and neuter-proven. No layout byte moves until the
 # user signs entries.
+# Re-pinned 2026-08-15: lattice now recounts each page's comb-subject stats
+# inside the reviewed-decision passes. The stats were computed while the page
+# was built -- before any decision could apply -- so every page carrying one
+# published a summary of the ledger as it stood a moment earlier, and this
+# referee refused 27 of 53 forms on "ledger stat ... is N, expected N+1".
 LATTICE_PRODUCER_SHA256 = (
-    "4088b625797110362e0fdb66333eb4937bd28ed0f5b6a0661b274479fda78242"
+    "eab80a047106f2fd150f2e8cb99b684309f23b865ba78e8a27fb0ca3b8ef8ec7"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER

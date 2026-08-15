@@ -7466,7 +7466,12 @@ def apply_reviewed_transitions(
     if stale:
         raise ValueError(
             f"reviewed transitions match no retained subject: {stale[:3]}")
-    return layout
+    # The pass that changes a state owns the summary of that state: the
+    # page stats were computed while the page was built, before any decision
+    # could apply, and a summary that disagrees with what it summarises is
+    # simply wrong. Refreshing HERE rather than in the caller means no future
+    # caller can forget to.
+    return refresh_comb_subject_stats(layout)
 
 
 def apply_reviewed_resolutions(
@@ -7581,6 +7586,51 @@ def apply_reviewed_resolutions(
     if stale:
         raise ValueError(
             f"reviewed resolutions match no eligible subject: {stale[:3]}")
+    # The pass that changes a state owns the summary of that state: the
+    # page stats were computed while the page was built, before any decision
+    # could apply, and a summary that disagrees with what it summarises is
+    # simply wrong. Refreshing HERE rather than in the caller means no future
+    # caller can forget to.
+    return refresh_comb_subject_stats(layout)
+
+
+def refresh_comb_subject_stats(layout: dict[str, Any]) -> dict[str, Any]:
+    """Recount the per-page subject stats after reviewed decisions land.
+
+    `build_page` publishes its stats while it builds the page, which is
+    BEFORE `apply_reviewed_transitions` and `apply_reviewed_resolutions` can
+    change any state -- they operate on the assembled layout.  Every applied
+    decision therefore left the page's own counters describing the ledger as
+    it stood a moment earlier, and comb_referee.py, which re-derives those
+    counters from the subjects themselves, refused 27 of 53 forms with
+    "ledger stat ... is N, expected N+1".  The stats are not evidence in
+    their own right -- they are a published summary of the subjects, and a
+    summary that disagrees with what it summarises is simply wrong.
+
+    Recounted from the final subjects, so the summary cannot drift from them
+    again whatever future pass mutates a state.
+    """
+    for page in layout["pages"]:
+        subjects = page.get("comb_subjects") or ()
+        inferences = page.get("comb_inferences") or ()
+        stats = page.get("stats")
+        if not isinstance(stats, dict):
+            continue
+        resolved = sum(1 for s in subjects if s["state"] == "active_resolved")
+        unresolved = sum(
+            1 for s in subjects if s["state"] == "active_unresolved")
+        composite = sum(1 for s in subjects if s["state"] == "active_composite")
+        retained = sum(
+            1 for s in subjects if s["state"] == "retained_unresolved")
+        subject_blockers = sum(1 for s in subjects if s.get("blocks_gate"))
+        inference_blockers = sum(
+            1 for item in inferences if item.get("blocks_gate"))
+        stats["comb_subjects_active"] = resolved + unresolved + composite
+        stats["comb_subjects_active_resolved"] = resolved
+        stats["comb_subjects_active_unresolved"] = unresolved
+        stats["comb_subjects_retained_unresolved"] = retained
+        stats["comb_subjects_blocking"] = subject_blockers
+        stats["comb_evidence_blocking"] = subject_blockers + inference_blockers
     return layout
 
 
@@ -7791,6 +7841,35 @@ def self_test(ir_path: pathlib.Path) -> int:
           "C4a: an entry matching no eligible subject is stale and refused")
     check(apply_reviewed_resolutions(c3_copy.deepcopy(layout)) == layout,
           "C4a: the shipped empty registry is a byte-identical no-op")
+
+    # A published stat that disagrees with the subjects it summarises is
+    # wrong, and the referee re-derives every one of them. This is the exact
+    # shape that refused 27 of 53 forms: the page stats were computed while
+    # the page was built, before any reviewed decision could be applied.
+    drift = c4_layout()
+    drift["pages"][0]["stats"] = {
+        "comb_subjects_active": 0, "comb_subjects_active_resolved": 0,
+        "comb_subjects_active_unresolved": 1,
+        "comb_subjects_retained_unresolved": 0,
+        "comb_subjects_blocking": 1, "comb_evidence_blocking": 1}
+    fixed = apply_reviewed_resolutions(drift, c4_entry())["pages"][0]["stats"]
+    check(fixed["comb_subjects_active_resolved"] == 1
+          and fixed["comb_subjects_active_unresolved"] == 0
+          and fixed["comb_subjects_active"] == 1
+          and fixed["comb_subjects_blocking"] == 0
+          and fixed["comb_evidence_blocking"] == 0,
+          "C4a: page stats are recounted after a reviewed resolution lands")
+    drift_t = c3_layout()
+    drift_t["pages"][0]["stats"] = {
+        "comb_subjects_active": 0, "comb_subjects_active_resolved": 0,
+        "comb_subjects_active_unresolved": 0,
+        "comb_subjects_retained_unresolved": 1,
+        "comb_subjects_blocking": 1, "comb_evidence_blocking": 1}
+    fixed_t = apply_reviewed_transitions(drift_t, c3_entry())["pages"][0]["stats"]
+    check(fixed_t["comb_subjects_active"] == 1
+          and fixed_t["comb_subjects_retained_unresolved"] == 0
+          and fixed_t["comb_subjects_blocking"] == 0,
+          "C3: page stats are recounted after a reviewed transition lands")
 
     # ---- MULTI-PART FORMS: a code+revision slug is NOT a document identity --
     #
