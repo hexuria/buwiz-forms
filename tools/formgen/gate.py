@@ -4842,7 +4842,8 @@ def validate_comb_referee_report(
             errors.append(f"form status/reason relation is false: {slug}")
         recomputed[f"forms_{derived_status}"] += 1
         for key in (
-                "combs", "measured", "source_unevaluable", "unevaluable",
+                "combs", "measured", "composite", "source_unevaluable",
+                "unevaluable",
                 "ledger_blocking", "subjects_active", "subjects_active_resolved",
                 "subjects_active_unresolved", "subjects_retained_unresolved",
                 "inferences_suppressed", "referee_layout_mismatches",
