@@ -3062,6 +3062,32 @@
    "status": "open",
    "resolution": "NOT YET FIXED. Hypothesis, to be verified before any edit: `bridge_knockout_bites` does not bridge these two gaps for these lines, so no line spans the middle-band row contiguously and no cell boundary forms. Unbridged, the longest fragment (100.58..109.82) fails to reach the row bottom 112.14; bridged across both gaps the run is 98.18..118.58 and spans the row with margin. This is a lattice change with corpus-wide blast radius (bridging governs every form), so it needs its own package with a full flip census, both rasterizers, and byte-parity on the other 52 forms -- NOT a spot fix. Do NOT weaken `partition_edge_corroboration` to admit the subject: the criterion is correct, the producer's partition is what is wrong.",
    "evidence": "Corroboration census of all 30 retained subjects (2026-08-15, via validate_comb_ledger + retained_suppression_corroboration on the pinned PDFs): 29 TRUE, 1 FALSE, the FALSE being this subject; recorded at /tmp/retained-verdicts.json and reproduced in the campaign notes. partition_edge_corroboration returns full_span_edges_checked=1, certifying_edge=null, least_void_pt=42.601562. IR rule geometry for the three fragmented verticals and the y~100.24 horizontals as listed in `where`. 300-dpi crop of the region confirms by eye that the sheet draws all three rules full height and that the row is four distinct form items (2 Amended Return, 3 No. of Sheet/s Attached, 4 ATC, DN 010)."
+  },
+  {
+   "id": "F235",
+   "form": "2553-1999, 1701ms-2024, 2551m-2002",
+   "page": 1,
+   "severity": "major",
+   "what": "TIN group SEPARATORS are emitted as live typeable inputs. On 2553-1999 the three 4.5-4.8pt cells between the TIN's four 3-cell groups (p1c19, p1c21, p1c23) are classified kind=field and each carries an <input>, so Tab stops in them and digits can be typed into a gap that holds no character on the sheet. User-reported and reproduced: the TIN reads 111[2]111[1]231[1]123 with the separators focusable. A cell narrower than one character cell (~11pt at this pitch) cannot be a writing compartment; width alone refutes the field verdict.",
+   "where": "2553-1999 p1 TIN band y 189.36..208.80: p1c18 x 57.84..91.80 (comb 3), p1c19 x 91.80..96.60 (w 4.80, FIELD+input), p1c20 (comb 3), p1c21 x 129.72..134.24 (w 4.52, FIELD+input), p1c22 (comb 3), p1c23 x 167.40..172.20 (w 4.80, FIELD+input), p1c24 (comb 3). Corpus census of sub-8pt non-comb kind=field cells carrying an input: 6 cells across 3 forms -- 2553-1999 x4, 1701ms-2024 p1c51 (w 1.27pt), 2551m-2002 p1c81 (w 1.54pt). Every other form is clean.",
+   "audit_blind": true,
+   "cause": null,
+   "status": "open",
+   "resolution": "NOT YET FIXED. The fix is producer-side in the field verdict: a rectangle narrower than the form's own character pitch cannot be a writing compartment, so it must not take an input. Derive the bound from the neighbouring comb's measured pitch rather than a literal, and prove it with a corpus flip census (expected: exactly these 6 cells lose their input, nothing else moves) plus a browser tab-walk showing the TIN now steps 3-3-3-3 with no stops between groups. Interacts with the TIN-modernization project, which widens the final group on the SAME forms -- sequence the two so the separator fix lands first and the widening is measured against a clean tab order.",
+   "evidence": "User screenshot of localhost:4190/extra/2553-1999/index.html showing digits typed into the orange-highlighted separator boxes; layout geometry and emitted HTML quoted in `where`, both read from the shipped build of commit a36568a2; corpus census run over all 53 layouts against their emitted HTML on 2026-08-15."
+  },
+  {
+   "id": "F236",
+   "form": "corpus-wide (money fields; user-reported on 2553-1999, 0605-1999, 2551m-2002)",
+   "page": 1,
+   "severity": "major",
+   "what": "Money boxes carry ONE input spanning the whole rectangle, including the region right of the sheet's own printed decimal point, so pesos and centavos cannot be placed against the printed dot: whatever is typed simply flows across it. The dot is OFFICIAL ink -- on 2553 it is drawn in the page artwork as vector paths near the right edge of each money box (e.g. x~568.8 at y 440.4 and 464.88), not as a text run, which is why a text-only search reports no dot. There is no money field kind at all today: the whole corpus emits 5,608 `text` and 4,664 `comb` fields and zero money fields.",
+   "where": "2553-1999 p1c38 (14C), p1c40 (14E), p1c61 (19) and every peer: emitted as `data-field-kind=\"text\"` with a single full-box <input>. Same shape on 0605-1999 and 2551m-2002 items reported by the user. The official box paints only its two side walls plus the decimal-point artwork -- no internal divider -- so the split is a modelling decision, not a missing printed rule.",
+   "audit_blind": true,
+   "cause": null,
+   "status": "open",
+   "resolution": "NOT YET FIXED, and NOT a faithful-tree defect: the official sheet really does print one open box with a decimal point, so a two-input money field is a DELIBERATE DIVERGENCE and belongs in the corrected tree beside the TIN work, not in forms/. The model implementation already exists in the calibration pipeline (localhost:4175 renders 0605 item 19 as `125000 . 00`), so the corrected-tree version should adopt its whole/fraction split and its overflow-to-plain rule. Requires: a money-field kind derived from the printed decimal-point artwork (never a form-code list), the split point taken from the dot's own x, and a fill-time check that a value longer than the whole part's capacity falls back rather than truncating.",
+   "evidence": "User screenshots of localhost:4190 for 2553-1999, 0605-1999 and 2551m-2002 annotating the money rows ('We should have 2 separate input field here, 1 for the decimal point and the other is for the whole numbers'). Verified in the live DOM of the shipped build: p1c61 is a single <input> with inset 0.72pt on all sides spanning the full 131.76pt box, no ::before/::after content, no neighbouring text node, no <img>; the dots resolve to vector paths inside the page's single <svg> artwork layer (paths beginning 'M568.8 464.88' and 'M568.8 440.4'). IR confirms the official box paints only its two side walls (x 456.24 and 588.00, y 327.00..347.64 for 14E) with no internal divider and no dot text run. Corpus field-kind census over all 53 emitted documents: 5,608 text + 4,664 comb, zero money."
   }
  ]
 }
