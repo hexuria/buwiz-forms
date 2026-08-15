@@ -402,7 +402,7 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # guard fixture-covered and neuter-proven. No layout byte moves until the
 # user signs entries.
 LATTICE_PRODUCER_SHA256 = (
-    "dedffb9e52071909fdec59d6af8d9bc615cc5e2ba9be1d36c5f327da1613cea2"
+    "577f092811f410f8c4ecfc16f723b68c7710bdbd71e67a0fb737409f7d16e3fd"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -5459,6 +5459,54 @@ def validate_comb_ledger(
                 if subject_cells != topology["cells"]:
                     raise RefereeError(
                         f"{label} ledger/cell comb counts disagree")
+                certificate = subject.get("resolution_certificate")
+                registry_key = (slug, page_index, str(cell_id))
+                entry = review_registry.REVIEWED_LEDGER_RESOLUTIONS.get(
+                    registry_key)
+                if certificate is not None:
+                    # The adjudicator half of the resolution path.  The
+                    # certificate must match the registry byte-for-byte AND
+                    # the cell's own resolution record must carry the same
+                    # one -- the producer transitions two records and a forger
+                    # who moved only the subject is caught here.  Whether the
+                    # PAPER agrees is decided later, in `comparison`, which
+                    # re-derives the four-way and refuses to let a review
+                    # stand against it.
+                    source_sha = str(
+                        (layout.get("source") or {}).get("sha256") or "")
+                    cell_certificate = (
+                        ((cell.get("comb") or {}).get("resolution") or {})
+                        .get("review_certificate"))
+                    if (state != "active_resolved"
+                            or not isinstance(certificate, dict)
+                            or set(certificate) != {
+                                "criterion", "registry_key", "four_way",
+                                "resolved_reason_codes", "reviewer", "date"}
+                            or certificate["criterion"]
+                            != review_registry.RESOLUTION_CRITERION
+                            or certificate["registry_key"]
+                            != [slug, page_index, str(cell_id)]
+                            or entry is None
+                            or entry["subject_key"] != subject_key
+                            or entry["source_sha256"] != source_sha
+                            or certificate["four_way"] != {
+                                name: int(entry["four_way"][name])
+                                for name in ("lattice", "audit", "emitted",
+                                             "referee")}
+                            or certificate["reviewer"] != entry["reviewer"]
+                            or certificate["date"] != entry["date"]
+                            or cell_certificate != certificate
+                            or not string_list(
+                                certificate["resolved_reason_codes"],
+                                f"{label} resolved_reason_codes",
+                                nonempty=True)):
+                        raise RefereeError(
+                            f"{label} resolution certificate does not match "
+                            "the review registry")
+                elif entry is not None:
+                    raise RefereeError(
+                        f"{label} has a reviewed resolution the producer did "
+                        "not apply")
                 expected_resolution = (
                     "resolved" if state == "active_resolved" else "unresolved")
                 if (topology["resolution_status"] != expected_resolution
@@ -5505,6 +5553,7 @@ def validate_comb_ledger(
                 page_active_order.append(cell_id)
                 active_cell_ids.add(cell_id)
                 published_subjects.append({
+                    "resolution_certificate": certificate,
                     "page": page_index,
                     "subject_key": subject_key,
                     "legacy_cell_id": legacy_cell_id,
@@ -11021,6 +11070,7 @@ def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     lattice = cell["latticed"]
     emitted = cell["emitted"]
     referee = cell["referee"]
+    certificate = cell.get("resolution_certificate")
     if emitted != lattice or not cell["emitted_indexes_valid"]:
         return "stale-generation", "emitted physical slots disagree with lattice"
     if not audit_complete:
@@ -11042,6 +11092,21 @@ def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
         return "stop", "referee positions disagree with lattice anchors"
     source = int(referee["compartments"])
     audit = int(cell["audit_printed"])
+    if certificate is not None:
+        # REVIEW CANNOT OVERRULE THE PAPER.  A reviewed resolution was signed
+        # on four counts recorded in the registry; this run re-derives all
+        # four from the source, the audit, the layout and the emission, and
+        # every one must still equal what was signed.  A corpus that has
+        # moved under a signed decision is a `stop`, never a quiet pass --
+        # the decision has to be re-reviewed against the new evidence.
+        signed = certificate["four_way"]
+        if (signed["lattice"] != lattice or signed["audit"] != audit
+                or signed["emitted"] != emitted
+                or signed["referee"] != source):
+            return (
+                "stop",
+                "the evidence has moved since this resolution was reviewed",
+            )
     if source == lattice == audit:
         return "agree", "referee, lattice, audit, and emitted agree"
     if source == audit and source != lattice:
@@ -11408,6 +11473,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 "emitted_evidence": emitted,
                 "audit_printed": audit_printed,
                 "audit_relation": audit_relation,
+                "resolution_certificate": subject.get(
+                    "resolution_certificate"),
                 "referee": result,
             })
 
@@ -14270,6 +14337,55 @@ def self_test() -> int:
     assert comparison(composite_cell(referee={"status": "unevaluable"}),
                       True)[0] == "unevaluable"
     assert transition_decision(composite_cell(), "agree")[0] == "none"
+
+    # ---- C4a: a reviewed resolution is scored against THIS run's evidence --
+    def resolved_cell(**overrides):
+        value = {
+            "ledger_state": "active_resolved",
+            "latticed": 4, "emitted": 4, "audit_printed": 4,
+            "emitted_indexes_valid": True,
+            "referee": {"status": "measured", "compartments": 4,
+                        "positions_match": True},
+            "resolution_certificate": {
+                "criterion": "reviewed-ledger-resolution-v1",
+                "registry_key": ["0605-1999", 1, "p1c66"],
+                "four_way": {"lattice": 4, "audit": 4,
+                             "emitted": 4, "referee": 4},
+                "resolved_reason_codes": ["competing-endpoint-topologies"],
+                "reviewer": "self-test", "date": "2026-08-15",
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert comparison(resolved_cell(), True)[0] == "agree"
+    # Every one of the four signed counts is re-derived; if the corpus has
+    # moved under a signed decision it STOPS rather than passing quietly.
+    # (Moving `latticed` ALONE is not this case: emitted-vs-lattice disagreement
+    # is the more fundamental `stale-generation` fault and is caught earlier,
+    # which is the correct ordering -- a stale generation is not a stale
+    # review.  Lattice drift reaches this check when the emission moved with
+    # it, as a regenerated corpus does.)
+    drifted_cases = {
+        "audit alone": {"audit_printed": 5},
+        "regenerated lattice and emission": {"latticed": 5, "emitted": 5},
+        "the source itself": {"referee": {
+            "status": "measured", "compartments": 5,
+            "positions_match": True}},
+        "the whole corpus": {
+            "latticed": 5, "emitted": 5, "audit_printed": 5,
+            "referee": {"status": "measured", "compartments": 5,
+                        "positions_match": True}},
+    }
+    for name, overrides in drifted_cases.items():
+        drifted = comparison(resolved_cell(**overrides), True)
+        assert drifted[0] == "stop", (name, drifted)
+        assert "moved since this resolution was reviewed" in drifted[1], name
+    stale_generation = comparison(resolved_cell(latticed=5), True)
+    assert stale_generation[0] == "stale-generation", stale_generation
+    # A subject with no certificate is untouched by any of this.
+    assert comparison(resolved_cell(resolution_certificate=None),
+                      True)[0] == "agree"
 
     retained_emission = {
         subject["cell_id"]: {"valid": True}

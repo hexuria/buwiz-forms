@@ -3652,6 +3652,13 @@ CELL_KEYS = {
     "emitted", "emitted_indexes_valid", "emitted_evidence", "audit_printed",
     "audit_relation", "referee", "comparison_status", "comparison_reason",
     "transition_status", "transition_reason", "four_way",
+    # DECLARED SCHEMA CHANGE (C4a): every cell publishes the reviewed
+    # resolution certificate that promoted it, or null.  Publishing it on
+    # EVERY cell rather than only the promoted ones is deliberate: the key's
+    # presence then carries no information, so a forger cannot hide a
+    # promotion by omitting the field, and this gate re-derives the signed
+    # four-way for any cell that carries one.
+    "resolution_certificate",
 }
 INFERENCE_KEYS = {
     "page", "subject_key", "cell_id", "state", "blocks_gate",
@@ -4038,6 +4045,28 @@ def _comparison_for_cell(
             "audit published this subject as an offender with no printed "
             "topology",
         )
+    certificate = cell.get("resolution_certificate")
+    if isinstance(certificate, dict):
+        # Mirror of comb_referee.comparison's review guard: a signed
+        # resolution is re-derived against THIS run's four measurements, and
+        # a corpus that moved under it stops the gate.  Review can never
+        # overrule the paper, and a stale review is not a pass.
+        signed = certificate.get("four_way")
+        if (not isinstance(signed, dict)
+                or set(signed) != {"lattice", "audit", "emitted", "referee"}):
+            return "stop", "resolution certificate publishes no four-way"
+        measured_referee = (
+            referee.get("compartments") if isinstance(referee, dict) else None)
+        if (signed.get("lattice") != lattice
+                or signed.get("audit") != cell.get("audit_printed")
+                or signed.get("emitted") != emitted
+                or (isinstance(referee, dict)
+                    and referee.get("status") == "measured"
+                    and signed.get("referee") != measured_referee)):
+            return (
+                "stop",
+                "the evidence has moved since this resolution was reviewed",
+            )
     if not isinstance(referee, dict) or referee.get("status") != "measured":
         reason = referee.get("reason", "no reason") if isinstance(
             referee, dict) else "no reason"
@@ -10581,6 +10610,9 @@ def _synthetic_comb_fixture(
         "comparison_status": "agree",
         "transition_status": "none",
         "transition_reason": "active ledger subject is already resolved",
+        # C4a: every cell publishes the key; null means "no reviewed
+        # resolution promoted this subject".
+        "resolution_certificate": None,
         "referee": {
             "status": "measured",
             "reason": (
@@ -13018,6 +13050,32 @@ def self_test() -> int:
         "status": "unevaluable", "reason": "x"}), True)[0] == "unevaluable"
     assert _transition_for_cell("active_composite", "agree") == (
         "none", "reviewed composite transition is already applied")
+    # C4a mirror: a signed resolution re-derived against this run.
+    def gate_resolved_cell(**overrides):
+        value = {
+            "ledger_state": "active_resolved",
+            "latticed": 4, "emitted": 4, "audit_printed": 4,
+            "emitted_indexes_valid": True,
+            "referee": {"status": "measured", "compartments": 4,
+                        "positions_match": True},
+            "resolution_certificate": {
+                "criterion": "reviewed-ledger-resolution-v1",
+                "four_way": {"lattice": 4, "audit": 4,
+                             "emitted": 4, "referee": 4},
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert _comparison_for_cell(gate_resolved_cell(), True)[0] == "agree"
+    for overrides in ({"audit_printed": 5}, {"latticed": 5, "emitted": 5},
+                      {"referee": {"status": "measured", "compartments": 5,
+                                   "positions_match": True}}):
+        drifted = _comparison_for_cell(gate_resolved_cell(**overrides), True)
+        assert drifted[0] == "stop", (overrides, drifted)
+        assert "moved since this resolution was reviewed" in drifted[1]
+    assert _comparison_for_cell(gate_resolved_cell(resolution_certificate={
+        "criterion": "reviewed-ledger-resolution-v1"}), True)[0] == "stop"
     assert "active_composite" in LEDGER_STATES
     # The composite certificate schema the cell walk enforces.
     assert COMPOSITE_REFEREE_KEYS == {

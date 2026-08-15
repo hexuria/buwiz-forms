@@ -7449,6 +7449,111 @@ def apply_reviewed_transitions(
     return layout
 
 
+def apply_reviewed_resolutions(
+        layout: dict[str, Any],
+        resolutions: dict[tuple[str, int, str], dict[str, Any]] | None = None,
+        ) -> dict[str, Any]:
+    """Apply user-reviewed resolutions of ACTIVE_UNRESOLVED subjects.
+
+    The sibling of `apply_reviewed_transitions`, for the other designed review
+    path.  A subject whose four independent measurements already agree is
+    still not self-promoting: `eligible-for-reviewed-resolution` says only
+    that a person may now look.  This consumes that person's decision and
+    publishes `active_resolved` WITH a certificate, which comb_referee.py
+    re-validates against the registry AND against its own current-run
+    four-way evidence -- review cannot overrule the paper.
+
+    A resolution touches TWO records, because the referee cross-checks them:
+    the subject's state/reason_codes, and the owning cell's comb resolution
+    (`status` and `reason_codes`), whose contract is that reasons are
+    non-empty exactly when the status is `unresolved`.  The measured
+    evidence already on the resolution record (endpoint topologies and the
+    like) is KEPT: it is why the decision was reviewable, and erasing it
+    would destroy the audit trail the review is supposed to create.
+
+    Fail-closed on every edge, same doctrine as the transition path.
+    """
+    if resolutions is None:
+        resolutions = review_registry.REVIEWED_LEDGER_RESOLUTIONS
+        shape_errors = review_registry.registry_errors()
+    else:
+        shape_errors = review_registry.registry_errors(resolutions, {})
+    if shape_errors:
+        raise ValueError(
+            "reviewed-resolution registry is malformed: "
+            + "; ".join(shape_errors[:3]))
+    form = layout["form"]
+    slug = f"{str(form['code']).lower()}-{form['revision']}"
+    source_sha = layout["source"]["sha256"]
+    applied: set[tuple[str, int, str]] = set()
+    for page in layout["pages"]:
+        page_index = int(page["index"])
+        cells_by_id = {str(cell["id"]): cell for cell in page.get("cells", ())}
+        for subject in page.get("comb_subjects", ()):
+            cell_id = subject.get("cell_id")
+            if cell_id is None:
+                continue
+            key = (slug, page_index, str(cell_id))
+            entry = resolutions.get(key)
+            if entry is None:
+                continue
+            if subject.get("state") != "active_unresolved":
+                raise ValueError(
+                    f"{key}: a reviewed resolution names a subject whose "
+                    f"state is {subject.get('state')!r}, not active_unresolved")
+            if entry["subject_key"] != subject["subject_key"]:
+                raise ValueError(
+                    f"{key}: reviewed resolution subject_key does not bind "
+                    "this subject")
+            if entry["source_sha256"] != source_sha:
+                raise ValueError(
+                    f"{key}: reviewed resolution was made on different "
+                    "source bytes")
+            cell = cells_by_id.get(str(cell_id))
+            comb = (cell or {}).get("comb")
+            resolution = (comb or {}).get("resolution")
+            if not isinstance(resolution, dict):
+                raise ValueError(
+                    f"{key}: reviewed resolution names a cell with no comb "
+                    "resolution record")
+            if resolution.get("status") != "unresolved":
+                raise ValueError(
+                    f"{key}: the cell's comb is not unresolved")
+            # The producer can only vouch for ITS OWN count; the other three
+            # measurements are the referee's to confirm.  Checking this one
+            # here stops a stale entry from riding a regenerated corpus.
+            if int(entry["four_way"]["lattice"]) != int(comb["cells"]):
+                raise ValueError(
+                    f"{key}: reviewed four-way lattice count "
+                    f"{entry['four_way']['lattice']} is not this comb's "
+                    f"{comb['cells']}")
+            certificate = {
+                "criterion": review_registry.RESOLUTION_CRITERION,
+                "registry_key": [slug, page_index, str(cell_id)],
+                "four_way": {
+                    name: int(entry["four_way"][name])
+                    for name in ("lattice", "audit", "emitted", "referee")
+                },
+                "resolved_reason_codes": list(subject["reason_codes"]),
+                "reviewer": entry["reviewer"],
+                "date": entry["date"],
+            }
+            subject["state"] = "active_resolved"
+            subject["blocks_gate"] = False
+            subject["reason_codes"] = []
+            subject["resolution_certificate"] = certificate
+            resolution["status"] = "resolved"
+            resolution["reason_codes"] = []
+            resolution["review_certificate"] = certificate
+            applied.add(key)
+    stale = [key for key in resolutions
+             if key[0] == slug and key not in applied]
+    if stale:
+        raise ValueError(
+            f"reviewed resolutions match no eligible subject: {stale[:3]}")
+    return layout
+
+
 def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
     fillable_metrics = min_fillable_line_metrics(ir)
     layout = {
@@ -7467,7 +7572,7 @@ def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
             build_page(p, fillable_metrics) for p in ir["pages"]
         ],
     }
-    return apply_reviewed_transitions(layout)
+    return apply_reviewed_resolutions(apply_reviewed_transitions(layout))
 
 
 # ---------------------------------------------------------------------------
@@ -7565,6 +7670,91 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(apply_reviewed_transitions(
               c3_copy.deepcopy(layout)) == layout,
           "C3: the shipped empty registry is a byte-identical no-op")
+
+    # ---- C4a: reviewed resolutions of active_unresolved subjects ----------
+    def c4_layout():
+        return {
+            "form": {"code": "9999X", "revision": "2099"},
+            "source": {"sha256": "ab" * 32},
+            "pages": [{
+                "index": 1,
+                "cells": [{
+                    "id": "p1c7",
+                    "comb": {"cells": 4, "resolution": {
+                        "status": "unresolved",
+                        "method": "final-visible-endpoint-slab",
+                        "reason_codes": ["competing-endpoint-topologies"],
+                        "endpoint_topologies": [{"divider_x": [1.0]}],
+                    }},
+                }],
+                "comb_subjects": [{
+                    "subject_key": "p1@7,7",
+                    "legacy_cell_id": "p1c7",
+                    "cell_id": "p1c7",
+                    "state": "active_unresolved",
+                    "blocks_gate": True,
+                    "reason_codes": ["competing-endpoint-topologies"],
+                }],
+            }],
+        }
+
+    def c4_entry(**overrides):
+        entry = {
+            "subject_key": "p1@7,7",
+            "source_sha256": "ab" * 32,
+            "four_way": {"lattice": 4, "audit": 4, "emitted": 4, "referee": 4},
+            "reviewer": "self-test", "date": "2026-08-15",
+            "citation": "self-test",
+        }
+        entry.update(overrides)
+        return {("9999x-2099", 1, "p1c7"): entry}
+
+    c4_applied = apply_reviewed_resolutions(c4_layout(), c4_entry())
+    c4_subject = c4_applied["pages"][0]["comb_subjects"][0]
+    c4_resolution = c4_applied["pages"][0]["cells"][0]["comb"]["resolution"]
+    check(c4_subject["state"] == "active_resolved"
+          and c4_subject["blocks_gate"] is False
+          and c4_subject["reason_codes"] == [],
+          "C4a: a reviewed resolution resolves the subject")
+    check(c4_resolution["status"] == "resolved"
+          and c4_resolution["reason_codes"] == [],
+          "C4a: the cell's comb resolution transitions with it")
+    check(c4_resolution["endpoint_topologies"] == [{"divider_x": [1.0]}],
+          "C4a: the measured evidence that made it reviewable is KEPT")
+    check(c4_subject["resolution_certificate"]["resolved_reason_codes"]
+          == ["competing-endpoint-topologies"],
+          "C4a: the certificate records what was resolved")
+    check(c4_subject["resolution_certificate"]
+          == c4_resolution["review_certificate"],
+          "C4a: subject and cell carry the same certificate")
+
+    def c4_refused(entries, layout_value=None) -> bool:
+        try:
+            apply_reviewed_resolutions(layout_value or c4_layout(), entries)
+        except ValueError:
+            return True
+        return False
+
+    check(c4_refused(c4_entry(subject_key="p1@0,0")),
+          "C4a: an entry binding a different subject_key is refused")
+    check(c4_refused(c4_entry(source_sha256="cd" * 32)),
+          "C4a: an entry reviewed on different source bytes is refused")
+    check(c4_refused(c4_entry(four_way={
+              "lattice": 9, "audit": 9, "emitted": 9, "referee": 9})),
+          "C4a: a four-way lattice count that is not this comb's is refused")
+    check(c4_refused(c4_entry(reviewer="")),
+          "C4a: a shape-invalid registry is refused whole")
+    c4_resolved = c4_layout()
+    c4_resolved["pages"][0]["comb_subjects"][0]["state"] = "active_resolved"
+    check(c4_refused(c4_entry(), c4_resolved),
+          "C4a: an entry naming an already-resolved subject is refused")
+    c4_stale = c4_layout()
+    c4_stale["pages"][0]["comb_subjects"][0]["cell_id"] = "p1c8"
+    c4_stale["pages"][0]["cells"][0]["id"] = "p1c8"
+    check(c4_refused(c4_entry(), c4_stale),
+          "C4a: an entry matching no eligible subject is stale and refused")
+    check(apply_reviewed_resolutions(c3_copy.deepcopy(layout)) == layout,
+          "C4a: the shipped empty registry is a byte-identical no-op")
 
     # ---- C1: the comb writing surface's span-scoped edge weight ------------
     #
