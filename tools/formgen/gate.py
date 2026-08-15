@@ -4677,7 +4677,7 @@ def validate_comb_referee_report(
                 errors.append(f"cell transition is not evaluable: {slug}")
 
             if not isinstance(referee, dict) or referee.get("status") not in {
-                    "measured", "unevaluable"}:
+                    "measured", "unevaluable", "composite"}:
                 errors.append(f"cell source result is malformed: {slug}")
             elif referee["status"] == "composite":
                 # A composite is MEASURED -- on its corroboration, not on a
