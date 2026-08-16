@@ -2741,9 +2741,14 @@ FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
     # label cell's caption sitting one row down, across a genuinely blank
     # sliver cell rather than sharing the rule's own bottom wall); no
     # extract.py check, count or tolerance moved.
+    # Re-pinned 2026-08-17: the reunification and ink-trim fixture combs
+    # were rescaled under DECISION A's 24.5pt compartment bound (their
+    # compartments were 60pt and 28.6pt out of drawing convenience), and
+    # the signature-rule mutation residue moved with the user's 22A
+    # decision. No extract.py check, count or tolerance moved.
     "FIXTURE-RULES": (
         "rules.pdf", "0001",
-        "6e4b5327b69232a8593294dd6fab54f9e44fd717b2d3e6ef2b8690301d4056fd"),
+        "014b763e16b724b8bda1aac3476af0d058447924423803a4a58770b89c9c6dc5"),
     # Non-rectilinear ink: filled triangles and filled Bezier marks.
     "FIXTURE-PATHS": (
         "paths.pdf", "0001",

@@ -877,8 +877,12 @@ AUDIT_DEPENDENCY_SHA256 = {
     # otherwise have broken. No comb constant, tolerance, or existing check
     # count moves. `fixtures/prove_fixtures_fail.py` gains two source-level
     # mutations against the new check (21 total, up from 19).
+    # Re-pinned 2026-08-17: extract's FIXTURE-RULES sha moved because the
+    # fixture combs were rescaled under DECISION A's 24.5pt bound and the
+    # tracked rules.pdf was regenerated (CI's byte-verify caught the gap).
+    # No extract check, count or tolerance moved.
     "tools/formgen/extract.py": (
-        "add0df8ca9204d98f095477211d67b477f66a7ddc3c87d522b2ad260453eacaf"
+        "4c72c5f9787a1ee693ed7b967e47b58de0cd8ecc21684164cefcb6105583ba1a"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
