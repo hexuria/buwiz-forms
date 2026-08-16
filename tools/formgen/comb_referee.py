@@ -11223,6 +11223,18 @@ def transition_decision(
         cell: dict[str, Any], comparison_status: str) -> tuple[str, str]:
     """Report review eligibility without mutating the blocking ledger."""
     ledger_state = cell.get("ledger_state")
+    if comparison_status == "excepted":
+        # A reviewed exception IS the adjudication: the user accepted that
+        # the paper cannot decide this subject, so no transition is pending
+        # -- there is nothing left for a future review to wait on unless
+        # the exception itself is removed, at which point the subject
+        # returns to its blocking shape and this function's other branches
+        # apply again.
+        return (
+            "none",
+            "reviewed exception holds; the paper cannot adjudicate a "
+            "transition",
+        )
     if ledger_state == "active_resolved":
         return "none", "active ledger subject is already resolved"
     if ledger_state == "active_composite":

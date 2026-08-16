@@ -3907,6 +3907,12 @@ def _raw_referee_attestation_errors(value: Any) -> list[str]:
 
 def _transition_for_cell(ledger_state: str, comparison_status: str
                          ) -> tuple[str, str]:
+    if comparison_status == "excepted":
+        return (
+            "none",
+            "reviewed exception holds; the paper cannot adjudicate a "
+            "transition",
+        )
     if ledger_state == "active_resolved":
         return "none", "active ledger subject is already resolved"
     if ledger_state == "active_composite":
