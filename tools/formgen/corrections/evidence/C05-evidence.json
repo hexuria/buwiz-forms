@@ -11,7 +11,7 @@
     "source_pdf_sha256": "6ea2ef0f6c84a68ef1c50ad63f4ff0e95a68258f52b62b98f305c861c8b75d55"
   },
   "subject": {
-    "description": "The fourth (branch-code) group of the item-5 TIN comb chain on page 1 -- the PRIMARY withholding agent's TIN, captioned 'TIN' at x 34.68-47.70. The chain prints 53.04-94.08 / 109.08-149.28 / 164.28-204.36 / 218.52-276.00, separated by three grey-filled, black-stroked spacer boxes 15.00 / 15.00 / 14.16pt wide (gray 0.7529, stroke 0.75pt) rather than by dashes. The whole row sits on a page-wide 0.7529 grey band (18.00,101.91-594.12,276.89). NOT the subject: the second page-1 TIN comb, emitted as p1c74, printed box 366.48-401.28 x 465.96-479.76 with its own three 0.25pt ticks at 375.79 / 384.61 / 393.44 -- a disjoint box 309pt lower on the sheet, owned by record C06.",
+    "description": "The fourth (branch-code) group of the item-5 TIN comb chain on page 1 -- the PRIMARY withholding agent's TIN, captioned 'TIN' at x 34.68-47.70. The chain prints 53.04-94.08 / 109.08-149.28 / 164.28-204.36 / 218.52-276.00, separated by three grey-filled, black-stroked spacer boxes 15.00 / 15.00 / 14.16pt wide (gray 0.7529, stroke 0.75pt) rather than by dashes. The whole row sits on a page-wide 0.7529 grey band (18.00,101.91-594.12,276.89). NOT the subject: the second page-1 TIN comb, emitted as p1c74, printed box 366.48-401.28 x 465.96-479.76 with its own three 0.25pt ticks at 375.79 / 384.61 / 393.44 -- a disjoint box 309pt lower on the sheet, owned by record C06. After the 2026-08-17 sitting the whole chain (not only this box) is reflowed to even 3-3-3-5 inside the original outer span; this printed box remains the PDF identity of the branch group.",
     "page": 1,
     "printed_box_pt": [
       218.52,
@@ -64,12 +64,12 @@
     }
   ],
   "what": {
-    "operation": "set_comb_compartments",
+    "operation": "reflow_tin_chain_to_3_3_3_5",
     "from": 4,
     "to": 5,
     "layout_policy": {
-      "writing_box": "unchanged -- the emitted box 218.53,139.19 -> 276.00,156.72 (57.47 x 17.53pt), inside the printed box 218.52,139.20 -> 276.00,156.72 (57.48 x 17.52pt). The correction adds compartments inside the box BIR printed; it does not widen, move or repaint any artwork.",
-      "division": "equal, deterministic: left(i) = round(i * 57.47 / 5, 2) for i in 0..4, width(i) = left(i+1) - left(i), width(4) = 57.47 - left(4)",
+      "writing_box": "outer TIN strip unchanged 53.19-276.0 pt; the four groups and three separators are reflowed inside it so every digit cell is the same width (3-3-3-5). The official printed boxes are knocked out with a white rectangle of that same outer span.",
+      "division": "separators keep their printed widths (sum 44.16pt) and move with the groups; digit cells equal-split the remaining 178.65pt into 14: [12.76, 12.76, 12.76, 12.76, 12.76, 12.76, 12.77, 12.76, 12.76, 12.76, 12.76, 12.76, 12.76, 12.76]",
       "computed_lefts_pt": [
         0.0,
         11.49,
@@ -87,15 +87,16 @@
       "widths_sum_pt": 57.47,
       "nominal_pitch_pt": 11.494,
       "declared_pitch_attribute": "11.49",
-      "slot_inset": "vertical inset unchanged from the consumed batch (top 0.75pt, height 16.03pt at HEAD 98ca03c3). The HORIZONTAL insets the batch carries -- first slot left 0.37pt, last slot right 57.47-(41.74+15.35) = 0.38pt -- are absorbed by the equal division, so the five compartments run edge to edge inside the emitted box. That is declared here rather than left implicit: it is a consequence of the division rule, it moves no box and no artwork, and it is what makes the geometry re-computable by hand from the box width alone.",
-      "per_slot_input": "one text input per compartment, class 'fi fh21 fc' (unchanged from the consumed batch), maxlength 1, sharing the group's field name, slot indexes 0..4 contiguous",
+      "slot_inset": "none — even digit-cell width across the whole strip is the rule; re-applying per-group 0.36pt insets would squeeze the edges of each group and make the last five cells look different from the first nine",
+      "per_slot_input": "TIN1/2/3: one editable maxlength-1 input per cell. Branch: five editable maxlength-1 inputs, each blank — no value attribute, no readonly, no tabindex override. The branch code is a value the filer supplies on this sheet.",
       "corrected_internal_boundaries_pt": [
         230.02,
         241.52,
         253.01,
         264.51
       ],
-      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone. The four corrected boundaries deliberately do NOT coincide with the three printed ticks at 232.68 / 247.68 / 260.28; that mismatch is the divergence this record declares, not a defect in the division."
+      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone. The four corrected boundaries deliberately do NOT coincide with the three printed ticks at 232.68 / 247.68 / 260.28; that mismatch is the divergence this record declares, not a defect in the division.",
+      "branch_lock": "NOT locked — the official branch box prints no 000 and no ink of any kind inside it. A locked 00000 here would declare the head office on a form whose filer must name a real branch, so the five cells stay editable. Widening 3 (or 4) compartments to 5 is the whole change; nothing is pre-filled."
     }
   },
   "reason": "BIR's January-2010 artwork for 1600WP is CORRECT and OUT OF DATE. It prints four compartments for the item-5 TIN branch code and pre-prints nothing in them. BIR's own eBIRForms client, whose runtime this repository has harvested, declares that same field with max_length 5. No rule can derive 'BIR widened this field after 2010' from 2010 ink, which is precisely why this is a stage-2 correction and not a stage-1 producer bug (ARCHITECTURE.md, 'What belongs in which stage'). Note what is NOT claimed: the stage-1 producer is not wrong here. It read four printed compartments and emitted four, and finding F178 was closed by doing exactly that; this record overrides a correct reading of an out-of-date sheet.",

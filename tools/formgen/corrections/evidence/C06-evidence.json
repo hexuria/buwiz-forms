@@ -11,7 +11,7 @@
     "source_pdf_sha256": "6ea2ef0f6c84a68ef1c50ad63f4ff0e95a68258f52b62b98f305c861c8b75d55"
   },
   "subject": {
-    "description": "The fourth (branch-code) group of the 'WITHHOLDING AGENT TIN:' comb chain in the Schedule 1.1 attachment header. The pinned file is a single 612 x 936pt sheet carrying the 1600WP form above and the alphabetical-list attachment below; this chain is the attachment's own header, at y 465.96-479.76, and is NOT item 5 of the form (that chain sits at y 139.20-156.72 and is C05's subject). The chain prints 257.16-284.121 / 293.44-320.891 / 330.20-357.651 / 366.48-401.284, separated by three grey DeviceGray-0.753 filled boxes at 284.121-293.434, 320.891-330.204 and 357.00-366.314. The first three groups print three compartments each; this fourth one prints four.",
+    "description": "The fourth (branch-code) group of the 'WITHHOLDING AGENT TIN:' comb chain in the Schedule 1.1 attachment header. The pinned file is a single 612 x 936pt sheet carrying the 1600WP form above and the alphabetical-list attachment below; this chain is the attachment's own header, at y 465.96-479.76, and is NOT item 5 of the form (that chain sits at y 139.20-156.72 and is C05's subject). The chain prints 257.16-284.121 / 293.44-320.891 / 330.20-357.651 / 366.48-401.284, separated by three grey DeviceGray-0.753 filled boxes at 284.121-293.434, 320.891-330.204 and 357.00-366.314. The first three groups print three compartments each; this fourth one prints four. After the 2026-08-17 sitting the whole chain (not only this box) is reflowed to even 3-3-3-5 inside the original outer span; this printed box remains the PDF identity of the branch group.",
     "page": 1,
     "printed_box_pt": [
       366.48,
@@ -59,12 +59,12 @@
     }
   ],
   "what": {
-    "operation": "set_comb_compartments",
+    "operation": "reflow_tin_chain_to_3_3_3_5",
     "from": 4,
     "to": 5,
     "layout_policy": {
-      "writing_box": "unchanged — the emitted box 366.4,465.96 -> 401.29,479.90 (34.89 x 13.94pt) over the printed box 366.48,465.96 -> 401.284,479.76. The correction adds a compartment inside the box BIR printed; it does not widen, move or repaint any artwork.",
-      "division": "equal, deterministic: left(i) = round(i * 34.89 / 5, 2) for i in 0..4, width(i) = left(i+1) - left(i), width(4) = 34.89 - left(4)",
+      "writing_box": "outer TIN strip unchanged 257.17-401.29 pt; the four groups and three separators are reflowed inside it so every digit cell is the same width (3-3-3-5). The official printed boxes are knocked out with a white rectangle of that same outer span.",
+      "division": "separators keep their printed widths (sum 27.9pt) and move with the groups; digit cells equal-split the remaining 116.22pt into 14: [8.3, 8.3, 8.3, 8.31, 8.3, 8.3, 8.3, 8.3, 8.3, 8.3, 8.31, 8.3, 8.3, 8.3]",
       "computed_lefts_pt": [
         0.0,
         6.98,
@@ -82,11 +82,12 @@
       "widths_sum_pt": 34.89,
       "nominal_pitch_pt": 6.978,
       "declared_pitch_attribute": "6.98",
-      "slot_inset": "vertical surface unchanged from the consumed batch (top 0.25pt, height 13.44pt at HEAD 98ca03c) and every input keeps class \"fi fh11 fc\" — the correction changes the compartment COUNT, nothing about the writing surface's height or typography",
+      "slot_inset": "none — even digit-cell width across the whole strip is the rule; re-applying per-group 0.36pt insets would squeeze the edges of each group and make the last five cells look different from the first nine",
       "horizontal_insets_absorbed": "The 4-slot emission inset its writing band horizontally: first slot left 0.21pt, last slot left 27.04 + width 7.72 = 34.76, i.e. 0.13pt short of the box's right edge, which kept the inputs clear of the printed 0.25pt frame. The equal division states widths that sum to the full 34.89pt, so those two insets are absorbed and slots 0 and 4 now reach the cell edges. Measured consequence, so it is not discovered later: the printed left and right rails at x 366.48 and 401.284 then fall inside slots 0 and 4 by 0.08pt and 0.006pt respectively. audit.py's inputs_span_no_printed_divider still reports nothing, by its own DIVIDER_INTERIOR_PT = 0.5 margin, which exists precisely so an input drawn over its own frame is not reported against its own walls.",
       "printed_tick_alignment_lost": "Today's four slots align with the three printed ticks to within 0.011pt (emitted internal edges 375.80 / 384.61 / 393.44 against printed 375.789 / 384.609 / 393.441). Five equal compartments put their internal edges at 373.38 / 380.36 / 387.33 / 394.31, so none coincides with a printed tick and every printed tick falls inside an input. This is inherent to putting five compartments in a box printed with four and is stated here rather than left to be found in a screenshot.",
-      "per_slot_input": "one text input per compartment, maxlength 1, sharing the group's field name, slot indexes 0..4 contiguous",
-      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone."
+      "per_slot_input": "TIN1/2/3: one editable maxlength-1 input per cell. Branch: five editable maxlength-1 inputs, each blank — no value attribute, no readonly, no tabindex override. The branch code is a value the filer supplies on this sheet.",
+      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone.",
+      "branch_lock": "NOT locked — the official branch box prints no 000 and no ink of any kind inside it. A locked 00000 here would declare the head office on a form whose filer must name a real branch, so the five cells stay editable. Widening 3 (or 4) compartments to 5 is the whole change; nothing is pre-filled."
     }
   },
   "reason": "BIR's January-2010 artwork for the 1600WP attachment sheet is CORRECT and OUT OF DATE. It prints four compartments for the withholding agent's TIN branch code and prints nothing inside them. A Philippine TIN is 3-3-3-5, so a five-character branch code cannot be entered on four compartments. No rule can derive that width from 2010 ink, which is precisely why this is a stage-2 correction and not a stage-1 producer bug (ARCHITECTURE.md, 'What belongs in which stage'): the stage-1 emission reproduces the printed topology to 0.011pt and is not misreading anything.",

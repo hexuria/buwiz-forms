@@ -204,32 +204,19 @@ class EmittedComb:
         self.slots = slots
 
 
-def find_printed_box_element(root: Element,
-                             printed_box: tuple[float, float, float, float],
-                             where: str) -> EmittedComb:
-    """The one placed element whose box IS the printed box. Cardinality: one.
+def emitted_comb_from_element(element: Element, where: str) -> EmittedComb:
+    """Read compartments from one placed element's own children.
 
-    The record's subject identifies its target by the printed box, not by a
-    cell id -- ids are quantised bounding boxes and renumber on any geometry
-    change (42 of 146 ids cited in the findings ledger are already dead). So
-    the box is the key here too, and the id is carried into the report as a
-    hint only. Zero matches or more than one aborts.
+    The count is the structure (one input per placed child), never the
+    `data-comb-slots` attribute. The attribute is only read so a document
+    that contradicts itself is a refusal.
     """
-    x0, y0, x1, y1 = printed_box
-    want = (x0, y0, x1 - x0, y1 - y0)
-    matches = [element for element in walk(root)
-               if (box := element_box(element)) is not None
-               and all(abs(box[i] - want[i]) <= MATCH_TOLERANCE_PT
-                       for i in range(4))]
-    if len(matches) != 1:
-        raise Refusal(
-            "subject-cardinality",
-            f"{where}: {len(matches)} element(s) carry the printed box "
-            f"x {x0}-{x1}, y {y0}-{y1} pt within {MATCH_TOLERANCE_PT}pt; "
-            f"exactly one is required")
-    element = matches[0]
     box = element_box(element)
-    assert box is not None
+    if box is None:
+        raise Refusal(
+            "subject-has-no-compartments",
+            f"{where}: the subject element is not placed, so nothing was "
+            f"emitted to compare")
 
     slots: list[tuple[float, float]] = []
     for child in element.children:
@@ -260,14 +247,55 @@ def find_printed_box_element(root: Element,
                 "declared-slots-unreadable",
                 f"{where}: data-comb-slots is {declared_raw!r}") from error
         if declared != len(slots):
-            # The attribute is not the measurement -- the structure is. But a
-            # document whose own two statements disagree is not a document any
-            # number should be read out of.
             raise Refusal(
                 "declared-slots-disagree-with-structure",
                 f"{where}: the subject element declares {declared} "
                 f"compartment(s) and contains {len(slots)}")
     return EmittedComb(element.attrs.get("id", ""), box, declared, slots)
+
+
+def find_printed_box_element(root: Element,
+                             printed_box: tuple[float, float, float, float],
+                             where: str,
+                             cell_id: str | None = None) -> EmittedComb:
+    """The comb this record rewrote.
+
+    Identity is the printed box when the emitted element still sits on it.
+    A chain reflow moves the branch comb (same outer TIN strip, even 3-3-3-5
+    cells) so the official box and the emitted box are no longer the same
+    rectangle. Then, and only then, the cell id hint is used to find the
+    moved comb. The PDF is still measured at the original printed box; the
+    id is never how the artwork is identified.
+    """
+    x0, y0, x1, y1 = printed_box
+    want = (x0, y0, x1 - x0, y1 - y0)
+    matches = [element for element in walk(root)
+               if (box := element_box(element)) is not None
+               and all(abs(box[i] - want[i]) <= MATCH_TOLERANCE_PT
+                       for i in range(4))]
+    if len(matches) == 1:
+        return emitted_comb_from_element(matches[0], where)
+    if len(matches) > 1:
+        raise Refusal(
+            "subject-cardinality",
+            f"{where}: {len(matches)} element(s) carry the printed box "
+            f"x {x0}-{x1}, y {y0}-{y1} pt within {MATCH_TOLERANCE_PT}pt; "
+            f"exactly one is required")
+    if not cell_id:
+        raise Refusal(
+            "subject-cardinality",
+            f"{where}: {len(matches)} element(s) carry the printed box "
+            f"x {x0}-{x1}, y {y0}-{y1} pt within {MATCH_TOLERANCE_PT}pt; "
+            f"exactly one is required")
+    by_id = [element for element in walk(root)
+             if element.attrs.get("id") == cell_id]
+    if len(by_id) != 1:
+        raise Refusal(
+            "subject-cardinality",
+            f"{where}: the printed box x {x0}-{x1}, y {y0}-{y1} pt matches "
+            f"no element (the comb was reflowed) and cell id {cell_id!r} "
+            f"matches {len(by_id)}; exactly one is required")
+    return emitted_comb_from_element(by_id[0], where)
 
 
 def slot_page_ranges(comb: EmittedComb) -> list[tuple[float, float]]:
@@ -542,6 +570,11 @@ def evidence_facts(records_dir: pathlib.Path, record_id: str) -> dict[str, Any]:
         out["page"] = subject["page"]
     if isinstance(form.get("source_pdf_sha256"), str):
         out["pdf_sha256"] = form["source_pdf_sha256"].lower()
+    hint = subject.get("cell_id_hint")
+    if isinstance(hint, str):
+        match = re.search(r"\b(p\d+c\d+)\b", hint)
+        if match:
+            out["cell_id"] = match.group(1)
     return out
 
 
@@ -674,7 +707,8 @@ def measure_record(*, entry: dict[str, Any], ledger: dict[str, dict[str, Any]],
             f"not be the bytes the manifest describes")
 
     root = parse_document(document_path.read_text(encoding="utf-8"))
-    comb = find_printed_box_element(root, printed_box, where)
+    comb = find_printed_box_element(
+        root, printed_box, where, cell_id=backing.get("cell_id"))
     ranges = slot_page_ranges(comb)
 
     fitz = _import_fitz()
@@ -882,6 +916,22 @@ def self_test() -> int:
             lambda: find_printed_box_element(
                 parse_document(_fixture_html(FIVE_SLOTS, declared=5, left=300.0)),
                 PRINTED_BOX, "fixture"))
+    # A reflowed comb no longer sits on the printed box. The cell id is how
+    # the HTML is found; the PDF is still measured at the original box.
+    reflowed = find_printed_box_element(
+        parse_document(_fixture_html(FIVE_SLOTS, declared=5, left=160.0,
+                                     width=50.0)),
+        PRINTED_BOX, "fixture", cell_id="p1c13")
+    if reflowed.element_id != "p1c13" or abs(reflowed.box[0] - 160.0) > 0.01:
+        failures.append("a reflowed comb must be found by cell id when it "
+                        "has left the printed box")
+    if len(reflowed.slots) != 5:
+        failures.append("a reflowed comb must still count structure, not the box")
+    refuses("a reflowed comb with the wrong cell id must refuse",
+            "subject-cardinality",
+            lambda: find_printed_box_element(
+                parse_document(_fixture_html(FIVE_SLOTS, declared=5, left=300.0)),
+                PRINTED_BOX, "fixture", cell_id="p1c99"))
     # An attribute-free document still measures: the count never came from the
     # attribute, so removing it changes nothing.
     unattributed = find_printed_box_element(

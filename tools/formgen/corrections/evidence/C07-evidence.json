@@ -11,7 +11,7 @@
     "source_pdf_sha256": "877fbeee071752b2d9af72924647196e6dafa71a2412e74bc9f17897767cc2e7"
   },
   "subject": {
-    "description": "The fourth (branch-code) group of the item-4 TIN comb chain on page 1, in Part I (Background Information); the row's caption word 'TIN' prints at x 45.60-57.88 and item 5 'RDO Code' begins at x 258.24. The chain prints 58.56-94.32 / 106.56-142.08 / 155.76-191.52 / 204.24-250.80, all at y 129.84-144.72, separated not by dashes but by three grey filled boxes (gray 0.8902) at 94.32-106.56, 142.08-155.76 and 191.52-204.24, each also stroked black at 0.72pt. The printed pattern is 3+3+3+4.",
+    "description": "The fourth (branch-code) group of the item-4 TIN comb chain on page 1, in Part I (Background Information); the row's caption word 'TIN' prints at x 45.60-57.88 and item 5 'RDO Code' begins at x 258.24. The chain prints 58.56-94.32 / 106.56-142.08 / 155.76-191.52 / 204.24-250.80, all at y 129.84-144.72, separated not by dashes but by three grey filled boxes (gray 0.8902) at 94.32-106.56, 142.08-155.76 and 191.52-204.24, each also stroked black at 0.72pt. The printed pattern is 3+3+3+4. After the 2026-08-17 sitting the whole chain (not only this box) is reflowed to even 3-3-3-5 inside the original outer span; this printed box remains the PDF identity of the branch group.",
     "page": 1,
     "printed_box_pt": [
       204.24,
@@ -59,12 +59,12 @@
     }
   ],
   "what": {
-    "operation": "set_comb_compartments",
+    "operation": "reflow_tin_chain_to_3_3_3_5_lock_branch",
     "from": 4,
     "to": 5,
     "layout_policy": {
-      "writing_box": "unchanged — the printed box 204.24,129.84 -> 250.80,144.72 (46.56 x 14.88pt). The correction adds a compartment inside the box BIR printed; it does not widen, move or repaint any artwork.",
-      "division": "equal, deterministic: left(i) = round(i * 46.56 / 5, 2) for i in 0..4, width(i) = left(i+1) - left(i), width(4) = 46.56 - left(4)",
+      "writing_box": "outer TIN strip unchanged 58.56-250.8 pt; the four groups and three separators are reflowed inside it so every digit cell is the same width (3-3-3-5). The official printed boxes are knocked out with a white rectangle of that same outer span.",
+      "division": "separators keep their printed widths (sum 38.64pt) and move with the groups; digit cells equal-split the remaining 153.6pt into 14: [10.97, 10.97, 10.97, 10.98, 10.97, 10.97, 10.97, 10.97, 10.97, 10.97, 10.98, 10.97, 10.97, 10.97]",
       "computed_lefts_pt": [
         0.0,
         9.31,
@@ -82,9 +82,10 @@
       "widths_sum_pt": 46.56,
       "nominal_pitch_pt": 9.312,
       "declared_pitch_attribute": "9.31",
-      "slot_inset": "VERTICAL inset unchanged from the consumed batch (top 0.72pt, height 13.44pt at HEAD 98ca03c3), and the inputs keep class 'fi fh17 fc'. The HORIZONTAL insets are NOT preserved: the consumed batch insets the writing surface by 0.36pt on each side (first slot left 0.36pt; last slot right edge 35.04 + 11.16 = 46.20pt, i.e. 46.56 - 46.20 = 0.36pt), and its four slot widths sum to 45.84pt, whereas the equal division here spans the full 46.56pt from left 0. This is a real, small change to the writing surface and is stated rather than left to be discovered: the alternative (dividing 45.84pt inside the insets) was not taken, because the division is specified over the printed box so that it is recomputable by hand from the box width alone.",
-      "per_slot_input": "one text input per compartment, maxlength 1, sharing the group's field name, slot indexes 0..4 contiguous",
-      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone."
+      "slot_inset": "none — even digit-cell width across the whole strip is the rule; re-applying per-group 0.36pt insets would squeeze the edges of each group and make the last five cells look different from the first nine",
+      "per_slot_input": "TIN1/2/3: one editable maxlength-1 input per cell. Branch: five inputs, each value 0, readonly, so the printed branch is 00000 and cannot be typed over. The lock is authorised by the official artwork's own pre-printed 000 in this box and by nothing else.",
+      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone.",
+      "branch_lock": "locked — the official artwork pre-prints 000 inside the branch box, so the corrected form reproduces that printed constant as five readonly zeros rather than offering a typing surface over BIR's own ink."
     }
   },
   "reason": "BIR's July-2008 artwork for 1604CF is CORRECT and OUT OF DATE — by one compartment, not two. It prints four compartments for the TIN branch code and pre-prints '000' in the first three, leaving the fourth blank. The only valid Philippine TIN is 3-3-3-5 (user rule of 2026-08-15), so a four-compartment branch box cannot hold a five-digit branch code. No rule can derive that width from 2008 ink that prints four boxes, which is precisely why this is a stage-2 correction and not a stage-1 producer bug (ARCHITECTURE.md, 'What belongs in which stage'): stage 1 read this artwork correctly, and its four emitted slots align with the three printed ticks to 0.00pt. What this record does NOT have, and C01 did, is a harvested declaration from BIR's own client — there is no rules/forms/1604cf*/fields.json in this checkout at all.",

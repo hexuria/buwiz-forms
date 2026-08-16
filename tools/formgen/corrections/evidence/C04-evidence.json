@@ -11,7 +11,7 @@
     "source_pdf_sha256": "e52f96fe48aba2890078f889930744a4e13a4defe1284aa9c5292e2c702a20e5"
   },
   "subject": {
-    "description": "The fourth (branch-code) group of the item-6 TIN comb chain on page 1. The chain prints four boxes at x 57.84-91.92 / 96.48-129.84 / 134.16-167.52 / 172.08-205.44, all y 189.36-208.80, each white-filled and stroked 0.72pt black, separated by three solid dashes filled rgb(1, 0.8, 0.6) at x 91.68-96.72 / 129.60-134.40 / 167.28-172.32 over the same y band. The item caption is the glyph '6' at x 22.32-26.72 and 'TIN' at x 36.48-49.37, y 188.40-197.52, which is the same item number rules/forms/2553-v1999/fields.json records for all four fields.",
+    "description": "The fourth (branch-code) group of the item-6 TIN comb chain on page 1. The chain prints four boxes at x 57.84-91.92 / 96.48-129.84 / 134.16-167.52 / 172.08-205.44, all y 189.36-208.80, each white-filled and stroked 0.72pt black, separated by three solid dashes filled rgb(1, 0.8, 0.6) at x 91.68-96.72 / 129.60-134.40 / 167.28-172.32 over the same y band. The item caption is the glyph '6' at x 22.32-26.72 and 'TIN' at x 36.48-49.37, y 188.40-197.52, which is the same item number rules/forms/2553-v1999/fields.json records for all four fields. After the 2026-08-17 sitting the whole chain (not only this box) is reflowed to even 3-3-3-5 inside the original outer span; this printed box remains the PDF identity of the branch group.",
     "page": 1,
     "printed_box_pt": [
       172.08,
@@ -66,12 +66,12 @@
     }
   ],
   "what": {
-    "operation": "set_comb_compartments",
+    "operation": "reflow_tin_chain_to_3_3_3_5",
     "from": 3,
     "to": 5,
     "layout_policy": {
-      "writing_box": "unchanged — the emitted box 172.20,189.36 -> 205.44,208.80 (33.24 x 19.44pt) over the printed box 172.08,189.36 -> 205.44,208.80 (33.36 x 19.44pt). The correction adds compartments inside the box BIR printed; it does not widen, move or repaint any artwork.",
-      "division": "equal division of the BOX, deterministic: left(i) = round(i * 33.24 / 5, 2) for i in 0..4",
+      "writing_box": "outer TIN strip unchanged 57.84-205.44 pt; the four groups and three separators are reflowed inside it so every digit cell is the same width (3-3-3-5). The official printed boxes are knocked out with a white rectangle of that same outer span.",
+      "division": "separators keep their printed widths (sum 14.12pt) and move with the groups; digit cells equal-split the remaining 133.48pt into 14: [9.53, 9.54, 9.53, 9.54, 9.53, 9.54, 9.53, 9.53, 9.54, 9.53, 9.54, 9.53, 9.54, 9.53]",
       "computed_lefts_pt": [
         0.0,
         6.65,
@@ -100,9 +100,10 @@
       "widths_sum_pt": 32.4,
       "nominal_pitch_pt": 6.648,
       "declared_pitch_attribute": "6.65",
-      "slot_inset": "unchanged from the consumed batch — the correction changes the compartment COUNT, nothing about the writing surface. At HEAD 98ca03c3 that batch insets the surface vertically (top 0.72pt, height 18.00pt) AND horizontally by 0.48pt at the left edge of the box and 0.36pt at the right: its three compartments run left 0.48 / 10.68 / 21.96pt with widths 10.20 / 11.28 / 10.92pt, i.e. 0.48pt to 32.88pt. The five corrected compartments keep exactly that surface — the first starts at left 0.48pt with width 6.17pt (reaching the first equal-division boundary 6.65), the last starts on the boundary 26.59pt with width 6.29pt (stopping at 32.88pt, 0.36pt short of the box's right edge), and the three middle compartments sit on the boundaries exactly with widths 6.65 / 6.64 / 6.65pt. The boundaries in computed_lefts_pt are unchanged; the inset is the batch's writing surface applied to them. The two insets are NOT equal on this form (0.48 left, 0.36 right), which is why they are recorded as measured rather than as a single number.",
-      "per_slot_input": "one text input per compartment, class \"fi fh8 fc\" unchanged from the batch, maxlength 1, sharing the group's field name, slot indexes 0..4 contiguous",
-      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width and the batch's two insets alone: round(i * 33.24 / 5, 2), then clamp the first left to 0.48 and the last right to 32.88."
+      "slot_inset": "none — even digit-cell width across the whole strip is the rule; re-applying per-group 0.36pt insets would squeeze the edges of each group and make the last five cells look different from the first nine",
+      "per_slot_input": "TIN1/2/3: one editable maxlength-1 input per cell. Branch: five editable maxlength-1 inputs, each blank — no value attribute, no readonly, no tabindex override. The branch code is a value the filer supplies on this sheet.",
+      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width and the batch's two insets alone: round(i * 33.24 / 5, 2), then clamp the first left to 0.48 and the last right to 32.88.",
+      "branch_lock": "NOT locked — the official branch box prints no 000 and no ink of any kind inside it. A locked 00000 here would declare the head office on a form whose filer must name a real branch, so the five cells stay editable. Widening 3 (or 4) compartments to 5 is the whole change; nothing is pre-filled."
     }
   },
   "reason": "BIR's July-1999 artwork for 2553 is CORRECT and OUT OF DATE. It prints three compartments for the TIN branch code and, unlike 2550M, pre-prints nothing in them. BIR's own eBIRForms client, whose runtime this repository has harvested, declares that same field with max_length 5. No rule can derive 'BIR widened this field after 1999' from 1999 ink, which is precisely why this is a stage-2 correction and not a stage-1 producer bug (ARCHITECTURE.md, 'What belongs in which stage').",

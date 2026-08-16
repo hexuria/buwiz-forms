@@ -126,18 +126,33 @@ and refuses to measure a file that does not match.
 
 | ID | Form | Change | Authority | Status |
 | --- | --- | --- | --- | --- |
-| C01 | `2550m-2007` | TIN branch: 3 printed (pre-printed `000`) → 5 writable | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
-| C02 | `0605-1999` | TIN branch: writable 3 → 5 | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `declared` |
-| C03 | `2551m-2002` | TIN branch: writable 3 → 5 | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `declared` |
-| C04 | `extra/2553-1999` | TIN branch: writable 3 → 5 | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
-| C05 | `extra/1600wp-2010` item 5 primary | TIN branch: writable 4 → 5 | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
-| C06 | `extra/1600wp-2010` agent TIN tail | TIN branch: writable 4 → 5 | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `declared` |
-| C07 | `extra/1604cf-2008` | TIN branch: writable 4 → 5 | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `declared` |
+| C01 | `2550m-2007` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000`) | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C02 | `0605-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `declared` |
+| C03 | `2551m-2002` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `declared` |
+| C04 | `extra/2553-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C05 | `extra/1600wp-2010` item 5 primary | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, none pre-printed) | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C06 | `extra/1600wp-2010` agent TIN | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, no ink inside) | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `declared` |
+| C07 | `extra/1604cf-2008` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000` in 3 of 4) | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `declared` |
+
+### The branch-lock rule
+
+The branch group is locked to `00000` **only where the official artwork already
+pre-prints `000` in the branch box** — C01 and C07, and nowhere else. Where the
+official box is blank, the five cells stay **editable**: C02, C03, C04, C05 and
+C06 are payment and withholding sheets whose filer must be able to enter a real
+branch code, and painting a locked `00000` over a blank official box would
+silently credit every remittance to the head office. `lock_branch` in
+`tools/formgen/review/reflow_tin_chain.py` carries the distinction, and it is
+set from the pinned artwork's own ink, never from convenience.
 
 Why C01 is genuinely stage 2: the 2007 artwork is **correct and out of date**.
 It prints three compartments and pre-prints `000` in them; BIR's own client
 declares `frm2550m:txtBranchCode` with `max_length: 5`. No rule derives "BIR
-widened this after 2007" from 2007 ink.
+widened this after 2007" from 2007 ink. After the 2026-08-17 sitting the
+correction reflows the **whole** TIN strip to even 3-3-3-5 inside that same
+outer span (not five squeezed writable cells in the old last box), and locks
+the branch as `00000` — a lock C01 earns because the 2007 sheet prints `000`
+there, and one the blank-box forms C02–C06 do not.
 
 **Measured while authoring it, and not what the briefing said:** 2550M is not
 the only bundle printing `3+3+3+3`. Of 53 bundles, **39** print `3+3+3+5`,
