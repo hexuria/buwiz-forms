@@ -7197,8 +7197,15 @@ def derive_application_scope_elevation(
             # inventory's two) must equal its sorted image -- same
             # membership, their own stated order, nothing waived.
             stream_inventories = [
-                [cell_id for cell_id, _expected in _ordered_layout_cell_items(
-                    layout_binding.get("cells", {}))],
+                # the same selection _layout_audit_owner_ids makes: active
+                # subjects owning emission geometry; a composite or
+                # excepted-retained row registers no geometry of its own.
+                [cell_id for cell_id, cell in _ordered_layout_cell_items(
+                    layout_binding.get("cells", {}))
+                 if isinstance(cell, dict)
+                 and cell.get("ledger_state") in {
+                     "active_resolved", "active_unresolved"}
+                 and cell.get("expected_emission_geometry") is not None],
                 report_ids,
                 relation.get("expected_comb_ids") if isinstance(
                     relation, dict) else None,
