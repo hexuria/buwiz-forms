@@ -7223,13 +7223,26 @@ def derive_application_scope_elevation(
                 emission_inventory.get("emitted_cell_ids")
                 if isinstance(emission_inventory, dict) else None,
             ]
-            if (any(inventory != layout_owner_ids
-                    for inventory in stream_inventories)
-                    or any(inventory != sorted_owner_ids
-                           for inventory in sorted_inventories)):
+            stream_names = (
+                "layout-binding", "report-active", "relation-expected",
+                "relation-checked", "audit-expected", "audit-checked",
+                "ledger-active")
+            sorted_names = (
+                "relation-emitted", "audit-emitted", "ledger-emitted",
+                "emission-expected", "emission-emitted")
+            drifted = [
+                name for name, inventory in zip(
+                    stream_names, stream_inventories)
+                if inventory != layout_owner_ids
+            ] + [
+                name for name, inventory in zip(
+                    sorted_names, sorted_inventories)
+                if inventory != sorted_owner_ids
+            ]
+            if drifted:
                 errors.append(
                     f"elevatable owner/audit/report/ledger inventories differ: "
-                    f"{slug}")
+                    f"{slug} ({', '.join(drifted)})")
         for cell in cells:
             if not isinstance(cell, dict):
                 errors.append(f"cell evidence is malformed: {slug}")
