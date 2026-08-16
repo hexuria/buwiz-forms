@@ -5,8 +5,11 @@
     STAGE 3  MAP        fields -> eBIRForms XML payload keys, bound to forms-corrected/
 
 This directory holds stage 2's **ledger**: the declared corrections, their
-evidence, and the schema they are checked against. It holds no applier and no
-verifier — neither exists yet.
+evidence, and the schema they are checked against. The applier is
+[`../correct.py`](../correct.py). The independent fidelity producer is
+[`../corrected_fidelity.py`](../corrected_fidelity.py). Passing
+`validate_records.py` means the pair is well formed, never that the
+correction is true.
 
 ## What a record is
 
@@ -97,9 +100,9 @@ where the applier's loader (files only, root only) never sees it.
 
 | File | What it is |
 | --- | --- |
-| `C01-2550m-tin-branch-code.json` | The ledger entry the applier reads. The entire current ledger: one record. |
-| `evidence/C01-evidence.json` | Its evidence: every measurement, its source, and how to re-derive it. |
-| `schema/correction-record.schema.json` | The evidence-record shape. **Provisional** — the integration round owns the final version. Kept out of the ledger root so the applier does not try to apply it. |
+| `C01-2550m-tin-branch-code.json` … `C07-1604cf-tin-branch-code.json` | Ledger entries the applier reads. Seven records: C01 re-anchored against HEAD `98ca03c3`; C02–C07 authored for the remaining census sites. |
+| `evidence/C0N-evidence.json` | Per-record evidence: every measurement, its source, and how to re-derive it. |
+| `schema/correction-record.schema.json` | The evidence-record shape. Kept out of the ledger root so the applier does not try to apply it. |
 | `validate_records.py` | Checks each evidence record against the schema and proves it still agrees with its ledger entry. **Not the applier, not the verifier.** Passing means well formed, never means true. |
 | `evidence/measure_tin_branch_census.py` | Measures, from the pinned PDFs alone, what each bundle PRINTS for its TIN comb chain. Evidence tooling; nothing in the pipeline consumes it. |
 | `evidence/tin-branch-census-20260808.json` | That script's output for all 53 bundles, 2026-08-08. |
@@ -123,7 +126,13 @@ and refuses to measure a file that does not match.
 
 | ID | Form | Change | Authority | Status |
 | --- | --- | --- | --- | --- |
-| C01 | 2550M (Feb 2007) | TIN branch code: 3 printed compartments → 5 | harvested HTA runtime declaration; regulation not identified in-repo | `declared` |
+| C01 | `2550m-2007` | TIN branch: 3 printed (pre-printed `000`) → 5 writable | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C02 | `0605-1999` | TIN branch: writable 3 → 5 | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `declared` |
+| C03 | `2551m-2002` | TIN branch: writable 3 → 5 | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `declared` |
+| C04 | `extra/2553-1999` | TIN branch: writable 3 → 5 | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C05 | `extra/1600wp-2010` item 5 primary | TIN branch: writable 4 → 5 | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C06 | `extra/1600wp-2010` agent TIN tail | TIN branch: writable 4 → 5 | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `declared` |
+| C07 | `extra/1604cf-2008` | TIN branch: writable 4 → 5 | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `declared` |
 
 Why C01 is genuinely stage 2: the 2007 artwork is **correct and out of date**.
 It prints three compartments and pre-prints `000` in them; BIR's own client

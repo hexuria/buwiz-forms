@@ -145,3 +145,17 @@ node_modules/
 # All regenerable from the pinned source PDFs by tools/formgen/batch.py; the
 # maintained artefact is forms/, not this.
 /build/
+
+# Stage 2 output (tools/formgen/ARCHITECTURE.md). `forms-corrected/` is
+# copy(named stage-1 batch) + the correction ledger, built by
+# tools/formgen/correct.py and re-derivable from those two inputs alone. Its
+# manifest is written in the same run and binds the resolved source commit.
+#
+# Committing it would create exactly the 53-bundle PARALLEL CORPUS rule 2
+# forbids: 372 files of which 368 are byte-identical copies, that must be
+# re-verified on every regeneration and whose reviewed state would start
+# competing with forms/ as the answer to "what does this form look like". The
+# reviewable artefact is the ledger -- seven small records under
+# tools/formgen/corrections/ -- and it is tracked.
+/forms-corrected/
+/forms-corrected.manifest.json
