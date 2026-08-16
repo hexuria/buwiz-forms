@@ -1082,13 +1082,13 @@ REVIEWED_UNEVALUABLE_EXCEPTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
             "re-partition, and the count it would re-derive is not in "
             "dispute. The claim is true; the paper cannot prove it in "
             "that slab.",
-        "reviewer": "assistant (user-delegated, final review pending)",
+        "reviewer": "user",
         "date": "2026-08-16",
         "citation": (
-            "Sitting 3, DECISION C, decided under the user's delegation "
-            "('decide for yourself how to deal with this ... ill do final "
-            "review and override those if necessary'); to override, "
-            "delete this entry and the subject returns to blocking"),
+            "Sitting 3, DECISION C. Decided first under the user's "
+            "delegation ('decide for yourself ... ill do final review and "
+            "override'), then confirmed by the user's own pasted verdict: "
+            "'SITTING 3 VERDICT / DECISION-C: EXCEPTION'"),
     },
 }
 
