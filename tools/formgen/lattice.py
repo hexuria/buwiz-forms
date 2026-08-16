@@ -6282,8 +6282,15 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         # published into a cell as an active comb -- it takes the retained
         # path and its retirement is a reviewed transition, exactly like
         # the 28 subjects of this shape the user already adjudicated.
+        # ... and only when nothing CURRENT can own the cell: a healthy
+        # current comb (1600WP p1c74's four rule-legal TIN boxes over a
+        # rule-refused coarse legacy band) must keep its active subject and
+        # reach the ordinary reconciliation. The rule forbids publishing
+        # the refused LEGACY topology by continuity -- never the current
+        # detector's own measurement.
         compartment_rule_refused = bool(
-            len(legacy_slot_x) >= 2 and not compartment_runs(legacy_slot_x))
+            len(legacy_slot_x) >= 2 and not compartment_runs(legacy_slot_x)
+            and resolved is None and final_candidate_owned is None)
         previously_retained = (
             cell is None
             or (cell.get("comb") is None

@@ -153,9 +153,16 @@ UNMAPPED_GLYPH_NAME = "gexotic"
 # not understand" refusal the mechanism exists to make.
 COMB_BAND_REUNIFICATION_ROW_WIDTH_PT = 300.0
 COMB_BAND_REUNIFICATION_ROW_HEIGHT_PT = 40.0
-COMB_BAND_REUNIFICATION_RAIL_INSET_PT = 60.0
+# Rescaled 2026-08-16 for DECISION A: the fixture's compartments were 60pt
+# out of drawing convenience, which the compartment rule now refuses as
+# not-character-boxes (the corpus's real bound is 24.5pt). The rail inset
+# and slot count move together so every compartment lands ~20-23pt --
+# rule-legal -- while every property the fixture exists for (outer paper
+# within one pitch of the rails, the notch mutation inside one slot) keeps
+# its own relation to the pitch.
+COMB_BAND_REUNIFICATION_RAIL_INSET_PT = 20.0
 COMB_BAND_REUNIFICATION_RAIL_TOP_INSET_PT = 15.0
-COMB_BAND_REUNIFICATION_SLOTS = 4
+COMB_BAND_REUNIFICATION_SLOTS = 12
 COMB_BAND_REUNIFICATION_BAND_TOP_INSET_PT = 25.0
 COMB_BAND_REUNIFICATION_NOTCH_SIZE_PT = 0.0
 
@@ -233,7 +240,10 @@ SIGNATURE_RULE_GAP_CAPTION_TEXT = (
 # own walls, dividers or slot count.
 INK_TRIM_COMB_ROW_WIDTH_PT = 200.0
 INK_TRIM_COMB_ROW_HEIGHT_PT = 24.0
-INK_TRIM_COMB_SLOTS = 7
+# 9 slots, not 7, since DECISION A: 200/7 = 28.6pt compartments were wider
+# than the corpus's own 24.5pt character-box bound and the rule now refuses
+# the band whole; 200/9 = 22.2pt is inside every real comb's range.
+INK_TRIM_COMB_SLOTS = 9
 INK_TRIM_COMB_BAND_TOP_INSET_PT = 14.0
 INK_TRIM_CAPTION_TEXT = "Telephone No."
 INK_TRIM_CAPTION_FONT_SIZE_PT = 9.0
