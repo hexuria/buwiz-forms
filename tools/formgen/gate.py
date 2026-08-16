@@ -7173,13 +7173,30 @@ def derive_application_scope_elevation(
                 or form.get("inferences") != []):
             errors.append(f"ledger evidence is not fully resolved: {slug}")
             continue
+        # The report's cell list carries EVERY subject, and a suppressed
+        # one (reviewed composite, excepted retained) has no active owner
+        # rectangle -- the audit, emission and owner inventories rightly
+        # know nothing of it. The identity that must hold is over the
+        # ACTIVE cells; the suppressed remainder was partitioned and
+        # registry-re-derived above, and the class loop below walks every
+        # cell again individually.
         report_ids = [
             cell.get("cell") if isinstance(cell, dict) else None
             for cell in cells
+            if not (isinstance(cell, dict)
+                    and (cell.get("ledger_state") in (
+                        "active_composite", "retained_unresolved")))
         ]
         emission_inventory = form.get("emission_inventory")
         if layout_owner_ids is not None:
-            exact_inventories = [
+            # Two publication conventions, checked to each publisher's own
+            # canon (first light, like the assertion repairs above): the
+            # stream-ordered inventories must equal the layout-owner
+            # registry EXACTLY; the canonically-sorted ones (the audit's
+            # emitted list, the referee ledger's emitted ids, the emission
+            # inventory's two) must equal its sorted image -- same
+            # membership, their own stated order, nothing waived.
+            stream_inventories = [
                 [cell_id for cell_id, _expected in _ordered_layout_cell_items(
                     layout_binding.get("cells", {}))],
                 report_ids,
@@ -7187,24 +7204,29 @@ def derive_application_scope_elevation(
                     relation, dict) else None,
                 relation.get("checked_comb_ids") if isinstance(
                     relation, dict) else None,
-                relation.get("emitted_comb_ids") if isinstance(
-                    relation, dict) else None,
                 audit_evidence.get("expected_comb_ids") if isinstance(
                     audit_evidence, dict) else None,
                 audit_evidence.get("checked_comb_ids") if isinstance(
                     audit_evidence, dict) else None,
-                audit_evidence.get("emitted_comb_ids") if isinstance(
-                    audit_evidence, dict) else None,
                 ledger.get("active_subject_ids") if isinstance(
                     ledger, dict) else None,
+            ]
+            sorted_owner_ids = sorted(layout_owner_ids)
+            sorted_inventories = [
+                relation.get("emitted_comb_ids") if isinstance(
+                    relation, dict) else None,
+                audit_evidence.get("emitted_comb_ids") if isinstance(
+                    audit_evidence, dict) else None,
                 ledger.get("emitted_ids") if isinstance(ledger, dict) else None,
                 emission_inventory.get("expected_active_cell_ids")
                 if isinstance(emission_inventory, dict) else None,
                 emission_inventory.get("emitted_cell_ids")
                 if isinstance(emission_inventory, dict) else None,
             ]
-            if any(inventory != layout_owner_ids
-                   for inventory in exact_inventories):
+            if (any(inventory != layout_owner_ids
+                    for inventory in stream_inventories)
+                    or any(inventory != sorted_owner_ids
+                           for inventory in sorted_inventories)):
                 errors.append(
                     f"elevatable owner/audit/report/ledger inventories differ: "
                     f"{slug}")
