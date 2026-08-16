@@ -11584,6 +11584,11 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 # whole time -- what was missing was the report saying so.
                 "transition_certificate": subject.get(
                     "transition_certificate"),
+                # None on every cell until the exception pass below stamps
+                # the applied entry's identity -- published unconditionally
+                # so the report schema is one shape, the certificate
+                # pattern exactly.
+                "exception_registry_key": None,
                 "referee": result,
             })
 
@@ -11603,6 +11608,16 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             cell, slug, source_sha_for_exceptions, status, reason)
         cell["comparison_status"] = status
         cell["comparison_reason"] = reason
+        if status == "excepted":
+            # The applied entry's identity, published the same way the two
+            # certificates publish theirs: so the gate's corpus-coverage
+            # guard can count every reviewed exception applied exactly
+            # once, off the report's own claims. The gate's mirror still
+            # re-derives the entry per cell -- this key is the census, not
+            # the proof.
+            cell["exception_registry_key"] = [
+                slug, int(cell["page"]),
+                str(cell.get("cell_id") or cell["legacy_cell_id"])]
         transition_status, transition_reason = transition_decision(
             cell, status)
         cell["transition_status"] = transition_status
@@ -11656,10 +11671,31 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     }
     status = "ok"
     reasons: list[str] = []
-    if ledger["counts"]["blocking"]:
+    # A blocking subject whose cell's comparison is `excepted` is EXCUSED:
+    # a reviewed entry names its exact live refusal, this run re-verified
+    # the match (a drifted refusal raises before reaching here), and the
+    # blocker is counted out loud below rather than hidden. Only blockers
+    # WITHOUT an applied exception keep the form unevaluable -- excusal is
+    # per-subject and bound to the registry, never a form-level waiver.
+    excepted_ids = {
+        str(cell.get("legacy_cell_id") or cell.get("cell_id"))
+        for cell in cells
+        if cell.get("comparison_status") == "excepted"
+    }
+    blocking_excused = sum(
+        1 for subject in ledger["subjects"]
+        if subject.get("blocks_gate")
+        and str(subject.get("legacy_cell_id") or subject.get("cell_id"))
+        in excepted_ids
+    )
+    blocking_unexcused = ledger["counts"]["blocking"] - blocking_excused
+    if blocking_unexcused:
         status = "unevaluable"
         reasons.append(
-            f"{ledger['counts']['blocking']} lattice-ledger blockers")
+            f"{blocking_unexcused} lattice-ledger blockers")
+    elif blocking_excused:
+        reasons.append(
+            f"{blocking_excused} blocker(s) excused by reviewed exception")
     if not emission_inventory["complete"]:
         status = "unevaluable"
         reasons.append(
@@ -11718,6 +11754,7 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 ledger["counts"]["retained_unresolved"]),
             "inferences_suppressed": (
                 ledger["counts"]["inferences_suppressed"]),
+            "ledger_blocking_excused": blocking_excused,
             "ledger_blocking": ledger["counts"]["blocking"],
             "measured": len(source_measured),
             "composite": sum(
@@ -16779,6 +16816,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             form["counts"]["inferences_suppressed"] for form in forms)
         ledger_blocking = sum(
             form["counts"]["ledger_blocking"] for form in forms)
+        ledger_blocking_excused = sum(
+            form["counts"].get("ledger_blocking_excused", 0)
+            for form in forms)
         mismatches = sum(form["counts"]["referee_layout_mismatches"]
                          for form in forms)
         position_mismatches = sum(
@@ -16882,6 +16922,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "subjects_retained_unresolved": retained_unresolved,
                 "inferences_suppressed": inferences_suppressed,
                 "ledger_blocking": ledger_blocking,
+                "ledger_blocking_excused": ledger_blocking_excused,
                 "referee_layout_mismatches": mismatches,
                 "referee_layout_position_mismatches": position_mismatches,
                 "comparisons": comparison_totals,
