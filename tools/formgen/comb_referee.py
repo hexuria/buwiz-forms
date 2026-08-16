@@ -668,8 +668,13 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # package): PrintedDecoration in emit + the decoration rider in the judge.
 # Flip census: EXACTLY 8 inputs corpus-wide (45,708 -> 45,700), the approved
 # cells and nothing else.
+# Re-pinned 2026-08-16 (DECISION A rider): audit.py's retained-reason
+# vocabulary gained its fourth identity tuple,
+# `emission-suppressed-compartment-rule` -- the user-approved judge-side
+# acknowledgement of the compartment rule's two retained->composite
+# subjects (2551M p2c13, 1604CF p2c73). Nothing else in the judge moved.
 AUDIT_PRODUCER_SHA256 = (
-    "a293a64e786eff20376d9ebb7bc4b039a20f16b1b7c903fbb256b175c62f2a72"
+    "4d5070c101101184bdd958c6eb68c58effdcd197a0fb61c5244ce4e2ee08497a"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
