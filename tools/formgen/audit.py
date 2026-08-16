@@ -342,11 +342,32 @@ RETAINED_NO_BAND_REASON_CODES = (
 RETAINED_REFUTED_CAPTION_REASON_CODES = (
     "emission-suppressed-caption-block-not-character-cells",
 )
+# The fourth retained shape -- REVIEW BUNDLE RIDER, Sitting 2 DECISION A
+# (2026-08-16), user-approved. Same identity shape again: one legacy
+# subject, its own rectangle, comb removed, emission suppressed. It is
+# published by lattice.py when the compartment rule refuses the legacy
+# comb whole (no run of character-box-width compartments survives; the
+# corpus census behind the 24.5pt bound lives at
+# `lattice.COMB_COMPARTMENT_MAX_PT`, spelled out here rather than imported
+# for the same reason as every tuple above) AND nothing current can own
+# the cell -- 2551M p2c13's column-rule "comb" of 70.80/156.72pt and
+# 1604CF p2c73's 68.64/26.64pt grid cells, both of which the user
+# adjudicated by name. Validated through the identity branch like its two
+# siblings; a subject carrying this reason while its cell still owns an
+# active comb, or while its certificate names a different criterion than
+# its reason codes table, still fails exactly as before. The referee
+# corroborates the claim against Poppler under
+# `source-crossing-rule-not-comb-scoped-v1` -- the "dividers" must outrun
+# the comb band -- so nothing is taken on the producer's word.
+RETAINED_COMPARTMENT_RULE_REASON_CODES = (
+    "emission-suppressed-compartment-rule",
+)
 # The retained reason tuples that map a subject onto its own layout cell,
 # one-to-one, rather than onto a partition of other cells.
 RETAINED_IDENTITY_REASON_CODES = frozenset({
     RETAINED_NO_BAND_REASON_CODES,
     RETAINED_REFUTED_CAPTION_REASON_CODES,
+    RETAINED_COMPARTMENT_RULE_REASON_CODES,
 })
 # emit.py serialises point geometry to four decimals. Two rounded endpoints can
 # differ by at most two ten-thousandths of a point.

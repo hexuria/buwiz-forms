@@ -428,8 +428,12 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # 0605's suppressed inference is never inferred; 2551M p2c13 and 1604CF
 # p2c73 lose their 2-slot phantom combs and emit plain region-cut inputs;
 # 1604F p1c25 carries its runs as published evidence, geometry unchanged.
+# Re-pinned same-day: the routing narrowed (a rule-refused legacy comb is
+# retained only when nothing CURRENT can own the cell -- 1600WP p1c74's
+# regression) and the reunification/ink-trim fixture geometries moved under
+# the bound. Same DECISION A lineage as the entry above.
 LATTICE_PRODUCER_SHA256 = (
-    "150740f08d6cbc9c59f42c9c6dbb43e0ba802df5324fce784c0c98ffac9d84eb"
+    "f0a3d09e94653da54d1c9ef99325d477cad9b4965d1a11e72b3739839d24a519"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER

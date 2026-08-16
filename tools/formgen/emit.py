@@ -1690,6 +1690,36 @@ def ruled_blank_field_box(cell: dict[str, Any], rules: Sequence[dict[str, Any]],
         tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((rx0, ry0, rx1, ry1), ink)
         if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0:
             continue
+        # A glyph printed ON the line at its left end is the line's own
+        # printed PREFIX, and the writable surface starts after it: 2551M
+        # sets its item number "26" 1.68pt into its "Title/Position of
+        # Signatory" line (the only such site in the corpus -- every other
+        # claimed rule prints its item number BEFORE the line begins).
+        # `writing_box_clear_of_printed_ink` deliberately refuses to trim a
+        # glyph whose centre is inside the box, because in general "which
+        # half to keep" is a guess; on a WRITING LINE it is not -- reading
+        # order settles it. Anchored means the glyph starts within its OWN
+        # ink height of the current left edge, a self-referential bound
+        # with no tuned constant: an item number is at most one glyph tall,
+        # so a glyph one glyph-height into the line is still the prefix,
+        # while text printed mid-line (a filled-in blank) stays where it is
+        # for `inputs_over_printed_text` to refuse -- pre-printed ink deep
+        # in a line is a defect to report, never one to type over.
+        if ink is not None:
+            while True:
+                anchored = [
+                    (gx0, gy0, gx1, gy1)
+                    for gx0, gy0, gx1, gy1 in ink.intrusions(
+                        tx0, ty0, tx1, ty1)
+                    if gx1 > tx0 and gx0 - tx0 < (gy1 - gy0)
+                ]
+                if not anchored:
+                    break
+                tx0 = max(gx1 for _gx0, _gy0, gx1, _gy1 in anchored)
+                if tx1 - tx0 <= 0.0:
+                    break
+        if tx1 - tx0 <= 0.0:
+            continue
         boxes.append((tx0, ty0, tx1, ty1))
     if not boxes:
         return None
