@@ -1058,6 +1058,38 @@ REVIEWED_UNEVALUABLE_EXCEPTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
         "date": "2026-08-16",
         "citation": "Sitting 2, DECISION B: EXCEPTION",
     },
+    ("1604f-2018", 1, "p1c25"): {
+        "subject_key": "p1@14.64,223.58,591.46,241.82",
+        "source_sha256":
+            "fc34de40dc7e6bc5f7a8cbc3feb5b170cca4bce4f0abd5b7b0dece4e9dd75c4d",
+        "reason": (
+            "referee: chosen source topology lacks a clean single-frame "
+            "subject proof"),
+        "evidence":
+            "p1c36's twin on the same sheet, decided the same way. All "
+            "three implementations agree at 36 (lattice = audit = "
+            "emitted); the form renders its 35 writable boxes correctly "
+            "with the printed '7A ZIP Code' label box (compartment #32, "
+            "72.75pt, the compartment rule's own evidence run cut) "
+            "correctly skipped. The referee measured 99.97% of the band "
+            "(7.4375 of 7.44pt) and matched all 35 dividers to within "
+            "0.004pt, then abstained over one 0.48pt sliver -- the "
+            "thickness of a horizontal rule crossing the comb -- where "
+            "only 19 of the 35 verticals survive the crossing and no "
+            "single-frame subject proof exists. A split into 31+4 "
+            "run-scoped subjects was designed, then refuted: the sliver "
+            "ambiguity lives inside the 31-run and survives any "
+            "re-partition, and the count it would re-derive is not in "
+            "dispute. The claim is true; the paper cannot prove it in "
+            "that slab.",
+        "reviewer": "assistant (user-delegated, final review pending)",
+        "date": "2026-08-16",
+        "citation": (
+            "Sitting 3, DECISION C, decided under the user's delegation "
+            "('decide for yourself how to deal with this ... ill do final "
+            "review and override those if necessary'); to override, "
+            "delete this entry and the subject returns to blocking"),
+    },
 }
 
 
