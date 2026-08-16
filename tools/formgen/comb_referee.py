@@ -415,8 +415,21 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # was built -- before any decision could apply -- so every page carrying one
 # published a summary of the ledger as it stood a moment earlier, and this
 # referee refused 27 of 53 forms on "ledger stat ... is N, expected N+1".
+# Re-pinned 2026-08-16 (DECISION A): lattice gained the compartment rule --
+# COMB_COMPARTMENT_MAX_PT = 24.5, census-derived, user-approved (Sitting 2).
+# Three placements: the CURRENT band builder refuses a band with no run of
+# character boxes; the same refusal at the subject layer routes a
+# rule-refused LEGACY comb to retained (reason
+# `emission-suppressed-compartment-rule`) instead of publishing it into a
+# cell by continuity; and the legacy pass itself is deliberately untouched
+# (28 of the 30 retained/composite subjects fail the rule -- that population
+# IS the legacy detector's false-positive class, already adjudicated by
+# reviewed transitions that refusing there would erase). Corpus effect:
+# 0605's suppressed inference is never inferred; 2551M p2c13 and 1604CF
+# p2c73 lose their 2-slot phantom combs and emit plain region-cut inputs;
+# 1604F p1c25 carries its runs as published evidence, geometry unchanged.
 LATTICE_PRODUCER_SHA256 = (
-    "eab80a047106f2fd150f2e8cb99b684309f23b865ba78e8a27fb0ca3b8ef8ec7"
+    "150740f08d6cbc9c59f42c9c6dbb43e0ba802df5324fce784c0c98ffac9d84eb"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -1025,6 +1038,18 @@ RETAINED_SUPPRESSION_SOURCE_CRITERIA = {
     ("emission-suppressed-no-rectangular-owner", "painted-edge-partition"):
         SOURCE_PARTITION_EDGE_CRITERION,
     ("emission-suppressed-no-final-visible-band",):
+        SOURCE_CROSSING_RULE_CRITERION,
+    # DECISION A (2026-08-16): a legacy comb the compartment rule refuses
+    # whole (no run of character boxes survives) is retained rather than
+    # published. Its factual claim is the same one the crossing-rule
+    # corroboration already re-derives against Poppler: the "dividers" are
+    # rules that extend far beyond the comb band -- table structure, not
+    # comb ticks. Both members of this population (2551M p2c13's column
+    # rule spanning y 46.56-140.16 across a 11.76pt row, 1604CF p2c73's
+    # grid rules spanning 350.88pt across a 16.8pt row) are exactly that
+    # shape. No new probe is added; a criterion whose corroboration cannot
+    # run still fails closed below.
+    ("emission-suppressed-compartment-rule",):
         SOURCE_CROSSING_RULE_CRITERION,
 }
 # Poppler emits every character as a `use` of a `#glyph-*` path, and `parse_svg`
@@ -14581,9 +14606,10 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     # The reason tuple is read out of the registry rather than restated, so a
     # second entry added to that table without a fixture of its own trips this
     # pairing instead of quietly riding on the caption block's evidence.
-    # R2a widened the table to three entries; each pairing is pinned here so a
-    # fourth cannot ride on the existing fixtures.
-    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 3
+    # R2a widened the table to three entries; DECISION A (2026-08-16) to
+    # four. Each pairing is pinned here so a fifth cannot ride on the
+    # existing fixtures.
+    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 4
     caption_reason_codes = [
         "emission-suppressed-caption-block-not-character-cells"]
     assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[tuple(caption_reason_codes)]
@@ -14593,6 +14619,9 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
         "painted-edge-partition")] == SOURCE_PARTITION_EDGE_CRITERION)
     assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[(
         "emission-suppressed-no-final-visible-band",)]
+        == SOURCE_CROSSING_RULE_CRITERION)
+    assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[(
+        "emission-suppressed-compartment-rule",)]
         == SOURCE_CROSSING_RULE_CRITERION)
 
     # (a) An unresolved retained topology stays accepted, and stays free of any
@@ -14642,6 +14671,21 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
         lattice_producer_bytes)
     assert unresolved_caption["suppression_obligations"] == {
         retained_cell["id"]: SOURCE_CAPTION_BLOCK_CRITERION}
+    # DECISION A's tuple carries the same debt through both topology
+    # statuses, and its criterion is the crossing-rule re-derivation -- the
+    # subject's "dividers" must prove to be rules that outrun the comb band.
+    for rule_status in ("resolved", "unresolved"):
+        rule_refused = validate_comb_ledger(
+            retained_fixture_slug,
+            retained_variant(
+                rule_status, ["emission-suppressed-compartment-rule"]),
+            lattice_producer_bytes)
+        rule_subject = rule_refused["subjects"][0]
+        assert rule_subject["state"] == "retained_unresolved"
+        assert (rule_subject["source_suppression_criterion"]
+                == SOURCE_CROSSING_RULE_CRITERION)
+        assert rule_refused["suppression_obligations"] == {
+            retained_cell["id"]: SOURCE_CROSSING_RULE_CRITERION}
 
     # (c) A resolved topology under a reason this referee cannot re-derive is
     # the original guard, and it still closes.  Both shapes are covered: a

@@ -117,6 +117,49 @@ QUANT = 2
 # ever merging two genuinely distinct lines (the tightest real pair on the
 # 2551Q is 0.48pt apart).
 CLUSTER_TOL_PT = 0.3
+# A comb compartment is a character box, and a character box has a maximum
+# width. Census over every compartment the corpus declares (39,471 in cells
+# plus the 5 of the one suppressed inference, 2026-08-16): the widest
+# legitimate compartment anywhere is 23.76pt (2551M p1c3's year box); the
+# narrowest compartment that is demonstrably NOT a character box is 25.22pt
+# (0605's "DD" table column, claimed by the suppressed inference). The bound
+# is the midpoint of that separating interval, +-0.73pt from both walls.
+# Exactly five compartments corpus-wide exceed it, and every one is a
+# printed label box or a table column the detector mistook for a comb slot:
+# 2551M p2c13 (70.80/156.72 -- a schedule cell crossed by a column rule),
+# 1604CF p2c73 (68.64/26.64 -- the same), 1604F p1c25 slot 31 (72.75 --
+# the "7A ZIP Code" label box between two runs of real boxes).
+# User decision 2026-08-16 (Sitting 2, DECISION A) adopting the rule:
+# a compartment wider than this is not a character box; it CUTS the slot
+# run; and a surviving run of fewer than two compartments is not a comb.
+# The minimum-run clause is load-bearing, not decoration: 0605's "MM"
+# column measures 23.63pt -- UNDER the legitimate maximum, unreachable by
+# any width test -- and dies only because cutting its neighbours leaves it
+# alone (one box is not a row of boxes).
+COMB_COMPARTMENT_MAX_PT = 24.5
+
+
+def compartment_runs(boundaries: Sequence[float]) -> list[tuple[int, int]]:
+    """Maximal slot-index runs after cutting over-wide compartments.
+
+    Returns [(a, b)] meaning slots a..b-1 (boundaries[a..b]) survive as one
+    comb run; runs shorter than two compartments are dropped. An empty list
+    means nothing here is a comb. The identity result for an ordinary comb
+    is [(0, len(boundaries) - 1)].
+    """
+    runs: list[tuple[int, int]] = []
+    start = 0
+    count = len(boundaries) - 1
+    for index in range(count):
+        if boundaries[index + 1] - boundaries[index] > COMB_COMPARTMENT_MAX_PT:
+            if index - start >= 2:
+                runs.append((start, index))
+            start = index + 1
+    if count - start >= 2:
+        runs.append((start, count))
+    return runs
+
+
 
 # Two collinear fragments of one border count as continuous within this gap.
 JOIN_EPSILON_PT = 0.05
@@ -3077,7 +3120,17 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             -float(ink["thickness_pt"])))
         thicknesses = collections.Counter(d["thickness_pt"] for d in ordered_band)
         grays = sorted({d["gray"] for d in ordered_band if d["gray"] is not None})
+        # DECISION A (2026-08-16): a band none of whose compartments form a
+        # run of character boxes is not a comb at all -- the whole band is
+        # refused here, exactly as a band with no candidate ink already is.
+        # A band that still holds at least one run keeps its full measured
+        # geometry (reshaping is the subject layer's act, not this one's)
+        # and carries the runs as published evidence.
+        rule_runs = compartment_runs(boundaries)
+        if not rule_runs:
+            continue
         bands.append({
+            "compartment_runs": [list(run) for run in rule_runs],
             "cells": len(xs) + 1,
             "divider_count": len(xs),
             # Modal slot width. Ties break on the smaller value for determinism.
@@ -3241,6 +3294,18 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
         thicknesses = collections.Counter(d["thickness_pt"] for d in ordered)
         grays = sorted({d["gray"] for d in ordered if d["gray"] is not None})
+        # DECISION A deliberately does NOT apply here. This is the legacy
+        # pass, and it derives the reviewed subject denominator -- frozen
+        # history. Census (2026-08-16): 28 of the corpus's 30
+        # retained/composite subjects have legacy combs the compartment
+        # rule refuses, because the retained/composite population IS the
+        # legacy detector's false-positive population, and the reviewed
+        # transition path is how each was already adjudicated. Refusing
+        # them here would erase those 28 reviewed decisions retroactively
+        # and stale every transition certificate (the fail-closed guard in
+        # apply_reviewed_transitions fires on 0605 p1c54 within seconds of
+        # trying). A false legacy comb is retired by review, never by a
+        # detector edit.
         bands.append({
             "cells": len(xs) + 1,
             "divider_count": len(xs),
@@ -6209,11 +6274,23 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 if failure is not None
             ]
         )
-        if (cell is None
-                or (cell.get("comb") is None
-                    and final_candidate is None
-                    and not subject["has_final_support"])
-                or no_owned_band):
+        legacy_slot_x = [
+            float(value) for value in (legacy_comb.get("slot_x") or ())]
+        # DECISION A at the subject layer: a legacy comb none of whose
+        # compartments form a run of character boxes may keep its reviewed
+        # subject (the denominator is frozen history) but may NOT be
+        # published into a cell as an active comb -- it takes the retained
+        # path and its retirement is a reviewed transition, exactly like
+        # the 28 subjects of this shape the user already adjudicated.
+        compartment_rule_refused = bool(
+            len(legacy_slot_x) >= 2 and not compartment_runs(legacy_slot_x))
+        previously_retained = (
+            cell is None
+            or (cell.get("comb") is None
+                and final_candidate is None
+                and not subject["has_final_support"])
+            or no_owned_band)
+        if (previously_retained or compartment_rule_refused):
             replacements = erased_edge_replacement_candidates(subject)
             owner = (
                 source_certified_replacement_owner(replacements)
@@ -6279,7 +6356,17 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 ]
             else:
                 mapped = [cell]
-            if cell is None:
+            if not previously_retained:
+                # Only the compartment rule brought this subject here, so
+                # only that reason is published. The guard order protects
+                # every subject the OLD routing already retains -- their
+                # reviewed reasons (and thus their certificates' criteria)
+                # do not move even where their legacy combs would also fail
+                # the rule, which the 2026-08-16 census shows is 28 of 30.
+                retained_reason_codes = [
+                    "emission-suppressed-compartment-rule",
+                ]
+            elif cell is None:
                 retained_reason_codes = [
                     "emission-suppressed-no-rectangular-owner",
                     "painted-edge-partition",
@@ -7669,6 +7756,66 @@ def self_test(ir_path: pathlib.Path) -> int:
     def check(condition: bool, message: str) -> None:
         if not condition:
             failures.append(message)
+
+    # ---- DECISION A: the compartment rule ---------------------------------
+    #
+    # Census-pinned boundary cases, each the real geometry of the cell that
+    # motivated it. The rule must cut every defect, split the merged row,
+    # and keep the three widest LEGITIMATE combs in the corpus untouched.
+    # Deleting the rule (or moving its bound) fails these directly, and the
+    # constructor case below proves the band builders actually consult it.
+    check(compartment_runs([0.0, 70.8, 227.52]) == [],
+          "2551M p2c13's two table-cell halves are not a comb")
+    check(compartment_runs([0.0, 68.64, 95.28]) == [],
+          "1604CF p2c73's two table-cell halves are not a comb")
+    check(compartment_runs(
+        [0.0, 106.15, 205.38, 229.01, 254.23, 306.18]) == [],
+          "0605's Details-of-Payment header is never a comb: three columns "
+          "die by width and MM alone dies by the minimum-run clause")
+    p1c25 = [0.0]
+    for width in [13.8] * 31 + [72.75, 14.52, 14.52, 15.12, 15.48]:
+        p1c25.append(p1c25[-1] + width)
+    check(compartment_runs(p1c25) == [(0, 31), (32, 36)],
+          "1604F p1c25 cuts at the ZIP label box into a 31-run and a 4-run")
+    check(compartment_runs([0.0, 18.96, 42.72]) == [(0, 2)],
+          "2551M p1c3, the widest legitimate compartment (23.76pt), is kept")
+    check(compartment_runs([0.0, 21.12, 42.72]) == [(0, 2)],
+          "2553 p1c6, the next widest legitimate comb, is kept")
+    check(compartment_runs([0.0, 24.5, 49.0]) == [(0, 2)],
+          "a compartment exactly AT the bound is kept -- the rule is "
+          "strictly wider-than, so the bound itself is not a cliff edge")
+    # The band builders consult the rule: a two-slab band whose compartments
+    # are table-cell halves must not survive construction, and the same
+    # geometry scaled down to character pitch must. Geometry mirrors 2551M
+    # p2c13 -- one full-height divider inside a wide cell band -- built with
+    # the same synthetic shapes the fixtures below use (defined here early
+    # because this block runs first).
+    def _rule_vertical(x: float, thickness: float, seq: int) -> dict[str, Any]:
+        return {
+            "axis": "v",
+            "x0": q(x - thickness / 2), "x1": q(x + thickness / 2),
+            "y0": 0.0, "y1": 12.0,
+            "thickness_pt": q(thickness),
+            "gray": 0.0, "role": "structural",
+            "paint_seq": seq, "paint_seq_max": seq,
+        }
+    rule_divider = _rule_vertical(70.8, 0.96, 10)
+    rule_paint = FinalPaint([rule_divider])
+    refused_bands = comb_bands(
+        [rule_divider], [rule_divider], 0.0, 227.52, (0.96, 0.96),
+        rule_paint)
+    check(refused_bands == [],
+          "comb_bands refuses the table-cell band whole -- no run of "
+          "character boxes survives the compartment rule")
+    kept_divider = _rule_vertical(14.4, 0.96, 10)
+    kept_paint = FinalPaint([kept_divider])
+    kept_bands = comb_bands(
+        [kept_divider], [kept_divider], 0.0, 28.8, (0.96, 0.96), kept_paint)
+    check(bool(kept_bands)
+          and kept_bands[0]["cells"] == 2
+          and kept_bands[0]["compartment_runs"] == [[0, 2]],
+          "the identical band at character pitch survives and publishes "
+          "its identity run")
 
     # ---- C3-A: reviewed retained-subject transitions -----------------------
     #
@@ -11168,12 +11315,19 @@ def self_test(ir_path: pathlib.Path) -> int:
           and not swept_paint.structural_across(swept_target, 0.0, 10.0),
           "moving nonrect knockout was certified from one midpoint section")
 
-    # A lone highly unequal split and two anchor runs separated by an interior
+    # A lone unequal split and two anchor runs separated by an interior
     # multi-slot gap are not coherent single combs. They remain present but
-    # explicitly unresolved until an independent referee adjudicates them.
-    unequal = synthetic_vertical(95, 0, 10, 0.2, 20)
+    # explicitly unresolved until an independent referee adjudicates them --
+    # PROVIDED every compartment is still character-box sized. This fixture
+    # originally split 95/5 in a 100pt band; DECISION A (2026-08-16) now
+    # refuses that outright at construction (a 95pt compartment is not a
+    # character box -- the compartment-rule fixtures at the top assert it),
+    # so the retained-unresolved contract is asserted just under the bound:
+    # 20/10 trips the same unequal-two-slot relation with both compartments
+    # legitimate widths.
+    unequal = synthetic_vertical(20, 0, 10, 0.2, 20)
     unequal_bands = comb_bands(
-        [unequal], [unequal], 0, 100, (1.0, 1.0),
+        [unequal], [unequal], 0, 30, (1.0, 1.0),
         FinalPaint([unequal]))
     check(bool(unequal_bands)
           and unequal_bands[0]["resolution"]["status"] == "unresolved"

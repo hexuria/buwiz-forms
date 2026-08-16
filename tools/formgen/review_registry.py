@@ -87,14 +87,13 @@ REVIEWED_LEDGER_RESOLUTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
         "reviewer": "uriah", "date": "2026-08-15",
         "citation": "C4b review sitting, all 112 rows approved",
     },
-    ("1604cf-2008", 2, "p2c73"): {
-        "subject_key": "p2@174.48,220.32,269.76,237.12",
-        "source_sha256": "877fbeee071752b2d9af72924647196e6dafa71a2412e74bc9f17897767cc2e7",
-        "four_way": {"lattice": 2, "audit": 2,
-                     "emitted": 2, "referee": 2},
-        "reviewer": "uriah", "date": "2026-08-15",
-        "citation": "C4b review sitting, all 112 rows approved",
-    },
+    # ("1604cf-2008", 2, "p2c73") was approved in the 112-row sitting and
+    # REVOKED by Sitting 2 DECISION A (2026-08-16): the compartment rule
+    # (>24.5pt cuts the run; runs shorter than 2 are not combs) proved the
+    # cell is a plain table cell crossed by column rules -- slots of 68.64pt
+    # and 26.64pt cannot be character boxes -- so there is no comb subject
+    # left for the entry to bind. The rule is corpus-wide; special-casing
+    # this form to preserve the entry is forbidden.
     ("1604e-2018", 1, "p1c4"): {
         "subject_key": "p1@135.02,121.46,208.61,144.02",
         "source_sha256": "1db203442630c74ff4c95b509e204f542c5ba8fb1bd812440793e314ce709876",
@@ -714,6 +713,36 @@ REVIEWED_LEDGER_RESOLUTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
 }
 
 REVIEWED_LEDGER_TRANSITIONS: dict[tuple[str, int, str], dict[str, Any]] = {
+    # Sitting 2, DECISION A (2026-08-16): the compartment rule proved these
+    # two "2-slot combs" are plain table cells crossed by grid rules
+    # (compartments of 70.80/156.72pt and 68.64/26.64pt -- the corpus's
+    # only compartments beyond the 24.5pt census bound besides 1604F
+    # p1c25's label box). The rule retires them through THIS path -- the
+    # same reviewed transition the user already exercised 28 times --
+    # because deleting their subjects would rewrite the frozen legacy
+    # denominator. Their cells now emit plain region-cut inputs; the
+    # criterion is the crossing-rule re-derivation the referee runs against
+    # Poppler (the "dividers" outrun the comb band by 8x and 21x).
+    ("2551m-2002", 2, "p2c13"): {
+        "subject_key": "p2@22.56,92.64,250.08,104.40",
+        "source_sha256":
+            "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e",
+        "transition": "active_composite",
+        "suppression_criterion": "source-crossing-rule-not-comb-scoped-v1",
+        "reviewer": "user",
+        "date": "2026-08-16",
+        "citation": "Sitting 2, DECISION A: ADOPT-RULE",
+    },
+    ("1604cf-2008", 2, "p2c73"): {
+        "subject_key": "p2@174.48,220.32,269.76,237.12",
+        "source_sha256":
+            "877fbeee071752b2d9af72924647196e6dafa71a2412e74bc9f17897767cc2e7",
+        "transition": "active_composite",
+        "suppression_criterion": "source-crossing-rule-not-comb-scoped-v1",
+        "reviewer": "user",
+        "date": "2026-08-16",
+        "citation": "Sitting 2, DECISION A: ADOPT-RULE",
+    },
     # Registered from the C4b review sitting (2026-08-15). Every entry's
     # suppression claim was corroborated TRUE from the pinned source by the
     # R2a re-derivations before it reached the reviewer, and 1800-2018 p1c4
@@ -1007,6 +1036,27 @@ REVIEWED_UNEVALUABLE_EXCEPTIONS: dict[tuple[str, int, str], dict[str, Any]] = {
         "reviewer": "user",
         "date": "2026-08-15",
         "citation": "F234; verdict 'DECISION 2 - F234: exception'",
+    },
+    ("1604f-2018", 1, "p1c36"): {
+        "subject_key": "p1@271.49,289.85,591.46,309.89",
+        "source_sha256":
+            "fc34de40dc7e6bc5f7a8cbc3feb5b170cca4bce4f0abd5b7b0dece4e9dd75c4d",
+        "reason": "referee: one or more source slabs have ambiguous topology",
+        "evidence":
+            "16 uniform ~14pt compartments; lattice, audit and emitter all "
+            "count 16 and the subject is active_resolved in the ledger. The "
+            "referee measured 93.54% of the band (6.959375 of 7.44pt) and "
+            "matched all 16 anchors to within 0.002pt, then abstained over "
+            "the remaining 0.48pt sliver -- the thickness of a horizontal "
+            "rule crossing the comb -- where only 13 of the 16 verticals "
+            "survive the crossing and the rule's own fragments read as "
+            "unrecognised ink. The direct lever is the slab-ignore bound, "
+            "which is the frozen POSITION_TOL_PT = 0.25 and stays frozen. "
+            "The claim is true and the paper cannot prove it inside that "
+            "sliver.",
+        "reviewer": "user",
+        "date": "2026-08-16",
+        "citation": "Sitting 2, DECISION B: EXCEPTION",
     },
 }
 
