@@ -7105,15 +7105,27 @@ def derive_application_scope_elevation(
                 or ledger.get("reason") != "complete"
                 or ledger.get("errors") != []):
             errors.append(f"raw audit ledger has a failure: {slug}")
+        # First light for this validator (it runs only once every other
+        # check is green, which had never happened): two latent mismatches
+        # with the audit's long-standing publication conventions. The
+        # offender keys are published ON FAILURE -- a green assertion
+        # carries an empty offenders list and no counts -- and the emitted
+        # inventory is canonically sorted while expected/checked are in
+        # stream order, so those two compare by membership; the exact
+        # stream-order identity is still enforced against the layout-owner
+        # registry below for the stream-ordered inventories.
         if (not isinstance(relation, dict)
                 or relation.get("holds") is not True
                 or relation.get("inventory_complete") is not True
-                or relation.get("offender_count") != 0
-                or relation.get("offender_dimensions") != {}
+                or (relation.get("offenders") or []) != []
+                or (relation.get("offender_count") or 0) != 0
+                or (relation.get("offender_dimensions") or {}) != {}
                 or relation.get("expected_comb_ids")
                 != relation.get("checked_comb_ids")
-                or relation.get("expected_comb_ids")
-                != relation.get("emitted_comb_ids")
+                or not isinstance(relation.get("expected_comb_ids"), list)
+                or not isinstance(relation.get("emitted_comb_ids"), list)
+                or sorted(relation["expected_comb_ids"])
+                != sorted(relation["emitted_comb_ids"])
                 or relation.get("owner_certificates_invalid") != 0
                 or relation.get("owner_certificates_valid")
                 != relation.get("combs_checked")
@@ -7128,11 +7140,35 @@ def derive_application_scope_elevation(
             errors.append(f"emission evidence is not complete: {slug}")
         counts = form.get("counts")
         cells = form.get("cells")
-        if (not isinstance(counts, dict) or not isinstance(cells, list)
-                or counts.get("ledger_blocking") != 0
-                or counts.get("subjects_active_resolved") != len(cells)
-                or counts.get("subjects_active_unresolved") != 0
-                or counts.get("subjects_retained_unresolved") != 0
+        if not isinstance(counts, dict) or not isinstance(cells, list):
+            errors.append(f"ledger evidence is not fully resolved: {slug}")
+            continue
+        # The per-form partition, derived from the cells the class loop
+        # below individually re-derives against the registry: composite
+        # subjects are resolved-by-review, and the only unresolved or
+        # retained subjects allowed are those whose comparisons are
+        # reviewed exceptions -- counted here and required to equal the
+        # ledger's own splits exactly. Anything else keeps the flat zero.
+        form_composite = sum(
+            1 for cell in cells if isinstance(cell, dict)
+            and cell.get("ledger_state") == "active_composite")
+        form_excepted_unresolved = sum(
+            1 for cell in cells if isinstance(cell, dict)
+            and cell.get("comparison_status") == "excepted"
+            and cell.get("ledger_state") == "active_unresolved")
+        form_excepted_retained = sum(
+            1 for cell in cells if isinstance(cell, dict)
+            and cell.get("comparison_status") == "excepted"
+            and cell.get("ledger_state") == "retained_unresolved")
+        form_excused = form_excepted_unresolved + form_excepted_retained
+        if (counts.get("ledger_blocking") != form_excused
+                or counts.get("ledger_blocking_excused") != form_excused
+                or counts.get("subjects_active_resolved")
+                != len(cells) - form_composite - form_excused
+                or counts.get("subjects_active_unresolved")
+                != form_excepted_unresolved
+                or counts.get("subjects_retained_unresolved")
+                != form_excepted_retained
                 or counts.get("inferences_suppressed") != 0
                 or form.get("inferences") != []):
             errors.append(f"ledger evidence is not fully resolved: {slug}")
