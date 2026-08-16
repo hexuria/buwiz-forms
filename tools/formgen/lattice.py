@@ -117,6 +117,49 @@ QUANT = 2
 # ever merging two genuinely distinct lines (the tightest real pair on the
 # 2551Q is 0.48pt apart).
 CLUSTER_TOL_PT = 0.3
+# A comb compartment is a character box, and a character box has a maximum
+# width. Census over every compartment the corpus declares (39,471 in cells
+# plus the 5 of the one suppressed inference, 2026-08-16): the widest
+# legitimate compartment anywhere is 23.76pt (2551M p1c3's year box); the
+# narrowest compartment that is demonstrably NOT a character box is 25.22pt
+# (0605's "DD" table column, claimed by the suppressed inference). The bound
+# is the midpoint of that separating interval, +-0.73pt from both walls.
+# Exactly five compartments corpus-wide exceed it, and every one is a
+# printed label box or a table column the detector mistook for a comb slot:
+# 2551M p2c13 (70.80/156.72 -- a schedule cell crossed by a column rule),
+# 1604CF p2c73 (68.64/26.64 -- the same), 1604F p1c25 slot 31 (72.75 --
+# the "7A ZIP Code" label box between two runs of real boxes).
+# User decision 2026-08-16 (Sitting 2, DECISION A) adopting the rule:
+# a compartment wider than this is not a character box; it CUTS the slot
+# run; and a surviving run of fewer than two compartments is not a comb.
+# The minimum-run clause is load-bearing, not decoration: 0605's "MM"
+# column measures 23.63pt -- UNDER the legitimate maximum, unreachable by
+# any width test -- and dies only because cutting its neighbours leaves it
+# alone (one box is not a row of boxes).
+COMB_COMPARTMENT_MAX_PT = 24.5
+
+
+def compartment_runs(boundaries: Sequence[float]) -> list[tuple[int, int]]:
+    """Maximal slot-index runs after cutting over-wide compartments.
+
+    Returns [(a, b)] meaning slots a..b-1 (boundaries[a..b]) survive as one
+    comb run; runs shorter than two compartments are dropped. An empty list
+    means nothing here is a comb. The identity result for an ordinary comb
+    is [(0, len(boundaries) - 1)].
+    """
+    runs: list[tuple[int, int]] = []
+    start = 0
+    count = len(boundaries) - 1
+    for index in range(count):
+        if boundaries[index + 1] - boundaries[index] > COMB_COMPARTMENT_MAX_PT:
+            if index - start >= 2:
+                runs.append((start, index))
+            start = index + 1
+    if count - start >= 2:
+        runs.append((start, count))
+    return runs
+
+
 
 # Two collinear fragments of one border count as continuous within this gap.
 JOIN_EPSILON_PT = 0.05
@@ -2012,7 +2055,9 @@ def bridge_knockout_bites(lattice: Lattice,
 
 
 def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str, Any]],
-                        lo: float, hi: float, axis: str) -> tuple[float, float, list[float]]:
+                        lo: float, hi: float, axis: str
+                        ) -> tuple[float, float, list[float],
+                                   list[dict[str, Any]]]:
     """Weight and tone of the ink on lattice line `index` over span lo..hi.
 
     Thickness is the maximum: where a border thins to 0.24 crossing a comb
@@ -2025,6 +2070,7 @@ def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str
     tolerance, and a distance-only scan would report the boundary as absent.
     """
     a0, a1 = ("x0", "x1") if axis == "h" else ("y0", "y1")
+    c0, c1 = ("y0", "y1") if axis == "h" else ("x0", "x1")
     position = lattice.positions[index]
     own = {id(r) for r in lattice.members[index]}
     hits = [r for r in all_ink
@@ -2034,7 +2080,21 @@ def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str
         hits = lattice.members[index]
     thicknesses = sorted({r["thickness_pt"] for r in hits})
     grays = [r["gray"] for r in hits if r["gray"] is not None]
-    return (max(thicknesses), min(grays) if grays else 0.0, thicknesses)
+    # The per-segment geometry, published beside the fused maximum so a comb
+    # can later ask what stands over ITS OWN span (C1): each hit's extent
+    # along the line and its ink band across it.  The fused thickness answers
+    # "how heavy is this border"; the segments answer "which ink is where".
+    segments = [
+        {
+            "a0": q(float(r[a0])), "a1": q(float(r[a1])),
+            "c0": q(float(r[c0])), "c1": q(float(r[c1])),
+            "thickness_pt": float(r["thickness_pt"]),
+            "gray": r["gray"],
+        }
+        for r in sorted(hits, key=lambda r: (float(r[a0]), float(r[c0])))
+    ]
+    return (max(thicknesses), min(grays) if grays else 0.0, thicknesses,
+            segments)
 
 
 # ---------------------------------------------------------------------------
@@ -3060,7 +3120,17 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             -float(ink["thickness_pt"])))
         thicknesses = collections.Counter(d["thickness_pt"] for d in ordered_band)
         grays = sorted({d["gray"] for d in ordered_band if d["gray"] is not None})
+        # DECISION A (2026-08-16): a band none of whose compartments form a
+        # run of character boxes is not a comb at all -- the whole band is
+        # refused here, exactly as a band with no candidate ink already is.
+        # A band that still holds at least one run keeps its full measured
+        # geometry (reshaping is the subject layer's act, not this one's)
+        # and carries the runs as published evidence.
+        rule_runs = compartment_runs(boundaries)
+        if not rule_runs:
+            continue
         bands.append({
+            "compartment_runs": [list(run) for run in rule_runs],
             "cells": len(xs) + 1,
             "divider_count": len(xs),
             # Modal slot width. Ties break on the smaller value for determinism.
@@ -3224,6 +3294,18 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
         thicknesses = collections.Counter(d["thickness_pt"] for d in ordered)
         grays = sorted({d["gray"] for d in ordered if d["gray"] is not None})
+        # DECISION A deliberately does NOT apply here. This is the legacy
+        # pass, and it derives the reviewed subject denominator -- frozen
+        # history. Census (2026-08-16): 28 of the corpus's 30
+        # retained/composite subjects have legacy combs the compartment
+        # rule refuses, because the retained/composite population IS the
+        # legacy detector's false-positive population, and the reviewed
+        # transition path is how each was already adjudicated. Refusing
+        # them here would erase those 28 reviewed decisions retroactively
+        # and stale every transition certificate (the fail-closed guard in
+        # apply_reviewed_transitions fires on 0605 p1c54 within seconds of
+        # trying). A false legacy comb is retired by review, never by a
+        # detector edit.
         bands.append({
             "cells": len(xs) + 1,
             "divider_count": len(xs),
@@ -4635,7 +4717,9 @@ def dividers_within(comb: dict[str, Any], rails: Interval) -> int:
     )
 
 
-def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
+def comb_writing_surface(cell: dict[str, Any],
+                         comb: dict[str, Any] | None = None,
+                         ) -> tuple[float, float] | None:
     """The vertical paper a comb's compartments are written on.
 
     A divider tick is a GUIDE MARK, not a wall.  `comb_bands` measures the band
@@ -4667,10 +4751,84 @@ def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
     y0 = float(cell["y0"])
     y1 = float(cell["y1"])
     border = cell.get("border") or {}
-    top_border = border.get("top") or {}
-    bottom_border = border.get("bottom") or {}
-    top = float(top_border.get("thickness_pt") or 0.0)
-    bottom = float(bottom_border.get("thickness_pt") or 0.0)
+
+    def edge_weight(record: dict[str, Any] | None, edge_y: float) -> float:
+        """The wall weight the COMB's own paper stands under (C1).
+
+        The border record's fused `thickness_pt` is the right weight for
+        DRAWING the border -- "where a border thins to 0.24 crossing a comb
+        band its real weight is the 0.48 it carries everywhere else" -- but
+        the writing surface is paper, and paper only cares about the ink
+        actually over it.  Two scopes, both physical, neither a tolerance:
+
+          * along the line, only segments overlapping the comb's own span
+            (`slot_x[0]..slot_x[-1]`) count -- 1701-MS draws its top border
+            0.5pt over the caption stretch and 0.2pt over the comb, and the
+            comb's writing surface sits under the 0.2;
+          * across the line, a segment must REACH this cell's edge within
+            the clustering tolerance -- 2316 fuses the row above's 0.84pt
+            rule into the boundary line although its ink stops 0.63pt short
+            of this cell, and an inset borrowed from it pushes the writing
+            surface 0.39pt below the wall that is actually there.
+
+        Falls back to the fused thickness when the comb or the segment
+        geometry is absent (plain fields, legacy layouts), which is exactly
+        the pre-C1 behaviour.
+        """
+        if not record:
+            return 0.0
+        segments = record.get("segments")
+        if comb is None or not isinstance(segments, list):
+            return float(record.get("thickness_pt") or 0.0)
+        slot_x = [float(value) for value in comb["slot_x"]]
+        midpoints = [
+            (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
+        ]
+        # The NEAREST segment to the edge decides, exactly the referee's own
+        # qualifying rule (`source_wall_thickness` takes the run nearest the
+        # edge by separation) -- a fixed reach distance was tried first and
+        # broke every DOUBLED rule in the corpus, whose bars legitimately sit
+        # half a white core away from the boundary (0619-E's date boxes:
+        # 1.44pt bars 0.60pt each side of the edge).  Producer and referee
+        # must measure the same relation or the corroboration compares two
+        # different physical quantities; that mismatch was C1's entire
+        # population.  A segment qualifies only where it SPANS one of the
+        # comb's own compartment midpoints -- the same rays the referee
+        # measures on -- so the two sides qualify identical ink by
+        # construction.  A span-overlap tolerance was tried instead and
+        # REVERTED: a heavier stretch nicking the span's first sliver bounds
+        # no compartment, and counting it forced span-end probe rays into the
+        # referee that refused 249 cells at shared-boundary junctions and
+        # moved the human-reviewed 2551Q control tuples.
+        nearest: float | None = None
+        best = 0.0
+        cell_y0, cell_y1 = float(cell["y0"]), float(cell["y1"])
+        for segment in segments:
+            if not any(segment["a0"] <= x <= segment["a1"]
+                       for x in midpoints):
+                continue
+            c0, c1 = float(segment["c0"]), float(segment["c1"])
+            # The referee's own candidate rule, mirrored: a run must overlap
+            # the CELL's band within the coincidence tolerance.  2316 p1c40's
+            # bottom border line carries the row below's 0.84pt rule, wholly
+            # outside this cell with 0.43pt of paper between -- the referee
+            # never considers it, and a nearest-by-separation pick without
+            # this filter chose it over the 0.45pt wall actually standing at
+            # the edge, leaving 0.23pt of that wall's ink inside the writing
+            # band.
+            if c0 >= cell_y1 + 0.25 or c1 <= cell_y0 - 0.25:
+                continue
+            separation = (0.0 if c0 <= edge_y <= c1
+                          else min(abs(c0 - edge_y), abs(c1 - edge_y)))
+            thickness = float(segment["thickness_pt"])
+            if nearest is None or separation < nearest - 1e-9:
+                nearest, best = separation, thickness
+            elif abs(separation - nearest) <= 1e-9:
+                best = max(best, thickness)
+        return best
+
+    top = edge_weight(border.get("top"), y0)
+    bottom = edge_weight(border.get("bottom"), y1)
     if top + bottom >= y1 - y0:
         top = bottom = 0.0
     surface_y0, surface_y1 = q(y0 + top), q(y1 - bottom)
@@ -5248,10 +5406,11 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             if not present:
                 border[side] = None
                 continue
-            thickness, gray, all_t = line_thickness_gray(
+            thickness, gray, all_t, segments = line_thickness_gray(
                 lat, index, ink, lo, hi, "h" if side in ("top", "bottom") else "v")
             border[side] = {"thickness_pt": thickness, "gray": gray,
-                            "thicknesses_pt": all_t}
+                            "thicknesses_pt": all_t,
+                            "segments": segments}
             if track_geometry_uncertainty and unresolved_geometry_ids:
                 own = {id(rule) for rule in lat.members[index]}
                 a0, a1 = (
@@ -6417,12 +6576,21 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         # taken, so the selection is not always one of `combs`.  Restate the
         # inventory once and reuse the same object for the selection when it
         # is there, so the two keys never disagree about one physical band.
+        # Each band gets ITS OWN surface: the walls over one band's span can
+        # differ from another's, and from the cell-wide fused weight (C1).
+        def band_surface(band: dict[str, Any]) -> tuple[float, float]:
+            band_value = comb_writing_surface(cell, band)
+            if band_value is None:
+                raise ValueError(
+                    f"{cell['id']}: comb owner has no writing surface")
+            return band_value
+
         restated = {
-            id(band): comb_on_writing_surface(band, surface)
+            id(band): comb_on_writing_surface(band, band_surface(band))
             for band in cell.get("combs") or ()
         }
         selected = restated.get(id(comb))
-        cell["comb"] = (comb_on_writing_surface(comb, surface)
+        cell["comb"] = (comb_on_writing_surface(comb, band_surface(comb))
                         if selected is None else selected)
         if "combs" in cell:
             cell["combs"] = [restated[id(band)] for band in cell["combs"]]
@@ -6521,6 +6689,72 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         raise ValueError(
             "refuted comb has no ledger subject: "
             + ", ".join(sorted(refuted)))
+
+    # DECISION A (2026-08-16), the compartment-rule sweep -- deliberately
+    # AFTER the caption refutation above and in its exact shape. The two
+    # passes catch the same disease in different tissue: a false comb whose
+    # compartments hold PRINTED TEXT is refuted by the caption pass with its
+    # richer glyph-count evidence and keeps its reviewed caption-block
+    # reason; a false comb whose compartments are EMPTY paper (2551M p2c13's
+    # column-rule pair, 1604CF p2c73's grid cells -- nothing printed for the
+    # caption pass to read) is caught here by width alone: no run of
+    # character-box compartments survives the rule, so the cell's published
+    # comb comes off and the subject retains, emitting nothing, blocking,
+    # awaiting review. Order is precedence: an earlier attempt routed these
+    # in the subject loop and stole eleven caption-block subjects on eight
+    # forms from the pass above, restamping reviewed reasons and mismatching
+    # every one of their certificates.
+    rule_retained: dict[str, dict[str, Any]] = {}
+    for cell in cells:
+        comb = cell.get("comb")
+        if comb is None:
+            continue
+        slot_x = [float(value) for value in (comb.get("slot_x") or ())]
+        if len(slot_x) < 2 or compartment_runs(slot_x):
+            continue
+        cell.pop("comb", None)
+        cell.pop("combs", None)
+        rule_retained[str(cell["subject_key"])] = {
+            "cell": cell, "comb": comb}
+    for index, subject in enumerate(subject_ledger):
+        evidence = rule_retained.pop(str(subject["subject_key"]), None)
+        if evidence is None:
+            continue
+        cell = evidence["cell"]
+        if (subject.get("cell_id") != cell["id"]
+                or subject.get("legacy_cell_id") != cell["id"]
+                or [q(float(value)) for value in subject["legacy_bbox"]]
+                != [q(float(cell[name])) for name in ("x0", "y0", "x1", "y1")]):
+            raise ValueError(
+                f"{cell['id']}: rule-refused comb subject is not an "
+                f"identity mapping onto its own rectangle")
+        subject_ledger[index] = {
+            "subject_key": subject["subject_key"],
+            "legacy_cell_id": subject["legacy_cell_id"],
+            "legacy_bbox": subject["legacy_bbox"],
+            "cell_id": None,
+            "mapped_partition_cell_ids": [subject["legacy_cell_id"]],
+            "mapped_partition_subject_keys": [subject["subject_key"]],
+            "state": "retained_unresolved",
+            "emission": "suppressed",
+            "reason_codes": ["emission-suppressed-compartment-rule"],
+            "legacy_comb": evidence["comb"],
+            "requires_independent_evidence": True,
+            "permitted_transitions": [
+                "active_composite",
+                "retired_proven_false",
+            ],
+            "blocks_gate": True,
+        }
+        cell["comb_refutation"] = {
+            "reason_codes": ["emission-suppressed-compartment-rule"],
+            "refused_slot_x": [q(float(value))
+                               for value in evidence["comb"]["slot_x"]],
+        }
+    if rule_retained:
+        raise ValueError(
+            "rule-refused comb has no ledger subject: "
+            + ", ".join(sorted(rule_retained)))
 
     page_area_fills = () if area_fills is None else area_fills
     for cell in cells:
@@ -7237,9 +7471,303 @@ def build_page(page: dict[str, Any],
     }
 
 
+def _load_review_registry():
+    """Load the reviewed-ledger registries by explicit pinned path.
+
+    Same isolation-proof pattern as comb_referee.py: the module beside this
+    file is the only trusted source, importable identically at a shell and
+    under an isolated interpreter.
+    """
+    import importlib.util
+    path = pathlib.Path(__file__).resolve().parent / "review_registry.py"
+    spec = importlib.util.spec_from_file_location("review_registry", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+review_registry = _load_review_registry()
+
+
+def apply_reviewed_transitions(
+        layout: dict[str, Any],
+        transitions: dict[tuple[str, int, str], dict[str, Any]] | None = None,
+        ) -> dict[str, Any]:
+    """Apply user-reviewed retained-subject transitions to a built layout.
+
+    The producer half of review_registry's doctrine: an entry is consumed
+    here and published as `active_composite` WITH a certificate naming it;
+    comb_referee.py independently validates that certificate against the
+    registry and against its own source corroboration.  Everything about
+    this pass fails closed:
+
+      * a registry whose shape validation reports any defect is refused
+        whole -- a partially trusted registry is not a registry;
+      * an entry must bind the exact subject (subject_key) on the exact
+        source bytes (source_sha256) with a transition the subject itself
+        permits, or the build errors rather than skipping it;
+      * `retired_proven_false` is permitted BY THE SUBJECT but expected to
+        stay unused; consuming one here is an error until a package
+        deliberately implements retirement, because silently accepting it
+        would drop a ledger subject with no machinery behind it;
+      * an entry that matches no retained subject on its slug is stale and
+        errors -- a review of bytes that no longer exist certifies nothing;
+      * an entry pointing at a subject that is not retained is an error:
+        resolutions of active subjects live in REVIEWED_LEDGER_RESOLUTIONS,
+        never here.
+
+    With the shipped empty registry this pass is a proven no-op: the layout
+    returns byte-identical.
+    """
+    if transitions is None:
+        transitions = review_registry.REVIEWED_LEDGER_TRANSITIONS
+        shape_errors = review_registry.registry_errors()
+    else:
+        shape_errors = review_registry.registry_errors({}, transitions)
+    if shape_errors:
+        raise ValueError(
+            "reviewed-transition registry is malformed: "
+            + "; ".join(shape_errors[:3]))
+    form = layout["form"]
+    slug = f"{str(form['code']).lower()}-{form['revision']}"
+    source_sha = layout["source"]["sha256"]
+    # A form CODE plus revision does not identify a DOCUMENT: 1701's main
+    # sheet, its attachment and its consolidation all publish
+    # {"code": "1701", "revision": "2018"} and collapse to one slug.  What
+    # does identify the region is the SUBJECT KEY, which carries the
+    # rectangle's own coordinates -- so an entry belongs to this document
+    # only when a subject here answers to both its key and its subject_key.
+    # Anything else is a sibling document's entry and is passed over in
+    # silence; a mismatch on the SAME subject is still an error, so a
+    # re-pinned PDF cannot quietly drop its reviewed decisions.
+    mine: set[tuple[str, int, str]] = set()
+    applied: set[tuple[str, int, str]] = set()
+    for page in layout["pages"]:
+        page_index = int(page["index"])
+        for subject in page.get("comb_subjects", ()):
+            key = (slug, page_index, str(subject["legacy_cell_id"]))
+            entry = transitions.get(key)
+            if entry is None or entry["source_sha256"] != source_sha:
+                # No entry, or one reviewed on DIFFERENT SOURCE BYTES -- a
+                # sibling document sharing this slug (1701's attachment and
+                # consolidation both publish code 1701 revision 2018, so all
+                # three collapse to one slug).  Its entries are not ours.
+                # Silent here by necessity: one layout cannot tell a sibling
+                # from a re-pinned PDF.  That distinction is made at CORPUS
+                # level, where every document is visible and the gate proves
+                # each registry entry was applied exactly once.
+                continue
+            mine.add(key)
+            if entry["subject_key"] != subject["subject_key"]:
+                raise ValueError(
+                    f"{key}: reviewed transition subject_key does not bind "
+                    "this subject")
+            if subject.get("state") != "retained_unresolved":
+                raise ValueError(
+                    f"{key}: a reviewed transition names a subject whose "
+                    f"state is {subject.get('state')!r}, not retained")
+            if entry["transition"] not in (
+                    subject.get("permitted_transitions") or ()):
+                raise ValueError(
+                    f"{key}: transition {entry['transition']!r} is not "
+                    "permitted by the subject")
+            if entry["transition"] != "active_composite":
+                raise ValueError(
+                    f"{key}: transition {entry['transition']!r} has no "
+                    "producer machinery; retirement is deliberately unbuilt")
+            subject["state"] = "active_composite"
+            subject["blocks_gate"] = False
+            subject["transition_certificate"] = {
+                "criterion": review_registry.TRANSITION_CRITERION,
+                "registry_key": [slug, page_index,
+                                 str(subject["legacy_cell_id"])],
+                "transition": entry["transition"],
+                "suppression_criterion": entry["suppression_criterion"],
+                "reviewer": entry["reviewer"],
+                "date": entry["date"],
+            }
+            applied.add(key)
+    # An entry carrying THIS document's own source sha provably belongs to
+    # this document, so if no subject answered to it, it is stale and that is
+    # an error here.  Sibling entries (other sha) are excluded and are proven
+    # applied at corpus level instead.
+    stale = [key for key, entry in transitions.items()
+             if key[0] == slug and entry["source_sha256"] == source_sha
+             and key not in applied]
+    if stale:
+        raise ValueError(
+            f"reviewed transitions match no retained subject: {stale[:3]}")
+    # The pass that changes a state owns the summary of that state: the
+    # page stats were computed while the page was built, before any decision
+    # could apply, and a summary that disagrees with what it summarises is
+    # simply wrong. Refreshing HERE rather than in the caller means no future
+    # caller can forget to.
+    return refresh_comb_subject_stats(layout)
+
+
+def apply_reviewed_resolutions(
+        layout: dict[str, Any],
+        resolutions: dict[tuple[str, int, str], dict[str, Any]] | None = None,
+        ) -> dict[str, Any]:
+    """Apply user-reviewed resolutions of ACTIVE_UNRESOLVED subjects.
+
+    The sibling of `apply_reviewed_transitions`, for the other designed review
+    path.  A subject whose four independent measurements already agree is
+    still not self-promoting: `eligible-for-reviewed-resolution` says only
+    that a person may now look.  This consumes that person's decision and
+    publishes `active_resolved` WITH a certificate, which comb_referee.py
+    re-validates against the registry AND against its own current-run
+    four-way evidence -- review cannot overrule the paper.
+
+    A resolution touches TWO records, because the referee cross-checks them:
+    the subject's state/reason_codes, and the owning cell's comb resolution
+    (`status` and `reason_codes`), whose contract is that reasons are
+    non-empty exactly when the status is `unresolved`.  The measured
+    evidence already on the resolution record (endpoint topologies and the
+    like) is KEPT: it is why the decision was reviewable, and erasing it
+    would destroy the audit trail the review is supposed to create.
+
+    Fail-closed on every edge, same doctrine as the transition path.
+    """
+    if resolutions is None:
+        resolutions = review_registry.REVIEWED_LEDGER_RESOLUTIONS
+        shape_errors = review_registry.registry_errors()
+    else:
+        shape_errors = review_registry.registry_errors(resolutions, {})
+    if shape_errors:
+        raise ValueError(
+            "reviewed-resolution registry is malformed: "
+            + "; ".join(shape_errors[:3]))
+    form = layout["form"]
+    slug = f"{str(form['code']).lower()}-{form['revision']}"
+    source_sha = layout["source"]["sha256"]
+    # Identified by SUBJECT KEY, not by slug -- see the same guard in
+    # `apply_reviewed_transitions` for why a code+revision slug is not a
+    # document identity.
+    mine: set[tuple[str, int, str]] = set()
+    applied: set[tuple[str, int, str]] = set()
+    for page in layout["pages"]:
+        page_index = int(page["index"])
+        cells_by_id = {str(cell["id"]): cell for cell in page.get("cells", ())}
+        for subject in page.get("comb_subjects", ()):
+            cell_id = subject.get("cell_id")
+            if cell_id is None:
+                continue
+            key = (slug, page_index, str(cell_id))
+            entry = resolutions.get(key)
+            if entry is None or entry["source_sha256"] != source_sha:
+                # No entry, or one reviewed on DIFFERENT SOURCE BYTES -- a
+                # sibling document sharing this slug (1701's attachment and
+                # consolidation both publish code 1701 revision 2018, so all
+                # three collapse to one slug).  Its entries are not ours.
+                # Silent here by necessity: one layout cannot tell a sibling
+                # from a re-pinned PDF.  That distinction is made at CORPUS
+                # level, where every document is visible and the gate proves
+                # each registry entry was applied exactly once.
+                continue
+            mine.add(key)
+            if entry["subject_key"] != subject["subject_key"]:
+                raise ValueError(
+                    f"{key}: reviewed resolution subject_key does not bind "
+                    "this subject")
+            if subject.get("state") != "active_unresolved":
+                raise ValueError(
+                    f"{key}: a reviewed resolution names a subject whose "
+                    f"state is {subject.get('state')!r}, not active_unresolved")
+            cell = cells_by_id.get(str(cell_id))
+            comb = (cell or {}).get("comb")
+            resolution = (comb or {}).get("resolution")
+            if not isinstance(resolution, dict):
+                raise ValueError(
+                    f"{key}: reviewed resolution names a cell with no comb "
+                    "resolution record")
+            if resolution.get("status") != "unresolved":
+                raise ValueError(
+                    f"{key}: the cell's comb is not unresolved")
+            # The producer can only vouch for ITS OWN count; the other three
+            # measurements are the referee's to confirm.  Checking this one
+            # here stops a stale entry from riding a regenerated corpus.
+            if int(entry["four_way"]["lattice"]) != int(comb["cells"]):
+                raise ValueError(
+                    f"{key}: reviewed four-way lattice count "
+                    f"{entry['four_way']['lattice']} is not this comb's "
+                    f"{comb['cells']}")
+            certificate = {
+                "criterion": review_registry.RESOLUTION_CRITERION,
+                "registry_key": [slug, page_index, str(cell_id)],
+                "four_way": {
+                    name: int(entry["four_way"][name])
+                    for name in ("lattice", "audit", "emitted", "referee")
+                },
+                "resolved_reason_codes": list(subject["reason_codes"]),
+                "reviewer": entry["reviewer"],
+                "date": entry["date"],
+            }
+            subject["state"] = "active_resolved"
+            subject["blocks_gate"] = False
+            subject["reason_codes"] = []
+            subject["resolution_certificate"] = certificate
+            resolution["status"] = "resolved"
+            resolution["reason_codes"] = []
+            resolution["review_certificate"] = certificate
+            applied.add(key)
+    stale = [key for key, entry in resolutions.items()
+             if key[0] == slug and entry["source_sha256"] == source_sha
+             and key not in applied]
+    if stale:
+        raise ValueError(
+            f"reviewed resolutions match no eligible subject: {stale[:3]}")
+    # The pass that changes a state owns the summary of that state: the
+    # page stats were computed while the page was built, before any decision
+    # could apply, and a summary that disagrees with what it summarises is
+    # simply wrong. Refreshing HERE rather than in the caller means no future
+    # caller can forget to.
+    return refresh_comb_subject_stats(layout)
+
+
+def refresh_comb_subject_stats(layout: dict[str, Any]) -> dict[str, Any]:
+    """Recount the per-page subject stats after reviewed decisions land.
+
+    `build_page` publishes its stats while it builds the page, which is
+    BEFORE `apply_reviewed_transitions` and `apply_reviewed_resolutions` can
+    change any state -- they operate on the assembled layout.  Every applied
+    decision therefore left the page's own counters describing the ledger as
+    it stood a moment earlier, and comb_referee.py, which re-derives those
+    counters from the subjects themselves, refused 27 of 53 forms with
+    "ledger stat ... is N, expected N+1".  The stats are not evidence in
+    their own right -- they are a published summary of the subjects, and a
+    summary that disagrees with what it summarises is simply wrong.
+
+    Recounted from the final subjects, so the summary cannot drift from them
+    again whatever future pass mutates a state.
+    """
+    for page in layout["pages"]:
+        subjects = page.get("comb_subjects") or ()
+        inferences = page.get("comb_inferences") or ()
+        stats = page.get("stats")
+        if not isinstance(stats, dict):
+            continue
+        resolved = sum(1 for s in subjects if s["state"] == "active_resolved")
+        unresolved = sum(
+            1 for s in subjects if s["state"] == "active_unresolved")
+        composite = sum(1 for s in subjects if s["state"] == "active_composite")
+        retained = sum(
+            1 for s in subjects if s["state"] == "retained_unresolved")
+        subject_blockers = sum(1 for s in subjects if s.get("blocks_gate"))
+        inference_blockers = sum(
+            1 for item in inferences if item.get("blocks_gate"))
+        stats["comb_subjects_active"] = resolved + unresolved + composite
+        stats["comb_subjects_active_resolved"] = resolved
+        stats["comb_subjects_active_unresolved"] = unresolved
+        stats["comb_subjects_retained_unresolved"] = retained
+        stats["comb_subjects_blocking"] = subject_blockers
+        stats["comb_evidence_blocking"] = subject_blockers + inference_blockers
+    return layout
+
+
 def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
     fillable_metrics = min_fillable_line_metrics(ir)
-    return {
+    layout = {
         "schema_version": SCHEMA_VERSION,
         "form": ir["form"],
         "source": ir["source"],
@@ -7255,6 +7783,7 @@ def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
             build_page(p, fillable_metrics) for p in ir["pages"]
         ],
     }
+    return apply_reviewed_resolutions(apply_reviewed_transitions(layout))
 
 
 # ---------------------------------------------------------------------------
@@ -7271,6 +7800,392 @@ def self_test(ir_path: pathlib.Path) -> int:
     def check(condition: bool, message: str) -> None:
         if not condition:
             failures.append(message)
+
+    # ---- DECISION A: the compartment rule ---------------------------------
+    #
+    # Census-pinned boundary cases, each the real geometry of the cell that
+    # motivated it. The rule must cut every defect, split the merged row,
+    # and keep the three widest LEGITIMATE combs in the corpus untouched.
+    # Deleting the rule (or moving its bound) fails these directly, and the
+    # constructor case below proves the band builders actually consult it.
+    check(compartment_runs([0.0, 70.8, 227.52]) == [],
+          "2551M p2c13's two table-cell halves are not a comb")
+    check(compartment_runs([0.0, 68.64, 95.28]) == [],
+          "1604CF p2c73's two table-cell halves are not a comb")
+    check(compartment_runs(
+        [0.0, 106.15, 205.38, 229.01, 254.23, 306.18]) == [],
+          "0605's Details-of-Payment header is never a comb: three columns "
+          "die by width and MM alone dies by the minimum-run clause")
+    p1c25 = [0.0]
+    for width in [13.8] * 31 + [72.75, 14.52, 14.52, 15.12, 15.48]:
+        p1c25.append(p1c25[-1] + width)
+    check(compartment_runs(p1c25) == [(0, 31), (32, 36)],
+          "1604F p1c25 cuts at the ZIP label box into a 31-run and a 4-run")
+    check(compartment_runs([0.0, 18.96, 42.72]) == [(0, 2)],
+          "2551M p1c3, the widest legitimate compartment (23.76pt), is kept")
+    check(compartment_runs([0.0, 21.12, 42.72]) == [(0, 2)],
+          "2553 p1c6, the next widest legitimate comb, is kept")
+    check(compartment_runs([0.0, 24.5, 49.0]) == [(0, 2)],
+          "a compartment exactly AT the bound is kept -- the rule is "
+          "strictly wider-than, so the bound itself is not a cliff edge")
+    # The band builders consult the rule: a two-slab band whose compartments
+    # are table-cell halves must not survive construction, and the same
+    # geometry scaled down to character pitch must. Geometry mirrors 2551M
+    # p2c13 -- one full-height divider inside a wide cell band -- built with
+    # the same synthetic shapes the fixtures below use (defined here early
+    # because this block runs first).
+    def _rule_vertical(x: float, thickness: float, seq: int) -> dict[str, Any]:
+        return {
+            "axis": "v",
+            "x0": q(x - thickness / 2), "x1": q(x + thickness / 2),
+            "y0": 0.0, "y1": 12.0,
+            "thickness_pt": q(thickness),
+            "gray": 0.0, "role": "structural",
+            "paint_seq": seq, "paint_seq_max": seq,
+        }
+    rule_divider = _rule_vertical(70.8, 0.96, 10)
+    rule_paint = FinalPaint([rule_divider])
+    refused_bands = comb_bands(
+        [rule_divider], [rule_divider], 0.0, 227.52, (0.96, 0.96),
+        rule_paint)
+    check(refused_bands == [],
+          "comb_bands refuses the table-cell band whole -- no run of "
+          "character boxes survives the compartment rule")
+    kept_divider = _rule_vertical(14.4, 0.96, 10)
+    kept_paint = FinalPaint([kept_divider])
+    kept_bands = comb_bands(
+        [kept_divider], [kept_divider], 0.0, 28.8, (0.96, 0.96), kept_paint)
+    check(bool(kept_bands)
+          and kept_bands[0]["cells"] == 2
+          and kept_bands[0]["compartment_runs"] == [[0, 2]],
+          "the identical band at character pitch survives and publishes "
+          "its identity run")
+
+    # ---- C3-A: reviewed retained-subject transitions -----------------------
+    #
+    # The producer half of review_registry's doctrine, proven on a synthetic
+    # one-subject ledger: a valid entry publishes `active_composite` with the
+    # exact certificate, and every guard that keeps this fail-closed is shown
+    # able to fire.  The shipped registry is empty, so the corpus pass is a
+    # no-op -- asserted against the real layout built above.
+    def c3_layout():
+        return {
+            "form": {"code": "9999X", "revision": "2099"},
+            "source": {"sha256": "ab" * 32},
+            "pages": [{
+                "index": 1,
+                "comb_subjects": [{
+                    "subject_key": "p1@9,9",
+                    "legacy_cell_id": "p1c9",
+                    "state": "retained_unresolved",
+                    "blocks_gate": True,
+                    "permitted_transitions": [
+                        "active_composite", "retired_proven_false"],
+                }],
+            }],
+        }
+
+    def c3_entry(**overrides):
+        entry = {
+            "subject_key": "p1@9,9",
+            "source_sha256": "ab" * 32,
+            "transition": "active_composite",
+            "suppression_criterion": (
+                "source-partition-edge-in-final-picture-v1"),
+            "reviewer": "self-test", "date": "2026-08-15",
+            "citation": "self-test",
+        }
+        entry.update(overrides)
+        return {("9999x-2099", 1, "p1c9"): entry}
+
+    applied = apply_reviewed_transitions(c3_layout(), c3_entry())
+    c3_subject = applied["pages"][0]["comb_subjects"][0]
+    check(c3_subject["state"] == "active_composite"
+          and c3_subject["blocks_gate"] is False
+          and c3_subject["transition_certificate"] == {
+              "criterion": "reviewed-ledger-transition-v1",
+              "registry_key": ["9999x-2099", 1, "p1c9"],
+              "transition": "active_composite",
+              "suppression_criterion": (
+                  "source-partition-edge-in-final-picture-v1"),
+              "reviewer": "self-test", "date": "2026-08-15",
+          }, "C3: a reviewed transition publishes the exact certificate")
+    check(apply_reviewed_transitions(c3_layout(), {})["pages"][0]
+          ["comb_subjects"][0]["state"] == "retained_unresolved",
+          "C3: no entry, no transition")
+
+    def c3_refused(transitions, layout=None) -> bool:
+        try:
+            apply_reviewed_transitions(layout or c3_layout(), transitions)
+        except ValueError:
+            return True
+        return False
+
+    check(c3_refused(c3_entry(subject_key="p1@0,0")),
+          "C3: an entry binding a different subject_key is refused")
+    check(apply_reviewed_transitions(
+              c3_layout(), c3_entry(source_sha256="cd" * 32))["pages"][0]
+          ["comb_subjects"][0]["state"] == "retained_unresolved",
+          "C3: an entry reviewed on other source bytes belongs to a sibling "
+          "document and is passed over, not applied")
+    check(c3_refused(c3_entry(transition="retired_proven_false")),
+          "C3: retirement is deliberately unbuilt and refused")
+    check(c3_refused(c3_entry(reviewer="")),
+          "C3: a shape-invalid registry is refused whole")
+    wrong_cell = c3_layout()
+    wrong_cell["pages"][0]["comb_subjects"][0]["legacy_cell_id"] = "p1c8"
+    check(c3_refused(c3_entry(), wrong_cell),
+          "C3: an entry matching no retained subject is stale and refused")
+    active = c3_layout()
+    active["pages"][0]["comb_subjects"][0]["state"] = "active_unresolved"
+    check(c3_refused(c3_entry(), active),
+          "C3: an entry naming a non-retained subject is refused")
+    import copy as c3_copy
+    check(apply_reviewed_transitions(
+              c3_copy.deepcopy(layout)) == layout,
+          "C3: the shipped empty registry is a byte-identical no-op")
+
+    # ---- C4a: reviewed resolutions of active_unresolved subjects ----------
+    def c4_layout():
+        return {
+            "form": {"code": "9999X", "revision": "2099"},
+            "source": {"sha256": "ab" * 32},
+            "pages": [{
+                "index": 1,
+                "cells": [{
+                    "id": "p1c7",
+                    "comb": {"cells": 4, "resolution": {
+                        "status": "unresolved",
+                        "method": "final-visible-endpoint-slab",
+                        "reason_codes": ["competing-endpoint-topologies"],
+                        "endpoint_topologies": [{"divider_x": [1.0]}],
+                    }},
+                }],
+                "comb_subjects": [{
+                    "subject_key": "p1@7,7",
+                    "legacy_cell_id": "p1c7",
+                    "cell_id": "p1c7",
+                    "state": "active_unresolved",
+                    "blocks_gate": True,
+                    "reason_codes": ["competing-endpoint-topologies"],
+                }],
+            }],
+        }
+
+    def c4_entry(**overrides):
+        entry = {
+            "subject_key": "p1@7,7",
+            "source_sha256": "ab" * 32,
+            "four_way": {"lattice": 4, "audit": 4, "emitted": 4, "referee": 4},
+            "reviewer": "self-test", "date": "2026-08-15",
+            "citation": "self-test",
+        }
+        entry.update(overrides)
+        return {("9999x-2099", 1, "p1c7"): entry}
+
+    c4_applied = apply_reviewed_resolutions(c4_layout(), c4_entry())
+    c4_subject = c4_applied["pages"][0]["comb_subjects"][0]
+    c4_resolution = c4_applied["pages"][0]["cells"][0]["comb"]["resolution"]
+    check(c4_subject["state"] == "active_resolved"
+          and c4_subject["blocks_gate"] is False
+          and c4_subject["reason_codes"] == [],
+          "C4a: a reviewed resolution resolves the subject")
+    check(c4_resolution["status"] == "resolved"
+          and c4_resolution["reason_codes"] == [],
+          "C4a: the cell's comb resolution transitions with it")
+    check(c4_resolution["endpoint_topologies"] == [{"divider_x": [1.0]}],
+          "C4a: the measured evidence that made it reviewable is KEPT")
+    check(c4_subject["resolution_certificate"]["resolved_reason_codes"]
+          == ["competing-endpoint-topologies"],
+          "C4a: the certificate records what was resolved")
+    check(c4_subject["resolution_certificate"]
+          == c4_resolution["review_certificate"],
+          "C4a: subject and cell carry the same certificate")
+
+    def c4_refused(entries, layout_value=None) -> bool:
+        try:
+            apply_reviewed_resolutions(layout_value or c4_layout(), entries)
+        except ValueError:
+            return True
+        return False
+
+    check(c4_refused(c4_entry(subject_key="p1@0,0")),
+          "C4a: an entry binding a different subject_key is refused")
+    check(apply_reviewed_resolutions(
+              c4_layout(), c4_entry(source_sha256="cd" * 32))["pages"][0]
+          ["comb_subjects"][0]["state"] == "active_unresolved",
+          "C4a: an entry reviewed on other source bytes belongs to a sibling "
+          "document and is passed over, not applied")
+    check(c4_refused(c4_entry(four_way={
+              "lattice": 9, "audit": 9, "emitted": 9, "referee": 9})),
+          "C4a: a four-way lattice count that is not this comb's is refused")
+    check(c4_refused(c4_entry(reviewer="")),
+          "C4a: a shape-invalid registry is refused whole")
+    c4_resolved = c4_layout()
+    c4_resolved["pages"][0]["comb_subjects"][0]["state"] = "active_resolved"
+    check(c4_refused(c4_entry(), c4_resolved),
+          "C4a: an entry naming an already-resolved subject is refused")
+    c4_stale = c4_layout()
+    c4_stale["pages"][0]["comb_subjects"][0]["cell_id"] = "p1c8"
+    c4_stale["pages"][0]["cells"][0]["id"] = "p1c8"
+    check(c4_refused(c4_entry(), c4_stale),
+          "C4a: an entry matching no eligible subject is stale and refused")
+    check(apply_reviewed_resolutions(c3_copy.deepcopy(layout)) == layout,
+          "C4a: the shipped empty registry is a byte-identical no-op")
+
+    # A published stat that disagrees with the subjects it summarises is
+    # wrong, and the referee re-derives every one of them. This is the exact
+    # shape that refused 27 of 53 forms: the page stats were computed while
+    # the page was built, before any reviewed decision could be applied.
+    drift = c4_layout()
+    drift["pages"][0]["stats"] = {
+        "comb_subjects_active": 0, "comb_subjects_active_resolved": 0,
+        "comb_subjects_active_unresolved": 1,
+        "comb_subjects_retained_unresolved": 0,
+        "comb_subjects_blocking": 1, "comb_evidence_blocking": 1}
+    fixed = apply_reviewed_resolutions(drift, c4_entry())["pages"][0]["stats"]
+    check(fixed["comb_subjects_active_resolved"] == 1
+          and fixed["comb_subjects_active_unresolved"] == 0
+          and fixed["comb_subjects_active"] == 1
+          and fixed["comb_subjects_blocking"] == 0
+          and fixed["comb_evidence_blocking"] == 0,
+          "C4a: page stats are recounted after a reviewed resolution lands")
+    drift_t = c3_layout()
+    drift_t["pages"][0]["stats"] = {
+        "comb_subjects_active": 0, "comb_subjects_active_resolved": 0,
+        "comb_subjects_active_unresolved": 0,
+        "comb_subjects_retained_unresolved": 1,
+        "comb_subjects_blocking": 1, "comb_evidence_blocking": 1}
+    fixed_t = apply_reviewed_transitions(drift_t, c3_entry())["pages"][0]["stats"]
+    check(fixed_t["comb_subjects_active"] == 1
+          and fixed_t["comb_subjects_retained_unresolved"] == 0
+          and fixed_t["comb_subjects_blocking"] == 0,
+          "C3: page stats are recounted after a reviewed transition lands")
+
+    # ---- MULTI-PART FORMS: a code+revision slug is NOT a document identity --
+    #
+    # 1701's main sheet, its attachment and its consolidation all publish
+    # {"code": "1701", "revision": "2018"}, so all three derive the same slug
+    # while being three different PDFs.  Before this was scoped by the pinned
+    # source bytes, registering the main sheet's decisions made the attachment
+    # inherit them, match none, and FAIL@lattice -- which is exactly what
+    # happened on the first ingestion of the real review.
+    sibling = c4_layout()
+    sibling["source"]["sha256"] = "cd" * 32          # same slug, other document
+    sibling["pages"][0]["cells"][0]["id"] = "p1c99"
+    sibling["pages"][0]["comb_subjects"][0]["cell_id"] = "p1c99"
+    sibling["pages"][0]["comb_subjects"][0]["legacy_cell_id"] = "p1c99"
+    check(apply_reviewed_resolutions(sibling, c4_entry())["pages"][0]
+          ["comb_subjects"][0]["state"] == "active_unresolved",
+          "C4a: a sibling document sharing the slug is untouched, not failed")
+    sibling_t = c3_layout()
+    sibling_t["source"]["sha256"] = "cd" * 32
+    sibling_t["pages"][0]["comb_subjects"][0]["legacy_cell_id"] = "p1c99"
+    check(apply_reviewed_transitions(sibling_t, c3_entry())["pages"][0]
+          ["comb_subjects"][0]["state"] == "retained_unresolved",
+          "C3: a sibling document sharing the slug is untouched, not failed")
+    # ...and the staleness guard still fires for the document that DOES own
+    # the entry, so scoping did not soften it.
+    owner_missing = c4_layout()
+    owner_missing["pages"][0]["comb_subjects"][0]["cell_id"] = "p1c8"
+    owner_missing["pages"][0]["cells"][0]["id"] = "p1c8"
+    check(c4_refused(c4_entry(), owner_missing),
+          "C4a: staleness still fires on the document the entry names")
+
+    # ---- C1: the comb writing surface's span-scoped edge weight ------------
+    #
+    # Each clause is a physical statement proven here against synthetic
+    # segment geometry, and each was forced by a real corpus shape named in
+    # the assertion.  The weights come from `border[edge]["segments"]`; the
+    # relation is the referee's own qualifying rule (nearest run by
+    # separation, heavier claim on ties), so both measurers of one relation
+    # qualify the same ink.
+    def c1_cell(segments, thickness=1.0, comb_span=(0.0, 40.0)):
+        return ({
+            "y0": 0.0, "y1": 20.0,
+            "border": {
+                "top": {"thickness_pt": thickness, "gray": 0.0,
+                        "thicknesses_pt": [thickness],
+                        "segments": segments},
+                "bottom": None,
+            },
+        }, {"slot_x": [comb_span[0], sum(comb_span) / 2, comb_span[1]]})
+
+    def c1_top_inset(segments, **kwargs):
+        cell, comb = c1_cell(segments, **kwargs)
+        surface = comb_writing_surface(cell, comb)
+        assert surface is not None
+        return surface[0]
+
+    # 2316's shape: the row above's 0.84pt rule is fused into the boundary
+    # line but its ink stops 0.63pt short of this cell; the 0.45pt wall at
+    # the edge decides.
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -1.47, "c1": -0.63,
+         "thickness_pt": 0.84, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": -0.22, "c1": 0.23,
+         "thickness_pt": 0.45, "gray": 0.0},
+    ]) == q(0.45), "C1: a nearer wall must out-rank a farther heavier one")
+
+    # A doubled rule: two 1.44pt bars 0.60pt each side of the edge, equally
+    # near -- the full bar weight stands (0619-E's date boxes).
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -2.04, "c1": -0.6,
+         "thickness_pt": 1.44, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": 0.6, "c1": 2.04,
+         "thickness_pt": 1.44, "gray": 0.0},
+    ]) == q(1.44), "C1: a doubled rule keeps its bar weight")
+
+    # Equal separations of DIFFERENT weight resolve to the heavier claim.
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -1.5, "c1": 0.0,
+         "thickness_pt": 1.5, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": 0.0, "c1": 1.0,
+         "thickness_pt": 1.0, "gray": 0.0},
+    ]) == q(1.5), "C1: equal separations take the heavier segment")
+
+    # 1701-MS's shape: a heavier stretch that spans NO compartment midpoint
+    # bounds no compartment and is out, however far it reaches into the span;
+    # one that covers a midpoint counts.  The midpoints are the same rays the
+    # referee measures on -- the two sides qualify identical ink by
+    # construction (comb span 0..40, midpoints 10 and 30).
+    check(c1_top_inset([
+        {"a0": -10.0, "a1": 9.0, "c0": -0.25, "c1": 0.25,
+         "thickness_pt": 0.5, "gray": 0.0},
+        {"a0": 9.0, "a1": 40.0, "c0": -0.1, "c1": 0.1,
+         "thickness_pt": 0.2, "gray": 0.0},
+    ]) == q(0.2), "C1: a segment spanning no compartment midpoint is out")
+    check(c1_top_inset([
+        {"a0": -10.0, "a1": 10.5, "c0": -0.25, "c1": 0.25,
+         "thickness_pt": 0.5, "gray": 0.0},
+        {"a0": 10.5, "a1": 40.0, "c0": -0.1, "c1": 0.1,
+         "thickness_pt": 0.2, "gray": 0.0},
+    ]) == q(0.5), "C1: a segment covering a midpoint counts")
+
+    # 2316 p1c40's shape: a heavier rule wholly OUTSIDE the cell band (the
+    # row below's), nearer to the edge than the true wall by paper distance,
+    # is not a candidate at all -- the referee's own overlap rule, mirrored.
+    check(c1_top_inset([
+        {"a0": 0.0, "a1": 40.0, "c0": -1.27, "c1": -0.43,
+         "thickness_pt": 0.84, "gray": 0.0},
+        {"a0": 0.0, "a1": 40.0, "c0": 0.62, "c1": 1.07,
+         "thickness_pt": 0.45, "gray": 0.0},
+    ]) == q(0.45), "C1: a run outside the cell band is no candidate")
+
+    # No segment geometry (legacy layouts, plain callers): the fused record
+    # thickness stands, which is exactly the pre-C1 behaviour.
+    legacy_cell, legacy_comb = c1_cell(None, thickness=0.75)
+    legacy_cell["border"]["top"].pop("segments")
+    legacy_surface = comb_writing_surface(legacy_cell, legacy_comb)
+    check(legacy_surface is not None and legacy_surface[0] == q(0.75),
+          "C1: absent segment geometry falls back to the fused thickness")
+
+    # A null border insets nothing, comb or no comb.
+    null_cell, null_comb = c1_cell([])
+    null_cell["border"]["top"] = None
+    null_surface = comb_writing_surface(null_cell, null_comb)
+    check(null_surface is not None and null_surface[0] == q(0.0),
+          "C1: a null border insets nothing")
 
     def synthetic_vertical(x: float, y0: float, y1: float,
                            thickness: float, sequence: int,
@@ -10444,12 +11359,19 @@ def self_test(ir_path: pathlib.Path) -> int:
           and not swept_paint.structural_across(swept_target, 0.0, 10.0),
           "moving nonrect knockout was certified from one midpoint section")
 
-    # A lone highly unequal split and two anchor runs separated by an interior
+    # A lone unequal split and two anchor runs separated by an interior
     # multi-slot gap are not coherent single combs. They remain present but
-    # explicitly unresolved until an independent referee adjudicates them.
-    unequal = synthetic_vertical(95, 0, 10, 0.2, 20)
+    # explicitly unresolved until an independent referee adjudicates them --
+    # PROVIDED every compartment is still character-box sized. This fixture
+    # originally split 95/5 in a 100pt band; DECISION A (2026-08-16) now
+    # refuses that outright at construction (a 95pt compartment is not a
+    # character box -- the compartment-rule fixtures at the top assert it),
+    # so the retained-unresolved contract is asserted just under the bound:
+    # 20/10 trips the same unequal-two-slot relation with both compartments
+    # legitimate widths.
+    unequal = synthetic_vertical(20, 0, 10, 0.2, 20)
     unequal_bands = comb_bands(
-        [unequal], [unequal], 0, 100, (1.0, 1.0),
+        [unequal], [unequal], 0, 30, (1.0, 1.0),
         FinalPaint([unequal]))
     check(bool(unequal_bands)
           and unequal_bands[0]["resolution"]["status"] == "unresolved"

@@ -322,3 +322,82 @@ two sittings as the only user-input dependency. The comb-referee check stays
 computed and reported on every gate run in the meantime; its permitted
 remainder is itemized in the feature branch's shipping amendment and any
 motion outside that remainder fails the gate.
+
+
+## C-series: the executable closure plan (2026-08-14, post-merge)
+
+PR #14 is merged (`a4b69f17`); the campaign now runs on
+`gol/comb-referee-campaign` off merged main. The full remainder is
+decomposed with no unknowns left -- including the three numbers earlier
+sections flagged as unscoped:
+
+- The **49 `combs_source_unevaluable`** = the 29 band cells + 3 proof cells
+  (all active, = C1+C2) + 17 retained subjects whose bands are also
+  unmeasurable (8 ambiguous-slabs, 4 unsupported-SVG-geometry, 3
+  strict-majority, 1 no-common-band, 1 single-frame) -- superseded by the
+  composite schema in C3, not measured around.
+- The **116 `ledger_blocking`** = the 115 blocks_gate subjects (30 retained
+  + 85 active-unresolved) + **1 suppressed inference**: 0605-1999 `p1c177`,
+  reason `no-legacy-subject` -- an inferred comb with no ledger ancestor,
+  needing its own admit-or-refute review (folded into C3/C5).
+- **R5/elevation is already designed and implemented**
+  (`derive_application_scope_elevation`): the referee deliberately refuses
+  to attest its own host runtime, and the gate replaces exactly that one
+  uncertainty with the outer audit envelope -- but only once the raw
+  report's sole unevaluable reason is that host attestation. C6 is the
+  first time it can ever fire; that is the campaign's tail risk, bounded
+  and named.
+
+Packages C0-C7 with acceptance criteria live in the campaign worktree's
+`.claude/GOAL.md` (the /goal loop's plan of record). Sequence: C0 done ->
+C1 (29 band cells; the defect-finding core -- real form fixes ship to main
+immediately as small PRs) -> C2 (3 proofs) -> C3 (composite machinery +
+inference path; empty registries must be byte-identical) -> C4 (panels) ->
+C5 (the user's two review sittings; 116 decisions total) -> C6 (elevation)
+-> C7 (gate 13/13, campaign PR).
+
+
+## C1/C2 outcome and the C3 fork (2026-08-14, measured)
+
+**C1 LANDED** (`e0a65dec`, `2bbb2276`): band-uncorroborated cells 29 -> 0,
+unevaluable comparisons 62 -> 33, agree 4,525 -> 4,554, source-unevaluable
+combs 49 -> 20, forms_ok 24 -> 26, gate 12/13, determinism byte-identical.
+Producer and referee now measure ONE relation (wall weight at the comb's
+compartment midpoints). 20 writing bands moved across 5 forms.
+
+**C2 is not a fix package.** All three cells already agree four ways; only
+the referee's proof SHAPE refuses, and each refusal is a different problem:
+
+| cell | mechanism | resolvable? |
+| --- | --- | --- |
+| 1604F p1c25 | 5-pitch empty gap needs the single-frame certificate; the sheet draws NO frame around that rectangle (0 elements on each of four sides, measured) | **NO** -- the referee is right; needs review |
+| 1604F p1c36 | 0.48pt sliver slab carrying unrecognised candidate ink | needs its own dig |
+| 2551M p2c13 | contract band 93.6pt on an 11.76pt cell -- the "divider" is a full-table column rule | clipping is the change recorded as breaking 4,417 combs |
+
+Consequence: **13/13 is unreachable by fixing alone.** The three belong in
+the review population, taking the load to 118.
+
+## The C3 fork, settled by reading the arithmetic
+
+`cells` is built one-per-subject from `ledger["subjects"]`, so
+`combs_found == subjects == 4,587`, and PASS demands `combs_measured` and
+`comparisons.agree` BOTH equal that. Every subject must therefore be
+measured and agree -- including the 30. A retained subject has no comb, so
+there is nothing for `classify_band` to measure. That kills the assumption
+in the earlier R2b design note (that `active_composite` lands the counts
+"with no census change") and leaves two honest routes:
+
+- **A. `active_composite` + a composite MEASUREMENT.** The subject stays in
+  the ledger and its measurement becomes the PARTITION rather than a comb --
+  which R2a's `partition_edge_corroboration` already performs. New referee
+  machinery (a composite four-way and its comparison), no census pin moves.
+- **B. `retired_proven_false` + declared census reduction.** The 30 leave
+  the ledger; `EXPECTED_COMBS` 4,587 -> 4,557, `EXPECTED_COMBS_BY_SLUG` and
+  `EXPECTED_RETAINED_SUBJECTS_BY_SLUG` move per slug, the gate's
+  `EXPECTED_COMB_SUBJECTS` follows. Simpler code, but it moves pinned corpus
+  identity across three tables and two files -- the class of change this
+  repo treats most carefully.
+
+B states the truth the corroborations proved (these are not combs); A keeps
+the ledger's promise that a refuted subject never leaves it. The choice is
+the user's, because it is a census-identity decision, not a measurement.

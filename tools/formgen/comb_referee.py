@@ -152,6 +152,15 @@ EXPECTED_FORMS = 53
 # compartments (2316's TINs, 0605's return-period boxes, 1600WP's item 5)
 # become combs again.
 EXPECTED_COMBS = 4587
+# The comparison vocabulary, in ONE place. It was duplicated -- inline in
+# the per-form counts and again in the corpus aggregate -- and the second
+# copy silently dropped `excepted`, so a corpus total under-reported an
+# entire comparison kind while every per-form count was right. A vocabulary
+# that exists twice is a vocabulary that will disagree with itself.
+COMPARISON_NAMES = (
+    "agree", "excepted", "repair-lattice", "repair-audit",
+    "stale-generation", "stop", "unevaluable",
+)
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
 # `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
@@ -368,8 +377,67 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # new cell is now inserted at its own sorted position instead. Both forms
 # re-pin below with a second byte change; 2551m-2002's cell already landed
 # in its correct sorted position and its own bytes are unchanged.
+# Re-pinned 2026-08-14 (C1a). Two changes, one relation: border records now
+# carry their per-segment geometry (span extent, cross-axis ink band,
+# thickness, tone), and a comb's writing surface insets by the weight of the
+# NEAREST segment to each edge over the comb's OWN span -- the referee's own
+# qualifying rule -- with equal separations resolving to the heavier segment
+# and span overlap demanded beyond the coincidence tolerance. Measured on the
+# regenerated corpus: exactly SIX writing bands move -- 2316 p1c74/76/78/80
+# (-0.39pt: the row above's 0.84pt rule, fused into the boundary line 0.63pt
+# short of this cell, no longer donates its weight) and 1604CF p1c16/p1c21
+# (-0.24pt: the 0.96pt segment lies outside the comb span; the span-local
+# wall is 0.72). A segment qualifies only where it spans one of the comb's
+# own COMPARTMENT MIDPOINTS -- the same rays the referee measures on -- which
+# also converges 1701-MS p1c117/120/123/126/129/132/135 (-0.30: the 0.5pt
+# caption stretch spans no compartment midpoint; the 0.2pt wall over the
+# compartments decides), 1706 p1c122 and 1800 p1c144/147/152/155/165 (-0.24:
+# knockout-halved walls) -- NINETEEN bands across five forms in all, every
+# one from the failing population, every delta equal to the referee's own
+# midpoint measurement, and 2316 p1c40 (-0.39 bottom: the row below's 0.84
+# rule, wholly outside the cell band, is no candidate under the referee's
+# own overlap rule, now mirrored -- its old inset left 0.23pt of the true
+# 0.45 wall's ink inside the writing band). TWENTY bands, five forms. A
+# span-overlap tolerance plus referee span-end rays was tried first and
+# REVERTED: the extra rays crossed shared-boundary junctions, refused 249
+# cells, and moved the reviewed 2551Q control digest.
+# Baseline parity was proven before any of it: stock code on this worktree's
+# environment reproduces all 53 shipped pins byte-for-byte. 4,557 comb
+# subjects unchanged; all 53 forms hold every audit assertion.
+# Re-pinned again 2026-08-15 (C3-A step 1): lattice gained
+# `apply_reviewed_transitions` -- the producer half of review_registry's
+# doctrine -- proven a byte-identical no-op on the shipped EMPTY registry
+# (fresh build_layout vs disk on 2551M/1604CF/2200A), with every fail-closed
+# guard fixture-covered and neuter-proven. No layout byte moves until the
+# user signs entries.
+# Re-pinned 2026-08-15: lattice now recounts each page's comb-subject stats
+# inside the reviewed-decision passes. The stats were computed while the page
+# was built -- before any decision could apply -- so every page carrying one
+# published a summary of the ledger as it stood a moment earlier, and this
+# referee refused 27 of 53 forms on "ledger stat ... is N, expected N+1".
+# Re-pinned 2026-08-16 (DECISION A): lattice gained the compartment rule --
+# COMB_COMPARTMENT_MAX_PT = 24.5, census-derived, user-approved (Sitting 2).
+# Three placements: the CURRENT band builder refuses a band with no run of
+# character boxes; the same refusal at the subject layer routes a
+# rule-refused LEGACY comb to retained (reason
+# `emission-suppressed-compartment-rule`) instead of publishing it into a
+# cell by continuity; and the legacy pass itself is deliberately untouched
+# (28 of the 30 retained/composite subjects fail the rule -- that population
+# IS the legacy detector's false-positive class, already adjudicated by
+# reviewed transitions that refusing there would erase). Corpus effect:
+# 0605's suppressed inference is never inferred; 2551M p2c13 and 1604CF
+# p2c73 lose their 2-slot phantom combs and emit plain region-cut inputs;
+# 1604F p1c25 carries its runs as published evidence, geometry unchanged.
+# Re-pinned same-day: the routing narrowed (a rule-refused legacy comb is
+# retained only when nothing CURRENT can own the cell -- 1600WP p1c74's
+# regression) and the reunification/ink-trim fixture geometries moved under
+# the bound. Same DECISION A lineage as the entry above.
+# Re-pinned same-day again: the compartment-rule retention moved from the
+# subject loop to a dedicated sweep AFTER the caption refutation, in its
+# exact shape -- the loop-order version stole eleven caption-block
+# subjects on eight forms and mismatched their reviewed certificates.
 LATTICE_PRODUCER_SHA256 = (
-    "fe8355dcb05439cbac3ecf8597a6a81c6bb1b65aa2247ea3e5aef38c864b6bea"
+    "cedf3f1f1a689e6fea610085250d52ff24a1b6bb3f5dc9ce0fc24353c1ad5762"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -594,8 +662,23 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # audit.py moves too, and it is DATA not logic: REVIEWED_COMB_TOPOLOGY gains
 # the three 2200A/C/P entries at 28 compartments and 1801 p1c13 goes 4 -> 3,
 # all four re-reviewed against the sheet's own ink and confirmed by the owner.
+# Re-pinned 2026-08-15: the user-approved review bundle admitted the
+# reviewed composite arrival to the judge (16 failing assertions -> 0, none
+# newly broken). The referee's own validation of the same certificate is
+# unchanged and independent -- it re-derives it against the review registry
+# and against its own Poppler corroboration, so this pin records WHICH judge
+# bytes were bound, never a delegation of judgement to them.
+# Audit + 4 structure pins re-pinned 2026-08-15 (user-approved F235/F237
+# package): PrintedDecoration in emit + the decoration rider in the judge.
+# Flip census: EXACTLY 8 inputs corpus-wide (45,708 -> 45,700), the approved
+# cells and nothing else.
+# Re-pinned 2026-08-16 (DECISION A rider): audit.py's retained-reason
+# vocabulary gained its fourth identity tuple,
+# `emission-suppressed-compartment-rule` -- the user-approved judge-side
+# acknowledgement of the compartment rule's two retained->composite
+# subjects (2551M p2c13, 1604CF p2c73). Nothing else in the judge moved.
 AUDIT_PRODUCER_SHA256 = (
-    "0f0803047cdfc40679a30848de9b1c09ef54a9aebc2c1d99768542abf4aa02af"
+    "4d5070c101101184bdd958c6eb68c58effdcd197a0fb61c5244ce4e2ee08497a"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -794,8 +877,12 @@ AUDIT_DEPENDENCY_SHA256 = {
     # otherwise have broken. No comb constant, tolerance, or existing check
     # count moves. `fixtures/prove_fixtures_fail.py` gains two source-level
     # mutations against the new check (21 total, up from 19).
+    # Re-pinned 2026-08-17: extract's FIXTURE-RULES sha moved because the
+    # fixture combs were rescaled under DECISION A's 24.5pt bound and the
+    # tracked rules.pdf was regenerated (CI's byte-verify caught the gap).
+    # No extract check, count or tolerance moved.
     "tools/formgen/extract.py": (
-        "add0df8ca9204d98f095477211d67b477f66a7ddc3c87d522b2ad260453eacaf"
+        "4c72c5f9787a1ee693ed7b967e47b58de0cd8ecc21684164cefcb6105583ba1a"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -890,6 +977,7 @@ LATTICE_GENERATOR_CONTRACT = {
 COMB_SUBJECT_STATES = frozenset({
     "active_resolved",
     "active_unresolved",
+    "active_composite",
     "retained_unresolved",
 })
 COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
@@ -929,6 +1017,12 @@ CHARACTER_CELL_MAX_PRINTED_GLYPHS = 1
 SOURCE_CAPTION_BLOCK_CRITERION = (
     "source-printed-caption-block-not-character-cells-v1"
 )
+# The corpus's structural-tone bound: rule tones at or below this are drawn
+# structure (the quantised corpus tones are 0.0, 0.251, ...; 0.15 separates
+# black structure from every decorative grey), the same boundary audit.py's
+# tone_role uses.  Used only by the null-border absence check: a claim of "no
+# wall" is refuted by structural ink at the edge, never by decoration.
+STRUCTURAL_TONE_MAX = 0.15
 SOURCE_PARTITION_EDGE_CRITERION = (
     "source-partition-edge-in-final-picture-v1"
 )
@@ -961,6 +1055,18 @@ RETAINED_SUPPRESSION_SOURCE_CRITERIA = {
     ("emission-suppressed-no-rectangular-owner", "painted-edge-partition"):
         SOURCE_PARTITION_EDGE_CRITERION,
     ("emission-suppressed-no-final-visible-band",):
+        SOURCE_CROSSING_RULE_CRITERION,
+    # DECISION A (2026-08-16): a legacy comb the compartment rule refuses
+    # whole (no run of character boxes survives) is retained rather than
+    # published. Its factual claim is the same one the crossing-rule
+    # corroboration already re-derives against Poppler: the "dividers" are
+    # rules that extend far beyond the comb band -- table structure, not
+    # comb ticks. Both members of this population (2551M p2c13's column
+    # rule spanning y 46.56-140.16 across a 11.76pt row, 1604CF p2c73's
+    # grid rules spanning 350.88pt across a 16.8pt row) are exactly that
+    # shape. No new probe is added; a criterion whose corroboration cannot
+    # run still fails closed below.
+    ("emission-suppressed-compartment-rule",):
         SOURCE_CROSSING_RULE_CRITERION,
 }
 # Poppler emits every character as a `use` of a `#glyph-*` path, and `parse_svg`
@@ -1106,7 +1212,7 @@ if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
 EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "0605-1999": 1,
     "1600wp-2010": 2,
-    "1604cf-2008": 1,
+    "1604cf-2008": 2,
     "1604f-2018": 1,
     "1606-2018": 1,
     "1707a-2021": 1,
@@ -1119,7 +1225,7 @@ EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "2200s-2018": 1,
     "2200t-2022": 2,
     "2550m-2007": 4,
-    "2551m-2002": 3,
+    "2551m-2002": 4,
     "2553-1999": 2,
 }
 EXPECTED_RETAINED_SUBJECTS = sum(EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
@@ -2295,20 +2401,20 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     # Input count 45,548 -> 45,549 (+1). `inputs_over_printed_text` stays 0
     # forms/0 offenders. Browser-verified: cell p1c214, Tab press 64, typed
     # and read back verbatim.
-    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
+    "0605-1999": "8a72b9c32f2a2dc5001f713f967605ba7c914b4f19a9e72dd7c60ed1c5bab4e0",
     "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
     "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
     "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
     "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
     "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
-    "1600wp-2010": "52c2f96df56e04e7cf91999a7d6ed1d58ebc96767e7fdb085d47f09c31f95862",
+    "1600wp-2010": "ab1e006ade827451181a305fc064f95515dda96fcc4d07a50ee804eb3326e54c",
     "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
     "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
     "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
     "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
     "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
     "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "b3cc3ea689114f7ca872f9b55588c6ad6c5a2fe72836ac3bfcd945b6b431d4a6",
+    "1604cf-2008": "9719777bc0cacb3be6f39333fff4ecbe01422f0c907485db6d0db262f293a965",
     "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
     "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
     "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
@@ -2318,18 +2424,18 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1701-2018-conso": "c3702a3e7dd82f2fb8e6a99bc4a27482b9b239ed8b43fd93e4fcbaebea83084a",
     "1701-2018": "dd4d02bcb9378e9358530370605da09da5e0d5b6e76b919738e18e187ce8059c",
     "1701a-2018": "8c0cfa010fe6f871855b36c913497f449afdfecc2407b0f4727891bef7a272ad",
-    "1701ms-2024": "60c93f1c3141615ca0182943750115dd66a8f1dc5c906438f69023ca89ff18e1",
+    "1701ms-2024": "adb7a7d24eb443c33b7ae72679be5a298f63bd79a916f15f3018c9e99e6b829d",
     "1701q-2018": "37b927b03a97a9364a9ff5f043a720125d44b22326eb2d23815da1cc0264c645",
     "1702ex-2018": "e0fd2ae0f9ce22a0079c5a861bb8deff665fc6e9d9e815dc54e770e46650cff0",
     "1702mx-2018c-attachment": "3a85eb3f58daa74a9aa68e12e67c322dd56fef63e917a63a58a7f4f1053568f1",
     "1702mx-2018c": "24fd0667582662a624ff0d030dbe460b148cea2ec50c95f78c0dc08070f17996",
     "1702q-2018": "50d00a5a72c815302db5658b6f1e9f17993d083495e715c1c3ab1f0eec28450c",
     "1702rt-2018c": "a3db97261ed811e522beaa515470b048a9232559e5c60a84eeaf9f2eae761ee7",
-    "1706-2018": "4161ad697a4a276ed4024aa159c956ffa0829901f26169592e40469ed8fa3de8",
+    "1706-2018": "17280da2c6b7467d303a2dcec514cb3f28873862bd6a0859891301213aff5ef4",
     "1707-2021": "b6f4ef2d3c0a918826d1f3ce00df1067e41a65c373650d6e04dfd6a5c4aceae7",
     "1707a-2021": "5dda59a6001f9ddb3fa373af6eb1894a29c8271b7bd9e377ea4938d5f05a158d",
     "1709-2020": "0dfb8ad6079e8739eee88f31710d61c7afccd7f011acfc1cd30b9f0618bc48bf",
-    "1800-2018": "25618332e2c8cec3f343ae876c7441e0e20a8880427b8ddb8e87602c1edb2f22",
+    "1800-2018": "a3efcf1b2f0738afd9fd103b269bccff01f5ed02187a8ee18495a5cc4c2fb21d",
     "1801-2018": "392bd8cca242071af0ef4df9c8b8210228b528e46e4b6ab58487b813a26a1cf9",
     "2000-dst-2018": "0a013b34da94170de5f892d86a941db6efec0050654194bd42df4a708d29477b",
     "2000-ot-2018": "af310b4678190881c92d2df96a2511cef5f17cb2b9eddad382e461305ee62162",
@@ -2340,14 +2446,14 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2200p-2020": "6c558749f0cae83b82bb9484831582807c721dfb507f4e743ba08c2f896b444c",
     "2200s-2018": "5e7f5686e19aa361614f6e9b0b20f783e8e17433d1e825473ae24e0b1e7451fc",
     "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
-    "2316-2021": "85654caa7382a0932f15d125e2a3af842110e3c8b631d4812864d65db2ded354",
+    "2316-2021": "42e9979b5032e1eb77de4ae7290b68cd6fabfdb2168b86d93f4261356741d674",
     "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
-    "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
+    "2550m-2007": "135edefefe6fd7950e0077bf7af7cfc405bfd2701926bf7ff18c2f8f5fd73632",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
-    "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
-    "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
+    "2551m-2002": "7eaff42dc757675f661be5609d64b9926232315b8f8a006405d9df8bb9ad818b",
+    "2551q-2018": "10389fc047d04e83a6b3175f0c37ca4b7ad99015d17f873b88bf71254d669ba3",
     "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
+    "2553-1999": "e7156fc6438f75e4a218ba2275e28d5cd3e63448f6d43e4a2b6015ab1e6d7997",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -5383,12 +5489,18 @@ def validate_comb_ledger(
                 subject.get("reason_codes"), f"{label} reason_codes",
                 nonempty=state != "active_resolved")
             blocks_gate = subject.get("blocks_gate")
+            # active_composite carries blocks_gate False: its certificate is
+            # validated below against the review registry byte-for-byte, and
+            # its MEASUREMENT (the R2a source corroboration) is what the
+            # comparison scores -- a composite the paper refutes still fails
+            # the gate through its own comparison row, never silently.
             if (not isinstance(blocks_gate, bool)
-                    or blocks_gate != (state != "active_resolved")):
+                    or blocks_gate != (state not in {
+                        "active_resolved", "active_composite"})):
                 raise RefereeError(
                     f"{label} state/blocks_gate contract disagrees")
 
-            if state.startswith("active_"):
+            if state in {"active_resolved", "active_unresolved"}:
                 cell_id = subject.get("cell_id")
                 mapped_ids = subject.get("mapped_partition_cell_ids")
                 if (not isinstance(cell_id, str)
@@ -5413,6 +5525,54 @@ def validate_comb_ledger(
                 if subject_cells != topology["cells"]:
                     raise RefereeError(
                         f"{label} ledger/cell comb counts disagree")
+                certificate = subject.get("resolution_certificate")
+                registry_key = (slug, page_index, str(cell_id))
+                entry = review_registry.REVIEWED_LEDGER_RESOLUTIONS.get(
+                    registry_key)
+                if certificate is not None:
+                    # The adjudicator half of the resolution path.  The
+                    # certificate must match the registry byte-for-byte AND
+                    # the cell's own resolution record must carry the same
+                    # one -- the producer transitions two records and a forger
+                    # who moved only the subject is caught here.  Whether the
+                    # PAPER agrees is decided later, in `comparison`, which
+                    # re-derives the four-way and refuses to let a review
+                    # stand against it.
+                    source_sha = str(
+                        (layout.get("source") or {}).get("sha256") or "")
+                    cell_certificate = (
+                        ((cell.get("comb") or {}).get("resolution") or {})
+                        .get("review_certificate"))
+                    if (state != "active_resolved"
+                            or not isinstance(certificate, dict)
+                            or set(certificate) != {
+                                "criterion", "registry_key", "four_way",
+                                "resolved_reason_codes", "reviewer", "date"}
+                            or certificate["criterion"]
+                            != review_registry.RESOLUTION_CRITERION
+                            or certificate["registry_key"]
+                            != [slug, page_index, str(cell_id)]
+                            or entry is None
+                            or entry["subject_key"] != subject_key
+                            or entry["source_sha256"] != source_sha
+                            or certificate["four_way"] != {
+                                name: int(entry["four_way"][name])
+                                for name in ("lattice", "audit", "emitted",
+                                             "referee")}
+                            or certificate["reviewer"] != entry["reviewer"]
+                            or certificate["date"] != entry["date"]
+                            or cell_certificate != certificate
+                            or not string_list(
+                                certificate["resolved_reason_codes"],
+                                f"{label} resolved_reason_codes",
+                                nonempty=True)):
+                        raise RefereeError(
+                            f"{label} resolution certificate does not match "
+                            "the review registry")
+                elif entry is not None:
+                    raise RefereeError(
+                        f"{label} has a reviewed resolution the producer did "
+                        "not apply")
                 expected_resolution = (
                     "resolved" if state == "active_resolved" else "unresolved")
                 if (topology["resolution_status"] != expected_resolution
@@ -5459,6 +5619,7 @@ def validate_comb_ledger(
                 page_active_order.append(cell_id)
                 active_cell_ids.add(cell_id)
                 published_subjects.append({
+                    "resolution_certificate": certificate,
                     "page": page_index,
                     "subject_key": subject_key,
                     "legacy_cell_id": legacy_cell_id,
@@ -5519,6 +5680,54 @@ def validate_comb_ledger(
                     and "comb" in cells_by_subject[subject_key]):
                 raise RefereeError(
                     f"{label} retained subject still has an active comb")
+            certificate = subject.get("transition_certificate")
+            if state == "active_composite":
+                # The adjudicator half of review_registry's doctrine: the
+                # producer's certificate is re-validated here against the
+                # registry byte-for-byte, and the criterion it names must be
+                # the criterion the subject's own reason tuple tables --
+                # review cannot substitute a different factual claim than the
+                # paper's.  Every mismatch is an ERROR, not a downgrade.
+                registry_key = (slug, page_index, legacy_cell_id)
+                entry = review_registry.REVIEWED_LEDGER_TRANSITIONS.get(
+                    registry_key)
+                source_sha = str(
+                    (layout.get("source") or {}).get("sha256") or "")
+                if (not isinstance(certificate, dict)
+                        or set(certificate) != {
+                            "criterion", "registry_key", "transition",
+                            "suppression_criterion", "reviewer", "date"}
+                        or certificate["criterion"]
+                        != review_registry.TRANSITION_CRITERION
+                        or certificate["registry_key"]
+                        != [slug, page_index, legacy_cell_id]
+                        or entry is None
+                        or entry["subject_key"] != subject_key
+                        or entry["source_sha256"] != source_sha
+                        or entry["transition"] != "active_composite"
+                        or certificate["transition"] != entry["transition"]
+                        or certificate["suppression_criterion"]
+                        != entry["suppression_criterion"]
+                        or certificate["reviewer"] != entry["reviewer"]
+                        or certificate["date"] != entry["date"]):
+                    raise RefereeError(
+                        f"{label} composite transition certificate does not "
+                        "match the review registry")
+                if (suppression_criterion is None
+                        or certificate["suppression_criterion"]
+                        != suppression_criterion):
+                    raise RefereeError(
+                        f"{label} composite certificate names a criterion "
+                        "the subject's reason codes do not table")
+            elif certificate is not None:
+                raise RefereeError(
+                    f"{label} carries a transition certificate without the "
+                    "transitioned state")
+            elif (slug, page_index, legacy_cell_id
+                    ) in review_registry.REVIEWED_LEDGER_TRANSITIONS:
+                raise RefereeError(
+                    f"{label} has a reviewed transition the producer did "
+                    "not apply")
             retained_legacy_ids.add(legacy_cell_id)
             published_subjects.append({
                 "page": page_index,
@@ -5526,7 +5735,8 @@ def validate_comb_ledger(
                 "legacy_cell_id": legacy_cell_id,
                 "cell_id": None,
                 "state": state,
-                "blocks_gate": True,
+                "blocks_gate": blocks_gate,
+                "transition_certificate": certificate,
                 "reason_codes": reason_codes,
                 "legacy_bbox": legacy_bbox,
                 "source_cell": {
@@ -5666,10 +5876,14 @@ def validate_comb_ledger(
             subject.get("blocks_gate") is True for subject in subjects)
         inference_blockers = sum(
             inference.get("blocks_gate") is True for inference in inferences)
+        page_composite = sum(
+            subject.get("state") == "active_composite"
+            for subject in subjects)
         expected_stats = {
             "comb_cells": len(comb_cells),
             "comb_subjects": len(subjects),
-            "comb_subjects_active": active_resolved + active_unresolved,
+            "comb_subjects_active": (
+                active_resolved + active_unresolved + page_composite),
             "comb_subjects_active_resolved": active_resolved,
             "comb_subjects_active_unresolved": active_unresolved,
             "comb_subjects_retained_unresolved": retained,
@@ -5701,6 +5915,9 @@ def validate_comb_ledger(
     active_resolved = sum(
         subject["state"] == "active_resolved"
         for subject in published_subjects)
+    active_composite = sum(
+        subject["state"] == "active_composite"
+        for subject in published_subjects)
     active_unresolved = sum(
         subject["state"] == "active_unresolved"
         for subject in published_subjects)
@@ -5708,9 +5925,18 @@ def validate_comb_ledger(
         subject["state"] == "retained_unresolved"
         for subject in published_subjects)
     expected_retained = EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(slug, 0)
-    if retained != expected_retained:
+    # The pin counts SUPPRESSED subjects -- subjects with no active cell of
+    # their own -- and a reviewed composite transition changes a subject's
+    # state, never its suppressed emission or its ledger membership (Path A:
+    # nothing leaves the books).  The census therefore counts retained AND
+    # composite together against the same unmoved pin, and the composite
+    # slice is bounded by the registry itself: every composite subject was
+    # already proven above to match a registry entry byte-for-byte.
+    if retained + active_composite != expected_retained:
         raise RefereeError(
-            f"{slug}: subject ledger retains {retained} suppressed subjects, "
+            f"{slug}: subject ledger retains "
+            f"{retained + active_composite} suppressed subjects "
+            f"({retained} retained, {active_composite} composite), "
             f"expected pinned {expected_retained}")
     expected_active = expected_total - expected_retained
     if active_resolved + active_unresolved != expected_active:
@@ -5739,9 +5965,10 @@ def validate_comb_ledger(
         "suppression_obligations": suppression_obligations,
         "counts": {
             "subjects": len(published_subjects),
-            "active": active_resolved + active_unresolved,
+            "active": active_resolved + active_unresolved + active_composite,
             "active_resolved": active_resolved,
             "active_unresolved": active_unresolved,
+            "active_composite": active_composite,
             "retained_unresolved": retained,
             "inferences_suppressed": len(published_inferences),
             "blocking": blockers,
@@ -6100,12 +6327,16 @@ def source_wall_thickness(
                 f"the source {edge} wall is not bounded inside the cell's own "
                 "neighbourhood")
         thicknesses.add(thickness)
-    if len(thicknesses) != 1:
+    if not thicknesses:
         return None, (
-            f"the source {edge} wall is not one weight across the "
-            "compartments: "
-            + ", ".join(f"{value:g}pt" for value in sorted(thicknesses)))
-    return thicknesses.pop(), None
+            f"the source paints no {edge} wall of the declared tone over "
+            "every compartment")
+    # The inset the writing surface stands under is the MAXIMUM weight over
+    # the span: a border drawn 0.5pt over the caption stretch and 0.2pt over
+    # the compartments claims 0.5 wherever both reach into the span, and the
+    # span-end probe rays below are what let this census see a heavier
+    # segment that only nicks the span's first sliver (1701-MS, 1800, 1706).
+    return max(thicknesses), None
 
 
 def writing_band_corroboration(
@@ -6149,10 +6380,48 @@ def writing_band_corroboration(
     probes = [
         (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
     ]
+    # The COMPARTMENT MIDPOINTS are the relation, on both sides: the producer
+    # counts a border segment only where it spans one of these same rays, so
+    # the two measurers qualify identical ink by construction.  Span-end rays
+    # were tried and REVERTED: at shared boundaries they crossed junction
+    # corners the old probes never touched, refused 249 cells corpus-wide,
+    # and moved the human-reviewed 2551Q control tuples -- the fail-closed
+    # digest caught it.  A heavier stretch that spans no compartment midpoint
+    # bounds no compartment's writing surface.
     walls: dict[str, float] = {}
     for edge in ("top", "bottom"):
         record = border.get(edge) if isinstance(border, dict) else None
-        tone = record.get("gray") if isinstance(record, dict) else None
+        if record is None:
+            # A null border is a CLAIM -- "no wall here" -- and the sheet is
+            # asked to confirm it: no structural-tone run may stand within
+            # the coincidence tolerance of this edge at any probe.  Absence
+            # verified is an inset of zero (1707 item 9's 25-compartment
+            # combs and 2551-M p1c103 are exactly this shape); ink found is a
+            # refusal, exactly as a wrong thickness is.
+            edge_y = box["y0"] if edge == "top" else box["y1"]
+            intruder = None
+            for x in probes:
+                for top, bottom, owner in visible_vertical_runs(
+                        page.paints, x, edge_y - 2 * POSITION_TOL_PT,
+                        edge_y + 2 * POSITION_TOL_PT):
+                    if owner.clipped or owner.tone > STRUCTURAL_TONE_MAX:
+                        continue
+                    if (top <= edge_y + POSITION_TOL_PT
+                            and bottom >= edge_y - POSITION_TOL_PT):
+                        intruder = (x, top, bottom, owner.tone)
+                        break
+                if intruder is not None:
+                    break
+            if intruder is not None:
+                return {
+                    "status": "uncorroborated",
+                    "reason": (
+                        f"the layout declares no {edge} border but the "
+                        "source paints structural ink at the edge"),
+                }
+            walls[edge] = 0.0
+            continue
+        tone = record.get("gray")
         if (isinstance(tone, bool) or not isinstance(tone, (int, float))
                 or not math.isfinite(float(tone))):
             return {
@@ -6183,8 +6452,13 @@ def writing_band_corroboration(
             "reason": "the source walls leave the cell no writing surface",
             **evidence,
         }
-    if (abs(source_y0 - evidence["layout_writing_y0"]) > 1e-9
-            or abs(source_y1 - evidence["layout_writing_y1"]) > 1e-9):
+    # One layout quantum (0.01pt) of tolerance, because the two rasterisers
+    # can disagree on a thickness at the last written digit: 0605 p1c36's
+    # bottom wall is 0.76pt in the content stream and 0.75pt in Poppler's
+    # vectors.  Half-ulp disagreement between two honestly-quantized numbers
+    # is not a defect; anything more is.
+    if (abs(source_y0 - evidence["layout_writing_y0"]) > 0.01 + 1e-9
+            or abs(source_y1 - evidence["layout_writing_y1"]) > 0.01 + 1e-9):
         return {
             "status": "uncorroborated",
             "reason": (
@@ -6939,13 +7213,25 @@ def classify_band(
             # void could be two separate comb runs joined by a bad lattice
             # subject.
             if not between:
+                # Occlusion is asked of THIS SLAB, not of the whole cell.  The
+                # claim under proof is "no divider crosses this slab in this
+                # gap", and a divider that crosses the slab is visible in the
+                # slab unless something covers it THERE.  Ink elsewhere in the
+                # cell cannot hide it here, and citing that ink refused
+                # 1604F p1c25 on glyphs 2.16pt above the slab they were
+                # charged against.  The protection is unweakened where it
+                # bears: ink actually overlapping the slab still refuses, and
+                # a divider hidden under such ink still leaves that slab's
+                # topology disagreeing with its neighbours', which the
+                # majority rule catches.  The single-frame certificate stays
+                # cell-scoped -- a frame is a property of the subject.
                 gap_unsupported = [
                     region for region in page.unsupported
                     if region.x1 > left and region.x0 < right
-                    and region.y1 > proof_y0 and region.y0 < proof_y1
+                    and region.y1 > a and region.y0 < b
                     and min(region.x1, right) - max(region.x0, left)
                     > POSITION_TOL_PT
-                    and min(region.y1, proof_y1) - max(region.y0, proof_y0)
+                    and min(region.y1, b) - max(region.y0, a)
                     > POSITION_TOL_PT
                 ]
                 subject_frame_elements = single_source_frame_elements()
@@ -10807,8 +11093,80 @@ def audit_relation_for_subject(
     return None, "unknown-truncated"
 
 
+def composite_comparison(cell: dict[str, Any]) -> tuple[str, str]:
+    """Score a reviewed composite on the only claim it makes.
+
+    Its claim is not a compartment count -- it has no comb -- but that the
+    source suppresses the legacy comb for the tabled reason the review
+    confirmed.  Review cannot overrule the paper: a corroboration that comes
+    back FALSE is a `stop`, exactly as a four-way disagreement is, and the
+    registry entry behind it is then wrong rather than stronger.
+    """
+    referee = cell["referee"]
+    if cell.get("emitted") is not None:
+        return (
+            "stop",
+            "a composite subject emitted physical slots of its own",
+        )
+    if referee.get("status") != "composite":
+        return (
+            "unevaluable",
+            "composite subject carries no corroboration measurement",
+        )
+    if not referee.get("corroborated"):
+        return (
+            "stop",
+            "the source refutes the reviewed composite's suppression claim",
+        )
+    return (
+        "agree",
+        "the source corroborates the reviewed composite's suppression claim",
+    )
+
+
+def reviewed_exception_status(cell: dict[str, Any], slug: str,
+                              source_sha: str, status: str, reason: str
+                              ) -> tuple[str, str]:
+    """Apply a reviewed exception, and ONLY to the verdict it names.
+
+    The third review path (S2). The other two say "the reviewer confirms
+    what the paper shows"; this one says "the reviewer accepts that the
+    paper CANNOT show it". It is deliberately the narrowest of the three:
+
+      * it applies only to an `unevaluable` comparison -- an exception can
+        never turn a `stop` (an active disagreement) into a pass;
+      * the entry records the EXACT refusal string it excuses, and this
+        honours it only while the live refusal still equals it. A fix, a
+        re-pin or a re-read that changes the refusal makes the exception
+        STALE, which is an error, not a silent pass;
+      * the result is published as its own comparison kind, `excepted`,
+        never folded into `agree`, so the report always states how many
+        verdicts were excused and the pass bar has to name them.
+    """
+    if status != "unevaluable":
+        return status, reason
+    key = (slug, int(cell["page"]),
+           str(cell.get("cell_id") or cell["legacy_cell_id"]))
+    entry = review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.get(key)
+    if entry is None:
+        return status, reason
+    if entry["source_sha256"] != source_sha:
+        return status, reason
+    if entry["subject_key"] != cell["subject_key"]:
+        raise RefereeError(
+            f"{key}: reviewed exception subject_key does not bind this "
+            "subject")
+    if entry["reason"] != reason:
+        raise RefereeError(
+            f"{key}: reviewed exception is stale -- it excuses "
+            f"{entry['reason']!r} but the source now says {reason!r}")
+    return "excepted", f"reviewed exception: {reason}"
+
+
 def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     ledger_state = cell.get("ledger_state")
+    if ledger_state == "active_composite":
+        return composite_comparison(cell)
     if ledger_state not in {"active_resolved", "active_unresolved"}:
         return (
             "unevaluable",
@@ -10817,6 +11175,7 @@ def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     lattice = cell["latticed"]
     emitted = cell["emitted"]
     referee = cell["referee"]
+    certificate = cell.get("resolution_certificate")
     if emitted != lattice or not cell["emitted_indexes_valid"]:
         return "stale-generation", "emitted physical slots disagree with lattice"
     if not audit_complete:
@@ -10838,6 +11197,21 @@ def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
         return "stop", "referee positions disagree with lattice anchors"
     source = int(referee["compartments"])
     audit = int(cell["audit_printed"])
+    if certificate is not None:
+        # REVIEW CANNOT OVERRULE THE PAPER.  A reviewed resolution was signed
+        # on four counts recorded in the registry; this run re-derives all
+        # four from the source, the audit, the layout and the emission, and
+        # every one must still equal what was signed.  A corpus that has
+        # moved under a signed decision is a `stop`, never a quiet pass --
+        # the decision has to be re-reviewed against the new evidence.
+        signed = certificate["four_way"]
+        if (signed["lattice"] != lattice or signed["audit"] != audit
+                or signed["emitted"] != emitted
+                or signed["referee"] != source):
+            return (
+                "stop",
+                "the evidence has moved since this resolution was reviewed",
+            )
     if source == lattice == audit:
         return "agree", "referee, lattice, audit, and emitted agree"
     if source == audit and source != lattice:
@@ -10853,8 +11227,25 @@ def transition_decision(
         cell: dict[str, Any], comparison_status: str) -> tuple[str, str]:
     """Report review eligibility without mutating the blocking ledger."""
     ledger_state = cell.get("ledger_state")
+    if comparison_status == "excepted":
+        # A reviewed exception IS the adjudication: the user accepted that
+        # the paper cannot decide this subject, so no transition is pending
+        # -- there is nothing left for a future review to wait on unless
+        # the exception itself is removed, at which point the subject
+        # returns to its blocking shape and this function's other branches
+        # apply again.
+        return (
+            "none",
+            "reviewed exception holds; the paper cannot adjudicate a "
+            "transition",
+        )
     if ledger_state == "active_resolved":
         return "none", "active ledger subject is already resolved"
+    if ledger_state == "active_composite":
+        # The transition this state names has already been made, under a
+        # reviewed certificate this run re-validated.  There is nothing left
+        # to become eligible for.
+        return "none", "reviewed composite transition is already applied"
     if ledger_state == "active_unresolved":
         if comparison_status == "agree":
             return (
@@ -11114,6 +11505,7 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             source_cell = subject["source_cell"]
             result = classify_band(
                 source_cell, svg, ledger_state=subject["state"])
+            corroboration = None
             if subject["source_suppression_criterion"] is not None:
                 corroboration = retained_suppression_corroboration(
                     subject, result, svg,
@@ -11121,6 +11513,42 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                     f"{subject['legacy_cell_id']}")
                 suppression_corroborations[subject["legacy_cell_id"]] = (
                     corroboration["criterion"])
+            if subject["state"] == "active_composite":
+                # A composite subject has NO comb of its own -- that is what
+                # the review certified -- so measuring its legacy band would
+                # score a claim nobody makes.  Its measurement is the source
+                # corroboration of the suppression itself, which is the only
+                # thing about it the paper can answer.  The partition cells it
+                # maps to carry their own comparison rows, so their
+                # correctness is scored there and never double-counted here.
+                label = (f"{slug} page {page_index} "
+                         f"{subject['legacy_cell_id']}")
+                if corroboration is None:
+                    raise RefereeError(
+                        f"{label} composite subject has no tabled suppression "
+                        "criterion to corroborate")
+                if "corroborated" in corroboration:
+                    corroborated = bool(corroboration["corroborated"])
+                elif (corroboration["criterion"]
+                        == SOURCE_CAPTION_BLOCK_CRITERION):
+                    # That criterion RAISES on every failure, so a returned
+                    # census is its affirmative verdict.
+                    corroborated = True
+                else:
+                    raise RefereeError(
+                        f"{label} composite corroboration published no "
+                        "verdict")
+                result = {
+                    "status": "composite",
+                    "criterion": corroboration["criterion"],
+                    "corroborated": corroborated,
+                    "reason": (
+                        "the source corroborates the reviewed composite's "
+                        "suppression claim"
+                        if corroborated else
+                        "the source REFUTES the reviewed composite's "
+                        "suppression claim"),
+                }
             report_cell_id = (
                 subject["cell_id"] or subject["legacy_cell_id"])
             # An emitted subject whose writing band the source refuses to
@@ -11162,6 +11590,21 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 "emitted_evidence": emitted,
                 "audit_printed": audit_printed,
                 "audit_relation": audit_relation,
+                "resolution_certificate": subject.get(
+                    "resolution_certificate"),
+                # Published for the SAME reason as its sibling above, and it
+                # was omitted here while the sibling was not: gate's
+                # corpus-coverage guard reads certificates off these cells,
+                # so 29 correctly-applied transitions read as "applied
+                # nowhere". The certificate lived on the ledger subject the
+                # whole time -- what was missing was the report saying so.
+                "transition_certificate": subject.get(
+                    "transition_certificate"),
+                # None on every cell until the exception pass below stamps
+                # the applied entry's identity -- published unconditionally
+                # so the report schema is one shape, the certificate
+                # pattern exactly.
+                "exception_registry_key": None,
                 "referee": result,
             })
 
@@ -11173,10 +11616,24 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         slug, ledger["suppression_obligations"], suppression_corroborations)
     if slug == "2551q-2018":
         validate_2551q_referee_golden(cells)
+    source_sha_for_exceptions = str(
+        (layout.get("source") or {}).get("sha256") or "")
     for cell in cells:
         status, reason = comparison(cell, bool(audit.get("complete")))
+        status, reason = reviewed_exception_status(
+            cell, slug, source_sha_for_exceptions, status, reason)
         cell["comparison_status"] = status
         cell["comparison_reason"] = reason
+        if status == "excepted":
+            # The applied entry's identity, published the same way the two
+            # certificates publish theirs: so the gate's corpus-coverage
+            # guard can count every reviewed exception applied exactly
+            # once, off the report's own claims. The gate's mirror still
+            # re-derives the entry per cell -- this key is the census, not
+            # the proof.
+            cell["exception_registry_key"] = [
+                slug, int(cell["page"]),
+                str(cell.get("cell_id") or cell["legacy_cell_id"])]
         transition_status, transition_reason = transition_decision(
             cell, status)
         cell["transition_status"] = transition_status
@@ -11193,11 +11650,19 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
 
     source_measured = [
         cell for cell in cells if cell["referee"]["status"] == "measured"]
+    # A composite IS measured -- on its corroboration, not on a band -- so
+    # it belongs in neither bucket: not "measured" (no band measurement) and
+    # never "source_unevaluable" (the source answered its question). The
+    # gate partitions cells the same three ways and cross-checks this count.
     source_unevaluable = [
-        cell for cell in cells if cell["referee"]["status"] != "measured"]
+        cell for cell in cells
+        if cell["referee"]["status"] not in ("measured", "composite")]
     unevaluable = [
         cell for cell in cells
         if cell["comparison_status"] == "unevaluable"]
+    excepted = [
+        cell for cell in cells
+        if cell["comparison_status"] == "excepted"]
     layout_mismatches = [
         cell for cell in source_measured
         if int(cell["referee"]["compartments"]) != int(cell["latticed"])
@@ -11208,22 +11673,45 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     ]
     emission_mismatches = [
         cell for cell in cells
-        if cell["emitted"] != cell["latticed"]
-        or not cell["emitted_indexes_valid"]
+        # A suppressed subject (retained or reviewed composite) emits
+        # nothing BY DESIGN; the emission inventory accounts for it, and
+        # the gate derives this count with the same exclusion.
+        if cell["ledger_state"] not in (
+            "retained_unresolved", "active_composite")
+        and (cell["emitted"] != cell["latticed"]
+             or not cell["emitted_indexes_valid"])
     ]
     comparison_counts = {
         name: sum(cell["comparison_status"] == name for cell in cells)
-        for name in (
-            "agree", "repair-lattice", "repair-audit", "stale-generation",
-            "stop", "unevaluable",
-        )
+        for name in COMPARISON_NAMES
     }
     status = "ok"
     reasons: list[str] = []
-    if ledger["counts"]["blocking"]:
+    # A blocking subject whose cell's comparison is `excepted` is EXCUSED:
+    # a reviewed entry names its exact live refusal, this run re-verified
+    # the match (a drifted refusal raises before reaching here), and the
+    # blocker is counted out loud below rather than hidden. Only blockers
+    # WITHOUT an applied exception keep the form unevaluable -- excusal is
+    # per-subject and bound to the registry, never a form-level waiver.
+    excepted_ids = {
+        str(cell.get("legacy_cell_id") or cell.get("cell_id"))
+        for cell in cells
+        if cell.get("comparison_status") == "excepted"
+    }
+    blocking_excused = sum(
+        1 for subject in ledger["subjects"]
+        if subject.get("blocks_gate")
+        and str(subject.get("legacy_cell_id") or subject.get("cell_id"))
+        in excepted_ids
+    )
+    blocking_unexcused = ledger["counts"]["blocking"] - blocking_excused
+    if blocking_unexcused:
         status = "unevaluable"
         reasons.append(
-            f"{ledger['counts']['blocking']} lattice-ledger blockers")
+            f"{blocking_unexcused} lattice-ledger blockers")
+    elif blocking_excused:
+        reasons.append(
+            f"{blocking_excused} blocker(s) excused by reviewed exception")
     if not emission_inventory["complete"]:
         status = "unevaluable"
         reasons.append(
@@ -11282,8 +11770,12 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 ledger["counts"]["retained_unresolved"]),
             "inferences_suppressed": (
                 ledger["counts"]["inferences_suppressed"]),
+            "ledger_blocking_excused": blocking_excused,
             "ledger_blocking": ledger["counts"]["blocking"],
             "measured": len(source_measured),
+            "composite": sum(
+                1 for cell in cells
+                if cell["referee"]["status"] == "composite"),
             "source_unevaluable": len(source_unevaluable),
             "unevaluable": len(unevaluable),
             "referee_layout_mismatches": len(layout_mismatches),
@@ -11377,6 +11869,28 @@ def source_literal_duplicate_keys(name: str) -> list[str]:
 
 
 def self_test() -> int:
+    # The registries are user data, not fixture data: the C4b sitting filled
+    # them with real reviewed decisions, and the synthetic ledgers below reuse
+    # real slugs (1604e-2018 is the fixture slug), so an entry for a real cell
+    # would hit the fail-closed "reviewed resolution the producer did not
+    # apply" guard inside a fixture that never claimed to have applied it.
+    # Empty both for the duration of the fixtures -- the guard itself is
+    # exercised deliberately by the composite fixtures via with_registry --
+    # and restore whatever was registered before returning.
+    _saved_resolutions = dict(review_registry.REVIEWED_LEDGER_RESOLUTIONS)
+    _saved_transitions = dict(review_registry.REVIEWED_LEDGER_TRANSITIONS)
+    review_registry.REVIEWED_LEDGER_RESOLUTIONS.clear()
+    review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+    try:
+        return _self_test_body(_saved_resolutions, _saved_transitions)
+    finally:
+        review_registry.REVIEWED_LEDGER_RESOLUTIONS.clear()
+        review_registry.REVIEWED_LEDGER_RESOLUTIONS.update(_saved_resolutions)
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.update(_saved_transitions)
+
+
+def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     # F231, proven able to fail by the mutation below: a pin dict whose source
     # literal repeats a key is a silent liar, because only the last one is
     # live. Asked of the SOURCE, never of the resolved dict.
@@ -13069,11 +13583,26 @@ def self_test() -> int:
                   band_bottom_wall))
     # Mutation: the wall is not one weight over every compartment.  An average
     # is not a measurement.
+    # C1 v2: a wall drawn 1.0pt over the left compartment and 0.5pt over the
+    # right no longer refuses -- the writing surface stands under the HEAVIER
+    # claim, so the census takes the maximum, and the corroboration holds
+    # exactly when the layout inset by that same maximum (1702-MX's four
+    # cells are the corpus population).  An inset taken from the lighter
+    # segment is still refused: the relation is the max, not "any weight the
+    # wall somewhere has".
+    mixed_weight_source = band_page(
+        band_wall(0.0, 1.0, 0, "left-top", x1=20.0),
+        band_wall(0.0, 0.5, 1, "right-top", x0=20.0),
+        band_bottom_wall)
+    mixed_ok = band_verdict(band_cell(), mixed_weight_source)
+    assert mixed_ok["status"] == "corroborated", mixed_ok
+    assert mixed_ok["source_top_wall_pt"] == 1.0, mixed_ok
+    thin_inset = band_cell()
+    thin_inset["border"]["top"]["thickness_pt"] = 0.5
+    thin_inset["comb"]["writing_y0"] = 0.5
     band_refuses(
-        band_cell(), "not one weight across the compartments",
-        band_page(band_wall(0.0, 1.0, 0, "left-top", x1=20.0),
-                  band_wall(0.0, 0.5, 1, "right-top", x0=20.0),
-                  band_bottom_wall))
+        thin_inset, "the source walls inset this cell",
+        mixed_weight_source)
     # Mutation: a later opaque paint eats half the wall.  The visible extent is
     # the measurement, so the shortened wall must not confirm the band.
     band_refuses(
@@ -13081,6 +13610,12 @@ def self_test() -> int:
         band_page(band_top_wall, band_bottom_wall,
                   band_wall(0.0, 0.5, 2, "knockout", tone=1.0)))
     # Mutation: two walls of different weight sit equally near the cell edge.
+    # Two walls of DIFFERENT weight equally near the edge stay refused: which
+    # of them bounds the box is genuinely ambiguous at that ray, and a census
+    # that picked either would corroborate an inset the paper does not
+    # establish.  (A tie-break to the heavier run was tried in C1 and
+    # REVERTED: at shared-boundary junctions it refused 249 cells and moved
+    # the reviewed 2551Q control digest.)
     band_refuses(
         band_cell(), "equally near the cell edge",
         band_page(band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
@@ -13576,7 +14111,7 @@ def self_test() -> int:
     # count is zero, so "how many subjects does this form publish" and "how many
     # of them are suppressed" stay separable in the self-test too. The retained
     # census gets its own fixture further down, on a slug that really has one.
-    ledger_fixture_slug = "1604e-2018"
+    ledger_fixture_slug = "1702mx-2018c-attachment"
     assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(ledger_fixture_slug, 0) == 0
 
     def synthetic_ledger_layout() -> dict[str, Any]:
@@ -13640,6 +14175,7 @@ def self_test() -> int:
         "active": fixture_subjects,
         "active_resolved": fixture_subjects,
         "active_unresolved": 0,
+        "active_composite": 0,
         "retained_unresolved": 0,
         "inferences_suppressed": 0,
         "blocking": 0,
@@ -13744,20 +14280,25 @@ def self_test() -> int:
     assert unresolved_result["counts"]["blocking"] == 1
 
     inference_ledger = clone(ledger_fixture)
+    # Identity AND geometry sit clear of the synthetic 0..N run for every
+    # slug total (the run's cells occupy x = 3*index): at 15 subjects the
+    # old x 63..65 was free paper, at 108 it was synthetic cell 21's exact
+    # bbox and collided on subject_key, which is this fixture's own
+    # duplicate-identity guard firing on the fixture itself.
     inferred_cell = {
-        "id": "p1c21",
-        "subject_key": "p1@63.00,0.00,65.00,10.00",
-        "x0": 63.0, "y0": 0.0, "x1": 65.0, "y1": 10.0,
+        "id": "p1c9021",
+        "subject_key": "p1@9021.00,0.00,9023.00,10.00",
+        "x0": 9021.0, "y0": 0.0, "x1": 9023.0, "y1": 10.0,
     }
     inference_ledger["pages"][0]["cells"].append(inferred_cell)
     inference_ledger["pages"][0]["comb_inferences"].append({
         "subject_key": inferred_cell["subject_key"],
         "cell_id": inferred_cell["id"],
-        "bbox": [63.0, 0.0, 65.0, 10.0],
+        "bbox": [9021.0, 0.0, 9023.0, 10.0],
         "state": COMB_INFERENCE_STATE,
         "reason_codes": ["no-legacy-subject"],
         "inferred_comb": synthetic_ledger_comb(
-            63.0, 65.0, "unresolved", ["no-legacy-subject"]),
+            9021.0, 9023.0, "unresolved", ["no-legacy-subject"]),
         "requires_independent_evidence": True,
         "permitted_transitions": ["active_reviewed"],
         "blocks_gate": True,
@@ -13809,14 +14350,18 @@ def self_test() -> int:
     #
     # It did exactly that at r20, which is the check working: 2551M went 15 -> 18
     # subjects and 1 -> 3 retained, so it is no longer paired with 1604-E and no
-    # longer a retained-ONE slug. 1604-CF replaces it -- 15 subjects, exactly one
-    # retained, the same pairing on today's measured census -- and 2551M is
-    # promoted to the retained-MANY negative control below, where 0605 used to
-    # sit. 0605 had to move for the same reason: it went 3 -> 1 retained, so it
-    # would now reject this fixture on its total alone and stop testing the
-    # retained census at all. Neither the fixture nor the rule was weakened;
-    # only the slugs that satisfy them were re-measured.
-    retained_fixture_slug = "1604cf-2008"
+    # longer a retained-ONE slug. 1604-CF replaced it then, and moved again
+    # on 2026-08-16 when DECISION A's transition took it 1 -> 2 retained
+    # (p2c73 joined the suppressed census), breaking the (15, 15) pairing
+    # with 1604-E outright -- no 15-subject retained-ONE slug exists on
+    # today's census. The pairing moves to (108, 108): 1702-MX's attachment
+    # (108 subjects, retained zero) carries the ledger fixture and 1800
+    # (108 subjects, exactly one retained -- p1c4, the reviewed exception's
+    # own subject) carries the retained census. 2551M stays the
+    # retained-MANY negative control, now at four. Neither the fixture nor
+    # the rule was weakened; only the slugs that satisfy them were
+    # re-measured, which is this assertion doing its job a third time.
+    retained_fixture_slug = "1800-2018"
     assert (EXPECTED_COMBS_BY_SLUG[retained_fixture_slug]
             == EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug])
     assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG[retained_fixture_slug] == 1
@@ -13844,6 +14389,272 @@ def self_test() -> int:
     retained_result = validate_comb_ledger(
         retained_fixture_slug, retained_ledger, lattice_producer_bytes)
     assert retained_result["counts"]["retained_unresolved"] == 1
+
+    # ---- C3-A step 2: the composite transition, adjudicator half ----------
+    #
+    # A user-signed registry entry lets the producer publish
+    # `active_composite`; this referee re-validates the certificate against
+    # the registry byte-for-byte and refuses every forgery.  The fixture
+    # subject uses a TABLED reason tuple (the R2a partition-edge criterion),
+    # because a composite of an untabled claim has no source corroboration
+    # to measure and must refuse.
+    composite_ledger = clone(retained_ledger)
+    composite_ledger["source"] = {"sha256": "ab" * 32}
+    composite_subject = composite_ledger["pages"][0]["comb_subjects"][0]
+    composite_subject["reason_codes"] = [
+        "emission-suppressed-no-rectangular-owner",
+        "painted-edge-partition",
+    ]
+    composite_subject["state"] = "active_composite"
+    composite_subject["blocks_gate"] = False
+    # The page stats transition exactly as lattice.py's own would: composite
+    # counts in `comb_subjects_active` (state startswith "active_"), leaves
+    # the retained count, and stops blocking.
+    composite_stats = composite_ledger["pages"][0]["stats"]
+    composite_stats["comb_subjects_active"] += 1
+    composite_stats["comb_subjects_retained_unresolved"] -= 1
+    composite_stats["comb_subjects_blocking"] -= 1
+    composite_stats["comb_evidence_blocking"] -= 1
+    composite_key = (
+        retained_fixture_slug, 1, composite_subject["legacy_cell_id"])
+    composite_entry = {
+        "subject_key": composite_subject["subject_key"],
+        "source_sha256": "ab" * 32,
+        "transition": "active_composite",
+        "suppression_criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "reviewer": "self-test", "date": "2026-08-15",
+        "citation": "self-test",
+    }
+    composite_subject["transition_certificate"] = {
+        "criterion": review_registry.TRANSITION_CRITERION,
+        "registry_key": list(composite_key),
+        "transition": "active_composite",
+        "suppression_criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "reviewer": "self-test", "date": "2026-08-15",
+    }
+
+    def with_registry(entries, work):
+        saved = dict(review_registry.REVIEWED_LEDGER_TRANSITIONS)
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+        review_registry.REVIEWED_LEDGER_TRANSITIONS.update(entries)
+        try:
+            return work()
+        finally:
+            review_registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+            review_registry.REVIEWED_LEDGER_TRANSITIONS.update(saved)
+
+    composite_result = with_registry(
+        {composite_key: composite_entry},
+        lambda: validate_comb_ledger(
+            retained_fixture_slug, composite_ledger, lattice_producer_bytes))
+    assert composite_result["counts"]["active_composite"] == 1
+    assert composite_result["counts"]["retained_unresolved"] == 0
+    assert composite_result["counts"]["blocking"] == 0
+    published_composite = [
+        subject for subject in composite_result["subjects"]
+        if subject["state"] == "active_composite"]
+    assert len(published_composite) == 1
+    assert (published_composite[0]["transition_certificate"]
+            == composite_subject["transition_certificate"])
+    assert published_composite[0]["blocks_gate"] is False
+    assert (published_composite[0]["source_suppression_criterion"]
+            == SOURCE_PARTITION_EDGE_CRITERION)
+
+    def composite_refused(name, entries=None, mutate=None):
+        broken_ledger = clone(composite_ledger)
+        if mutate is not None:
+            mutate(broken_ledger)
+        try:
+            with_registry(
+                {composite_key: composite_entry}
+                if entries is None else entries,
+                lambda: validate_comb_ledger(
+                    retained_fixture_slug, broken_ledger,
+                    lattice_producer_bytes))
+        except RefereeError:
+            return
+        raise AssertionError(f"composite forgery was accepted: {name}")
+
+    composite_refused("no registry entry at all", entries={})
+    composite_refused(
+        "registry names a different reviewer",
+        entries={composite_key: {**composite_entry, "reviewer": "someone"}})
+    composite_refused(
+        "registry reviewed different source bytes",
+        entries={composite_key: {
+            **composite_entry, "source_sha256": "cd" * 32}})
+
+    def strip_certificate(value):
+        value["pages"][0]["comb_subjects"][0].pop("transition_certificate")
+        value["pages"][0]["comb_subjects"][0]["state"] = "retained_unresolved"
+        value["pages"][0]["comb_subjects"][0]["blocks_gate"] = True
+    composite_refused(
+        "reviewed transition the producer did not apply",
+        mutate=strip_certificate)
+
+    def untabled_reasons(value):
+        value["pages"][0]["comb_subjects"][0]["reason_codes"] = [
+            "emission-suppressed-unproved-multi-row-divider-corridor"]
+    composite_refused(
+        "certificate names a criterion the reasons do not table",
+        mutate=untabled_reasons)
+
+    def composite_blocks(value):
+        value["pages"][0]["comb_subjects"][0]["blocks_gate"] = True
+    composite_refused(
+        "a composite subject claiming to block the gate",
+        mutate=composite_blocks)
+
+    def certificate_without_state(value):
+        value["pages"][0]["comb_subjects"][0]["state"] = "retained_unresolved"
+        value["pages"][0]["comb_subjects"][0]["blocks_gate"] = True
+    composite_refused(
+        "certificate carried by a retained state",
+        mutate=certificate_without_state)
+
+    # The composite's own comparison: it is scored on the suppression
+    # corroboration, never on a compartment count it does not have.
+    def composite_cell(**overrides):
+        value = {
+            "ledger_state": "active_composite",
+            "latticed": 4,
+            "emitted": None,
+            "audit_printed": None,
+            "emitted_indexes_valid": False,
+            "referee": {
+                "status": "composite",
+                "criterion": SOURCE_PARTITION_EDGE_CRITERION,
+                "corroborated": True,
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert comparison(composite_cell(), True)[0] == "agree"
+    # Audit completeness is irrelevant to a subject with no printed topology:
+    # the corroboration is the whole measurement.
+    assert comparison(composite_cell(), False)[0] == "agree"
+    # Review cannot overrule the paper.
+    refuted_composite = comparison(composite_cell(referee={
+        "status": "composite",
+        "criterion": SOURCE_PARTITION_EDGE_CRITERION,
+        "corroborated": False}), True)
+    assert refuted_composite[0] == "stop", refuted_composite
+    assert "refutes" in refuted_composite[1]
+    # A composite that emitted slots of its own contradicts its own claim.
+    assert comparison(composite_cell(emitted=4), True)[0] == "stop"
+    # An unmeasured composite is unevaluable, never a pass.
+    assert comparison(composite_cell(referee={"status": "unevaluable"}),
+                      True)[0] == "unevaluable"
+    assert transition_decision(composite_cell(), "agree")[0] == "none"
+
+    # ---- S2: the reviewed exception, the narrowest of the three paths ----
+    exc_cell = {"page": 1, "cell_id": "p1c9", "legacy_cell_id": "p1c9",
+                "subject_key": "p1@9,9"}
+    exc_key = ("fixture-1999", 1, "p1c9")
+    exc_entry = {
+        "subject_key": "p1@9,9", "source_sha256": "ab" * 32,
+        "reason": "referee: chosen source topology lacks a proof",
+        "evidence": "self-test", "reviewer": "self-test",
+        "date": "2026-08-16", "citation": "self-test"}
+
+    def with_exceptions(entries, work):
+        saved = dict(review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS)
+        review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.clear()
+        review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.update(entries)
+        try:
+            return work()
+        finally:
+            review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.clear()
+            review_registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.update(saved)
+
+    excused = with_exceptions({exc_key: exc_entry}, lambda:
+        reviewed_exception_status(exc_cell, "fixture-1999", "ab" * 32,
+                                  "unevaluable", exc_entry["reason"]))
+    assert excused[0] == "excepted", excused
+    assert "reviewed exception" in excused[1]
+    # An exception NEVER converts an active disagreement.
+    stopped = with_exceptions({exc_key: exc_entry}, lambda:
+        reviewed_exception_status(exc_cell, "fixture-1999", "ab" * 32,
+                                  "stop", exc_entry["reason"]))
+    assert stopped[0] == "stop", stopped
+    # Different document sharing the slug: not ours, left alone.
+    sibling = with_exceptions({exc_key: exc_entry}, lambda:
+        reviewed_exception_status(exc_cell, "fixture-1999", "cd" * 32,
+                                  "unevaluable", exc_entry["reason"]))
+    assert sibling[0] == "unevaluable", sibling
+    # STALE: the refusal moved, so the exception no longer describes reality.
+    for bad_reason, needle in (
+            ("referee: something else entirely", "stale"),
+    ):
+        try:
+            with_exceptions({exc_key: exc_entry}, lambda:
+                reviewed_exception_status(exc_cell, "fixture-1999", "ab" * 32,
+                                          "unevaluable", bad_reason))
+        except RefereeError as error:
+            assert needle in str(error), error
+        else:
+            raise AssertionError("a stale exception was honoured")
+    # Wrong subject bound to the key.
+    try:
+        with_exceptions({exc_key: {**exc_entry, "subject_key": "p1@0,0"}},
+                        lambda: reviewed_exception_status(
+                            exc_cell, "fixture-1999", "ab" * 32,
+                            "unevaluable", exc_entry["reason"]))
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError("an exception bound to another subject passed")
+
+    # ---- C4a: a reviewed resolution is scored against THIS run's evidence --
+    def resolved_cell(**overrides):
+        value = {
+            "ledger_state": "active_resolved",
+            "latticed": 4, "emitted": 4, "audit_printed": 4,
+            "emitted_indexes_valid": True,
+            "referee": {"status": "measured", "compartments": 4,
+                        "positions_match": True},
+            "resolution_certificate": {
+                "criterion": "reviewed-ledger-resolution-v1",
+                "registry_key": ["0605-1999", 1, "p1c66"],
+                "four_way": {"lattice": 4, "audit": 4,
+                             "emitted": 4, "referee": 4},
+                "resolved_reason_codes": ["competing-endpoint-topologies"],
+                "reviewer": "self-test", "date": "2026-08-15",
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert comparison(resolved_cell(), True)[0] == "agree"
+    # Every one of the four signed counts is re-derived; if the corpus has
+    # moved under a signed decision it STOPS rather than passing quietly.
+    # (Moving `latticed` ALONE is not this case: emitted-vs-lattice disagreement
+    # is the more fundamental `stale-generation` fault and is caught earlier,
+    # which is the correct ordering -- a stale generation is not a stale
+    # review.  Lattice drift reaches this check when the emission moved with
+    # it, as a regenerated corpus does.)
+    drifted_cases = {
+        "audit alone": {"audit_printed": 5},
+        "regenerated lattice and emission": {"latticed": 5, "emitted": 5},
+        "the source itself": {"referee": {
+            "status": "measured", "compartments": 5,
+            "positions_match": True}},
+        "the whole corpus": {
+            "latticed": 5, "emitted": 5, "audit_printed": 5,
+            "referee": {"status": "measured", "compartments": 5,
+                        "positions_match": True}},
+    }
+    for name, overrides in drifted_cases.items():
+        drifted = comparison(resolved_cell(**overrides), True)
+        assert drifted[0] == "stop", (name, drifted)
+        assert "moved since this resolution was reviewed" in drifted[1], name
+    stale_generation = comparison(resolved_cell(latticed=5), True)
+    assert stale_generation[0] == "stale-generation", stale_generation
+    # A subject with no certificate is untouched by any of this.
+    assert comparison(resolved_cell(resolution_certificate=None),
+                      True)[0] == "agree"
+
     retained_emission = {
         subject["cell_id"]: {"valid": True}
         for subject in retained_result["subjects"]
@@ -13870,9 +14681,10 @@ def self_test() -> int:
     # The reason tuple is read out of the registry rather than restated, so a
     # second entry added to that table without a fixture of its own trips this
     # pairing instead of quietly riding on the caption block's evidence.
-    # R2a widened the table to three entries; each pairing is pinned here so a
-    # fourth cannot ride on the existing fixtures.
-    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 3
+    # R2a widened the table to three entries; DECISION A (2026-08-16) to
+    # four. Each pairing is pinned here so a fifth cannot ride on the
+    # existing fixtures.
+    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 4
     caption_reason_codes = [
         "emission-suppressed-caption-block-not-character-cells"]
     assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[tuple(caption_reason_codes)]
@@ -13882,6 +14694,9 @@ def self_test() -> int:
         "painted-edge-partition")] == SOURCE_PARTITION_EDGE_CRITERION)
     assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[(
         "emission-suppressed-no-final-visible-band",)]
+        == SOURCE_CROSSING_RULE_CRITERION)
+    assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[(
+        "emission-suppressed-compartment-rule",)]
         == SOURCE_CROSSING_RULE_CRITERION)
 
     # (a) An unresolved retained topology stays accepted, and stays free of any
@@ -13931,6 +14746,21 @@ def self_test() -> int:
         lattice_producer_bytes)
     assert unresolved_caption["suppression_obligations"] == {
         retained_cell["id"]: SOURCE_CAPTION_BLOCK_CRITERION}
+    # DECISION A's tuple carries the same debt through both topology
+    # statuses, and its criterion is the crossing-rule re-derivation -- the
+    # subject's "dividers" must prove to be rules that outrun the comb band.
+    for rule_status in ("resolved", "unresolved"):
+        rule_refused = validate_comb_ledger(
+            retained_fixture_slug,
+            retained_variant(
+                rule_status, ["emission-suppressed-compartment-rule"]),
+            lattice_producer_bytes)
+        rule_subject = rule_refused["subjects"][0]
+        assert rule_subject["state"] == "retained_unresolved"
+        assert (rule_subject["source_suppression_criterion"]
+                == SOURCE_CROSSING_RULE_CRITERION)
+        assert rule_refused["suppression_obligations"] == {
+            retained_cell["id"]: SOURCE_CROSSING_RULE_CRITERION}
 
     # (c) A resolved topology under a reason this referee cannot re-derive is
     # the original guard, and it still closes.  Both shapes are covered: a
@@ -16002,19 +16832,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             form["counts"]["inferences_suppressed"] for form in forms)
         ledger_blocking = sum(
             form["counts"]["ledger_blocking"] for form in forms)
+        ledger_blocking_excused = sum(
+            form["counts"].get("ledger_blocking_excused", 0)
+            for form in forms)
         mismatches = sum(form["counts"]["referee_layout_mismatches"]
                          for form in forms)
         position_mismatches = sum(
             form["counts"]["referee_layout_position_mismatches"]
             for form in forms
         )
-        comparison_names = (
-            "agree", "repair-lattice", "repair-audit", "stale-generation",
-            "stop", "unevaluable",
-        )
         comparison_totals = {
             name: sum(form["counts"]["comparisons"][name] for form in forms)
-            for name in comparison_names
+            for name in COMPARISON_NAMES
         }
         expected_comb_total = sum(
             EXPECTED_COMBS_BY_SLUG[slug] for slug in selected_slugs)
@@ -16099,6 +16928,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "combs_expected": expected_comb_total,
                 "combs_found": combs,
                 "combs_measured": measured,
+                "combs_composite": sum(
+                    form["counts"]["composite"] for form in forms),
                 "combs_unevaluable": unevaluable,
                 "combs_source_unevaluable": source_unevaluable,
                 "subjects_active": active,
@@ -16107,6 +16938,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "subjects_retained_unresolved": retained_unresolved,
                 "inferences_suppressed": inferences_suppressed,
                 "ledger_blocking": ledger_blocking,
+                "ledger_blocking_excused": ledger_blocking_excused,
                 "referee_layout_mismatches": mismatches,
                 "referee_layout_position_mismatches": position_mismatches,
                 "comparisons": comparison_totals,

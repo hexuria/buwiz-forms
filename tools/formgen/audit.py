@@ -269,6 +269,30 @@ COMB_OWNER_REVIEWED_STATES = frozenset({
     "active_resolved",
     "active_unresolved",
 })
+# REVIEW BUNDLE (user-approved 2026-08-15). This judge already NAMES
+# `active_composite` -- it is half of RETAINED_COMB_TRANSITIONS below, the
+# set of destinations a retained subject is permitted to reach. What it
+# lacked was any way to accept a subject that had ARRIVED there, so the
+# first reviewed transition invalidated its form's whole comb-owner
+# registry and every comb on that form failed inventory binding. Measured
+# before the change: 16 forms carry a composite, the same 16 failed, and
+# the two sets were identical.
+#
+# A composite is a SUPPRESSED subject, exactly like a retained one -- no
+# active cell of its own, its legacy comb kept, its partition mapped. The
+# single difference is that a reviewer has certified the transition, so it
+# no longer blocks. It is admitted here on that certificate and on nothing
+# else: `validate_comb_owner_registry` demands the certificate's shape, and
+# comb_referee.py independently re-derives it against the review registry
+# and against its own source corroboration. The producer cannot mint one.
+COMB_SUPPRESSED_STATES = frozenset({
+    "retained_unresolved",
+    "active_composite",
+})
+COMPOSITE_TRANSITION_CERTIFICATE_KEYS = frozenset({
+    "criterion", "registry_key", "transition",
+    "suppression_criterion", "reviewer", "date",
+})
 RETAINED_COMB_SUBJECT_KEYS = frozenset({
     "subject_key",
     "legacy_cell_id",
@@ -318,11 +342,32 @@ RETAINED_NO_BAND_REASON_CODES = (
 RETAINED_REFUTED_CAPTION_REASON_CODES = (
     "emission-suppressed-caption-block-not-character-cells",
 )
+# The fourth retained shape -- REVIEW BUNDLE RIDER, Sitting 2 DECISION A
+# (2026-08-16), user-approved. Same identity shape again: one legacy
+# subject, its own rectangle, comb removed, emission suppressed. It is
+# published by lattice.py when the compartment rule refuses the legacy
+# comb whole (no run of character-box-width compartments survives; the
+# corpus census behind the 24.5pt bound lives at
+# `lattice.COMB_COMPARTMENT_MAX_PT`, spelled out here rather than imported
+# for the same reason as every tuple above) AND nothing current can own
+# the cell -- 2551M p2c13's column-rule "comb" of 70.80/156.72pt and
+# 1604CF p2c73's 68.64/26.64pt grid cells, both of which the user
+# adjudicated by name. Validated through the identity branch like its two
+# siblings; a subject carrying this reason while its cell still owns an
+# active comb, or while its certificate names a different criterion than
+# its reason codes table, still fails exactly as before. The referee
+# corroborates the claim against Poppler under
+# `source-crossing-rule-not-comb-scoped-v1` -- the "dividers" must outrun
+# the comb band -- so nothing is taken on the producer's word.
+RETAINED_COMPARTMENT_RULE_REASON_CODES = (
+    "emission-suppressed-compartment-rule",
+)
 # The retained reason tuples that map a subject onto its own layout cell,
 # one-to-one, rather than onto a partition of other cells.
 RETAINED_IDENTITY_REASON_CODES = frozenset({
     RETAINED_NO_BAND_REASON_CODES,
     RETAINED_REFUTED_CAPTION_REASON_CODES,
+    RETAINED_COMPARTMENT_RULE_REASON_CODES,
 })
 # emit.py serialises point geometry to four decimals. Two rounded endpoints can
 # differ by at most two ten-thousandths of a point.
@@ -393,6 +438,59 @@ SOURCE_SHADING_MIN_COVERAGE = 0.70
 # checked against the rasteriser rather than trusted: over 38,650 candidates on
 # 53 page-1s, the compositor's visible/not-visible verdict agrees with the
 # rendered raster 38,650 times and disagrees 0 times.
+# REVIEW BUNDLE RIDER (user-approved 2026-08-15, decisions page): three
+# relations under which an enclosed empty field cell is the sheet's own
+# DECORATION rather than a writing box, so no input is demanded of it. Each
+# population was censused corpus-wide, refuting weaker rules on the way (the
+# refutations live in findings F235/F237), and the user approved every cell
+# on the official sheets: the 6 TIN group separators (2553's peach three,
+# 1604CF's grey three), the 1800 ATC sliver the row mosaic cut from the ONE
+# undivided 'DN 010' box, and 2551Q's 0.88pt-tall invisible strip. Exactly 8
+# cells corpus-wide; a ninth match is a regression to investigate, which is
+# why every exclusion is published in the assertion's own counts.
+ATC_CONSTANT_RE = re.compile(r"^[A-Z]{2} ?[0-9]{3}$")
+
+
+def printed_decoration_reason(cell_id: str,
+                              layout_cells_by_row: dict,
+                              layout_cell: dict,
+                              fills, runs,
+                              min_glyph_height_pt) -> str | None:
+    x0, y0 = float(layout_cell["x0"]), float(layout_cell["y0"])
+    x1, y1 = float(layout_cell["x1"]), float(layout_cell["y1"])
+    if (min_glyph_height_pt is not None
+            and y1 - y0 < float(min_glyph_height_pt)):
+        return "sub-glyph-height"
+    for run in runs or ():
+        if not ATC_CONSTANT_RE.fullmatch(str(run.get("text", "")).strip()):
+            continue
+        if (min(x1, float(run["x1"])) - max(x0, float(run["x0"])) > 1.0
+                and min(y1, float(run["y1"])) - max(y0, float(run["y0"]))
+                > 0.75):
+            return "printed-constant"
+    dedicated = any(
+        abs(float(f["x0"]) - x0) <= 1.0 and abs(float(f["x1"]) - x1) <= 1.0
+        and abs(float(f["y0"]) - y0) <= 1.0 and abs(float(f["y1"]) - y1) <= 1.0
+        and not ((f.get("gray") is not None and float(f["gray"]) >= 0.99)
+                 or (f.get("rgb")
+                     and all(float(v) >= 0.99 for v in f["rgb"])))
+        for f in fills or ())
+    if not dedicated:
+        return None
+    row = layout_cells_by_row.get(
+        (round(y0, 1), round(y1, 1)), [])
+    index = next((i for i, c in enumerate(row)
+                  if str(c["id"]) == str(cell_id)), None)
+    if index is None:
+        return None
+    left = row[index - 1] if index > 0 else None
+    right = row[index + 1] if index + 1 < len(row) else None
+    if (left is not None and isinstance(left.get("comb"), dict)
+            and right is not None and isinstance(right.get("comb"), dict)):
+        return "comb-separator-fill"
+    return None
+
+
 DIVIDER_MAX_TONE = 0.5
 DIVIDER_MAX_WIDTH_PT = 1.6
 DIVIDER_MIN_HEIGHT_PT = 2.0
@@ -2282,7 +2380,8 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                 return fail(
                     f"layout page {page_index} contains a malformed comb_subject")
             state = subject.get("state")
-            if state not in (*COMB_OWNER_REVIEWED_STATES, "retained_unresolved"):
+            if state not in (*COMB_OWNER_REVIEWED_STATES,
+                             *COMB_SUPPRESSED_STATES):
                 return fail(
                     f"layout page {page_index} comb_subject has unknown state")
             cell_id = subject.get("cell_id")
@@ -2309,22 +2408,47 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
             subject_keys.add(subject_key)
             legacy_cell_ids.add(legacy_cell_id)
 
-            if state == "retained_unresolved":
+            if state in COMB_SUPPRESSED_STATES:
+                composite = state == "active_composite"
                 subject_key_set = set(subject)
-                if (not RETAINED_COMB_SUBJECT_KEYS <= subject_key_set
-                        or subject_key_set - RETAINED_COMB_SUBJECT_KEYS
-                        - RETAINED_COMB_SUBJECT_OPTIONAL_KEYS):
+                allowed = set(RETAINED_COMB_SUBJECT_KEYS)
+                optional = set(RETAINED_COMB_SUBJECT_OPTIONAL_KEYS)
+                if composite:
+                    # The certificate is REQUIRED, not optional: it is the
+                    # only thing separating a composite from a retained
+                    # subject that simply stopped blocking, and that
+                    # difference must never be assertable by omission.
+                    allowed = allowed | {"transition_certificate"}
+                if (not allowed <= subject_key_set
+                        or subject_key_set - allowed - optional):
                     return fail(
-                        "retained_unresolved comb_subject schema is malformed")
+                        f"{state} comb_subject schema is malformed")
+                if composite:
+                    certificate = subject.get("transition_certificate")
+                    if (not isinstance(certificate, dict)
+                            or set(certificate)
+                            != COMPOSITE_TRANSITION_CERTIFICATE_KEYS
+                            or certificate.get("transition")
+                            != "active_composite"
+                            or not isinstance(certificate.get("reviewer"), str)
+                            or not certificate.get("reviewer")
+                            or not isinstance(certificate.get("date"), str)
+                            or not certificate.get("date")
+                            or not isinstance(
+                                certificate.get("suppression_criterion"), str)
+                            or not certificate.get("suppression_criterion")):
+                        return fail(
+                            "active_composite transition certificate is "
+                            "malformed")
                 if (cell_id is not None
                         or subject.get("emission") != "suppressed"
                         or subject.get("requires_independent_evidence") is not True
-                        or subject.get("blocks_gate") is not True
+                        or subject.get("blocks_gate") is not (not composite)
                         or tuple(subject.get("permitted_transitions") or ())
                         != RETAINED_COMB_TRANSITIONS
                         or not isinstance(subject.get("legacy_comb"), dict)):
                     return fail(
-                        "retained_unresolved suppression/blocking/transition "
+                        f"{state} suppression/blocking/transition "
                         "evidence is incomplete")
                 reason_codes_value = subject.get("reason_codes")
                 if (not isinstance(reason_codes_value, list)
@@ -2333,7 +2457,7 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                             *RETAINED_IDENTITY_REASON_CODES,
                         }):
                     return fail(
-                        "retained_unresolved suppression reason evidence is "
+                        f"{state} suppression reason evidence is "
                         "malformed")
                 mapped_ids = subject.get("mapped_partition_cell_ids")
                 mapped_keys = subject.get("mapped_partition_subject_keys")
@@ -8776,6 +8900,24 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
         )
     offenders, checked, fully_inked, preprinted = [], 0, 0, 0
     bureau_reserved = 0
+    decoration = 0
+    # Rows keyed exactly as the emitter keys them, per page, so both sides of
+    # the rider group the same neighbours.
+    rows_by_page: dict[int, dict] = {}
+    for page_index, layout_page in b.layout_pages.items():
+        page_rows = rows_by_page.setdefault(int(page_index), {})
+        for lc in layout_page.get("cells") or ():
+            key = (round(float(lc["y0"]), 1), round(float(lc["y1"]), 1))
+            page_rows.setdefault(key, []).append(lc)
+        for row in page_rows.values():
+            row.sort(key=lambda item: float(item["x0"]))
+    min_glyph_by_page: dict[int, float] = {}
+    for page_index, page_ir in b.pages.items():
+        heights = [float(r["y1"]) - float(r["y0"])
+                   for r in page_ir.get("text_runs") or ()
+                   if float(r["y1"]) - float(r["y0"]) > 0.5]
+        if heights:
+            min_glyph_by_page[page_index] = min(heights)
     # Read from the pinned PDF's own text operators, never from the layout
     # this assertion's population comes from, so a lattice or emitter mistake
     # cannot manufacture its own excuse. A page whose captions cannot be read
@@ -8841,6 +8983,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                     > PREPRINTED_COVERAGE):
                 preprinted += 1
                 continue
+            decoration_kind = printed_decoration_reason(
+                cell_id, rows_by_page.get(cell.page, {}), layout_cell,
+                b.pages.get(cell.page, {}).get("area_fills") or (),
+                runs, min_glyph_by_page.get(cell.page))
+            if decoration_kind is not None:
+                # RIDER: the sheet decorates this cell (its own fill between
+                # two combs, its printed ATC constant, or a strip shorter
+                # than its own smallest glyph). Counted, never silent.
+                decoration += 1
+                continue
             checked += 1
             if not input_boxes(cell):
                 box = (float(layout_cell["x0"]), float(layout_cell["y0"]),
@@ -8855,10 +9007,12 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                                   "why": "enclosed empty box, no input"})
     if offenders:
         return broken(f"{len(offenders)} of {checked} printed boxes are not fillable",
-                      offenders, boxes_checked=checked, combs_fully_inked=fully_inked,
+                      offenders, boxes_decoration=decoration,
+                      boxes_checked=checked, combs_fully_inked=fully_inked,
                       boxes_preprinted=preprinted,
                       boxes_bureau_reserved=bureau_reserved)
     return held(
+        boxes_decoration=decoration,
         boxes_checked=checked,
         combs_fully_inked=fully_inked,
         boxes_preprinted=preprinted,
@@ -11745,7 +11899,7 @@ def self_test() -> int:
     def preprinted_box_fixture(run_y0: float, run_y1: float) -> Bundle:
         covered_ir = copy.deepcopy(ir)
         covered_ir["pages"][0]["text_runs"] = [{
-            "text": "XP010", "font": "Arial", "size_pt": 8.0, "color": 0,
+            "text": "Wages", "font": "Arial", "size_pt": 8.0, "color": 0,
             "x0": 9.0, "y0": run_y0, "x1": 34.0, "y1": run_y1,
             "origin_x": 9.0, "baseline_y": run_y1 - 2.0,
             "char_origin_offsets_pt": [0.0, 5.0, 10.0, 15.0, 20.0],
@@ -11779,6 +11933,87 @@ def self_test() -> int:
         and grazed_money["boxes_preprinted"] == 0
         and grazed_money["offenders"][0]["why"]
         == "enclosed empty box, no input",
+    )
+
+    # ---- RIDER (F235/F237, user-approved): decoration exclusions ---------
+    #
+    # The generic-graze principle above holds for ordinary text ("Wages").
+    # A printed ATC-format constant is different: on the whole corpus it
+    # intersects exactly ONE input cell (1800's DN 010 sliver, cut by the
+    # row mosaic from the constant's own undivided box), and the three
+    # legitimate ATC write-ins sit BELOW their constants with no overlap.
+    # The exclusion is published (`boxes_decoration`), never silent.
+    def rider_fixture(*, run_text=None, cell_height=12.0, fill=None,
+                      combs=False) -> Bundle:
+        rider_ir = copy.deepcopy(ir)
+        runs = []
+        if run_text is not None:
+            runs.append({
+                "text": run_text, "font": "Arial", "size_pt": 8.0,
+                "color": 0, "x0": 9.0, "y0": 2.0, "x1": 34.0, "y1": 10.0,
+                "origin_x": 9.0, "baseline_y": 8.0,
+                "char_origin_offsets_pt": [0.0, 5.0, 10.0, 15.0, 20.0],
+                "char_widths_pt": [5.0, 5.0, 5.0, 5.0, 5.0],
+            })
+        rider_ir["pages"][0]["text_runs"] = runs
+        if fill is not None:
+            rider_ir["pages"][0]["area_fills"] = [dict(
+                x0=8.0, y0=8.0, x1=38.0, y1=8.0 + cell_height, **fill)]
+        rider_layout = copy.deepcopy(enclosed_plain_layout)
+        target = rider_layout["pages"][0]["cells"][0]
+        target["y1"] = target["y0"] + cell_height
+        if combs:
+            comb = {"cells": 2, "divider_x": [3.0],
+                    "slot_x": [0.0, 3.0, 6.0], "pitch_pt": 3.0}
+            rider_layout["pages"][0]["cells"] += [
+                {"id": "p1c90", "subject_key": "p1@0,8,8,20", "x0": 0.0,
+                 "y0": target["y0"], "x1": 8.0, "y1": target["y1"],
+                 "kind": "field", "comb": dict(comb)},
+                {"id": "p1c91", "subject_key": "p1@38,8,44,20", "x0": 38.0,
+                 "y0": target["y0"], "x1": 44.0, "y1": target["y1"],
+                 "kind": "field", "comb": dict(comb)},
+            ]
+        rider_html = (
+            '<div class="page page-1" id="page-1" '
+            'style="width:100pt;height:100pt">'
+            '<div id="p1c0" class="c f" data-cell-kind="field" '
+            f'style="left:8pt;top:8pt;width:30pt;height:{cell_height}pt">'
+            '</div></div>')
+        return Bundle(
+            slug="rider-fixture", ir=rider_ir, layout=rider_layout,
+            plan=None, form_html=rider_html, guide_html=None, pdf=None)
+
+    atc_money = check_money_boxes_have_inputs(rider_fixture(run_text="DN 010"))
+    check(
+        "an ATC constant intersecting the box excludes it, published",
+        atc_money["holds"] is True and atc_money["boxes_decoration"] == 1
+        and atc_money["boxes_checked"] == 0,
+    )
+    sep_money = check_money_boxes_have_inputs(rider_fixture(
+        fill={"gray": None, "rgb": [1.0, 0.8, 0.6]}, combs=True))
+    check(
+        "a dedicated non-white fill between two combs excludes it, published",
+        sep_money["holds"] is True and sep_money["boxes_decoration"] == 1,
+    )
+    unflanked_money = check_money_boxes_have_inputs(rider_fixture(
+        fill={"gray": None, "rgb": [1.0, 0.8, 0.6]}, combs=False))
+    check(
+        "the same fill WITHOUT comb neighbours keeps its fillability check",
+        unflanked_money["holds"] is False,
+    )
+    white_money = check_money_boxes_have_inputs(rider_fixture(
+        fill={"gray": 1.0, "rgb": [1.0, 1.0, 1.0]}, combs=True))
+    check(
+        "a WHITE dedicated fill (a writing knockout) is never decoration",
+        white_money["holds"] is False,
+    )
+    # sub-glyph: the fixture IR prints runs ~8pt tall; a 2pt box is shorter
+    # than anything the document prints, so it is the sheet's own framing.
+    tiny_money = check_money_boxes_have_inputs(rider_fixture(
+        run_text="Wages", cell_height=2.0))
+    check(
+        "a box shorter than the document's smallest glyph is decoration",
+        tiny_money["holds"] is True and tiny_money["boxes_decoration"] == 1,
     )
 
     # A placement the guide plan relocated is subtracted from the source's
@@ -13852,6 +14087,8 @@ def self_test() -> int:
             f"{label} invalidates the exhaustive ownership registry",
             certificate is None and reason is not None and phrase in reason,
         )
+    _DROP = object()
+
     def append_valid_retained(layout_fixture: dict[str, Any]) -> None:
         page = layout_fixture["pages"][0]
         retained_cell = {
@@ -13901,6 +14138,95 @@ def self_test() -> int:
         and retained_reason is not None
         and "no exact unique reviewed" in retained_reason,
     )
+
+    # ---- REVIEW BUNDLE: the composite arrival, and its own corruptions ----
+    #
+    # A composite is the retained shape plus a reviewer's certificate, minus
+    # the blocking. Both differences are asserted here, and each is proven
+    # load-bearing by its own corruption below -- without these fixtures the
+    # certificate requirement and the certificate schema were dead code that
+    # could be deleted with no test noticing, which is exactly what the
+    # neuter-proof reported before they were written.
+    COMPOSITE_CERT = {
+        "criterion": "reviewed-ledger-transition-v1",
+        "registry_key": ["fixture-1999", 1, "p1c1"],
+        "transition": "active_composite",
+        "suppression_criterion": "source-partition-edge-in-final-picture-v1",
+        "reviewer": "fixture-reviewer", "date": "2026-08-15",
+    }
+
+    def append_valid_composite(layout_fixture: dict[str, Any]) -> None:
+        append_valid_retained(layout_fixture)
+        subject = layout_fixture["pages"][0]["comb_subjects"][-1]
+        subject["state"] = "active_composite"
+        subject["blocks_gate"] = False
+        subject["transition_certificate"] = dict(COMPOSITE_CERT)
+
+    composite_fixture = owner_registry_fixture(
+        layout_mutator=append_valid_composite)
+    composite_registry = composite_fixture[0]
+    composite_certificate, composite_reason = composite_registry.resolve(
+        1, retained_cell)
+    check(
+        "a reviewed composite does not invalidate the ownership registry",
+        composite_fixture[2] is not None
+        and composite_registry.binding_error is None,
+    )
+    check(
+        "a composite subject still cannot certify a cell of its own",
+        composite_certificate is None
+        and composite_reason is not None
+        and "no exact unique reviewed" in composite_reason,
+    )
+
+    def corrupt_composite(field: str, value: Any) -> Any:
+        def mutate(layout_fixture: dict[str, Any]) -> None:
+            append_valid_composite(layout_fixture)
+            subject = layout_fixture["pages"][0]["comb_subjects"][-1]
+            if value is _DROP:
+                subject.pop(field, None)
+            else:
+                subject[field] = value
+        return mutate
+
+    for label, mutator, phrase in (
+        ("a composite with NO certificate",
+         corrupt_composite("transition_certificate", _DROP),
+         "schema is malformed"),
+        ("a composite whose certificate is not a dict",
+         corrupt_composite("transition_certificate", "reviewed"),
+         "transition certificate is malformed"),
+        ("a composite whose certificate has an unknown field",
+         corrupt_composite("transition_certificate",
+                           {**COMPOSITE_CERT, "approved": True}),
+         "transition certificate is malformed"),
+        ("a composite whose certificate is missing a field",
+         corrupt_composite("transition_certificate",
+                           {k: v for k, v in COMPOSITE_CERT.items()
+                            if k != "reviewer"}),
+         "transition certificate is malformed"),
+        ("a composite whose certificate names another transition",
+         corrupt_composite("transition_certificate",
+                           {**COMPOSITE_CERT,
+                            "transition": "retired_proven_false"}),
+         "transition certificate is malformed"),
+        ("a composite whose certificate has an empty reviewer",
+         corrupt_composite("transition_certificate",
+                           {**COMPOSITE_CERT, "reviewer": ""}),
+         "transition certificate is malformed"),
+        ("a composite that still claims to block the gate",
+         corrupt_composite("blocks_gate", True),
+         "suppression/blocking/transition"),
+        ("a composite that grew an active cell id",
+         corrupt_composite("cell_id", "p1c1"),
+         "suppression/blocking/transition"),
+    ):
+        registry, _cell, certificate, reason = owner_registry_fixture(
+            layout_mutator=mutator)
+        check(
+            f"{label} invalidates the exhaustive ownership registry",
+            certificate is None and reason is not None and phrase in reason,
+        )
 
     def corrupt_retained(
             field: str, value: Any,

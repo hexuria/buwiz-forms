@@ -158,8 +158,11 @@ COMB_REFEREE_ARTIFACT_TREES = {
     "guides": BUILD / "guides",
 }
 COMPARISON_NAMES = (
-    "agree", "repair-lattice", "repair-audit", "stale-generation", "stop",
-    "unevaluable",
+    # `excepted` (S2) is its own kind and is NEVER folded into `agree`: the
+    # report must always state how many verdicts a reviewer excused, and the
+    # pass bar below has to name them explicitly rather than inherit them.
+    "agree", "excepted", "repair-lattice", "repair-audit",
+    "stale-generation", "stop", "unevaluable",
 )
 
 # Modules that expose --self-test. lattice and fonts need an --ir argument, so
@@ -2502,6 +2505,8 @@ def _layout_audit_owner_ids(layout_binding: Any) -> list[str]:
         if (cell.get("ledger_state") in {
                 "active_resolved", "active_unresolved"}
                 and cell.get("expected_emission_geometry") is not None)
+        # active_composite is deliberately absent: a composite emits nothing
+        # of its own, so it owns no emission geometry to register.
     ]
     if audit_ids != owner_ids:
         raise CombRefereeScopeError(
@@ -3620,11 +3625,12 @@ REPORT_AUDIT_CHILD_DEPENDENCIES = (
 )
 TOTAL_KEYS = {
     "forms_expected", "forms_measured", "forms_error", "combs_expected",
-    "combs_found", "combs_measured", "combs_unevaluable",
+    "combs_found", "combs_measured", "combs_composite", "combs_unevaluable",
     "combs_source_unevaluable", "subjects_active",
     "subjects_active_resolved", "subjects_active_unresolved",
     "subjects_retained_unresolved", "inferences_suppressed",
-    "ledger_blocking", "referee_layout_mismatches",
+    "ledger_blocking", "ledger_blocking_excused",
+    "referee_layout_mismatches",
     "referee_layout_position_mismatches", "comparisons", "forms_ok",
     "forms_disagreement", "forms_unevaluable",
     "audit_evidence_complete_forms", "referee_attestation_complete",
@@ -3638,7 +3644,8 @@ FORM_KEYS = {
 FORM_COUNT_KEYS = {
     "combs", "subjects", "subjects_active", "subjects_active_resolved",
     "subjects_active_unresolved", "subjects_retained_unresolved",
-    "inferences_suppressed", "ledger_blocking", "measured",
+    "inferences_suppressed", "ledger_blocking", "ledger_blocking_excused",
+    "measured", "composite",
     "source_unevaluable", "unevaluable", "referee_layout_mismatches",
     "referee_layout_position_mismatches", "emission_layout_mismatches",
     "comparisons",
@@ -3650,6 +3657,18 @@ CELL_KEYS = {
     "emitted", "emitted_indexes_valid", "emitted_evidence", "audit_printed",
     "audit_relation", "referee", "comparison_status", "comparison_reason",
     "transition_status", "transition_reason", "four_way",
+    # DECLARED SCHEMA CHANGE (C4a): every cell publishes the reviewed
+    # resolution certificate that promoted it, or null.  Publishing it on
+    # EVERY cell rather than only the promoted ones is deliberate: the key's
+    # presence then carries no information, so a forger cannot hide a
+    # promotion by omitting the field, and this gate re-derives the signed
+    # four-way for any cell that carries one.
+    "resolution_certificate",
+    # DECLARED SCHEMA CHANGE: the transition certificate's sibling, published
+    # on every cell for the same reason -- a key whose PRESENCE carries no
+    # information cannot be used to hide a promotion by omission.
+    "transition_certificate",
+    "exception_registry_key",
 }
 INFERENCE_KEYS = {
     "page", "subject_key", "cell_id", "state", "blocks_gate",
@@ -3729,6 +3748,18 @@ RAIL_DERIVATION_BASES = {
 # assert "no unproven gaps" for a test that never ran — and instead carries
 # the erased-anchor inventory plus the erasure certificate the gate
 # independently re-derives in _partial_anchor_referee_certificate_errors.
+# DECLARED SCHEMA (C3-A): a reviewed composite subject has no comb, so it
+# publishes no band measurement.  Its certificate is the source corroboration
+# of the suppression the review confirmed, and these are its exact keys.
+COMPOSITE_REFEREE_KEYS = {"status", "criterion", "corroborated", "reason"}
+COMPOSITE_SUPPRESSION_CRITERIA = {
+    # The exact strings comb_referee.py tables; the first was declared here
+    # from memory, wrong ("source-caption-block-..."), and the schema guard
+    # rejected the real certificate on 1606 p2c135 -- fixed to the real one.
+    "source-printed-caption-block-not-character-cells-v1",
+    "source-partition-edge-in-final-picture-v1",
+    "source-crossing-rule-not-comb-scoped-v1",
+}
 PARTIAL_ANCHOR_REFEREE_KEYS = (
     MEASURED_REFEREE_KEYS - {"subject_gap_proofs", "unproven_subject_gaps"}
 ) | {"missing_anchor_x", "active_partial_anchor_certificate"}
@@ -3769,8 +3800,17 @@ PARTIAL_ANCHOR_MISSING_BASIS = (
     "unclipped non-target final owner"
 )
 LEDGER_STATES = {
-    "active_resolved", "active_unresolved", "retained_unresolved",
+    "active_resolved", "active_unresolved", "active_composite",
+    "retained_unresolved",
 }
+# Declared ONCE and consumed everywhere, because this contract has now been
+# discovered three separate times in three files by watching it fail. A
+# SUPPRESSED subject has no active cell of its own and emits nothing; a
+# NON-BLOCKING one does not hold the gate. A reviewed composite is both,
+# which is exactly what makes it easy to miss in a test written against
+# either property alone.
+LEDGER_SUPPRESSED_STATES = {"retained_unresolved", "active_composite"}
+LEDGER_NONBLOCKING_STATES = {"active_resolved", "active_composite"}
 INFERENCE_STATE = "suppressed_unreviewed_inference"
 RAW_REFEREE_ATTESTATION_KEYS = {
     "schema", "producer_and_declared_dependency_bytes_bound",
@@ -3867,8 +3907,16 @@ def _raw_referee_attestation_errors(value: Any) -> list[str]:
 
 def _transition_for_cell(ledger_state: str, comparison_status: str
                          ) -> tuple[str, str]:
+    if comparison_status == "excepted":
+        return (
+            "none",
+            "reviewed exception holds; the paper cannot adjudicate a "
+            "transition",
+        )
     if ledger_state == "active_resolved":
         return "none", "active ledger subject is already resolved"
+    if ledger_state == "active_composite":
+        return "none", "reviewed composite transition is already applied"
     if ledger_state == "active_unresolved":
         if comparison_status == "agree":
             return (
@@ -3979,6 +4027,33 @@ def _comparison_for_cell(
         ) -> tuple[str, str]:
     """Mirror comb_referee.comparison; published labels are never trusted."""
     ledger_state = cell.get("ledger_state")
+    if ledger_state == "active_composite":
+        # Mirror of comb_referee.composite_comparison.  A reviewed composite
+        # has no comb, so it is scored on the source corroboration of its
+        # suppression -- and a corroboration that came back FALSE stops the
+        # gate, because review can never overrule the paper.
+        referee = cell.get("referee") or {}
+        if cell.get("emitted") is not None:
+            return (
+                "stop",
+                "a composite subject emitted physical slots of its own",
+            )
+        if referee.get("status") != "composite":
+            return (
+                "unevaluable",
+                "composite subject carries no corroboration measurement",
+            )
+        if not referee.get("corroborated"):
+            return (
+                "stop",
+                "the source refutes the reviewed composite's suppression "
+                "claim",
+            )
+        return (
+            "agree",
+            "the source corroborates the reviewed composite's suppression "
+            "claim",
+        )
     if ledger_state not in {"active_resolved", "active_unresolved"}:
         return (
             "unevaluable",
@@ -3997,6 +4072,28 @@ def _comparison_for_cell(
             "audit published this subject as an offender with no printed "
             "topology",
         )
+    certificate = cell.get("resolution_certificate")
+    if isinstance(certificate, dict):
+        # Mirror of comb_referee.comparison's review guard: a signed
+        # resolution is re-derived against THIS run's four measurements, and
+        # a corpus that moved under it stops the gate.  Review can never
+        # overrule the paper, and a stale review is not a pass.
+        signed = certificate.get("four_way")
+        if (not isinstance(signed, dict)
+                or set(signed) != {"lattice", "audit", "emitted", "referee"}):
+            return "stop", "resolution certificate publishes no four-way"
+        measured_referee = (
+            referee.get("compartments") if isinstance(referee, dict) else None)
+        if (signed.get("lattice") != lattice
+                or signed.get("audit") != cell.get("audit_printed")
+                or signed.get("emitted") != emitted
+                or (isinstance(referee, dict)
+                    and referee.get("status") == "measured"
+                    and signed.get("referee") != measured_referee)):
+            return (
+                "stop",
+                "the evidence has moved since this resolution was reviewed",
+            )
     if not isinstance(referee, dict) or referee.get("status") != "measured":
         reason = referee.get("reason", "no reason") if isinstance(
             referee, dict) else "no reason"
@@ -4021,13 +4118,23 @@ def _comparison_for_cell(
 def _form_status_relation(
         *, ledger_blocking: int, emission_inventory: dict[str, Any],
         audit_evidence: dict[str, Any], comparisons: dict[str, int],
+        ledger_blocking_excused: int = 0,
         ) -> tuple[str, str]:
     """Mirror the producer's ordered form status/reason relation exactly."""
     status = "ok"
     reasons: list[str] = []
-    if ledger_blocking:
+    # An excused blocker -- one whose cell's comparison is a re-derived
+    # reviewed exception -- is counted out loud but does not make the form
+    # unevaluable; only unexcused blockers do. Mirrors the producer's
+    # excusal exactly, including the reason strings.
+    blocking_unexcused = ledger_blocking - ledger_blocking_excused
+    if blocking_unexcused:
         status = "unevaluable"
-        reasons.append(f"{ledger_blocking} lattice-ledger blockers")
+        reasons.append(f"{blocking_unexcused} lattice-ledger blockers")
+    elif ledger_blocking_excused:
+        reasons.append(
+            f"{ledger_blocking_excused} blocker(s) excused by reviewed "
+            "exception")
     if emission_inventory.get("complete") is not True:
         status = "unevaluable"
         reasons.append(
@@ -4203,7 +4310,11 @@ def validate_comb_referee_report(
 
     totals = report.get("totals")
     if not isinstance(totals, dict) or set(totals) != TOTAL_KEYS:
-        errors.append("report totals schema is incomplete or unsupported")
+        drift = (sorted(set(totals) ^ TOTAL_KEYS)
+                 if isinstance(totals, dict) else ["not-a-dict"])
+        errors.append(
+            "report totals schema is incomplete or unsupported: "
+            + ", ".join(drift[:6]))
         totals = {}
     for key in TOTAL_KEYS - {
             "comparisons", "referee_attestation_complete",
@@ -4237,12 +4348,28 @@ def validate_comb_referee_report(
         errors.append(
             f"report is partial: {len(forms)}/{expected_forms} forms")
 
+    # Corpus-scoped: every reviewed registry entry applied exactly once,
+    # across ALL documents. See `_reviewed_registry_coverage_errors` -- the
+    # per-document half of this guard cannot be completed from one layout.
+    #
+    # Only asked of a COMPLETE report. On a partial one every absent form's
+    # entries look "applied nowhere", which is true of the report and false
+    # of the corpus -- it would bury the real fault (the partiality, already
+    # reported above) under a list of its consequences. Skipping is safe
+    # precisely because a partial report can never reach PASS.
+    if len(forms) == expected_forms:
+        errors.extend(_reviewed_registry_coverage_errors(
+            cell for form in forms if isinstance(form, dict)
+            for cell in (form.get("cells") or [])
+            if isinstance(cell, dict)))
+
     slugs: set[str] = set()
     corpus_cell_ids: set[str] = set()
     corpus_subject_keys: set[str] = set()
     recomputed = {
-        "combs": 0, "measured": 0, "source_unevaluable": 0,
+        "combs": 0, "measured": 0, "composite": 0, "source_unevaluable": 0,
         "unevaluable": 0, "ledger_blocking": 0,
+        "ledger_blocking_excused": 0,
         "subjects_active": 0, "subjects_active_resolved": 0,
         "subjects_active_unresolved": 0,
         "subjects_retained_unresolved": 0, "inferences_suppressed": 0,
@@ -4441,7 +4568,9 @@ def validate_comb_referee_report(
         cell_comparisons = {name: 0 for name in COMPARISON_NAMES}
         state_counts = {state: 0 for state in LEDGER_STATES}
         measured_cells = source_unevaluable_cells = pending = 0
+        composite_cells = 0
         blocking_cells = layout_mismatches = position_mismatches = 0
+        excused_blocking_cells = 0
         emission_mismatches = 0
         form_cell_ids: set[str] = set()
         form_legacy_ids: set[str] = set()
@@ -4485,23 +4614,30 @@ def validate_comb_referee_report(
                 errors.append(f"cell ledger state is invalid: {slug}/{published_id}")
             else:
                 state_counts[ledger_state] += 1
-                expected_block = ledger_state != "active_resolved"
+                # A reviewed composite keeps the SUPPRESSED shape it had as a
+                # retained subject -- no active cell id, reported under its
+                # legacy id -- because the review changed its state, not its
+                # emission.  What the review does change is that it stops
+                # blocking, on a certificate this gate re-derives above.
+                suppressed_shape = ledger_state in LEDGER_SUPPRESSED_STATES
+                expected_block = (
+                    ledger_state not in LEDGER_NONBLOCKING_STATES)
                 if blocks_gate is not expected_block:
                     errors.append(
                         f"cell ledger blocking relation is false: {slug}/{published_id}")
                 if blocks_gate is True:
                     blocking_cells += 1
-                if (ledger_state == "retained_unresolved"
-                        and active_id is not None):
+                    if cell.get("comparison_status") == "excepted":
+                        excused_blocking_cells += 1
+                if suppressed_shape and active_id is not None:
                     errors.append(
                         f"retained cell publishes an active ID: {slug}/{published_id}")
-                if (ledger_state != "retained_unresolved"
+                if (not suppressed_shape
                         and (not isinstance(active_id, str)
                              or active_id != published_id)):
                     errors.append(
                         f"active cell identity is invalid: {slug}/{published_id}")
-                if (ledger_state == "retained_unresolved"
-                        and published_id != legacy_id):
+                if suppressed_shape and published_id != legacy_id:
                     errors.append(
                         f"retained cell identity is invalid: {slug}/{published_id}")
                 if not _string_list(
@@ -4540,7 +4676,14 @@ def validate_comb_referee_report(
             if not isinstance(indexes_valid, bool):
                 errors.append(
                     f"cell emitted-index flag is invalid: {slug}/{published_id}")
-            if emitted != cell.get("latticed") or indexes_valid is not True:
+            if cell.get("ledger_state") in LEDGER_SUPPRESSED_STATES:
+                # A suppressed subject emits NOTHING by design -- that is
+                # what suppression means, and the emission inventory already
+                # accounts for it. Counting emitted=None against its legacy
+                # comb count filed all 29 composites plus the one retained
+                # subject as emission mismatches the moment they existed.
+                pass
+            elif emitted != cell.get("latticed") or indexes_valid is not True:
                 emission_mismatches += 1
 
             referee = cell.get("referee")
@@ -4553,6 +4696,36 @@ def validate_comb_referee_report(
                     f"{error}")
                 expected_comparison = (
                     "unevaluable", "comparison evidence is malformed")
+            # Mirror of comb_referee.reviewed_exception_status. A reviewed
+            # exception excuses ONE named unevaluable verdict on ONE subject,
+            # so the gate re-derives that verdict itself and requires the
+            # registry entry to name exactly it. An exception can never
+            # launder a `stop`, and one whose recorded refusal no longer
+            # matches the live one is STALE -- an error, not a pass.
+            if cell.get("comparison_status") == "excepted":
+                entry = _load_review_registry(
+                    ).REVIEWED_UNEVALUABLE_EXCEPTIONS.get(
+                    (str(slug), int(cell.get("page") or 0),
+                     str(cell.get("cell_id") or cell.get("legacy_cell_id"))))
+                underlying = expected_comparison
+                if entry is None:
+                    errors.append(
+                        f"cell claims an exception no registry names: "
+                        f"{slug}/{published_id}")
+                elif underlying[0] != "unevaluable":
+                    errors.append(
+                        f"an exception excuses a non-unevaluable verdict: "
+                        f"{slug}/{published_id}")
+                elif entry.get("reason") != underlying[1]:
+                    errors.append(
+                        f"reviewed exception is stale: {slug}/{published_id}")
+                elif entry.get("subject_key") != cell.get("subject_key"):
+                    errors.append(
+                        f"reviewed exception binds another subject: "
+                        f"{slug}/{published_id}")
+                else:
+                    expected_comparison = (
+                        "excepted", f"reviewed exception: {underlying[1]}")
             actual_comparison = (
                 cell.get("comparison_status"), cell.get("comparison_reason"))
             if actual_comparison != expected_comparison:
@@ -4574,8 +4747,30 @@ def validate_comb_referee_report(
                 errors.append(f"cell transition is not evaluable: {slug}")
 
             if not isinstance(referee, dict) or referee.get("status") not in {
-                    "measured", "unevaluable"}:
+                    "measured", "unevaluable", "composite"}:
                 errors.append(f"cell source result is malformed: {slug}")
+            elif referee["status"] == "composite":
+                # A composite is MEASURED -- on its corroboration, not on a
+                # band -- so it must never be filed as source-unevaluable.
+                # Its schema is re-derived here rather than trusted.
+                composite_cells += 1
+                if set(referee) != COMPOSITE_REFEREE_KEYS:
+                    errors.append(
+                        f"composite source certificate schema is "
+                        f"unsupported: {slug}/{published_id}")
+                elif (referee["criterion"]
+                        not in COMPOSITE_SUPPRESSION_CRITERIA):
+                    errors.append(
+                        f"composite certificate names an untabled criterion: "
+                        f"{slug}/{published_id}")
+                elif not isinstance(referee["corroborated"], bool):
+                    errors.append(
+                        f"composite certificate publishes no boolean verdict: "
+                        f"{slug}/{published_id}")
+                elif cell.get("ledger_state") != "active_composite":
+                    errors.append(
+                        f"composite certificate on a non-composite subject: "
+                        f"{slug}/{published_id}")
             elif referee["status"] == "measured":
                 measured_cells += 1
                 source_page = next((
@@ -4668,16 +4863,23 @@ def validate_comb_referee_report(
         active_resolved = state_counts["active_resolved"]
         active_unresolved = state_counts["active_unresolved"]
         retained = state_counts["retained_unresolved"]
+        composite = state_counts["active_composite"]
         derived_counts = {
             "combs": len(cells),
             "subjects": len(cells),
-            "subjects_active": active_resolved + active_unresolved,
+            "subjects_active": (
+                active_resolved + active_unresolved + composite),
             "subjects_active_resolved": active_resolved,
             "subjects_active_unresolved": active_unresolved,
             "subjects_retained_unresolved": retained,
             "inferences_suppressed": len(inferences),
             "ledger_blocking": blocking_cells + inference_blockers,
+            # re-derived from the cells, never read off the report: a
+            # blocker is excused exactly when its own cell's comparison is
+            # an excepted one (each already registry-re-derived above).
+            "ledger_blocking_excused": excused_blocking_cells,
             "measured": measured_cells,
+            "composite": composite_cells,
             "source_unevaluable": source_unevaluable_cells,
             "unevaluable": cell_comparisons["unevaluable"],
             "referee_layout_mismatches": layout_mismatches,
@@ -4687,8 +4889,15 @@ def validate_comb_referee_report(
         for key, actual in derived_counts.items():
             if counts.get(key) != actual:
                 errors.append(f"form total disagrees with evidence: {slug}/{key}")
-        if (len(cells) != active_resolved + active_unresolved + retained
-                or measured_cells + source_unevaluable_cells != len(cells)
+        # Both partitions must still account for EVERY cell exactly once, so
+        # a composite has to be counted on both axes -- by ledger state and by
+        # measurement kind.  Leaving it out of either would let a whole class
+        # of subject pass through unreconciled, which is the fault this
+        # identity exists to catch.
+        if (len(cells) != (active_resolved + active_unresolved + retained
+                           + composite)
+                or (measured_cells + source_unevaluable_cells
+                    + composite_cells) != len(cells)
                 or sum(cell_comparisons.values()) != len(cells)):
             errors.append(f"form subject partitions are inconsistent: {slug}")
         stats["pending_transitions"] += pending
@@ -4696,6 +4905,8 @@ def validate_comb_referee_report(
             errors.append(f"cell comparison totals disagree: {slug}")
         derived_status, derived_reason = _form_status_relation(
             ledger_blocking=derived_counts["ledger_blocking"],
+            ledger_blocking_excused=derived_counts[
+                "ledger_blocking_excused"],
             emission_inventory=emission_inventory,
             audit_evidence=audit_evidence,
             comparisons=cell_comparisons,
@@ -4704,8 +4915,10 @@ def validate_comb_referee_report(
             errors.append(f"form status/reason relation is false: {slug}")
         recomputed[f"forms_{derived_status}"] += 1
         for key in (
-                "combs", "measured", "source_unevaluable", "unevaluable",
-                "ledger_blocking", "subjects_active", "subjects_active_resolved",
+                "combs", "measured", "composite", "source_unevaluable",
+                "unevaluable",
+                "ledger_blocking", "ledger_blocking_excused",
+                "subjects_active", "subjects_active_resolved",
                 "subjects_active_unresolved", "subjects_retained_unresolved",
                 "inferences_suppressed", "referee_layout_mismatches",
                 "referee_layout_position_mismatches",
@@ -4719,9 +4932,11 @@ def validate_comb_referee_report(
         "forms_error": len(raw_errors),
         "combs_found": recomputed["combs"],
         "combs_measured": recomputed["measured"],
+        "combs_composite": recomputed["composite"],
         "combs_source_unevaluable": recomputed["source_unevaluable"],
         "combs_unevaluable": recomputed["unevaluable"],
         "ledger_blocking": recomputed["ledger_blocking"],
+        "ledger_blocking_excused": recomputed["ledger_blocking_excused"],
         "subjects_active": recomputed["subjects_active"],
         "subjects_active_resolved": recomputed["subjects_active_resolved"],
         "subjects_active_unresolved": recomputed["subjects_active_unresolved"],
@@ -4751,6 +4966,7 @@ def validate_comb_referee_report(
         errors.append("report corpus identity is incomplete")
     if (sum(comparisons.values()) != totals.get("combs_found")
             or totals.get("combs_measured", 0)
+            + totals.get("combs_composite", 0)
             + totals.get("combs_source_unevaluable", 0)
             != totals.get("combs_found")):
         errors.append("report subject partition is inconsistent")
@@ -4853,6 +5069,101 @@ def _referee_topology_contains(
 
 def _referee_topology_key(values: Sequence[float]) -> str:
     return ",".join(str(_rounded_six(value)) for value in values)
+
+
+_REVIEW_REGISTRY = None
+
+
+def _load_review_registry():
+    """Load the reviewed-ledger registries by explicit pinned path.
+
+    Same isolation-proof pattern the referee uses: this gate runs children
+    with `-I`, and a bare import would resolve differently (or not at all)
+    depending on how it was invoked.
+    """
+    global _REVIEW_REGISTRY
+    if _REVIEW_REGISTRY is None:
+        import importlib.util
+        path = HERE / "review_registry.py"
+        spec = importlib.util.spec_from_file_location("review_registry", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _REVIEW_REGISTRY = module
+    # ONE module instance for the process. Re-executing the file per call
+    # would hand every caller its own copy of the registries, so a test that
+    # emptied them would be emptying a copy nobody else reads -- which is
+    # exactly what happened when this was written without the cache.
+    return _REVIEW_REGISTRY
+
+
+def _reviewed_registry_coverage_errors(cells: "Iterable[dict[str, Any]]"
+                                       ) -> list[str]:
+    """Every reviewed entry applied EXACTLY ONCE across the whole corpus.
+
+    This is the corpus half of a guard that cannot be completed per document.
+    A form CODE plus revision is not a document identity -- 1701's main
+    sheet, its attachment and its consolidation all publish code 1701
+    revision 2018 -- so `lattice.apply_reviewed_*` passes over entries whose
+    pinned source bytes are not its own, unable to tell a sibling document
+    from a re-pinned PDF from where it stands.  Here every document is
+    visible at once, so the question becomes answerable and is answered:
+
+      * an entry that landed NOWHERE is a review of bytes the corpus no
+        longer contains, or of a subject that no longer exists;
+      * an entry that landed TWICE means two documents accepted the same
+        decision, which the sha scoping is supposed to make impossible;
+      * a published certificate naming no entry is a forged promotion.
+
+    All three are errors.  Reported from the report's own published
+    certificates, never from the layouts, so a producer that lied about what
+    it applied is caught rather than believed.
+    """
+    registry = _load_review_registry()
+    wanted: set[tuple[str, ...]] = set()
+    for key in registry.REVIEWED_LEDGER_RESOLUTIONS:
+        wanted.add(("resolution", str(key[0]), str(key[1]), str(key[2])))
+    for key in registry.REVIEWED_LEDGER_TRANSITIONS:
+        wanted.add(("transition", str(key[0]), str(key[1]), str(key[2])))
+    for key in registry.REVIEWED_UNEVALUABLE_EXCEPTIONS:
+        wanted.add(("exception", str(key[0]), str(key[1]), str(key[2])))
+    seen: dict[tuple[str, ...], int] = {}
+    for cell in cells:
+        for kind, field in (("resolution", "resolution_certificate"),
+                            ("transition", "transition_certificate")):
+            certificate = cell.get(field)
+            if not isinstance(certificate, dict):
+                continue
+            raw = certificate.get("registry_key")
+            if (not isinstance(raw, list) or len(raw) != 3):
+                return [f"certificate publishes no registry key: "
+                        f"{cell.get('cell')}"]
+            item = (kind, str(raw[0]), str(raw[1]), str(raw[2]))
+            seen[item] = seen.get(item, 0) + 1
+        raw_exception = cell.get("exception_registry_key")
+        if raw_exception is not None:
+            if (not isinstance(raw_exception, list)
+                    or len(raw_exception) != 3
+                    or cell.get("comparison_status") != "excepted"):
+                return [f"exception key without an excepted comparison: "
+                        f"{cell.get('cell')}"]
+            item = ("exception", str(raw_exception[0]),
+                    str(raw_exception[1]), str(raw_exception[2]))
+            seen[item] = seen.get(item, 0) + 1
+        elif cell.get("comparison_status") == "excepted":
+            return [f"excepted cell publishes no exception key: "
+                    f"{cell.get('cell')}"]
+    errors: list[str] = []
+    for item in sorted(wanted - set(seen)):
+        errors.append("reviewed entry was applied nowhere in the corpus: "
+                      f"{item[0]} {item[1]}/p{item[2]}/{item[3]}")
+    for item in sorted(set(seen) - wanted):
+        errors.append("published certificate names no reviewed entry: "
+                      f"{item[0]} {item[1]}/p{item[2]}/{item[3]}")
+    for item, count in sorted(seen.items()):
+        if item in wanted and count != 1:
+            errors.append(f"reviewed entry applied {count} times: "
+                          f"{item[0]} {item[1]}/p{item[2]}/{item[3]}")
+    return errors
 
 
 def _rail_derivation_errors(
@@ -5979,20 +6290,26 @@ def _layout_binding_projection(
             bbox_raw = subject.get("legacy_bbox")
             reason_codes = subject.get("reason_codes")
             blocks_gate = subject.get("blocks_gate")
+            # A reviewed composite keeps its reason codes (they say WHY the
+            # comb was suppressed, which the review confirmed rather than
+            # erased) but stops blocking, on a certificate this gate
+            # re-derives corpus-wide. Enumerated with every other site
+            # carrying this contract rather than patched where it surfaced.
+            suppressed_shape = state in LEDGER_SUPPRESSED_STATES
             if (state not in LEDGER_STATES
                     or not isinstance(subject_key, str) or not subject_key
                     or not isinstance(legacy_id, str) or not legacy_id
                     or not _finite_number_list(bbox_raw, length=4)
                     or not _string_list(
                         reason_codes, nonempty=state != "active_resolved")
-                    or blocks_gate is not (state != "active_resolved")):
+                    or blocks_gate is not (state not in LEDGER_NONBLOCKING_STATES)):
                 raise CombRefereeScopeError(
                     f"layout subject relation is malformed: {slug}/{legacy_id}")
             bbox = [float(value) for value in bbox_raw]
             if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
                 raise CombRefereeScopeError(
                     f"layout subject bbox is invalid: {slug}/{legacy_id}")
-            if state == "retained_unresolved":
+            if suppressed_shape:
                 if active_id is not None:
                     raise CombRefereeScopeError(
                         f"retained subject has active id: {slug}/{legacy_id}")
@@ -6373,7 +6690,7 @@ def form_binding_errors(form: dict[str, Any],
         if isinstance(inventory, dict) and inventory.get("complete") is True:
             active_ids = sorted(
                 cell_id for cell_id, expected_cell in expected_cells.items()
-                if expected_cell.get("ledger_state") != "retained_unresolved")
+                if expected_cell.get("ledger_state") not in LEDGER_SUPPRESSED_STATES)
             exact_inventory = {
                 "complete": True,
                 "reason": "complete",
@@ -6641,7 +6958,7 @@ def form_binding_errors(form: dict[str, Any],
             or ledger_binding.get("active_subject_ids") != [
                 cell_id for cell_id, expected in _ordered_layout_cell_items(
                     layout_binding["cells"])
-                if expected.get("ledger_state") != "retained_unresolved"]
+                if expected.get("ledger_state") not in LEDGER_SUPPRESSED_STATES]
             or ledger_binding.get("emitted_ids") != sorted(
                 cell_id for cell_id, expected in layout_binding["cells"].items()
                 if expected.get("expected_emission_geometry") is not None)
@@ -6731,6 +7048,8 @@ def derive_application_scope_elevation(
         return [*errors, "raw report forms are missing"], None
 
     effective_subjects = 0
+    elevated_excepted = 0
+    elevated_composite = 0
     for form in forms:
         if not isinstance(form, dict):
             errors.append("raw report contains a malformed form")
@@ -6786,15 +7105,27 @@ def derive_application_scope_elevation(
                 or ledger.get("reason") != "complete"
                 or ledger.get("errors") != []):
             errors.append(f"raw audit ledger has a failure: {slug}")
+        # First light for this validator (it runs only once every other
+        # check is green, which had never happened): two latent mismatches
+        # with the audit's long-standing publication conventions. The
+        # offender keys are published ON FAILURE -- a green assertion
+        # carries an empty offenders list and no counts -- and the emitted
+        # inventory is canonically sorted while expected/checked are in
+        # stream order, so those two compare by membership; the exact
+        # stream-order identity is still enforced against the layout-owner
+        # registry below for the stream-ordered inventories.
         if (not isinstance(relation, dict)
                 or relation.get("holds") is not True
                 or relation.get("inventory_complete") is not True
-                or relation.get("offender_count") != 0
-                or relation.get("offender_dimensions") != {}
+                or (relation.get("offenders") or []) != []
+                or (relation.get("offender_count") or 0) != 0
+                or (relation.get("offender_dimensions") or {}) != {}
                 or relation.get("expected_comb_ids")
                 != relation.get("checked_comb_ids")
-                or relation.get("expected_comb_ids")
-                != relation.get("emitted_comb_ids")
+                or not isinstance(relation.get("expected_comb_ids"), list)
+                or not isinstance(relation.get("emitted_comb_ids"), list)
+                or sorted(relation["expected_comb_ids"])
+                != sorted(relation["emitted_comb_ids"])
                 or relation.get("owner_certificates_invalid") != 0
                 or relation.get("owner_certificates_valid")
                 != relation.get("combs_checked")
@@ -6809,50 +7140,116 @@ def derive_application_scope_elevation(
             errors.append(f"emission evidence is not complete: {slug}")
         counts = form.get("counts")
         cells = form.get("cells")
-        if (not isinstance(counts, dict) or not isinstance(cells, list)
-                or counts.get("ledger_blocking") != 0
-                or counts.get("subjects_active_resolved") != len(cells)
-                or counts.get("subjects_active_unresolved") != 0
-                or counts.get("subjects_retained_unresolved") != 0
+        if not isinstance(counts, dict) or not isinstance(cells, list):
+            errors.append(f"ledger evidence is not fully resolved: {slug}")
+            continue
+        # The per-form partition, derived from the cells the class loop
+        # below individually re-derives against the registry: composite
+        # subjects are resolved-by-review, and the only unresolved or
+        # retained subjects allowed are those whose comparisons are
+        # reviewed exceptions -- counted here and required to equal the
+        # ledger's own splits exactly. Anything else keeps the flat zero.
+        form_composite = sum(
+            1 for cell in cells if isinstance(cell, dict)
+            and cell.get("ledger_state") == "active_composite")
+        form_excepted_unresolved = sum(
+            1 for cell in cells if isinstance(cell, dict)
+            and cell.get("comparison_status") == "excepted"
+            and cell.get("ledger_state") == "active_unresolved")
+        form_excepted_retained = sum(
+            1 for cell in cells if isinstance(cell, dict)
+            and cell.get("comparison_status") == "excepted"
+            and cell.get("ledger_state") == "retained_unresolved")
+        form_excused = form_excepted_unresolved + form_excepted_retained
+        if (counts.get("ledger_blocking") != form_excused
+                or counts.get("ledger_blocking_excused") != form_excused
+                or counts.get("subjects_active_resolved")
+                != len(cells) - form_composite - form_excused
+                or counts.get("subjects_active_unresolved")
+                != form_excepted_unresolved
+                or counts.get("subjects_retained_unresolved")
+                != form_excepted_retained
                 or counts.get("inferences_suppressed") != 0
                 or form.get("inferences") != []):
             errors.append(f"ledger evidence is not fully resolved: {slug}")
             continue
+        # The report's cell list carries EVERY subject, and a suppressed
+        # one (reviewed composite, excepted retained) has no active owner
+        # rectangle -- the audit, emission and owner inventories rightly
+        # know nothing of it. The identity that must hold is over the
+        # ACTIVE cells; the suppressed remainder was partitioned and
+        # registry-re-derived above, and the class loop below walks every
+        # cell again individually.
         report_ids = [
             cell.get("cell") if isinstance(cell, dict) else None
             for cell in cells
+            if not (isinstance(cell, dict)
+                    and (cell.get("ledger_state") in (
+                        "active_composite", "retained_unresolved")))
         ]
         emission_inventory = form.get("emission_inventory")
         if layout_owner_ids is not None:
-            exact_inventories = [
-                [cell_id for cell_id, _expected in _ordered_layout_cell_items(
-                    layout_binding.get("cells", {}))],
+            # Two publication conventions, checked to each publisher's own
+            # canon (first light, like the assertion repairs above): the
+            # stream-ordered inventories must equal the layout-owner
+            # registry EXACTLY; the canonically-sorted ones (the audit's
+            # emitted list, the referee ledger's emitted ids, the emission
+            # inventory's two) must equal its sorted image -- same
+            # membership, their own stated order, nothing waived.
+            stream_inventories = [
+                # the same selection _layout_audit_owner_ids makes: active
+                # subjects owning emission geometry; a composite or
+                # excepted-retained row registers no geometry of its own.
+                [cell_id for cell_id, cell in _ordered_layout_cell_items(
+                    layout_binding.get("cells", {}))
+                 if isinstance(cell, dict)
+                 and cell.get("ledger_state") in {
+                     "active_resolved", "active_unresolved"}
+                 and cell.get("expected_emission_geometry") is not None],
                 report_ids,
                 relation.get("expected_comb_ids") if isinstance(
                     relation, dict) else None,
                 relation.get("checked_comb_ids") if isinstance(
                     relation, dict) else None,
-                relation.get("emitted_comb_ids") if isinstance(
-                    relation, dict) else None,
                 audit_evidence.get("expected_comb_ids") if isinstance(
                     audit_evidence, dict) else None,
                 audit_evidence.get("checked_comb_ids") if isinstance(
                     audit_evidence, dict) else None,
-                audit_evidence.get("emitted_comb_ids") if isinstance(
-                    audit_evidence, dict) else None,
                 ledger.get("active_subject_ids") if isinstance(
                     ledger, dict) else None,
+            ]
+            sorted_owner_ids = sorted(layout_owner_ids)
+            sorted_inventories = [
+                relation.get("emitted_comb_ids") if isinstance(
+                    relation, dict) else None,
+                audit_evidence.get("emitted_comb_ids") if isinstance(
+                    audit_evidence, dict) else None,
                 ledger.get("emitted_ids") if isinstance(ledger, dict) else None,
                 emission_inventory.get("expected_active_cell_ids")
                 if isinstance(emission_inventory, dict) else None,
                 emission_inventory.get("emitted_cell_ids")
                 if isinstance(emission_inventory, dict) else None,
             ]
-            if any(inventory != layout_owner_ids
-                   for inventory in exact_inventories):
+            stream_names = (
+                "layout-binding", "report-active", "relation-expected",
+                "relation-checked", "audit-expected", "audit-checked",
+                "ledger-active")
+            sorted_names = (
+                "relation-emitted", "audit-emitted", "ledger-emitted",
+                "emission-expected", "emission-emitted")
+            drifted = [
+                name for name, inventory in zip(
+                    stream_names, stream_inventories)
+                if inventory != layout_owner_ids
+            ] + [
+                name for name, inventory in zip(
+                    sorted_names, sorted_inventories)
+                if inventory != sorted_owner_ids
+            ]
+            if drifted:
                 errors.append(
                     f"elevatable owner/audit/report/ledger inventories differ: "
-                    f"{slug}")
+                    f"{slug} ({', '.join(drifted)})")
         for cell in cells:
             if not isinstance(cell, dict):
                 errors.append(f"cell evidence is malformed: {slug}")
@@ -6866,6 +7263,56 @@ def derive_application_scope_elevation(
                 "audit": cell.get("audit_printed"),
                 "emitted": cell.get("emitted"),
             }
+            comparison_status = cell.get("comparison_status")
+            if comparison_status == "excepted":
+                # Admitted ONLY on the registry's word, re-derived here:
+                # the entry must exist for this exact subject, bind its
+                # subject_key, and its recorded refusal must be the one the
+                # published reason carries. The gate never trusts the
+                # label alone.
+                entry = _load_review_registry(
+                    ).REVIEWED_UNEVALUABLE_EXCEPTIONS.get(
+                    (str(slug), int(cell.get("page") or 0),
+                     str(cell.get("cell_id")
+                         or cell.get("legacy_cell_id"))))
+                if (entry is None
+                        or entry.get("subject_key")
+                        != cell.get("subject_key")
+                        or cell.get("comparison_reason")
+                        != "reviewed exception: " + str(entry.get("reason"))
+                        or cell.get("transition_status") != "none"):
+                    errors.append(
+                        f"excepted cell fails registry re-derivation: "
+                        f"{slug}/{cell.get('cell')}")
+                else:
+                    elevated_excepted += 1
+                continue
+            if cell.get("ledger_state") == "active_composite":
+                # Admitted only with its certificate re-verified against
+                # the registry and the source corroboration standing --
+                # the same relation the scoring pass enforces, asked again
+                # by the elevation with its own eyes.
+                certificate = cell.get("transition_certificate")
+                entry = None
+                raw_key = (certificate or {}).get("registry_key")
+                if isinstance(raw_key, list) and len(raw_key) == 3:
+                    entry = _load_review_registry(
+                        ).REVIEWED_LEDGER_TRANSITIONS.get(
+                        (str(raw_key[0]), int(raw_key[1]), str(raw_key[2])))
+                if (entry is None
+                        or cell.get("ledger_blocks_gate") is not False
+                        or (certificate or {}).get("suppression_criterion")
+                        != entry.get("suppression_criterion")
+                        or cell.get("comparison_status") != "agree"
+                        or cell.get("comparison_reason")
+                        != ("the source corroborates the reviewed "
+                            "composite's suppression claim")):
+                    errors.append(
+                        f"composite cell fails registry re-derivation: "
+                        f"{slug}/{cell.get('cell')}")
+                else:
+                    elevated_composite += 1
+                continue
             if (cell.get("ledger_state") != "active_resolved"
                     or cell.get("ledger_blocks_gate") is not False
                     or not isinstance(referee, dict)
@@ -6895,6 +7342,11 @@ def derive_application_scope_elevation(
     # them. It used to overwrite `comparisons` with an all-agree distribution
     # because the referee could not adjudicate at all, which meant the numbers
     # the gate scored were the gate's own. They are the referee's again.
+    # The elevation's own partition: pristine agreements + composite
+    # agreements carry `agree`; excused subjects carry `excepted`; nothing
+    # else exists. Both excused counts were just re-derived cell by cell
+    # against the registry above, so these numbers are the gate's, bound
+    # to review -- not the report's word for itself.
     expected_totals = {
         "combs_unevaluable": 0,
         "forms_ok": len(forms),
@@ -6902,7 +7354,10 @@ def derive_application_scope_elevation(
         "forms_unevaluable": 0,
         "audit_evidence_complete_forms": len(forms),
         "comparisons": {
-            name: effective_subjects if name == "agree" else 0
+            name: (
+                effective_subjects - elevated_excepted
+                if name == "agree"
+                else elevated_excepted if name == "excepted" else 0)
             for name in COMPARISON_NAMES
         },
     }
@@ -7290,21 +7745,57 @@ def _comb_referee_outcome(report: dict[str, Any],
             if comparisons[name])
         return Result("comb-referee", Verdict.FAIL,
                       f"{disagreements} actual disagreement(s): {detail}")
+    # The final totals are a PARTITION, never a waiver. These expectations
+    # were written before reviewed partitions existed and demanded flat
+    # zeros; each excused quantity is now derived from the REGISTRY the
+    # gate loads itself -- never from the report's own labels -- and must
+    # match exactly. A missing entry, an extra excusal, or an unreviewed
+    # shortfall shows up as an arithmetic mismatch here, not as a hidden
+    # allowance. The thresholds themselves do not move: agree still means
+    # four-way agreement, stop still fails, and everything not named by a
+    # reviewed entry must be genuinely zero.
+    registry = _load_review_registry()
+    transitions_n = len(registry.REVIEWED_LEDGER_TRANSITIONS)
+    exceptions_n = len(registry.REVIEWED_UNEVALUABLE_EXCEPTIONS)
+    excepted_states: dict[str, int] = {}
+    for form in (report.get("forms") or ()):
+        for cell in (form.get("cells") or ()):
+            if cell.get("comparison_status") == "excepted":
+                state = str(cell.get("ledger_state"))
+                excepted_states[state] = excepted_states.get(state, 0) + 1
+    excepted_total = sum(excepted_states.values())
+    excepted_retained = excepted_states.get("retained_unresolved", 0)
+    excepted_unresolved = excepted_states.get("active_unresolved", 0)
+    if excepted_total != exceptions_n:
+        incomplete_prelude = [
+            f"excepted cells={excepted_total} but the registry holds "
+            f"{exceptions_n} reviewed exceptions"]
+    else:
+        incomplete_prelude = []
     required = {
         "forms_expected": expected_forms,
         "forms_measured": expected_forms,
         "forms_error": 0,
         "combs_expected": expected_subjects,
         "combs_found": expected_subjects,
-        "combs_measured": expected_subjects,
+        # measured + composite + excepted partition the corpus exactly.
+        "combs_measured": expected_subjects - transitions_n - exceptions_n,
+        "combs_composite": transitions_n,
         "combs_unevaluable": 0,
-        "combs_source_unevaluable": 0,
-        "subjects_active": expected_subjects,
-        "subjects_active_resolved": expected_subjects,
-        "subjects_active_unresolved": 0,
-        "subjects_retained_unresolved": 0,
+        # the source side stays honest: an excepted subject's paper is
+        # still unevaluable, counted out loud, equal to the registry.
+        "combs_source_unevaluable": exceptions_n,
+        "subjects_active": expected_subjects - excepted_retained,
+        "subjects_active_resolved": (
+            expected_subjects - excepted_retained - transitions_n
+            - excepted_unresolved),
+        "subjects_active_unresolved": excepted_unresolved,
+        "subjects_retained_unresolved": excepted_retained,
         "inferences_suppressed": 0,
-        "ledger_blocking": 0,
+        # blockers are counted truthfully AND every one must be excused by
+        # name -- the two keys must be equal, and both trace to entries.
+        "ledger_blocking": excepted_retained + excepted_unresolved,
+        "ledger_blocking_excused": excepted_retained + excepted_unresolved,
         "referee_layout_mismatches": 0,
         "referee_layout_position_mismatches": 0,
         "forms_ok": expected_forms,
@@ -7312,13 +7803,21 @@ def _comb_referee_outcome(report: dict[str, Any],
         "forms_unevaluable": 0,
         "audit_evidence_complete_forms": expected_forms,
     }
-    incomplete = [
+    incomplete = incomplete_prelude + [
         f"{key}={totals.get(key)} (expected {expected})"
         for key, expected in required.items() if totals.get(key) != expected
     ]
-    if comparisons["agree"] != expected_subjects:
+    if comparisons["excepted"] != exceptions_n:
+        incomplete.append(
+            f"comparisons.excepted={comparisons['excepted']} "
+            f"(expected {exceptions_n} -- the registry's own count)")
+    # Every subject must be agreed OR explicitly excused by a reviewed
+    # exception, and the excused ones are counted out loud.
+    decided = comparisons["agree"] + comparisons["excepted"]
+    if decided != expected_subjects:
         incomplete.append(
             f"comparisons.agree={comparisons['agree']} "
+            f"+ excepted={comparisons['excepted']} "
             f"(expected {expected_subjects})")
     if comparisons["unevaluable"]:
         incomplete.append(f"comparisons.unevaluable={comparisons['unevaluable']}")
@@ -7539,7 +8038,13 @@ BASIC_ASSERTION_COUNT_FIELDS = {
     # reads as `detail has unsupported fields` and fails the gate.
     "money_boxes_have_inputs": (
         ("boxes_checked", "combs_fully_inked"),
-        ("boxes_preprinted", "boxes_bureau_reserved",
+        # `boxes_decoration` (F235/F237 rider, user-approved 2026-08-15)
+        # counts the cells the sheet DECORATES -- separator fills between
+        # combs, printed ATC constants, sub-glyph strips. Declared here for
+        # the same reason its siblings are: an undeclared count would read
+        # as "unsupported fields" and fail the gate, and an exclusion that
+        # is not published is an exclusion that can hide.
+        ("boxes_preprinted", "boxes_bureau_reserved", "boxes_decoration",
          "emitted_cell_binding_issues")),
     "rules_below_guide_cut": (("cuts",), ("area_fills_below_cut",)),
     "run_colour_matches_ir": (("runs_checked",), ()),
@@ -10502,6 +11007,11 @@ def _synthetic_comb_fixture(
         "comparison_status": "agree",
         "transition_status": "none",
         "transition_reason": "active ledger subject is already resolved",
+        # C4a: every cell publishes the key; null means "no reviewed
+        # resolution promoted this subject".
+        "resolution_certificate": None,
+        "transition_certificate": None,
+        "exception_registry_key": None,
         "referee": {
             "status": "measured",
             "reason": (
@@ -10559,7 +11069,9 @@ def _synthetic_comb_fixture(
         "subjects_retained_unresolved": 0,
         "inferences_suppressed": 0,
         "ledger_blocking": 0,
+        "ledger_blocking_excused": 0,
         "measured": 1,
+        "composite": 0,
         "source_unevaluable": 0,
         "unevaluable": 0,
         "referee_layout_mismatches": 0,
@@ -10704,6 +11216,7 @@ def _synthetic_comb_fixture(
             "combs_expected": 1,
             "combs_found": 1,
             "combs_measured": 1,
+            "combs_composite": 0,
             "combs_unevaluable": 0,
             "combs_source_unevaluable": 0,
             "subjects_active": 1,
@@ -10712,6 +11225,7 @@ def _synthetic_comb_fixture(
             "subjects_retained_unresolved": 0,
             "inferences_suppressed": 0,
             "ledger_blocking": 0,
+            "ledger_blocking_excused": 0,
             "referee_layout_mismatches": 0,
             "referee_layout_position_mismatches": 0,
             "comparisons": comparisons,
@@ -11162,6 +11676,30 @@ def _synthetic_audit_record(
 
 
 def self_test() -> int:
+    """Run the fixtures against EMPTY reviewed registries.
+
+    The registries hold real user decisions (112 of them after the C4b
+    sitting), while these fixtures build synthetic reports that contain none
+    of the named cells -- so the corpus coverage guard would report every
+    real entry as applied nowhere, inside a fixture that never claimed to
+    apply it. The guard is exercised deliberately by its own fixtures below.
+    """
+    registry = _load_review_registry()
+    saved_r = dict(registry.REVIEWED_LEDGER_RESOLUTIONS)
+    saved_t = dict(registry.REVIEWED_LEDGER_TRANSITIONS)
+    saved_e = dict(registry.REVIEWED_UNEVALUABLE_EXCEPTIONS)
+    registry.REVIEWED_LEDGER_RESOLUTIONS.clear()
+    registry.REVIEWED_LEDGER_TRANSITIONS.clear()
+    registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.clear()
+    try:
+        return _self_test_body()
+    finally:
+        registry.REVIEWED_UNEVALUABLE_EXCEPTIONS.update(saved_e)
+        registry.REVIEWED_LEDGER_RESOLUTIONS.update(saved_r)
+        registry.REVIEWED_LEDGER_TRANSITIONS.update(saved_t)
+
+
+def _self_test_body() -> int:
     """Prove the gate can fail, and that it treats absence as failure.
 
     A gate that cannot fail is worthless, and one that passes on a missing check
@@ -12903,6 +13441,96 @@ def self_test() -> int:
     for label, mutator in measured_certificate_mutations:
         if not mutation_errors(mutator):
             failures.append(f"{label} must invalidate measured source evidence")
+
+    # ---- C3-A: the gate's own composite mirror ---------------------------
+    #
+    # These are the gate's independent re-derivations, never the referee's
+    # published labels: a reviewed composite is scored on its corroboration,
+    # and every way that certificate can be wrong is proven to be caught.
+    def composite_gate_cell(**overrides):
+        value = {
+            "ledger_state": "active_composite",
+            "emitted": None,
+            "latticed": 4,
+            "audit_printed": None,
+            "referee": {
+                "status": "composite",
+                "criterion": "source-partition-edge-in-final-picture-v1",
+                "corroborated": True,
+                "reason": "the source corroborates the reviewed composite's "
+                          "suppression claim",
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert _comparison_for_cell(composite_gate_cell(), True)[0] == "agree"
+    assert _comparison_for_cell(composite_gate_cell(), False)[0] == "agree"
+    assert _comparison_for_cell(composite_gate_cell(referee={
+        "status": "composite",
+        "criterion": "source-partition-edge-in-final-picture-v1",
+        "corroborated": False,
+        "reason": "refuted"}), True)[0] == "stop"
+    assert _comparison_for_cell(
+        composite_gate_cell(emitted=4), True)[0] == "stop"
+    assert _comparison_for_cell(composite_gate_cell(referee={
+        "status": "unevaluable", "reason": "x"}), True)[0] == "unevaluable"
+    assert _transition_for_cell("active_composite", "agree") == (
+        "none", "reviewed composite transition is already applied")
+    # C4a mirror: a signed resolution re-derived against this run.
+    def gate_resolved_cell(**overrides):
+        value = {
+            "ledger_state": "active_resolved",
+            "latticed": 4, "emitted": 4, "audit_printed": 4,
+            "emitted_indexes_valid": True,
+            "referee": {"status": "measured", "compartments": 4,
+                        "positions_match": True},
+            "resolution_certificate": {
+                "criterion": "reviewed-ledger-resolution-v1",
+                "four_way": {"lattice": 4, "audit": 4,
+                             "emitted": 4, "referee": 4},
+            },
+        }
+        value.update(overrides)
+        return value
+
+    assert _comparison_for_cell(gate_resolved_cell(), True)[0] == "agree"
+    for overrides in ({"audit_printed": 5}, {"latticed": 5, "emitted": 5},
+                      {"referee": {"status": "measured", "compartments": 5,
+                                   "positions_match": True}}):
+        drifted = _comparison_for_cell(gate_resolved_cell(**overrides), True)
+        assert drifted[0] == "stop", (overrides, drifted)
+        assert "moved since this resolution was reviewed" in drifted[1]
+    assert _comparison_for_cell(gate_resolved_cell(resolution_certificate={
+        "criterion": "reviewed-ledger-resolution-v1"}), True)[0] == "stop"
+    # C4b coverage guard, proven able to fail in all three directions.
+    def cov(cells): return _reviewed_registry_coverage_errors(cells)
+    _reg = _load_review_registry()
+    _k = ("fixture-1999", 1, "p1c7")
+    _reg.REVIEWED_LEDGER_RESOLUTIONS[_k] = {
+        "subject_key": "p1@0,0,1,1", "source_sha256": "ab" * 32,
+        "four_way": {"lattice": 2, "audit": 2, "emitted": 2, "referee": 2},
+        "reviewer": "self-test", "date": "2026-08-15", "citation": "self-test"}
+    try:
+        _cert = {"registry_key": [_k[0], _k[1], _k[2]]}
+        _one = [{"cell": _k[2], "resolution_certificate": _cert}]
+        assert cov(_one) == [], cov(_one)
+        assert any("applied 2 times" in e for e in cov(_one + _one))
+        assert any("applied nowhere" in e for e in cov([]))
+        forged = [{"cell": "p9c9", "resolution_certificate":
+                   {"registry_key": ["no-such-form", 1, "p9c9"]}}]
+        errs = cov(forged)
+        assert any("names no reviewed entry" in e for e in errs), errs
+        assert any("applied nowhere" in e for e in errs), errs
+    finally:
+        _reg.REVIEWED_LEDGER_RESOLUTIONS.pop(_k, None)
+    assert "active_composite" in LEDGER_STATES
+    # The composite certificate schema the cell walk enforces.
+    assert COMPOSITE_REFEREE_KEYS == {
+        "status", "criterion", "corroborated", "reason"}
+    assert all(
+        criterion.endswith("-v1")
+        for criterion in COMPOSITE_SUPPRESSION_CRITERIA)
 
     def layout_disagreement(value: dict[str, Any], *, global_total: int) -> None:
         cell = value["forms"][0]["cells"][0]

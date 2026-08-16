@@ -989,22 +989,24 @@ def _signature_rule_claimed(root: pathlib.Path) -> bool | None:
 
 
 def mutate_signature_rule() -> None:
-    """Change the caption below the signature line from a signature caption
-    to 0605-1999's own real "Title/Position of Signatory" residue.
+    """Change the caption below the signature line to one that claims
+    nothing writable.
 
     Nothing about either cell's own geometry moves -- not the wall they
     share, not the vector bar straddling it, not the item number's own ink
-    -- only the caption text's own words do, from "Signature over Printed
-    Name of Taxpayer" to a caption that names no signature. What breaks is
-    the fact `emit.SignatureRuleWriting` reads: a `label` cell's own vector
-    rule earns it an input only when a caption naming BOTH "signature" and
-    "printed name" sits in the cell directly below it -- exactly 0605-1999's
-    own measured shape (its identical geometry beside "Title/Position of
-    Signatory" is correctly refused today; F221 case 1's own resolution
-    names this as one of three real rules straddling this exact cell's own
-    bottom wall, only two of which have a matching caption).
+    -- only the caption text's own words do. What breaks is the fact
+    `emit.SignatureRuleWriting` reads: a `label` cell's own vector rule
+    earns it an input only when the caption directly below it names what
+    belongs ON the line -- a signature caption or, since the user's
+    2026-08-16 decision, a signatory-detail caption ("Title/Position of
+    Signatory" and kin, 0605-1999's own real third line, which this
+    mutation USED as its residue back when that caption was refused; it
+    claims now, so it can no longer serve). "Details of Payment" is
+    0605-1999's own next printed caption down the same page: a section
+    header that names no signature, no printed name and no signatory
+    detail, and never earns the line an input.
     """
-    fixtures.SIGNATURE_RULE_CAPTION_TEXT = "Title/Position of Signatory"
+    fixtures.SIGNATURE_RULE_CAPTION_TEXT = "Details of Payment"
 
 
 def prove_signature_rule(stream: Any) -> int:

@@ -1690,6 +1690,36 @@ def ruled_blank_field_box(cell: dict[str, Any], rules: Sequence[dict[str, Any]],
         tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink((rx0, ry0, rx1, ry1), ink)
         if tx1 - tx0 <= 0.0 or ty1 - ty0 <= 0.0:
             continue
+        # A glyph printed ON the line at its left end is the line's own
+        # printed PREFIX, and the writable surface starts after it: 2551M
+        # sets its item number "26" 1.68pt into its "Title/Position of
+        # Signatory" line (the only such site in the corpus -- every other
+        # claimed rule prints its item number BEFORE the line begins).
+        # `writing_box_clear_of_printed_ink` deliberately refuses to trim a
+        # glyph whose centre is inside the box, because in general "which
+        # half to keep" is a guess; on a WRITING LINE it is not -- reading
+        # order settles it. Anchored means the glyph starts within its OWN
+        # ink height of the current left edge, a self-referential bound
+        # with no tuned constant: an item number is at most one glyph tall,
+        # so a glyph one glyph-height into the line is still the prefix,
+        # while text printed mid-line (a filled-in blank) stays where it is
+        # for `inputs_over_printed_text` to refuse -- pre-printed ink deep
+        # in a line is a defect to report, never one to type over.
+        if ink is not None:
+            while True:
+                anchored = [
+                    (gx0, gy0, gx1, gy1)
+                    for gx0, gy0, gx1, gy1 in ink.intrusions(
+                        tx0, ty0, tx1, ty1)
+                    if gx1 > tx0 and gx0 - tx0 < (gy1 - gy0)
+                ]
+                if not anchored:
+                    break
+                tx0 = max(gx1 for _gx0, _gy0, gx1, _gy1 in anchored)
+                if tx1 - tx0 <= 0.0:
+                    break
+        if tx1 - tx0 <= 0.0:
+            continue
         boxes.append((tx0, ty0, tx1, ty1))
     if not boxes:
         return None
@@ -2196,6 +2226,33 @@ def _signature_line_caption(text: str) -> bool:
     return "signature" in normalised and "printed name" in normalised
 
 
+def _signatory_detail_caption(text: str) -> bool:
+    """Whether this run is one of BIR's signatory-detail captions -- the
+    words the corpus sets under the OTHER ruled lines of a jurat strip
+    (user decision, 2026-08-16: the Title/Position line of 0605's item 22A
+    strip "needs to have its own input field", generalised to the caption
+    family, never to one form). Three phrasings, measured corpus-wide
+    (build/ir, 53 bundles): "Title/Position of Signatory" on 8 runs (0605,
+    1600WP, 1604CF x2, 2550M x2, 2551M, 2553), "Title of Signatory" on 8
+    (the 1702 family, whose strips are field cells that already carry
+    inputs, so no binding arises there), "TIN of Signatory" on 5 (1600WP,
+    1604CF x2, 2550M x2).
+
+    A FULL match on the normalised run, never containment: 1604-E and
+    1604-F page 2 set the words "title of signatory and" INSIDE an
+    instruction paragraph, and a containment test would dedicate whatever
+    rule that paragraph happens to sit over. Normalisation collapses
+    1604CF's double-spaced "TIN of  Signatory" and strips 2553's leading
+    spaces; nothing else in the corpus comes close.
+    """
+    normalised = " ".join(text.split()).lower()
+    return normalised in {
+        "title/position of signatory",
+        "title of signatory",
+        "tin of signatory",
+    }
+
+
 # Float fuzz only, not a tuned tolerance: a caption's owning cell and the box
 # above it share the identical lattice wall coordinate, so the measured gap
 # over all 75 real bindings in this corpus is exactly 0.0pt -- see
@@ -2360,12 +2417,17 @@ class SignatureRuleWriting:
     A rule is claimed only when exactly one caption in a cell directly below
     (sharing this cell's own bottom wall, `SignatureLineBinding`'s own
     `SIGNATURE_LINE_ADJACENCY_EPSILON_PT`) names it -- its x-centre inside
-    the rule's own x-extent. 0605 rules three lines at this cell's own
-    bottom, and only two have any caption below them at all ("Title/Position
-    of Signatory" is not a signature caption); 2551M and 2553 each rule two,
-    and only one of the two has a caption below it. `RuledBlankWriting`'s own
-    precedent for ownership that does not resolve to exactly one claimant:
-    refused, not guessed at.
+    the rule's own x-extent. A claiming caption is either a signature
+    caption (`_signature_line_caption`) or a signatory-detail caption
+    (`_signatory_detail_caption`: "Title/Position of Signatory", "Title of
+    Signatory", "TIN of Signatory") -- the second family added by the
+    user's 2026-08-16 decision that the other ruled lines of a jurat strip
+    earn a typing surface exactly the way the signature line always has.
+    0605 rules three lines at this cell's own bottom: two signature
+    captions and one title caption, all three claimed; 2551M and 2553 each
+    rule two, the second under its own "Title/Position of Signatory".
+    `RuledBlankWriting`'s own precedent for ownership that does not resolve
+    to exactly one claimant still holds: refused, not guessed at.
 
     Where the box is drawn: reused whole, not re-derived --
     `ruled_blank_field_box`'s "the box sits ABOVE its rule, seated on it" is
@@ -2375,12 +2437,16 @@ class SignatureRuleWriting:
     it). `field_verdict` calls that function directly with this class's own
     claims; there is no second field-box function to keep in step with it.
 
-    Measured over this corpus (build/ir + build/layout, 53 bundles): 8 rules
-    across the 5 forms named above, plus a 9th this class reaches without
-    being told to look for it -- `2316-2021`'s own item 55 ("I declare...
-    qualified under substituted filing...") sets its rule and its caption's
-    owning cell directly adjacent, the identical shape, so it is claimed the
-    same way, not special-cased for the form.
+    Measured over this corpus (build/ir + build/layout, 53 bundles): 8
+    signature rules across the 5 forms named above, plus a 9th this class
+    reaches without being told to look for it -- `2316-2021`'s own item 55
+    ("I declare... qualified under substituted filing...") sets its rule
+    and its caption's owning cell directly adjacent, the identical shape,
+    so it is claimed the same way, not special-cased for the form. The
+    signatory-detail family adds 12 more, every one at an exact 0.0pt
+    shared wall, no new ambiguity anywhere: 0605 1 (the title line the
+    user asked after), 1600WP 2, 1604CF 3, 2550M 4, 2551M 1, 2553 1 --
+    23 claimed rules in all, with the two F226 gap sites below.
 
     **F226: the caption need not share the rule-owner's own wall exactly --
     it may sit across a small vertical GAP, provided nothing is printed in
@@ -2485,7 +2551,8 @@ class SignatureRuleWriting:
                         run for rid in (other.get("text_run_ids") or ())
                         for run in (runs_by_id.get(rid),)
                         if (run is not None
-                            and _signature_line_caption(run["text"])
+                            and (_signature_line_caption(run["text"])
+                                 or _signatory_detail_caption(run["text"]))
                             and rx0 <= (float(run["x0"]) + float(run["x1"])) / 2.0 <= rx1)
                     ]
                     if not captions:
@@ -2912,6 +2979,96 @@ def row_number_band(cell: dict[str, Any], runs_by_id: dict[str, dict[str, Any]],
     if ink is not None and ink.intrusions(ink_x1, y0, x1, y1):
         return None
     return (ink_x1, y0, x1, y1)
+
+
+ATC_CONSTANT_RE = re.compile(r"^[A-Z]{2} ?[0-9]{3}$")
+
+
+class PrintedDecoration:
+    """Cells the sheet DECORATES rather than offers for writing (F235/F237).
+
+    Three relations, every one census-first, every census recorded in the
+    findings ledger before a clause was written, and the user approved the
+    populations on the official sheets (2026-08-15 decisions page):
+
+    * **comb-separator-fill** -- a cell carrying a DEDICATED non-white fill
+      (the fill's own rectangle is the cell's, within 1pt) that sits BETWEEN
+      two character combs in its own row. 6 cells corpus-wide, all TIN group
+      separators: 2553-1999 p1c19/21/23 (peach rgb 1.0,0.8,0.6) and
+      1604cf-2008 p1c8/10/12 (grey 0.8902). Neither colour nor width is the
+      signal -- 1604CF's are as wide as real character boxes -- the signal is
+      decoration drawn FOR a cell between combs. Refuted on the way here:
+      width-alone (misses 1604CF), has-fill (strips 2,061 legitimate money
+      boxes on tint), dedicated-fill-alone (1,619 white writing knockouts),
+      dedicated-non-white-alone (2200AN's two writable schedule cells).
+    * **printed-constant** -- a cell INTERSECTED by a printed ATC-format
+      constant. Exactly 1 corpus-wide: 1800-2018 p1c186, the sliver the row
+      mosaic cut from the bottom of the sheet's ONE undivided 'DN 010' box.
+      The three legitimate ATC write-ins (1702MX/Q/RT second row) sit 3.5pt
+      BELOW their example constants with no overlap and are untouched.
+      Refuted on the way here: crossed-by-any-run (10 hits, mostly 2550M
+      payment boxes under caption leader dots -- real fields).
+    * **sub-glyph-height** -- a cell shorter than the smallest glyph the
+      document itself prints. Exactly 1 corpus-wide: 2551q-2018 p1c168,
+      0.88pt tall, an input nobody could see or use, surfaced by this
+      census rather than by a user.
+
+    The flip budget is EXACTLY 8 inputs corpus-wide and is asserted by the
+    corpus census below; a ninth flip is a regression, not a bonus.
+    """
+
+    def __init__(self, cells: "Sequence[dict[str, Any]]",
+                 fills: "Sequence[dict[str, Any]]",
+                 runs: "Sequence[dict[str, Any]] | None",
+                 min_glyph_height_pt: float | None):
+        self._reasons: dict[str, str] = {}
+        rows: dict[tuple[float, float], list[dict[str, Any]]] = {}
+        for cell in cells:
+            key = (round(float(cell["y0"]), 1), round(float(cell["y1"]), 1))
+            rows.setdefault(key, []).append(cell)
+        constants = [
+            run for run in (runs or ())
+            if ATC_CONSTANT_RE.fullmatch(str(run.get("text", "")).strip())
+        ]
+        for row in rows.values():
+            row.sort(key=lambda item: float(item["x0"]))
+            for index, cell in enumerate(row):
+                if isinstance(cell.get("comb"), dict):
+                    continue
+                x0, y0 = float(cell["x0"]), float(cell["y0"])
+                x1, y1 = float(cell["x1"]), float(cell["y1"])
+                cell_id = str(cell["id"])
+                if (min_glyph_height_pt is not None
+                        and y1 - y0 < min_glyph_height_pt):
+                    self._reasons[cell_id] = "sub-glyph-height"
+                    continue
+                if any(min(x1, float(r["x1"])) - max(x0, float(r["x0"])) > 1.0
+                       and min(y1, float(r["y1"])) - max(y0, float(r["y0"]))
+                       > 0.75
+                       for r in constants):
+                    self._reasons[cell_id] = "printed-constant"
+                    continue
+                dedicated = any(
+                    abs(float(f["x0"]) - x0) <= 1.0
+                    and abs(float(f["x1"]) - x1) <= 1.0
+                    and abs(float(f["y0"]) - y0) <= 1.0
+                    and abs(float(f["y1"]) - y1) <= 1.0
+                    and not (
+                        (f.get("gray") is not None and float(f["gray"]) >= 0.99)
+                        or (f.get("rgb")
+                            and all(float(v) >= 0.99 for v in f["rgb"])))
+                    for f in fills)
+                if not dedicated:
+                    continue
+                left = row[index - 1] if index > 0 else None
+                right = row[index + 1] if index + 1 < len(row) else None
+                if (left is not None and isinstance(left.get("comb"), dict)
+                        and right is not None
+                        and isinstance(right.get("comb"), dict)):
+                    self._reasons[cell_id] = "comb-separator-fill"
+
+    def reason(self, cell_id: str) -> str | None:
+        return self._reasons.get(str(cell_id))
 
 
 class RowNumberWriting:
@@ -3792,6 +3949,7 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                   knockout_specify: "KnockoutSpecifyWriting | None" = None,
                   row_numbers: "RowNumberWriting | None" = None,
                   signature_rules: "SignatureRuleWriting | None" = None,
+                  decoration: "PrintedDecoration | None" = None,
                   ) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
@@ -3957,6 +4115,13 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
                 float(cell["x1"]), float(cell["y1"])):
             return False, "bureau"
         return True, "ruled-blank"
+    if decoration is not None:
+        decoration_reason = decoration.reason(cell["id"])
+        if decoration_reason is not None:
+            # F235/F237, FIRST: these are refutations by the sheet's own
+            # geometry (its fill, its printed constant, its own smallest
+            # glyph), not competing claims -- no later branch may overrule.
+            return False, decoration_reason
     if (cell["kind"] == "label" and signature_rules is not None
             and signature_rules.for_cell(cell["id"])):
         # F221 case 1: routed through BOTH `BureauReservation` and `shading`
@@ -4263,11 +4428,15 @@ class FieldPlan:
                 SignatureRuleWriting(page["cells"], page_index, rules, runs,
                                      fillable_metrics)
                 if rules is not None and runs is not None else None)
+            decoration = PrintedDecoration(
+                page["cells"], fills or (), runs,
+                (fillable_metrics or {}).get("glyph_height_pt"))
             for cell in page["cells"]:
                 fillable, reason = field_verdict(cell, ink, shading, reservation,
                                                  ruled_blanks, checkbox_squares,
                                                  signature_boxes, knockout_specify,
-                                                 row_numbers, signature_rules)
+                                                 row_numbers, signature_rules,
+                                                 decoration)
                 if not fillable:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
@@ -9287,6 +9456,11 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
         p["cells"], int(p["index"]), rules_by_page.get(int(p["index"]), ()),
         runs_by_page.get(int(p["index"]), ()), fillable_metrics)
         for p in layout["pages"]}
+    decoration = {int(p["index"]): PrintedDecoration(
+        p["cells"], fills_by_page.get(int(p["index"]), ()),
+        runs_by_page.get(int(p["index"]), ()),
+        (fillable_metrics or {}).get("glyph_height_pt"))
+        for p in layout["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
                                  shading.get(int(p["index"])),
@@ -9296,7 +9470,8 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
                                  signature_boxes=signature_boxes.get(int(p["index"])),
                                  knockout_specify=knockout_specify.get(int(p["index"])),
                                  row_numbers=row_numbers.get(int(p["index"])),
-                                 signature_rules=signature_rules.get(int(p["index"])))[0]]
+                                 signature_rules=signature_rules.get(int(p["index"])),
+                                 decoration=decoration.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -10427,12 +10602,34 @@ def signature_rule_writing_assertions(plan: dict[str, Any],
            "a signature caption directly below it, is claimed",
            f"{base}", failures)
 
-    no_caption = claim([OWNER, CAPTION_CELL], [owned_rule()],
-                       [caption_run("Title/Position of Signatory")])
-    _check(not no_caption,
-           "the identical rule with no signature caption below it (0605's "
-           "own \"Title/Position of Signatory\" line) is refused",
-           f"{no_caption}", failures)
+    title_caption = claim([OWNER, CAPTION_CELL], [owned_rule()],
+                          [caption_run("Title/Position of Signatory")])
+    _check(list(title_caption) == [owned_rule()],
+           "the identical rule under a signatory-detail caption (0605's own "
+           "\"Title/Position of Signatory\" line) is claimed too -- the "
+           "user's 2026-08-16 decision",
+           f"{title_caption}", failures)
+
+    prose = claim([OWNER, CAPTION_CELL], [owned_rule()],
+                  [caption_run(
+                      "provide the necessary details (e.g. title of "
+                      "signatory and TIN)")])
+    _check(not prose,
+           "an instruction paragraph CONTAINING \"title of signatory\" "
+           "(1604-E/F page 2's own text) is refused -- the detail test is "
+           "a full match, never containment",
+           f"{prose}", failures)
+
+    both_cell = {**CAPTION_CELL,
+                 "text_run_ids": [run_id(page_index, 0),
+                                  run_id(page_index, 1)]}
+    two_captions = claim([OWNER, both_cell], [owned_rule()],
+                         [caption_run(),
+                          caption_run("Title/Position of Signatory")])
+    _check(not two_captions,
+           "one rule named by BOTH a signature and a detail caption is "
+           "still ambiguous: refused, not guessed at",
+           f"{two_captions}", failures)
 
     underscore = claim([OWNER, CAPTION_CELL], [owned_rule(origin="text-underscore")],
                        [caption_run()])
