@@ -6274,30 +6274,11 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 if failure is not None
             ]
         )
-        legacy_slot_x = [
-            float(value) for value in (legacy_comb.get("slot_x") or ())]
-        # DECISION A at the subject layer: a legacy comb none of whose
-        # compartments form a run of character boxes may keep its reviewed
-        # subject (the denominator is frozen history) but may NOT be
-        # published into a cell as an active comb -- it takes the retained
-        # path and its retirement is a reviewed transition, exactly like
-        # the 28 subjects of this shape the user already adjudicated.
-        # ... and only when nothing CURRENT can own the cell: a healthy
-        # current comb (1600WP p1c74's four rule-legal TIN boxes over a
-        # rule-refused coarse legacy band) must keep its active subject and
-        # reach the ordinary reconciliation. The rule forbids publishing
-        # the refused LEGACY topology by continuity -- never the current
-        # detector's own measurement.
-        compartment_rule_refused = bool(
-            len(legacy_slot_x) >= 2 and not compartment_runs(legacy_slot_x)
-            and resolved is None and final_candidate_owned is None)
-        previously_retained = (
-            cell is None
-            or (cell.get("comb") is None
-                and final_candidate is None
-                and not subject["has_final_support"])
-            or no_owned_band)
-        if (previously_retained or compartment_rule_refused):
+        if (cell is None
+                or (cell.get("comb") is None
+                    and final_candidate is None
+                    and not subject["has_final_support"])
+                or no_owned_band):
             replacements = erased_edge_replacement_candidates(subject)
             owner = (
                 source_certified_replacement_owner(replacements)
@@ -6363,17 +6344,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 ]
             else:
                 mapped = [cell]
-            if not previously_retained:
-                # Only the compartment rule brought this subject here, so
-                # only that reason is published. The guard order protects
-                # every subject the OLD routing already retains -- their
-                # reviewed reasons (and thus their certificates' criteria)
-                # do not move even where their legacy combs would also fail
-                # the rule, which the 2026-08-16 census shows is 28 of 30.
-                retained_reason_codes = [
-                    "emission-suppressed-compartment-rule",
-                ]
-            elif cell is None:
+            if cell is None:
                 retained_reason_codes = [
                     "emission-suppressed-no-rectangular-owner",
                     "painted-edge-partition",
@@ -6718,6 +6689,72 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         raise ValueError(
             "refuted comb has no ledger subject: "
             + ", ".join(sorted(refuted)))
+
+    # DECISION A (2026-08-16), the compartment-rule sweep -- deliberately
+    # AFTER the caption refutation above and in its exact shape. The two
+    # passes catch the same disease in different tissue: a false comb whose
+    # compartments hold PRINTED TEXT is refuted by the caption pass with its
+    # richer glyph-count evidence and keeps its reviewed caption-block
+    # reason; a false comb whose compartments are EMPTY paper (2551M p2c13's
+    # column-rule pair, 1604CF p2c73's grid cells -- nothing printed for the
+    # caption pass to read) is caught here by width alone: no run of
+    # character-box compartments survives the rule, so the cell's published
+    # comb comes off and the subject retains, emitting nothing, blocking,
+    # awaiting review. Order is precedence: an earlier attempt routed these
+    # in the subject loop and stole eleven caption-block subjects on eight
+    # forms from the pass above, restamping reviewed reasons and mismatching
+    # every one of their certificates.
+    rule_retained: dict[str, dict[str, Any]] = {}
+    for cell in cells:
+        comb = cell.get("comb")
+        if comb is None:
+            continue
+        slot_x = [float(value) for value in (comb.get("slot_x") or ())]
+        if len(slot_x) < 2 or compartment_runs(slot_x):
+            continue
+        cell.pop("comb", None)
+        cell.pop("combs", None)
+        rule_retained[str(cell["subject_key"])] = {
+            "cell": cell, "comb": comb}
+    for index, subject in enumerate(subject_ledger):
+        evidence = rule_retained.pop(str(subject["subject_key"]), None)
+        if evidence is None:
+            continue
+        cell = evidence["cell"]
+        if (subject.get("cell_id") != cell["id"]
+                or subject.get("legacy_cell_id") != cell["id"]
+                or [q(float(value)) for value in subject["legacy_bbox"]]
+                != [q(float(cell[name])) for name in ("x0", "y0", "x1", "y1")]):
+            raise ValueError(
+                f"{cell['id']}: rule-refused comb subject is not an "
+                f"identity mapping onto its own rectangle")
+        subject_ledger[index] = {
+            "subject_key": subject["subject_key"],
+            "legacy_cell_id": subject["legacy_cell_id"],
+            "legacy_bbox": subject["legacy_bbox"],
+            "cell_id": None,
+            "mapped_partition_cell_ids": [subject["legacy_cell_id"]],
+            "mapped_partition_subject_keys": [subject["subject_key"]],
+            "state": "retained_unresolved",
+            "emission": "suppressed",
+            "reason_codes": ["emission-suppressed-compartment-rule"],
+            "legacy_comb": evidence["comb"],
+            "requires_independent_evidence": True,
+            "permitted_transitions": [
+                "active_composite",
+                "retired_proven_false",
+            ],
+            "blocks_gate": True,
+        }
+        cell["comb_refutation"] = {
+            "reason_codes": ["emission-suppressed-compartment-rule"],
+            "refused_slot_x": [q(float(value))
+                               for value in evidence["comb"]["slot_x"]],
+        }
+    if rule_retained:
+        raise ValueError(
+            "rule-refused comb has no ledger subject: "
+            + ", ".join(sorted(rule_retained)))
 
     page_area_fills = () if area_fills is None else area_fills
     for cell in cells:

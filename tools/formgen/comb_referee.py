@@ -432,8 +432,12 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # retained only when nothing CURRENT can own the cell -- 1600WP p1c74's
 # regression) and the reunification/ink-trim fixture geometries moved under
 # the bound. Same DECISION A lineage as the entry above.
+# Re-pinned same-day again: the compartment-rule retention moved from the
+# subject loop to a dedicated sweep AFTER the caption refutation, in its
+# exact shape -- the loop-order version stole eleven caption-block
+# subjects on eight forms and mismatched their reviewed certificates.
 LATTICE_PRODUCER_SHA256 = (
-    "f0a3d09e94653da54d1c9ef99325d477cad9b4965d1a11e72b3739839d24a519"
+    "cedf3f1f1a689e6fea610085250d52ff24a1b6bb3f5dc9ce0fc24353c1ad5762"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -1204,7 +1208,7 @@ if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
 EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "0605-1999": 1,
     "1600wp-2010": 2,
-    "1604cf-2008": 1,
+    "1604cf-2008": 2,
     "1604f-2018": 1,
     "1606-2018": 1,
     "1707a-2021": 1,
@@ -1217,7 +1221,7 @@ EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "2200s-2018": 1,
     "2200t-2022": 2,
     "2550m-2007": 4,
-    "2551m-2002": 3,
+    "2551m-2002": 4,
     "2553-1999": 2,
 }
 EXPECTED_RETAINED_SUBJECTS = sum(EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
@@ -2393,20 +2397,20 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     # Input count 45,548 -> 45,549 (+1). `inputs_over_printed_text` stays 0
     # forms/0 offenders. Browser-verified: cell p1c214, Tab press 64, typed
     # and read back verbatim.
-    "0605-1999": "d69938d3719dd8078dcba5ca19a4d04a4f146b08b477511e5a7c1786ba8ced64",
+    "0605-1999": "8a72b9c32f2a2dc5001f713f967605ba7c914b4f19a9e72dd7c60ed1c5bab4e0",
     "0619e-2018": "f2575f26a27d2e58a9ecbba461c67bdb7b293e270274d589da1bfd433e4ace51",
     "0619f-2018": "4d0b8447d14f56c47becc9aff4806562a25bd2012b10383b36f7caae5de89519",
     "0620-2019": "92697df81ac7b1b2a3dddb8e25143b6bd9f70f9077cbe4e654d6b4bf3d546127",
     "1600-pt-2018": "8f5056587fb0175179364ba1ce84a0d14a4eda4b2369de5d3d3e719a72de95b7",
     "1600-vt-2018": "f69ebf582b846345a32e34d91d7e7b0f6ff589d13dbc4a51e6094ccdc3fad08d",
-    "1600wp-2010": "52c2f96df56e04e7cf91999a7d6ed1d58ebc96767e7fdb085d47f09c31f95862",
+    "1600wp-2010": "ab1e006ade827451181a305fc064f95515dda96fcc4d07a50ee804eb3326e54c",
     "1601-fq-2020": "4a4cc47645c07ab8a4430d2e8ab1212cbbe02b1d25f73c0ec2c379908b6866d0",
     "1601c-2018": "ce9361ba0f720c6f25e95de9f26eb315c2837730baef86c975f22f310be7ab9e",
     "1601eq-2019": "b9ebe5e60b4b0583755c3320d4197c3bea6b1f2d9179e75433ac04249191294f",
     "1602q-2019": "68ff4f254ca15d3124646099b21d6c3088f8cee8ec4f08a694a50ea9515b4fd1",
     "1603q-2018": "c0447994e444036275ff6297e69d5378e412242be86be673888040d25aa7f6f7",
     "1604c-2018": "1115dd91d6f2a985749a487aedf7c142bc07a0d825c2585b5952610d14f53563",
-    "1604cf-2008": "aa5f405c2af515ba035b2c68e9c1214d98f39823efefe6fa41a94d25b2a44332",
+    "1604cf-2008": "9719777bc0cacb3be6f39333fff4ecbe01422f0c907485db6d0db262f293a965",
     "1604e-2018": "64e2ea8da9a38f21df98cdbadc861206b7fd8baeedd8387c5dc98f771f5f821d",
     "1604f-2018": "60ae661e938892a4186f25f7febb3eb846882a878d42717efa3d25ddad876864",
     "1606-2018": "4e7d51d0bde8223137156140882cf9c3015afbe2f00cd31b5f7f004c45d92099",
@@ -2440,12 +2444,12 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2200t-2022": "ad66c8a6e4d3195a6a3b4ba181c730f81cad5f3f16978ccdc514fa84ff2dd521",
     "2316-2021": "42e9979b5032e1eb77de4ae7290b68cd6fabfdb2168b86d93f4261356741d674",
     "2550-ds-2025": "ca244dfa8be687e2d11c1951f4aed6d37f908d2c2b476c9488af3025def19074",
-    "2550m-2007": "84579b45b6027ddba8636644ae288aff2bd362536d8b4e62d058dd4c2a71ac20",
+    "2550m-2007": "135edefefe6fd7950e0077bf7af7cfc405bfd2701926bf7ff18c2f8f5fd73632",
     "2550q-2024": "12b3ba5c14757efb3bf38befd17457f723423574fce98163eb6e7a1cce3c24fa",
-    "2551m-2002": "6bbb32cee00e6f037015896b25ea4ea6e6bb65deed58c8b01330fa4ae7310cf2",
+    "2551m-2002": "7eaff42dc757675f661be5609d64b9926232315b8f8a006405d9df8bb9ad818b",
     "2551q-2018": "10389fc047d04e83a6b3175f0c37ca4b7ad99015d17f873b88bf71254d669ba3",
     "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
-    "2553-1999": "e2236e7f7ee1f0404482b8b34ea62040b11c45bcf7e89f7bbbe42d0c5743e1fb",
+    "2553-1999": "e7156fc6438f75e4a218ba2275e28d5cd3e63448f6d43e4a2b6015ab1e6d7997",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -14054,7 +14058,7 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     # count is zero, so "how many subjects does this form publish" and "how many
     # of them are suppressed" stay separable in the self-test too. The retained
     # census gets its own fixture further down, on a slug that really has one.
-    ledger_fixture_slug = "1604e-2018"
+    ledger_fixture_slug = "1702mx-2018c-attachment"
     assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(ledger_fixture_slug, 0) == 0
 
     def synthetic_ledger_layout() -> dict[str, Any]:
@@ -14223,20 +14227,25 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     assert unresolved_result["counts"]["blocking"] == 1
 
     inference_ledger = clone(ledger_fixture)
+    # Identity AND geometry sit clear of the synthetic 0..N run for every
+    # slug total (the run's cells occupy x = 3*index): at 15 subjects the
+    # old x 63..65 was free paper, at 108 it was synthetic cell 21's exact
+    # bbox and collided on subject_key, which is this fixture's own
+    # duplicate-identity guard firing on the fixture itself.
     inferred_cell = {
-        "id": "p1c21",
-        "subject_key": "p1@63.00,0.00,65.00,10.00",
-        "x0": 63.0, "y0": 0.0, "x1": 65.0, "y1": 10.0,
+        "id": "p1c9021",
+        "subject_key": "p1@9021.00,0.00,9023.00,10.00",
+        "x0": 9021.0, "y0": 0.0, "x1": 9023.0, "y1": 10.0,
     }
     inference_ledger["pages"][0]["cells"].append(inferred_cell)
     inference_ledger["pages"][0]["comb_inferences"].append({
         "subject_key": inferred_cell["subject_key"],
         "cell_id": inferred_cell["id"],
-        "bbox": [63.0, 0.0, 65.0, 10.0],
+        "bbox": [9021.0, 0.0, 9023.0, 10.0],
         "state": COMB_INFERENCE_STATE,
         "reason_codes": ["no-legacy-subject"],
         "inferred_comb": synthetic_ledger_comb(
-            63.0, 65.0, "unresolved", ["no-legacy-subject"]),
+            9021.0, 9023.0, "unresolved", ["no-legacy-subject"]),
         "requires_independent_evidence": True,
         "permitted_transitions": ["active_reviewed"],
         "blocks_gate": True,
@@ -14288,14 +14297,18 @@ def _self_test_body(_saved_resolutions, _saved_transitions) -> int:
     #
     # It did exactly that at r20, which is the check working: 2551M went 15 -> 18
     # subjects and 1 -> 3 retained, so it is no longer paired with 1604-E and no
-    # longer a retained-ONE slug. 1604-CF replaces it -- 15 subjects, exactly one
-    # retained, the same pairing on today's measured census -- and 2551M is
-    # promoted to the retained-MANY negative control below, where 0605 used to
-    # sit. 0605 had to move for the same reason: it went 3 -> 1 retained, so it
-    # would now reject this fixture on its total alone and stop testing the
-    # retained census at all. Neither the fixture nor the rule was weakened;
-    # only the slugs that satisfy them were re-measured.
-    retained_fixture_slug = "1604cf-2008"
+    # longer a retained-ONE slug. 1604-CF replaced it then, and moved again
+    # on 2026-08-16 when DECISION A's transition took it 1 -> 2 retained
+    # (p2c73 joined the suppressed census), breaking the (15, 15) pairing
+    # with 1604-E outright -- no 15-subject retained-ONE slug exists on
+    # today's census. The pairing moves to (108, 108): 1702-MX's attachment
+    # (108 subjects, retained zero) carries the ledger fixture and 1800
+    # (108 subjects, exactly one retained -- p1c4, the reviewed exception's
+    # own subject) carries the retained census. 2551M stays the
+    # retained-MANY negative control, now at four. Neither the fixture nor
+    # the rule was weakened; only the slugs that satisfy them were
+    # re-measured, which is this assertion doing its job a third time.
+    retained_fixture_slug = "1800-2018"
     assert (EXPECTED_COMBS_BY_SLUG[retained_fixture_slug]
             == EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug])
     assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG[retained_fixture_slug] == 1

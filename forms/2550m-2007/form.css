@@ -29,5 +29,3 @@
 .fh7 { font-size:8.23pt;line-height:9.12pt;letter-spacing:-0.0857pt }
 .fh8 { font-size:8.24pt;line-height:9.136pt;letter-spacing:-0.0858pt }
 .fh9 { font-size:8.25pt;line-height:9.6pt;letter-spacing:-0.0859pt }
-.doc-link { position:absolute;left:0;top:0;z-index:9;font:12px/1.5 system-ui,-apple-system,sans-serif;padding:2px 8px;background:#fff;color:#0645ad;text-decoration:underline }
-@media print { .doc-link{display:none} }
