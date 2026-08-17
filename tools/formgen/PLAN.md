@@ -6,10 +6,11 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-18, named Stage 1 batch on `gol/tin-stage5`).**
-Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Do not fold later
-rows into those PRs. This layer commits the 53-form corpus produced by
-that producer so C01–C07 can re-anchor against it.
+**Active queue (2026-08-18, P0b sitting accepted on `gol/tin-stage5`).**
+Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
+batch is `ddac6058`. Uriah sat C01–C07 at http://127.0.0.1:4191/ and
+approved all seven. Status is `applied`, not `verified`. Do not fold
+later rows into those PRs.
 
 Visual rule the user named (0605 screenshot, 2026-08-17): a **charbox** is
 an outer rectangle plus short bottom hair ticks that do not run the full
@@ -28,8 +29,8 @@ does.
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | 2550M page-2 first Schedule 1 row (horizontal walls → 4-row growable); 0605 items 17 then 18 tab. Specify still a lower band. H-walls that would fuse into an existing y-line are skipped (2551M/2553 reviewed combs). | 1 / UX | Landed. |
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
-| **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch is `ddac6058`. This commit re-anchors C01–C07 against it (C01 first group `p1c116`→`p1c127`; P2 hairlines inside the TIN span are dropped into the knockout). `correct.py --batch ddac6058` is next; status stays `declared`. | 2 | Serial. Ledger binds the named batch. |
-| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Blocked on P0b. |
+| **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Status `applied`, not `verified` (`proven: false` until audit.py is seen to fail on the corrected tree). | 2 | Sitting accepted. Do not call this verification. |
+| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** P0b sitting is done. Still blocked on **stable field identity** (R2: ids are `p<page>@<bbox>`; 42/146 cited ids already dead). |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
@@ -40,8 +41,8 @@ file):
    (b) every checkbox-sized square with no `maxlength`.
 2. **One** implementer for P2 commit, then **one** for P1 charbox split.
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
-4. The named Stage 1 batch is this commit. Re-anchor C01–C07 against it
-   before starting Stage 3.
+4. The named Stage 1 batch is `ddac6058` and C01–C07 are applied against
+   it. Stage 3 still does not start: freeze field identity first (R2).
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
 

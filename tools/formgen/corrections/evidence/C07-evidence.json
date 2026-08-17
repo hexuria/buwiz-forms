@@ -2,7 +2,7 @@
   "schema_version": "0.1.0-provisional",
   "id": "C07",
   "title": "1604CF item 4: the TIN branch code prints four compartments, and the only valid TIN is 3-3-3-5",
-  "status": "declared",
+  "status": "applied",
   "form": {
     "code": "1604CF",
     "revision": "2008",
@@ -481,7 +481,7 @@
       "a determinism re-run — it runs the writer twice and both halves drift together (PLAN.md, `3bf32c8`)",
       "tin-branch-census-20260808.json's verdict for this bundle — it says not-measurable, and a verifier that reads it will conclude nothing rather than check anything"
     ],
-    "status": "not yet verified — nothing has been applied. This record is `declared`, and the effect it declares is what the verifier will be held to. It must not be promoted to `verified` on any evidence produced by the applier itself. Note that this record's AUTHORITY is weaker than C01's and no amount of verification strengthens it: verification can show that five compartments were emitted, never that BIR wants five."
+    "status": "not yet verified — Uriah sat the applied tree on 2026-08-18 and approved chrome and the lock rule. That is not independent re-derivation of expected_effect. Divergence checks remain proven:false until audit.py is seen to fail on forms-corrected/. Do not promote to verified on the sitting or on the applier manifest."
   },
   "provenance": {
     "authored_at": "2026-08-17",
@@ -494,8 +494,8 @@
       "tools/formgen/corrections/evidence/measure_tin_branch_census.py — read as source, to explain why its 2026-08-08 run reported this bundle not-measurable; not re-run"
     ],
     "review": {
-      "state": "unreviewed",
-      "note": "Authored by an agent. Nothing here promotes anything: no capability flag, no release_ready, no allowlist, and nothing under forms-corrected/ was written. The user reviews the record before an applier is run against this bundle. Reviewer's attention is drawn to two things above all: the authority is a project rule plus a declared gap, weaker than C01's harvested declaration, and the equal division spends the consumed batch's 0.36pt horizontal insets."
+      "state": "user-reviewed",
+      "note": "Uriah reviewed the applied tree on 2026-08-18 at http://127.0.0.1:4191/ and approved C01–C07 (even 3-3-3-5; lock 00000 only on C01 and C07). Verdict file: tools/formgen/corrections/evidence/tin-stage2-sitting-20260818.json. Status is applied, not verified: the sitting is a human check of chrome and the lock rule, not an independent re-derivation of expected_effect, and divergence.proven stays false until audit.py is seen to fail on the corrected tree."
     }
   }
 }

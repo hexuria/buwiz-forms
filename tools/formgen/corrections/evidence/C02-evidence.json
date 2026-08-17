@@ -2,7 +2,7 @@
   "schema_version": "0.1.0-provisional",
   "id": "C02",
   "title": "0605 item 9: the TIN branch code prints three compartments, BIR's own runtime declares five",
-  "status": "declared",
+  "status": "applied",
   "form": {
     "code": "0605",
     "revision": "1999",
@@ -467,7 +467,7 @@
       "this record's own arithmetic on a string copy of the batch — the author's self-check is not verification",
       "a determinism re-run — it runs the writer twice and both halves drift together (PLAN.md, `3bf32c8`)"
     ],
-    "status": "not yet verified — the applier does not exist, no corrected tree has been written, and no check in divergence.checks_that_must_report_it has been SEEN to fail. This record is `declared`, and the effect it declares is what the verifier will be held to. It must not be promoted to `verified` on any evidence produced by the applier itself or by the agent that authored it."
+    "status": "not yet verified — Uriah sat the applied tree on 2026-08-18 and approved chrome and the lock rule. That is not independent re-derivation of expected_effect. Divergence checks remain proven:false until audit.py is seen to fail on forms-corrected/. Do not promote to verified on the sitting or on the applier manifest."
   },
   "provenance": {
     "authored_at": "2026-08-17",
@@ -481,8 +481,8 @@
       "a string-copy application of the ledger entry's find/replace, in memory, to confirm the anchor and the declared counts — author's self-check, not verification, and nothing was written"
     ],
     "review": {
-      "state": "unreviewed",
-      "note": "Authored by an agent. Nothing here promotes anything: no capability flag, no release_ready, no allowlist, no pin moved. The user reviews the record before an applier is written, and the applier is a separate reviewed change."
+      "state": "user-reviewed",
+      "note": "Uriah reviewed the applied tree on 2026-08-18 at http://127.0.0.1:4191/ and approved C01–C07 (even 3-3-3-5; lock 00000 only on C01 and C07). Verdict file: tools/formgen/corrections/evidence/tin-stage2-sitting-20260818.json. Status is applied, not verified: the sitting is a human check of chrome and the lock rule, not an independent re-derivation of expected_effect, and divergence.proven stays false until audit.py is seen to fail on the corrected tree."
     }
   }
 }
