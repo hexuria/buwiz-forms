@@ -111,7 +111,7 @@
       "2000 Guide Jan 2018.pdf"
     ]
   },
-  "html_bytes": 770727,
+  "html_bytes": 771392,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

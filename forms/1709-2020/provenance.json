@@ -27,7 +27,50 @@
   "images": 4,
   "cells": 403,
   "comb_cells": 19,
-  "growables": [],
+  "growables": [
+    {
+      "page": 1,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    },
+    {
+      "page": 1,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    },
+    {
+      "page": 1,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    },
+    {
+      "page": 1,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    },
+    {
+      "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    },
+    {
+      "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    },
+    {
+      "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 12.0
+    }
+  ],
   "sources": [
     {
       "role": "form",
@@ -40,7 +83,7 @@
     "inline_pages": [],
     "standalone_pdfs": []
   },
-  "html_bytes": 515976,
+  "html_bytes": 579680,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

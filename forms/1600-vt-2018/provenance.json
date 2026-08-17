@@ -32,6 +32,12 @@
       "rows": 5,
       "capacity": 5,
       "pitch_pt": 18.0
+    },
+    {
+      "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 14.88
     }
   ],
   "sources": [
@@ -78,7 +84,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 529546,
+  "html_bytes": 542804,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -30,6 +30,12 @@
   "growables": [
     {
       "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 14.28
+    },
+    {
+      "page": 2,
       "rows": 5,
       "capacity": 5,
       "pitch_pt": 14.28
@@ -79,7 +85,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 558610,
+  "html_bytes": 566718,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
