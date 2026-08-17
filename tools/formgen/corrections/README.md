@@ -167,7 +167,7 @@ human verdict or an explicit skip.
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | Tab: 0605 17 then 18; 2550M page-2 first schedule row (horizontal walls). | Stage 1 lattice. TIN overlay is a later batch. |
 | **P1+P1b** | `gol/tin-stage4` (this commit, stacked on #18) | Charbox hair ticks and X-squares stamp `maxlength="1"`; stay `type=text`. | Stage 1. Never a TIN record. |
 | **P0b** | `gol/tin-stage5` | Named Stage 1 batch `ddac6058`. C01–C07 re-anchored and applied. Sitting 2026-08-18: Uriah approved all seven ([`evidence/tin-stage2-sitting-20260818.json`](evidence/tin-stage2-sitting-20260818.json)). | Stage 2. Sitting accepted. Status `applied`, not `verified`. |
-| **I0** | `gol/field-identity` | Durable identity catalog: seven TIN strips, four groups each (28 identities). `p1cN` is a hint. | Not a mapper. Stage 3 still blocked. |
+| **I0** | `gol/field-identity` | Durable identity catalog: 180 TIN-strip identities (C01–C07 seed plus 38 corpus strips). `p1cN` is a hint. | Not a mapper. Stage 3 still blocked. |
 | **—** | blocked | Stage 3 map | Catalog is seeded, not coverage. G02 / G03 / G04 still open. |
 
 Status on C01–C07 is `applied` after the 2026-08-18 sitting. It is not `verified`: the sitting is chrome and the lock rule, not an independent re-derivation of `expected_effect`, and every divergence check stays `proven: false` until `audit.py` is seen to fail on `forms-corrected/`.

@@ -11,13 +11,15 @@ quantised bbox. Both move when the lattice changes (PLAN.md risk R2). A field
 identity is a published id such as `2550m-2007/p1/tin-branch`, bound to the
 printed box on the pinned PDF. The HTML cell id is a hint.
 
-Resolution puts the center of an emitted fillable field (`data-cell-kind=
-"field"`, comb or text) inside that printed box. Exactly one hit, whose
-`id` equals the hint, is success. A unique hit with a different `id` is
-`html_id_hint_stale` — update the catalog in the same commit as the batch;
-do not mint a new identity. Zero or two hits cannot be resolved and must
-not be guessed. Raw overlap is not the test: Stage 2 reflow makes
-neighbouring TIN groups nick each other's old edges.
+Resolution puts the center of an emitted fillable field inside that
+printed box. Fillable means `data-cell-kind` is `field` or `mixed` and
+`data-field-kind` is set (comb or text). G11 mixed combs are the branch
+identity when the sheet pre-prints `000` and emit refuses empty slots.
+Exactly one hit, whose `id` equals the hint, is success. A unique hit
+with a different `id` is `html_id_hint_stale` — update the catalog in the
+same commit as the batch; do not mint a new identity. Zero or two hits
+cannot be resolved and must not be guessed. Raw overlap is not the test:
+Stage 2 reflow makes neighbouring TIN groups nick each other's old edges.
 
 This is not Stage 3: nothing writes `name="frm2550m:txtBranchCode"`.
 This is not verification of C01–C07: overlap is not `expected_effect`.
@@ -63,7 +65,12 @@ MATCH_KINDS = frozenset({"comb", "field"})
 
 
 class FieldCollector(html.parser.HTMLParser):
-    """Every fillable field box. Ignores knockouts, separators, and labels."""
+    """Every fillable field box. Ignores knockouts, separators, and labels.
+
+    G11 mixed combs (`data-cell-kind=mixed` + `data-field-kind`) are fillable:
+    the sheet pre-printed `000` in the branch, so emit keeps the mixed cell
+    instead of five empty slots. That cell is the identity.
+    """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -73,11 +80,12 @@ class FieldCollector(html.parser.HTMLParser):
         if tag != "div":
             return
         data = {key: value or "" for key, value in attrs}
-        if data.get("data-cell-kind") != "field":
+        if data.get("data-cell-kind") not in ("field", "mixed"):
             return
         # TIN dash separators are field cells with no field-kind. After the
         # even reflow their centers sit inside the previous group's printed
-        # box (C04 peach, C07 grey). They are not identities.
+        # box (C04 peach, C07 grey). They are not identities. Mixed cells
+        # without a field-kind are labels-with-ink, not the comb.
         if not data.get("data-field-kind"):
             return
         box = parse_style_box(data.get("style", ""))
@@ -347,6 +355,14 @@ def _text(html_id: str, left: float, top: float, width: float, height: float) ->
     )
 
 
+def _mixed_comb(html_id: str, left: float, top: float, width: float, height: float) -> str:
+    return (
+        f'<div id="{html_id}" class="c" data-cell-kind="mixed" '
+        f'data-field-kind="comb" data-comb-slots="5" '
+        f'style="left:{left}pt;top:{top}pt;width:{width}pt;height:{height}pt"></div>'
+    )
+
+
 def _sample_record(**overrides: object) -> dict:
     record: dict[str, object] = {
         "id": "fixture/p1/tin-branch",
@@ -378,10 +394,17 @@ def self_test() -> int:
     catalog, errors = load_catalog(DEFAULT_CATALOG)
     check("shipped catalog is well formed", not errors, "; ".join(errors[:3]))
     if catalog:
-        check("shipped catalog covers the seven TIN strips (4 groups each)",
-              len(catalog.get("records", [])) == 28,
-              str(len(catalog.get("records", []))))
-        ids = [record["id"] for record in catalog["records"]]
+        records = catalog.get("records", [])
+        seed = [record for record in records if record.get("correction_id")]
+        check("C01–C07 seed identities are still present (28)",
+              len(seed) == 28
+              and {record["correction_id"] for record in seed}
+              == {"C01", "C02", "C03", "C04", "C05", "C06", "C07"},
+              str(len(seed)))
+        check("catalog covers the measured TIN-strip class (180)",
+              len(records) == 180,
+              str(len(records)))
+        ids = [record["id"] for record in records]
         check("shipped identity ids are unique", len(ids) == len(set(ids)))
         check("no identity id is a bbox key",
               all("@" not in ident for ident in ids))
@@ -489,6 +512,17 @@ def self_test() -> int:
               sep_result["status"] == "resolved"
               and sep_result["resolved_html_id"] == "p1c18",
               str(sep_result))
+
+        # G11: pre-printed 000 in the branch box. emit keeps a mixed comb,
+        # not an empty field. That mixed cell is the identity.
+        _write_html(tree / "fixture-form" / "index.html",
+                    _mixed_comb("p1c19", x0, y0, x1 - x0, y1 - y0))
+        mixed_record = _sample_record(html_id_hint="p1c19")
+        mixed_result = resolve_record(mixed_record, tree)
+        check("a G11 mixed comb still resolves kind=field",
+              mixed_result["status"] == "resolved"
+              and mixed_result["resolved_html_id"] == "p1c19",
+              str(mixed_result))
 
     print("FAIL" if failed else "OK",
           f"{failed} self-test(s) failed" if failed else "self-test")

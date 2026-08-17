@@ -6,7 +6,7 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-18, field identity started on `gol/field-identity`).**
+**Active queue (2026-08-18, TIN-class identity catalog on `gol/field-identity`).**
 Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
 batch is `ddac6058`. C01–C07 sitting accepted (`applied`, not `verified`).
 Do not fold later rows into those PRs. Identity is a new layer on top of
@@ -30,7 +30,7 @@ does.
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
 | **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Status `applied`, not `verified` (`proven: false` until audit.py is seen to fail on the corrected tree). | 2 | Sitting accepted. Do not call this verification. |
-| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. Seven TIN strips, four groups each (28 identities). Matcher: exactly one fillable-field *center* in `source_printed_box_pt`; `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN-strip class is catalogued. Stage 3 still closed. |
+| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. C01–C07 seed (28) plus 38 measured 3+3+3+5 corpus strips (152) = 180 identities. Matcher: exactly one fillable-field *center* in `source_printed_box_pt` (field or G11 mixed comb); `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN caption-chain class: 44/53 bundles. `extra/1801-2018` skipped. Stage 3 still closed. |
 | **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Identity catalog is seeded, not complete. Still blocked on catalog coverage of fillable fields, and on G02 / G03 / G04. |
 
 How to use agents (compact prompts, no full chat history; one writer per
@@ -43,7 +43,7 @@ file):
 2. **One** implementer for P2 commit, then **one** for P1 charbox split.
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
 4. Identity work is `tools/formgen/field_identity.py` against
-   `tools/formgen/identity/catalog.json` (28 TIN-strip identities). Stage 3
+   `tools/formgen/identity/catalog.json` (180 TIN-strip identities). Stage 3
    still does not start until that catalog covers fillable fields and G02 /
    G03 / G04 are done.
 
@@ -366,10 +366,11 @@ shown *not* to be a stage-1 row above.
 
 ## Stage 3 — map
 
-**Blocked. Do not start.** The identity catalog exists and is seeded with
-seven TIN strips, 28 identities (`tools/formgen/identity/`). That is the freeze
-R2 asked for, not the mapper. Stage 3 begins when the catalog covers
-fillable fields and the preconditions below hold.
+**Blocked. Do not start.** The identity catalog exists: C01–C07 seed plus
+the measured TIN caption-chain class, 180 identities
+(`tools/formgen/identity/`). That is the freeze R2 asked for, not the mapper.
+It is not coverage of every fillable field. Stage 3 begins when the catalog
+covers fillable fields and the preconditions below hold.
 
 The naming problem is already solved on BIR's side: `rules/forms/*/fields.json`
 carries 43 forms and 9,592 field names harvested from the official HTA runtime,
@@ -393,8 +394,8 @@ The join is also far from bijective (measured 2026-08-06):
 | 0605: names we emit vs official fields | 71 vs 235 |
 
 **Preconditions before stage 3 opens (all must hold):**
-1. Field identity is a catalog id, not a bbox and not `p1cN`. The seed of
-   seven TIN strips (28 identities) is not coverage. Every fillable field Stage 3
+1. Field identity is a catalog id, not a bbox and not `p1cN`. 180 TIN-strip
+   identities is not coverage of every fillable field. Every fillable field Stage 3
    would join must resolve `exactly-one` against `forms-corrected/`.
 2. Stage-1 rows G02, G03, G04 are `done` (a field that does not exist cannot be
    mapped; a field that should not exist must not be).
@@ -510,7 +511,7 @@ Condensed to what changes behaviour.
 | ID | Risk | Consequence | Mitigation |
 | --- | --- | --- | --- |
 | **R1** | **Stage 2's guarantee is close to vacuous today.** The check that is supposed to fail on an override is blind to the field layer: 137/138 findings are `audit_blind: true`; blocker F028 (live inputs over 1700's statutory tax brackets) sat on a form scoring rules 100% / text 100% / 0 missing / 0 extra. | "A correction never hides a divergence" certifies nothing. | Each override must **name the specific check that fails on it and prove it fails**. Close G10 before Stage 2 ships. |
-| **R2** | Field identity was a quantised bbox; every geometry fix renumbers ids. | Ledger and mapping both drift silently. 42/146 cited ids already dead. | Catalog ids (`2550m-2007/p1/tin-branch`) plus overlap match. `p1cN` is a hint. Seeded 2026-08-18 with C01–C07; not yet coverage. Treat a stale hint as a schema change. |
+| **R2** | Field identity was a quantised bbox; every geometry fix renumbers ids. | Ledger and mapping both drift silently. 42/146 cited ids already dead. | Catalog ids (`2550m-2007/p1/tin-branch`) plus center-in-printed-box match. `p1cN` is a hint. TIN caption-chain class catalogued 2026-08-18 (180 identities, 44/53 bundles); not yet coverage of every fillable field. Treat a stale hint as a schema change. |
 | **R3** | A checker sharing an assumption, code path or source of truth with its subject — 11 instances found so far. | The largest instance would be a self-verifying correction system sitting between the generator and everything downstream. | Rule 4 above: independent producer, always. |
 | **R4** | Census pins drift apart (G01, live now). | 60-minute gate run fails on its own constants. | The pins-move-together list under "How we work". |
 | **R5** | The comb-referee's 53 reviewed HTML hashes invalidate on **every** legitimate producer change. | Either maximum conservatism or unworkable friction. | Open design question in GOAL.md §Blocked: hash the tag/attribute skeleton, not every byte. **Undecided.** |

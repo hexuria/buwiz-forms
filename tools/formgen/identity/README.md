@@ -21,9 +21,11 @@ in the same commit (a schema change), but it must not mint a new identity.
 ## How a record is resolved
 
 `field_identity.py` parses the named tree with the stdlib HTML parser — not
-`emit.py`, not `lattice.py`. It collects `data-cell-kind="field"` boxes
-(comb *or* text: C01's first TIN group and C06's agent TIN emit as `text`
-on the stage-1 batch). A white knockout covering the strip is
+`emit.py`, not `lattice.py`. It collects fillable boxes: `data-cell-kind` is
+`field` *or* `mixed`, and `data-field-kind` is set (comb or text). C01's
+first TIN group and C06's agent TIN emit as `text` on the stage-1 batch.
+G11 mixed combs are the branch identity when the sheet pre-prints `000` and
+emit refuses empty slots. A white knockout covering the strip is
 `data-cell-kind="blank"` and is ignored. Dash separators are `data-cell-kind=
 "field"` with no `data-field-kind`; they are ignored too, because the even
 reflow parks their centers inside the previous group's printed box.
@@ -45,15 +47,25 @@ success.
 Zero or two is a failure. A stale hint is also a failure: silent remapping
 is risk R2. The identity id still names the same box; only the hint moves.
 
-The seed is the seven TIN strips (4 groups each, 28 identities), not every
-fillable field.
+## Coverage
+
+180 identities. The C01–C07 seed is 7 strips (28). The rest are the
+measured 3+3+3+5 TIN caption chain on 38 more bundles (152), from
+[`tin-branch-census-20260808.json`](../corrections/evidence/tin-branch-census-20260808.json)
+with harvest notes in
+[`tin-identity-corpus-20260818.json`](../corrections/evidence/tin-identity-corpus-20260818.json).
+`correction_id` is null on those 152.
+
+Not in this catalog: `extra/1801-2018` (lattice merged tin-1; fail closed,
+no partial strip), eight PDF-census not-measurable bundles whose HTML also
+has no 3+3+3+N fillable chain, spouse/agent/schedule TINs other than C06,
+and every non-TIN fillable field. That is not coverage for Stage 3.
 
 ## What this is not
 
 - Not Stage 3. Nothing writes `name="frm2550m:txtBranchCode"`.
 - Not verification of C01–C07. Overlap does not re-derive `expected_effect`.
-- Not a census of every fillable field. The seed is the seven TIN strips
-  already bound by C01–C07 (four groups each).
+- Not a census of every fillable field.
 
 ```sh
 python3 tools/formgen/field_identity.py --self-test
