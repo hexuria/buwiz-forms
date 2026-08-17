@@ -26,10 +26,10 @@ does.
 | # | Branch / PR | Work | Stage | Parallel? |
 | --- | --- | --- | --- | --- |
 | **P0** | `gol/tin-stage2` PR #17 | Even 3-3-3-5 TIN; lock `00000` only where the sheet prints `000`; outer frame + bottom hair ticks | 2 | Land independently. Do not regenerate under it until P1/P1b exist, or every TIN record re-anchors twice. |
-| **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | 2550M page-2 first Schedule 1 row (horizontal walls → 4-row growable); 0605 items 17 then 18 tab. Specify still a lower band. | 1 / UX | Landed. |
+| **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | 2550M page-2 first Schedule 1 row (horizontal walls → 4-row growable); 0605 items 17 then 18 tab. Specify still a lower band. H-walls that would fuse into an existing y-line are skipped (2551M/2553 reviewed combs). | 1 / UX | Landed. |
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
-| **P0b** | after a new Stage 1 batch | Re-anchor C01–C07; `correct.py` so TIN chrome sits on the P2+P1 HTML. | 2 | **Serial.** Blocked on a named batch from P1/P1b. |
+| **P0b** | after a named Stage 1 `forms/` commit | Re-anchor C01–C07; `correct.py`. Scratch batch is in `build/batch-p0b` (51 packaged + 2551M/2553 emitted after the h-wall fuse skip). Find-strings still match git `forms/`, not the scratch tree (`data-row` shifted; C01 `p1c116`→`p1c129`). Do not rewrite the ledger until `forms/` is that batch. | 2 | **Serial.** Blocked on committing the scratch tree as the next corpus. |
 | **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Blocked on P0b. |
 
 How to use agents (compact prompts, no full chat history; one writer per
