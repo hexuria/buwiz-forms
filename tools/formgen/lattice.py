@@ -73,8 +73,8 @@ Schedule 1 cells snapped to columns belonging to rows further down the sheet --
 covered. The 1.5pt cut is about how BIR *draws* a line, not about whether the
 line *bounds* a cell. `comb_boundary_candidates` had always known this and read
 those fills; the cell grid had not. `wall_boundaries` closes that asymmetry for
-verticals, and the shape test that keeps a character divider out of the x
-lattice is measured there.
+verticals and horizontals, and the shape test that keeps a character divider
+out of the lattice is measured there.
 
 A sixth finding is that the *tone of the paper* decides whether a region is a
 writing surface at all, and this module used to ask only about ink. An empty
@@ -881,7 +881,7 @@ MIN_WALL_ASPECT = 5.0
 
 def wall_boundaries(area_fills: Sequence[dict[str, Any]]
                     ) -> list[dict[str, Any]]:
-    """Structural area fills that BOUND a cell, as x-lattice candidates.
+    """Structural area fills that BOUND a cell, as lattice candidates.
 
     A 1.92pt painted wall is a wall. `extract.py` files a filled rectangle as a
     rule only when its short side is at most `MAX_RULE_THICKNESS_PT` (1.5) and
@@ -898,7 +898,10 @@ def wall_boundaries(area_fills: Sequence[dict[str, Any]]
     columns contributed by rows further down the sheet. Column 1 loses 54.96 of
     226.08pt, column 4 loses 66.84 of 141.72pt, and the lost strips hold no text
     run at all: they are pure writing surface that does nothing when clicked.
-    22 cells on that page, 230 field cells across 22 forms.
+    22 cells on that page, 230 field cells across 22 forms. The same page paints
+    Schedule 1's top rail as a 1.92pt *horizontal* fill, so the first data row
+    had no top boundary and no input -- holding horizontals back left that
+    row unclosed.
 
     Not every structural fill is a wall, and promoting the wrong one would cut a
     comb into separate cells. Measured over the 53-form corpus, the 997 vertical
@@ -914,13 +917,12 @@ def wall_boundaries(area_fills: Sequence[dict[str, Any]]
     Aspect decides it because aspect is the scale-free measurement: it asks
     about the mark's shape rather than about how big this particular sheet is
     drawn. Length and thickness happen to agree here, and are recorded above so
-    a future disagreement is visible rather than silent.
+    a future disagreement is visible rather than silent. The same aspect cut
+    applied on the other axis keeps a wide thin rail (a table's top/bottom)
+    and rejects a short wide mark that is not a row boundary.
 
-    Horizontals are held back. `comb_boundary_candidates` excludes them because
-    a band is bounded top and bottom by horizontal rules; here the reason is
-    different and narrower -- a horizontal wall moves row boundaries and the
-    growable bands measured from them, which is a change with its own evidence
-    to gather. This increment moves columns only.
+    A page-sized fill matches neither orientation: both sides are long, so
+    neither aspect reaches MIN_WALL_ASPECT, and it stays out of the lattice.
 
     Sorted so that clustering inside `build_lattice` is order-independent.
     """
@@ -928,12 +930,18 @@ def wall_boundaries(area_fills: Sequence[dict[str, Any]]
     for fill in area_fills:
         if fill["role"] != "structural":
             continue
-        thickness = float(fill["x1"]) - float(fill["x0"])
-        length = float(fill["y1"]) - float(fill["y0"])
-        if thickness <= 0 or length < thickness * MIN_WALL_ASPECT:
+        width = float(fill["x1"]) - float(fill["x0"])
+        height = float(fill["y1"]) - float(fill["y0"])
+        if width <= 0 or height <= 0:
+            continue
+        if height >= width * MIN_WALL_ASPECT:
+            axis, thickness = "v", width
+        elif width >= height * MIN_WALL_ASPECT:
+            axis, thickness = "h", height
+        else:
             continue
         walls.append({
-            "axis": "v",
+            "axis": axis,
             "x0": fill["x0"], "y0": fill["y0"],
             "x1": fill["x1"], "y1": fill["y1"],
             "thickness_pt": q(thickness),
@@ -946,8 +954,26 @@ def wall_boundaries(area_fills: Sequence[dict[str, Any]]
             "paint_seq_max": fill.get("paint_seq_max",
                                       fill.get("paint_seq", -1)),
         })
-    walls.sort(key=lambda wall: (centre(wall), wall["y0"], wall["y1"]))
+    walls.sort(key=lambda wall: (
+        wall["axis"], centre(wall),
+        wall["y0"] if wall["axis"] == "v" else wall["x0"],
+        wall["y1"] if wall["axis"] == "v" else wall["x1"]))
     return walls
+
+
+def split_wall_axes(walls: Sequence[dict[str, Any]]
+                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Partition painted walls into vertical (x-lattice) and horizontal (y-lattice)."""
+    vertical = [wall for wall in walls if wall["axis"] == "v"]
+    horizontal = [wall for wall in walls if wall["axis"] == "h"]
+    return vertical, horizontal
+
+
+def wall_run(wall: dict[str, Any]) -> tuple[float, float]:
+    """Along-axis span a visibility test must cover for this wall."""
+    if wall["axis"] == "h":
+        return float(wall["x0"]), float(wall["x1"])
+    return float(wall["y0"]), float(wall["y1"])
 
 
 def paint_ordinal(paint: dict[str, Any]) -> int:
@@ -2100,6 +2126,65 @@ def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str
 # ---------------------------------------------------------------------------
 # Cells
 # ---------------------------------------------------------------------------
+
+
+def order_rects_reading_order(
+        items: Sequence[dict[str, Any]],
+        x0_of: Any, y0_of: Any, x1_of: Any, y1_of: Any,
+        ) -> list[dict[str, Any]]:
+    """Column-aware reading order for tab/DOM (F209).
+
+    A global (y, x) sort zig-zags across side-by-side sections: 0605 items 17
+    and 18 share some row y-values, so tab walked 17's first checkbox, then
+    18's, then back to 17. Readers finish item 17, then item 18.
+
+    A regular table must NOT become column-major. Table columns share the same
+    row y-values; 17/18 do not. A full-height vertical cut whose two sides are
+    each multi-row AND whose y0-sets differ is therefore a section split and
+    is taken first. Otherwise a clean horizontal cut (stacked sections, table
+    rows) is taken. Otherwise (y, x).
+    """
+    eps = CLUSTER_TOL_PT
+
+    def rec(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if len(group) <= 1:
+            return list(group)
+        xs = sorted({q(x1_of(item)) for item in group}
+                    | {q(x0_of(item)) for item in group})
+        gx0 = min(x0_of(item) for item in group)
+        gx1 = max(x1_of(item) for item in group)
+        for cut in xs:
+            if cut <= gx0 + eps or cut >= gx1 - eps:
+                continue
+            left = [item for item in group if x1_of(item) <= cut + eps]
+            right = [item for item in group if x0_of(item) >= cut - eps]
+            if (not left or not right
+                    or len(left) + len(right) != len(group)):
+                continue
+            y_left = {q(y0_of(item)) for item in left}
+            y_right = {q(y0_of(item)) for item in right}
+            if (len(y_left) < 2 or len(y_right) < 2
+                    or y_left == y_right):
+                continue
+            return rec(left) + rec(right)
+
+        ys = sorted({q(y1_of(item)) for item in group}
+                    | {q(y0_of(item)) for item in group})
+        gy0 = min(y0_of(item) for item in group)
+        gy1 = max(y1_of(item) for item in group)
+        for cut in ys:
+            if cut <= gy0 + eps or cut >= gy1 - eps:
+                continue
+            above = [item for item in group if y1_of(item) <= cut + eps]
+            below = [item for item in group if y0_of(item) >= cut - eps]
+            if (not above or not below
+                    or len(above) + len(below) != len(group)):
+                continue
+            return rec(above) + rec(below)
+
+        return sorted(group, key=lambda item: (y0_of(item), x0_of(item)))
+
+    return rec(list(items))
 
 
 class DisjointSet:
@@ -5367,7 +5452,6 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         ))
     for index, box in enumerate(legacy_boxes):
         box["legacy_index"] = index
-    boxes.sort(key=lambda b: (yl.positions[b["j0"]], xl.positions[b["i0"]]))
 
     def materialise_cell(
             box: dict[str, Any], identifier: str,
@@ -5769,11 +5853,11 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             "absorbed_cell_ids": sorted(cell["id"] for cell in absorbed),
             "trimmed_cell_ids": sorted(cell["id"] for cell, _r in trims),
         }
-        # `cells` is reading order (top to bottom, then left to right) --
-        # the same key `boxes.sort` already established it by -- and DOM
-        # order IS focus order (F209), so appending at the end would tab
-        # this band in dead last regardless of where on the page it prints.
-        # Insert at the position that key already puts it at.
+        # `cells` is reading order -- `order_rects_reading_order` is the same
+        # key the final cell stream is sorted by -- and DOM order IS focus
+        # order (F209), so appending at the end would tab this band in dead
+        # last regardless of where on the page it prints. Insert at the
+        # position that key already puts it at.
         insert_at = len(cells)
         new_key = (new_cell["y0"], new_cell["x0"])
         for index, existing in enumerate(cells):
@@ -6787,6 +6871,16 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             shaded)
         cell.pop("_component_root")
     resolve_retained_partition_overlaps(subject_ledger)
+    # DOM order IS focus order (F209). Reunification inserts by (y, x); put
+    # the finished stream back into column-aware reading order so side-by-side
+    # sections tab as groups.
+    cells[:] = order_rects_reading_order(
+        cells,
+        lambda cell: float(cell["x0"]),
+        lambda cell: float(cell["y0"]),
+        lambda cell: float(cell["x1"]),
+        lambda cell: float(cell["y1"]),
+    )
     # The gate binds the reviewed active-owner registry to the exact order of
     # the current layout cell stream.  Legacy subjects are discovered in
     # legacy-bbox order, but a repaired lattice can split/reuse those subjects
@@ -6982,6 +7076,37 @@ def column_role(texts: Sequence[str]) -> str | None:
     return None
 
 
+def uniform_pitch_subruns(run: Sequence[int], yl: Lattice) -> list[list[int]]:
+    """Maximal contiguous sub-runs whose pitch stays within PITCH_TOL_PT.
+
+    A header row sharing a column signature with the data rows below it must
+    not poison the band: 2550M Schedule 1 is four equal data rows under a
+    taller header, and rejecting the whole signature-run left the first data
+    row outside the growable.
+    """
+    if len(run) < MIN_GROWABLE_ROWS:
+        return []
+    edges = [yl.positions[j] for j in (*run, run[-1] + 1)]
+    deltas = [q(b - a) for a, b in zip(edges, edges[1:])]
+    if max(deltas) - min(deltas) <= PITCH_TOL_PT:
+        return [list(run)]
+    subruns: list[list[int]] = []
+    start = 0
+    n = len(run)
+    while start < n:
+        end = start + 1
+        while (end < n
+               and max(deltas[start:end + 1]) - min(deltas[start:end + 1])
+               <= PITCH_TOL_PT):
+            end += 1
+        if end - start >= MIN_GROWABLE_ROWS:
+            subruns.append(list(run[start:end]))
+            start = end
+        else:
+            start += 1
+    return subruns
+
+
 def detect_growables(page_index: int, xl: Lattice, yl: Lattice,
                      v_at: list[list[bool]], h_at: list[list[bool]],
                      cells: Sequence[dict[str, Any]],
@@ -7016,65 +7141,69 @@ def detect_growables(page_index: int, xl: Lattice, yl: Lattice,
             continue
         i0, i1 = signature[0], signature[-1]
 
-        # Every row must be closed top and bottom across the band's width,
-        # otherwise this is a column of free space, not a stack of rows.
-        if not all(h_at[j][i] for j in (*run, run[-1] + 1) for i in range(i0, i1)):
-            continue
+        for sub in uniform_pitch_subruns(run, yl):
+            # Every row must be closed top and bottom across the band's width,
+            # otherwise this is a column of free space, not a stack of rows.
+            if not all(h_at[j][i] for j in (*sub, sub[-1] + 1)
+                       for i in range(i0, i1)):
+                continue
 
-        edges = [yl.positions[j] for j in (*run, run[-1] + 1)]
-        deltas = [q(b - a) for a, b in zip(edges, edges[1:])]
-        if max(deltas) - min(deltas) > PITCH_TOL_PT:
-            continue
+            edges = [yl.positions[j] for j in (*sub, sub[-1] + 1)]
+            deltas = [q(b - a) for a, b in zip(edges, edges[1:])]
 
-        roles: dict[int, str] = {}
-        for column in signature[:-1]:
-            column_cells = [by_position.get((j, column)) for j in run]
-            if any(c is None for c in column_cells):
-                roles = {}
-                break
-            texts = ["".join(run_text[t] for t in c["text_run_ids"]) for c in column_cells]
-            role = column_role(texts)
-            if role is None:
-                roles = {}
-                break
-            roles[column] = role
-        if not roles:
-            continue
+            roles: dict[int, str] = {}
+            for column in signature[:-1]:
+                column_cells = [by_position.get((j, column)) for j in sub]
+                if any(c is None for c in column_cells):
+                    roles = {}
+                    break
+                texts = ["".join(run_text[t] for t in c["text_run_ids"])
+                         for c in column_cells]
+                role = column_role(texts)
+                if role is None:
+                    roles = {}
+                    break
+                roles[column] = role
+            if not roles:
+                continue
 
-        band_x0, band_x1 = xl.positions[i0], xl.positions[i1]
-        band_y0, band_y1 = edges[0], edges[-1]
-        in_band = [c for c in cells
-                   if c["x0"] >= band_x0 - CLUSTER_TOL_PT and c["x1"] <= band_x1 + CLUSTER_TOL_PT
-                   and c["y0"] >= band_y0 - CLUSTER_TOL_PT and c["y1"] <= band_y1 + CLUSTER_TOL_PT]
-        template = [c["id"] for c in in_band if abs(c["y0"] - edges[0]) <= CLUSTER_TOL_PT]
-        header = [c["id"] for c in cells
-                  if abs(c["y1"] - band_y0) <= CLUSTER_TOL_PT
-                  and c["x0"] >= band_x0 - CLUSTER_TOL_PT
-                  and c["x1"] <= band_x1 + CLUSTER_TOL_PT]
+            band_x0, band_x1 = xl.positions[i0], xl.positions[i1]
+            band_y0, band_y1 = edges[0], edges[-1]
+            in_band = [c for c in cells
+                       if c["x0"] >= band_x0 - CLUSTER_TOL_PT
+                       and c["x1"] <= band_x1 + CLUSTER_TOL_PT
+                       and c["y0"] >= band_y0 - CLUSTER_TOL_PT
+                       and c["y1"] <= band_y1 + CLUSTER_TOL_PT]
+            template = [c["id"] for c in in_band
+                        if abs(c["y0"] - edges[0]) <= CLUSTER_TOL_PT]
+            header = [c["id"] for c in cells
+                      if abs(c["y1"] - band_y0) <= CLUSTER_TOL_PT
+                      and c["x0"] >= band_x0 - CLUSTER_TOL_PT
+                      and c["x1"] <= band_x1 + CLUSTER_TOL_PT]
 
-        growables.append({
-            "id": f"p{page_index}g{len(growables)}",
-            "kind": "repeating_rows",
-            "x0": band_x0, "y0": band_y0, "x1": band_x1, "y1": band_y1,
-            # Modal pitch. The band is NOT perfectly regular -- on the 2551Q
-            # Schedule 1 rows 1-5 are 18.24pt and row 6 is 18.27pt -- so a
-            # generator must use row_y, not index * pitch.
-            "row_pitch_pt": min(collections.Counter(deltas).most_common(),
-                                key=lambda kv: (-kv[1], kv[0]))[0],
-            "row_pitch_min_pt": min(deltas),
-            "row_pitch_max_pt": max(deltas),
-            "row_count": len(run),
-            "row_y": edges,
-            "column_x": [xl.positions[i] for i in signature],
-            "column_index": list(signature),
-            "column_roles": [roles[i] for i in signature[:-1]],
-            "header_cell_ids": sorted(header),
-            "template_cell_ids": sorted(template),
-            "cell_ids": sorted(c["id"] for c in in_band),
-            # On-sheet capacity. Overflow beyond this is a continuation sheet,
-            # not a taller table.
-            "capacity": len(run),
-        })
+            growables.append({
+                "id": f"p{page_index}g{len(growables)}",
+                "kind": "repeating_rows",
+                "x0": band_x0, "y0": band_y0, "x1": band_x1, "y1": band_y1,
+                # Modal pitch. The band is NOT perfectly regular -- on the 2551Q
+                # Schedule 1 rows 1-5 are 18.24pt and row 6 is 18.27pt -- so a
+                # generator must use row_y, not index * pitch.
+                "row_pitch_pt": min(collections.Counter(deltas).most_common(),
+                                    key=lambda kv: (-kv[1], kv[0]))[0],
+                "row_pitch_min_pt": min(deltas),
+                "row_pitch_max_pt": max(deltas),
+                "row_count": len(sub),
+                "row_y": edges,
+                "column_x": [xl.positions[i] for i in signature],
+                "column_index": list(signature),
+                "column_roles": [roles[i] for i in signature[:-1]],
+                "header_cell_ids": sorted(header),
+                "template_cell_ids": sorted(template),
+                "cell_ids": sorted(c["id"] for c in in_band),
+                # On-sheet capacity. Overflow beyond this is a continuation sheet,
+                # not a taller table.
+                "capacity": len(sub),
+            })
     return growables
 
 
@@ -7156,8 +7285,13 @@ def build_page(page: dict[str, Any],
     # that boundary's coverage and weight. The raw/legacy stream takes them
     # unfiltered, exactly as `raw_extra_ink` above takes its fills unfiltered.
     raw_walls = wall_boundaries(page["area_fills"])
+    raw_v_walls, _raw_h_walls = split_wall_axes(raw_walls)
     raw_xl = build_lattice(
-        [*_raw_borders, *raw_walls], [*raw_verticals, *raw_walls], "v")
+        [*_raw_borders, *raw_v_walls], [*raw_verticals, *raw_v_walls], "v")
+    # Horizontal walls belong on the current y-lattice (Schedule 1's first
+    # data row has no other top rail). They must not join the continuity
+    # lattice: extra y-lines remumber every later legacy_index, and reviewed
+    # comb transitions bind (slug, page, p1cN) plus that cell's subject_key.
     raw_yl = build_lattice(raw_horizontals, raw_horizontals, "h")
     # F201 / P1b: the legacy view is bridged on exactly the same evidence as
     # the current one. A rail the source always drew, interrupted only by a
@@ -7293,12 +7427,13 @@ def build_page(page: dict[str, Any],
     extra_ink = comb_boundary_candidates(verticals, final_area_fills)
     # The same visibility test `final_area_fills` applies, but asked on the
     # wall's own axis rather than a hard-coded "v": a wall that a later
-    # knockout paints over must not define a column.
+    # knockout paints over must not define a column or a row.
     final_walls = [
         wall for wall in raw_walls
         if final_paint.structural_across_axis(
-            wall, float(wall["y0"]), float(wall["y1"]), str(wall["axis"]))
+            wall, *wall_run(wall), str(wall["axis"]))
     ]
+    final_v_walls, final_h_walls = split_wall_axes(final_walls)
 
     # Once a composite vertical has been partitioned into paper corridors, a
     # character tick in one row must not become lattice coverage merely because
@@ -7346,9 +7481,10 @@ def build_page(page: dict[str, Any],
     # members are counted by source id, which a painted wall does not carry.
     borders = border_defining
     xl = build_lattice(
-        [*border_defining, *final_walls], [*border_coverage, *final_walls], "v")
+        [*border_defining, *final_v_walls], [*border_coverage, *final_v_walls], "v")
     yl = build_lattice(
-        geometry_horizontals, geometry_horizontals, "h")
+        [*geometry_horizontals, *final_h_walls],
+        [*geometry_horizontals, *final_h_walls], "h")
 
     # A knockout strictly interior to one rail (F097) leaks a comb wall into
     # a blank sliver; rejoin those spans before the cell walk sees the gap.
@@ -7375,7 +7511,7 @@ def build_page(page: dict[str, Any],
         dsu, v_at, h_at = merge_grid(xl, yl)
         cells, unassigned, comb_subjects, comb_inferences = build_cells(
             index, xl, yl, dsu, v_at, h_at, geometry_verticals,
-            geometry_horizontals, dividers, extra_ink, final_paint,
+            [*geometry_horizontals, *final_h_walls], dividers, extra_ink, final_paint,
             page["text_runs"],
             legacy_dividers=raw_dividers,
             legacy_extra_ink=raw_extra_ink,
@@ -8572,9 +8708,65 @@ def self_test(ir_path: pathlib.Path) -> int:
         not wall_boundaries([grey_band]),
         "a decorative band was promoted to a cell-grid boundary",
     )
+    horizontal_rail = synthetic_fill(0.0, 0.0, 600.0, 1.92)
+    h_walls = wall_boundaries([horizontal_rail])
     check(
-        not wall_boundaries([synthetic_fill(0.0, 0.0, 600.0, 1.92)]),
-        "a horizontal painted wall entered the vertical-only lattice",
+        len(h_walls) == 1 and h_walls[0]["axis"] == "h"
+        and h_walls[0]["thickness_pt"] == 1.92,
+        "a horizontal painted wall did not enter the y lattice",
+    )
+    check(
+        not [wall for wall in h_walls if wall["axis"] == "v"],
+        "a horizontal painted wall entered the vertical lattice",
+    )
+    v_split, h_split = split_wall_axes(wall_boundaries([
+        wall_2550m, horizontal_rail, divider_2000ot,
+    ]))
+    check(
+        len(v_split) == 1 and len(h_split) == 1
+        and v_split[0]["axis"] == "v" and h_split[0]["axis"] == "h",
+        "split_wall_axes did not partition mixed walls by axis",
+    )
+    page_fill = synthetic_fill(0.0, 0.0, 600.0, 800.0)
+    check(
+        not wall_boundaries([page_fill]),
+        "a page-sized fill was promoted to a lattice wall",
+    )
+
+    # Column-aware reading order. A table whose columns share row y-values
+    # stays left-to-right, top-to-bottom. Side-by-side sections whose rows
+    # do not share y-values (0605 items 17 and 18) finish the left group
+    # before the right.
+    def rect(x0: float, y0: float, x1: float, y1: float, name: str
+             ) -> dict[str, Any]:
+        return {"x0": x0, "y0": y0, "x1": x1, "y1": y1, "id": name}
+
+    table = [
+        rect(0, 0, 10, 10, "a"), rect(10, 0, 20, 10, "b"),
+        rect(0, 10, 10, 20, "c"), rect(10, 10, 20, 20, "d"),
+    ]
+    table_order = [item["id"] for item in order_rects_reading_order(
+        table,
+        lambda item: item["x0"], lambda item: item["y0"],
+        lambda item: item["x1"], lambda item: item["y1"],
+    )]
+    check(
+        table_order == ["a", "b", "c", "d"],
+        "an aligned table was tabbed column-major",
+    )
+    sections = [
+        rect(0, 0, 40, 12, "17a"), rect(50, 2, 90, 14, "18a"),
+        rect(0, 12, 40, 24, "17b"), rect(50, 16, 90, 28, "18b"),
+        rect(0, 24, 40, 36, "17c"), rect(50, 30, 90, 42, "18c"),
+    ]
+    section_order = [item["id"] for item in order_rects_reading_order(
+        sections,
+        lambda item: item["x0"], lambda item: item["y0"],
+        lambda item: item["x1"], lambda item: item["y1"],
+    )]
+    check(
+        section_order == ["17a", "17b", "17c", "18a", "18b", "18c"],
+        "side-by-side sections were tabbed as a zig-zag",
     )
 
     # Shaded paper. 2551Q shades none of its cells, so the tone cut is asserted
