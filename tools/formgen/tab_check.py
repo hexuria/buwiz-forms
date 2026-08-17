@@ -20,16 +20,17 @@ The walk, per form, mirrors exactly what a person did:
   4. Compare the reached sequence against the *expected* reading order.
 
 The expected order is read off the live DOM, not off `build/layout/*.json`.
-Every fact the layout has that this walk needs -- a field cell's row, its
-left edge, its comb slots or writing regions, in reading order -- is already
-in the rendered document as `data-row`, `style.left` and DOM child order
-(emit.py copies them there verbatim; verified against the layout for several
-forms while this module was built). Reading it from the DOM rather than a
-side-channel JSON file means the walk measures the artifact it is standing
-in, the same discipline band_drive.py's PROBE follows for authored style
-values, and it is what lets this run in CI, where `build/` -- gitignored,
-regenerated from six PDFs this repo will never commit -- does not exist but
-the tracked `forms/` tree does.
+Every fact the layout has that this walk needs -- a field cell's box
+(`style.left/top/width/height`), its comb slots or writing regions -- is
+already in the rendered document. Cells are then ordered by the same
+column-aware reading order the lattice emits (side-by-side sections finish
+left-then-right; an aligned table stays left-to-right, top-to-bottom).
+Reading geometry from the DOM rather than a side-channel JSON file means
+the walk measures the artifact it is standing in, the same discipline
+band_drive.py's PROBE follows for authored style values, and it is what
+lets this run in CI, where `build/` -- gitignored, regenerated from six
+PDFs this repo will never commit -- does not exist but the tracked
+`forms/` tree does.
 
 Row identity comes from `data-row`, not from a `row_tops()`-style pitch/2
 reclustering of raw y-coordinates. `data-row` already *is* that clustering,
@@ -79,6 +80,7 @@ if str(HERE) not in sys.path:
 
 import band_drive  # noqa: E402  - sibling module, imported not shelled out; bundle_dir() only
 import emit  # noqa: E402  - sibling module; only FIELD_DEBUG_JS, for the self-test fixture
+import lattice  # noqa: E402  - sibling module; order_rects_reading_order only
 
 # Bumped for T4-addendum: `report["vacant"]` and `report["totals"]["vacant"]`
 # are new, burned from the SAME tone-aware census `?debug=fields` paints
@@ -160,6 +162,9 @@ DISCOVER_JS = r"""
         cells.push({
           row: parseInt(cellEl.getAttribute("data-row"), 10),
           left: parseFloat(cellEl.style.left),
+          top: parseFloat(cellEl.style.top),
+          width: parseFloat(cellEl.style.width),
+          height: parseFloat(cellEl.style.height),
           inputs: inputs,
         });
       }
@@ -287,10 +292,13 @@ def build_expected(pages_raw: list[dict[str, Any]]
                    ) -> tuple[list[str], dict[str, dict[str, Any]], dict[int, dict[str, float]]]:
     """The reading-order sequence every input is graded against.
 
-    Cells are ordered (row, left) -- row from the lattice, exact, not a
-    reclustered y0 -- and within a cell, inputs keep the DOM order the
-    document already put them in: slot 0..capacity-1 for a comb, writing
-    region 0..N for a plain field the source rules into several boxes.
+    Cells are ordered by the same column-aware reading order the lattice
+    emits (side-by-side sections finish left-then-right; an aligned table
+    stays left-to-right, top-to-bottom). Geometry comes from the live DOM
+    (`style.left/top/width/height`), not from `build/layout`. Within a cell,
+    inputs keep the DOM order the document already put them in: slot
+    0..capacity-1 for a comb, writing region 0..N for a plain field the
+    source rules into several boxes.
 
     Raises `DuplicateInputIdError` (F215) the moment a second input claims an
     id `input_meta` already holds -- a hard failure, not a silent overwrite.
@@ -301,7 +309,14 @@ def build_expected(pages_raw: list[dict[str, Any]]
     for page in sorted(pages_raw, key=lambda p: p["index"]):
         index = int(page["index"])
         page_meta[index] = {"width_pt": page["width_pt"], "height_pt": page["height_pt"]}
-        for cell in sorted(page["cells"], key=lambda c: (c["row"], c["left"])):
+        ordered_cells = lattice.order_rects_reading_order(
+            page["cells"],
+            lambda cell: float(cell["left"]),
+            lambda cell: float(cell["top"]),
+            lambda cell: float(cell["left"]) + float(cell["width"]),
+            lambda cell: float(cell["top"]) + float(cell["height"]),
+        )
+        for cell in ordered_cells:
             for inp in cell["inputs"]:
                 input_id = inp["id"]
                 if input_id in input_meta:
@@ -357,12 +372,12 @@ def compute_verdicts(expected_order: list[str], sequence: list[str]
     """green / red-skipped / red-order, plus the reached-at sequence numbers.
 
     An input is `green` if, at the moment it is first reached, its expected
-    rank (row-cluster then x, folded into one index by `build_expected`'s
-    sort) is not behind anything already reached -- i.e. reading the walk in
-    the order it actually happened, the sequence of expected-ranks so far is
-    non-decreasing. The first press that breaks that is `red-order`: an input
-    whose row-cluster (or, tied, whose x) is strictly above one already
-    reached. Never-reached inputs are `red-skipped`.
+    rank (column-aware reading order, folded into one index by
+    `build_expected`) is not behind anything already reached -- i.e. reading
+    the walk in the order it actually happened, the sequence of expected-ranks
+    so far is non-decreasing. The first press that breaks that is `red-order`:
+    an input whose reading-order rank is strictly above one already reached.
+    Never-reached inputs are `red-skipped`.
 
     F214: the VERY FIRST input the walk reaches is graded against a stricter
     rule than the rest. A real Tab walk starts wherever `document.

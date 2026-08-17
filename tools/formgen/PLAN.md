@@ -6,16 +6,43 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-17 sitting).** Stage 2 TIN is in flight on
-`gol/tin-stage2` / PR #17. The sitting split the remaining work; do not
-fold P1 or P2 into that PR.
+**Active queue (reassessed 2026-08-17 21:00, after P2 lattice sitting).**
+Stage 2 TIN is PR #17. Do not fold later rows into that PR. Do not re-apply
+C01–C07 until the Stage 1 generator rows below have cut a **new batch** —
+TIN records bind find-strings, and a second lattice/emit pass already
+shifted `data-row` on 2550M/0605.
 
-| # | Branch / PR | Work | Stage |
-| --- | --- | --- | --- |
-| **P0** | `gol/tin-stage2` PR #17 | Even 3-3-3-5 TIN; lock `00000` only where the sheet prints `000`; **restore charbox chrome** (outer frame + bottom hair ticks; grey dash separators stay non-tabbable) | 2 |
-| **P1** | later, not #17 | Text inputs that sit on printed charbox dividers and accept a whole string (2550M month/sheets/RDO/zip and corpus peers). Comb slots already `maxlength="1"` everywhere. This is `inputs_span_no_printed_divider` — fix the generator, do not declare TIN records for it. | 1 |
-| **P2** | `gol/tin-stage3` (stacked on #17) | Tab order: finish a grouped item (0605 17 then 18) before the neighbour; diagnose 2550M page-2 first schedule row. F209 (band DOM order) is already closed. | 1 / UX |
-| **—** | blocked | Stage 3 map | 3 |
+Visual rule the user named (0605 screenshot, 2026-08-17): a **charbox** is
+an outer rectangle plus short bottom hair ticks that do not run the full
+height. That field must type **one character per tick**, not one `<input>`
+across the whole box. A **checkbox** is a small empty square for an `X`
+(the sheet says "Mark all appropriate boxes with an 'X'"). On the sitting
+0605 HTML those squares are `type="text"` with **no `maxlength`** (~12×10pt
+cells: Calendar/Fiscal `p1c1`/`p1c2`, item 17 `p1c43`, …). There are
+**zero** `type="checkbox"` inputs on that document. Do not invent HTML
+checkbox widgets; constrain them to one `X` the way the official client
+does.
+
+| # | Branch / PR | Work | Stage | Parallel? |
+| --- | --- | --- | --- | --- |
+| **P0** | `gol/tin-stage2` PR #17 | Even 3-3-3-5 TIN; lock `00000` only where the sheet prints `000`; outer frame + bottom hair ticks | 2 | Land independently. Do not regenerate under it until P1/P1b exist, or every TIN record re-anchors twice. |
+| **P2** | `gol/tin-stage3` (this commit, stacked on #17) | 2550M page-2 first Schedule 1 row (horizontal walls → 4-row growable); 0605 items 17 then 18 tab. Specify still a lower band. | 1 / UX | Landed in producer. Do not fold P1 into this commit. |
+| **P1** | stacked on P2 | Printed charboxes still one unbounded `<input>` (0605 item 2 Year Ended overflow; item 7 Return Period; 2550M month/sheets/RDO/zip; corpus peers). Comb slots already `maxlength="1"`. This is `inputs_span_no_printed_divider`. Hair ticks in the IR are the marker. **Census can start now** (read-only). Generator fix after P2 lands. Never a TIN record. | 1 | Census ∥ checkbox census. One implementer on `lattice.py`/`emit.py`. |
+| **P1b** | same stack, own commit | Small X-squares that accept a whole string. Census: square-ish cells (~10–14pt) with `type=text` and no `maxlength`. Fix: `maxlength="1"` (and keep them text, not `<input type=checkbox>`). | 1 | Census ∥ P1 census. Implement after P1 or in the same generator PR only if the change does not share the comb-split code. |
+| **P0b** | after a new Stage 1 batch | Re-anchor C01–C07; `correct.py` so TIN chrome sits on the P2+P1 HTML. | 2 | **Serial.** Blocked on a named batch from P1/P1b. |
+| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Blocked on P0b. |
+
+How to use agents (compact prompts, no full chat history; one writer per
+file):
+
+1. **Now, two read-only censuses in parallel** against `forms/` (not the
+   overwritten sitting `forms-corrected/2550m-2007` / `0605-1999`):
+   (a) every text input whose cell contains short bottom ticks;
+   (b) every checkbox-sized square with no `maxlength`.
+2. **One** implementer for P2 commit, then **one** for P1 charbox split.
+3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
+4. Do **not** cut a full 53-form `forms/` batch until P1/P1b are in the
+   producer — that batch is what P0b re-anchors against.
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
 
