@@ -5,7 +5,10 @@ Uriah 2026-08-17: do not squeeze five digits into the old last box. Take every
 fill-in box of the old 3-3-3-3 (or 3-3-3-4) chain, including the separator
 gaps, and re-divide that same outer span so every digit cell is the same
 width. A white knockout covers the old printed boxes so the new cells read
-cleanly.
+cleanly. Digit groups keep one outer 0.72pt frame; interior ticks are
+short bottom hairs like the official charbox (not a full-height wall on
+every digit). Dash separators keep their dedicated grey/peach fill and
+a black frame, and stay non-tabbable.
 
 The branch group is locked to 00000 ONLY where the official artwork already
 pre-prints 000 in the branch box — C01 (2550M) and C07 (1604CF). Everywhere the
@@ -215,6 +218,50 @@ def slot_metrics(inner: str, height: float) -> tuple[float, float]:
     return top, round(height - top, 2)
 
 
+# Interior comb ticks on official sheets are short bottom hairs, not a
+# full-height wall: 2550M item-1 month v172 is 0.72×4.32pt in a 13.20pt box
+# (~33% of the box, sitting on the floor). Only the group's outer frame is a
+# complete rectangle. Painting `inset -0.72pt 0 0 0` on every slot made each
+# digit look like its own bordered box and is the sitting defect.
+HAIR_TICK_HEIGHT_FRAC = 0.33
+
+
+def hair_tick_style(slot_height: float) -> str:
+    hair_h = max(round(slot_height * HAIR_TICK_HEIGHT_FRAC, 2), 3.0)
+    return (f";background:linear-gradient(#000,#000) right bottom / "
+            f"0.72pt {fmt_pt(hair_h)}pt no-repeat")
+
+
+def dedicated_fill(html: str, left: float, top: float, width: float,
+                   height: float) -> str:
+    """The SVG fill whose rectangle IS this separator, not a page-sized band."""
+    best = None
+    best_area_delta = None
+    cell_area = width * height
+    for attrs in re.findall(r"<rect([^>]+)>", html):
+        def _g(name: str, src: str = attrs) -> str | None:
+            match = re.search(rf'\b{name}="([^"]+)"', src)
+            return match.group(1) if match else None
+        fill, x, y, w, h = (_g("fill"), _g("x"), _g("y"), _g("width"),
+                            _g("height"))
+        if not all((fill, x, y, w, h)):
+            continue
+        if fill.lower() in {"#000", "#000000", "black", "#fff", "#ffffff",
+                            "white"}:
+            continue
+        rx, ry, rw, rh = float(x), float(y), float(w), float(h)
+        if abs(rw - width) > 1.5 or abs(rh - height) > 1.5:
+            continue
+        if (min(left + width, rx + rw) - max(left, rx) <= 0.5
+                or min(top + height, ry + rh) - max(top, ry) <= 0.5):
+            continue
+        delta = abs(rw * rh - cell_area)
+        if best_area_delta is None or delta < best_area_delta:
+            best_area_delta = delta
+            best = fill
+    return best or "#c0c0c0"
+
+
 def emit_comb(*, ident: str, attrs: dict[str, str], left: float, width: float,
               n_slots: int, slot_widths: list[float], top: float, height: float,
               slot_top: float, slot_height: float, cls: str,
@@ -234,11 +281,11 @@ def emit_comb(*, ident: str, attrs: dict[str, str], left: float, width: float,
     cursor = 0.0
     lock = ' value="0" readonly tabindex="-1"' if locked else ""
     for i, slot_w in enumerate(slot_widths):
-        divider = "" if i == n_slots - 1 else ";box-shadow:inset -0.72pt 0 0 0 #000"
+        tick = "" if i == n_slots - 1 else hair_tick_style(slot_height)
         parts.append(
             f'<div class="s" data-slot="{i}" style="left:{fmt_pt(cursor)}pt;'
             f'top:{fmt_pt(slot_top)}pt;width:{fmt_pt(slot_w)}pt;'
-            f'height:{fmt_pt(slot_height)}pt{divider}">'
+            f'height:{fmt_pt(slot_height)}pt{tick}">'
             f'<input type="text" class="{cls}" id="{ident}-s{i}" name="{ident}" '
             f'data-slot-index="{i}" maxlength="1" autocomplete="off" '
             f'spellcheck="false"{lock}></div>'
@@ -248,14 +295,14 @@ def emit_comb(*, ident: str, attrs: dict[str, str], left: float, width: float,
     return "".join(parts)
 
 
-def emit_sep(div: str, left: float, width: float) -> str:
+def emit_sep(div: str, left: float, width: float, fill: str) -> str:
     _raw, attrs, _inner = parse_open(div)
     style = attrs["style"]
     top = style_prop(style, "top")
     height = style_prop(style, "height")
     new_style = (f"left:{fmt_pt(left)}pt;top:{fmt_pt(top)}pt;"
-                 f"width:{fmt_pt(width)}pt;height:{fmt_pt(height)}pt")
-    # Keep every original attribute except style.
+                 f"width:{fmt_pt(width)}pt;height:{fmt_pt(height)}pt;"
+                 f"background:{fill};box-shadow:inset 0 0 0 0.72pt #000")
     rebuilt = []
     for match in re.finditer(r'([:\w-]+)="([^"]*)"',
                              re.match(r"<div([^>]*)>", div).group(1)):
@@ -267,7 +314,7 @@ def emit_sep(div: str, left: float, width: float) -> str:
 
 
 def reflow_chain(find_html: str, ids: list[str], branch_id: str,
-                 lock_branch: bool) -> tuple[str, dict]:
+                 lock_branch: bool, form_html: str) -> tuple[str, dict]:
     divs = split_divs(find_html)
     if len(divs) != 7:
         raise ValueError(f"expected 7 pieces, got {len(divs)}")
@@ -346,7 +393,9 @@ def reflow_chain(find_html: str, ids: list[str], branch_id: str,
             gi += 1
         else:
             width = sep_widths[si]
-            out.append(emit_sep(piece["div"], x, width))
+            fill = dedicated_fill(form_html, piece["left"], piece["top"],
+                                  piece["width"], piece["height"])
+            out.append(emit_sep(piece["div"], x, width, fill))
             x = round(x + width, 2)
             si += 1
     if abs(x - x1) > 0.02:
@@ -401,6 +450,12 @@ def describe(meta: dict, branch_id: str, lock_branch: bool) -> str:
         f"cells (3+3+3+5) by left(i)=round(i*width/14, 2). {gdesc}. "
         f"A white knockout covers that same outer rectangle so the official "
         f"3- or 4-cell artwork does not show through the new even cells. "
+        f"Each digit group keeps ONE outer 0.72pt frame; interior slot "
+        f"dividers are short bottom hairs (~33% of slot height), matching "
+        f"how the official sheet draws a charbox tick (2550M item-1 month "
+        f"v172 is 0.72×4.32pt in a 13.20pt box), not a full-height wall on "
+        f"every digit. Separator boxes keep their dedicated SVG fill and a "
+        f"0.72pt black frame, and stay non-tabbable. "
         f"{branch_sentence(branch_id, lock_branch)} First/last writing-"
         f"surface insets are not re-applied: even cell width across the strip "
         f"is the layout rule. Branch pitch {fmt_pt(branch['slots'][0])}."
@@ -437,6 +492,13 @@ def update_evidence(record_id: str, meta: dict, lock_branch: bool) -> None:
         "none — even digit-cell width across the whole strip is the rule; "
         "re-applying per-group 0.36pt insets would squeeze the edges of each "
         "group and make the last five cells look different from the first nine"
+    )
+    policy["chrome"] = (
+        "each digit group: one outer 0.72pt frame, white knockout inside. "
+        "Interior ticks are short bottom hairs (~33% of slot height), matching "
+        "the official charbox (2550M month v172), not a full-height wall on "
+        "every digit. Separators: dedicated SVG fill + 0.72pt black frame, "
+        "no input, not in tab order."
     )
     if lock_branch:
         policy["per_slot_input"] = (
@@ -493,7 +555,7 @@ def main() -> int:
             raise SystemExit(f"{spec['id']}: branch id not unique in span")
         lock_branch = spec["lock_branch"]
         replace, meta = reflow_chain(find, spec["ids"], spec["branch_id"],
-                                     lock_branch)
+                                     lock_branch, html)
         after_html = html.replace(find, replace, 1)
         if after_html.count(replace) != 1:
             raise SystemExit(f"{spec['id']}: replace is not unique")

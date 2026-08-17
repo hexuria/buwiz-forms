@@ -6,6 +6,19 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
+**Active queue (2026-08-17 sitting).** Stage 2 TIN is in flight on
+`gol/tin-stage2` / PR #17. The sitting split the remaining work; do not
+fold P1 or P2 into that PR.
+
+| # | Branch / PR | Work | Stage |
+| --- | --- | --- | --- |
+| **P0** | `gol/tin-stage2` PR #17 | Even 3-3-3-5 TIN; lock `00000` only where the sheet prints `000`; **restore charbox chrome** (outer frame + bottom hair ticks; grey dash separators stay non-tabbable) | 2 |
+| **P1** | later, not #17 | Text inputs that sit on printed charbox dividers and accept a whole string (2550M month/sheets/RDO/zip and corpus peers). Comb slots already `maxlength="1"` everywhere. This is `inputs_span_no_printed_divider` — fix the generator, do not declare TIN records for it. | 1 |
+| **P2** | `gol/tin-stage3` (stacked on #17) | Tab order: finish a grouped item (0605 17 then 18) before the neighbour; diagnose 2550M page-2 first schedule row. F209 (band DOM order) is already closed. | 1 / UX |
+| **—** | blocked | Stage 3 map | 3 |
+
+Detail for P0 lives in [corrections/README.md](corrections/README.md).
+
 **Merging PR #13 lands the pipeline and the corpus so they can be polished in
 place. It does not land defect-free forms.** 26 blocker+major findings are open
 and two gate checks fail. That is the starting position of this plan, not a

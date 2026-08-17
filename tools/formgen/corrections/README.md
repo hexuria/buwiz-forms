@@ -145,6 +145,31 @@ silently credit every remittance to the head office. `lock_branch` in
 `tools/formgen/review/reflow_tin_chain.py` carries the distinction, and it is
 set from the pinned artwork's own ink, never from convenience.
 
+### Charbox chrome (sitting 2026-08-17)
+
+The even 3-3-3-5 split does **not** get to restyle the TIN as a grid of
+full boxes. Official charboxes (2550M item 1 month, rule `v172`) put a
+complete 0.72pt frame on the **outer** group only; interior ticks are
+short hairs on the floor of the box (~33% of its height). Dash/gap cells
+between TIN groups keep the dedicated SVG fill (`#c0c0c0` / `#808080` /
+`#ffcc99` / `#e3e3e3` depending on the sheet) and a black frame, and they
+stay non-tabbable. `reflow_tin_chain.py` paints that chrome after the
+white knockout, because the knockout hides the official ticks and fills.
+
+### Execution queue after this sitting
+
+Do these in order. Do not start a later row until the earlier one has a
+human verdict or an explicit skip.
+
+| # | Where | What | Why it is that layer |
+| --- | --- | --- | --- |
+| **P0** | `gol/tin-stage2` / [PR #17](https://github.com/hexuria/buwiz-forms/pull/17) | TIN chrome restore (this section) + even 3-3-3-5 + lock rule | Stage 2 residue: the source prints 3 or 4 branch boxes. |
+| **P1** | **not this PR** | Printed charboxes that still type like one `<input>` (2550M item 1/3/5/10 and peers) | Stage 1. Every comb slot in `forms/` already has `maxlength="1"` (0 missing across 53 forms). The overflowing fields are **text** inputs sitting on printed dividers — `inputs_span_no_printed_divider`. Fixing them in this ledger would hide a generator misread. Census, then a generator fix on a later batch, never a TIN record. |
+| **P2** | `gol/tin-stage3` (stacked on #17) | Tab/index: section-scoped order (0605 item 17 finishes before item 18); 2550M page-2 first schedule row | Beyond Stage 2 TIN. F209 (bands appended after the page) is already **fixed** (T1, 53/53 tab-walk green). What remains is (a) row-then-x across two side-by-side items instead of finishing a group, and (b) measuring why 2550M Schedule 1's first printed line is unusable — live `p2c0` exists at 118.32pt; do not guess. |
+| **—** | blocked | Stage 3 map | Field identity still bbox-derived. |
+
+Status on C01–C07 stays `declared` until the P0 sitting is accepted.
+
 Why C01 is genuinely stage 2: the 2007 artwork is **correct and out of date**.
 It prints three compartments and pre-prints `000` in them; BIR's own client
 declares `frm2550m:txtBranchCode` with `max_length: 5`. No rule derives "BIR
