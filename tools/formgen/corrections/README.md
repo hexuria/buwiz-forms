@@ -166,7 +166,7 @@ human verdict or an explicit skip.
 | **P0** | `gol/tin-stage2` / [PR #17](https://github.com/hexuria/buwiz-forms/pull/17) | TIN chrome restore (this section) + even 3-3-3-5 + lock rule | Stage 2 residue: the source prints 3 or 4 branch boxes. |
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | Tab: 0605 17 then 18; 2550M page-2 first schedule row (horizontal walls). | Stage 1 lattice. TIN overlay is a later batch. |
 | **P1+P1b** | `gol/tin-stage4` (this commit, stacked on #18) | Charbox hair ticks and X-squares stamp `maxlength="1"`; stay `type=text`. | Stage 1. Never a TIN record. |
-| **P0b** | after a new Stage 1 batch | Re-anchor C01–C07 and run `correct.py`. | Stage 2. Serial — records bind HTML bytes. |
+| **P0b** | after a named Stage 1 `forms/` commit | Re-anchor C01–C07 and run `correct.py`. Scratch HTML is `build/batch-p0b`; ledger still binds git `forms/`. | Stage 2. Serial — records bind HTML bytes. |
 | **—** | blocked | Stage 3 map | Field identity still bbox-derived. |
 
 Status on C01–C07 stays `declared` until the P0 sitting is accepted.
