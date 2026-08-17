@@ -28,7 +28,7 @@ does.
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | 2550M page-2 first Schedule 1 row (horizontal walls → 4-row growable); 0605 items 17 then 18 tab. Specify still a lower band. H-walls that would fuse into an existing y-line are skipped (2551M/2553 reviewed combs). | 1 / UX | Landed. |
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
-| **P0b** | `gol/tin-stage5` (this commit, stacked on #20) | Named Stage 1 `forms/` batch from the P2+P1 producer (53/53). Landing page still carries the previous audit: this worktree has no `build/audit.json`. Next commit on this layer re-anchors C01–C07 (C01 first group is now `p1c127`, not `p1c116`; `data-row` shifted on every TIN sheet) and runs `correct.py`. | 1 then 2 | Corpus is this commit. Re-anchor is the next commit on the same branch. |
+| **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch is `ddac6058`. This commit re-anchors C01–C07 against it (C01 first group `p1c116`→`p1c127`; P2 hairlines inside the TIN span are dropped into the knockout). `correct.py --batch ddac6058` is next; status stays `declared`. | 2 | Serial. Ledger binds the named batch. |
 | **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Blocked on P0b. |
 
 How to use agents (compact prompts, no full chat history; one writer per
