@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0.0-provisional",
+  "records": [
+    {
+      "id": "2550m-2007/p1/tin-branch",
+      "bundle_slug": "2550m-2007",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [180.24, 118.8, 213.12, 134.4],
+      "official_field_key": "frm2550m:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C01"
+    },
+    {
+      "id": "0605-1999/p1/tin-branch",
+      "bundle_slug": "0605-1999",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [183.0, 246.12, 223.92, 265.08],
+      "official_field_key": "frm0605:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C02"
+    },
+    {
+      "id": "2551m-2002/p1/tin-branch",
+      "bundle_slug": "2551m-2002",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [174.0, 190.8, 207.36, 210.24],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c19",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C03"
+    },
+    {
+      "id": "extra/2553-1999/p1/tin-branch",
+      "bundle_slug": "extra/2553-1999",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [172.08, 189.36, 205.44, 208.8],
+      "official_field_key": "frm2553:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c24",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C04"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-branch",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [218.52, 139.2, 276.0, 156.72],
+      "official_field_key": "frm1600WP:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C05"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-agent-branch",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-agent-branch",
+      "source_printed_box_pt": [366.48, 465.96, 401.284, 479.76],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested agent-branch field_key in this checkout",
+      "html_id_hint": "p1c74",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C06"
+    },
+    {
+      "id": "extra/1604cf-2008/p1/tin-branch",
+      "bundle_slug": "extra/1604cf-2008",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [204.24, 129.84, 250.8, 144.72],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "comb",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C07"
+    }
+  ]
+}
