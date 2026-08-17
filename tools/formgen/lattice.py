@@ -976,6 +976,38 @@ def wall_run(wall: dict[str, Any]) -> tuple[float, float]:
     return float(wall["y0"]), float(wall["y1"])
 
 
+def h_wall_would_fuse(wall: dict[str, Any],
+                      horizontals: Sequence[dict[str, Any]]) -> bool:
+    """True when this h-wall is redundant ink of a y-line we already have.
+
+    `fuse_boundaries` joins two horizontals when the paper between their ink
+    is thinner than the two thicknesses. A 1.92pt footer rail 2.52pt below a
+    0.72pt comb baseline (2551M y 822.72 vs 826.56) therefore fuses into one
+    lattice line at 823.49, which drops the reviewed combs on that row.
+    A missing table rail a full row away (2550M Schedule 1 at 108.24 vs the
+    next rule at 118.32) does not fuse, and is the wall this path exists to
+    admit. Skip the first; keep the second.
+    """
+    wy0, wy1 = float(wall["y0"]), float(wall["y1"])
+    wt = float(wall["thickness_pt"])
+    wx0, wx1 = float(wall["x0"]), float(wall["x1"])
+    for rule in horizontals:
+        rx0, rx1 = float(rule["x0"]), float(rule["x1"])
+        if min(wx1, rx1) - max(wx0, rx0) <= 0:
+            continue
+        ry0, ry1 = float(rule["y0"]), float(rule["y1"])
+        rt = float(rule.get("thickness_pt") or (ry1 - ry0))
+        if wy1 < ry0:
+            paper = ry0 - wy1
+        elif ry1 < wy0:
+            paper = wy0 - ry1
+        else:
+            paper = 0.0
+        if paper < wt + rt:
+            return True
+    return False
+
+
 def paint_ordinal(paint: dict[str, Any]) -> int:
     """Last source operation represented by one extracted paint rectangle."""
     return int(paint.get("paint_seq_max", paint.get("paint_seq", -1)))
@@ -7434,6 +7466,10 @@ def build_page(page: dict[str, Any],
             wall, *wall_run(wall), str(wall["axis"]))
     ]
     final_v_walls, final_h_walls = split_wall_axes(final_walls)
+    final_h_walls = [
+        wall for wall in final_h_walls
+        if not h_wall_would_fuse(wall, geometry_horizontals)
+    ]
 
     # Once a composite vertical has been partitioned into paper corridors, a
     # character tick in one row must not become lattice coverage merely because
@@ -8731,6 +8767,20 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(
         not wall_boundaries([page_fill]),
         "a page-sized fill was promoted to a lattice wall",
+    )
+    footer_rail = wall_boundaries([synthetic_fill(23.5, 825.60, 590.4, 827.52)])[0]
+    comb_baseline = {"x0": 85.6, "y0": 822.36, "x1": 141.5, "y1": 823.08,
+                     "thickness_pt": 0.72, "axis": "h"}
+    check(
+        h_wall_would_fuse(footer_rail, [comb_baseline]),
+        "a footer rail 2.52pt below a comb baseline was admitted as a new row",
+    )
+    schedule_rail = wall_boundaries([synthetic_fill(22.1, 107.28, 592.0, 109.20)])[0]
+    next_row = {"x0": 22.1, "y0": 117.84, "x1": 590.0, "y1": 118.80,
+                "thickness_pt": 0.96, "axis": "h"}
+    check(
+        not h_wall_would_fuse(schedule_rail, [next_row]),
+        "Schedule 1's missing top rail was skipped as a fused neighbour",
     )
 
     # Column-aware reading order. A table whose columns share row y-values
