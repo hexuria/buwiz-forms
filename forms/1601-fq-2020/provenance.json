@@ -33,6 +33,12 @@
       "rows": 6,
       "capacity": 6,
       "pitch_pt": 18.24
+    },
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
+      "pitch_pt": 13.44
     }
   ],
   "sources": [
@@ -94,7 +100,7 @@
       "1601-FQ Sep 2020 Guide.pdf"
     ]
   },
-  "html_bytes": 578698,
+  "html_bytes": 593412,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
