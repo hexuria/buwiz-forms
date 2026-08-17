@@ -164,9 +164,8 @@ human verdict or an explicit skip.
 | # | Where | What | Why it is that layer |
 | --- | --- | --- | --- |
 | **P0** | `gol/tin-stage2` / [PR #17](https://github.com/hexuria/buwiz-forms/pull/17) | TIN chrome restore (this section) + even 3-3-3-5 + lock rule | Stage 2 residue: the source prints 3 or 4 branch boxes. |
-| **P2** | `gol/tin-stage3` (this commit, stacked on #17) | Tab: 0605 17 then 18; 2550M page-2 first schedule row (horizontal walls). | Stage 1 lattice. TIN overlay is a later batch. |
-| **P1** | stacked on P2 | Charbox hair ticks still one unbounded `<input>` (0605 Year Ended overflow; Return Period; 2550M month/RDO/zip; peers). `inputs_span_no_printed_divider`. Census now; generator after P2. | Stage 1. Never a TIN record. |
-| **P1b** | same stack, own commit | Checkbox squares (`~12pt`, mark with `X`) that accept a whole string. 0605 sitting HTML has **zero** `type=checkbox`; Calendar/Fiscal and item 17 are `type=text` with no `maxlength`. Constrain to one character. | Stage 1. |
+| **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | Tab: 0605 17 then 18; 2550M page-2 first schedule row (horizontal walls). | Stage 1 lattice. TIN overlay is a later batch. |
+| **P1+P1b** | `gol/tin-stage4` (this commit, stacked on #18) | Charbox hair ticks and X-squares stamp `maxlength="1"`; stay `type=text`. | Stage 1. Never a TIN record. |
 | **P0b** | after a new Stage 1 batch | Re-anchor C01–C07 and run `correct.py`. | Stage 2. Serial — records bind HTML bytes. |
 | **—** | blocked | Stage 3 map | Field identity still bbox-derived. |
 

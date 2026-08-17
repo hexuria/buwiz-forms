@@ -1954,10 +1954,10 @@ def checkbox_square_field_box(cell: dict[str, Any],
     inset by the FRAME rule's own thickness on each side -- the identical
     clearance `field_box` gives an ordinary cell (see its docstring for why
     the full thickness, not half, is the deliberate margin). This is a
-    mark-with-an-X box, so one character is the whole capacity; nothing here
-    invents a new element, a new attribute or a maxlength -- it is rendered
-    by `field_input_markup`, the same function every other plain field goes
-    through.
+    mark-with-an-X box, so one character is the whole capacity. The input
+    stays `type="text"` -- the official client never ships a checkbox
+    widget -- and `field_input_markup` stamps `maxlength="1"` because
+    `input_is_single_character` sees a square in this size band.
 
     A cell's regions share one metrics class, so -- exactly as
     `ruled_blank_field_box` reclamps two blanks on one caption line to the
@@ -4667,9 +4667,58 @@ def field_region_suffix(box: FieldBox, region_index: int) -> str:
     return "-i" if box.regions is None else f"-i{region_index}"
 
 
+# Hair-tick charbox compartments (P1). 2550M "No. of sheets" regions measure
+# 24.6pt; zip/RDO regions 9.72-16.68pt. A table-column split (ADDRESS vs
+# STATUS) is tens to hundreds of points. The gap is empty; 28pt sits in it.
+CHAR_REGION_MAX_PT = 28.0
+# Square-ish X-boxes the sheet says to mark with an X (P1b). Reuses the F210
+# knockout band (4-20pt) plus an aspect cut so a 5x19 sliver is not an X-box.
+XBOX_ASPECT_LO = 0.70
+XBOX_ASPECT_HI = 1.45
+
+
+def region_inner_size(cell: dict[str, Any],
+                      inset: tuple[float, float, float, float] | None
+                      ) -> tuple[float, float]:
+    """Writing width/height of one region, from the cell and that region's inset."""
+    width = float(cell["x1"]) - float(cell["x0"])
+    height = float(cell["y1"]) - float(cell["y0"])
+    if inset is None:
+        return width, height
+    top, right, bottom, left = inset
+    return width - left - right, height - top - bottom
+
+
+def input_is_single_character(cell: dict[str, Any], box: FieldBox,
+                              region_index: int) -> bool:
+    """Whether this writing region is one character on the printed sheet.
+
+    Comb slots never consult this (`slot_index is not None` already stamps
+    maxlength=1). Two populations remain, both `type="text"`:
+
+      * P1b / F210: the region itself is a checkbox square (lattice cell or
+        knockout interior inside a label).
+      * P1: every region of the cell is a digit-sized hair-tick compartment.
+        A wide+narrow split (ADDRESS vs STATUS) fails the all-regions test
+        and is left unbounded.
+    """
+    sizes = [region_inner_size(cell, inset) for inset in box.region_insets]
+    width, height = sizes[region_index]
+    if (CHECKBOX_SQUARE_MIN_PT <= width <= CHECKBOX_SQUARE_MAX_PT
+            and CHECKBOX_SQUARE_MIN_PT <= height <= CHECKBOX_SQUARE_MAX_PT
+            and width > 0.0
+            and XBOX_ASPECT_LO <= height / width <= XBOX_ASPECT_HI):
+        return True
+    if (len(sizes) > 1
+            and all(0.0 < inner_w <= CHAR_REGION_MAX_PT for inner_w, _h in sizes)):
+        return True
+    return False
+
+
 def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
                        slot_index: int | None, live: bool,
-                       region_index: int = 0) -> str:
+                       region_index: int = 0,
+                       cell: dict[str, Any] | None = None) -> str:
     """One <input>. Its geometry is its parent's unless it is a plain field.
 
     A template's inputs carry no `id` and no `name`: template content is the
@@ -4713,13 +4762,21 @@ def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
     if slot_index is not None:
         identity.append(f'data-slot-index="{slot_index}"')
         identity.append('maxlength="1"')
+    elif (cell is not None
+          and input_is_single_character(cell, box, region_index)):
+        identity.append('maxlength="1"')
     return ('<input type="text" class="' + " ".join(classes) + '" '
             + " ".join(identity + attrs + ['autocomplete="off"', 'spellcheck="false"'])
             + ">")
 
 
-def field_json(box: FieldBox, fields: FieldPlan, cell_id: str) -> dict[str, Any]:
+def field_json(box: FieldBox, fields: FieldPlan, cell_id: str,
+               cell: dict[str, Any] | None = None) -> dict[str, Any]:
     """The field as data, so the band renderer can build one from scratch."""
+    ones = (
+        [input_is_single_character(cell, box, index)
+         for index in range(len(box.region_insets))]
+        if cell is not None else [])
     return {
         "kind": box.kind,
         "class": fields.class_of(box),
@@ -4742,6 +4799,11 @@ def field_json(box: FieldBox, fields: FieldPlan, cell_id: str) -> dict[str, Any]
         # present only where the field IS centred, so an uncentred field's
         # JSON is unchanged and every other reader keeps its current answer.
         **({"centered": True} if cell_id in fields.centered else {}),
+        # P1/P1b: same sparsity. A cloned row must stamp maxlength=1 on the
+        # same regions the pre-rendered inputs already carry, and nowhere else.
+        **({"maxlength_one": True} if ones and all(ones) else {}),
+        **({"region_maxlength_one": ones}
+           if ones and any(ones) and not all(ones) else {}),
     }
 
 
@@ -4881,7 +4943,7 @@ def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
         # `writing_regions` exists to answer; 9,932 of 9,971 cells have exactly
         # one region and emit exactly the input they always did.
         body = "".join(
-            field_input_markup(cell["id"], box, fields, None, live, index)
+            field_input_markup(cell["id"], box, fields, None, live, index, cell)
             for index in range(len(box.region_insets)))
     return f'<div {" ".join(attrs)} style="{esc_attr(style)}">{body}</div>'
 
@@ -4974,7 +5036,7 @@ def cell_json(cell: dict[str, Any], fields: "FieldPlan | None" = None) -> dict[s
         }
     box = fields.of(cell["id"]) if fields is not None else None
     if box is not None:
-        payload["field"] = field_json(box, fields, cell["id"])
+        payload["field"] = field_json(box, fields, cell["id"], cell)
     return payload
 
 
@@ -6501,6 +6563,18 @@ function fieldRegions(field){
      FieldBox.region_insets. */
   return field.region_insets?field.region_insets:[field.inset_trbl];
 }
+function fieldMaxlengthOne(cell,regionIndex){
+  /* Mirrors field_input_markup's P1/P1b maxlength=1 stamp into a row cloned
+     at run time. Sparse keys: maxlength_one means every region, region_
+     maxlength_one is the mixed case, absent means unbounded. */
+  var field=cell.field;
+  if(!field){return false;}
+  if(field.maxlength_one){return true;}
+  if(field.region_maxlength_one){
+    return !!field.region_maxlength_one[regionIndex||0];
+  }
+  return false;
+}
 function fieldMetrics(el,field,regionIndex,slotIndex){
   el.style.fontSize=field.size_pt+"pt";
   el.style.lineHeight=field.line_height_pt+"pt";
@@ -6535,6 +6609,8 @@ function fieldInput(cell,slotIndex,regionIndex){
   el.setAttribute("spellcheck","false");
   if(slotIndex!==null){
     el.setAttribute("data-slot-index",slotIndex);
+    el.setAttribute("maxlength","1");
+  }else if(fieldMaxlengthOne(cell,regionIndex)){
     el.setAttribute("maxlength","1");
   }
   fieldMetrics(el,cell.field,regionIndex,slotIndex);
@@ -10426,6 +10502,55 @@ def writing_box_assertions(plan: dict[str, Any], failures: list[str]) -> None:
            "cloned at run time, not just the pre-rendered instance",
            "BAND_JS's fieldMetrics reads field.centered and sets textAlign",
            failures)
+
+    # P1/P1b: maxlength=1 on hair-tick compartments and X-squares, never on a
+    # wide column split, never as type=checkbox.
+    _check('maxlength="' not in markup,
+           "a wide column-split (ADDRESS vs STATUS shape) stays unbounded",
+           markup, failures)
+    tick = {"x0": 24.9, "y0": 10.0, "x1": 25.5, "y1": 16.5}
+    charbox = {**_synthetic_cell("p0c5", 0.0, 16.0),
+               "x1": 50.4, "printed_partitions": [tick]}
+    char_plan = FieldPlan(
+        {"pages": [{"index": 0, "cells": [charbox]}]}, face, [])
+    char_box = char_plan.of("p0c5")
+    char_markup = cell_markup(charbox, char_plan)
+    char_json = field_json(char_box, char_plan, "p0c5", charbox) if char_box else {}
+    _check(char_box is not None and char_box.regions is not None
+           and len(char_box.regions) == 2
+           and char_markup.count('maxlength="1"') == 2
+           and char_json.get("maxlength_one") is True,
+           "a hair-tick charbox stamps maxlength=1 on every compartment (P1)",
+           f"regions {None if char_box is None else char_box.regions} "
+           f"markup={char_markup} json={char_json}", failures)
+    xbox = _synthetic_cell("p0c6", 0.0, 12.0)
+    xbox["x1"] = 12.0
+    xbox_plan = FieldPlan(
+        {"pages": [{"index": 0, "cells": [xbox]}]}, face, [])
+    xbox_box = xbox_plan.of("p0c6")
+    xbox_markup = cell_markup(xbox, xbox_plan)
+    xbox_json = field_json(xbox_box, xbox_plan, "p0c6", xbox) if xbox_box else {}
+    _check(xbox_box is not None
+           and xbox_markup.count('maxlength="1"') == 1
+           and 'type="text"' in xbox_markup
+           and "checkbox" not in xbox_markup
+           and xbox_json.get("maxlength_one") is True,
+           "an X-square stays type=text with maxlength=1 (P1b)",
+           f"markup={xbox_markup} json={xbox_json}", failures)
+    wide = _synthetic_cell("p0c7", 40.0, 60.0)
+    wide_plan = FieldPlan(
+        {"pages": [{"index": 0, "cells": [wide]}]}, face, [])
+    wide_box = wide_plan.of("p0c7")
+    wide_markup = cell_markup(wide, wide_plan)
+    _check(wide_box is not None
+           and 'maxlength="' not in wide_markup
+           and "maxlength_one" not in field_json(wide_box, wide_plan, "p0c7", wide),
+           "a wide undivided text field stays unbounded",
+           wide_markup, failures)
+    _check("fieldMaxlengthOne" in BAND_JS,
+           "the band runtime stamps maxlength=1 on cloned single-character "
+           "regions, not just the pre-rendered instance",
+           "BAND_JS defines fieldMaxlengthOne", failures)
 
 
 def _knockout_specify_fill(role: str, gray: float | None,
