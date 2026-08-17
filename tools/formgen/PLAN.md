@@ -30,7 +30,7 @@ does.
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
 | **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Status `applied`, not `verified` (`proven: false` until audit.py is seen to fail on the corrected tree). | 2 | Sitting accepted. Do not call this verification. |
-| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. Seed: the seven TIN branch subjects already bound by printed boxes. Matcher: exactly one comb overlapping `source_printed_box_pt`; `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. This is the freeze R2 asked for, not Stage 3. |
+| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. Seven TIN strips, four groups each (28 identities). Matcher: exactly one fillable-field *center* in `source_printed_box_pt`; `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN-strip class is catalogued. Stage 3 still closed. |
 | **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Identity catalog is seeded, not complete. Still blocked on catalog coverage of fillable fields, and on G02 / G03 / G04. |
 
 How to use agents (compact prompts, no full chat history; one writer per
@@ -43,8 +43,9 @@ file):
 2. **One** implementer for P2 commit, then **one** for P1 charbox split.
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
 4. Identity work is `tools/formgen/field_identity.py` against
-   `tools/formgen/identity/catalog.json`. Stage 3 still does not start until
-   that catalog covers fillable fields and G02 / G03 / G04 are done.
+   `tools/formgen/identity/catalog.json` (28 TIN-strip identities). Stage 3
+   still does not start until that catalog covers fillable fields and G02 /
+   G03 / G04 are done.
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
 
@@ -366,7 +367,7 @@ shown *not* to be a stage-1 row above.
 ## Stage 3 — map
 
 **Blocked. Do not start.** The identity catalog exists and is seeded with
-seven TIN branch subjects (`tools/formgen/identity/`). That is the freeze
+seven TIN strips, 28 identities (`tools/formgen/identity/`). That is the freeze
 R2 asked for, not the mapper. Stage 3 begins when the catalog covers
 fillable fields and the preconditions below hold.
 
@@ -393,7 +394,7 @@ The join is also far from bijective (measured 2026-08-06):
 
 **Preconditions before stage 3 opens (all must hold):**
 1. Field identity is a catalog id, not a bbox and not `p1cN`. The seed of
-   seven TIN branch subjects is not coverage. Every fillable field Stage 3
+   seven TIN strips (28 identities) is not coverage. Every fillable field Stage 3
    would join must resolve `exactly-one` against `forms-corrected/`.
 2. Stage-1 rows G02, G03, G04 are `done` (a field that does not exist cannot be
    mapped; a field that should not exist must not be).

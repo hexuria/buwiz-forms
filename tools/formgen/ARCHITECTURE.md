@@ -227,12 +227,12 @@ harvested from the official HTA runtime, with `serialized_key` values like
 Our side now has a durable identity that is not `p1c9` and not
 `lattice.geometry_subject_key`'s `p<page>@<bbox>`:
 [`tools/formgen/identity/catalog.json`](identity/catalog.json), checked by
-[`tools/formgen/field_identity.py`](field_identity.py). The seed is the
-seven TIN branch subjects already bound by printed boxes in the Stage 2
-ledger. A record resolves when exactly one emitted comb overlaps
-`source_printed_box_pt`. The HTML cell id is a hint; a unique overlap
-with a different id is `html_id_hint_stale` and must update the catalog
-in the same commit as the batch that moved it.
+[`tools/formgen/field_identity.py`](field_identity.py). The catalog covers
+the seven TIN strips (four groups each, 28 identities). A record resolves
+when exactly one fillable field has its center in `source_printed_box_pt`.
+The HTML cell id is a hint; a unique center hit with a different id is
+`html_id_hint_stale` and must update the catalog in the same commit as the
+batch that moved it.
 
 This is not Stage 3. Nothing writes official keys onto `name=`. The
 mapper stays closed until the catalog covers fillable fields and G02 /

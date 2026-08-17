@@ -11,11 +11,13 @@ quantised bbox. Both move when the lattice changes (PLAN.md risk R2). A field
 identity is a published id such as `2550m-2007/p1/tin-branch`, bound to the
 printed box on the pinned PDF. The HTML cell id is a hint.
 
-Resolution overlaps that printed box with emitted `data-field-kind="comb"`
-rectangles in a named tree. Exactly one hit, whose `id` equals the hint, is
-success. A unique hit with a different `id` is `html_id_hint_stale` — update
-the catalog in the same commit as the batch; do not mint a new identity.
-Zero or two hits cannot be resolved and must not be guessed.
+Resolution puts the center of an emitted fillable field (`data-cell-kind=
+"field"`, comb or text) inside that printed box. Exactly one hit, whose
+`id` equals the hint, is success. A unique hit with a different `id` is
+`html_id_hint_stale` — update the catalog in the same commit as the batch;
+do not mint a new identity. Zero or two hits cannot be resolved and must
+not be guessed. Raw overlap is not the test: Stage 2 reflow makes
+neighbouring TIN groups nick each other's old edges.
 
 This is not Stage 3: nothing writes `name="frm2550m:txtBranchCode"`.
 This is not verification of C01–C07: overlap is not `expected_effect`.
@@ -57,24 +59,37 @@ REQUIRED_MATCH_KEYS = ("kind", "tolerance_pt", "cardinality")
 HTML_ID_HINT_RE = re.compile(r"^p[0-9]+c[0-9]+$")
 
 
-class CombCollector(html.parser.HTMLParser):
-    """Every comb-field box in a document. Ignores knockouts and labels."""
+MATCH_KINDS = frozenset({"comb", "field"})
+
+
+class FieldCollector(html.parser.HTMLParser):
+    """Every fillable field box. Ignores knockouts, separators, and labels."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.combs: list[dict[str, object]] = []
+        self.fields: list[dict[str, object]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag != "div":
             return
         data = {key: value or "" for key, value in attrs}
-        if data.get("data-field-kind") != "comb":
+        if data.get("data-cell-kind") != "field":
+            return
+        # TIN dash separators are field cells with no field-kind. After the
+        # even reflow their centers sit inside the previous group's printed
+        # box (C04 peach, C07 grey). They are not identities.
+        if not data.get("data-field-kind"):
             return
         box = parse_style_box(data.get("style", ""))
         html_id = data.get("id", "")
         if box is None or not html_id:
             return
-        self.combs.append({"id": html_id, "box": box, "page_prefix": _page_prefix(html_id)})
+        self.fields.append({
+            "id": html_id,
+            "box": box,
+            "page_prefix": _page_prefix(html_id),
+            "field_kind": data.get("data-field-kind", ""),
+        })
 
 
 def _page_prefix(html_id: str) -> str:
@@ -108,19 +123,21 @@ def expand_box(box: tuple[float, float, float, float],
     return (x0 - tolerance, y0 - tolerance, x1 + tolerance, y1 + tolerance)
 
 
-def intersection_area(left: tuple[float, float, float, float],
-                      right: tuple[float, float, float, float]) -> float:
-    x0 = max(left[0], right[0])
-    y0 = max(left[1], right[1])
-    x1 = min(left[2], right[2])
-    y1 = min(left[3], right[3])
-    return max(0.0, x1 - x0) * max(0.0, y1 - y0)
+def box_center(box: tuple[float, float, float, float]) -> tuple[float, float]:
+    return ((box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0)
 
 
-def overlaps(printed: tuple[float, float, float, float],
-             emitted: tuple[float, float, float, float],
-             tolerance_pt: float) -> bool:
-    return intersection_area(expand_box(printed, tolerance_pt), emitted) > 0.0
+def center_in_printed(printed: tuple[float, float, float, float],
+                      emitted: tuple[float, float, float, float],
+                      tolerance_pt: float) -> bool:
+    """Stage 2 reflow expands the branch left, so neighbouring groups overlap
+    by a fraction of a point. The emitted box whose *center* still sits in
+    the printed box is the same field; a neighbour that only nicks the edge
+    is not.
+    """
+    cx, cy = box_center(emitted)
+    x0, y0, x1, y1 = expand_box(printed, tolerance_pt)
+    return x0 <= cx <= x1 and y0 <= cy <= y1
 
 
 def load_catalog(path: pathlib.Path) -> tuple[dict, list[str]]:
@@ -203,8 +220,8 @@ def check_record(record: object, path: str, seen: set[str]) -> list[str]:
         extra_match = set(match) - set(REQUIRED_MATCH_KEYS)
         if extra_match:
             errors.append(f"{path}: match unknown keys {sorted(extra_match)}")
-        if match.get("kind") != "comb":
-            errors.append(f"{path}: match.kind must be 'comb'")
+        if match.get("kind") not in MATCH_KINDS:
+            errors.append(f"{path}: match.kind must be one of {sorted(MATCH_KINDS)}")
         if match.get("cardinality") != "exactly-one":
             errors.append(f"{path}: match.cardinality must be 'exactly-one'")
         tolerance = match.get("tolerance_pt")
@@ -216,11 +233,17 @@ def check_record(record: object, path: str, seen: set[str]) -> list[str]:
     return errors
 
 
-def collect_combs(html_text: str) -> list[dict[str, object]]:
-    parser = CombCollector()
+def collect_fields(html_text: str) -> list[dict[str, object]]:
+    parser = FieldCollector()
     parser.feed(html_text)
     parser.close()
-    return parser.combs
+    return parser.fields
+
+
+def _kind_wanted(match_kind: str, field_kind: str) -> bool:
+    if match_kind == "comb":
+        return field_kind == "comb"
+    return True
 
 
 def resolve_record(record: dict, tree: pathlib.Path) -> dict[str, object]:
@@ -241,6 +264,7 @@ def resolve_record(record: dict, tree: pathlib.Path) -> dict[str, object]:
         return result
     printed = tuple(float(value) for value in record["source_printed_box_pt"])
     tolerance = float(record["match"]["tolerance_pt"])
+    match_kind = str(record["match"]["kind"])
     page_prefix = f"p{record['page']}"
     try:
         html_text = html_path.read_text(encoding="utf-8")
@@ -248,32 +272,34 @@ def resolve_record(record: dict, tree: pathlib.Path) -> dict[str, object]:
         result["reason"] = f"cannot read {html_path}: {exc}"
         return result
     hits = []
-    for comb in collect_combs(html_text):
-        if comb["page_prefix"] != page_prefix:
+    for field in collect_fields(html_text):
+        if field["page_prefix"] != page_prefix:
             continue
-        if overlaps(printed, comb["box"], tolerance):  # type: ignore[arg-type]
-            hits.append(comb)
-    result["candidates"] = [comb["id"] for comb in hits]
+        if not _kind_wanted(match_kind, str(field["field_kind"])):
+            continue
+        if center_in_printed(printed, field["box"], tolerance):  # type: ignore[arg-type]
+            hits.append(field)
+    result["candidates"] = [field["id"] for field in hits]
     if not hits:
         result["status"] = "unresolved"
-        result["reason"] = "no comb overlaps source_printed_box_pt"
+        result["reason"] = "no fillable field has its center in source_printed_box_pt"
         return result
     if len(hits) > 1:
         result["status"] = "ambiguous"
-        result["reason"] = "more than one comb overlaps source_printed_box_pt: " + ", ".join(
-            str(comb["id"]) for comb in hits)
+        result["reason"] = "more than one field center sits in source_printed_box_pt: " + ", ".join(
+            str(field["id"]) for field in hits)
         return result
     resolved = str(hits[0]["id"])
     result["resolved_html_id"] = resolved
     if resolved != record["html_id_hint"]:
         result["status"] = "html_id_hint_stale"
         result["reason"] = (
-            f"unique overlap is {resolved}, catalog hint is {record['html_id_hint']}; "
+            f"unique center hit is {resolved}, catalog hint is {record['html_id_hint']}; "
             "update the hint in this commit, do not mint a new identity"
         )
         return result
     result["status"] = "resolved"
-    result["reason"] = "exactly one comb overlaps; html_id_hint agrees"
+    result["reason"] = "exactly one field center in the printed box; html_id_hint agrees"
     return result
 
 
@@ -313,6 +339,14 @@ def _comb(html_id: str, left: float, top: float, width: float, height: float) ->
     )
 
 
+def _text(html_id: str, left: float, top: float, width: float, height: float) -> str:
+    return (
+        f'<div id="{html_id}" class="c f" data-cell-kind="field" '
+        f'data-field-kind="text" data-field-name="{html_id}" '
+        f'style="left:{left}pt;top:{top}pt;width:{width}pt;height:{height}pt"></div>'
+    )
+
+
 def _sample_record(**overrides: object) -> dict:
     record: dict[str, object] = {
         "id": "fixture/p1/tin-branch",
@@ -323,7 +357,7 @@ def _sample_record(**overrides: object) -> dict:
         "official_field_key": "frmFixture:txtBranchCode",
         "official_field_key_gap": "",
         "html_id_hint": "p1c13",
-        "match": {"kind": "comb", "tolerance_pt": 0.25, "cardinality": "exactly-one"},
+        "match": {"kind": "field", "tolerance_pt": 0.25, "cardinality": "exactly-one"},
         "correction_id": None,
     }
     record.update(overrides)
@@ -344,8 +378,8 @@ def self_test() -> int:
     catalog, errors = load_catalog(DEFAULT_CATALOG)
     check("shipped catalog is well formed", not errors, "; ".join(errors[:3]))
     if catalog:
-        check("shipped catalog seeds seven TIN branch identities",
-              len(catalog.get("records", [])) == 7,
+        check("shipped catalog covers the seven TIN strips (4 groups each)",
+              len(catalog.get("records", [])) == 28,
               str(len(catalog.get("records", []))))
         ids = [record["id"] for record in catalog["records"]]
         check("shipped identity ids are unique", len(ids) == len(set(ids)))
@@ -400,20 +434,61 @@ def self_test() -> int:
 
         _write_html(tree / "fixture-form" / "index.html", neighbour)
         missing = resolve_record(record, tree)
-        check("no overlapping comb is unresolved",
+        check("no field center in the printed box is unresolved",
               missing["status"] == "unresolved", str(missing))
 
         twin = _comb("p1c99", 180.0, y0, 40.0, y1 - y0)
         _write_html(tree / "fixture-form" / "index.html", target + twin)
         ambi = resolve_record(record, tree)
-        check("two overlapping combs are ambiguous",
+        check("two field centers in the printed box are ambiguous",
               ambi["status"] == "ambiguous", str(ambi))
 
         _write_html(tree / "fixture-form" / "index.html",
                     _comb("p2c13", 165.63, y0, x1 - 165.63, y1 - y0))
         other_page = resolve_record(record, tree)
-        check("a comb on another page does not resolve this identity",
+        check("a field on another page does not resolve this identity",
               other_page["status"] == "unresolved", str(other_page))
+
+        # C01 tin-1 after even reflow: neighbour nicks the old right edge,
+        # but its center is in tin-2. Must not go ambiguous.
+        tin1 = _sample_record(
+            id="fixture/p1/tin-1", role="tin-1", html_id_hint="p1c127",
+            source_printed_box_pt=[66.0, 118.8, 99.84, 133.68])
+        reflowed = (
+            _text("p1c127", 66.0, 118.8, 28.49, 14.88)
+            + _comb("p1c9", 99.29, 118.8, 28.49, 15.6)
+        )
+        _write_html(tree / "fixture-form" / "index.html", reflowed)
+        tin1_result = resolve_record(tin1, tree)
+        check("a neighbour that nicks the printed edge does not steal the identity",
+              tin1_result["status"] == "resolved"
+              and tin1_result["resolved_html_id"] == "p1c127",
+              str(tin1_result))
+        text_only = _sample_record(
+            id="fixture/p1/tin-text", role="tin-1", html_id_hint="p1c127",
+            source_printed_box_pt=[66.0, 118.8, 99.84, 133.68])
+        _write_html(tree / "fixture-form" / "index.html",
+                    _text("p1c127", 66.0, 118.8, 33.84, 14.88))
+        text_result = resolve_record(text_only, tree)
+        check("a stage-1 text field (not comb) still resolves kind=field",
+              text_result["status"] == "resolved"
+              and text_result["resolved_html_id"] == "p1c127",
+              str(text_result))
+
+        sep = (
+            _comb("p1c18", 57.84, 189.36, 28.6, 19.44)
+            + '<div id="p1c19" class="c" data-cell-kind="field" '
+            'style="left:86.44pt;top:189.36pt;width:4.8pt;height:19.44pt"></div>'
+        )
+        tin_c04 = _sample_record(
+            id="fixture/p1/tin-peach", role="tin-1", html_id_hint="p1c18",
+            source_printed_box_pt=[57.84, 189.36, 91.8, 208.8])
+        _write_html(tree / "fixture-form" / "index.html", sep)
+        sep_result = resolve_record(tin_c04, tree)
+        check("a dash separator with no field-kind does not steal the identity",
+              sep_result["status"] == "resolved"
+              and sep_result["resolved_html_id"] == "p1c18",
+              str(sep_result))
 
     print("FAIL" if failed else "OK",
           f"{failed} self-test(s) failed" if failed else "self-test")

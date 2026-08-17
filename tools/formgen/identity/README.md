@@ -21,27 +21,39 @@ in the same commit (a schema change), but it must not mint a new identity.
 ## How a record is resolved
 
 `field_identity.py` parses the named tree with the stdlib HTML parser — not
-`emit.py`, not `lattice.py`. It collects `data-field-kind="comb"` boxes and
-requires **exactly one** whose emitted rectangle overlaps the printed box
-(tolerance `match.tolerance_pt`). A white knockout covering the strip is
-`data-cell-kind="blank"` and is ignored.
+`emit.py`, not `lattice.py`. It collects `data-cell-kind="field"` boxes
+(comb *or* text: C01's first TIN group and C06's agent TIN emit as `text`
+on the stage-1 batch). A white knockout covering the strip is
+`data-cell-kind="blank"` and is ignored. Dash separators are `data-cell-kind=
+"field"` with no `data-field-kind`; they are ignored too, because the even
+reflow parks their centers inside the previous group's printed box.
+
+Match is **center-in-printed-box**, not raw overlap. Stage 2 even-3-3-3-5
+reflow expands the branch left, so neighbouring groups nick each other's
+old edges by a fraction of a point. The emitted field whose center still
+sits in `source_printed_box_pt` (tolerance `match.tolerance_pt`) is the
+same subject. Exactly one such hit, whose `id` equals `html_id_hint`, is
+success.
 
 | Result | Meaning |
 | --- | --- |
-| resolved | exactly one comb, and its `id` equals `html_id_hint` |
-| html_id_hint_stale | exactly one comb, different `id` — update the catalog in this commit |
-| unresolved | zero combs overlap the printed box |
-| ambiguous | two or more combs overlap — the printed box no longer names one field |
+| resolved | exactly one field center in the printed box, and its `id` equals `html_id_hint` |
+| html_id_hint_stale | unique center hit, different `id` — update the catalog in this commit |
+| unresolved | no field center sits in the printed box |
+| ambiguous | two or more field centers sit in the printed box |
 
 Zero or two is a failure. A stale hint is also a failure: silent remapping
 is risk R2. The identity id still names the same box; only the hint moves.
+
+The seed is the seven TIN strips (4 groups each, 28 identities), not every
+fillable field.
 
 ## What this is not
 
 - Not Stage 3. Nothing writes `name="frm2550m:txtBranchCode"`.
 - Not verification of C01–C07. Overlap does not re-derive `expected_effect`.
-- Not a census of every fillable field. The seed is the seven TIN branch
-  subjects already bound by printed boxes in the Stage 2 ledger.
+- Not a census of every fillable field. The seed is the seven TIN strips
+  already bound by C01–C07 (four groups each).
 
 ```sh
 python3 tools/formgen/field_identity.py --self-test

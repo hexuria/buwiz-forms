@@ -43,7 +43,7 @@
             "items": { "type": "number" },
             "minItems": 4,
             "maxItems": 4,
-            "description": "[x0, y0, x1, y1] in PDF points, top-left origin, from the pinned PDF. Artwork identity. Not the lookup key after a Stage 2 reflow — the matcher overlaps this box with emitted combs."
+            "description": "[x0, y0, x1, y1] in PDF points, top-left origin, from the pinned PDF / stage-1 emission of that artwork. Artwork identity. After a Stage 2 reflow the matcher uses the emitted box whose center still sits in this rectangle."
           },
           "official_field_key": {
             "type": ["string", "null"],
@@ -56,14 +56,14 @@
           "html_id_hint": {
             "type": "string",
             "pattern": "^p[0-9]+c[0-9]+$",
-            "description": "Current batch cell id. Non-authoritative. A mismatch against a unique overlap is html_id_hint_stale, a schema change, not a new identity."
+            "description": "Current batch cell id. Non-authoritative. A mismatch against a unique center hit is html_id_hint_stale, a schema change, not a new identity."
           },
           "match": {
             "type": "object",
             "additionalProperties": false,
             "required": ["kind", "tolerance_pt", "cardinality"],
             "properties": {
-              "kind": { "const": "comb" },
+              "kind": { "enum": ["comb", "field"] },
               "tolerance_pt": { "type": "number", "exclusiveMinimum": 0 },
               "cardinality": { "const": "exactly-one" }
             }
