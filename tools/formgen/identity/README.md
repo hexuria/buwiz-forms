@@ -49,12 +49,14 @@ is risk R2. The identity id still names the same box; only the hint moves.
 
 ## Coverage
 
-5211 identities. C01–C07 seed (28) + I0 TIN caption chains (152) + I1 TIN
-leftovers (28) + I2 remaining comb cells (4349) + I2 x-squares (654).
-X-squares are ~4–20pt text cells with aspect 0.70–1.45 (`xbox-*`). Evidence:
-[`identity-xbox-20260818.json`](../corrections/evidence/identity-xbox-20260818.json).
+9990 identities on both `forms/` and `forms-corrected/` — every fillable
+cell. C01–C07 seed (28) + I0 TIN caption chains (152) + I1 TIN leftovers
+(28) + I2 combs (4349) + I2 x-squares (654) + I2 wide text (4779). Wide
+text is `text-*`. Evidence:
+[`identity-text-20260818.json`](../corrections/evidence/identity-text-20260818.json).
 
-Wide text and remainder fillables are not catalogued yet.
+`coverage --tree forms` and `coverage --tree forms-corrected` report
+9990/9990. The gate pin for that 0-gap is I3.
 
 ## What this is not
 

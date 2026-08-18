@@ -34,6 +34,7 @@ does.
 | **I1** | `gol/stage3-ready` | TIN leftovers: 1801 mixed `tin-strip` + tin-2/3/branch; extra HTML 3+3+3+N chains (spouse/page-2/extra). 208 identities. Eight PDF-unmeasurable bundles still emit no chain. | 2/3 seam | Serial. Not a mapper. |
 | **I2 comb** | `gol/stage3-ready` | Remaining comb fillables (4349). Roles from slot count + pitch (`date-yyyy`, `money-21`, `comb-2s`, …). Emitted box as `source_printed_box_pt`. 4557 identities. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
 | **I2 xbox** | `gol/stage3-ready` | X-squares (654): ~4–20pt text, aspect 0.70–1.45, `xbox-*`. 5211 identities. | 2/3 seam | Serial. Not `type=checkbox`. |
+| **I2 text** | `gol/stage3-ready` | Wide text (4779) as `text-*`. Live fillable denominator 9990/9990 on both trees. Remainder 0. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
 | **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Identity catalog is seeded, not complete. Still blocked on catalog coverage of fillable fields, and on G02 / G03 / G04. |
 
 How to use agents (compact prompts, no full chat history; one writer per

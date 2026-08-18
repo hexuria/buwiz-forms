@@ -588,8 +588,8 @@ def self_test() -> int:
               and {record["correction_id"] for record in seed}
               == {"C01", "C02", "C03", "C04", "C05", "C06", "C07"},
               str(len(seed)))
-        check("catalog covers TIN, combs, and x-squares (5211)",
-              len(records) == 5211,
+        check("catalog covers every measured fillable cell (9990)",
+              len(records) == 9990,
               str(len(records)))
         ids = [record["id"] for record in records]
         check("shipped identity ids are unique", len(ids) == len(set(ids)))
