@@ -6,7 +6,7 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-18, TIN-class identity catalog on `gol/field-identity`).**
+**Active queue (2026-08-18, Stage 3 preconditions hold on `gol/stage3-ready`).**
 Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
 batch is `ddac6058`. C01–C07 sitting accepted (`applied`, not `verified`).
 Do not fold later rows into those PRs. Identity is a new layer on top of
@@ -30,8 +30,13 @@ does.
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
 | **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Status `applied`, not `verified` (`proven: false` until audit.py is seen to fail on the corrected tree). | 2 | Sitting accepted. Do not call this verification. |
-| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. C01–C07 seed (28) plus 38 measured 3+3+3+5 corpus strips (152) = 180 identities. Matcher: exactly one fillable-field *center* in `source_printed_box_pt` (field or G11 mixed comb); `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN caption-chain class: 44/53 bundles. `extra/1801-2018` skipped. Stage 3 still closed. |
-| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Identity catalog is seeded, not complete. Still blocked on catalog coverage of fillable fields, and on G02 / G03 / G04. |
+| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. C01–C07 seed (28) plus 38 measured 3+3+3+5 corpus strips (152) = 180 identities. Matcher: exactly one fillable-field *center* in `source_printed_box_pt` (field or G11 mixed comb); `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN caption-chain class: 44/53 bundles. `extra/1801-2018` skipped at I0. Stage 3 still closed. |
+| **I1** | `gol/stage3-ready` | TIN leftovers: 1801 mixed `tin-strip` + tin-2/3/branch; extra HTML 3+3+3+N chains (spouse/page-2/extra). 208 identities. Eight PDF-unmeasurable bundles still emit no chain. | 2/3 seam | Serial. Not a mapper. |
+| **I2 comb** | `gol/stage3-ready` | Remaining comb fillables (4349). Roles from slot count + pitch (`date-yyyy`, `money-21`, `comb-2s`, …). Emitted box as `source_printed_box_pt`. 4557 identities. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
+| **I2 xbox** | `gol/stage3-ready` | X-squares (654): ~4–20pt text, aspect 0.70–1.45, `xbox-*`. 5211 identities. | 2/3 seam | Serial. Not `type=checkbox`. |
+| **I2 text** | `gol/stage3-ready` | Wide text (4779) as `text-*`. Live fillable denominator 9990/9990 on both trees. Remainder 0. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
+| **I3** | `gol/stage3-ready` | Remainder mint 0. Pin `EXPECTED_FILLABLE_CELLS = 9990` and `EXPECTED_UNCATALOGUED_FILLABLES = 0` in `field_identity.py` and `gate.py`. C01–C07 seed still present. | 2/3 seam | Serial. Coverage is a gate self-test, not a mapper. |
+| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial. Preconditions 1–3 hold. Mapper still Blocked. Do not start.** Comb-referee PASS, G10/G16/G17, and C01–C07 `verified` are out of scope. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
@@ -43,9 +48,9 @@ file):
 2. **One** implementer for P2 commit, then **one** for P1 charbox split.
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
 4. Identity work is `tools/formgen/field_identity.py` against
-   `tools/formgen/identity/catalog.json` (180 TIN-strip identities). Stage 3
-   still does not start until that catalog covers fillable fields and G02 /
-   G03 / G04 are done.
+   `tools/formgen/identity/catalog.json` (9990 fillable identities,
+   coverage 0 uncatalogued). Stage 3 still does not start: the mapper
+   stays closed even though the three preconditions hold.
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
 
@@ -259,19 +264,19 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | ID | Symptom | Count (denominator, date) | Owning function | S | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | **G01** | Census pins contradict each other, or contradict the producer; a full gate fails on its own constants after 60 minutes | was 4442 vs 4540; **both now 4,521 = measured** (r14) | `gate.py:80`, `comb_referee.py:86` + per-slug, `guides.py` expectation table | **done** | The second instance was worse than the first: both files agreed on 4,540 and both were wrong, because 21e0630 shipped a lattice change without its census. `comb_referee`'s self-test held the same number as a literal and now derives it from the pin. The class is not closed — one number still lives in two files |
-| **G02** | Comb compartments merged into one wide input — the user's "4 year boxes as 1 big box" | 22 of 53 forms / 186 offenders (`comb_slots_match_printed`, r13) | `extract.py:382,1571` stroke→rect ignores `lineCap`; `audit.py` topology chooser | diag | STATUS.md; 2550M `p1c2`; gap = ½ supporting rule's stroke width in **every** case in the histogram |
-| G02a | 2550M item 1 YYYY: 4 printed compartments, 1 free-text input | 1 cell | same | diag | 0.36pt = round cap at width 0.72 |
-| G02b | 2550-DS item 4 `Year Ended (MM/YYYY)`: 6-cell comb → 1 input | F115 | same | open | ledger |
-| G02c | 1701MS items 8, 10C: comb → wide input, overflows | F041 | same | open | ledger |
-| G02d | 2316 TIN items 3/12/16: 8 inputs for 14 printed comb cells | F111 (blocker) | same | open | ledger |
-| G02e | 2200C item 1 date: MM and YYYY groups have no inputs (6 of 8 cells dead) | F097 (blocker) | same | open | ledger |
-| G02f | 1800 item 14 centavos: free-text where every other row is 2 comb slots | F073 | same | open | ledger |
-| G02g | 0605 items 5, 7, 9: 22 printed compartments → 8 unbounded inputs, TIN included | F163 | same | open | ledger; official ticks counted inside each input rect |
-| G02h | 2551M item 2 `Year Ended` → 1 input; Schedule 1 period+name columns merged per row | F164, F165 | same | open | ledger |
-| G02i | 2550Q item 10 address line 3 + 10A ZIP → one input; line 2 of the same block is correct | F166 | same | open | ledger |
-| **G03** | Real field has **no** input — the user's "no yellow box here" | 160 empty non-fillable `label` cells ≥40×9pt and ≥600pt², 38 of 53 forms (2026-08-07) — the candidate population; 16 open findings | `lattice.py` cell classification | open | F049, F054, F058, F062 (Fiscal checkbox, 4 forms); F135 (2553 Q3); F106 (2200S ×3, blocker); F109 (2200T ×3, blocker); F112 (2316 items 23/24, blocker); F064, F065 (1707 specify lines); **new 2026-08-07** F150 (2551M 23A Surcharge), F151 (1701-conso Sched C+D Description, blocker), F152/F153 (0619E, 0620 Amended-YES checkbox, blocker) |
-| G03a | An empty printed box is classified `label`, so no input is ever emitted. A `field` cell with 0 inputs does **not** occur anywhere in the corpus (measured: 0 of 9,971) — this is the whole mechanism | F150, F151 | `lattice.py` | open | ledger |
-| **G04** | Input exists where nothing should be fillable — grey spacers made FILLABLE | **169 inputs sit wholly on official grey decoration, 22 of 46 measured forms** (1pt inset, ≥95% tone 150–240, zero black; 7 forms have no saved raster) (2026-08-07); 11 open findings | `lattice.py` field classification vs tone | open | F066 (1707 grey filler = 330×17pt input); F081 (1801 rows 23A-D, 200pt inputs on grey band); F093, F095 (2200A grey "not applicable"); **new 2026-08-07** F154 (1701 449×34pt input over the sworn declaration), F156–F158 (0619E/0619F/0620 header pads, incl. the tax-type pad beside pre-printed "WE"/"WB"), F159 (2552), F160 (2551Q), F161 (1701MS), F162 (1701-attachment) |
+| **G02** | Comb compartments merged into one wide input — the user's "4 year boxes as 1 big box" | **0 offenders / 53 forms** (`inputs_span_no_printed_divider`, batch `ddac6058`, 2026-08-18). Residual `comb_slots_match_printed` is **G16**, not this class. | `extract.py` `cap_extension_pt`; lattice skip-fuse | **done** | Named G02a–i findings all `fixed` or `not-a-defect`. `extra/1801-2018` tin-1 leftover is identity `tin-strip` (mixed caption+comb), not a year-box merge: 1801 holds all 10 assertions including span=0. No new `forms/` batch. |
+| G02a | 2550M item 1 YYYY: 4 printed compartments, 1 free-text input | 1 cell, then 0 | `extract.py` `cap_extension_pt` | **done** | Line-cap gap was 0.36pt = round cap at width 0.72 |
+| G02b | 2550-DS item 4 `Year Ended (MM/YYYY)`: 6-cell comb → 1 input | F115 | same | **done** | ledger `fixed` |
+| G02c | 1701MS items 8, 10C: comb → wide input, overflows | F041 | same | **done** | ledger `fixed` |
+| G02d | 2316 TIN items 3/12/16: 8 inputs for 14 printed comb cells | F111 (blocker) | same | **done** | ledger `fixed` |
+| G02e | 2200C item 1 date: MM and YYYY groups have no inputs (6 of 8 cells dead) | F097 (blocker) | same | **done** | ledger `fixed` |
+| G02f | 1800 item 14 centavos: free-text where every other row is 2 comb slots | F073 | same | **done** | ledger `not-a-defect` |
+| G02g | 0605 items 5, 7, 9: 22 printed compartments → 8 unbounded inputs, TIN included | F163 | same | **done** | ledger `fixed` |
+| G02h | 2551M item 2 `Year Ended` → 1 input; Schedule 1 period+name columns merged per row | F164, F165 | same | **done** | ledger `fixed` |
+| G02i | 2550Q item 10 address line 3 + 10A ZIP → one input; line 2 of the same block is correct | F166 | same | **done** | ledger `fixed` |
+| **G03** | Real field has **no** input — the user's "no yellow box here" | **0 offenders / 53 forms** (`printed_box_peers_all_fillable`, batch `ddac6058`, 2026-08-18). Diagnosis census was 160 empty non-fillable `label` cells, 38 of 53 forms (2026-08-07). | `lattice.py` cell classification | **done** | Named findings all `fixed`. Open blocker+major = 0. |
+| G03a | An empty printed box is classified `label`, so no input is ever emitted. A `field` cell with 0 inputs does **not** occur anywhere in the corpus (measured: 0 of 9,971) — this is the whole mechanism | F150, F151 | `lattice.py` | **done** | ledger `fixed` |
+| **G04** | Input exists where nothing should be fillable — grey spacers made FILLABLE | Named findings all `fixed` or `not-a-defect` (2026-08-18). Diagnosis census was **169 inputs** wholly on official grey decoration, 22 of 46 measured forms (1pt inset, ≥95% tone 150–240, zero black; 2026-08-07). | `lattice.py` field classification vs tone | **done** | F066, F081, F093, F095, F157–F162 `fixed`; F154, F156 `not-a-defect`. F081 (1801 grey band) holds all 10 assertions. No producer residue; no new `forms/` batch. |
 | **G05** | Input overlaps pre-printed text | was 40 of 53 forms / 258 (r13), 20 / 147 (r23-r25); **12 of 53 forms / 33 offenders (r27)** | `lattice.py` cell segmentation — the rectangle spans caption **and** comb; `emit.slot_constant`; `audit.glyph_boxes` | **fixing** | r27 removed three populations at once and STATUS.md carries the split: 92 money decimal-bullet compartments that were live typing surfaces on printed ink (**F189**), 11 printed caption blocks read as 2-compartment combs — 1606 p2's whole statutory rate table and five excise mastheads (**F188**) — and the false positives, where `glyph_boxes` scored an input against the font's LINE box so every glyph was charged with its face's full descender. **Not a shrunk writing surface**: 7,405 surviving slot rectangles compared byte-for-byte, zero moved. What is left is 33 offenders on 12 forms, F134 among them |
 | **G06** | Lines painted that do not exist on the official sheet | 2 open findings | extract/guides crop — barcode tail | open | F027 (1700 p1), F030 (1701, all 4 pages) |
 | **G07** | Text run mis-positioned or reordered | 3 open findings | emit text placement / run ordering | open | F070 (1707A "Calendar" 4pt high); F102 (2200P header 5pt high); F060 (1702Q guide: superscript reordered, corrupts two sentences) |
@@ -279,10 +284,10 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | **G09** | Oversized leading comb slot | 29 groups at ≥1.10× median, 17 at ≥1.25× (corpus, 2026-08-06) | `lattice.comb_bands` | open | re-measured this session |
 | **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | was 171 of 172; **the first two field-layer assertions landed at r18** and catch **93 offenders across 22 of 53 forms** — `inputs_span_no_printed_divider` 11 forms / 79 offenders (44,536 inputs walked), `printed_box_peers_all_fillable` 14 forms / 14 offenders (7,223 printed boxes recovered from the source). 9 of the 93 were on populations no open finding covered (F173–F181); the rest independently re-derive **16 existing human findings** from the pinned PDF alone | `audit.py` assertions; `gate.py` allowlists | **fixing** — the first of the two now PASSES (r20: `printed_box_peers_all_fillable` 14 forms → 0, `audit.py` byte-identical) | 0619-E's A10 offender box `[276.05, 134.64, 289.08, 146.16]` is F152's `(276.0, 135.0) 12.5 x 10.5` to the point; 2550M's A9 offender `p1c2 [209.28, 90.72, 270.00, 102.48]` is G02a, hand-diagnosed on 2026-08-06 and invisible to every check until now. Neither assertion reads `b.layout`, `b.plan`, emit.py's markers or the IR — only `ordered_vector_paints` and `drawn_glyph_boxes` — which is why they can see what `money_boxes_have_inputs` and `comb_slots_match_printed` structurally cannot. **Not `done`:** these bound two field-layer questions (a box the source drew but nobody made fillable; an input laid across a divider the source printed). "Does an input match its printed box" and "is a printed constant overtypeable" are still unbound |
 | **G11** | **A cell the lattice itself marks `mixed` — meaning it knows pre-printed glyph ink is inside — is emitted with a full set of editable comb slots, so the taxpayer can type on a pre-printed constant.** `emit.py`'s `PrePrintedInk` guard (F028's second guard) applies to plain text cells only and has no effect on comb slots | **the defect's own metric is 0**: editable compartments sitting on a short pre-printed constant go **175 → 0** (r14, 2026-08-07). 281 compartments refused across 26 forms. 156 of the 180 `mixed` cells still carry inputs and should — they are money combs whose printed ink is the decimal decoration (C4) | `emit.py` `comb_slot_verdicts()`, per slot | **done** | F139–F146 all `fixed`. Verdict is per COMPARTMENT: a slot is refused when the source printed exactly one alphanumeric glyph **wholly inside that slot's walls**, or shaded it at the unchanged 0.87 threshold. Per-slot is forced by the corpus — 1600-PT prints the century in the *leading* two boxes and 1702EX the branch code in the *trailing* three, so no rule over the group tells the two apart. `II 011`, `XC 010`, `2 0` and `0 0 0 0 0` are no longer typeable; 2000-DST's money grid keeps all 14 compartments including the printed decimal bullet (C4 intact). Rasters in the session scratchpad `preprinted/` |
-| **G12** | A caption and the writable blank beside it are segmented into one `label` cell, so the blank gets **no input at all**. Same root cause as G05, opposite symptom — G05 is the case where the merged cell *does* get an input | 2 confirmed (2026-08-07) | `lattice.py` cell segmentation | open | F148 (1701 p4 item 9 "(specify)", `p4c89` 312.90×14.76pt label, 0 inputs), F149 (1701A p2 item 63) |
+| **G12** | A caption and the writable blank beside it are segmented into one `label` cell, so the blank gets **no input at all**. Same root cause as G05, opposite symptom — G05 is the case where the merged cell *does* get an input | 2 confirmed (2026-08-07) → 0 open | `lattice.py` cell segmentation | **done** | F148, F149 `fixed` |
 | **G13** | **A multi-column guide source is reflowed scanline-by-scanline, interleaving the columns and binding values to the wrong key.** On 2551M this puts the wrong tax rate against an ATC code | **2551M: 0 of 15 ATC codes carried their official rate → 15 of 15** (r19, measured on the written tree by a checker sharing no producer with the emitter). 3 guide bundles changed, 0605 and 2200-AN with it | **`emit.py`** `reflow_page` → `_column_bands` → `_table_markup`, using the new `guides.table_columns` — **NOT `guides.py`'s reflow, which is what this row, STATUS.md and F167 all said, and is why the fix failed to land twice**. `BLOCKER-PLAN.md` C9 named `emit.py` and was right | **done for the rate binding; F170 and F183 remain** | F127, F167, F168, F169 all `fixed` at r19 on the measurement above; **F170 stays open** (0605's ATC region is still cut into two tables, so its 3-line header section cannot reach `MIN_COLUMN_SUPPORT`) and **F183 is newly filed** (2551M's left `Tax Rate` label is set at x 237.60 against its own column edge of 251.52, so the label — not any rate — falls one cell left). The old grid came from `_coverage_gutters`, which calls a 1pt bin a gutter below 12% of peak; on 2551M p2 the real gutter sits at 4–5 runs against a peak of 18, so all four missing boundaries were bins the histogram called occupied. `guides.table_columns` asks where a *cell starts* instead and keeps a column only where two lines agree |
-| **G14** | A BIR-only control field is emitted as a taxpayer input | 1 confirmed (2026-08-07) | `lattice.py` field classification | open | F147 (0605 "BCS No./Item No. (To be filled up by the BIR)" = 253.0×17.5pt free text, no maxlength). The exclusion works on the same sheet for DLN/PSIC/PSOC, so this box was missed, not unhandled |
-| **G16** | **`audit.py`'s `comb_slots_match_printed` requires a comb's input indexes to run 0..N−1 with no gap, so it fails on every compartment G11 correctly refuses.** The emission contract changed; the assertion that owns it was not told | **r27: 94 more cells, one per compartment the emitter newly refuses** — 76 already offenders, 18 not, taking the assertion 22 forms / 193 → 23 / 203 and filed as **F192**. Was 76 offenders, 24 forms (r14). The other 167 of the assertion's 247 are the pre-existing `source-topology-unevaluable` population | `audit.py` `check_comb_slots_match_printed` | open | STATUS.md §"The two assertions". **The assertion must not be weakened.** The fix is to re-derive the constant from the SOURCE PDF's own text operators — where this assertion already reads from, so it stays independent of `emit.py` — and accept a gap exactly where the source printed one. This is the "a schema change is declared everywhere it is asserted, in the same commit" rule being paid late |
+| **G14** | A BIR-only control field is emitted as a taxpayer input | 1 confirmed (2026-08-07) → 0 open | `lattice.py` field classification | **done** | F147 `fixed` |
+| **G16** | **`audit.py`'s `comb_slots_match_printed` requires a comb's input indexes to run 0..N−1 with no gap, so it fails on every compartment G11 correctly refuses.** The emission contract changed; the assertion that owns it was not told | **Live 2026-08-18, batch `ddac6058`: 9 forms / 288 offenders** (0605, 1600wp, 1604cf, 1604f, 1800, 2200c, 2550m, 2551m, 2553). Not a Stage 3 gate. STATUS Z1 still records the reviewed-topology remainder. | `audit.py` `check_comb_slots_match_printed` | open | **The assertion must not be weakened.** Residual is reviewed topology / G16, not “year boxes as one input.” |
 | **G17** | **A reviewed emitter pin lives in a place no one has enumerated, and only the referee reads it — so it costs a full 60-minute gate run to discover.** `comb_referee.HTML_RUNTIME_SCRIPT_SHA256` is a third such pin, distinct from `EXPECTED_HTML_STRUCTURE_SHA256` and from the four producer SHAs | 5 forms UNEVALUABLE at r14, report partial 40/53; 2 of the pin's 3 hashes had moved | `comb_referee.py:535`, read at `comb_referee.py:2822` | open | The pin itself is re-pinned and **r15 confirms it** (all five emission-binding errors gone). The class stays open because the underlying defect is the enumeration, not this pin: the "census pins that must move together" list under **How we work** did not contain it, and does not name whatever else is like it. An inventory that a producer change can be checked against in seconds — rather than at the end of an hour — is the actual fix |
 | **G18** | **A human-reviewed referee control no longer holds, and it is the last thing between the referee and a complete corpus report.** `REVIEWED_2551Q_EXPLICIT_COMPARTMENTS` reviewed 2551Q `p2c5` as `measured` with 14 compartments and `p2c80` as 12; the referee now returns `unevaluable — source topology does not occupy a strict majority of the full comb band` for both | **52/53 forms report at r19** (r18: 40/53). 2551Q is the only one that errors, and it takes 105 subjects with it, which is also why `combs_found` is 4,433 against an expected 4,538. p2c5 measures 6.96pt of a 17.70pt band; p2c80 7.44pt of 18.78pt | `comb_referee.validate_2551q_referee_golden` vs whatever moved the majority rule under it | open | **The pin was NOT moved and must not be** — moving a reviewed control to match the producer that stopped satisfying it is the failure this project already paid for at `EXPECTED_COMBS` (r14) and `HTML_RUNTIME_SCRIPT_SHA256` (G17). Not caused by r19: 2551Q's `index.html`, layout and IR are byte-identical and only three *guide* documents changed; r19 merely made 2551Q reach the check. Same shape as G10's assertions — newly visible, not newly broken. **Reaching PASS is further off than this one form**: `forms_ok` is 0 and 4,385 of 4,433 subjects are `source_unevaluable`, so 53/53 would buy a complete report, not a score |
 | **G19** | **A comb slot boundary is taken from a divider the page's own `comb_divider_final_visible_ids` excludes, so a money box claims a compartment the paper does not print.** The lattice already computes the right answer and records it beside the wrong one; `legacy-continuity` outranks it | 5 cells on 2550M (r20), plus the 2 on 1707/1707A that pre-date r20 — the `layout-printed-mismatch` half of `comb_slots_match_printed`, 2 → 7 | `lattice.py` comb band, `legacy_dividers` / `frame_dividers` vs `dividers` | open | **F184.** 2550M `p1c89` is the MM box of a Schedule row: the source strokes ticks at x 260.40 and 263.52, then paints a white fill over the whole box (seqno 477) AFTER the 263.52 tick (seqno 419), so one tick survives to the paper. `slot_x` is `[246.96, 260.40, 263.52, 273.84]` — a 3.12pt compartment. The cell's own `comb.resolution` reads `final_visible_candidate_cells: 2`, `[final-visible-count-regression, legacy-continuity-only]`, so it is already `active_unresolved` and already blocks the gate. **Not patched at r20 on purpose**: dropping a legacy topology is the reviewed `retired_proven_false` transition, which needs independent evidence and a human |
@@ -366,23 +371,19 @@ shown *not* to be a stage-1 row above.
 
 ## Stage 3 — map
 
-**Blocked. Do not start.** The identity catalog exists: C01–C07 seed plus
-the measured TIN caption-chain class, 180 identities
-(`tools/formgen/identity/`). That is the freeze R2 asked for, not the mapper.
-It is not coverage of every fillable field. Stage 3 begins when the catalog
-covers fillable fields and the preconditions below hold.
+**Blocked. Do not start.** The three preconditions hold. Nothing writes
+`name="frm…:txtTIN1"`. Comb-referee PASS, G10/G16/G17, and C01–C07
+`verified` are not this program.
+
+The identity catalog is 9990 records, 9990/9990 on `forms/` and
+`forms-corrected/` (`tools/formgen/identity/`). That is the freeze R2
+asked for, not the mapper. The HTML cell id is a hint; a unique overlap
+with a different `p1cN` is `html_id_hint_stale` and must update the
+catalog in the same commit.
 
 The naming problem is already solved on BIR's side: `rules/forms/*/fields.json`
 carries 43 forms and 9,592 field names harvested from the official HTA runtime,
 with `serialized_key` values like `frm2550m:txtBranchCode`.
-
-The blocker was ours: field identity was a **quantised bounding box** —
-`lattice.geometry_subject_key` produces `p<page>@<bbox>` — so every geometry
-fix renumbered ids. Measured drift: 42 of 146 cited cell ids in the findings
-ledger no longer exist in the shipped HTML. The catalog's durable id (for
-example `2550m-2007/p1/tin-branch`) is not that string and not `p1c13`. The
-HTML cell id is a hint; a unique overlap with a different `p1cN` is
-`html_id_hint_stale` and must update the catalog in the same commit.
 
 The join is also far from bijective (measured 2026-08-06):
 
@@ -393,14 +394,19 @@ The join is also far from bijective (measured 2026-08-06):
 | Official fields with `serialized_key: null` | 1,234 of 9,592 |
 | 0605: names we emit vs official fields | 71 vs 235 |
 
-**Preconditions before stage 3 opens (all must hold):**
-1. Field identity is a catalog id, not a bbox and not `p1cN`. 180 TIN-strip
-   identities is not coverage of every fillable field. Every fillable field Stage 3
-   would join must resolve `exactly-one` against `forms-corrected/`.
-2. Stage-1 rows G02, G03, G04 are `done` (a field that does not exist cannot be
-   mapped; a field that should not exist must not be).
-3. The findings ledger's cited ids all resolve in the shipped HTML — cite
-   catalog ids, not dead `p1cN` strings.
+**Preconditions before stage 3 opens (all three hold; mapper still closed):**
+1. **Holds.** Field identity is a catalog id, not a bbox and not `p1cN`.
+   9990/9990 fillable cells resolve `exactly-one` against `forms/` and
+   `forms-corrected/`. `EXPECTED_UNCATALOGUED_FILLABLES = 0` is pinned in
+   `field_identity.py` and `gate.py`.
+2. **Holds.** Stage-1 rows G02, G03, G04 (and G02a–i, G12, G14) are `done`.
+   Live 2026-08-18, batch `ddac6058`: `inputs_span_no_printed_divider` 0/53,
+   `printed_box_peers_all_fillable` 0/53. G16 remains open (9 forms / 288)
+   and is not a Stage 3 gate.
+3. **Holds.** `field_identity.py ledger-check` is green on open, fixed, and
+   not-a-defect findings (259/259 cited cells on `forms/`). Fillable
+   subjects cite catalog ids; live labels keep a current cell id; vanished
+   cells are `former_pXcN`.
 
 ---
 
@@ -1312,6 +1318,14 @@ Newest first. One line each.
   **rejected**: that is F028's fix working, the tables are in `guide.html` with
   0 inputs and no orphan frame remains; only the dangling "refer to tax table
   below" cross-reference survives (F171, minor).
+- **2026-08-18** — Stage 3 preconditions 1–3 hold: catalog 9990/9990, G02/G03/G04
+  `done`, ledger-check 259/259. Mapper still **Blocked. Do not start.**
+- **2026-08-18** — Re-measured G02/G03/G04 on batch `ddac6058` (assertions-only
+  on `forms/`, four font-snapshot misses re-scored). `inputs_span_no_printed_divider`
+  0/53, `printed_box_peers_all_fillable` 0/53. Named G02a–i, G03, G04, G12, G14
+  findings are `fixed` or `not-a-defect`. No producer residue and no new `forms/`
+  batch. G16 stays open at 9 forms / 288 offenders and is not a Stage 3 gate.
+  1801 tin-1 leftover is identity `extra/1801-2018/p1/tin-strip`, not a G02 merge.
 - **2026-08-06** — Plan created at HEAD `0ea1f84`. Three stages recorded in
   ARCHITECTURE.md. Baseline measured: 53 bundles / 50 codes / 116 pages;
   gate r13 9/12; 26/84 blocker+major open. G01 (census pin contradiction

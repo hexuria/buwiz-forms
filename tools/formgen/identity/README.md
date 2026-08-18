@@ -49,26 +49,35 @@ is risk R2. The identity id still names the same box; only the hint moves.
 
 ## Coverage
 
-180 identities. The C01–C07 seed is 7 strips (28). The rest are the
-measured 3+3+3+5 TIN caption chain on 38 more bundles (152), from
-[`tin-branch-census-20260808.json`](../corrections/evidence/tin-branch-census-20260808.json)
-with harvest notes in
-[`tin-identity-corpus-20260818.json`](../corrections/evidence/tin-identity-corpus-20260818.json).
-`correction_id` is null on those 152.
+9990 identities on both `forms/` and `forms-corrected/` — every fillable
+cell. C01–C07 seed (28) + I0 TIN caption chains (152) + I1 TIN leftovers
+(28) + I2 combs (4349) + I2 x-squares (654) + I2 wide text (4779). Wide
+text is `text-*`. Evidence:
+[`identity-text-20260818.json`](../corrections/evidence/identity-text-20260818.json).
 
-Not in this catalog: `extra/1801-2018` (lattice merged tin-1; fail closed,
-no partial strip), eight PDF-census not-measurable bundles whose HTML also
-has no 3+3+3+N fillable chain, spouse/agent/schedule TINs other than C06,
-and every non-TIN fillable field. That is not coverage for Stage 3.
+`coverage --tree forms` and `coverage --tree forms-corrected` report
+9990/9990. I3 pins that 0-gap in `field_identity.py` (`EXPECTED_FILLABLE_CELLS`)
+and `gate.py` (`EXPECTED_UNCATALOGUED_FILLABLES`). Remainder mint was 0:
+odd-size text went into I2 `text-*`. Evidence:
+[`identity-remainder-20260818.json`](../corrections/evidence/identity-remainder-20260818.json).
 
 ## What this is not
 
 - Not Stage 3. Nothing writes `name="frm2550m:txtBranchCode"`.
 - Not verification of C01–C07. Overlap does not re-derive `expected_effect`.
-- Not a census of every fillable field.
 
 ```sh
 python3 tools/formgen/field_identity.py --self-test
 python3 tools/formgen/field_identity.py check --tree forms-corrected
 python3 tools/formgen/field_identity.py check --tree forms
+python3 tools/formgen/field_identity.py coverage --tree forms
+python3 tools/formgen/field_identity.py coverage --tree forms-corrected
+python3 tools/formgen/field_identity.py ledger-check --tree forms
+python3 tools/formgen/field_identity.py ledger-rewrite --tree forms --write
 ```
+
+`ledger-check` requires every `pXcN` in `where`/`what` to exist as a live
+HTML element id (fillable or not) or a catalog id that resolves. Fillable
+subjects were rewritten to catalog ids; dead `p1cN` became `former_p1cN`.
+Non-fillable ink (triangles, labels) keeps a current cell id and is not
+minted as a fillable identity.

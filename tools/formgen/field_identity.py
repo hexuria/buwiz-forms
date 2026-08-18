@@ -28,6 +28,9 @@ Usage:
     python3 tools/formgen/field_identity.py --self-test
     python3 tools/formgen/field_identity.py check --tree forms-corrected
     python3 tools/formgen/field_identity.py check --tree forms
+    python3 tools/formgen/field_identity.py coverage --tree forms
+    python3 tools/formgen/field_identity.py ledger-check --tree forms
+    python3 tools/formgen/field_identity.py ledger-rewrite --tree forms --write
 """
 
 from __future__ import annotations
@@ -59,9 +62,17 @@ REQUIRED_RECORD_KEYS = (
 )
 REQUIRED_MATCH_KEYS = ("kind", "tolerance_pt", "cardinality")
 HTML_ID_HINT_RE = re.compile(r"^p[0-9]+c[0-9]+$")
+CELL_ID_RE = re.compile(r"\bp[0-9]+c[0-9]+\b")
+FORM_FIELD_SPLIT_RE = re.compile(r"[,;/]+")
+PARENTHETICAL_RE = re.compile(r"\([^)]*\)")
+SKIP_TREE_SLUGS = frozenset({".", "review"})
+FINDINGS_PATH = HERE / "review-findings.json"
+LEDGER_TEXT_KEYS = ("where", "what")
 
 
 MATCH_KINDS = frozenset({"comb", "field"})
+EXPECTED_FILLABLE_CELLS = 9990
+EXPECTED_UNCATALOGUED_FILLABLES = 0
 
 
 class FieldCollector(html.parser.HTMLParser):
@@ -97,6 +108,8 @@ class FieldCollector(html.parser.HTMLParser):
             "box": box,
             "page_prefix": _page_prefix(html_id),
             "field_kind": data.get("data-field-kind", ""),
+            "comb_slots": data.get("data-comb-slots", ""),
+            "cell_kind": data.get("data-cell-kind", ""),
         })
 
 
@@ -317,6 +330,476 @@ def check_tree(catalog: dict, tree: pathlib.Path) -> tuple[list[dict[str, object
     return results, failed
 
 
+def iter_bundles(tree: pathlib.Path) -> list[tuple[str, pathlib.Path]]:
+    """Form bundles under a tree. Skips the corpus index and review helpers."""
+    found: list[tuple[str, pathlib.Path]] = []
+    if not tree.is_dir():
+        return found
+    for html in sorted(tree.glob("**/index.html")):
+        slug = html.parent.relative_to(tree).as_posix()
+        if slug in SKIP_TREE_SLUGS:
+            continue
+        found.append((slug, html))
+    return found
+
+
+def records_for_slug(catalog: dict, slug: str) -> list[dict]:
+    return [record for record in catalog.get("records", []) if record["bundle_slug"] == slug]
+
+
+def identities_claiming(field: dict, records: list[dict]) -> list[str]:
+    hits: list[str] = []
+    page_prefix = str(field["page_prefix"])
+    box = field["box"]
+    field_kind = str(field["field_kind"])
+    for record in records:
+        if page_prefix != f"p{record['page']}":
+            continue
+        match = record.get("match") or {}
+        if not _kind_wanted(str(match.get("kind") or "field"), field_kind):
+            continue
+        printed = tuple(float(value) for value in record["source_printed_box_pt"])
+        tolerance = float(match.get("tolerance_pt") or 0.25)
+        if center_in_printed(printed, box, tolerance):  # type: ignore[arg-type]
+            hits.append(str(record["id"]))
+    return hits
+
+
+def coverage_tree(catalog: dict, tree: pathlib.Path) -> dict[str, object]:
+    uncatalogued: list[dict[str, object]] = []
+    ambiguous: list[dict[str, object]] = []
+    fillable = 0
+    covered = 0
+    for slug, html_path in iter_bundles(tree):
+        try:
+            fields = collect_fields(html_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            uncatalogued.append({"bundle_slug": slug, "html_id": None, "reason": str(exc)})
+            continue
+        records = records_for_slug(catalog, slug)
+        for field in fields:
+            fillable += 1
+            hits = identities_claiming(field, records)
+            if not hits:
+                uncatalogued.append({
+                    "bundle_slug": slug,
+                    "html_id": field["id"],
+                    "page_prefix": field["page_prefix"],
+                    "field_kind": field["field_kind"],
+                    "box": [round(float(v), 4) for v in field["box"]],  # type: ignore[union-attr]
+                })
+            elif len(hits) > 1:
+                ambiguous.append({
+                    "bundle_slug": slug,
+                    "html_id": field["id"],
+                    "identities": hits,
+                })
+            else:
+                covered += 1
+    return {
+        "tree": str(tree),
+        "fillable": fillable,
+        "covered": covered,
+        "uncatalogued": uncatalogued,
+        "ambiguous": ambiguous,
+    }
+
+
+def print_coverage(report: dict[str, object]) -> None:
+    uncatalogued = report["uncatalogued"]
+    ambiguous = report["ambiguous"]
+    fillable = int(report["fillable"])  # type: ignore[arg-type]
+    covered = int(report["covered"])  # type: ignore[arg-type]
+    print(f"{covered}/{fillable} fillable cells claimed by exactly one identity in {report['tree']}")
+    if uncatalogued:
+        print(f"{len(uncatalogued)} uncatalogued:")
+        for item in uncatalogued[:40]:  # type: ignore[index]
+            print(f"  {item['bundle_slug']}  {item.get('html_id')}")
+        if len(uncatalogued) > 40:  # type: ignore[arg-type]
+            print(f"  … {len(uncatalogued) - 40} more")
+    if ambiguous:
+        print(f"{len(ambiguous)} claimed by two or more identities:")
+        for item in ambiguous[:20]:  # type: ignore[index]
+            print(f"  {item['bundle_slug']}  {item['html_id']} -> {item['identities']}")
+        if len(ambiguous) > 20:  # type: ignore[arg-type]
+            print(f"  … {len(ambiguous) - 20} more")
+
+
+class ElementCollector(html.parser.HTMLParser):
+    """Every element whose id looks like p1c13, fillable or not.
+
+    Ledger citations name triangles, labels, and blanks as well as fields.
+    Those cells are not identities; they still have to exist in the HTML.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.ids: set[str] = set()
+        self.fillable: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        data = {key: value or "" for key, value in attrs}
+        html_id = data.get("id", "")
+        if not HTML_ID_HINT_RE.match(html_id):
+            return
+        self.ids.add(html_id)
+        if data.get("data-cell-kind") in ("field", "mixed") and data.get("data-field-kind"):
+            self.fillable.add(html_id)
+
+
+def collect_element_ids(html_text: str) -> tuple[set[str], set[str]]:
+    parser = ElementCollector()
+    parser.feed(html_text)
+    parser.close()
+    return parser.ids, parser.fillable
+
+
+def bundle_slug_for_finding_form(form: str, tree: pathlib.Path) -> str | None:
+    if (tree / form / "index.html").is_file():
+        return form
+    extra = f"extra/{form}"
+    if (tree / extra / "index.html").is_file():
+        return extra
+    return None
+
+
+def html_ids_in_tree_bundle(tree: pathlib.Path, slug: str) -> set[str]:
+    html_path = tree / slug / "index.html"
+    if not html_path.is_file():
+        return set()
+    return {str(field["id"]) for field in collect_fields(html_path.read_text(encoding="utf-8"))}
+
+
+def known_bundle_slugs(tree: pathlib.Path) -> list[str]:
+    return [slug for slug, _ in iter_bundles(tree)]
+
+
+def _slug_aliases(slug: str) -> tuple[str, ...]:
+    tail = slug.split("/")[-1]
+    code = tail.split("-")[0]
+    aliases = [slug, tail]
+    if len(code) >= 4:
+        aliases.append(code)
+    return tuple(aliases)
+
+
+def _bounded_rfind(window: str, alias: str) -> int:
+    lowered = window.lower()
+    needle = alias.lower()
+    pos = len(window)
+    while pos > 0:
+        pos = lowered.rfind(needle, 0, pos)
+        if pos < 0:
+            return -1
+        end = pos + len(alias)
+        left_ok = pos == 0 or not (window[pos - 1].isalnum() or window[pos - 1] in "/-_")
+        right_ok = end == len(window) or not (window[end].isalnum() or window[end] in "/-_")
+        if left_ok and right_ok:
+            return pos
+    return -1
+
+
+def match_token_to_slug(token: str, known: list[str]) -> str | None:
+    token = token.strip()
+    if not token:
+        return None
+    lowered = token.lower()
+    exact: list[str] = []
+    code_hits: list[str] = []
+    for slug in known:
+        tail = slug.split("/")[-1]
+        code = tail.split("-")[0]
+        if token in (slug, tail) or lowered == tail.lower():
+            exact.append(slug)
+        elif lowered == code.lower() or lowered == f"extra/{tail}".lower():
+            code_hits.append(slug)
+        elif lowered.replace("-", "") == tail.replace("-", "").lower():
+            exact.append(slug)
+    if exact:
+        in_corpus = [slug for slug in exact if not slug.startswith("extra/")]
+        return (in_corpus or exact)[0]
+    if len(code_hits) == 1:
+        return code_hits[0]
+    in_corpus = [slug for slug in code_hits if not slug.startswith("extra/")]
+    if len(in_corpus) == 1:
+        return in_corpus[0]
+    return None
+
+
+def form_field_tokens(form: str) -> list[str]:
+    cleaned = PARENTHETICAL_RE.sub(" ", form)
+    return [part.strip() for part in FORM_FIELD_SPLIT_RE.split(cleaned) if part.strip()]
+
+
+def slugs_for_finding(form: str, text: str, known: list[str]) -> list[str]:
+    found: list[str] = []
+    for token in form_field_tokens(form):
+        hit = match_token_to_slug(token, known)
+        if hit:
+            found.append(hit)
+    pairs: list[tuple[str, str]] = []
+    for slug in known:
+        for alias in _slug_aliases(slug):
+            pairs.append((alias, slug))
+    pairs.sort(key=lambda item: len(item[0]), reverse=True)
+    occupied = [False] * len(text)
+    lowered = text.lower()
+    for alias, slug in pairs:
+        start = 0
+        needle = alias.lower()
+        while True:
+            pos = lowered.find(needle, start)
+            if pos < 0:
+                break
+            end = pos + len(alias)
+            left_ok = pos == 0 or not (text[pos - 1].isalnum() or text[pos - 1] in "/-_")
+            right_ok = end == len(text) or not (text[end].isalnum() or text[end] in "/-_")
+            if left_ok and right_ok and not any(occupied[pos:end]):
+                found.append(slug)
+                for index in range(pos, end):
+                    occupied[index] = True
+            start = pos + 1
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for slug in found:
+        if slug not in seen:
+            seen.add(slug)
+            ordered.append(slug)
+    return ordered
+
+
+def nearest_slug(text: str, index: int, slugs: list[str]) -> str | None:
+    window = text[:index]
+    best_pos = -1
+    best_alias_len = -1
+    best: str | None = None
+    for slug in slugs:
+        for alias in _slug_aliases(slug):
+            if len(alias) < 4:
+                continue
+            pos = _bounded_rfind(window, alias)
+            if pos < 0:
+                continue
+            if pos > best_pos or (pos == best_pos and len(alias) > best_alias_len):
+                best_pos = pos
+                best_alias_len = len(alias)
+                best = slug
+    if best is not None:
+        return best
+    return slugs[0] if slugs else None
+
+
+def catalog_records_by_id(catalog: dict) -> dict[str, dict]:
+    return {str(record["id"]): record for record in catalog.get("records", [])}
+
+
+def catalog_ids_longest(catalog: dict) -> list[str]:
+    return sorted(catalog_records_by_id(catalog), key=len, reverse=True)
+
+
+def hint_to_identity(catalog: dict) -> dict[tuple[str, str], str]:
+    mapping: dict[tuple[str, str], str] = {}
+    for record in catalog.get("records", []):
+        mapping[(str(record["bundle_slug"]), str(record["html_id_hint"]))] = str(record["id"])
+    return mapping
+
+
+def catalog_ids_in_text(text: str, identities: list[str]) -> list[str]:
+    occupied = [False] * len(text)
+    hits: list[str] = []
+    for ident in identities:
+        start = 0
+        while True:
+            pos = text.find(ident, start)
+            if pos < 0:
+                break
+            end = pos + len(ident)
+            nxt = text[end] if end < len(text) else " "
+            if (not any(occupied[pos:end])
+                    and not (nxt.isalnum() or nxt in "-/")):
+                hits.append(ident)
+                for index in range(pos, end):
+                    occupied[index] = True
+            start = pos + 1
+    return hits
+
+
+def load_bundle_element_ids(
+        tree: pathlib.Path, slug: str,
+        cache: dict[tuple[str, str], tuple[set[str], set[str]]],
+) -> tuple[set[str], set[str]]:
+    key = (str(tree), slug)
+    if key not in cache:
+        html_path = tree / slug / "index.html"
+        if not html_path.is_file():
+            cache[key] = (set(), set())
+        else:
+            cache[key] = collect_element_ids(html_path.read_text(encoding="utf-8"))
+    return cache[key]
+
+
+def catalog_id_resolves(record: dict, tree: pathlib.Path,
+                        cache: dict[tuple[str, str], tuple[set[str], set[str]]],
+                        ) -> bool:
+    ids, fillable = load_bundle_element_ids(tree, str(record["bundle_slug"]), cache)
+    return str(record["html_id_hint"]) in fillable and str(record["html_id_hint"]) in ids
+
+
+def ledger_check(catalog: dict, tree: pathlib.Path,
+                 findings_path: pathlib.Path,
+                 statuses: set[str] | None = None) -> dict[str, object]:
+    try:
+        payload = json.loads(findings_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"errors": [f"{findings_path}: {exc}"], "dead": [], "ok": 0, "checked": 0}
+    findings = payload.get("findings") if isinstance(payload, dict) else None
+    if not isinstance(findings, list):
+        return {"errors": [f"{findings_path}: findings is not an array"], "dead": [], "ok": 0, "checked": 0}
+    known = known_bundle_slugs(tree)
+    identities = catalog_ids_longest(catalog)
+    by_id = catalog_records_by_id(catalog)
+    cache: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
+    dead: list[dict[str, object]] = []
+    checked = 0
+    ok = 0
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        status = str(finding.get("status") or "")
+        if statuses is not None and status not in statuses:
+            continue
+        form = str(finding.get("form") or "")
+        text = " ".join(str(finding.get(key) or "") for key in LEDGER_TEXT_KEYS)
+        slugs = slugs_for_finding(form, text, known)
+        cited_ids = catalog_ids_in_text(text, identities)
+        if not cited_ids and not CELL_ID_RE.search(text):
+            continue
+        for ident in cited_ids:
+            checked += 1
+            record = by_id.get(ident)
+            if record is not None and catalog_id_resolves(record, tree, cache):
+                ok += 1
+                continue
+            dead.append({
+                "finding": finding.get("id"),
+                "form": form,
+                "bundle_slug": None if record is None else record.get("bundle_slug"),
+                "status": status,
+                "cell": ident,
+            })
+        for match in CELL_ID_RE.finditer(text):
+            cell = match.group(0)
+            checked += 1
+            search = list(slugs)
+            nearest = nearest_slug(text, match.start(), slugs)
+            if nearest:
+                search = [nearest] + [slug for slug in slugs if slug != nearest]
+            live = False
+            hit_slug: str | None = None
+            for slug in search:
+                ids, _fillable = load_bundle_element_ids(tree, slug, cache)
+                if cell in ids:
+                    live = True
+                    hit_slug = slug
+                    break
+            if live:
+                ok += 1
+                continue
+            dead.append({
+                "finding": finding.get("id"),
+                "form": form,
+                "bundle_slug": hit_slug or (search[0] if search else None),
+                "status": status,
+                "cell": cell,
+            })
+    return {
+        "errors": [],
+        "checked": checked,
+        "ok": ok,
+        "dead": dead,
+        "path": str(findings_path),
+        "tree": str(tree),
+    }
+
+
+def rewrite_ledger_text(text: str, form: str, catalog: dict, tree: pathlib.Path,
+                        known: list[str],
+                        hints: dict[tuple[str, str], str],
+                        cache: dict[tuple[str, str], tuple[set[str], set[str]]],
+                        ) -> str:
+    slugs = slugs_for_finding(form, text, known)
+
+    def replace(match: re.Match[str]) -> str:
+        cell = match.group(0)
+        nearest = nearest_slug(text, match.start(), slugs)
+        search = list(slugs)
+        if nearest:
+            search = [nearest] + [slug for slug in slugs if slug != nearest]
+
+        def lookup(slug: str) -> str | None:
+            ids, fillable = load_bundle_element_ids(tree, slug, cache)
+            if cell in fillable:
+                ident = hints.get((slug, cell))
+                if ident:
+                    return ident
+            if cell in ids:
+                return cell
+            return None
+
+        if nearest:
+            hit = lookup(nearest)
+            if hit is not None:
+                return hit
+        for slug in search:
+            if slug == nearest:
+                continue
+            hit = lookup(slug)
+            if hit is not None:
+                return hit
+        return f"former_{cell}"
+
+    return CELL_ID_RE.sub(replace, text)
+
+
+def rewrite_findings_ledger(catalog: dict, tree: pathlib.Path,
+                            findings_path: pathlib.Path) -> dict[str, object]:
+    payload = json.loads(findings_path.read_text(encoding="utf-8"))
+    findings = payload.get("findings")
+    if not isinstance(findings, list):
+        raise ValueError(f"{findings_path}: findings is not an array")
+    known = known_bundle_slugs(tree)
+    hints = hint_to_identity(catalog)
+    cache: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
+    changed = 0
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        form = str(finding.get("form") or "")
+        for key in LEDGER_TEXT_KEYS:
+            original = str(finding.get(key) or "")
+            rewritten = rewrite_ledger_text(
+                original, form, catalog, tree, known, hints, cache)
+            if rewritten != original:
+                finding[key] = rewritten
+                changed += 1
+    return {"payload": payload, "changed_fields": changed}
+
+
+def print_ledger(report: dict[str, object]) -> None:
+    if report.get("errors"):
+        for error in report["errors"]:  # type: ignore[union-attr]
+            print(f"FAIL  {error}")
+        return
+    dead = report["dead"]
+    print(f"{report['ok']}/{report['checked']} cited cells resolve in {report['tree']}")
+    if dead:
+        print(f"{len(dead)} dead citations:")
+        for item in dead[:40]:  # type: ignore[index]
+            print(f"  {item['finding']}  {item['form']}  {item['cell']}")
+        if len(dead) > 40:  # type: ignore[arg-type]
+            print(f"  … {len(dead) - 40} more")
+
+
 def print_results(results: list[dict[str, object]], tree: pathlib.Path) -> None:
     for item in results:
         status = item["status"]
@@ -401,9 +884,18 @@ def self_test() -> int:
               and {record["correction_id"] for record in seed}
               == {"C01", "C02", "C03", "C04", "C05", "C06", "C07"},
               str(len(seed)))
-        check("catalog covers the measured TIN-strip class (180)",
-              len(records) == 180,
+        check("catalog covers every measured fillable cell (9990)",
+              len(records) == EXPECTED_FILLABLE_CELLS,
               str(len(records)))
+        forms = REPO / "forms"
+        if forms.is_dir():
+            cover = coverage_tree(catalog, forms)
+            check("forms/ fillable coverage is 0 uncatalogued",
+                  int(cover["fillable"]) == EXPECTED_FILLABLE_CELLS
+                  and int(cover["covered"]) == EXPECTED_FILLABLE_CELLS
+                  and len(cover["uncatalogued"]) == EXPECTED_UNCATALOGUED_FILLABLES
+                  and not cover["ambiguous"],
+                  f"{cover['covered']}/{cover['fillable']} uncat={len(cover['uncatalogued'])}")
         ids = [record["id"] for record in records]
         check("shipped identity ids are unique", len(ids) == len(set(ids)))
         check("no identity id is a bbox key",
@@ -524,6 +1016,63 @@ def self_test() -> int:
               and mixed_result["resolved_html_id"] == "p1c19",
               str(mixed_result))
 
+        cover_tree = pathlib.Path(tmp) / "cover"
+        _write_html(
+            cover_tree / "fixture-form" / "index.html",
+            _comb("p1c13", 165.63, y0, x1 - 165.63, y1 - y0)
+            + _text("p1c99", 300.0, y0, 40.0, y1 - y0),
+        )
+        cover_catalog = {
+            "schema_version": "1.0.0-provisional",
+            "records": [record],
+        }
+        cover_report = coverage_tree(cover_catalog, cover_tree)
+        check("coverage reports an uncatalogued sibling fillable",
+              int(cover_report["fillable"]) == 2  # type: ignore[arg-type]
+              and int(cover_report["covered"]) == 1  # type: ignore[arg-type]
+              and len(cover_report["uncatalogued"]) == 1  # type: ignore[arg-type]
+              and cover_report["uncatalogued"][0]["html_id"] == "p1c99",  # type: ignore[index]
+              str(cover_report))
+
+        label = (
+            f'<div id="p1c1" class="c" data-cell-kind="label" '
+            f'style="left:10pt;top:{y0}pt;width:12pt;height:{y1 - y0}pt"></div>'
+        )
+        _write_html(tree / "fixture-form" / "index.html", target + label)
+        findings_path = pathlib.Path(tmp) / "findings.json"
+        findings_path.write_text(json.dumps({
+            "findings": [
+                {"id": "T001", "form": "fixture-form", "status": "open",
+                 "where": "fillable p1c13 and label p1c1", "what": "ok"},
+                {"id": "T002", "form": "fixture-form", "status": "open",
+                 "where": "dead p1c99", "what": "gone"},
+                {"id": "T003", "form": "fixture-form", "status": "open",
+                 "where": "catalog fixture/p1/tin-branch", "what": "id"},
+                {"id": "T004",
+                 "form": "fixture-form, missing-form",
+                 "status": "open",
+                 "where": "fixture-form p1c13", "what": "split"},
+            ]
+        }), encoding="utf-8")
+        live_report = ledger_check(cover_catalog, tree, findings_path, {"open"})
+        dead_cells = [item["cell"] for item in live_report["dead"]]  # type: ignore[index]
+        check("ledger-check accepts a live label id and a resolving catalog id",
+              live_report["errors"] == []
+              and "p1c99" in dead_cells
+              and "p1c13" not in dead_cells
+              and "p1c1" not in dead_cells
+              and "fixture/p1/tin-branch" not in dead_cells,
+              str(live_report))
+        rewritten = rewrite_ledger_text(
+            "fillable p1c13 and dead p1c99 and label p1c1",
+            "fixture-form", cover_catalog, tree, ["fixture-form"],
+            {("fixture-form", "p1c13"): "fixture/p1/tin-branch"},
+            {},
+        )
+        check("ledger rewrite maps fillable cells to catalog ids and marks dead ones",
+              rewritten == "fillable fixture/p1/tin-branch and dead former_p1c99 and label p1c1",
+              rewritten)
+
     print("FAIL" if failed else "OK",
           f"{failed} self-test(s) failed" if failed else "self-test")
     return 1 if failed else 0
@@ -536,10 +1085,29 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command")
     check_cmd = sub.add_parser("check", help="resolve every catalog record against a tree")
     check_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    cover_cmd = sub.add_parser("coverage", help="list fillable cells no catalog record claims")
+    cover_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    ledger_cmd = sub.add_parser("ledger-check", help="cited pXcN in review-findings vs a tree")
+    ledger_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    ledger_cmd.add_argument("--findings", type=pathlib.Path, default=FINDINGS_PATH)
+    ledger_cmd.add_argument(
+        "--status",
+        action="append",
+        dest="statuses",
+        help="repeatable; default is open findings only",
+    )
+    rewrite_cmd = sub.add_parser(
+        "ledger-rewrite",
+        help="replace fillable pXcN in where/what with catalog ids; mark dead ids",
+    )
+    rewrite_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    rewrite_cmd.add_argument("--findings", type=pathlib.Path, default=FINDINGS_PATH)
+    rewrite_cmd.add_argument("--write", action="store_true",
+                             help="write the rewritten ledger back to --findings")
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    if args.command != "check":
+    if args.command not in ("check", "coverage", "ledger-check", "ledger-rewrite"):
         parser.print_help()
         return 2
     catalog, errors = load_catalog(args.catalog)
@@ -554,6 +1122,28 @@ def main() -> int:
     if not tree.is_dir():
         print(f"FAIL  tree {tree} is not a directory")
         return 1
+    if args.command == "coverage":
+        report = coverage_tree(catalog, tree)
+        print_coverage(report)
+        failed = bool(report["uncatalogued"] or report["ambiguous"])
+        return 1 if failed else 0
+    if args.command == "ledger-check":
+        statuses = set(args.statuses) if args.statuses else {"open"}
+        report = ledger_check(catalog, tree, args.findings, statuses)
+        print_ledger(report)
+        if report.get("errors") or report.get("dead"):
+            return 1
+        return 0
+    if args.command == "ledger-rewrite":
+        result = rewrite_findings_ledger(catalog, tree, args.findings)
+        payload = result["payload"]
+        print(f"{result['changed_fields']} where/what field(s) rewritten")
+        if args.write:
+            args.findings.write_text(
+                json.dumps(payload, indent=1, ensure_ascii=True) + "\n",
+                encoding="utf-8",
+            )
+        return 0
     results, failed = check_tree(catalog, tree)
     print_results(results, tree)
     return 1 if failed else 0

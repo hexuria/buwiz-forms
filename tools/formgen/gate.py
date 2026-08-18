@@ -175,8 +175,11 @@ COMPARISON_NAMES = (
 # they are invoked with one rather than being excused from the check.
 SELF_TEST_MODULES = (
     "extract", "lattice", "fonts", "guides", "emit", "verify", "index_page",
-    "audit", "comb_referee", "gate",
+    "audit", "comb_referee", "gate", "field_identity",
 )
+# Identity coverage pin (I3). Must match field_identity.EXPECTED_FILLABLE_CELLS.
+EXPECTED_FILLABLE_CELLS = 9990
+EXPECTED_UNCATALOGUED_FILLABLES = 0
 SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
 # A checker-of-checkers, not a module self-test: it proves every `extract.py`
@@ -9969,6 +9972,15 @@ def check_self_tests() -> Result:
         code, _ = runner(args, timeout=900)
         if code != 0:
             failures.append(module)
+    forms_tree = REPO / "forms"
+    if EXPECTED_UNCATALOGUED_FILLABLES != 0:
+        failures.append("EXPECTED_UNCATALOGUED_FILLABLES must stay 0")
+    if forms_tree.is_dir():
+        code, _ = run(
+            [str(HERE / "field_identity.py"), "coverage", "--tree", str(forms_tree)],
+            timeout=120)
+        if code != 0:
+            failures.append("field_identity coverage")
     prover = HERE / PROVE_FIXTURES_SCRIPT
     if not prover.is_file():
         missing.append(PROVE_FIXTURES_SCRIPT)
@@ -10258,8 +10270,12 @@ FINDING_IMMUTABLE_KEYS = (
     "id", "form", "page", "severity", "what", "where", "evidence",
     "cause", "audit_blind",
 )
+# Recited 2026-08-18: dead pXcN in where/what of the first 138 entries
+# became catalog ids, live non-fillable cell ids, or former_pXcN. The
+# visual claims in what/evidence are otherwise the same review. Moving
+# this pin without a matching ledger recitation is still a rewrite.
 FINDINGS_IMMUTABLE_BASELINE_SHA256 = (
-    "1e6b13157096d15f608a6505602ef47368b307982f5eadb2c24b3bd0dc839723"
+    "5078408e0b8efd59e57071648a9918292bdc70998bb39fe17b4a010321c88d71"
 )
 
 
@@ -11974,6 +11990,12 @@ def _self_test_body() -> int:
                         "count contract")
     if "comb_referee" not in SELF_TEST_MODULES:
         failures.append("comb_referee.py must be included in module self-tests")
+    if "field_identity" not in SELF_TEST_MODULES:
+        failures.append("field_identity.py must be included in module self-tests")
+    if EXPECTED_UNCATALOGUED_FILLABLES != 0:
+        failures.append("I3 coverage pin EXPECTED_UNCATALOGUED_FILLABLES must be 0")
+    if EXPECTED_FILLABLE_CELLS != 9990:
+        failures.append("I3 fillable census pin moved without its catalog/self-test twin")
 
     # Built from the census constants rather than repeating 38 and 13 as
     # literals: the fixture and the thing it certifies must move together, and
