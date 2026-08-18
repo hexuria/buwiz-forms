@@ -49,14 +49,13 @@ is risk R2. The identity id still names the same box; only the hint moves.
 
 ## Coverage
 
-208 identities. The C01–C07 seed is 7 strips (28). I0 added the measured
-3+3+3+5 TIN caption chain on 38 more bundles (152). I1 added 28 leftovers:
-`extra/1801-2018` as a mixed `tin-strip` plus tin-2/3/branch, extra HTML
-3+3+3+N chains that uniquely resolve (spouse / page-2 / extra), from
-[`tin-identity-leftovers-20260818.json`](../corrections/evidence/tin-identity-leftovers-20260818.json).
-Eight PDF-census not-measurable bundles still emit no 3+3+3+N chain.
+4557 identities. C01–C07 seed (28) + I0 TIN caption chains (152) + I1 TIN
+leftovers (28) + I2 remaining comb cells (4349). Comb roles are
+`date-yyyy-*`, `date-mmyyyy-*`, `date-full-*`, `money-{slots}-*`, or
+`comb-{slots}s-*` from slot count and pitch. Evidence:
+[`identity-comb-20260818.json`](../corrections/evidence/identity-comb-20260818.json).
 
-This is not yet coverage of every fillable field.
+X-squares, wide text, and remainder fillables are not catalogued yet.
 
 ## What this is not
 
