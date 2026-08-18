@@ -436,8 +436,12 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # subject loop to a dedicated sweep AFTER the caption refutation, in its
 # exact shape -- the loop-order version stole eleven caption-block
 # subjects on eight forms and mismatched their reviewed certificates.
+# Re-pinned 2026-08-18 (gol/tin-stage3): lattice admits thick horizontal
+# table rails to the y-lattice and skips painted walls that would fuse
+# into an existing y-line. No comb-referee constant other than this
+# producer pin moves with it.
 LATTICE_PRODUCER_SHA256 = (
-    "cedf3f1f1a689e6fea610085250d52ff24a1b6bb3f5dc9ce0fc24353c1ad5762"
+    "f525554aeb81795c98314d87808160ac060e095441b1a7311b0cce6d278d060c"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
