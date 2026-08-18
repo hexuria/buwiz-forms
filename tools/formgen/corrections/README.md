@@ -5,8 +5,11 @@
     STAGE 3  MAP        fields -> eBIRForms XML payload keys, bound to forms-corrected/
 
 This directory holds stage 2's **ledger**: the declared corrections, their
-evidence, and the schema they are checked against. It holds no applier and no
-verifier — neither exists yet.
+evidence, and the schema they are checked against. The applier is
+[`../correct.py`](../correct.py). The independent fidelity producer is
+[`../corrected_fidelity.py`](../corrected_fidelity.py). Passing
+`validate_records.py` means the pair is well formed, never that the
+correction is true.
 
 ## What a record is
 
@@ -97,9 +100,9 @@ where the applier's loader (files only, root only) never sees it.
 
 | File | What it is |
 | --- | --- |
-| `C01-2550m-tin-branch-code.json` | The ledger entry the applier reads. The entire current ledger: one record. |
-| `evidence/C01-evidence.json` | Its evidence: every measurement, its source, and how to re-derive it. |
-| `schema/correction-record.schema.json` | The evidence-record shape. **Provisional** — the integration round owns the final version. Kept out of the ledger root so the applier does not try to apply it. |
+| `C01-2550m-tin-branch-code.json` … `C07-1604cf-tin-branch-code.json` | Ledger entries the applier reads. Seven records: C01 re-anchored against HEAD `98ca03c3`; C02–C07 authored for the remaining census sites. |
+| `evidence/C0N-evidence.json` | Per-record evidence: every measurement, its source, and how to re-derive it. |
+| `schema/correction-record.schema.json` | The evidence-record shape. Kept out of the ledger root so the applier does not try to apply it. |
 | `validate_records.py` | Checks each evidence record against the schema and proves it still agrees with its ledger entry. **Not the applier, not the verifier.** Passing means well formed, never means true. |
 | `evidence/measure_tin_branch_census.py` | Measures, from the pinned PDFs alone, what each bundle PRINTS for its TIN comb chain. Evidence tooling; nothing in the pipeline consumes it. |
 | `evidence/tin-branch-census-20260808.json` | That script's output for all 53 bundles, 2026-08-08. |
@@ -123,12 +126,58 @@ and refuses to measure a file that does not match.
 
 | ID | Form | Change | Authority | Status |
 | --- | --- | --- | --- | --- |
-| C01 | 2550M (Feb 2007) | TIN branch code: 3 printed compartments → 5 | harvested HTA runtime declaration; regulation not identified in-repo | `declared` |
+| C01 | `2550m-2007` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000`) | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C02 | `0605-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `declared` |
+| C03 | `2551m-2002` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `declared` |
+| C04 | `extra/2553-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C05 | `extra/1600wp-2010` item 5 primary | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, none pre-printed) | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
+| C06 | `extra/1600wp-2010` agent TIN | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, no ink inside) | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `declared` |
+| C07 | `extra/1604cf-2008` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000` in 3 of 4) | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `declared` |
+
+### The branch-lock rule
+
+The branch group is locked to `00000` **only where the official artwork already
+pre-prints `000` in the branch box** — C01 and C07, and nowhere else. Where the
+official box is blank, the five cells stay **editable**: C02, C03, C04, C05 and
+C06 are payment and withholding sheets whose filer must be able to enter a real
+branch code, and painting a locked `00000` over a blank official box would
+silently credit every remittance to the head office. `lock_branch` in
+`tools/formgen/review/reflow_tin_chain.py` carries the distinction, and it is
+set from the pinned artwork's own ink, never from convenience.
+
+### Charbox chrome (sitting 2026-08-17)
+
+The even 3-3-3-5 split does **not** get to restyle the TIN as a grid of
+full boxes. Official charboxes (2550M item 1 month, rule `v172`) put a
+complete 0.72pt frame on the **outer** group only; interior ticks are
+short hairs on the floor of the box (~33% of its height). Dash/gap cells
+between TIN groups keep the dedicated SVG fill (`#c0c0c0` / `#808080` /
+`#ffcc99` / `#e3e3e3` depending on the sheet) and a black frame, and they
+stay non-tabbable. `reflow_tin_chain.py` paints that chrome after the
+white knockout, because the knockout hides the official ticks and fills.
+
+### Execution queue after this sitting
+
+Do these in order. Do not start a later row until the earlier one has a
+human verdict or an explicit skip.
+
+| # | Where | What | Why it is that layer |
+| --- | --- | --- | --- |
+| **P0** | `gol/tin-stage2` / [PR #17](https://github.com/hexuria/buwiz-forms/pull/17) | TIN chrome restore (this section) + even 3-3-3-5 + lock rule | Stage 2 residue: the source prints 3 or 4 branch boxes. |
+| **P1** | **not this PR** | Printed charboxes that still type like one `<input>` (2550M item 1/3/5/10 and peers) | Stage 1. Every comb slot in `forms/` already has `maxlength="1"` (0 missing across 53 forms). The overflowing fields are **text** inputs sitting on printed dividers — `inputs_span_no_printed_divider`. Fixing them in this ledger would hide a generator misread. Census, then a generator fix on a later batch, never a TIN record. |
+| **P2** | `gol/tin-stage3` (stacked on #17) | Tab/index: section-scoped order (0605 item 17 finishes before item 18); 2550M page-2 first schedule row | Beyond Stage 2 TIN. F209 (bands appended after the page) is already **fixed** (T1, 53/53 tab-walk green). What remains is (a) row-then-x across two side-by-side items instead of finishing a group, and (b) measuring why 2550M Schedule 1's first printed line is unusable — live `p2c0` exists at 118.32pt; do not guess. |
+| **—** | blocked | Stage 3 map | Field identity still bbox-derived. |
+
+Status on C01–C07 stays `declared` until the P0 sitting is accepted.
 
 Why C01 is genuinely stage 2: the 2007 artwork is **correct and out of date**.
 It prints three compartments and pre-prints `000` in them; BIR's own client
 declares `frm2550m:txtBranchCode` with `max_length: 5`. No rule derives "BIR
-widened this after 2007" from 2007 ink.
+widened this after 2007" from 2007 ink. After the 2026-08-17 sitting the
+correction reflows the **whole** TIN strip to even 3-3-3-5 inside that same
+outer span (not five squeezed writable cells in the old last box), and locks
+the branch as `00000` — a lock C01 earns because the 2007 sheet prints `000`
+there, and one the blank-box forms C02–C06 do not.
 
 **Measured while authoring it, and not what the briefing said:** 2550M is not
 the only bundle printing `3+3+3+3`. Of 53 bundles, **39** print `3+3+3+5`,

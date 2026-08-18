@@ -91,9 +91,12 @@ What survives of the instinct, as binding rules:
    failure, not a shrug. Stage 3 binds to forms-corrected/ and to nothing
    else, so the mapping moves only when a correction record moves.
 
-Current stage-2 ledger: exactly ONE true correction is known -- the TIN branch
-code 3 -> 5 on 2550M (see the table above). The applier gets built when stage 1
-closes, against this section.
+Current stage-2 ledger: one CLASS of true correction is known -- the TIN branch
+code, widened to five compartments over artwork that prints three or four (see
+the table above). 2550M was the first record; the census in
+`corrections/evidence/tin-branch-census-20260808.json` found it is not alone,
+and the ledger has grown a record per affected form rather than one generalised
+rule. The applier gets built when stage 1 closes, against this section.
 
 ## Rule 4, wired at r27 — the checkable half
 
@@ -102,14 +105,15 @@ its branches are stated here so that a later widening is a visible change:
 
 | State | Verdict |
 | --- | --- |
-| `forms-corrected/` absent | **PASS** — stage 2 is unbuilt; nothing downstream reads a tree that is not there |
+| `forms-corrected/` absent, ledger EMPTY | **PASS** — stage 2 is unbuilt; nothing downstream reads a tree that is not there |
+| `forms-corrected/` absent, ledger NON-EMPTY | **FAIL** — a declared override applied to nothing and published by nothing |
 | present, no manifest | **FAIL** — bytes nobody can re-derive from a named batch |
 | a manifest `correct.py --verify` cannot re-derive | **FAIL** — the check demands that verification rather than re-implementing it, so the second opinion does not share this file's assumptions |
 | verified, no divergence declared | **PASS** |
 | a declared divergence, no fidelity report | **FAIL** |
 | a declared divergence the report does not name | **FAIL** — this is rule 1's silent override, and it is the branch that must never go green |
 
-All seven branches are fixtures in `gate.self_test`. The four interesting ones
+All eight branches are fixtures in `gate.self_test`. The four interesting ones
 were also proven end to end at r27 against a real corrected tree built from
 `corpus/r27`: no report FAILs; a report naming the sentence PASSes; a report
 that paraphrases it into "the tree matches the official form" FAILs; and one
@@ -123,12 +127,87 @@ plainly contained it. The check now decodes a JSON report's strings before
 looking, and falls back to raw text otherwise, so it does not depend on a report
 format that has not been decided.
 
-**What is still missing, precisely.** There is no fidelity run over
-`forms-corrected/`, so `build/corrected-fidelity.json` does not exist. Until it
-does, declaring any correction turns the gate red — the fail-closed direction,
-and the reason this check could land before that report. The gate also does not
-yet run the stage-1 checks a second time over the corrected tree; that is the
-other half of rule 4 and is not wired.
+### The absent-tree branch, split
+
+The original absent-tree PASS was true of an empty ledger and false of this one.
+A correction record exists; nothing has applied it; no report publishes its
+divergence — and the gate was green, because the one state it treated as an
+answer was exactly the state the project had entered. That is rule 1's silent
+override arrived at by NOT BUILDING rather than by hiding, and it is the reason
+the branch is now split on whether `tools/formgen/corrections/` holds a record.
+
+The scan is the applier's own rule restated, not imported: root-level `*.json`
+only, because `evidence/` and `schema/` deliberately sit where
+`correct.load_records` never looks. The check does **not** apply the ledger to
+find out what a corrected tree would contain. Applying one record while its
+siblings are mid-write makes the applier refuse the whole tree, and a gate that
+did that would report a ledger in progress as a broken build. Knowing that a
+tree is OWED is the whole of what this branch needs.
+
+Note which direction the split runs. Deleting a record does not turn a red gate
+green: a corrected tree that exists is judged entirely on itself, and
+`gate.self_test` asserts that the ledger's contents cannot change any of those
+verdicts. The ledger only ever adds a failure.
+
+### `corrected_fidelity.py` — the report that was missing
+
+`build/corrected-fidelity.json` now has a producer:
+
+```sh
+python3 tools/formgen/corrected_fidelity.py \
+    --tree forms-corrected --manifest forms-corrected.manifest.json \
+    --records tools/formgen/corrections --out build/corrected-fidelity.json
+```
+
+`/build/` is repository-ignored, so the report is a gate-run artifact like
+`audit.json` — recomputed, never a committed pin. `forms-corrected/` and its
+manifest are ignored too: at the six records in the ledger today the tree is 358
+files across 53 bundles of which 352 are byte-identical copies, which is the
+parallel corpus rule 2 forbids. It is re-derivable from a named batch plus the
+ledger, and both of those are tracked.
+
+**It is not the manifest with the honesty flags turned on.** That shape is the
+`?debug=fields` defect reached from the other side — a report that satisfies the
+gate for a corrected tree in which nothing actually diverges. So a sentence is
+emitted only after the divergence it names has been SEEN, in that run, by two
+measurements that share nothing with the applier:
+
+- the emitted compartment count comes from the corrected HTML parsed with the
+  stdlib `html.parser`, counted from the element STRUCTURE — `data-comb-slots`
+  is read only so that a document contradicting itself refuses;
+- the printed compartment count comes from the pinned PDF's drawing operators
+  via PyMuPDF (internal ticks in the printed box + 1), never from
+  `build/layout`, the IR, or the manifest. PyMuPDF is also `extract.py`'s
+  library, so the report names `mutool draw -F trace` and Poppler
+  `pdftocairo -svg` as the readers that re-derived the same geometry when the
+  records were authored, and states that it did not re-run them.
+
+Both of C01's predicted offenders must be observed or the run writes nothing:
+`comb_slots_match_printed` (emitted ≠ printed) and
+`inputs_span_no_printed_divider` (a printed tick lands strictly inside an
+emitted compartment). Equal counts refuse as `no-observed-divergence`; a
+correction that changed nothing visible has no divergence to declare, and
+publishing one anyway would be the report inventing its own finding.
+
+Proven end to end against a corrected tree built from `HEAD` into a scratch
+directory outside the repository, over all six records in the ledger at the
+time (2550M, 0605, 2551M, 2553, 1600WP, 1604-CF — 1600WP prints four
+compartments, not three, and is measured as such). Reverting one correction's
+bytes refuses; editing one byte after the applier ran refuses on the manifest
+hash; paraphrasing a manifest sentence refuses because the sentence is
+regenerated from the ledger record and compared. No report is written in any of
+those cases. That tree was removed afterwards — this round does not land stage 2.
+
+**What is still missing, precisely.** The gate does not yet run the stage-1
+checks a second time over the corrected tree; that is the other half of rule 4
+and is not wired. `corrected_fidelity.py` measures the ONE divergence shape the
+ledger currently contains — a comb whose compartment count was deliberately
+changed — and refuses any record it cannot bind to a printed box stated in the
+record's own subject. A correction of a different shape needs its own observer
+here before its record can land, and refusing is what it does until then.
+Nothing in this file has been reviewed as a trusted producer: the registries in
+`scripts/audit_html_form_migration.py` stay empty frozensets, and satisfying
+`corrected-tree` promotes nothing.
 
 ## Why rule 3 matters here specifically
 

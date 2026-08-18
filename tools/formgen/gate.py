@@ -71,6 +71,12 @@ COMB_REFEREE_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
 CORRECTED_TREE = REPO / "forms-corrected"
 CORRECTED_MANIFEST = REPO / "forms-corrected.manifest.json"
 CORRECTED_FIDELITY_REPORT = BUILD / "corrected-fidelity.json"
+# The stage-2 ledger. Read here for ONE fact: whether any correction has been
+# declared. `correct.py` owns what a record means; this only needs to know that
+# a tree is owed. The scan is the applier's rule restated, not imported -- root
+# only, because `evidence/` and `schema/` deliberately sit where the applier's
+# loader never looks and recursing would count backing documents as records.
+CORRECTIONS_LEDGER = HERE / "corrections"
 
 # Corpus census. Pins, not thresholds: a form that appears or disappears has to
 # be declared here, in a commit that says which one and why. 51 -> 53 and
@@ -10395,7 +10401,8 @@ def check_no_tracked_deletions() -> Result:
 def corrected_tree_result(*, tree_exists: bool, manifest_exists: bool,
                           verify_code: int | None, verify_output: str,
                           divergence_reports: list[str],
-                          fidelity_text: str | None) -> Result:
+                          fidelity_text: str | None,
+                          ledger_nonempty: bool = False) -> Result:
     """ARCHITECTURE.md rule 4, in the half that is checkable today.
 
     The rule: "The gate runs on BOTH trees. On forms-corrected/, fidelity must
@@ -10406,10 +10413,18 @@ def corrected_tree_result(*, tree_exists: bool, manifest_exists: bool,
     filesystem or a subprocess. What it does NOT do is as important as what it
     does, so it is stated rather than implied:
 
-      * **No corrected tree -> PASS.** Stage 2 is unbuilt. That is a true
-        statement about a tree that does not exist, not a check that was
-        skipped, and it is the one branch where absence is an answer -- because
-        nothing downstream reads a tree that is not there.
+      * **No corrected tree and an EMPTY ledger -> PASS.** Stage 2 is unbuilt.
+        That is a true statement about a tree that does not exist, not a check
+        that was skipped, and it is the one branch where absence is an answer
+        -- because nothing downstream reads a tree that is not there.
+      * **No corrected tree and a NON-EMPTY ledger -> FAIL.** The moment a
+        correction record exists, absence stops being an answer: a declared
+        override that nothing has applied is a divergence nothing publishes,
+        which is rule 1's silent override reached by not building rather than
+        by hiding. The check does NOT apply the ledger itself to find out --
+        applying one record while its siblings are mid-write would refuse the
+        whole tree and report a ledger problem as a build problem. It only
+        needs to know that a tree is owed.
       * **A corrected tree with no manifest -> FAIL.** Bytes nobody can
         re-derive from a named batch are exactly the parallel corpus rule 2
         forbids.
@@ -10430,6 +10445,13 @@ def corrected_tree_result(*, tree_exists: bool, manifest_exists: bool,
         direction, and the reason this check can land before that report does.
     """
     if not tree_exists:
+        if ledger_nonempty:
+            return Result(
+                "corrected-tree", Verdict.FAIL,
+                "stage 2 ledger has records but forms-corrected/ does not "
+                "exist, so a declared override is applied to nothing and "
+                "published by nothing; build the tree and write "
+                f"{CORRECTED_FIDELITY_REPORT.name}")
         return Result("corrected-tree", Verdict.PASS,
                       "forms-corrected/ does not exist; stage 2 is unbuilt")
     if not manifest_exists:
@@ -10462,14 +10484,37 @@ def corrected_tree_result(*, tree_exists: bool, manifest_exists: bool,
         f"divergence(s) named in the fidelity report")
 
 
+def ledger_record_names() -> list[str]:
+    """Correction records in the ledger ROOT, by file name.
+
+    `correct.load_records` reads `*.json` at the root and nothing below it, and
+    refuses a nested file that validates as a record. That rule is restated
+    rather than imported so this check does not inherit the applier's
+    assumptions about its own ledger; the names are all that is needed, and a
+    ledger directory that is missing entirely reads as empty here because
+    `correct.py` is the thing that refuses on that -- not the gate's business
+    to decide twice, and the branch it feeds is the conservative one either
+    way.
+    """
+    if not CORRECTIONS_LEDGER.is_dir():
+        return []
+    return sorted(path.name for path in CORRECTIONS_LEDGER.iterdir()
+                  if path.is_file() and path.suffix == ".json"
+                  and not path.name.startswith("."))
+
+
 def check_corrected_tree() -> Result:
     tree_exists = CORRECTED_TREE.is_dir()
     manifest_exists = CORRECTED_MANIFEST.is_file()
+    records = ledger_record_names()
     if not tree_exists or not manifest_exists:
-        return corrected_tree_result(
+        result = corrected_tree_result(
             tree_exists=tree_exists, manifest_exists=manifest_exists,
             verify_code=None, verify_output="", divergence_reports=[],
-            fidelity_text=None)
+            fidelity_text=None, ledger_nonempty=bool(records))
+        if not tree_exists and records:
+            result.detail += f" -- {len(records)} record(s): {', '.join(records)}"
+        return result
     code, output = run([str(HERE / "correct.py"), "--verify",
                         "--manifest", str(CORRECTED_MANIFEST)])
     reports: list[str] = []
@@ -10491,7 +10536,7 @@ def check_corrected_tree() -> Result:
     return corrected_tree_result(
         tree_exists=True, manifest_exists=True, verify_code=code,
         verify_output=output, divergence_reports=reports,
-        fidelity_text=fidelity_report_text())
+        fidelity_text=fidelity_report_text(), ledger_nonempty=bool(records))
 
 
 def _json_strings(value: Any, out: list[str]) -> None:
@@ -11782,25 +11827,33 @@ def _self_test_body() -> int:
     if not findings_payload_errors(findings_fixture):
         failures.append("an empty findings ledger must fail closed")
 
-    # ARCHITECTURE.md rule 4. Six fixtures, one per branch, and the two that
+    # ARCHITECTURE.md rule 4. One fixture per branch, and the three that
     # matter are the ones that must never go green: a corrected tree whose
-    # manifest does not re-derive, and a declared divergence no fidelity report
-    # publishes. The absent-tree branch is the only PASS on absence, and it is
-    # asserted explicitly so that a later edit widening it is a test change
-    # rather than a silent one.
+    # manifest does not re-derive, a declared divergence no fidelity report
+    # publishes, and a ledger carrying records with no tree built from them.
+    # The absent-tree PASS is the only PASS on absence, it now holds ONLY for
+    # an empty ledger, and both halves are asserted explicitly so that a later
+    # edit widening either is a test change rather than a silent one.
     def _corrected(**over: Any) -> Result:
         fixture: dict[str, Any] = {
             "tree_exists": True, "manifest_exists": True,
             "verify_code": 0, "verify_output": "",
             "divergence_reports": [], "fidelity_text": None,
+            "ledger_nonempty": False,
         }
         fixture.update(over)
         return corrected_tree_result(**fixture)
 
     declared = ["diverges by declared override C001, authorised by RR 11-2018"]
     corrected_cases: tuple[tuple[str, Result, Verdict], ...] = (
-        ("an unbuilt stage 2 is not a skipped check",
+        ("an unbuilt stage 2 with an empty ledger is not a skipped check",
          _corrected(tree_exists=False, manifest_exists=False), Verdict.PASS),
+        ("a declared record with no corrected tree is a build failure",
+         _corrected(tree_exists=False, manifest_exists=False,
+                    ledger_nonempty=True), Verdict.FAIL),
+        ("a declared record with a manifest but no tree is a build failure",
+         _corrected(tree_exists=False, manifest_exists=True,
+                    ledger_nonempty=True), Verdict.FAIL),
         ("a corrected tree with no manifest is a build failure",
          _corrected(manifest_exists=False), Verdict.FAIL),
         ("a manifest that does not re-derive is a build failure",
@@ -11823,6 +11876,72 @@ def _self_test_body() -> int:
             failures.append(f"corrected-tree rule 4: {label}")
     if "corrected-tree" not in CHECKS:
         failures.append("rule 4 is not wired into the gate's check inventory")
+
+    # The unbuilt-with-records FAIL has to SAY why, because the operator's next
+    # move differs entirely from every other corrected-tree failure: build the
+    # tree, do not repair one.
+    unbuilt_with_records = _corrected(tree_exists=False, manifest_exists=False,
+                                      ledger_nonempty=True)
+    if "stage 2 ledger has records but forms-corrected/ does not exist" \
+            not in unbuilt_with_records.detail:
+        failures.append("the unbuilt-with-records failure must name the ledger "
+                        "as its reason")
+    if "ledger" in _corrected(tree_exists=False, manifest_exists=False).detail:
+        failures.append("the empty-ledger unbuilt PASS must stay the plain "
+                        "'stage 2 is unbuilt' statement")
+    # A tree that EXISTS is judged on itself. Whether the ledger is empty
+    # cannot change any of those verdicts, or a record deleted from the ledger
+    # would quietly re-colour a real corrected tree.
+    for label, over in (
+            ("no manifest", {"manifest_exists": False}),
+            ("verify fails", {"verify_code": 1}),
+            ("nothing declared", {}),
+            ("declared, no report", {"divergence_reports": declared}),
+            ("declared and named", {"divergence_reports": declared,
+                                    "fidelity_text": f"x {declared[0]} y"})):
+        with_ledger = _corrected(ledger_nonempty=True, **over)
+        without = _corrected(**over)
+        if with_ledger.verdict is not without.verdict:
+            failures.append(f"a present corrected tree ({label}) must not "
+                            f"change verdict with the ledger's contents")
+    # The live check must actually consult the ledger. A pure function nothing
+    # ever passes `ledger_nonempty` to is a branch that cannot fire, which is
+    # how the previous version of this check spent its whole life green while
+    # C01 sat declared in the ledger. Driven through the real function with the
+    # three paths redirected, so the wiring is what is tested and not a
+    # restatement of it.
+    global CORRECTIONS_LEDGER, CORRECTED_TREE, CORRECTED_MANIFEST
+    saved = (CORRECTIONS_LEDGER, CORRECTED_TREE, CORRECTED_MANIFEST)
+    with tempfile.TemporaryDirectory() as scratch:
+        root = pathlib.Path(scratch)
+        ledger = root / "corrections"
+        (ledger / "evidence").mkdir(parents=True)
+        (ledger / "evidence" / "C99-evidence.json").write_text("{}", encoding="utf-8")
+        (ledger / "README.md").write_text("prose", encoding="utf-8")
+        try:
+            CORRECTIONS_LEDGER = ledger
+            CORRECTED_TREE = root / "forms-corrected"
+            CORRECTED_MANIFEST = root / "forms-corrected.manifest.json"
+            if ledger_record_names():
+                failures.append("prose and nested evidence are not ledger "
+                                "records")
+            empty = check_corrected_tree()
+            if empty.verdict is not Verdict.PASS:
+                failures.append("an unbuilt stage 2 with an empty ledger must "
+                                f"still pass, got {empty.verdict.value}")
+            (ledger / "C99-probe.json").write_text("{}", encoding="utf-8")
+            if ledger_record_names() != ["C99-probe.json"]:
+                failures.append("a root-level record must be seen by the "
+                                "ledger scan")
+            declared_only = check_corrected_tree()
+            if declared_only.verdict is not Verdict.FAIL:
+                failures.append("a declared record with no corrected tree must "
+                                f"fail live, got {declared_only.verdict.value}")
+            if "C99-probe.json" not in declared_only.detail:
+                failures.append("the live failure must name the records it "
+                                f"found: {declared_only.detail}")
+        finally:
+            CORRECTIONS_LEDGER, CORRECTED_TREE, CORRECTED_MANIFEST = saved
 
     huge_json_integer = ("[" + "9" * 5000 + "]").encode("ascii")
     try:

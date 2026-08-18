@@ -11,7 +11,7 @@
     "source_pdf_sha256": "9fb4101ace8c781436dac85df138a8fb9790775291affe2dada030c490d0d2b6"
   },
   "subject": {
-    "description": "The fourth (branch-code) group of the item-4 TIN comb chain on page 1. The chain prints 66.00-99.84 / 104.64-137.76 / 142.32-175.44 / 180.24-213.12, separated by three grey dashes 4.80 / 4.56 / 4.80pt wide.",
+    "description": "The fourth (branch-code) group of the item-4 TIN comb chain on page 1. The chain prints 66.00-99.84 / 104.64-137.76 / 142.32-175.44 / 180.24-213.12, separated by three grey dashes 4.80 / 4.56 / 4.80pt wide. After the 2026-08-17 sitting the whole chain (not only this box) is reflowed to even 3-3-3-5 inside the original outer span; this printed box remains the PDF identity of the branch group.",
     "page": 1,
     "printed_box_pt": [
       180.24,
@@ -25,7 +25,7 @@
       "cardinality": "exactly-one"
     },
     "official_field_key": "frm2550m:txtBranchCode",
-    "cell_id_hint": "p1c13 at HEAD 77987f8 — NON-AUTHORITATIVE. Cell ids are quantised bounding boxes (lattice.geometry_subject_key) and renumber on any geometry change; 42 of 146 cited ids in the findings ledger are already dead (PLAN.md risk R2). If the hint and printed_box_pt disagree, printed_box_pt wins and the applier aborts. The applier binds to the batch by the comb element's exact bytes (954 bytes at HEAD 77987f8, occurring once), not by the id: a later batch that emits it differently makes the applier refuse rather than guess."
+    "cell_id_hint": "p1c13 at HEAD 98ca03c3 — NON-AUTHORITATIVE. Cell ids are quantised bounding boxes (lattice.geometry_subject_key) and renumber on any geometry change; 42 of 146 cited ids in the findings ledger are already dead (PLAN.md risk R2). If the hint and printed_box_pt disagree, printed_box_pt wins and the applier aborts. The applier binds to the batch by the comb element's exact bytes (957 bytes at HEAD 98ca03c3, occurring once), not by the id: a later batch that emits it differently makes the applier refuse rather than guess. That refusal has already happened once: the anchor first written against HEAD 77987f8 (954 bytes) matched ZERO times at 98ca03c3, and the record was re-anchored and re-reviewed against 98ca03c3 on 2026-08-17 rather than loosened to match both."
   },
   "preconditions": [
     {
@@ -53,12 +53,12 @@
     }
   ],
   "what": {
-    "operation": "set_comb_compartments",
+    "operation": "reflow_tin_chain_to_3_3_3_5_lock_branch",
     "from": 3,
     "to": 5,
     "layout_policy": {
-      "writing_box": "unchanged — the printed box 180.24,118.80 -> 213.12,134.40 (32.88 x 15.60pt). The correction adds compartments inside the box BIR printed; it does not widen, move or repaint any artwork.",
-      "division": "equal, deterministic: left(i) = round(i * 32.88 / 5, 2) for i in 0..4, width(i) = left(i+1) - left(i), width(4) = 32.88 - left(4)",
+      "writing_box": "outer TIN strip unchanged 66.0-213.12 pt; the four groups and three separators are reflowed inside it so every digit cell is the same width (3-3-3-5). The official printed boxes are knocked out with a white rectangle of that same outer span.",
+      "division": "separators keep their printed widths (sum 14.16pt) and move with the groups; digit cells equal-split the remaining 132.96pt into 14: [9.5, 9.49, 9.5, 9.5, 9.5, 9.49, 9.5, 9.5, 9.49, 9.5, 9.5, 9.5, 9.49, 9.5]",
       "computed_lefts_pt": [
         0.0,
         6.58,
@@ -76,9 +76,11 @@
       "widths_sum_pt": 32.88,
       "nominal_pitch_pt": 6.576,
       "declared_pitch_attribute": "6.58",
-      "slot_inset": "unchanged from the consumed batch (top 0.72pt, height 14.16pt at HEAD 77987f8) — the correction changes the compartment COUNT, nothing about the writing surface",
-      "per_slot_input": "one text input per compartment, maxlength 1, sharing the group's field name, slot indexes 0..4 contiguous",
-      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone."
+      "slot_inset": "none — even digit-cell width across the whole strip is the rule; re-applying per-group 0.36pt insets would squeeze the edges of each group and make the last five cells look different from the first nine",
+      "per_slot_input": "TIN1/2/3: one editable maxlength-1 input per cell. Branch: five inputs, each value 0, readonly, so the printed branch is 00000 and cannot be typed over. The lock is authorised by the official artwork's own pre-printed 000 in this box and by nothing else.",
+      "note": "Rounding is fixed here so the applier's output is byte-deterministic and re-computable by hand from the box width alone.",
+      "branch_lock": "locked — the official artwork pre-prints 000 inside the branch box, so the corrected form reproduces that printed constant as five readonly zeros rather than offering a typing surface over BIR's own ink.",
+      "chrome": "each digit group: one outer 0.72pt frame, white knockout inside. Interior ticks are short bottom hairs (~33% of slot height), matching the official charbox (2550M month v172), not a full-height wall on every digit. Separators: dedicated SVG fill + 0.72pt black frame, no input, not in tab order."
     }
   },
   "reason": "BIR's February-2007 artwork for 2550M is CORRECT and OUT OF DATE. It prints three compartments for the TIN branch code and pre-prints '000' in them. BIR's own eBIRForms client, whose runtime this repository has harvested, declares that same field with max_length 5. No rule can derive 'BIR widened this field after 2007' from 2007 ink, which is precisely why this is a stage-2 correction and not a stage-1 producer bug (ARCHITECTURE.md, 'What belongs in which stage').",
@@ -215,49 +217,68 @@
       "independence": "Measured from the pinned PDF; no layout, IR or emitted HTML is read."
     },
     {
-      "claim": "The stage-1 batch at HEAD 77987f8 emits three typeable compartments for the branch code — a taxpayer can type three digits over the pre-printed 000 and has no way to enter a fourth or fifth.",
-      "source": "forms/2550m-2007/index.html at HEAD 77987f8 (worktree .claude/worktrees/form-correction)",
+      "claim": "The stage-1 batch at HEAD 98ca03c3 emits three typeable compartments for the branch code — a taxpayer can type three digits over the pre-printed 000 and has no way to enter a fourth or fifth.",
+      "source": "forms/2550m-2007/index.html at HEAD 98ca03c3 (worktree .claude/worktrees/tin-stage2, branch gol/tin-stage2)",
       "measurement": {
-        "element": "<div id=\"p1c13\" class=\"c f\" data-cell-kind=\"field\" data-field-kind=\"comb\" data-field-name=\"p1c13\" data-comb-capacity=\"3\" data-comb-slots=\"3\" data-comb-pitch=\"11.04\" style=\"left:180.24pt;top:118.8pt;width:32.88pt;height:15.6pt\">",
+        "element": "<div id=\"p1c13\" class=\"c f\" data-cell-kind=\"field\" data-row=\"4\" data-col=\"13\" data-field-kind=\"comb\" data-field-name=\"p1c13\" data-comb-capacity=\"3\" data-comb-slots=\"3\" data-comb-pitch=\"11.04\" style=\"left:180.24pt;top:118.8pt;width:32.88pt;height:15.6pt\">",
         "slots": [
-          "p1c13-s0 width 11.04pt",
-          "p1c13-s1 width 10.8pt",
-          "p1c13-s2 width 11.04pt"
+          "p1c13-s0 left 0.36pt width 10.68pt",
+          "p1c13-s1 left 11.04pt width 10.8pt",
+          "p1c13-s2 left 21.84pt width 10.68pt"
         ],
+        "slot_input_class": "fi fh22 fc",
         "inputs": 3,
         "maxlength_per_input": 1,
-        "note": "The pre-printed 000 is vector artwork, not glyphs, so emit.py's pre-printed-ink refusal (G11) does not fire on it and all three compartments carry live inputs."
+        "occurrence_counts": {
+          "id=\"p1c13-s": 3,
+          "name=\"p1c13\"": 4,
+          "note": "name=\"p1c13\" counts 4 because data-field-name carries the same substring as the three inputs' name attributes."
+        },
+        "changed_since_HEAD_77987f8": "This claim previously described HEAD 77987f8, where the slots carried a 0pt horizontal inset (left 0 / 11.04 / 21.84pt, widths 11.04 / 10.8 / 11.04pt) and the input class was fi fh21 fc. At 98ca03c3 the writing surface is inset 0.36pt at each end and the class is fi fh22 fc. Nothing about the printed artwork, the compartment COUNT (still 3) or the correction's premise moved with it — only the bytes the edit anchor has to match, which is why the anchor was re-derived from 98ca03c3 rather than carried forward.",
+        "note": "The pre-printed 000 is vector artwork, not glyphs, so emit.py's pre-printed-ink refusal (G11) does not fire on it and all three compartments carry live inputs. The 000 stays painted after the correction: this record adds compartments and un-prints nothing."
       },
-      "reproduce": "grep -o 'id=\"p1c13\"[^>]*' forms/2550m-2007/index.html and count the enclosed div.s children",
+      "reproduce": "python3 -c \"import re; h=open('forms/2550m-2007/index.html').read(); i=h.find('id=\\\"p1c13\\\"'); print(h[h.rfind('<div',0,i):][:1000])\" and count the enclosed div.s children",
       "independence": "Read from the shipped bytes, not from the layout or the audit report. This is the only observation in this record that is batch-specific; it is a description of today's stage-1 output, not a premise of the correction."
     },
     {
-      "claim": "The record's edit anchor matches the batch byte-for-byte, and applying it changes exactly one file: 371 of 372 files copy byte-identically.",
-      "source": "tools/formgen/correct.py (the stage-2 applier, authored concurrently by another agent) run against forms/ at HEAD 77987f8, output written to a scratch tree outside the repository",
+      "claim": "The re-anchored edit anchor matches the batch at HEAD 98ca03c3 byte-for-byte, and applying it changes exactly one file: 357 of 358 files copy byte-identically.",
+      "source": "tools/formgen/correct.py (the stage-2 applier) run on 2026-08-17 against forms/ at HEAD 98ca03c3 with a ledger directory holding C01 alone, output written to /tmp/c01-scratch, outside the repository",
       "measurement": {
+        "resolved_commit": "98ca03c3be5e9f2a4671546c1e1fe1059138f9a6",
         "counts": {
-          "files": 372,
+          "files": 358,
           "bundles": 53,
           "records": 1,
           "files_corrected": 1,
-          "files_copied_byte_identical": 371
+          "files_copied_byte_identical": 357
         },
         "effects_re_derived_by_the_applier": {
           "count_delta id=\"p1c13-s": {
             "before": 3,
-            "after": 5
+            "after": 5,
+            "met": true
           },
           "count_delta name=\"p1c13\"": {
             "before": 4,
-            "after": 6
+            "after": 6,
+            "met": true
           },
-          "occurs data-comb-slots=\"5\"": 1,
-          "absent the 3-slot branch comb signature": 0
+          "occurs data-comb-slots=\"5\"": {
+            "source": 0,
+            "output": 1,
+            "met": true
+          },
+          "absent the 3-slot branch comb signature": {
+            "source": 1,
+            "output": 0,
+            "met": true
+          }
         },
-        "written_element": "<div id=\"p1c13\" ... data-comb-capacity=\"5\" data-comb-slots=\"5\" data-comb-pitch=\"6.58\" style=\"left:180.24pt;top:118.8pt;width:32.88pt;height:15.6pt\"> with five slot containers",
+        "written_element": "<div id=\"p1c13\" ... data-comb-capacity=\"5\" data-comb-slots=\"5\" data-comb-pitch=\"6.58\" style=\"left:180.24pt;top:118.8pt;width:32.88pt;height:15.6pt\"> with five slot containers at left 0.36 / 6.58 / 13.15 / 19.73 / 26.3pt and widths 6.22 / 6.57 / 6.58 / 6.57 / 6.22pt, each carrying one input.fi.fh22.fc with maxlength 1",
+        "superseded_run": "An earlier run of this self-check, against HEAD 77987f8, reported 372 files and 371 byte-identical copies. The file count moved with the batch, not with this record.",
         "what_this_does_NOT_prove": "The applier measured its own output. Its manifest says so itself (self_check_is_not_independent_verification: true). No assertion in expected_effect is therefore 'held', and none of the divergence checks has been seen to fail on a corrected tree — that needs the audit, an independent parser, and a human."
       },
-      "reproduce": "python3 tools/formgen/correct.py --batch <name> --dry-run --out <scratch>/forms-corrected --manifest <scratch>/forms-corrected.manifest.json",
+      "reproduce": "python3 tools/formgen/correct.py --batch main --records <dir holding C01 alone> --out <scratch>/forms-corrected --manifest <scratch>/forms-corrected.manifest.json --dry-run",
       "independence": "None claimed. Recorded as an applier self-check, which rule 4 explicitly does not accept as verification."
     }
   ],
@@ -368,14 +389,14 @@
     "status": "not yet verified — the applier does not exist. This record is `declared`, and the effect it declares is what the verifier will be held to. It must not be promoted to `verified` on any evidence produced by the applier itself."
   },
   "provenance": {
-    "authored_at": "2026-08-08",
-    "authored_against_head": "77987f8 (worktree .claude/worktrees/form-correction, branch gol/form-correction); the edit anchor re-verified to occur exactly once at d6b8a59, the next batch commit, whose lattice change did not touch this comb",
+    "authored_at": "2026-08-08; re-anchored 2026-08-17",
+    "authored_against_head": "authored against 77987f8 (worktree .claude/worktrees/form-correction, branch gol/form-correction), with the edit anchor re-verified to occur exactly once at d6b8a59, the next batch commit, whose lattice change did not touch this comb. RE-ANCHORED against 98ca03c3 (worktree .claude/worktrees/tin-stage2, branch gol/tin-stage2) on 2026-08-17: that batch changed the branch comb's slot input class from fh21 to fh22 and inset the slot writing surface 0.36pt at each end of the box, so the 954-byte anchor matched zero times and the applier refused, as designed. The anchor is now the 957-byte element 98ca03c3 emits, occurring exactly once. The printed-artwork measurements below were re-confirmed against the same pinned PDF at the same time and did not move.",
     "tools": [
       "PyMuPDF get_drawings / get_text — pinned-PDF geometry and text operators",
-      "mutool draw -F trace — independent re-derivation of the 2550M branch box and its two ticks",
+      "mutool draw -F trace — independent re-derivation of the 2550M branch box and its two ticks; re-run on 2026-08-17 and still reporting box x 180.24-213.12 / y 873.60-889.20 in PDF space, ticks at x 191.28 and 202.08 spanning y 873.60-876.72, stroke width 0.72, and the three pre-printed '0' outlines at x 182.64-187.92 / 193.44-198.96 / 203.76-208.56 spanning y 876.72-884.64",
       "pdftocairo -svg (Poppler) — second independent re-derivation, including the three pre-printed '0' outlines",
       "tools/formgen/corrections/evidence/measure_tin_branch_census.py — the 53-bundle census",
-      "sha256 of the pinned PDF, verified against build/layout/2550m-2007.layout.json before any measurement",
+      "sha256 of the pinned PDF, verified again on 2026-08-17 as 9fb4101ace8c781436dac85df138a8fb9790775291affe2dada030c490d0d2b6 before any re-measurement",
       "tools/formgen/correct.py --dry-run and a scratch --out — anchor and edit shape only, self-check, not verification"
     ],
     "review": {
