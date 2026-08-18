@@ -823,6 +823,20 @@ def self_test() -> int:
     from playwright.sync_api import sync_playwright
 
     failures = 0
+
+    # emit.py writes each layer-cells run in this order. If it drifts,
+    # tab_check grades the live DOM red-order (Stage 1 corpus: 21/53).
+    shuffled = [
+        {"id": "p1c9", "row": 2, "x0": 522.34},
+        {"id": "p1c10", "row": 3, "x0": 20.0},
+        {"id": "p1c8", "row": 2, "x0": 100.0},
+    ]
+    got = [cell["id"] for cell in emit.cells_in_tab_order(shuffled)]
+    ok = got == ["p1c8", "p1c9", "p1c10"]
+    failures += not ok
+    print(f"  {'PASS' if ok else 'FAIL'}  cells_in_tab_order is (row, left, id) "
+          f"(got {got})", file=sys.stderr)
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = pathlib.Path(tmp)
         review_dir = tmp_path / "review"

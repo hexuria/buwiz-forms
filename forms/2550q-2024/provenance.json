@@ -65,7 +65,7 @@
       "2550Q guidelines April 2024_final.pdf"
     ]
   },
-  "html_bytes": 761817,
+  "html_bytes": 758525,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -91,7 +91,7 @@
       "1800 Guidelines.pdf"
     ]
   },
-  "html_bytes": 1005428,
+  "html_bytes": 1001113,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
