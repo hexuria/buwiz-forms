@@ -73,6 +73,11 @@ python3 tools/formgen/field_identity.py check --tree forms
 python3 tools/formgen/field_identity.py coverage --tree forms
 python3 tools/formgen/field_identity.py coverage --tree forms-corrected
 python3 tools/formgen/field_identity.py ledger-check --tree forms
+python3 tools/formgen/field_identity.py ledger-rewrite --tree forms --write
 ```
 
-`coverage` lists fillable cells whose center sits in no catalog `source_printed_box_pt`. I3 pins coverage 0 uncatalogued in `field_identity.py` and `gate.py`. `ledger-check` requires every `pXcN` in an open finding's `where`/`what` to exist as a live HTML element id or a catalog id that `check` resolves.
+`ledger-check` requires every `pXcN` in `where`/`what` to exist as a live
+HTML element id (fillable or not) or a catalog id that resolves. Fillable
+subjects were rewritten to catalog ids; dead `p1cN` became `former_p1cN`.
+Non-fillable ink (triangles, labels) keeps a current cell id and is not
+minted as a fillable identity.

@@ -10270,8 +10270,12 @@ FINDING_IMMUTABLE_KEYS = (
     "id", "form", "page", "severity", "what", "where", "evidence",
     "cause", "audit_blind",
 )
+# Recited 2026-08-18: dead pXcN in where/what of the first 138 entries
+# became catalog ids, live non-fillable cell ids, or former_pXcN. The
+# visual claims in what/evidence are otherwise the same review. Moving
+# this pin without a matching ledger recitation is still a rewrite.
 FINDINGS_IMMUTABLE_BASELINE_SHA256 = (
-    "1e6b13157096d15f608a6505602ef47368b307982f5eadb2c24b3bd0dc839723"
+    "5078408e0b8efd59e57071648a9918292bdc70998bb39fe17b4a010321c88d71"
 )
 
 
