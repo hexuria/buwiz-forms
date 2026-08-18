@@ -6,7 +6,7 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-18, TIN-class identity catalog on `gol/field-identity`).**
+**Active queue (2026-08-18, Stage 3 preconditions hold on `gol/stage3-ready`).**
 Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
 batch is `ddac6058`. C01–C07 sitting accepted (`applied`, not `verified`).
 Do not fold later rows into those PRs. Identity is a new layer on top of
@@ -36,7 +36,7 @@ does.
 | **I2 xbox** | `gol/stage3-ready` | X-squares (654): ~4–20pt text, aspect 0.70–1.45, `xbox-*`. 5211 identities. | 2/3 seam | Serial. Not `type=checkbox`. |
 | **I2 text** | `gol/stage3-ready` | Wide text (4779) as `text-*`. Live fillable denominator 9990/9990 on both trees. Remainder 0. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
 | **I3** | `gol/stage3-ready` | Remainder mint 0. Pin `EXPECTED_FILLABLE_CELLS = 9990` and `EXPECTED_UNCATALOGUED_FILLABLES = 0` in `field_identity.py` and `gate.py`. C01–C07 seed still present. | 2/3 seam | Serial. Coverage is a gate self-test, not a mapper. |
-| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Identity catalog is seeded, not complete. Still blocked on catalog coverage of fillable fields, and on G02 / G03 / G04. |
+| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial. Preconditions 1–3 hold. Mapper still Blocked. Do not start.** Comb-referee PASS, G10/G16/G17, and C01–C07 `verified` are out of scope. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
@@ -48,9 +48,9 @@ file):
 2. **One** implementer for P2 commit, then **one** for P1 charbox split.
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
 4. Identity work is `tools/formgen/field_identity.py` against
-   `tools/formgen/identity/catalog.json` (180 TIN-strip identities). Stage 3
-   still does not start until that catalog covers fillable fields and G02 /
-   G03 / G04 are done.
+   `tools/formgen/identity/catalog.json` (9990 fillable identities,
+   coverage 0 uncatalogued). Stage 3 still does not start: the mapper
+   stays closed even though the three preconditions hold.
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
 
@@ -371,23 +371,19 @@ shown *not* to be a stage-1 row above.
 
 ## Stage 3 — map
 
-**Blocked. Do not start.** The identity catalog exists: C01–C07 seed plus
-the measured TIN caption-chain class plus I1 leftovers, 208 identities
-(`tools/formgen/identity/`). That is the freeze R2 asked for, not the mapper.
-It is not coverage of every fillable field. Stage 3 begins when the catalog
-covers fillable fields and the preconditions below hold.
+**Blocked. Do not start.** The three preconditions hold. Nothing writes
+`name="frm…:txtTIN1"`. Comb-referee PASS, G10/G16/G17, and C01–C07
+`verified` are not this program.
+
+The identity catalog is 9990 records, 9990/9990 on `forms/` and
+`forms-corrected/` (`tools/formgen/identity/`). That is the freeze R2
+asked for, not the mapper. The HTML cell id is a hint; a unique overlap
+with a different `p1cN` is `html_id_hint_stale` and must update the
+catalog in the same commit.
 
 The naming problem is already solved on BIR's side: `rules/forms/*/fields.json`
 carries 43 forms and 9,592 field names harvested from the official HTA runtime,
 with `serialized_key` values like `frm2550m:txtBranchCode`.
-
-The blocker was ours: field identity was a **quantised bounding box** —
-`lattice.geometry_subject_key` produces `p<page>@<bbox>` — so every geometry
-fix renumbered ids. Measured drift: 42 of 146 cited cell ids in the findings
-ledger no longer exist in the shipped HTML. The catalog's durable id (for
-example `2550m-2007/p1/tin-branch`) is not that string and not `p1c13`. The
-HTML cell id is a hint; a unique overlap with a different `p1cN` is
-`html_id_hint_stale` and must update the catalog in the same commit.
 
 The join is also far from bijective (measured 2026-08-06):
 
@@ -398,14 +394,19 @@ The join is also far from bijective (measured 2026-08-06):
 | Official fields with `serialized_key: null` | 1,234 of 9,592 |
 | 0605: names we emit vs official fields | 71 vs 235 |
 
-**Preconditions before stage 3 opens (all must hold):**
-1. Field identity is a catalog id, not a bbox and not `p1cN`. 208 TIN-class
-   identities is not coverage of every fillable field. Every fillable field Stage 3
-   would join must resolve `exactly-one` against `forms-corrected/`.
-2. Stage-1 rows G02, G03, G04 are `done` (a field that does not exist cannot be
-   mapped; a field that should not exist must not be).
-3. The findings ledger's cited ids all resolve in the shipped HTML — cite
-   catalog ids, not dead `p1cN` strings.
+**Preconditions before stage 3 opens (all three hold; mapper still closed):**
+1. **Holds.** Field identity is a catalog id, not a bbox and not `p1cN`.
+   9990/9990 fillable cells resolve `exactly-one` against `forms/` and
+   `forms-corrected/`. `EXPECTED_UNCATALOGUED_FILLABLES = 0` is pinned in
+   `field_identity.py` and `gate.py`.
+2. **Holds.** Stage-1 rows G02, G03, G04 (and G02a–i, G12, G14) are `done`.
+   Live 2026-08-18, batch `ddac6058`: `inputs_span_no_printed_divider` 0/53,
+   `printed_box_peers_all_fillable` 0/53. G16 remains open (9 forms / 288)
+   and is not a Stage 3 gate.
+3. **Holds.** `field_identity.py ledger-check` is green on open, fixed, and
+   not-a-defect findings (259/259 cited cells on `forms/`). Fillable
+   subjects cite catalog ids; live labels keep a current cell id; vanished
+   cells are `former_pXcN`.
 
 ---
 
@@ -1317,6 +1318,8 @@ Newest first. One line each.
   **rejected**: that is F028's fix working, the tables are in `guide.html` with
   0 inputs and no orphan frame remains; only the dangling "refer to tax table
   below" cross-reference survives (F171, minor).
+- **2026-08-18** — Stage 3 preconditions 1–3 hold: catalog 9990/9990, G02/G03/G04
+  `done`, ledger-check 259/259. Mapper still **Blocked. Do not start.**
 - **2026-08-18** — Re-measured G02/G03/G04 on batch `ddac6058` (assertions-only
   on `forms/`, four font-snapshot misses re-scored). `inputs_span_no_printed_divider`
   0/53, `printed_box_peers_all_fillable` 0/53. Named G02a–i, G03, G04, G12, G14

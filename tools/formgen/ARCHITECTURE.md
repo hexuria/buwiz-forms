@@ -218,7 +218,7 @@ assumption, a code path, or a source of truth with the thing it checked. The
 verifies itself would be the largest instance of that defect yet built, because
 it would sit between the generator and everything downstream.
 
-## Stage 3 readiness (identity catalog started, mapper not started)
+## Stage 3 readiness (preconditions hold, mapper not started)
 
 `rules/forms/*/fields.json` already carries 43 forms and 9,592 field names
 harvested from the official HTA runtime, with `serialized_key` values like
@@ -227,17 +227,19 @@ harvested from the official HTA runtime, with `serialized_key` values like
 Our side now has a durable identity that is not `p1c9` and not
 `lattice.geometry_subject_key`'s `p<page>@<bbox>`:
 [`tools/formgen/identity/catalog.json`](identity/catalog.json), checked by
-[`tools/formgen/field_identity.py`](field_identity.py). The catalog covers
-the TIN caption-chain class plus I1 leftovers and I2/I3 fillable coverage,
-9990 identities, 9990/9990 on both trees. A record resolves when exactly
+[`tools/formgen/field_identity.py`](field_identity.py). Coverage is
+9990/9990 on both trees, 0 uncatalogued. A record resolves when exactly
 one fillable field (including a G11 mixed comb) has its center in
 `source_printed_box_pt`. The HTML cell id is a hint; a unique center hit
 with a different id is `html_id_hint_stale` and must update the catalog in
 the same commit as the batch that moved it.
 
-This is not Stage 3. Nothing writes official keys onto `name=`. G02 /
-G03 / G04 (and G02a–i, G12, G14) are `done` on batch `ddac6058`:
-`inputs_span_no_printed_divider` 0/53, `printed_box_peers_all_fillable`
-0/53. G16 (`comb_slots_match_printed`, 9 forms / 288) stays open and is
-not a Stage 3 gate. The mapper stays closed until the ledger cites
-catalog ids. Coverage of fillable cells is 9990/9990.
+This is not Stage 3. Nothing writes official keys onto `name=`. The
+mapper stays **Blocked. Do not start.** Preconditions:
+
+1. Catalog coverage 9990/9990, `EXPECTED_UNCATALOGUED_FILLABLES = 0`.
+2. G02 / G03 / G04 (and G02a–i, G12, G14) are `done` on batch `ddac6058`:
+   `inputs_span_no_printed_divider` 0/53, `printed_box_peers_all_fillable`
+   0/53. G16 (`comb_slots_match_printed`, 9 forms / 288) stays open and
+   is not a Stage 3 gate.
+3. `ledger-check` is green (259/259 cited cells on `forms/`).
