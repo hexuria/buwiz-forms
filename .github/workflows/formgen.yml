@@ -184,7 +184,7 @@ jobs:
           python3 - <<'PY'
           import ast, pathlib, sys
 
-          RUNS_IN_CI = {"extract", "index_page", "audit", "comb_referee", "gate"}
+          RUNS_IN_CI = {"extract", "index_page", "audit", "comb_referee", "gate", "field_identity"}
           NEEDS_PINNED_CORPUS = {"lattice", "fonts", "guides", "emit", "verify"}
 
           source = pathlib.Path("tools/formgen/gate.py").read_text(encoding="utf-8")
@@ -210,20 +210,21 @@ jobs:
                 f"{len(NEEDS_PINNED_CORPUS)} need the pinned corpus")
           PY
 
-      # Four modules whose self-tests read nothing but their own source and the
+      # Five modules whose self-tests read nothing but their own source and the
       # committed tree. Measured on a clean `git archive` checkout with no
       # build/ and no ~/Downloads/forms: index_page <1s, comb_referee 1s,
-      # audit ~35s incl. the browser fixtures, gate 29s (gate needs the .git directory that actions/checkout
-      # provides — it re-derives the tracked corpus from HEAD).
+      # field_identity catalogs the tracked forms/, audit ~35s incl. the
+      # browser fixtures, gate 29s (gate needs the .git directory that
+      # actions/checkout provides — it re-derives the tracked corpus from HEAD).
       #
       # Each module is run and reported by name so a failure says which. The
-      # loop does not stop at the first failure: knowing that three of four
+      # loop does not stop at the first failure: knowing that three of five
       # broke is worth the extra minute.
       - name: Module self-tests (no external input)
         run: |
           set -uo pipefail
           failed=""
-          for module in index_page comb_referee audit gate; do
+          for module in index_page comb_referee audit gate field_identity; do
             echo "::group::${module}.py --self-test"
             if python3 "tools/formgen/${module}.py" --self-test; then
               echo "PASS ${module}"
@@ -313,7 +314,7 @@ jobs:
           | `make_fixtures.py` ×2 | the synthetic corpus is byte-identical across generations |
           | `make_fixtures.py --verify` | the committed fixture bytes rebuild exactly |
           | `extract.py --self-test` (fixture profile) | the extractor's assertions, over synthetic stand-ins |
-          | `index_page`, `comb_referee`, `audit`, `gate` `--self-test` | those four modules' own invariants |
+          | `index_page`, `comb_referee`, `audit`, `gate`, `field_identity` `--self-test` | those five modules' own invariants |
 
           ### NOT covered here, and why
 
