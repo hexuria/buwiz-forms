@@ -49,13 +49,12 @@ is risk R2. The identity id still names the same box; only the hint moves.
 
 ## Coverage
 
-4557 identities. C01–C07 seed (28) + I0 TIN caption chains (152) + I1 TIN
-leftovers (28) + I2 remaining comb cells (4349). Comb roles are
-`date-yyyy-*`, `date-mmyyyy-*`, `date-full-*`, `money-{slots}-*`, or
-`comb-{slots}s-*` from slot count and pitch. Evidence:
-[`identity-comb-20260818.json`](../corrections/evidence/identity-comb-20260818.json).
+5211 identities. C01–C07 seed (28) + I0 TIN caption chains (152) + I1 TIN
+leftovers (28) + I2 remaining comb cells (4349) + I2 x-squares (654).
+X-squares are ~4–20pt text cells with aspect 0.70–1.45 (`xbox-*`). Evidence:
+[`identity-xbox-20260818.json`](../corrections/evidence/identity-xbox-20260818.json).
 
-X-squares, wide text, and remainder fillables are not catalogued yet.
+Wide text and remainder fillables are not catalogued yet.
 
 ## What this is not
 
