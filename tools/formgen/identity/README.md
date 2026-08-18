@@ -71,4 +71,9 @@ and every non-TIN fillable field. That is not coverage for Stage 3.
 python3 tools/formgen/field_identity.py --self-test
 python3 tools/formgen/field_identity.py check --tree forms-corrected
 python3 tools/formgen/field_identity.py check --tree forms
+python3 tools/formgen/field_identity.py coverage --tree forms
+python3 tools/formgen/field_identity.py coverage --tree forms-corrected
+python3 tools/formgen/field_identity.py ledger-check --tree forms
 ```
+
+`coverage` lists fillable cells whose center sits in no catalog `source_printed_box_pt`. It is not a gate until remainder minting (I3) brings the count to 0. `ledger-check` requires every `pXcN` in an open finding's `where`/`what` to exist as a live fillable id or a catalog `html_id_hint`.

@@ -28,6 +28,8 @@ Usage:
     python3 tools/formgen/field_identity.py --self-test
     python3 tools/formgen/field_identity.py check --tree forms-corrected
     python3 tools/formgen/field_identity.py check --tree forms
+    python3 tools/formgen/field_identity.py coverage --tree forms
+    python3 tools/formgen/field_identity.py ledger-check --tree forms
 """
 
 from __future__ import annotations
@@ -59,6 +61,9 @@ REQUIRED_RECORD_KEYS = (
 )
 REQUIRED_MATCH_KEYS = ("kind", "tolerance_pt", "cardinality")
 HTML_ID_HINT_RE = re.compile(r"^p[0-9]+c[0-9]+$")
+CELL_ID_RE = re.compile(r"\bp[0-9]+c[0-9]+\b")
+SKIP_TREE_SLUGS = frozenset({".", "review"})
+FINDINGS_PATH = HERE / "review-findings.json"
 
 
 MATCH_KINDS = frozenset({"comb", "field"})
@@ -97,6 +102,8 @@ class FieldCollector(html.parser.HTMLParser):
             "box": box,
             "page_prefix": _page_prefix(html_id),
             "field_kind": data.get("data-field-kind", ""),
+            "comb_slots": data.get("data-comb-slots", ""),
+            "cell_kind": data.get("data-cell-kind", ""),
         })
 
 
@@ -317,6 +324,186 @@ def check_tree(catalog: dict, tree: pathlib.Path) -> tuple[list[dict[str, object
     return results, failed
 
 
+def iter_bundles(tree: pathlib.Path) -> list[tuple[str, pathlib.Path]]:
+    """Form bundles under a tree. Skips the corpus index and review helpers."""
+    found: list[tuple[str, pathlib.Path]] = []
+    if not tree.is_dir():
+        return found
+    for html in sorted(tree.glob("**/index.html")):
+        slug = html.parent.relative_to(tree).as_posix()
+        if slug in SKIP_TREE_SLUGS:
+            continue
+        found.append((slug, html))
+    return found
+
+
+def records_for_slug(catalog: dict, slug: str) -> list[dict]:
+    return [record for record in catalog.get("records", []) if record["bundle_slug"] == slug]
+
+
+def identities_claiming(field: dict, records: list[dict]) -> list[str]:
+    hits: list[str] = []
+    page_prefix = str(field["page_prefix"])
+    box = field["box"]
+    field_kind = str(field["field_kind"])
+    for record in records:
+        if page_prefix != f"p{record['page']}":
+            continue
+        match = record.get("match") or {}
+        if not _kind_wanted(str(match.get("kind") or "field"), field_kind):
+            continue
+        printed = tuple(float(value) for value in record["source_printed_box_pt"])
+        tolerance = float(match.get("tolerance_pt") or 0.25)
+        if center_in_printed(printed, box, tolerance):  # type: ignore[arg-type]
+            hits.append(str(record["id"]))
+    return hits
+
+
+def coverage_tree(catalog: dict, tree: pathlib.Path) -> dict[str, object]:
+    uncatalogued: list[dict[str, object]] = []
+    ambiguous: list[dict[str, object]] = []
+    fillable = 0
+    covered = 0
+    for slug, html_path in iter_bundles(tree):
+        try:
+            fields = collect_fields(html_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            uncatalogued.append({"bundle_slug": slug, "html_id": None, "reason": str(exc)})
+            continue
+        records = records_for_slug(catalog, slug)
+        for field in fields:
+            fillable += 1
+            hits = identities_claiming(field, records)
+            if not hits:
+                uncatalogued.append({
+                    "bundle_slug": slug,
+                    "html_id": field["id"],
+                    "page_prefix": field["page_prefix"],
+                    "field_kind": field["field_kind"],
+                    "box": [round(float(v), 4) for v in field["box"]],  # type: ignore[union-attr]
+                })
+            elif len(hits) > 1:
+                ambiguous.append({
+                    "bundle_slug": slug,
+                    "html_id": field["id"],
+                    "identities": hits,
+                })
+            else:
+                covered += 1
+    return {
+        "tree": str(tree),
+        "fillable": fillable,
+        "covered": covered,
+        "uncatalogued": uncatalogued,
+        "ambiguous": ambiguous,
+    }
+
+
+def print_coverage(report: dict[str, object]) -> None:
+    uncatalogued = report["uncatalogued"]
+    ambiguous = report["ambiguous"]
+    fillable = int(report["fillable"])  # type: ignore[arg-type]
+    covered = int(report["covered"])  # type: ignore[arg-type]
+    print(f"{covered}/{fillable} fillable cells claimed by exactly one identity in {report['tree']}")
+    if uncatalogued:
+        print(f"{len(uncatalogued)} uncatalogued:")
+        for item in uncatalogued[:40]:  # type: ignore[index]
+            print(f"  {item['bundle_slug']}  {item.get('html_id')}")
+        if len(uncatalogued) > 40:  # type: ignore[arg-type]
+            print(f"  … {len(uncatalogued) - 40} more")
+    if ambiguous:
+        print(f"{len(ambiguous)} claimed by two or more identities:")
+        for item in ambiguous[:20]:  # type: ignore[index]
+            print(f"  {item['bundle_slug']}  {item['html_id']} -> {item['identities']}")
+        if len(ambiguous) > 20:  # type: ignore[arg-type]
+            print(f"  … {len(ambiguous) - 20} more")
+
+
+def bundle_slug_for_finding_form(form: str, tree: pathlib.Path) -> str | None:
+    if (tree / form / "index.html").is_file():
+        return form
+    extra = f"extra/{form}"
+    if (tree / extra / "index.html").is_file():
+        return extra
+    return None
+
+
+def html_ids_in_tree_bundle(tree: pathlib.Path, slug: str) -> set[str]:
+    html_path = tree / slug / "index.html"
+    if not html_path.is_file():
+        return set()
+    return {str(field["id"]) for field in collect_fields(html_path.read_text(encoding="utf-8"))}
+
+
+def ledger_check(catalog: dict, tree: pathlib.Path,
+                 findings_path: pathlib.Path,
+                 statuses: set[str] | None = None) -> dict[str, object]:
+    try:
+        payload = json.loads(findings_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"errors": [f"{findings_path}: {exc}"], "dead": [], "ok": 0, "checked": 0}
+    findings = payload.get("findings") if isinstance(payload, dict) else None
+    if not isinstance(findings, list):
+        return {"errors": [f"{findings_path}: findings is not an array"], "dead": [], "ok": 0, "checked": 0}
+    dead: list[dict[str, object]] = []
+    checked = 0
+    ok = 0
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        status = str(finding.get("status") or "")
+        if statuses is not None and status not in statuses:
+            continue
+        form = str(finding.get("form") or "")
+        text = " ".join(str(finding.get(key) or "") for key in ("where", "what"))
+        cells = CELL_ID_RE.findall(text)
+        if not cells:
+            continue
+        slug = bundle_slug_for_finding_form(form, tree)
+        live_ids: set[str] = set()
+        catalog_hints: set[str] = set()
+        if slug:
+            live_ids = html_ids_in_tree_bundle(tree, slug)
+            catalog_hints = {
+                str(record["html_id_hint"]) for record in records_for_slug(catalog, slug)
+            }
+        for cell in cells:
+            checked += 1
+            if slug and (cell in live_ids or cell in catalog_hints):
+                ok += 1
+                continue
+            dead.append({
+                "finding": finding.get("id"),
+                "form": form,
+                "bundle_slug": slug,
+                "status": status,
+                "cell": cell,
+            })
+    return {
+        "errors": [],
+        "checked": checked,
+        "ok": ok,
+        "dead": dead,
+        "path": str(findings_path),
+        "tree": str(tree),
+    }
+
+
+def print_ledger(report: dict[str, object]) -> None:
+    if report.get("errors"):
+        for error in report["errors"]:  # type: ignore[union-attr]
+            print(f"FAIL  {error}")
+        return
+    dead = report["dead"]
+    print(f"{report['ok']}/{report['checked']} cited pXcN resolve in {report['tree']}")
+    if dead:
+        print(f"{len(dead)} dead citations:")
+        for item in dead[:40]:  # type: ignore[index]
+            print(f"  {item['finding']}  {item['form']}  {item['cell']}")
+        if len(dead) > 40:  # type: ignore[arg-type]
+            print(f"  … {len(dead) - 40} more")
+
+
 def print_results(results: list[dict[str, object]], tree: pathlib.Path) -> None:
     for item in results:
         status = item["status"]
@@ -524,6 +711,24 @@ def self_test() -> int:
               and mixed_result["resolved_html_id"] == "p1c19",
               str(mixed_result))
 
+        cover_tree = pathlib.Path(tmp) / "cover"
+        _write_html(
+            cover_tree / "fixture-form" / "index.html",
+            _comb("p1c13", 165.63, y0, x1 - 165.63, y1 - y0)
+            + _text("p1c99", 300.0, y0, 40.0, y1 - y0),
+        )
+        cover_catalog = {
+            "schema_version": "1.0.0-provisional",
+            "records": [record],
+        }
+        cover_report = coverage_tree(cover_catalog, cover_tree)
+        check("coverage reports an uncatalogued sibling fillable",
+              int(cover_report["fillable"]) == 2  # type: ignore[arg-type]
+              and int(cover_report["covered"]) == 1  # type: ignore[arg-type]
+              and len(cover_report["uncatalogued"]) == 1  # type: ignore[arg-type]
+              and cover_report["uncatalogued"][0]["html_id"] == "p1c99",  # type: ignore[index]
+              str(cover_report))
+
     print("FAIL" if failed else "OK",
           f"{failed} self-test(s) failed" if failed else "self-test")
     return 1 if failed else 0
@@ -536,10 +741,21 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command")
     check_cmd = sub.add_parser("check", help="resolve every catalog record against a tree")
     check_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    cover_cmd = sub.add_parser("coverage", help="list fillable cells no catalog record claims")
+    cover_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    ledger_cmd = sub.add_parser("ledger-check", help="cited pXcN in review-findings vs a tree")
+    ledger_cmd.add_argument("--tree", type=pathlib.Path, required=True)
+    ledger_cmd.add_argument("--findings", type=pathlib.Path, default=FINDINGS_PATH)
+    ledger_cmd.add_argument(
+        "--status",
+        action="append",
+        dest="statuses",
+        help="repeatable; default is open findings only",
+    )
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    if args.command != "check":
+    if args.command not in ("check", "coverage", "ledger-check"):
         parser.print_help()
         return 2
     catalog, errors = load_catalog(args.catalog)
@@ -554,6 +770,18 @@ def main() -> int:
     if not tree.is_dir():
         print(f"FAIL  tree {tree} is not a directory")
         return 1
+    if args.command == "coverage":
+        report = coverage_tree(catalog, tree)
+        print_coverage(report)
+        failed = bool(report["uncatalogued"] or report["ambiguous"])
+        return 1 if failed else 0
+    if args.command == "ledger-check":
+        statuses = set(args.statuses) if args.statuses else {"open"}
+        report = ledger_check(catalog, tree, args.findings, statuses)
+        print_ledger(report)
+        if report.get("errors") or report.get("dead"):
+            return 1
+        return 0
     results, failed = check_tree(catalog, tree)
     print_results(results, tree)
     return 1 if failed else 0

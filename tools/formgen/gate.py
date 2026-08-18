@@ -175,7 +175,7 @@ COMPARISON_NAMES = (
 # they are invoked with one rather than being excused from the check.
 SELF_TEST_MODULES = (
     "extract", "lattice", "fonts", "guides", "emit", "verify", "index_page",
-    "audit", "comb_referee", "gate",
+    "audit", "comb_referee", "gate", "field_identity",
 )
 SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
