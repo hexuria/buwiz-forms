@@ -235,6 +235,9 @@ one fillable field (including a G11 mixed comb) has its center in
 with a different id is `html_id_hint_stale` and must update the catalog in
 the same commit as the batch that moved it.
 
-This is not Stage 3. Nothing writes official keys onto `name=`. The
-mapper stays closed until G02 / G03 / G04 are done and the ledger cites
+This is not Stage 3. Nothing writes official keys onto `name=`. G02 /
+G03 / G04 (and G02a–i, G12, G14) are `done` on batch `ddac6058`:
+`inputs_span_no_printed_divider` 0/53, `printed_box_peers_all_fillable`
+0/53. G16 (`comb_slots_match_printed`, 9 forms / 288) stays open and is
+not a Stage 3 gate. The mapper stays closed until the ledger cites
 catalog ids. Coverage of fillable cells is 9990/9990.
