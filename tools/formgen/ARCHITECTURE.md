@@ -229,7 +229,8 @@ Our side now has a durable identity that is not `p1c9` and not
 [`tools/formgen/identity/catalog.json`](identity/catalog.json), checked by
 [`tools/formgen/field_identity.py`](field_identity.py). The catalog covers
 the TIN caption-chain class: C01–C07 seed plus 38 measured 3+3+3+5 corpus
-strips, 180 identities, 44 of 53 bundles. A record resolves when exactly
+strips plus I1 leftovers (1801 mixed tin-strip, extra HTML 3+3+3+N chains),
+208 identities. A record resolves when exactly
 one fillable field (including a G11 mixed comb) has its center in
 `source_printed_box_pt`. The HTML cell id is a hint; a unique center hit
 with a different id is `html_id_hint_stale` and must update the catalog in

@@ -3780,6 +3780,594 @@
         "cardinality": "exactly-one"
       },
       "correction_id": null
+    },
+    {
+      "id": "extra/1801-2018/p1/tin-strip",
+      "bundle_slug": "extra/1801-2018",
+      "page": 1,
+      "role": "tin-strip",
+      "source_printed_box_pt": [
+        21.6,
+        136.7,
+        247.97,
+        155.54
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "lattice mixed cell covers caption plus tin-1; four HTA keys do not collapse onto this cell \u2014 tin-2/3/branch are separate",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1801-2018/p1/tin-2",
+      "bundle_slug": "extra/1801-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        262.01,
+        137.54,
+        304.85,
+        155.3
+      ],
+      "official_field_key": "frm1801v2018:tinB_1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1801-2018/p1/tin-3",
+      "bundle_slug": "extra/1801-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        318.89,
+        137.54,
+        361.39,
+        155.3
+      ],
+      "official_field_key": "frm1801v2018:tinC_1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1801-2018/p1/tin-branch",
+      "bundle_slug": "extra/1801-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        375.55,
+        137.54,
+        446.47,
+        155.3
+      ],
+      "official_field_key": "frm1801v2018:branchCode_1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p2/tin-p2-1",
+      "bundle_slug": "1701-2018",
+      "page": 2,
+      "role": "tin-p2-1",
+      "source_printed_box_pt": [
+        200.33,
+        106.94,
+        243.17,
+        124.58
+      ],
+      "official_field_key": "frm1701:txtPg2TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c9",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p2/tin-p2-2",
+      "bundle_slug": "1701-2018",
+      "page": 2,
+      "role": "tin-p2-2",
+      "source_printed_box_pt": [
+        257.69,
+        106.94,
+        300.89,
+        124.58
+      ],
+      "official_field_key": "frm1701:txtPg2TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c11",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p2/tin-p2-3",
+      "bundle_slug": "1701-2018",
+      "page": 2,
+      "role": "tin-p2-3",
+      "source_printed_box_pt": [
+        315.29,
+        106.94,
+        358.51,
+        124.58
+      ],
+      "official_field_key": "frm1701:txtPg2TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p2/tin-p2-branch",
+      "bundle_slug": "1701-2018",
+      "page": 2,
+      "role": "tin-p2-branch",
+      "source_printed_box_pt": [
+        373.03,
+        106.94,
+        448.63,
+        124.58
+      ],
+      "official_field_key": "frm1701:txtPg2BranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p2/tin-p2-1",
+      "bundle_slug": "1701a-2018",
+      "page": 2,
+      "role": "tin-p2-1",
+      "source_printed_box_pt": [
+        28.56,
+        719.86,
+        69.62,
+        738.1
+      ],
+      "official_field_key": "frm1701A:txtPg2TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c118",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p2/tin-p2-2",
+      "bundle_slug": "1701a-2018",
+      "page": 2,
+      "role": "tin-p2-2",
+      "source_printed_box_pt": [
+        84.14,
+        719.86,
+        125.54,
+        738.1
+      ],
+      "official_field_key": "frm1701A:txtPg2TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c120",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p2/tin-p2-3",
+      "bundle_slug": "1701a-2018",
+      "page": 2,
+      "role": "tin-p2-3",
+      "source_printed_box_pt": [
+        140.06,
+        719.86,
+        181.94,
+        738.1
+      ],
+      "official_field_key": "frm1701A:txtPg2TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c122",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p2/tin-p2-branch",
+      "bundle_slug": "1701a-2018",
+      "page": 2,
+      "role": "tin-p2-branch",
+      "source_printed_box_pt": [
+        196.49,
+        719.86,
+        273.05,
+        738.1
+      ],
+      "official_field_key": "frm1701A:txtPg2BranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p2c124",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-extra-1",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-extra-1",
+      "source_printed_box_pt": [
+        199.37,
+        388.73,
+        241.73,
+        405.17
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no unique fields.json key for this box",
+      "html_id_hint": "p1c66",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-extra-2",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-extra-2",
+      "source_printed_box_pt": [
+        256.25,
+        388.73,
+        298.85,
+        405.17
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no unique fields.json key for this box",
+      "html_id_hint": "p1c68",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-extra-3",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-extra-3",
+      "source_printed_box_pt": [
+        313.61,
+        388.73,
+        356.71,
+        405.17
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no unique fields.json key for this box",
+      "html_id_hint": "p1c70",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-extra-branch",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-extra-branch",
+      "source_printed_box_pt": [
+        371.42,
+        388.73,
+        446.23,
+        405.17
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no unique fields.json key for this box",
+      "html_id_hint": "p1c72",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-extra-1",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-extra-1",
+      "source_printed_box_pt": [
+        86.23,
+        431.14,
+        124.15,
+        446.77
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c74",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-extra-2",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-extra-2",
+      "source_printed_box_pt": [
+        135.88,
+        431.14,
+        173.81,
+        446.42
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c76",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-extra-3",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-extra-3",
+      "source_printed_box_pt": [
+        185.55,
+        431.14,
+        223.48,
+        446.42
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c78",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-extra-branch",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-extra-branch",
+      "source_printed_box_pt": [
+        235.22,
+        431.14,
+        306.08,
+        446.42
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c80",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-extra-1",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-extra-1",
+      "source_printed_box_pt": [
+        77.87,
+        324.97,
+        119.87,
+        342.08
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c52",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-extra-2",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-extra-2",
+      "source_printed_box_pt": [
+        134.68,
+        324.97,
+        176.28,
+        342.08
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c54",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-extra-3",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-extra-3",
+      "source_printed_box_pt": [
+        191.88,
+        324.97,
+        234.0,
+        342.08
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c56",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-extra-branch",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-extra-branch",
+      "source_printed_box_pt": [
+        249.5,
+        324.97,
+        320.3,
+        342.08
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c58",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-spouse-1",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-spouse-1",
+      "source_printed_box_pt": [
+        41.24,
+        374.81,
+        83.42,
+        393.05
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I17SpouseTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c61",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-spouse-2",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-spouse-2",
+      "source_printed_box_pt": [
+        98.06,
+        374.81,
+        140.18,
+        393.05
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I17SpouseTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c63",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-spouse-3",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-spouse-3",
+      "source_printed_box_pt": [
+        154.58,
+        374.81,
+        196.97,
+        393.05
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I17SpouseTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c65",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-spouse-branch",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-spouse-branch",
+      "source_printed_box_pt": [
+        211.49,
+        374.81,
+        284.21,
+        393.05
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I17SpouseBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c67",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
     }
   ]
 }

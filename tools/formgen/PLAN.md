@@ -30,7 +30,8 @@ does.
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
 | **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Status `applied`, not `verified` (`proven: false` until audit.py is seen to fail on the corrected tree). | 2 | Sitting accepted. Do not call this verification. |
-| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. C01–C07 seed (28) plus 38 measured 3+3+3+5 corpus strips (152) = 180 identities. Matcher: exactly one fillable-field *center* in `source_printed_box_pt` (field or G11 mixed comb); `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN caption-chain class: 44/53 bundles. `extra/1801-2018` skipped. Stage 3 still closed. |
+| **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. C01–C07 seed (28) plus 38 measured 3+3+3+5 corpus strips (152) = 180 identities. Matcher: exactly one fillable-field *center* in `source_printed_box_pt` (field or G11 mixed comb); `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN caption-chain class: 44/53 bundles. `extra/1801-2018` skipped at I0. Stage 3 still closed. |
+| **I1** | `gol/stage3-ready` | TIN leftovers: 1801 mixed `tin-strip` + tin-2/3/branch; extra HTML 3+3+3+N chains (spouse/page-2/extra). 208 identities. Eight PDF-unmeasurable bundles still emit no chain. | 2/3 seam | Serial. Not a mapper. |
 | **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial.** Identity catalog is seeded, not complete. Still blocked on catalog coverage of fillable fields, and on G02 / G03 / G04. |
 
 How to use agents (compact prompts, no full chat history; one writer per
@@ -367,7 +368,7 @@ shown *not* to be a stage-1 row above.
 ## Stage 3 — map
 
 **Blocked. Do not start.** The identity catalog exists: C01–C07 seed plus
-the measured TIN caption-chain class, 180 identities
+the measured TIN caption-chain class plus I1 leftovers, 208 identities
 (`tools/formgen/identity/`). That is the freeze R2 asked for, not the mapper.
 It is not coverage of every fillable field. Stage 3 begins when the catalog
 covers fillable fields and the preconditions below hold.
@@ -394,7 +395,7 @@ The join is also far from bijective (measured 2026-08-06):
 | 0605: names we emit vs official fields | 71 vs 235 |
 
 **Preconditions before stage 3 opens (all must hold):**
-1. Field identity is a catalog id, not a bbox and not `p1cN`. 180 TIN-strip
+1. Field identity is a catalog id, not a bbox and not `p1cN`. 208 TIN-class
    identities is not coverage of every fillable field. Every fillable field Stage 3
    would join must resolve `exactly-one` against `forms-corrected/`.
 2. Stage-1 rows G02, G03, G04 are `done` (a field that does not exist cannot be

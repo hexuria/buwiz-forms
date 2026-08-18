@@ -49,17 +49,14 @@ is risk R2. The identity id still names the same box; only the hint moves.
 
 ## Coverage
 
-180 identities. The C01–C07 seed is 7 strips (28). The rest are the
-measured 3+3+3+5 TIN caption chain on 38 more bundles (152), from
-[`tin-branch-census-20260808.json`](../corrections/evidence/tin-branch-census-20260808.json)
-with harvest notes in
-[`tin-identity-corpus-20260818.json`](../corrections/evidence/tin-identity-corpus-20260818.json).
-`correction_id` is null on those 152.
+208 identities. The C01–C07 seed is 7 strips (28). I0 added the measured
+3+3+3+5 TIN caption chain on 38 more bundles (152). I1 added 28 leftovers:
+`extra/1801-2018` as a mixed `tin-strip` plus tin-2/3/branch, extra HTML
+3+3+3+N chains that uniquely resolve (spouse / page-2 / extra), from
+[`tin-identity-leftovers-20260818.json`](../corrections/evidence/tin-identity-leftovers-20260818.json).
+Eight PDF-census not-measurable bundles still emit no 3+3+3+N chain.
 
-Not in this catalog: `extra/1801-2018` (lattice merged tin-1; fail closed,
-no partial strip), eight PDF-census not-measurable bundles whose HTML also
-has no 3+3+3+N fillable chain, spouse/agent/schedule TINs other than C06,
-and every non-TIN fillable field. That is not coverage for Stage 3.
+This is not yet coverage of every fillable field.
 
 ## What this is not
 
