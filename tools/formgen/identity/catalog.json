@@ -1,0 +1,3785 @@
+{
+  "schema_version": "1.0.0-provisional",
+  "records": [
+    {
+      "id": "2550m-2007/p1/tin-1",
+      "bundle_slug": "2550m-2007",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        66.0,
+        118.8,
+        99.84,
+        133.68
+      ],
+      "official_field_key": "frm2550m:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c127",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C01"
+    },
+    {
+      "id": "2550m-2007/p1/tin-2",
+      "bundle_slug": "2550m-2007",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        104.64,
+        118.8,
+        137.76,
+        134.4
+      ],
+      "official_field_key": "frm2550m:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c9",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C01"
+    },
+    {
+      "id": "2550m-2007/p1/tin-3",
+      "bundle_slug": "2550m-2007",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        142.32,
+        118.8,
+        175.44,
+        134.4
+      ],
+      "official_field_key": "frm2550m:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c11",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C01"
+    },
+    {
+      "id": "2550m-2007/p1/tin-branch",
+      "bundle_slug": "2550m-2007",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        180.24,
+        118.8,
+        213.12,
+        134.4
+      ],
+      "official_field_key": "frm2550m:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C01"
+    },
+    {
+      "id": "0605-1999/p1/tin-1",
+      "bundle_slug": "0605-1999",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        30.23,
+        246.12,
+        68.91,
+        265.08
+      ],
+      "official_field_key": "frm0605:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c23",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C02"
+    },
+    {
+      "id": "0605-1999/p1/tin-2",
+      "bundle_slug": "0605-1999",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        81.48,
+        246.12,
+        121.56,
+        265.08
+      ],
+      "official_field_key": "frm0605:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c25",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C02"
+    },
+    {
+      "id": "0605-1999/p1/tin-3",
+      "bundle_slug": "0605-1999",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        134.16,
+        246.12,
+        172.68,
+        265.08
+      ],
+      "official_field_key": "frm0605:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C02"
+    },
+    {
+      "id": "0605-1999/p1/tin-branch",
+      "bundle_slug": "0605-1999",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        183.0,
+        246.12,
+        223.92,
+        265.08
+      ],
+      "official_field_key": "frm0605:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C02"
+    },
+    {
+      "id": "2551m-2002/p1/tin-1",
+      "bundle_slug": "2551m-2002",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        59.76,
+        190.8,
+        93.72,
+        210.24
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C03"
+    },
+    {
+      "id": "2551m-2002/p1/tin-2",
+      "bundle_slug": "2551m-2002",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        98.52,
+        190.8,
+        131.64,
+        210.24
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C03"
+    },
+    {
+      "id": "2551m-2002/p1/tin-3",
+      "bundle_slug": "2551m-2002",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        136.16,
+        190.8,
+        169.32,
+        210.24
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C03"
+    },
+    {
+      "id": "2551m-2002/p1/tin-branch",
+      "bundle_slug": "2551m-2002",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        174.0,
+        190.8,
+        207.36,
+        210.24
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c19",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C03"
+    },
+    {
+      "id": "extra/2553-1999/p1/tin-1",
+      "bundle_slug": "extra/2553-1999",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        57.84,
+        189.36,
+        91.8,
+        208.8
+      ],
+      "official_field_key": "frm2553:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C04"
+    },
+    {
+      "id": "extra/2553-1999/p1/tin-2",
+      "bundle_slug": "extra/2553-1999",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        96.6,
+        189.36,
+        129.72,
+        208.8
+      ],
+      "official_field_key": "frm2553:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C04"
+    },
+    {
+      "id": "extra/2553-1999/p1/tin-3",
+      "bundle_slug": "extra/2553-1999",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        134.24,
+        189.36,
+        167.4,
+        208.8
+      ],
+      "official_field_key": "frm2553:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C04"
+    },
+    {
+      "id": "extra/2553-1999/p1/tin-branch",
+      "bundle_slug": "extra/2553-1999",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        172.08,
+        189.36,
+        205.44,
+        208.8
+      ],
+      "official_field_key": "frm2553:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c24",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C04"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-1",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        53.19,
+        139.19,
+        94.08,
+        156.72
+      ],
+      "official_field_key": "frm1600WP:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c10",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C05"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-2",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        109.08,
+        139.19,
+        149.28,
+        156.72
+      ],
+      "official_field_key": "frm1600WP:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c12",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C05"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-3",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        164.28,
+        139.19,
+        204.37,
+        156.72
+      ],
+      "official_field_key": "frm1600WP:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C05"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-branch",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        218.52,
+        139.2,
+        276.0,
+        156.72
+      ],
+      "official_field_key": "frm1600WP:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C05"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-agent-1",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-agent-1",
+      "source_printed_box_pt": [
+        257.17,
+        465.96,
+        284.12,
+        479.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested agent-TIN field_key in this checkout",
+      "html_id_hint": "p1c68",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C06"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-agent-2",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-agent-2",
+      "source_printed_box_pt": [
+        293.44,
+        465.96,
+        320.89,
+        479.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested agent-TIN field_key in this checkout",
+      "html_id_hint": "p1c70",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C06"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-agent-3",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-agent-3",
+      "source_printed_box_pt": [
+        330.2,
+        465.96,
+        357.13,
+        479.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested agent-TIN field_key in this checkout",
+      "html_id_hint": "p1c72",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C06"
+    },
+    {
+      "id": "extra/1600wp-2010/p1/tin-agent-branch",
+      "bundle_slug": "extra/1600wp-2010",
+      "page": 1,
+      "role": "tin-agent-branch",
+      "source_printed_box_pt": [
+        366.48,
+        465.96,
+        401.284,
+        479.76
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested agent-TIN field_key in this checkout",
+      "html_id_hint": "p1c74",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C06"
+    },
+    {
+      "id": "extra/1604cf-2008/p1/tin-1",
+      "bundle_slug": "extra/1604cf-2008",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        58.56,
+        129.84,
+        94.32,
+        144.72
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c7",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C07"
+    },
+    {
+      "id": "extra/1604cf-2008/p1/tin-2",
+      "bundle_slug": "extra/1604cf-2008",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        106.56,
+        129.84,
+        142.08,
+        144.72
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c9",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C07"
+    },
+    {
+      "id": "extra/1604cf-2008/p1/tin-3",
+      "bundle_slug": "extra/1604cf-2008",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        155.76,
+        129.84,
+        191.52,
+        144.72
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c11",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C07"
+    },
+    {
+      "id": "extra/1604cf-2008/p1/tin-branch",
+      "bundle_slug": "extra/1604cf-2008",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        204.24,
+        129.84,
+        250.8,
+        144.72
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": "C07"
+    },
+    {
+      "id": "0619e-2018/p1/tin-1",
+      "bundle_slug": "0619e-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        218.09,
+        165.5,
+        261.29,
+        183.14
+      ],
+      "official_field_key": "frm0619E:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c28",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619e-2018/p1/tin-2",
+      "bundle_slug": "0619e-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        276.05,
+        165.5,
+        319.25,
+        183.14
+      ],
+      "official_field_key": "frm0619E:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c30",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619e-2018/p1/tin-3",
+      "bundle_slug": "0619e-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        334.03,
+        165.5,
+        377.23,
+        183.14
+      ],
+      "official_field_key": "frm0619E:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c32",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619e-2018/p1/tin-branch",
+      "bundle_slug": "0619e-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        392.11,
+        165.5,
+        464.14,
+        183.14
+      ],
+      "official_field_key": "frm0619E:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c34",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619f-2018/p1/tin-1",
+      "bundle_slug": "0619f-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        217.37,
+        143.54,
+        260.57,
+        161.3
+      ],
+      "official_field_key": "frm0619F:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c28",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619f-2018/p1/tin-2",
+      "bundle_slug": "0619f-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        275.45,
+        143.54,
+        318.65,
+        161.3
+      ],
+      "official_field_key": "frm0619F:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c30",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619f-2018/p1/tin-3",
+      "bundle_slug": "0619f-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        333.43,
+        143.54,
+        376.63,
+        161.3
+      ],
+      "official_field_key": "frm0619F:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c32",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0619f-2018/p1/tin-branch",
+      "bundle_slug": "0619f-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        391.39,
+        143.54,
+        463.42,
+        161.3
+      ],
+      "official_field_key": "frm0619F:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c34",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0620-2019/p1/tin-1",
+      "bundle_slug": "0620-2019",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        218.09,
+        171.26,
+        261.29,
+        188.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c28",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0620-2019/p1/tin-2",
+      "bundle_slug": "0620-2019",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        276.05,
+        171.26,
+        319.25,
+        188.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c30",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0620-2019/p1/tin-3",
+      "bundle_slug": "0620-2019",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        334.03,
+        171.26,
+        377.23,
+        188.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c32",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "0620-2019/p1/tin-branch",
+      "bundle_slug": "0620-2019",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        392.11,
+        171.26,
+        464.14,
+        188.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c34",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-pt-2018/p1/tin-1",
+      "bundle_slug": "1600-pt-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        213.65,
+        145.58,
+        256.25,
+        162.26
+      ],
+      "official_field_key": "frm1600PT:txtPg1TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-pt-2018/p1/tin-2",
+      "bundle_slug": "1600-pt-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        270.53,
+        145.58,
+        313.13,
+        162.26
+      ],
+      "official_field_key": "frm1600PT:txtPg1TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-pt-2018/p1/tin-3",
+      "bundle_slug": "1600-pt-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        327.42,
+        145.58,
+        370.03,
+        162.26
+      ],
+      "official_field_key": "frm1600PT:txtPg1TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-pt-2018/p1/tin-branch",
+      "bundle_slug": "1600-pt-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        384.31,
+        145.58,
+        455.35,
+        162.26
+      ],
+      "official_field_key": "frm1600PT:txtPg1TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-vt-2018/p1/tin-1",
+      "bundle_slug": "1600-vt-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        213.65,
+        141.14,
+        256.25,
+        159.02
+      ],
+      "official_field_key": "frm1600VT:txtPg1TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-vt-2018/p1/tin-2",
+      "bundle_slug": "1600-vt-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        270.53,
+        141.14,
+        313.13,
+        159.02
+      ],
+      "official_field_key": "frm1600VT:txtPg1TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-vt-2018/p1/tin-3",
+      "bundle_slug": "1600-vt-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        327.42,
+        141.14,
+        370.03,
+        159.02
+      ],
+      "official_field_key": "frm1600VT:txtPg1TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1600-vt-2018/p1/tin-branch",
+      "bundle_slug": "1600-vt-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        384.31,
+        141.14,
+        455.35,
+        159.02
+      ],
+      "official_field_key": "frm1600VT:txtPg1TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601-fq-2020/p1/tin-1",
+      "bundle_slug": "1601-fq-2020",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        232.85,
+        148.34,
+        275.81,
+        165.98
+      ],
+      "official_field_key": "frm1601FQ:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601-fq-2020/p1/tin-2",
+      "bundle_slug": "1601-fq-2020",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        290.21,
+        148.34,
+        333.19,
+        165.98
+      ],
+      "official_field_key": "frm1601FQ:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601-fq-2020/p1/tin-3",
+      "bundle_slug": "1601-fq-2020",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.71,
+        148.34,
+        390.67,
+        165.98
+      ],
+      "official_field_key": "frm1601FQ:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601-fq-2020/p1/tin-branch",
+      "bundle_slug": "1601-fq-2020",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.19,
+        148.34,
+        476.86,
+        165.98
+      ],
+      "official_field_key": "frm1601FQ:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c33",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601c-2018/p1/tin-1",
+      "bundle_slug": "1601c-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.09,
+        142.1,
+        276.05,
+        157.46
+      ],
+      "official_field_key": "frm1601c:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c26",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601c-2018/p1/tin-2",
+      "bundle_slug": "1601c-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        290.45,
+        142.1,
+        333.43,
+        157.46
+      ],
+      "official_field_key": "frm1601c:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c28",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601c-2018/p1/tin-3",
+      "bundle_slug": "1601c-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.83,
+        142.1,
+        390.79,
+        157.46
+      ],
+      "official_field_key": "frm1601c:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c30",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601c-2018/p1/tin-branch",
+      "bundle_slug": "1601c-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.19,
+        142.1,
+        476.86,
+        157.46
+      ],
+      "official_field_key": "frm1601c:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c32",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601eq-2019/p1/tin-1",
+      "bundle_slug": "1601eq-2019",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.09,
+        144.02,
+        276.05,
+        161.78
+      ],
+      "official_field_key": "frm1601EQ:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601eq-2019/p1/tin-2",
+      "bundle_slug": "1601eq-2019",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        290.45,
+        144.02,
+        333.43,
+        161.78
+      ],
+      "official_field_key": "frm1601EQ:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601eq-2019/p1/tin-3",
+      "bundle_slug": "1601eq-2019",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.83,
+        144.02,
+        390.79,
+        161.78
+      ],
+      "official_field_key": "frm1601EQ:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c24",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1601eq-2019/p1/tin-branch",
+      "bundle_slug": "1601eq-2019",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.19,
+        144.02,
+        476.86,
+        161.78
+      ],
+      "official_field_key": "frm1601EQ:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c26",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1602q-2019/p1/tin-1",
+      "bundle_slug": "1602q-2019",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.09,
+        170.42,
+        276.05,
+        188.18
+      ],
+      "official_field_key": "frm1602Q:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1602q-2019/p1/tin-2",
+      "bundle_slug": "1602q-2019",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        290.45,
+        170.42,
+        333.43,
+        188.18
+      ],
+      "official_field_key": "frm1602Q:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1602q-2019/p1/tin-3",
+      "bundle_slug": "1602q-2019",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.83,
+        170.42,
+        390.79,
+        188.18
+      ],
+      "official_field_key": "frm1602Q:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1602q-2019/p1/tin-branch",
+      "bundle_slug": "1602q-2019",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.19,
+        170.42,
+        476.86,
+        188.18
+      ],
+      "official_field_key": "frm1602Q:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c33",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1603q-2018/p1/tin-1",
+      "bundle_slug": "1603q-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.09,
+        185.9,
+        276.05,
+        204.74
+      ],
+      "official_field_key": "frm1603Q:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1603q-2018/p1/tin-2",
+      "bundle_slug": "1603q-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        290.45,
+        185.9,
+        333.43,
+        204.74
+      ],
+      "official_field_key": "frm1603Q:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1603q-2018/p1/tin-3",
+      "bundle_slug": "1603q-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.83,
+        185.9,
+        390.79,
+        204.74
+      ],
+      "official_field_key": "frm1603Q:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1603q-2018/p1/tin-branch",
+      "bundle_slug": "1603q-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.19,
+        185.9,
+        476.86,
+        204.74
+      ],
+      "official_field_key": "frm1603Q:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c33",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604c-2018/p1/tin-1",
+      "bundle_slug": "1604c-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        238.13,
+        153.02,
+        279.65,
+        171.86
+      ],
+      "official_field_key": "frm1604c:tinA",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c12",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604c-2018/p1/tin-2",
+      "bundle_slug": "1604c-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        294.05,
+        153.02,
+        335.71,
+        171.86
+      ],
+      "official_field_key": "frm1604c:tinB",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604c-2018/p1/tin-3",
+      "bundle_slug": "1604c-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        350.11,
+        153.02,
+        392.83,
+        171.86
+      ],
+      "official_field_key": "frm1604c:tinC",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604c-2018/p1/tin-branch",
+      "bundle_slug": "1604c-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        407.23,
+        153.02,
+        476.62,
+        171.86
+      ],
+      "official_field_key": "frm1604c:branchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604f-2018/p1/tin-1",
+      "bundle_slug": "1604f-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        228.41,
+        146.18,
+        271.49,
+        163.82
+      ],
+      "official_field_key": "frm1604f:tinA",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c12",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604f-2018/p1/tin-2",
+      "bundle_slug": "1604f-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        285.89,
+        146.18,
+        329.23,
+        163.82
+      ],
+      "official_field_key": "frm1604f:tinB",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604f-2018/p1/tin-3",
+      "bundle_slug": "1604f-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        343.63,
+        146.18,
+        386.59,
+        163.82
+      ],
+      "official_field_key": "frm1604f:tinC",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1604f-2018/p1/tin-branch",
+      "bundle_slug": "1604f-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        400.99,
+        146.18,
+        473.5,
+        163.82
+      ],
+      "official_field_key": "frm1604f:branchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1621-2019/p1/tin-1",
+      "bundle_slug": "1621-2019",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.09,
+        181.1,
+        276.05,
+        201.14
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1621-2019/p1/tin-2",
+      "bundle_slug": "1621-2019",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        290.45,
+        181.1,
+        333.43,
+        201.14
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1621-2019/p1/tin-3",
+      "bundle_slug": "1621-2019",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.83,
+        181.1,
+        390.79,
+        201.14
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1621-2019/p1/tin-branch",
+      "bundle_slug": "1621-2019",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.19,
+        181.1,
+        476.86,
+        201.14
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c33",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p1/tin-1",
+      "bundle_slug": "1701-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        195.41,
+        134.78,
+        238.13,
+        151.34
+      ],
+      "official_field_key": "frm1701:txtPg1I4TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p1/tin-2",
+      "bundle_slug": "1701-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        252.77,
+        134.78,
+        296.45,
+        151.34
+      ],
+      "official_field_key": "frm1701:txtPg1I4TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p1/tin-3",
+      "bundle_slug": "1701-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        313.25,
+        134.78,
+        357.07,
+        151.34
+      ],
+      "official_field_key": "frm1701:txtPg1I4TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701-2018/p1/tin-branch",
+      "bundle_slug": "1701-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        371.59,
+        134.78,
+        447.91,
+        151.34
+      ],
+      "official_field_key": "frm1701:txtPg1I4BranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c19",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p1/tin-1",
+      "bundle_slug": "1701a-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        28.68,
+        153.02,
+        70.22,
+        170.78
+      ],
+      "official_field_key": "frm1701A:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p1/tin-2",
+      "bundle_slug": "1701a-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        84.26,
+        153.02,
+        126.5,
+        170.78
+      ],
+      "official_field_key": "frm1701A:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p1/tin-3",
+      "bundle_slug": "1701a-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        140.66,
+        153.02,
+        183.26,
+        170.78
+      ],
+      "official_field_key": "frm1701A:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701a-2018/p1/tin-branch",
+      "bundle_slug": "1701a-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        197.57,
+        153.02,
+        269.69,
+        170.78
+      ],
+      "official_field_key": "frm1701A:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-1",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        198.53,
+        126.74,
+        241.85,
+        142.22
+      ],
+      "official_field_key": "frm1701q:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-2",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        256.61,
+        126.74,
+        299.69,
+        142.22
+      ],
+      "official_field_key": "frm1701q:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-3",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        314.21,
+        126.74,
+        357.31,
+        142.22
+      ],
+      "official_field_key": "frm1701q:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1701q-2018/p1/tin-branch",
+      "bundle_slug": "1701q-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        372.07,
+        126.74,
+        446.83,
+        142.22
+      ],
+      "official_field_key": "frm1701q:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702ex-2018/p1/tin-1",
+      "bundle_slug": "1702ex-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        215.09,
+        185.66,
+        260.57,
+        202.22
+      ],
+      "official_field_key": "frm1702EX:txtPg1Pt1I6TINC1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c25",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702ex-2018/p1/tin-2",
+      "bundle_slug": "1702ex-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        275.81,
+        185.66,
+        321.29,
+        202.22
+      ],
+      "official_field_key": "frm1702EX:txtPg1Pt1I6TINC2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702ex-2018/p1/tin-3",
+      "bundle_slug": "1702ex-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        336.43,
+        185.66,
+        381.91,
+        202.22
+      ],
+      "official_field_key": "frm1702EX:txtPg1Pt1I6TINC3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702ex-2018/p1/tin-branch",
+      "bundle_slug": "1702ex-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        397.03,
+        185.66,
+        472.9,
+        202.22
+      ],
+      "official_field_key": "frm1702EX:txtPg1Pt1I6TINC4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702mx-2018c/p1/tin-1",
+      "bundle_slug": "1702mx-2018c",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        215.09,
+        188.06,
+        260.57,
+        204.5
+      ],
+      "official_field_key": "frm1702MX:txtPg1Pt1I6TINC1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c25",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702mx-2018c/p1/tin-2",
+      "bundle_slug": "1702mx-2018c",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        275.81,
+        188.06,
+        321.29,
+        204.5
+      ],
+      "official_field_key": "frm1702MX:txtPg1Pt1I6TINC2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702mx-2018c/p1/tin-3",
+      "bundle_slug": "1702mx-2018c",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        336.43,
+        188.06,
+        381.91,
+        204.5
+      ],
+      "official_field_key": "frm1702MX:txtPg1Pt1I6TINC3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702mx-2018c/p1/tin-branch",
+      "bundle_slug": "1702mx-2018c",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        397.03,
+        188.06,
+        472.9,
+        204.5
+      ],
+      "official_field_key": "frm1702MX:txtPg1Pt1I6TINC4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702q-2018/p1/tin-1",
+      "bundle_slug": "1702q-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        215.09,
+        178.82,
+        260.57,
+        195.38
+      ],
+      "official_field_key": "frm1702q:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c26",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702q-2018/p1/tin-2",
+      "bundle_slug": "1702q-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        275.81,
+        178.82,
+        321.29,
+        195.38
+      ],
+      "official_field_key": "frm1702q:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c28",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702q-2018/p1/tin-3",
+      "bundle_slug": "1702q-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        336.43,
+        178.82,
+        381.91,
+        195.38
+      ],
+      "official_field_key": "frm1702q:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c30",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702q-2018/p1/tin-branch",
+      "bundle_slug": "1702q-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        397.03,
+        178.82,
+        472.9,
+        195.38
+      ],
+      "official_field_key": "frm1702q:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c32",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702rt-2018c/p1/tin-1",
+      "bundle_slug": "1702rt-2018c",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        215.09,
+        182.3,
+        260.57,
+        198.86
+      ],
+      "official_field_key": "frm1702RT:txtPg1Pt1I6TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c25",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702rt-2018c/p1/tin-2",
+      "bundle_slug": "1702rt-2018c",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        275.81,
+        182.3,
+        321.29,
+        198.86
+      ],
+      "official_field_key": "frm1702RT:txtPg1Pt1I6TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702rt-2018c/p1/tin-3",
+      "bundle_slug": "1702rt-2018c",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        336.43,
+        182.3,
+        381.91,
+        198.86
+      ],
+      "official_field_key": "frm1702RT:txtPg1Pt1I6TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1702rt-2018c/p1/tin-branch",
+      "bundle_slug": "1702rt-2018c",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        397.03,
+        182.3,
+        472.9,
+        198.86
+      ],
+      "official_field_key": "frm1702RT:txtPg1Pt1I6TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1707a-2021/p1/tin-1",
+      "bundle_slug": "1707a-2021",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        216.53,
+        171.74,
+        259.97,
+        189.38
+      ],
+      "official_field_key": "frm1707Av2021:txtI5TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c21",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1707a-2021/p1/tin-2",
+      "bundle_slug": "1707a-2021",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        274.49,
+        171.74,
+        317.69,
+        189.38
+      ],
+      "official_field_key": "frm1707Av2021:txtI5TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c23",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1707a-2021/p1/tin-3",
+      "bundle_slug": "1707a-2021",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        332.23,
+        171.74,
+        375.67,
+        189.38
+      ],
+      "official_field_key": "frm1707Av2021:txtI5TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c25",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1707a-2021/p1/tin-branch",
+      "bundle_slug": "1707a-2021",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        390.67,
+        171.74,
+        463.18,
+        189.38
+      ],
+      "official_field_key": "frm1707Av2021:txtI5BranchMask",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c27",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1709-2020/p1/tin-1",
+      "bundle_slug": "1709-2020",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        219.05,
+        158.06,
+        262.85,
+        176.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1709-2020/p1/tin-2",
+      "bundle_slug": "1709-2020",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        277.37,
+        158.06,
+        321.17,
+        176.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1709-2020/p1/tin-3",
+      "bundle_slug": "1709-2020",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        335.71,
+        158.06,
+        379.51,
+        176.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c19",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "1709-2020/p1/tin-branch",
+      "bundle_slug": "1709-2020",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        394.03,
+        158.06,
+        467.02,
+        176.9
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c21",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2000-dst-2018/p1/tin-1",
+      "bundle_slug": "2000-dst-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        220.61,
+        145.1,
+        262.61,
+        160.46
+      ],
+      "official_field_key": "frm2000:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2000-dst-2018/p1/tin-2",
+      "bundle_slug": "2000-dst-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        276.77,
+        145.1,
+        318.89,
+        160.46
+      ],
+      "official_field_key": "frm2000:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2000-dst-2018/p1/tin-3",
+      "bundle_slug": "2000-dst-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        332.95,
+        145.1,
+        375.07,
+        160.46
+      ],
+      "official_field_key": "frm2000:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2000-dst-2018/p1/tin-branch",
+      "bundle_slug": "2000-dst-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        389.11,
+        145.1,
+        459.31,
+        160.46
+      ],
+      "official_field_key": "frm2000:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c19",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200c-2018/p1/tin-1",
+      "bundle_slug": "2200c-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        204.53,
+        148.82,
+        247.97,
+        164.18
+      ],
+      "official_field_key": "frm2200C:txtPg1TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200c-2018/p1/tin-2",
+      "bundle_slug": "2200c-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        262.37,
+        148.82,
+        305.81,
+        164.18
+      ],
+      "official_field_key": "frm2200C:txtPg1TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200c-2018/p1/tin-3",
+      "bundle_slug": "2200c-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        320.33,
+        148.82,
+        363.67,
+        164.18
+      ],
+      "official_field_key": "frm2200C:txtPg1TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200c-2018/p1/tin-branch",
+      "bundle_slug": "2200c-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        378.19,
+        148.82,
+        450.55,
+        164.18
+      ],
+      "official_field_key": "frm2200C:txtPg1TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c24",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200m-2018/p1/tin-1",
+      "bundle_slug": "2200m-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.81,
+        129.74,
+        277.25,
+        144.02
+      ],
+      "official_field_key": "frm2200M:txtPg1TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200m-2018/p1/tin-2",
+      "bundle_slug": "2200m-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        292.01,
+        129.74,
+        334.99,
+        144.02
+      ],
+      "official_field_key": "frm2200M:txtPg1TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200m-2018/p1/tin-3",
+      "bundle_slug": "2200m-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        349.51,
+        129.74,
+        392.59,
+        144.02
+      ],
+      "official_field_key": "frm2200M:txtPg1TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2200m-2018/p1/tin-branch",
+      "bundle_slug": "2200m-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        407.11,
+        129.74,
+        479.02,
+        144.02
+      ],
+      "official_field_key": "frm2200M:txtPg1TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-1",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        86.24,
+        122.72,
+        124.15,
+        137.79
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-2",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        135.88,
+        122.72,
+        173.79,
+        137.79
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c12",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-3",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        185.55,
+        122.72,
+        223.46,
+        137.79
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2316-2021/p1/tin-branch",
+      "bundle_slug": "2316-2021",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        235.22,
+        122.72,
+        306.08,
+        137.79
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-1",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        232.8,
+        167.22,
+        275.3,
+        183.83
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c32",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-2",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        289.5,
+        167.22,
+        332.5,
+        183.83
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c34",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-3",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        346.7,
+        167.22,
+        389.52,
+        183.83
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c36",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550-ds-2025/p1/tin-branch",
+      "bundle_slug": "2550-ds-2025",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        404.02,
+        167.22,
+        475.23,
+        183.83
+      ],
+      "official_field_key": null,
+      "official_field_key_gap": "no harvested fields.json in this checkout",
+      "html_id_hint": "p1c38",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550q-2024/p1/tin-1",
+      "bundle_slug": "2550q-2024",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        233.1,
+        169.42,
+        275.6,
+        186.03
+      ],
+      "official_field_key": "frm2550qv2024:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c29",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550q-2024/p1/tin-2",
+      "bundle_slug": "2550q-2024",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        289.8,
+        169.42,
+        332.8,
+        186.03
+      ],
+      "official_field_key": "frm2550qv2024:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c31",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550q-2024/p1/tin-3",
+      "bundle_slug": "2550q-2024",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        347.0,
+        169.42,
+        389.83,
+        186.03
+      ],
+      "official_field_key": "frm2550qv2024:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c33",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2550q-2024/p1/tin-branch",
+      "bundle_slug": "2550q-2024",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        404.33,
+        169.42,
+        475.52,
+        186.03
+      ],
+      "official_field_key": "frm2550qv2024:branchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c35",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2551q-2018/p1/tin-1",
+      "bundle_slug": "2551q-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        220.85,
+        160.1,
+        263.33,
+        177.86
+      ],
+      "official_field_key": "frm2551Qv2018:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2551q-2018/p1/tin-2",
+      "bundle_slug": "2551q-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        277.49,
+        160.1,
+        320.09,
+        177.86
+      ],
+      "official_field_key": "frm2551Qv2018:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2551q-2018/p1/tin-3",
+      "bundle_slug": "2551q-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        334.39,
+        160.1,
+        376.99,
+        177.86
+      ],
+      "official_field_key": "frm2551Qv2018:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c24",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "2551q-2018/p1/tin-branch",
+      "bundle_slug": "2551q-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        391.15,
+        160.1,
+        462.1,
+        177.86
+      ],
+      "official_field_key": "frm2551Qv2018:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c26",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1604e-2018/p1/tin-1",
+      "bundle_slug": "extra/1604e-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        235.85,
+        159.14,
+        277.85,
+        177.98
+      ],
+      "official_field_key": "frm1604e:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c12",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1604e-2018/p1/tin-2",
+      "bundle_slug": "extra/1604e-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        292.25,
+        159.14,
+        334.27,
+        177.98
+      ],
+      "official_field_key": "frm1604e:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1604e-2018/p1/tin-3",
+      "bundle_slug": "extra/1604e-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        348.67,
+        159.14,
+        390.67,
+        177.98
+      ],
+      "official_field_key": "frm1604e:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1604e-2018/p1/tin-branch",
+      "bundle_slug": "extra/1604e-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        405.07,
+        159.14,
+        475.18,
+        177.98
+      ],
+      "official_field_key": "frm1604e:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-1",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        41.28,
+        150.86,
+        83.42,
+        168.62
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I5TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-2",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        98.06,
+        150.86,
+        140.18,
+        168.62
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I5TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-3",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        154.58,
+        150.86,
+        196.97,
+        168.62
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I5TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1700-2018/p1/tin-branch",
+      "bundle_slug": "extra/1700-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        211.49,
+        150.86,
+        284.21,
+        168.62
+      ],
+      "official_field_key": "frm1700:txtPg1Pt1I5BranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1800-2018/p1/tin-1",
+      "bundle_slug": "extra/1800-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        227.81,
+        132.62,
+        270.17,
+        148.58
+      ],
+      "official_field_key": "frm1800v2018:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c13",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1800-2018/p1/tin-2",
+      "bundle_slug": "extra/1800-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        284.33,
+        132.62,
+        326.69,
+        148.58
+      ],
+      "official_field_key": "frm1800v2018:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1800-2018/p1/tin-3",
+      "bundle_slug": "extra/1800-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        342.19,
+        132.62,
+        384.79,
+        148.58
+      ],
+      "official_field_key": "frm1800v2018:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/1800-2018/p1/tin-branch",
+      "bundle_slug": "extra/1800-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        398.95,
+        132.62,
+        470.62,
+        148.58
+      ],
+      "official_field_key": "frm1800v2018:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200a-2020/p1/tin-1",
+      "bundle_slug": "extra/2200a-2020",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        204.53,
+        137.06,
+        247.97,
+        152.54
+      ],
+      "official_field_key": "frm2200Av2020:tinA",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200a-2020/p1/tin-2",
+      "bundle_slug": "extra/2200a-2020",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        262.37,
+        137.06,
+        305.81,
+        152.54
+      ],
+      "official_field_key": "frm2200Av2020:tinB",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200a-2020/p1/tin-3",
+      "bundle_slug": "extra/2200a-2020",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        320.33,
+        137.06,
+        363.67,
+        152.54
+      ],
+      "official_field_key": "frm2200Av2020:tinC",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200a-2020/p1/tin-branch",
+      "bundle_slug": "extra/2200a-2020",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        378.19,
+        137.06,
+        450.55,
+        152.54
+      ],
+      "official_field_key": "frm2200Av2020:branchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200an-2018/p1/tin-1",
+      "bundle_slug": "extra/2200an-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        234.53,
+        140.42,
+        277.85,
+        154.58
+      ],
+      "official_field_key": "frm2200ANv2018:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200an-2018/p1/tin-2",
+      "bundle_slug": "extra/2200an-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        292.61,
+        140.42,
+        335.59,
+        154.58
+      ],
+      "official_field_key": "frm2200ANv2018:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200an-2018/p1/tin-3",
+      "bundle_slug": "extra/2200an-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        350.11,
+        140.42,
+        393.31,
+        154.58
+      ],
+      "official_field_key": "frm2200ANv2018:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200an-2018/p1/tin-branch",
+      "bundle_slug": "extra/2200an-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        407.83,
+        140.42,
+        479.62,
+        154.58
+      ],
+      "official_field_key": "frm2200ANv2018:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200p-2020/p1/tin-1",
+      "bundle_slug": "extra/2200p-2020",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        204.53,
+        135.62,
+        247.97,
+        150.98
+      ],
+      "official_field_key": "frm2200P:txtPg1TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200p-2020/p1/tin-2",
+      "bundle_slug": "extra/2200p-2020",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        262.37,
+        135.62,
+        305.81,
+        150.98
+      ],
+      "official_field_key": "frm2200P:txtPg1TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200p-2020/p1/tin-3",
+      "bundle_slug": "extra/2200p-2020",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        320.33,
+        135.62,
+        363.67,
+        150.98
+      ],
+      "official_field_key": "frm2200P:txtPg1TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200p-2020/p1/tin-branch",
+      "bundle_slug": "extra/2200p-2020",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        378.19,
+        135.62,
+        450.55,
+        150.98
+      ],
+      "official_field_key": "frm2200P:txtPg1TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200s-2018/p1/tin-1",
+      "bundle_slug": "extra/2200s-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        193.7,
+        133.82,
+        239.09,
+        148.1
+      ],
+      "official_field_key": "frm2200S:txtTIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c15",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200s-2018/p1/tin-2",
+      "bundle_slug": "extra/2200s-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        254.81,
+        133.82,
+        301.97,
+        148.1
+      ],
+      "official_field_key": "frm2200S:txtTIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c17",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200s-2018/p1/tin-3",
+      "bundle_slug": "extra/2200s-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        317.69,
+        133.82,
+        364.87,
+        148.1
+      ],
+      "official_field_key": "frm2200S:txtTIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c19",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200s-2018/p1/tin-branch",
+      "bundle_slug": "extra/2200s-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        381.91,
+        133.82,
+        462.22,
+        148.1
+      ],
+      "official_field_key": "frm2200S:txtBranchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c21",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200t-2022/p1/tin-1",
+      "bundle_slug": "extra/2200t-2022",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        234.53,
+        146.06,
+        277.85,
+        160.34
+      ],
+      "official_field_key": "frm2200Tv2020:tinA",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200t-2022/p1/tin-2",
+      "bundle_slug": "extra/2200t-2022",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        292.61,
+        146.06,
+        335.59,
+        160.34
+      ],
+      "official_field_key": "frm2200Tv2020:tinB",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200t-2022/p1/tin-3",
+      "bundle_slug": "extra/2200t-2022",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        350.11,
+        146.06,
+        393.31,
+        160.34
+      ],
+      "official_field_key": "frm2200Tv2020:tinC",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2200t-2022/p1/tin-branch",
+      "bundle_slug": "extra/2200t-2022",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        407.83,
+        146.06,
+        479.62,
+        160.34
+      ],
+      "official_field_key": "frm2200Tv2020:branchCode",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c22",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2552-2018/p1/tin-1",
+      "bundle_slug": "extra/2552-2018",
+      "page": 1,
+      "role": "tin-1",
+      "source_printed_box_pt": [
+        222.65,
+        149.66,
+        265.49,
+        166.22
+      ],
+      "official_field_key": "frm2552:txtPg1TIN1",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c14",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2552-2018/p1/tin-2",
+      "bundle_slug": "extra/2552-2018",
+      "page": 1,
+      "role": "tin-2",
+      "source_printed_box_pt": [
+        279.77,
+        149.66,
+        322.61,
+        166.22
+      ],
+      "official_field_key": "frm2552:txtPg1TIN2",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c16",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2552-2018/p1/tin-3",
+      "bundle_slug": "extra/2552-2018",
+      "page": 1,
+      "role": "tin-3",
+      "source_printed_box_pt": [
+        336.91,
+        149.66,
+        379.75,
+        166.22
+      ],
+      "official_field_key": "frm2552:txtPg1TIN3",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c18",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    },
+    {
+      "id": "extra/2552-2018/p1/tin-branch",
+      "bundle_slug": "extra/2552-2018",
+      "page": 1,
+      "role": "tin-branch",
+      "source_printed_box_pt": [
+        394.03,
+        149.66,
+        465.58,
+        166.22
+      ],
+      "official_field_key": "frm2552:txtPg1TIN4",
+      "official_field_key_gap": "",
+      "html_id_hint": "p1c20",
+      "match": {
+        "kind": "field",
+        "tolerance_pt": 0.25,
+        "cardinality": "exactly-one"
+      },
+      "correction_id": null
+    }
+  ]
+}

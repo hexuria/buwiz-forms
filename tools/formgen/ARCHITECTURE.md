@@ -218,12 +218,24 @@ assumption, a code path, or a source of truth with the thing it checked. The
 verifies itself would be the largest instance of that defect yet built, because
 it would sit between the generator and everything downstream.
 
-## Stage 3 readiness (recorded, not started)
+## Stage 3 readiness (identity catalog started, mapper not started)
 
 `rules/forms/*/fields.json` already carries 43 forms and 9,592 field names
 harvested from the official HTA runtime, with `serialized_key` values like
-`frm2550m:txtBranchCode`. The naming problem is solved. The blocker is on our
-side: emitted inputs are named positionally (`p1c9`) and renumber whenever the
-lattice reclassifies a cell -- which happened twice on 2026-08-06 alone. Field
-identity must be frozen before mapping starts. Per the user: stage 3 begins
-after field geometry settles.
+`frm2550m:txtBranchCode`. The naming problem is solved on BIR's side.
+
+Our side now has a durable identity that is not `p1c9` and not
+`lattice.geometry_subject_key`'s `p<page>@<bbox>`:
+[`tools/formgen/identity/catalog.json`](identity/catalog.json), checked by
+[`tools/formgen/field_identity.py`](field_identity.py). The catalog covers
+the TIN caption-chain class: C01–C07 seed plus 38 measured 3+3+3+5 corpus
+strips, 180 identities, 44 of 53 bundles. A record resolves when exactly
+one fillable field (including a G11 mixed comb) has its center in
+`source_printed_box_pt`. The HTML cell id is a hint; a unique center hit
+with a different id is `html_id_hint_stale` and must update the catalog in
+the same commit as the batch that moved it.
+
+This is not Stage 3. Nothing writes official keys onto `name=`. The
+mapper stays closed until the catalog covers fillable fields and G02 /
+G03 / G04 are done. Per the user: stage 3 begins after field geometry
+settles.
