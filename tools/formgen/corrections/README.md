@@ -126,13 +126,13 @@ and refuses to measure a file that does not match.
 
 | ID | Form | Change | Authority | Status |
 | --- | --- | --- | --- | --- |
-| C01 | `2550m-2007` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000`) | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
-| C02 | `0605-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `declared` |
-| C03 | `2551m-2002` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `declared` |
-| C04 | `extra/2553-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
-| C05 | `extra/1600wp-2010` item 5 primary | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, none pre-printed) | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `declared` |
-| C06 | `extra/1600wp-2010` agent TIN | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, no ink inside) | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `declared` |
-| C07 | `extra/1604cf-2008` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000` in 3 of 4) | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `declared` |
+| C01 | `2550m-2007` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000`) | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
+| C02 | `0605-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
+| C03 | `2551m-2002` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
+| C04 | `extra/2553-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
+| C05 | `extra/1600wp-2010` item 5 primary | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, none pre-printed) | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
+| C06 | `extra/1600wp-2010` agent TIN | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, no ink inside) | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
+| C07 | `extra/1604cf-2008` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000` in 3 of 4) | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `applied` (sitting 2026-08-18; not verified) |
 
 ### The branch-lock rule
 
@@ -166,10 +166,10 @@ human verdict or an explicit skip.
 | **P0** | `gol/tin-stage2` / [PR #17](https://github.com/hexuria/buwiz-forms/pull/17) | TIN chrome restore (this section) + even 3-3-3-5 + lock rule | Stage 2 residue: the source prints 3 or 4 branch boxes. |
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | Tab: 0605 17 then 18; 2550M page-2 first schedule row (horizontal walls). | Stage 1 lattice. TIN overlay is a later batch. |
 | **P1+P1b** | `gol/tin-stage4` (this commit, stacked on #18) | Charbox hair ticks and X-squares stamp `maxlength="1"`; stay `type=text`. | Stage 1. Never a TIN record. |
-| **P0b** | after a named Stage 1 `forms/` commit | Re-anchor C01–C07 and run `correct.py`. Scratch HTML is `build/batch-p0b`; ledger still binds git `forms/`. | Stage 2. Serial — records bind HTML bytes. |
-| **—** | blocked | Stage 3 map | Field identity still bbox-derived. |
+| **P0b** | `gol/tin-stage5` | Named Stage 1 batch `ddac6058`. C01–C07 re-anchored and applied. Sitting 2026-08-18: Uriah approved all seven ([`evidence/tin-stage2-sitting-20260818.json`](evidence/tin-stage2-sitting-20260818.json)). | Stage 2. Sitting accepted. Status `applied`, not `verified`. |
+| **—** | blocked | Stage 3 map | Field identity still bbox-derived (R2). P0b sitting does not unblock this. |
 
-Status on C01–C07 stays `declared` until the P0 sitting is accepted.
+Status on C01–C07 is `applied` after the 2026-08-18 sitting. It is not `verified`: the sitting is chrome and the lock rule, not an independent re-derivation of `expected_effect`, and every divergence check stays `proven: false` until `audit.py` is seen to fail on `forms-corrected/`.
 
 Why C01 is genuinely stage 2: the 2007 artwork is **correct and out of date**.
 It prints three compartments and pre-prints `000` in them; BIR's own client
@@ -202,12 +202,14 @@ must not become a rule.
 4. Declare `expected_effect` **before** anything is applied, and name the checks
    that must report the divergence.
 5. `python3 tools/formgen/corrections/validate_records.py`.
-6. The user reviews. `status` stays `declared` until an independent producer
-   re-derives the effect from a corrected tree that was actually written.
+6. The user reviews. `status` becomes `applied` when the applier writes
+   `forms-corrected/` and the sitting is accepted. It stays off `verified`
+   until an independent producer re-derives the effect and the named
+   divergence checks are seen to fire (`proven: true`).
 
 ## What C01 does NOT yet have
 
-`status` is `declared`, and it stays there.
+`status` is `applied` (sitting 2026-08-18). It is not `verified`.
 
 The applier was run once against `forms/` at HEAD `77987f8` into a scratch tree
 outside the repository: the anchor matched, 371 of 372 files copied

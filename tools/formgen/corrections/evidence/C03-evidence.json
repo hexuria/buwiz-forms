@@ -2,7 +2,7 @@
   "schema_version": "0.1.0-provisional",
   "id": "C03",
   "title": "2551M item 6: the TIN branch code prints three compartments, and the only valid TIN format is 3-3-3-5",
-  "status": "declared",
+  "status": "applied",
   "form": {
     "code": "2551M",
     "revision": "2002",
@@ -438,7 +438,7 @@
       "the string arithmetic recorded in this record's fifth evidence item — same agent, no corrected tree",
       "a determinism re-run — it runs the writer twice and both halves drift together (PLAN.md, `3bf32c8`)"
     ],
-    "status": "not yet verified — this record has never been applied and no corrected tree exists for 2551m-2002. It is `declared`, and the effect it declares is what the verifier will be held to. It must not be promoted to `verified` on any evidence produced by the applier itself, and its authority must be reviewed on its own weaker terms rather than by analogy to C01."
+    "status": "not yet verified — Uriah sat the applied tree on 2026-08-18 and approved chrome and the lock rule. That is not independent re-derivation of expected_effect. Divergence checks remain proven:false until audit.py is seen to fail on forms-corrected/. Do not promote to verified on the sitting or on the applier manifest."
   },
   "provenance": {
     "authored_at": "2026-08-17",
@@ -452,8 +452,8 @@
       "python3 str.replace on an in-memory copy of the anchor — declared-effect arithmetic only, no file written, explicitly not verification"
     ],
     "review": {
-      "state": "unreviewed",
-      "note": "Authored by an agent. Nothing here promotes anything: no capability flag, no release_ready, no allowlist, and no file under forms/ or forms-corrected/ was written. The user reviews the record — and specifically reviews whether a user rule plus two declared gaps is authority enough for this form, which is a weaker claim than C01's — before any applier consumes it."
+      "state": "user-reviewed",
+      "note": "Uriah reviewed the applied tree on 2026-08-18 at http://127.0.0.1:4191/ and approved C01–C07 (even 3-3-3-5; lock 00000 only on C01 and C07). Verdict file: tools/formgen/corrections/evidence/tin-stage2-sitting-20260818.json. Status is applied, not verified: the sitting is a human check of chrome and the lock rule, not an independent re-derivation of expected_effect, and divergence.proven stays false until audit.py is seen to fail on the corrected tree."
     }
   }
 }

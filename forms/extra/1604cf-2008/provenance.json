@@ -28,16 +28,9 @@
   "rules": 720,
   "text_runs": 1020,
   "images": 1,
-  "cells": 1207,
+  "cells": 1300,
   "comb_cells": 13,
-  "growables": [
-    {
-      "page": 2,
-      "rows": 18,
-      "capacity": 18,
-      "pitch_pt": 16.8
-    }
-  ],
+  "growables": [],
   "sources": [
     {
       "role": "form",
@@ -51,6 +44,23 @@
       "inline-region"
     ],
     "moved_from_form": [
+      {
+        "page": 1,
+        "cut_y_pt": 755.28,
+        "reclaimed_pt": 252.72,
+        "reclaimed_pct": 25,
+        "marker": "We declare, under the penalties of perjury, that this declaration has been made in good faith, verified by us, and  to the best of our",
+        "marker_pattern": "reference-band",
+        "moved": {
+          "rules": 9,
+          "cells": 5,
+          "text_runs": 20,
+          "area_fills": 28,
+          "images": 0
+        },
+        "straddlers_kept_by_form": 5,
+        "moved_to": "guide.html"
+      },
       {
         "page": 4,
         "cut_y_pt": 0.0,
@@ -70,19 +80,20 @@
       }
     ],
     "standalone_pdfs": [],
-    "reclaimed_pt_total": 1008.0,
-    "reclaimed_pct_mean": 100,
-    "reclaimed_pct_min": 100,
+    "reclaimed_pt_total": 1260.72,
+    "reclaimed_pct_mean": 62,
+    "reclaimed_pct_min": 25,
     "reclaimed_pct_max": 100,
     "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form. Each PDF under standalone_pdfs was re-extracted and reflowed into guide.html so that it prints with the document; the pinned PDF is kept beside it and linked, and remains the exact artefact."
   },
   "guide_detected": {
     "inline_pages": [
+      1,
       4
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 914523,
+  "html_bytes": 873329,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

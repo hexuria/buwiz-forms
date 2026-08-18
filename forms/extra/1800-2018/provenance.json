@@ -33,6 +33,24 @@
       "rows": 5,
       "capacity": 5,
       "pitch_pt": 18.0
+    },
+    {
+      "page": 2,
+      "rows": 7,
+      "capacity": 7,
+      "pitch_pt": 10.8
+    },
+    {
+      "page": 2,
+      "rows": 8,
+      "capacity": 8,
+      "pitch_pt": 11.64
+    },
+    {
+      "page": 2,
+      "rows": 9,
+      "capacity": 9,
+      "pitch_pt": 11.64
     }
   ],
   "sources": [
@@ -73,7 +91,7 @@
       "1800 Guidelines.pdf"
     ]
   },
-  "html_bytes": 960973,
+  "html_bytes": 1001113,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

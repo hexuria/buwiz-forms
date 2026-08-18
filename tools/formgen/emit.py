@@ -8120,6 +8120,20 @@ def page_css(ir: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def cells_in_tab_order(cells: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The order `tab_check.py` grades: lattice `data-row`, then left edge.
+
+    Focus order is DOM order (`input.fi` has no `tabindex`). Lattice cell
+    ids are materialisation order, which is not that key — a later-id comb
+    on an earlier row (1601EQ `p1c9` at row 2, left 522pt, after `p1c10`–
+    `p1c17` on row 3) is the Stage 1 corpus's 21/53 tab-order fail. Sorting
+    each `layer-cells` run here, without moving growable-band splices, is
+    what makes the walk match the grade.
+    """
+    return sorted(cells, key=lambda cell: (int(cell["row"]), float(cell["x0"]),
+                                           str(cell["id"])))
+
+
 def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
               styles: dict[tuple[int, int], RunStyle], backend: RuleBackend,
               options: Options, band_blobs: list[dict[str, Any]],
@@ -8227,11 +8241,13 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
     # first row would have sorted instead of at the page's tab-order end
     # (F209: a 490pt backward jump on 1600-pt-2018 p1). The cells layer is
     # therefore emitted as `len(band_order) + 1` separate, flat
-    # `<div class="layer-cells">` sibling runs -- never nested, never
-    # reordered among themselves -- with one band's `<template>` + rendered
-    # `<div class="band">` filling each gap. Multiple bands on one page each
-    # land at their own position because `band_order` is sorted by that same
-    # key and the cells are partitioned by walking it once.
+    # `<div class="layer-cells">` sibling runs -- never nested -- with one
+    # band's `<template>` + rendered `<div class="band">` filling each gap.
+    # Multiple bands on one page each land at their own position because
+    # `band_order` is sorted by that same key and the cells are partitioned
+    # by walking it once. Inside each run, cells are then ordered by
+    # `cells_in_tab_order` so DOM order matches tab_check's (data-row, left)
+    # grade; lattice ids are not that key.
     band_order = sorted(
         plans, key=lambda plan: (float(plan.band["y0"]), float(plan.band["x0"])))
     segments: list[list[dict[str, Any]]] = [[]]
@@ -8252,7 +8268,7 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
 
     def emit_cells_layer(cells: list[dict[str, Any]]) -> None:
         parts.append('<div class="layer-cells">')
-        for cell in cells:
+        for cell in cells_in_tab_order(cells):
             parts.append(cell_markup(split.clipped(cell, "cell", cell["id"]), fields))
         parts.append("</div>")
 

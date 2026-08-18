@@ -37,7 +37,7 @@ CHAINS = [
         "id": "C01",
         "file": "C01-2550m-tin-branch-code.json",
         "form": "2550m-2007",
-        "ids": ["p1c116", "p1c8", "p1c9", "p1c10", "p1c11", "p1c12", "p1c13"],
+        "ids": ["p1c127", "p1c8", "p1c9", "p1c10", "p1c11", "p1c12", "p1c13"],
         "branch_id": "p1c13",
         # Official artwork pre-prints 000 inside the branch box.
         "lock_branch": True,
@@ -315,12 +315,33 @@ def emit_sep(div: str, left: float, width: float, fill: str) -> str:
 
 def reflow_chain(find_html: str, ids: list[str], branch_id: str,
                  lock_branch: bool, form_html: str) -> tuple[str, dict]:
+    """Reflow the seven named TIN boxes; drop any 0.72pt hairlines in the span.
+
+    P2 reading order can insert the top/bottom rule of the TIN row into the
+    HTML between the fill-in boxes (C01 p1c128/p1c129, C03/C04 six 0.72pt
+    slivers). The find string stays a contiguous span so the applier can
+    match it; those slivers are not fillable and the knockout covers their
+    ink, so they are not emitted.
+    """
     divs = split_divs(find_html)
-    if len(divs) != 7:
-        raise ValueError(f"expected 7 pieces, got {len(divs)}")
-    pieces = []
-    for ident, div in zip(ids, divs):
+    by_id: dict[str, tuple[str, dict[str, str], str]] = {}
+    span_boxes: list[tuple[float, float, float, float]] = []
+    for div in divs:
         _raw, attrs, inner = parse_open(div)
+        style = attrs["style"]
+        span_boxes.append((
+            style_prop(style, "left"), style_prop(style, "top"),
+            style_prop(style, "width"), style_prop(style, "height"),
+        ))
+        cid = attrs.get("id")
+        if cid:
+            by_id[cid] = (div, attrs, inner)
+    missing = [ident for ident in ids if ident not in by_id]
+    if missing:
+        raise ValueError(f"missing {missing} in TIN span")
+    pieces = []
+    for ident in ids:
+        div, attrs, inner = by_id[ident]
         style = attrs["style"]
         pieces.append({
             "id": ident,
@@ -354,8 +375,8 @@ def reflow_chain(find_html: str, ids: list[str], branch_id: str,
     sample = next((p for p in groups if 'data-slot="' in p["inner"]), groups[-1])
     slot_top, slot_height = slot_metrics(sample["inner"], sample["height"])
 
-    y0 = min(p["top"] for p in pieces)
-    y1 = max(p["top"] + p["height"] for p in pieces)
+    y0 = min(top for _l, top, _w, _h in span_boxes)
+    y1 = max(top + height for _l, top, _w, height in span_boxes)
     knockout = (
         f'<div class="c" data-cell-kind="blank" '
         f'style="left:{fmt_pt(x0)}pt;top:{fmt_pt(y0)}pt;'

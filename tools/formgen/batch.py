@@ -457,7 +457,8 @@ def guide_block(plan: dict[str, Any], pdfs: list[pathlib.Path],
 
 
 def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib.Path,
-            source_root: pathlib.Path, guide_layout: str | None) -> dict[str, Any]:
+            source_root: pathlib.Path, guide_layout: str | None,
+            fonts_root: pathlib.Path | None = None) -> dict[str, Any]:
     """Run the pipeline for one form. Returns a record, never raises."""
     slug = source.key
     ir = work / "ir" / f"{slug}.ir.json"
@@ -487,7 +488,8 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
         ("lattice", [str(HERE / "lattice.py"), "--ir", str(ir), "--out", str(layout)]),
         ("guides", [str(HERE / "guides.py"), "--ir", str(ir), "--layout", str(layout),
                     "--source-root", str(source_root), "--out", str(guide_plan)]),
-        ("fonts", [str(HERE / "fonts.py"), "--ir", str(ir), "--out", str(plan)]),
+        ("fonts", [str(HERE / "fonts.py"), "--ir", str(ir), "--out", str(plan)]
+                  + (["--fonts-root", str(fonts_root)] if fonts_root else [])),
     ]
     for name, argv in steps:
         ok, error = run_stage(argv)
@@ -1140,6 +1142,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                              "that stopped being used). Off by default: the same "
                              "condition is how a regeneration deletes tracked files.")
     parser.add_argument("--report", type=pathlib.Path, default=None)
+    parser.add_argument("--fonts-root", type=pathlib.Path, default=None,
+                        help="Checkout holding node_modules/@fontsource-variable "
+                             "(passed to fonts.py; default: fonts.py walks ancestors).")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     discovered = discover(args.source_root)
@@ -1186,7 +1191,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     records = []
     for i, source in enumerate(sources, 1):
         record = convert(source, args.work, args.rule_backend, args.fonts_dir,
-                         args.source_root, args.guide_layout)
+                         args.source_root, args.guide_layout, args.fonts_root)
         records.append(record)
         status = "ok" if record["stage_failed"] is None else f"FAIL@{record['stage_failed']}"
         guide = record.get("guide") or {}

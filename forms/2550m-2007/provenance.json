@@ -26,31 +26,13 @@
   "rules": 445,
   "text_runs": 666,
   "images": 1,
-  "cells": 422,
+  "cells": 558,
   "comb_cells": 17,
   "growables": [
     {
       "page": 2,
-      "rows": 3,
-      "capacity": 3,
-      "pitch_pt": 10.08
-    },
-    {
-      "page": 2,
-      "rows": 3,
-      "capacity": 3,
-      "pitch_pt": 10.08
-    },
-    {
-      "page": 2,
-      "rows": 3,
-      "capacity": 3,
-      "pitch_pt": 10.08
-    },
-    {
-      "page": 2,
-      "rows": 3,
-      "capacity": 3,
+      "rows": 4,
+      "capacity": 4,
       "pitch_pt": 10.08
     },
     {
@@ -69,6 +51,24 @@
       "page": 2,
       "rows": 4,
       "capacity": 4,
+      "pitch_pt": 10.08
+    },
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
+      "pitch_pt": 10.08
+    },
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
+      "pitch_pt": 10.08
+    },
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
       "pitch_pt": 10.08
     }
   ],
@@ -94,7 +94,7 @@
         "marker_pattern": "unfillable-page",
         "moved": {
           "rules": 21,
-          "cells": 74,
+          "cells": 87,
           "text_runs": 125,
           "area_fills": 27,
           "images": 0
@@ -134,7 +134,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 509026,
+  "html_bytes": 542641,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

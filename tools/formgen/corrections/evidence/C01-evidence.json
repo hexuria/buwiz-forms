@@ -2,7 +2,7 @@
   "schema_version": "0.1.0-provisional",
   "id": "C01",
   "title": "2550M item 4: the TIN branch code prints three compartments, BIR's own runtime declares five",
-  "status": "declared",
+  "status": "applied",
   "form": {
     "code": "2550M",
     "revision": "2007",
@@ -386,7 +386,7 @@
       "the applier's own manifest as evidence that the applier worked",
       "a determinism re-run — it runs the writer twice and both halves drift together (PLAN.md, `3bf32c8`)"
     ],
-    "status": "not yet verified — the applier does not exist. This record is `declared`, and the effect it declares is what the verifier will be held to. It must not be promoted to `verified` on any evidence produced by the applier itself."
+    "status": "not yet verified — Uriah sat the applied tree on 2026-08-18 and approved chrome and the lock rule. That is not independent re-derivation of expected_effect. Divergence checks remain proven:false until audit.py is seen to fail on forms-corrected/. Do not promote to verified on the sitting or on the applier manifest."
   },
   "provenance": {
     "authored_at": "2026-08-08; re-anchored 2026-08-17",
@@ -400,8 +400,8 @@
       "tools/formgen/correct.py --dry-run and a scratch --out — anchor and edit shape only, self-check, not verification"
     ],
     "review": {
-      "state": "unreviewed",
-      "note": "Authored by an agent. Nothing here promotes anything: no capability flag, no release_ready, no allowlist. The user reviews the record before an applier is written, and the applier is a separate reviewed change."
+      "state": "user-reviewed",
+      "note": "Uriah reviewed the applied tree on 2026-08-18 at http://127.0.0.1:4191/ and approved C01–C07 (even 3-3-3-5; lock 00000 only on C01 and C07). Verdict file: tools/formgen/corrections/evidence/tin-stage2-sitting-20260818.json. Status is applied, not verified: the sitting is a human check of chrome and the lock rule, not an independent re-derivation of expected_effect, and divergence.proven stays false until audit.py is seen to fail on the corrected tree."
     }
   }
 }

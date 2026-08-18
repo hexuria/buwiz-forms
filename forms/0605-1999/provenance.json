@@ -24,7 +24,7 @@
   "rules": 370,
   "text_runs": 427,
   "images": 1,
-  "cells": 328,
+  "cells": 378,
   "comb_cells": 26,
   "growables": [],
   "sources": [
@@ -49,7 +49,7 @@
         "marker_pattern": "unfillable-page",
         "moved": {
           "rules": 41,
-          "cells": 138,
+          "cells": 168,
           "text_runs": 281,
           "area_fills": 44,
           "images": 0
@@ -71,7 +71,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 236571,
+  "html_bytes": 236642,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
