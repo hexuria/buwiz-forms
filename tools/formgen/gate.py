@@ -177,6 +177,9 @@ SELF_TEST_MODULES = (
     "extract", "lattice", "fonts", "guides", "emit", "verify", "index_page",
     "audit", "comb_referee", "gate", "field_identity",
 )
+# Identity coverage pin (I3). Must match field_identity.EXPECTED_FILLABLE_CELLS.
+EXPECTED_FILLABLE_CELLS = 9990
+EXPECTED_UNCATALOGUED_FILLABLES = 0
 SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
 # A checker-of-checkers, not a module self-test: it proves every `extract.py`
@@ -9969,6 +9972,15 @@ def check_self_tests() -> Result:
         code, _ = runner(args, timeout=900)
         if code != 0:
             failures.append(module)
+    forms_tree = REPO / "forms"
+    if EXPECTED_UNCATALOGUED_FILLABLES != 0:
+        failures.append("EXPECTED_UNCATALOGUED_FILLABLES must stay 0")
+    if forms_tree.is_dir():
+        code, _ = run(
+            [str(HERE / "field_identity.py"), "coverage", "--tree", str(forms_tree)],
+            timeout=120)
+        if code != 0:
+            failures.append("field_identity coverage")
     prover = HERE / PROVE_FIXTURES_SCRIPT
     if not prover.is_file():
         missing.append(PROVE_FIXTURES_SCRIPT)
@@ -11974,6 +11986,12 @@ def _self_test_body() -> int:
                         "count contract")
     if "comb_referee" not in SELF_TEST_MODULES:
         failures.append("comb_referee.py must be included in module self-tests")
+    if "field_identity" not in SELF_TEST_MODULES:
+        failures.append("field_identity.py must be included in module self-tests")
+    if EXPECTED_UNCATALOGUED_FILLABLES != 0:
+        failures.append("I3 coverage pin EXPECTED_UNCATALOGUED_FILLABLES must be 0")
+    if EXPECTED_FILLABLE_CELLS != 9990:
+        failures.append("I3 fillable census pin moved without its catalog/self-test twin")
 
     # Built from the census constants rather than repeating 38 and 13 as
     # literals: the fixture and the thing it certifies must move together, and

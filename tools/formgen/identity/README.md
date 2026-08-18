@@ -56,13 +56,15 @@ text is `text-*`. Evidence:
 [`identity-text-20260818.json`](../corrections/evidence/identity-text-20260818.json).
 
 `coverage --tree forms` and `coverage --tree forms-corrected` report
-9990/9990. The gate pin for that 0-gap is I3.
+9990/9990. I3 pins that 0-gap in `field_identity.py` (`EXPECTED_FILLABLE_CELLS`)
+and `gate.py` (`EXPECTED_UNCATALOGUED_FILLABLES`). Remainder mint was 0:
+odd-size text went into I2 `text-*`. Evidence:
+[`identity-remainder-20260818.json`](../corrections/evidence/identity-remainder-20260818.json).
 
 ## What this is not
 
 - Not Stage 3. Nothing writes `name="frm2550m:txtBranchCode"`.
 - Not verification of C01–C07. Overlap does not re-derive `expected_effect`.
-- Not a census of every fillable field.
 
 ```sh
 python3 tools/formgen/field_identity.py --self-test
@@ -73,4 +75,4 @@ python3 tools/formgen/field_identity.py coverage --tree forms-corrected
 python3 tools/formgen/field_identity.py ledger-check --tree forms
 ```
 
-`coverage` lists fillable cells whose center sits in no catalog `source_printed_box_pt`. It is not a gate until remainder minting (I3) brings the count to 0. `ledger-check` requires every `pXcN` in an open finding's `where`/`what` to exist as a live fillable id or a catalog `html_id_hint`.
+`coverage` lists fillable cells whose center sits in no catalog `source_printed_box_pt`. I3 pins coverage 0 uncatalogued in `field_identity.py` and `gate.py`. `ledger-check` requires every `pXcN` in an open finding's `where`/`what` to exist as a live HTML element id or a catalog id that `check` resolves.

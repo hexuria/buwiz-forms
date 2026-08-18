@@ -67,6 +67,8 @@ FINDINGS_PATH = HERE / "review-findings.json"
 
 
 MATCH_KINDS = frozenset({"comb", "field"})
+EXPECTED_FILLABLE_CELLS = 9990
+EXPECTED_UNCATALOGUED_FILLABLES = 0
 
 
 class FieldCollector(html.parser.HTMLParser):
@@ -589,8 +591,17 @@ def self_test() -> int:
               == {"C01", "C02", "C03", "C04", "C05", "C06", "C07"},
               str(len(seed)))
         check("catalog covers every measured fillable cell (9990)",
-              len(records) == 9990,
+              len(records) == EXPECTED_FILLABLE_CELLS,
               str(len(records)))
+        forms = REPO / "forms"
+        if forms.is_dir():
+            cover = coverage_tree(catalog, forms)
+            check("forms/ fillable coverage is 0 uncatalogued",
+                  int(cover["fillable"]) == EXPECTED_FILLABLE_CELLS
+                  and int(cover["covered"]) == EXPECTED_FILLABLE_CELLS
+                  and len(cover["uncatalogued"]) == EXPECTED_UNCATALOGUED_FILLABLES
+                  and not cover["ambiguous"],
+                  f"{cover['covered']}/{cover['fillable']} uncat={len(cover['uncatalogued'])}")
         ids = [record["id"] for record in records]
         check("shipped identity ids are unique", len(ids) == len(set(ids)))
         check("no identity id is a bbox key",

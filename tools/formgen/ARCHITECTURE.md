@@ -228,15 +228,13 @@ Our side now has a durable identity that is not `p1c9` and not
 `lattice.geometry_subject_key`'s `p<page>@<bbox>`:
 [`tools/formgen/identity/catalog.json`](identity/catalog.json), checked by
 [`tools/formgen/field_identity.py`](field_identity.py). The catalog covers
-the TIN caption-chain class: C01–C07 seed plus 38 measured 3+3+3+5 corpus
-strips plus I1 leftovers (1801 mixed tin-strip, extra HTML 3+3+3+N chains),
-208 identities. A record resolves when exactly
+the TIN caption-chain class plus I1 leftovers and I2/I3 fillable coverage,
+9990 identities, 9990/9990 on both trees. A record resolves when exactly
 one fillable field (including a G11 mixed comb) has its center in
 `source_printed_box_pt`. The HTML cell id is a hint; a unique center hit
 with a different id is `html_id_hint_stale` and must update the catalog in
 the same commit as the batch that moved it.
 
 This is not Stage 3. Nothing writes official keys onto `name=`. The
-mapper stays closed until the catalog covers fillable fields and G02 /
-G03 / G04 are done. Per the user: stage 3 begins after field geometry
-settles.
+mapper stays closed until G02 / G03 / G04 are done and the ledger cites
+catalog ids. Coverage of fillable cells is 9990/9990.
