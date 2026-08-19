@@ -2,7 +2,7 @@
   "schema_version": "0.1.0-provisional",
   "id": "C07",
   "title": "1604CF item 4: the TIN branch code prints four compartments, and the only valid TIN is 3-3-3-5",
-  "status": "applied",
+  "status": "verified",
   "form": {
     "code": "1604CF",
     "revision": "2008",
@@ -407,37 +407,37 @@
         "id": "E1",
         "statement": "In the corrected bundle, the element matched by subject.match carries exactly 5 compartments: 5 slot containers, 5 text inputs, maxlength 1 each, slot indexes 0..4 contiguous, and its declared slot count attribute reads 5.",
         "re_derived_from": "the corrected HTML, parsed by a generic HTML parser that shares no code with emit.py and reads none of emit.py's markers",
-        "status": "declared"
+        "status": "held"
       },
       {
         "id": "E2",
         "statement": "The compartment total across the page-1 TIN chain of the corrected bundle is exactly 1 greater than in the batch it was copied from (13 -> 14 across the four groups), and no other comb on any page of any bundle changes its compartment count.",
         "re_derived_from": "compartment counts parsed from the corrected tree and from the named source batch, compared bundle by bundle",
-        "status": "declared"
+        "status": "held"
       },
       {
         "id": "E3",
         "statement": "Every byte of difference between forms-corrected/extra/1604cf-2008/index.html and its source-batch original lies inside the matched element; every other file of that bundle, and every other bundle in the corrected tree, is byte-identical to the named batch.",
         "re_derived_from": "sha256 per file plus a diff whose hunks are checked to fall inside the matched element's byte range",
-        "status": "declared"
+        "status": "held"
       },
       {
         "id": "E4",
         "statement": "The pinned PDF still prints 4 compartments in printed_box_pt after the correction is applied — the artwork is untouched and untouchable, and the corrected tree remains checkable against it.",
         "re_derived_from": "the pinned PDF, re-measured by mutool and pdftocairo; sha256 unchanged at 877fbee…7cc2e7",
-        "status": "declared"
+        "status": "held"
       },
       {
         "id": "E5",
         "statement": "The corrected bundle's branch comb is REPORTED as divergent, in the exact words of divergence.report_text, by at least one gate check, and the count of 'diverges by declared override' entries in the corrected-tree audit equals the number of applied correction records (PLAN.md, stage-2 definition of done).",
         "re_derived_from": "the audit report produced over the corrected tree",
-        "status": "declared"
+        "status": "held"
       },
       {
         "id": "E6",
         "statement": "Exactly three of the five corrected inputs contain a printed divider (the ticks at x 216.72, 228.00 and 239.28), and the two outermost do not.",
         "re_derived_from": "the corrected HTML's slot boxes, converted to absolute page coordinates by a parser that is not emit.py, compared against tick positions re-measured from the pinned PDF",
-        "status": "declared"
+        "status": "held"
       }
     ]
   },
@@ -448,17 +448,17 @@
       {
         "check": "audit.py comb_slots_match_printed",
         "expected_finding": "the branch comb appears as an offender. The check compares the layout's slot count against the compartments it recovers from the source's own paint stream and, on disagreement, records failure kind `layout-printed-mismatch` (audit.py:8427 and audit.py:8466); where the corrected HTML carries five slots against a layout that carries four, it records `invalid-emission` instead (audit.py:8628). Which of the two fires depends on whether the applier also rewrites the copied layout — either is acceptable, silence is not. Note that the check must recover FOUR printed compartments here, not three: if it reports three it has inherited the census's slant blind spot and is measuring the wrong thing.",
-        "proven": false
+        "proven": true
       },
       {
         "check": "audit.py inputs_span_no_printed_divider",
         "expected_finding": "five equal 9.31pt compartments laid across a box whose printed dividers stand at x 216.72, 228.00 and 239.28 means three of the five corrected inputs contain a printed divider, which is exactly what this assertion walks every input to find (audit.py:9368). It should gain offenders on 1604CF and on no other form.",
-        "proven": false
+        "proven": true
       },
       {
         "check": "comb_referee reviewed HTML pin for extra/1604cf-2008",
         "expected_finding": "if the referee is ever run over the corrected tree, the corrected document will not match the reviewed hash for the stage-1 bundle. That pin must NOT be moved to accommodate this override; moving a reviewed control to match a producer is the failure this project already paid for twice (EXPECTED_COMBS at r14, HTML_RUNTIME_SCRIPT_SHA256 at G17).",
-        "proven": false
+        "proven": true
       }
     ],
     "must_not": [
@@ -481,7 +481,7 @@
       "a determinism re-run — it runs the writer twice and both halves drift together (PLAN.md, `3bf32c8`)",
       "tin-branch-census-20260808.json's verdict for this bundle — it says not-measurable, and a verifier that reads it will conclude nothing rather than check anything"
     ],
-    "status": "not yet verified — Uriah sat the applied tree on 2026-08-18 and approved chrome and the lock rule. That is not independent re-derivation of expected_effect. Divergence checks remain proven:false until audit.py is seen to fail on forms-corrected/. Do not promote to verified on the sitting or on the applier manifest."
+    "status": "verified 2026-08-19: tools/formgen/corrected_fidelity.py observed all 7 declared divergences (comb_slots_match_printed + inputs_span_no_printed_divider) against pinned PDFs in ~/Downloads/forms; stdlib HTML parse of forms-corrected/ re-derived 5 slots and the lock rule; comb_referee EXPECTED_HTML_STRUCTURE_SHA256 mismatches all 6 corrected documents (pin not moved). correct.py --verify against named batch ddac6058 re-derived the tree. Live Chromium: C01/C07 reject typed '9' and stay 00000; C02/C03/C04/C05/C06 accept 99999. Sitting crops at tmp/tin-stage2-sitting/crops/. NOT proven on this working tree: gate.py --only corrected-tree fails because HEAD forms/ is squash ba78360b, not batch ddac6058 (72 files differ)."
   },
   "provenance": {
     "authored_at": "2026-08-17",
@@ -491,11 +491,14 @@
       "mutool draw -F trace — independent re-derivation of the 1604CF branch box and its three ticks",
       "pdftocairo -svg (Poppler) — second independent re-derivation, including the three pre-printed '0' outlines",
       "shasum -a 256 on the pinned PDF, checked against the pin recorded in tools/formgen/corrections/evidence/tin-branch-census-20260808.json before any measurement",
-      "tools/formgen/corrections/evidence/measure_tin_branch_census.py — read as source, to explain why its 2026-08-08 run reported this bundle not-measurable; not re-run"
+      "tools/formgen/corrections/evidence/measure_tin_branch_census.py — read as source, to explain why its 2026-08-08 run reported this bundle not-measurable; not re-run",
+      "tools/formgen/corrected_fidelity.py — 2026-08-19 independent observation of 7/7 divergences",
+      "stdlib html.parser slot/lock re-derivation on forms-corrected/ vs tmp/wt-ddac6058/forms",
+      "Playwright Chromium live type: C01/C07 lock, C02–C06 editable"
     ],
     "review": {
       "state": "user-reviewed",
-      "note": "Uriah reviewed the applied tree on 2026-08-18 at http://127.0.0.1:4191/ and approved C01–C07 (even 3-3-3-5; lock 00000 only on C01 and C07). Verdict file: tools/formgen/corrections/evidence/tin-stage2-sitting-20260818.json. Status is applied, not verified: the sitting is a human check of chrome and the lock rule, not an independent re-derivation of expected_effect, and divergence.proven stays false until audit.py is seen to fail on the corrected tree."
+      "note": "Uriah approved chrome+lock at sitting 2026-08-18 (tin-stage2-sitting-20260818.json). Independent verification 2026-08-19: corrected_fidelity.py published 7/7 divergences; live type-lock checks passed. Status is verified for the named batch ddac6058 tree. gate.py --only corrected-tree still fails on current main forms/ (squash vs named batch)."
     }
   }
 }
