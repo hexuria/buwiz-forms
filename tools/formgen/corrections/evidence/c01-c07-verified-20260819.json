@@ -27,6 +27,7 @@
   ],
   "referee_html_pins": "all 6 corrected documents mismatch EXPECTED_HTML_STRUCTURE_SHA256 (expected; pins not moved)",
   "sitting": "http://127.0.0.1:4191/",
+  "uriah_verdict": "tools/formgen/corrections/evidence/tin-stage2-sitting-20260819.json — all seven approve in chat 2026-08-19 (Confirm not clicked; chat is the verdict)",
   "crops": "tmp/tin-stage2-sitting/crops/",
   "live_screenshots": "tmp/c01-c07-review/"
 }
