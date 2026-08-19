@@ -8,7 +8,7 @@ resolved by file existence, not by ``mint_fillables.inventory_path_for_slug``.
 Usage:
     python3 tools/formgen/join_census.py --self-test
     python3 tools/formgen/join_census.py --tree forms-corrected \
-        --out tools/formgen/corrections/evidence/join-census-20260819.json
+        --out tools/formgen/corrections/evidence/join-census-20260819-remint.json
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 DEFAULT_CATALOG = HERE / "identity" / "catalog.json"
 DEFAULT_RULES = REPO / "rules" / "forms"
-DEFAULT_OUT = HERE / "corrections" / "evidence" / "join-census-20260819.json"
+DEFAULT_OUT = HERE / "corrections" / "evidence" / "join-census-20260819-remint.json"
 
 SLUG_RE = re.compile(r"^(.*?)-(v?)((19|20)\d\d)([a-z]?)$")
 OCCURRENCE_RE = re.compile(r"_\d+$")
@@ -51,12 +51,12 @@ RECORD_CLASSES = (
 )
 
 ACCEPTANCE = {
-    "FALSE_NEGATIVE": 1334,
+    "FALSE_NEGATIVE": 0,
     "R1_keyed_1to1": 163,
     "R2_agent_tin": 4,
-    "R2_no_unique_key": 6221,
+    "R2_no_unique_key": 7555,
     "R4_mixed_cell": 1,
-    "R5_plus_FALSE_NEGATIVE": 3601,
+    "R5_plus_FALSE_NEGATIVE": 2267,
     "bundles": 53,
     "inventory_files": 43,
     "inventory_null_keys": 1234,
@@ -68,14 +68,7 @@ ACCEPTANCE = {
     "resolution_exact": 36,
     "resolution_skew": 6,
 }
-ACCEPTANCE_FALSE_NEGATIVE_BUNDLES = (
-    ("0605-1999", 61),
-    ("1702ex-2018", 168),
-    ("1702mx-2018c", 503),
-    ("1702q-2018", 128),
-    ("1702rt-2018c", 226),
-    ("extra/2200t-2022", 248),
-)
+ACCEPTANCE_FALSE_NEGATIVE_BUNDLES = ()
 ACCEPTANCE_SKEW_BUNDLES = (
     "0605-1999",
     "1601-fq-2020",

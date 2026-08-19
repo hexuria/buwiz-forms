@@ -14,15 +14,15 @@ FORMGEN = HERE.parent
 REPO = FORMGEN.parent.parent
 sys.path.insert(0, str(FORMGEN))
 import field_identity as fi  # noqa: E402
+import join_census as jc  # noqa: E402
 
 RULES_FORMS = REPO / "rules" / "forms"
 CENSUS_PATH = FORMGEN / "corrections" / "evidence" / "tin-branch-census-20260808.json"
 EVIDENCE = FORMGEN / "corrections" / "evidence"
 MATCH = {"kind": "field", "tolerance_pt": 0.25, "cardinality": "exactly-one"}
-SKEW = {
-    "1601eq-2019": "1601eq-v2018",
-    "extra/1700-2018": "1700-v2013",
-}
+GAP_NO_HARVEST = "no harvested fields.json in this checkout"
+GAP_NO_UNIQUE = "no unique fields.json key for this box"
+EXPECTED_FALSE_NEGATIVE_REWRITES = 1334
 
 
 def round_box(box: tuple[float, float, float, float]) -> list[float]:
@@ -46,40 +46,25 @@ def load_inventories() -> dict[str, pathlib.Path]:
     return found
 
 
-def norm(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", value.lower())
-
-
 def inventory_path_for_slug(slug: str, inventories: dict[str, pathlib.Path]) -> pathlib.Path | None:
-    if slug in SKEW and SKEW[slug] in inventories:
-        return inventories[SKEW[slug]]
-    leaf = slug.split("/")[-1]
-    if leaf in inventories:
-        return inventories[leaf]
-    wanted = norm(leaf)
-    for key, path in inventories.items():
-        if norm(key) == wanted:
-            return path
-    # 1600-pt-2018 -> 1600pt-v2018
-    m = re.match(r"^(.+)-(\d{4})$", leaf)
-    if m:
-        form, year = m.group(1), m.group(2)
-        candidates = [f"{form}-v{year}", f"{form.replace('-', '')}-v{year}"]
-        for cand in candidates:
-            if cand in inventories:
-                return inventories[cand]
-            for key, path in inventories.items():
-                if norm(key) == norm(cand):
-                    return path
-        # revision skew: try nearby years
-        for alt_year in (str(int(year) - 1), str(int(year) - 5), "2018", "2007"):
-            for cand in (f"{form}-v{alt_year}", f"{form.replace('-', '')}-v{alt_year}"):
-                if cand in inventories:
-                    return inventories[cand]
-                for key, path in inventories.items():
-                    if norm(key) == norm(cand):
-                        return path
-    return None
+    """Resolve by file existence. Same algorithm as join_census; never invent a key."""
+    dirs: dict[str, dict[str, object]] = {}
+    for name, path in inventories.items():
+        if path.parent.name != name:
+            continue
+        dirs[name] = {
+            "dir": name,
+            "keys": [],
+            "nulls": 0,
+            "parsed": jc.parse_slug(name),
+            "path": path,
+            "rows": 0,
+        }
+    resolved = jc.resolve_slug(slug, dirs, jc.index_inventories_by_stem(dirs))
+    inventory = resolved["inventory"]
+    if inventory is None:
+        return None
+    return inventories.get(str(inventory))
 
 
 def inventory_keys(path: pathlib.Path) -> list[dict]:
@@ -351,19 +336,131 @@ def write_catalog(catalog: dict) -> None:
 
 def write_evidence(name: str, payload: dict) -> None:
     path = EVIDENCE / name
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(payload, indent=2) + chr(10), encoding="utf-8")
+
+
+def remint_false_negatives(catalog: dict, inventories: dict[str, pathlib.Path]) -> dict:
+    rewritten: list[str] = []
+    by_slug: dict[str, int] = {}
+    for record in catalog["records"]:
+        if record.get("official_field_key"):
+            continue
+        if record.get("official_field_key_gap") != GAP_NO_HARVEST:
+            continue
+        slug = str(record["bundle_slug"])
+        if inventory_path_for_slug(slug, inventories) is None:
+            continue
+        record["official_field_key_gap"] = GAP_NO_UNIQUE
+        rewritten.append(str(record["id"]))
+        by_slug[slug] = by_slug.get(slug, 0) + 1
+    if len(rewritten) != EXPECTED_FALSE_NEGATIVE_REWRITES:
+        raise ValueError(
+            "false-negative remint expected %s rewrites, got %s"
+            % (EXPECTED_FALSE_NEGATIVE_REWRITES, len(rewritten))
+        )
+    return {
+        "title": "Mint-path false-negative remint",
+        "source_census": "tools/formgen/corrections/evidence/join-census-20260819.json",
+        "rewritten_record_count": len(rewritten),
+        "bundles": [
+            {"records": by_slug[slug], "slug": slug}
+            for slug in sorted(by_slug)
+        ],
+        "notes": [
+            "inventory_path_for_slug now uses join_census file-existence resolution.",
+            "Records that claimed no harvested fields.json while inventory exists now carry no unique fields.json key for this box.",
+            "No official_field_key was invented. Catalog size stays 9990. Not Stage 3.",
+        ],
+    }
+
+
+def self_test() -> int:
+    failed = 0
+
+    def check(name: str, held: bool, detail: str = "") -> None:
+        nonlocal failed
+        if held:
+            print("OK    " + name)
+        else:
+            failed += 1
+            extra = (" — " + detail) if detail else ""
+            print("FAIL  " + name + extra)
+
+    inventories = load_inventories()
+    check(
+        "1702ex-2018 vs 1702ex-v2018c is exact",
+        inventory_path_for_slug("1702ex-2018", inventories)
+        == RULES_FORMS / "1702ex-v2018c" / "fields.json",
+    )
+    check(
+        "extra/2200t-2022 vs 2200t-v2020 is skew",
+        inventory_path_for_slug("extra/2200t-2022", inventories)
+        == RULES_FORMS / "2200t-v2020" / "fields.json",
+    )
+    check(
+        "2000-dst-2018 stays absent",
+        inventory_path_for_slug("2000-dst-2018", inventories) is None,
+    )
+    check(
+        "1601eq-2019 still resolves to 1601eq-v2018",
+        inventory_path_for_slug("1601eq-2019", inventories)
+        == RULES_FORMS / "1601eq-v2018" / "fields.json",
+    )
+    check(
+        "1701-2018-attachment stays absent",
+        inventory_path_for_slug("1701-2018-attachment", inventories) is None,
+    )
+    print(("FAIL" if failed else "OK"),
+          ("%s self-test(s) failed" % failed) if failed else "self-test")
+    return 1 if failed else 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--tree", type=pathlib.Path, default=REPO / "forms")
-    parser.add_argument("--wave", required=True,
-                        choices=("i1", "comb", "xbox", "text", "field"))
+    parser.add_argument("--wave", choices=("i1", "comb", "xbox", "text", "field"))
+    parser.add_argument(
+        "--remint-false-negatives",
+        action="store_true",
+        help="rewrite mint-path false-negative gaps; do not invent keys",
+    )
     args = parser.parse_args()
+    if args.self_test:
+        return self_test()
+    if args.remint_false_negatives:
+        if args.wave:
+            parser.error("--remint-false-negatives does not take --wave")
+        catalog, errors = fi.load_catalog(fi.DEFAULT_CATALOG)
+        if errors:
+            print(chr(10).join(errors))
+            return 1
+        before = len(catalog["records"])
+        try:
+            payload = remint_false_negatives(catalog, load_inventories())
+        except ValueError as exc:
+            print("FAIL  %s" % exc)
+            return 1
+        errors = fi.check_catalog(catalog, fi.DEFAULT_CATALOG)
+        if errors:
+            print(chr(10).join(errors[:20]))
+            print("%s catalog error(s)" % len(errors))
+            return 1
+        if len(catalog["records"]) != before:
+            print("FAIL  remint changed catalog size")
+            return 1
+        write_catalog(catalog)
+        evidence_name = "join-false-negative-remint-20260819.json"
+        write_evidence(evidence_name, payload)
+        rewritten = payload["rewritten_record_count"]
+        print("remint-false-negatives: %s gaps rewritten, catalog %s wrote %s" % (rewritten, before, evidence_name))
+        return 0
+    if not args.wave:
+        parser.error("--wave is required unless --self-test or --remint-false-negatives")
     tree = args.tree if args.tree.is_absolute() else (pathlib.Path.cwd() / args.tree)
     catalog, errors = fi.load_catalog(fi.DEFAULT_CATALOG)
     if errors:
-        print("\n".join(errors))
+        print(chr(10).join(errors))
         return 1
     inventories = load_inventories()
     before = len(catalog["records"])
@@ -384,9 +481,9 @@ def main() -> int:
         }
     else:
         added = mint_class(catalog, tree, inventories, args.wave)
-        evidence_name = f"identity-{args.wave}-20260818.json"
+        evidence_name = "identity-%s-20260818.json" % args.wave
         payload = {
-            "title": f"Fillable identity class {args.wave}",
+            "title": "Fillable identity class %s" % args.wave,
             "date": "2026-08-18",
             "new_record_count": len(added),
             "bundle_count": len({record["bundle_slug"] for record in added}),
@@ -399,12 +496,13 @@ def main() -> int:
     catalog["records"].extend(added)
     errors = fi.check_catalog(catalog, fi.DEFAULT_CATALOG)
     if errors:
-        print("\n".join(errors[:20]))
-        print(f"{len(errors)} catalog error(s)")
+        print(chr(10).join(errors[:20]))
+        print("%s catalog error(s)" % len(errors))
         return 1
     write_catalog(catalog)
     write_evidence(evidence_name, payload)
-    print(f"{args.wave}: {before} -> {len(catalog['records'])} (+{len(added)}) wrote {evidence_name}")
+    after = len(catalog["records"])
+    print("%s: %s -> %s (+%s) wrote %s" % (args.wave, before, after, len(added), evidence_name))
     return 0
 
 
