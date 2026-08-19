@@ -6,11 +6,11 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-18, Stage 3 preconditions hold on `gol/stage3-ready`).**
+**Active queue (2026-08-19, join census on `gol/join-census`).**
 Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
 batch is `ddac6058`. C01–C07 sitting accepted (`applied`, not `verified`).
-Do not fold later rows into those PRs. Identity is a new layer on top of
-`gol/tin-stage5`: a catalog, not a mapper.
+Identity catalog is PR #22–#23. Join census + remint are this branch.
+Do not fold later rows into those PRs. The mapper stays closed.
 
 Visual rule the user named (0605 screenshot, 2026-08-17): a **charbox** is
 an outer rectangle plus short bottom hair ticks that do not run the full
@@ -35,8 +35,10 @@ does.
 | **I2 comb** | `gol/stage3-ready` | Remaining comb fillables (4349). Roles from slot count + pitch (`date-yyyy`, `money-21`, `comb-2s`, …). Emitted box as `source_printed_box_pt`. 4557 identities. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
 | **I2 xbox** | `gol/stage3-ready` | X-squares (654): ~4–20pt text, aspect 0.70–1.45, `xbox-*`. 5211 identities. | 2/3 seam | Serial. Not `type=checkbox`. |
 | **I2 text** | `gol/stage3-ready` | Wide text (4779) as `text-*`. Live fillable denominator 9990/9990 on both trees. Remainder 0. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
-| **I3** | `gol/stage3-ready` | Remainder mint 0. Pin `EXPECTED_FILLABLE_CELLS = 9990` and `EXPECTED_UNCATALOGUED_FILLABLES = 0` in `field_identity.py` and `gate.py`. C01–C07 seed still present. | 2/3 seam | Serial. Coverage is a gate self-test, not a mapper. |
-| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial. Preconditions 1–3 hold. Mapper still Blocked. Do not start.** Comb-referee PASS, G10/G16/G17, and C01–C07 `verified` are out of scope. |
+| **I3** | `gol/stage3-ready` PR #23 | Remainder mint 0. Pin `EXPECTED_FILLABLE_CELLS = 9990` and `EXPECTED_UNCATALOGUED_FILLABLES = 0` in `field_identity.py` and `gate.py`. C01–C07 seed still present. | 2/3 seam | Serial. Coverage is a gate self-test, not a mapper. |
+| **J0** | `gol/join-census` | Replayable join census (`join_census.py`). 9990 classified by file-existence inventory, not mint-path. Dated evidence JSON. | 2/3 seam | Serial. Not a mapper. |
+| **J1** | same branch | Remint 1334 mint-path false negatives on 6 skew bundles to honest R2 gaps. Catalog size stays 9990. No keys invented. | 2/3 seam | Serial. Not a mapper. |
+| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial. Preconditions 1–3 hold. Join policy written. Mapper still Blocked. Do not start.** Comb-referee PASS, G10/G16/G17, and C01–C07 `verified` are out of scope. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
