@@ -1,0 +1,44 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "0619E",
+    "device_scale_factor": 1.5,
+    "dpi": 144,
+    "form_id": "0619Ev2018",
+    "official_source_file": "external:0619-E Jan 2018 rev final.pdf",
+    "official_source_sha256": "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
+    "page_count": 1,
+    "page_height_pt": 792,
+    "page_width_pt": 612,
+    "pages": [
+      {
+        "chromium_png": "packages/form-renderer/references/0619e-2018-page-1-chromium.png",
+        "chromium_png_sha256": "f3d3caa4b8635299f241f57548aafce0184ee97efa314adf1c8b49f3c6974737",
+        "noise_floor_changed_percent": 3.4545825906120022,
+        "noise_floor_changed_pixels": 66978,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 1,
+        "poppler_reference_png": "packages/form-renderer/references/0619e-2018-page-1.png",
+        "poppler_reference_png_sha256": "924db11df80f2ee4e5df63838ac6b93980725d677632c9739690c9ec9aacb83a",
+        "reference_height_px": 1584,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "4fcd762df5437628423246d6a290d5c504be4cd5b533dca33a98f694eb5ba4ba"
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_chromium_raster",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": {
+    "chromium_version": "145.0.7632.6",
+    "name": "prepare_chromium_reference.mjs",
+    "pdftocairo_version": "26.07.0",
+    "platform": "darwin",
+    "playwright_version": "1.58.2"
+  },
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

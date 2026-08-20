@@ -1,0 +1,39 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "2551Q",
+    "dpi": 144,
+    "form_id": "2551Qv2018",
+    "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf",
+    "official_source_file": "external:2551Q Jan 2018 ENCS final rev 3_copy.pdf",
+    "official_source_sha256": "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
+    "page_count": 2,
+    "page_height_pt": 936.0,
+    "page_width_pt": 612.0,
+    "pages": [
+      {
+        "page": 1,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/2551q-2018-page-1.png",
+        "reference_png_sha256": "8f93ea4f937ca9bdb48ecc5b57de30e5130ab35608fdfc4609cb8dbf03f3f3d3",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 2,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/2551q-2018-page-2.png",
+        "reference_png_sha256": "67d0d81fd14e5130e6e93f7e9eedc5f9219028a1cea5ecf5674dfce3c87f31da",
+        "reference_width_px": 1224
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_pdf",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": "prepare_official_reference.py (Poppler)",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

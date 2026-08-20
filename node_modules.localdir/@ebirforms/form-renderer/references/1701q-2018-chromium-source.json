@@ -1,0 +1,57 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "1701Q",
+    "device_scale_factor": 1.5,
+    "dpi": 144,
+    "form_id": "1701Qv2018",
+    "official_source_file": "external:1701Q Jan 2018 final rev2_copy.pdf",
+    "official_source_sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
+    "page_count": 2,
+    "page_height_pt": 936,
+    "page_width_pt": 612,
+    "pages": [
+      {
+        "chromium_png": "packages/form-renderer/references/1701q-2018-page-1-chromium.png",
+        "chromium_png_sha256": "33c321c9c4ca2ba8e3ed3e995ffb34e833979ebf0226f5fd79cd91cd873c86dd",
+        "noise_floor_changed_percent": 4.538983506508016,
+        "noise_floor_changed_pixels": 104003,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 1,
+        "poppler_reference_png": "packages/form-renderer/references/1701q-2018-page-1.png",
+        "poppler_reference_png_sha256": "dcd98d06dde89732f4d340d6add017e2bf4b7040f3eda755a618ba43f01172ef",
+        "reference_height_px": 1872,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "924452489363f9aa43079637463b9fa15328b53d564c66ad56ed8a8a020ea914"
+      },
+      {
+        "chromium_png": "packages/form-renderer/references/1701q-2018-page-2-chromium.png",
+        "chromium_png_sha256": "72c79311ce465e50b17c033df5c721e6a6e01f1db9f7e90431619c2452fca7c1",
+        "noise_floor_changed_percent": 3.6595371766940397,
+        "noise_floor_changed_pixels": 83852,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 2,
+        "poppler_reference_png": "packages/form-renderer/references/1701q-2018-page-2.png",
+        "poppler_reference_png_sha256": "d69c01b30c6f86a92d090b3f81965a6e5f1464444012c425cece6a1ac84e1bf8",
+        "reference_height_px": 1872,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "818fe8ef6b15cc29e6531b8c61bb4ef80dc156550ad1f586f5a6ab660a8fbe05"
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_chromium_raster",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": {
+    "chromium_version": "145.0.7632.6",
+    "name": "prepare_chromium_reference.mjs",
+    "pdftocairo_version": "26.07.0",
+    "platform": "darwin",
+    "playwright_version": "1.58.2"
+  },
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

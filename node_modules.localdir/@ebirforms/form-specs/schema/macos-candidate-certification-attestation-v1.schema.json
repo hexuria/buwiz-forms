@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/ebirforms/schema/macos-candidate-certification-attestation-v1.schema.json",
+  "title": "External macOS candidate certification attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope",
+    "promotion_eligible",
+    "trusted_producer",
+    "operator_only",
+    "attestation_id",
+    "form",
+    "candidate",
+    "collector",
+    "accessibility",
+    "runtime",
+    "preview",
+    "toolbar_export",
+    "native_print",
+    "pdf_validation",
+    "package_security",
+    "integrity",
+    "rollback",
+    "strict_verifier_gaps"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scope": { "const": "external_macos_candidate_certification_attestation" },
+    "promotion_eligible": { "const": false },
+    "trusted_producer": { "const": false },
+    "operator_only": { "const": true },
+    "attestation_id": { "type": "string", "format": "uuid" },
+    "form": {
+      "const": { "code": "2551Q", "revision": "2018" }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_manifest_sha256",
+        "candidate_archive_sha256",
+        "source_revision",
+        "app_tree_sha256",
+        "renderer_bundle_sha256"
+      ],
+      "properties": {
+        "candidate_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "candidate_archive_sha256": { "$ref": "#/$defs/sha256" },
+        "source_revision": { "$ref": "#/$defs/gitRevision" },
+        "app_tree_sha256": { "$ref": "#/$defs/sha256" },
+        "renderer_bundle_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "invocation_id",
+        "started_at_utc",
+        "completed_at_utc",
+        "executable_sha256",
+        "host_identifier_sha256"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "invocation_id": { "type": "string", "minLength": 1 },
+        "started_at_utc": { "type": "string", "format": "date-time" },
+        "completed_at_utc": { "type": "string", "format": "date-time" },
+        "executable_sha256": { "$ref": "#/$defs/sha256" },
+        "host_identifier_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "accessibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permission_granted", "automation_identity", "artifact"],
+      "properties": {
+        "permission_granted": { "const": true },
+        "automation_identity": { "type": "string", "minLength": 1 },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "non_dev_build",
+        "dev_tools_enabled",
+        "launch_argv",
+        "pid",
+        "network_denial",
+        "artifact"
+      ],
+      "properties": {
+        "non_dev_build": { "const": true },
+        "dev_tools_enabled": { "const": false },
+        "launch_argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "pid": { "type": "integer", "minimum": 1 },
+        "network_denial": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mechanism", "exercised", "enforced_for_launch", "passed", "artifact"],
+          "properties": {
+            "mechanism": { "type": "string", "pattern": "deny network" },
+            "exercised": { "const": true },
+            "enforced_for_launch": { "const": true },
+            "passed": { "const": true },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercised",
+        "passed",
+        "window_title",
+        "document_run_id",
+        "envelope_sha256",
+        "nonce",
+        "page_count",
+        "geometry_measurements",
+        "artifact"
+      ],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "window_title": { "type": "string", "pattern": "2551Q HTML Form Preview" },
+        "document_run_id": { "type": "string", "minLength": 1 },
+        "envelope_sha256": { "$ref": "#/$defs/sha256" },
+        "nonce": { "type": "integer", "minimum": 1 },
+        "page_count": { "const": 2 },
+        "geometry_measurements": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/geometryMeasurement" }
+        },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "toolbar_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exercised", "passed", "control", "save_chooser_exercised", "destination_path", "nonce", "artifact"],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "control": { "const": "Export PDF" },
+        "save_chooser_exercised": { "const": true },
+        "destination_path": { "type": "string", "minLength": 1 },
+        "nonce": { "type": "integer", "minimum": 1 },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "native_print": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exercised", "passed", "completed", "printer_name", "job_id", "artifact"],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "completed": { "const": true },
+        "printer_name": { "type": "string", "minLength": 1 },
+        "job_id": { "type": "string", "minLength": 1 },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "pdf_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exercised", "passed", "output", "expected_page_count", "actual_page_count", "pages", "content_nonempty", "validated_by", "verifier_executable_sha256", "artifact"],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "output": { "$ref": "#/$defs/fileRecord" },
+        "expected_page_count": { "const": 2 },
+        "actual_page_count": { "const": 2 },
+        "pages": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/pdfPage" }
+        },
+        "content_nonempty": { "const": true },
+        "validated_by": { "const": "bir-print::html_output::validate_pdf_file" },
+        "verifier_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "package_security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codesign", "notarization", "stapling"],
+      "properties": {
+        "codesign": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "developer_id_signed", "authority", "team_identifier", "artifact"],
+          "properties": {
+            "passed": { "const": true },
+            "developer_id_signed": { "const": true },
+            "authority": { "type": "string", "minLength": 1 },
+            "team_identifier": { "type": "string", "minLength": 1 },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        },
+        "notarization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "gatekeeper_accepted", "artifact"],
+          "properties": {
+            "passed": { "const": true },
+            "gatekeeper_accepted": { "const": true },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        },
+        "stapling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "artifact"],
+          "properties": {
+            "passed": { "const": true },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "app_tree_sha256_before",
+        "app_tree_sha256_after",
+        "destination_before",
+        "destination_after",
+        "draft_before",
+        "draft_after",
+        "temporary_files_manifest"
+      ],
+      "properties": {
+        "app_tree_sha256_before": { "$ref": "#/$defs/sha256" },
+        "app_tree_sha256_after": { "$ref": "#/$defs/sha256" },
+        "destination_before": { "$ref": "#/$defs/fileRecord" },
+        "destination_after": { "$ref": "#/$defs/fileRecord" },
+        "draft_before": { "$ref": "#/$defs/fileRecord" },
+        "draft_after": { "$ref": "#/$defs/fileRecord" },
+        "temporary_files_manifest": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases", "destination_preserved", "temporary_files_remaining", "draft_unchanged"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 11,
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "passed", "artifact"],
+            "properties": {
+              "name": {
+                "enum": [
+                  "release_ready_false",
+                  "kill_switch",
+                  "missing_assets",
+                  "renderer_error",
+                  "late_renderer_error",
+                  "readiness_timeout",
+                  "invalid_geometry",
+                  "rejected_pdf",
+                  "destination_preserved",
+                  "no_temp_leaks",
+                  "draft_unchanged"
+                ]
+              },
+              "passed": { "const": true },
+              "artifact": { "$ref": "#/$defs/fileRecord" }
+            }
+          }
+        },
+        "destination_preserved": { "const": true },
+        "temporary_files_remaining": { "const": 0 },
+        "draft_unchanged": { "const": true }
+      }
+    },
+    "strict_verifier_gaps": {
+      "type": "array",
+      "minItems": 1,
+      "contains": { "const": "collector producer is not registered as trusted" },
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_count", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "geometryMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measurement_index", "page_width_pt", "page_height_pt", "pages", "clipping_count", "overflow_count"],
+      "properties": {
+        "measurement_index": { "type": "integer", "minimum": 1, "maximum": 2 },
+        "page_width_pt": { "const": 612 },
+        "page_height_pt": { "const": 936 },
+        "pages": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["page", "x", "y", "width_pt", "height_pt"],
+            "properties": {
+              "page": { "type": "integer", "minimum": 1, "maximum": 2 },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "width_pt": { "const": 612 },
+              "height_pt": { "const": 936 }
+            }
+          }
+        },
+        "clipping_count": { "const": 0 },
+        "overflow_count": { "const": 0 }
+      }
+    },
+    "pdfPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "media_width_pt", "media_height_pt", "crop_width_pt", "crop_height_pt", "rotation", "content_byte_count"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1, "maximum": 2 },
+        "media_width_pt": { "const": 612 },
+        "media_height_pt": { "const": 936 },
+        "crop_width_pt": { "const": 612 },
+        "crop_height_pt": { "const": 936 },
+        "rotation": { "const": 0 },
+        "content_byte_count": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

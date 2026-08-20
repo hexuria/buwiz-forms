@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/ebirforms/schema/windows-candidate-certification-report-v1.schema.json",
+  "title": "External Windows candidate certification verification report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "scope", "promotion_eligible", "trusted_producer",
+    "operator_only", "foundation_verification_passed", "promotion_satisfied",
+    "form", "source_revision", "candidate_manifest", "candidate_archive",
+    "renderer_identity", "attestation", "verified_artifact_count",
+    "owned_pdf_validation", "live_windows_verification", "distribution_policy",
+    "strict_verifier_gaps"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scope": { "const": "external_windows_candidate_certification_verification" },
+    "promotion_eligible": { "const": false },
+    "trusted_producer": { "const": false },
+    "operator_only": { "const": true },
+    "foundation_verification_passed": { "const": true },
+    "promotion_satisfied": { "const": false },
+    "form": { "const": { "code": "2551Q", "revision": "2018" } },
+    "source_revision": { "$ref": "#/$defs/gitRevision" },
+    "candidate_manifest": { "$ref": "#/$defs/fileRecord" },
+    "candidate_archive": { "$ref": "#/$defs/fileRecord" },
+    "renderer_identity": { "$ref": "#/$defs/fileRecord" },
+    "attestation": { "$ref": "#/$defs/fileRecord" },
+    "verified_artifact_count": { "type": "integer", "minimum": 1 },
+    "owned_pdf_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verifier_executable_sha256", "output_sha256", "actual_page_count",
+        "width_points", "height_points", "content_nonempty"
+      ],
+      "properties": {
+        "verifier_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "output_sha256": { "$ref": "#/$defs/sha256" },
+        "actual_page_count": { "const": 2 },
+        "width_points": { "const": 612 },
+        "height_points": { "const": 936 },
+        "content_nonempty": { "const": true }
+      }
+    },
+    "live_windows_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windows_edition", "windows_build", "os_architecture",
+        "process_architecture", "session_id", "elevated",
+        "process_integrity_level", "webview2_executable_sha256",
+        "ui_automation_available",
+        "printer_available", "printer_name",
+        "completed_print_job_verified", "print_event_record_id",
+        "print_event_output_sha256", "authenticode_valid", "signer_subject",
+        "signer_issuer", "signer_thumbprint", "timestamp_signature_verified",
+        "timestamp_thumbprint", "signtool_output_sha256"
+      ],
+      "properties": {
+        "windows_edition": { "type": "string", "minLength": 1 },
+        "windows_build": { "type": "string", "minLength": 1 },
+        "os_architecture": { "const": "x86_64" },
+        "process_architecture": { "const": "x86_64" },
+        "session_id": { "type": "integer", "minimum": 0 },
+        "elevated": { "const": true },
+        "process_integrity_level": { "const": "High" },
+        "webview2_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "ui_automation_available": { "const": true },
+        "printer_available": { "const": true },
+        "printer_name": { "type": "string", "minLength": 1 },
+        "completed_print_job_verified": { "const": true },
+        "print_event_record_id": { "type": "integer", "minimum": 1 },
+        "print_event_output_sha256": { "$ref": "#/$defs/sha256" },
+        "authenticode_valid": { "const": true },
+        "signer_subject": { "type": "string", "minLength": 1 },
+        "signer_issuer": { "type": "string", "minLength": 1 },
+        "signer_thumbprint": { "$ref": "#/$defs/certificateThumbprint" },
+        "timestamp_signature_verified": { "const": true },
+        "timestamp_thumbprint": { "$ref": "#/$defs/certificateThumbprint" },
+        "signtool_output_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "distribution_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_format", "distribution_track", "public_release_formats",
+        "public_release_allows_msix", "store_msix_policy"
+      ],
+      "properties": {
+        "candidate_format": { "const": "portable_zip" },
+        "distribution_track": { "const": "portable_candidate" },
+        "public_release_formats": {
+          "const": ["signed_inno_setup_exe", "signed_msi"]
+        },
+        "public_release_allows_msix": { "const": false },
+        "store_msix_policy": { "const": "separate_store_only_certification_blocked" }
+      }
+    },
+    "strict_verifier_gaps": {
+      "type": "array", "minItems": 2,
+      "items": { "type": "string", "minLength": 1 },
+      "allOf": [
+        { "contains": { "const": "collector producer is not registered as trusted" } },
+        { "contains": { "const": "public EXE/MSI and installed-tree certification remain separate and incomplete" } }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "certificateThumbprint": { "type": "string", "pattern": "^[0-9A-F]{40}$" },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_count", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}
