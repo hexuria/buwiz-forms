@@ -218,7 +218,7 @@ assumption, a code path, or a source of truth with the thing it checked. The
 verifies itself would be the largest instance of that defect yet built, because
 it would sit between the generator and everything downstream.
 
-## Stage 3 readiness (preconditions hold, mapper not started)
+## Stage 3 readiness (preconditions hold; R1 TIN mapper is `map_tin.py`)
 
 `rules/forms/*/fields.json` already carries 43 forms and 9,592 field names
 harvested from the official HTA runtime, with `serialized_key` values like
@@ -234,8 +234,11 @@ one fillable field (including a G11 mixed comb) has its center in
 with a different id is `html_id_hint_stale` and must update the catalog in
 the same commit as the batch that moved it.
 
-This is not Stage 3. Nothing writes official keys onto `name=`. The
-mapper stays **Blocked. Do not start.** Preconditions:
+R1 (163 unique harvested TIN keys) is executable: `map_tin.py` copies
+`official_field_key` onto input `name=` in `forms-corrected/` only. It
+refuses `forms/`, gapped records, and any resolve status other than
+`resolved`. R3/R7 have zero keyed examples and stay classified, not
+joined. Preconditions that had to hold before that mapper opened:
 
 1. Catalog coverage 9990/9990, `EXPECTED_UNCATALOGUED_FILLABLES = 0`.
 2. G02 / G03 / G04 (and G02a–i, G12, G14) are `done` on batch `ddac6058`:

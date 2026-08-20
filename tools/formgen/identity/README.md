@@ -8,7 +8,7 @@ is not an HTML `id`. Stage 3 will join identities to official
     STAGE 1  GENERATE   forms/          (batch-versioned; `p1cN` may move)
     STAGE 2  CORRECT    forms-corrected/
     IDENTITY            this catalog    (durable id + printed box)
-    STAGE 3  MAP        identity → eBIRForms XML key   (not started)
+    STAGE 3  MAP        identity → eBIRForms XML key   (R1 TIN: map_tin.py)
 
 ## What is frozen
 
@@ -63,7 +63,8 @@ odd-size text went into I2 `text-*`. Evidence:
 
 ## What this is not
 
-- Not Stage 3. Nothing writes `name="frm2550m:txtBranchCode"`.
+- Not Stage 3 itself. `map_tin.py` is the R1 TIN mapper and is the only
+  thing that writes `name="frm2550m:txtBranchCode"`.
 - Not verification of C01–C07. Overlap does not re-derive `expected_effect`.
 
 ```sh

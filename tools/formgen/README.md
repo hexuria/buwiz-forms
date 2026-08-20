@@ -375,6 +375,10 @@ explain the why.
   against `forms/assets-manifest.json`. This is the part of the work a fresh
   clone can evaluate, so it is the backbone of CI.
 - `gate.py` — the done-condition. See below.
+- `field_identity.py` — durable fillable-cell catalog (9990 records). Not a mapper.
+- `join_census.py` — read-only R1–R7 join census. Never writes `name=`.
+- `map_tin.py` — Stage 3 TIN mapper: copies the 163 R1 harvest keys onto
+  input `name=` in `forms-corrected/` only. Fail-closed; never invents a key.
 - `fixtures/make_fixtures.py` — builds the committed synthetic PDF corpus
   (`flip`, `glyphs`, `lean`, `masks`, `paths`, `rules`); `--verify` proves the
   committed bytes rebuild exactly.
@@ -396,7 +400,7 @@ python3 tools/formgen/gate.py --skip-regenerate   # score forms/ as it stands
 python3 tools/formgen/gate.py --only assertions   # one check while iterating
 python3 tools/formgen/gate.py --list              # the check names
 python3 tools/formgen/validate_tree.py --verbose  # the committed tree alone
-python3 tools/formgen/<module>.py --self-test     # any of the ten self-testing modules
+python3 tools/formgen/<module>.py --self-test     # any of the twelve self-testing modules
 python3 tools/formgen/fixtures/make_fixtures.py --verify
 python3 tools/formgen/fixtures/prove_fixtures_fail.py
 python3 tools/formgen/extract.py --self-test --fixtures
@@ -414,27 +418,28 @@ mechanical notes: `audit-refresh` exists only in full runs, so it is not an
 `--only` choice; and a full run's `--json` target must be outside the
 repository, or the write would stale the gate's own final snapshot.
 
-**Self-tests.** `gate.py` declares `SELF_TEST_MODULES` — ten modules expose
+**Self-tests.** `gate.py` declares `SELF_TEST_MODULES` — twelve modules expose
 `--self-test`: extract, lattice, fonts, guides, emit, verify, index_page,
-audit, comb_referee, gate. Five of them (lattice, fonts, guides, emit, verify)
-assert against the real pinned corpus by construction and cannot run on a
-fresh clone; extract defaults to its official pins but accepts `--fixtures`;
-the remaining four (index_page, comb_referee, audit, gate) need no external
-input beyond a Chromium for audit.
+audit, comb_referee, gate, field_identity, map_tin. Five of them (lattice,
+fonts, guides, emit, verify) assert against the real pinned corpus by
+construction and cannot run on a fresh clone; extract defaults to its official
+pins but accepts `--fixtures`; the remaining seven (index_page, comb_referee,
+audit, gate, field_identity, map_tin, plus extract's fixture profile) need no
+external input beyond a Chromium for audit.
 
 **CI** (`.github/workflows/formgen.yml`) runs the no-external-input subset on
 every push: the tree validator and its own self-test, fixture-corpus
 determinism (two generations, byte-compared) and committed-bytes verification,
-`prove_fixtures_fail.py`, the four no-input module self-tests (index_page,
-comb_referee, audit, gate — audit drives a real Chromium), and extract's
-fixture profile. **CI is not the gate and says so in its job summary every
-run**: the gate needs the official source PDFs — deliberately untracked
-(`*.pdf` is gitignored), pinned by sha256 so a swapped file fails loudly — and
-the regenerable `build/` tree, neither of which exists on a hosted runner. The
-workflow asserts its own coverage table against `SELF_TEST_MODULES` so a new
-module cannot be quietly uncovered, and nothing in it is skipped or
-`continue-on-error`. The gate stays operator-run; `local-runners/` is where
-its launchers and reports land.
+`prove_fixtures_fail.py`, the six no-input module self-tests (index_page,
+comb_referee, audit, gate, field_identity, map_tin — audit drives a real
+Chromium), and extract's fixture profile. **CI is not the gate and says so in
+its job summary every run**: the gate needs the official source PDFs —
+deliberately untracked (`*.pdf` is gitignored), pinned by sha256 so a swapped
+file fails loudly — and the regenerable `build/` tree, neither of which exists
+on a hosted runner. The workflow asserts its own coverage table against
+`SELF_TEST_MODULES` so a new module cannot be quietly uncovered, and nothing
+in it is skipped or `continue-on-error`. The gate stays operator-run;
+`local-runners/` is where its launchers and reports land.
 
 ## Documentation map
 

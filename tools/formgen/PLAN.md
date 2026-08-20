@@ -6,11 +6,11 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 [STATUS.md](STATUS.md) (all volatile measured numbers),
 [README.md](README.md) (the pipeline itself).
 
-**Active queue (2026-08-20, join census is PR #24; C01–C07 verified on named-batch tree).**
+**Active queue (2026-08-20, TIN mapper is `gol/tin-map`; #24–#26 are on main).**
 Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
 batch is current `main` `forms/` (`0c1def60`); C01–C07 re-anchored 2026-08-20. Sitting accepted; independent verify 2026-08-19 (`verified`). `corrected-tree` PASS on this tree.
-Identity catalog is PR #22–#23. Join census + remint are PR #24.
-Do not fold later rows into those PRs. The mapper stays closed.
+Identity catalog is PR #22–#23. Join census + remint are PR #24. Bind-to-HEAD is PR #26.
+Do not fold later rows into those PRs. R3/R7 joins stay closed.
 
 Visual rule the user named (0605 screenshot, 2026-08-17): a **charbox** is
 an outer rectangle plus short bottom hair ticks that do not run the full
@@ -38,7 +38,7 @@ does.
 | **I3** | `gol/stage3-ready` PR #23 | Remainder mint 0. Pin `EXPECTED_FILLABLE_CELLS = 9990` and `EXPECTED_UNCATALOGUED_FILLABLES = 0` in `field_identity.py` and `gate.py`. C01–C07 seed still present. | 2/3 seam | Serial. Coverage is a gate self-test, not a mapper. |
 | **J0** | `gol/join-census` | Replayable join census (`join_census.py`). 9990 classified by file-existence inventory, not mint-path. Dated evidence JSON. | 2/3 seam | Serial. Not a mapper. |
 | **J1** | same branch | Remint 1334 mint-path false negatives on 6 skew bundles to honest R2 gaps. Catalog size stays 9990. No keys invented. | 2/3 seam | Serial. Not a mapper. |
-| **—** | blocked | Stage 3 map: fields → eBIRForms XML keys | 3 | **Serial. Preconditions 1–3 hold. Join policy written. Mapper still Blocked. Do not start.** Comb-referee PASS, G10/G16/G17, and C01–C07 `verified` are out of scope. |
+| **M0** | `gol/tin-map` | Fail-closed TIN-only mapper (`map_tin.py`). 163 R1 identities: 148 writable keys copied onto input `name=` in `forms-corrected/`; 15 G11 mixed branch combs have no input (pre-printed digits) and stay counted, not rewritten. Refuses `forms/`, gapped records, stale hints, duplicate keys, missing inputs on a non-mixed field. Never invents a key. | 3 | Serial. R3/R7 still have zero keyed examples — do not join them. Comb-referee PASS, G10/G16/G17 are out of scope. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
@@ -51,7 +51,7 @@ file):
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
 4. Identity work is `tools/formgen/field_identity.py` against
    `tools/formgen/identity/catalog.json` (9990 fillable identities,
-   coverage 0 uncatalogued). Stage 3 still does not start: the mapper
+   coverage 0 uncatalogued). Stage 3 R1 TIN mapping is `map_tin.py`; R3/R7
    stays closed even though the three preconditions hold.
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
@@ -373,9 +373,10 @@ shown *not* to be a stage-1 row above.
 
 ## Stage 3 — map
 
-**Blocked. Do not start.** The three preconditions hold. Nothing writes
-`name="frm…:txtTIN1"`. Comb-referee PASS, G10/G16/G17, and C01–C07
-`verified` are not this program.
+**R1 TIN mapper is `map_tin.py`.** The three preconditions hold. Only the
+163 unique harvested TIN keys are copied onto input `name=`, and only on
+`forms-corrected/`. R3/R7 stay classified, not joined. Comb-referee PASS,
+G10/G16/G17, and C01–C07 `verified` are not this program.
 
 The identity catalog is 9990 records, 9990/9990 on `forms/` and
 `forms-corrected/` (`tools/formgen/identity/`). That is the freeze R2

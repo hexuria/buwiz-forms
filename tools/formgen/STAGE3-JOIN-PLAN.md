@@ -5,15 +5,19 @@ Measured 2026-08-19 on `.claude/worktrees/tin-stage2`, branch
 `tools/formgen/identity/catalog.json` and `rules/forms/*/fields.json` on
 this tree. Mapper not started.
 
-**Landed 2026-08-19 on `gol/join-census` (this PR):** `join_census.py`,
+**Landed 2026-08-19 on `gol/join-census` (PR #24):** `join_census.py`,
 the dated evidence JSON, and the remint of 1334 mint-path false
-negatives. Section 3 is done. The mapper stays closed.
+negatives. Section 3 is done.
+
+**R1 mapper (2026-08-20, `gol/tin-map`):** `map_tin.py` copies the 163
+R1 keys onto input `name=` in `forms-corrected/` only. R3/R7 stay
+closed: they still have zero keyed examples.
 
 **Headline finding: no N:1 or growable join is currently evidenced by a
 single harvested key.** All 163 keyed records are 1:1 TIN suffixes. The
 policy below can therefore *classify* N:1 and growable cases but cannot
-yet *execute* them, and that — not missing code — is why the mapper stays
-closed.
+yet *execute* them. R1 is the exception: 163 unique TIN keys, mapped by
+`map_tin.py`. R3/R7 stay closed for lack of evidence, not missing code.
 
 ---
 
@@ -235,9 +239,11 @@ Explicit non-start: no mapper module, no `name="frm…"` in `emit.py`.
 
 ## 4. Still blocked
 
-- **The mapper.** Blocked on evidence, not policy: R1 is executable but
-  covers only 163 of 9990 records, and R3/R7 have zero keyed examples in
-  the whole corpus. Do not start.
+- **The mapper, R1.** Executable: `map_tin.py` writes the 163 unique
+  harvested TIN keys onto input `name=` in `forms-corrected/` only. It
+  does not invent keys and does not map R2–R7.
+- **The mapper, R3/R7.** Still blocked on evidence: zero keyed examples
+  in the whole corpus. Do not join them.
 - **The 1334 false negatives.** Reminted 2026-08-19: gap strings on the
   6 skew bundles now say “no unique key”, not “no inventory”. Catalog
   size stays 9990. No keys invented.

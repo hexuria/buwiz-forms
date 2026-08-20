@@ -175,7 +175,7 @@ COMPARISON_NAMES = (
 # they are invoked with one rather than being excused from the check.
 SELF_TEST_MODULES = (
     "extract", "lattice", "fonts", "guides", "emit", "verify", "index_page",
-    "audit", "comb_referee", "gate", "field_identity",
+    "audit", "comb_referee", "gate", "field_identity", "map_tin",
 )
 # Identity coverage pin (I3). Must match field_identity.EXPECTED_FILLABLE_CELLS.
 EXPECTED_FILLABLE_CELLS = 9990
@@ -11992,6 +11992,8 @@ def _self_test_body() -> int:
         failures.append("comb_referee.py must be included in module self-tests")
     if "field_identity" not in SELF_TEST_MODULES:
         failures.append("field_identity.py must be included in module self-tests")
+    if "map_tin" not in SELF_TEST_MODULES:
+        failures.append("map_tin.py must be included in module self-tests")
     if EXPECTED_UNCATALOGUED_FILLABLES != 0:
         failures.append("I3 coverage pin EXPECTED_UNCATALOGUED_FILLABLES must be 0")
     if EXPECTED_FILLABLE_CELLS != 9990:
