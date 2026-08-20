@@ -377,6 +377,8 @@ explain the why.
 - `gate.py` — the done-condition. See below.
 - `field_identity.py` — durable fillable-cell catalog (9990 records). Not a mapper.
 - `join_census.py` — read-only R1–R7 join census. Never writes `name=`.
+- `leftover_keys.py` — read-only leftover `serialized_key` census. Unique
+  leftovers are inventory facts, not joins. Never writes `name=`.
 - `map_tin.py` — Stage 3 TIN mapper: copies the 163 R1 harvest keys onto
   input `name=` in `forms-corrected/` only. Fail-closed; never invents a key.
 - `fixtures/make_fixtures.py` — builds the committed synthetic PDF corpus
