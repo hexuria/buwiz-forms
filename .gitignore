@@ -159,3 +159,18 @@ node_modules/
 # tools/formgen/corrections/ -- and it is tracked.
 /forms-corrected/
 /forms-corrected.manifest.json
+
+# Windows Offline eBIRForms dummy-Save scratch. Dated evidence JSON and
+# reviewed staging inventories are tracked; local helpers, screenshots,
+# dummy save XMLs, and extra copied form trees are not.
+/tools/formgen/_tmp_*
+/tools/formgen/corrections/staging/**/00000000000000-*.xml
+/tools/formgen/corrections/staging/w3-20260820/
+/tools/formgen/corrections/staging/w4-20260820/
+/tools/formgen/corrections/staging/*/rules/forms/*
+!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1601eq-v2018
+!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1601eq-v2018/**
+!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1701q-v2018
+!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1701q-v2018/**
+!/tools/formgen/corrections/staging/w2-20260820/rules/forms/2000-dst-v2018
+!/tools/formgen/corrections/staging/w2-20260820/rules/forms/2000-dst-v2018/**

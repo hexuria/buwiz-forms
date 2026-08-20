@@ -43,7 +43,7 @@ does.
 | **J0** | `gol/join-census` | Replayable join census (`join_census.py`). 9990 classified by file-existence inventory, not mint-path. Dated evidence JSON. | 2/3 seam | Serial. Not a mapper. |
 | **J1** | same branch | Remint 1334 mint-path false negatives on 6 skew bundles to honest R2 gaps. Catalog size stays 9990. No keys invented. | 2/3 seam | Serial. Not a mapper. |
 | **M0** | `gol/tin-map` PR #27 | Fail-closed TIN-only mapper (`map_tin.py`). 163 R1 identities: 148 writable keys copied onto input `name=` in `forms-corrected/`; 15 G11 mixed branch combs have no input (pre-printed digits) and stay counted, not rewritten. Refuses `forms/`, gapped records, stale hints, duplicate keys, missing inputs on a non-mixed field. Never invents a key. | 3 | Landed. R3/R7 still have zero keyed examples — do not join them. |
-| **J2** | `gol/leftover-keys` PR #28 | Read-only leftover-key census (`leftover_keys.py`). 8028 unique unclaimed `serialized_key`s are inventory facts, not joins. 4 shipped R1 keys on 2200A appear 3× each (`claimed_duplicate`). 12 claimed TIN keys have no non-null inventory row (`claimed_absent`). Never writes `official_field_key` or `name=`. Landed on `main` `df537eb`. | 2/3 seam | Serial. A future harvest needs a named rule and a box role; uniqueness alone is not evidence. |
+| **J2** | `gol/leftover-keys` PR #28 | Read-only leftover-key census (`leftover_keys.py`). After the 1601EQ/1701Q/2000-dst land: leftover_unique 8436, leftover_duplicate 5, claimed_unique 159, claimed_duplicate 4, claimed_absent 0, claimed 163. Never writes `official_field_key` or `name=`. Landed on `main` `df537eb`; pins retuned on the land PR. | 2/3 seam | Serial. A future harvest needs a named rule and a box role; uniqueness alone is not evidence. |
 | **W0** | this Windows PC | Replay leftover pins; record live eBIRForms **7.9.6.1** vs manifest 7.9.6.0 hash drift. Dummy TIN only. Start via `/goal` + [GOAL-WINDOWS-EBIRFORMS.md](GOAL-WINDOWS-EBIRFORMS.md). | 3 evidence | First. Do not Save yet. |
 | **W1** | `gol/windows-ebirforms-obs` (when landing) | Dummy Save 1601EQ Jan 2018 + 1701Q Jan 2018. Stage `serialized_key` only where saveXML emits it. | 3 evidence | After W0. Live `rules/forms/` untouched. |
 | **W2** | same | Identify 2000-DST vs 2000 / 2000-OT; dummy Save; new staging snapshot. Do not let `2000-dst-2018` steal `2000-v2018`. | 3 evidence | After W1. |
@@ -53,6 +53,7 @@ does.
 | **W6** | same | Four leftover_duplicate keys (1702Q tel, 1707A email, 2551Q email, 2200A registeredName). | 3 evidence | After W5. |
 | **W7** | same | 1600WP agent TIN (C06) only if W1–W3 done. Item 5 TIN is C05, not this comb. | 3 evidence | After W1–W3. |
 | **W8** | same | Land evidence JSON (+ staging if needed) when Uriah says land. PR, no merge. | 3 evidence | Not until asked. |
+| **W9** | `gol/windows-ebirforms-land` | Land staged 1601EQ/1701Q `serialized_key` and NEW `2000-dst-v2018`. Remint 142 2000-dst no-harvest gaps to R2. Live 2000-v2018 untouched. PR, no merge. | 3 inventory | After W8. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
