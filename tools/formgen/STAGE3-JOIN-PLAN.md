@@ -247,7 +247,8 @@ Explicit non-start: no mapper module, no `name="frm…"` in `emit.py`.
 - **Leftover unique keys.** Measured 2026-08-20: 8028 unclaimed keys
   appear once in their inventory. That is not a join. Do not copy them
   onto `official_field_key` or `name=` without a named harvest rule and
-  a box role. Replay: `leftover_keys.py`.
+  a box role. Replay: `leftover_keys.py`. Windows dummy-Save discovery:
+  `HANDOFF-WINDOWS-EBIRFORMS.md`.
 - **The mapper, R3/R7.** Still blocked on evidence: zero keyed examples
   in the whole corpus. Do not join them.
 - **The 1334 false negatives.** Reminted 2026-08-19: gap strings on the

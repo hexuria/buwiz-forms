@@ -9,6 +9,9 @@ This module never writes HTML, never writes ``official_field_key``, never
 emits ``name="frm…"``, and never invents a harvest rule. Inventory is
 resolved by file existence via ``join_census``.
 
+Windows follow-up (dummy Save / saveXML, no remint):
+``tools/formgen/HANDOFF-WINDOWS-EBIRFORMS.md``.
+
 Usage:
     python3 tools/formgen/leftover_keys.py --self-test
     python3 tools/formgen/leftover_keys.py --tree forms-corrected \
