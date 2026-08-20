@@ -126,13 +126,13 @@ and refuses to measure a file that does not match.
 
 | ID | Form | Change | Authority | Status |
 | --- | --- | --- | --- | --- |
-| C01 | `2550m-2007` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000`) | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
-| C02 | `0605-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
-| C03 | `2551m-2002` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
-| C04 | `extra/2553-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
-| C05 | `extra/1600wp-2010` item 5 primary | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, none pre-printed) | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
-| C06 | `extra/1600wp-2010` agent TIN | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, no ink inside) | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
-| C07 | `extra/1604cf-2008` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000` in 3 of 4) | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `verified` (2026-08-19; named batch `ddac6058`) |
+| C01 | `2550m-2007` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000`) | harvested HTA `frm2550m:txtBranchCode` ml=5; regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
+| C02 | `0605-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm0605:txtBranchCode` ml=5 (`0605-v2003`); regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
+| C03 | `2551m-2002` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | user rule 2026-08-15 (3-3-3-5); no harvested fields.json; regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
+| C04 | `extra/2553-1999` | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (official box blank) | harvested HTA `frm2553:txtBranchCode` ml=5; regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
+| C05 | `extra/1600wp-2010` item 5 primary | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, none pre-printed) | harvested HTA `frm1600WP:txtBranchCode` ml=5; regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
+| C06 | `extra/1600wp-2010` agent TIN | whole TIN strip reflowed to even 3-3-3-5; branch **5 editable cells** (4 official compartments, no ink inside) | user rule 2026-08-15; no agent-branch field_key; regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
+| C07 | `extra/1604cf-2008` | whole TIN strip reflowed to even 3-3-3-5; branch **locked `00000`** (official pre-prints `000` in 3 of 4) | user rule 2026-08-15; no harvested fields.json; regulation not identified in-repo | `verified` (re-anchored 2026-08-20 to `0c1def60`) |
 
 ### The branch-lock rule
 
@@ -166,15 +166,16 @@ human verdict or an explicit skip.
 | **P0** | `gol/tin-stage2` / [PR #17](https://github.com/hexuria/buwiz-forms/pull/17) | TIN chrome restore (this section) + even 3-3-3-5 + lock rule | Stage 2 residue: the source prints 3 or 4 branch boxes. |
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | Tab: 0605 17 then 18; 2550M page-2 first schedule row (horizontal walls). | Stage 1 lattice. TIN overlay is a later batch. |
 | **P1+P1b** | `gol/tin-stage4` (this commit, stacked on #18) | Charbox hair ticks and X-squares stamp `maxlength="1"`; stay `type=text`. | Stage 1. Never a TIN record. |
-| **P0b** | `gol/tin-stage5` | Named Stage 1 batch `ddac6058`. C01–C07 re-anchored and applied. Sitting 2026-08-18: Uriah approved all seven ([`evidence/tin-stage2-sitting-20260818.json`](evidence/tin-stage2-sitting-20260818.json)). | Stage 2. Sitting accepted. Status `applied`, not `verified`. |
+| **P0b** | `gol/tin-stage5` | Named Stage 1 batch now current `main` `forms/` (`0c1def60`). C01–C07 re-anchored 2026-08-20. Sittings 2026-08-18/19. `corrected-tree` PASS. | Stage 2. Status `verified` on this tree. |
 | **I0** | `gol/field-identity` | Durable identity catalog: 180 TIN-strip identities (C01–C07 seed plus 38 corpus strips). `p1cN` is a hint. | Not a mapper. Stage 3 still blocked. |
 | **—** | blocked | Stage 3 map | Catalog is seeded, not coverage. G02 / G03 / G04 still open. |
 
-Status on C01–C07 is `verified` as of 2026-08-19 against named batch `ddac6058`.
-`corrected_fidelity.py` observed all 7 slot-count and printed-divider
-divergences. The 2026-08-18 sitting remains the chrome/lock human approval.
-`gate.py --only corrected-tree` still fails on current `main` `forms/` because
-that tree is squash `#21` (`ba78360b`), not `ddac6058` (72 files differ).
+Status on C01–C07 is `verified`. Find/replace re-anchored 2026-08-20 to
+current `main` `forms/` (`0c1def60`) after tab-order reordered C01/C03/C04
+cells. `correct.py --batch HEAD` + `--verify` PASS.
+`corrected_fidelity.py` observed all 7 divergences.
+`gate.py --only corrected-tree` PASS (7/7 sentences named).
+The 2026-08-18/19 sittings remain the chrome/lock human approval.
 
 Why C01 is genuinely stage 2: the 2007 artwork is **correct and out of date**.
 It prints three compartments and pre-prints `000` in them; BIR's own client
