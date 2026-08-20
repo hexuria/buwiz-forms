@@ -8,7 +8,7 @@ stages and the rules), [GOAL.md](GOAL.md) (objective, coverage, constraints),
 
 **Active queue (2026-08-20, join census is PR #24; C01–C07 verified on named-batch tree).**
 Stage 2 TIN is PR #17. P2 is PR #18. P1/P1b is PR #20. Named Stage 1
-batch is `ddac6058`. C01–C07 sitting accepted; independent verify 2026-08-19 (`verified` on the named-batch tree).
+batch is current `main` `forms/` (`0c1def60`); C01–C07 re-anchored 2026-08-20. Sitting accepted; independent verify 2026-08-19 (`verified`). `corrected-tree` PASS on this tree.
 Identity catalog is PR #22–#23. Join census + remint are PR #24.
 Do not fold later rows into those PRs. The mapper stays closed.
 
@@ -29,7 +29,7 @@ does.
 | **P2** | `gol/tin-stage3` PR #18 (stacked on #17) | 2550M page-2 first Schedule 1 row (horizontal walls → 4-row growable); 0605 items 17 then 18 tab. Specify still a lower band. H-walls that would fuse into an existing y-line are skipped (2551M/2553 reviewed combs). | 1 / UX | Landed. |
 | **P1** | `gol/tin-stage4` (this commit, stacked on #18) | Hair-tick charboxes stamp `maxlength="1"` per compartment (2550M sheets/RDO/zip; 0605 Year Ended / Return Period). Stay `type=text`. Never a TIN record. | 1 | Landed in `emit.input_is_single_character`. |
 | **P1b** | same commit | X-squares (~4–20pt, aspect 0.70–1.45, plus F210 knockout interiors) stamp `maxlength="1"`. Not `<input type=checkbox>`. | 1 | Same helper; xbox size vs all-regions charbox. |
-| **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Independent verify 2026-08-19: `corrected_fidelity.py` 7/7. Status `verified` on the named-batch tree. | 2 | Verified against `ddac6058`. Gate `corrected-tree` still fails on current `main` forms/ (squash vs named batch). |
+| **P0b** | `gol/tin-stage5` (stacked on #20) | Named Stage 1 `forms/` batch `ddac6058`. C01–C07 re-anchored (`p1c127` first group; P2 hairlines dropped into the knockout). `correct.py --batch ddac6058` wrote `forms-corrected/`. Sitting 2026-08-18: Uriah approved C01–C07. Independent verify 2026-08-19: `corrected_fidelity.py` 7/7. Status `verified` on the named-batch tree. | 2 | Re-anchored 2026-08-20 to current `main` `forms/` (`0c1def60`). `gate.py --only corrected-tree` PASS: 7/7 divergences named. |
 | **I0** | `gol/field-identity` (stacked on `gol/tin-stage5`) | Durable field identity catalog. C01–C07 seed (28) plus 38 measured 3+3+3+5 corpus strips (152) = 180 identities. Matcher: exactly one fillable-field *center* in `source_printed_box_pt` (field or G11 mixed comb); `p1cN` is a hint. Does not write official keys onto `name=`. | 2/3 seam | Serial. TIN caption-chain class: 44/53 bundles. `extra/1801-2018` skipped at I0. Stage 3 still closed. |
 | **I1** | `gol/stage3-ready` | TIN leftovers: 1801 mixed `tin-strip` + tin-2/3/branch; extra HTML 3+3+3+N chains (spouse/page-2/extra). 208 identities. Eight PDF-unmeasurable bundles still emit no chain. | 2/3 seam | Serial. Not a mapper. |
 | **I2 comb** | `gol/stage3-ready` | Remaining comb fillables (4349). Roles from slot count + pitch (`date-yyyy`, `money-21`, `comb-2s`, …). Emitted box as `source_printed_box_pt`. 4557 identities. | 2/3 seam | Serial. Honest `official_field_key` gaps. |
