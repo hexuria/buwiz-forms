@@ -25,6 +25,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 DEFAULT_CATALOG = HERE / "identity" / "catalog.json"
 DEFAULT_RULES = REPO / "rules" / "forms"
+DEFAULT_OVERLAY = HERE / "inventories"
 DEFAULT_OUT = HERE / "corrections" / "evidence" / "join-census-20260819-remint.json"
 
 SLUG_RE = re.compile(r"^(.*?)-(v?)((19|20)\d\d)([a-z]?)$")
@@ -54,18 +55,18 @@ ACCEPTANCE = {
     "FALSE_NEGATIVE": 0,
     "R1_keyed_1to1": 163,
     "R2_agent_tin": 4,
-    "R2_no_unique_key": 7555,
+    "R2_no_unique_key": 7697,
     "R4_mixed_cell": 1,
-    "R5_plus_FALSE_NEGATIVE": 2267,
+    "R5_plus_FALSE_NEGATIVE": 2125,
     "bundles": 53,
-    "inventory_files": 43,
-    "inventory_null_keys": 1234,
-    "inventory_rows": 9592,
-    "keyed_in_bundles_with_inventory": 159,
-    "keyed_in_bundles_without_inventory": 4,
+    "inventory_files": 44,
+    "inventory_null_keys": 972,
+    "inventory_rows": 9754,
+    "keyed_in_bundles_with_inventory": 163,
+    "keyed_in_bundles_without_inventory": 0,
     "records_classified": 9990,
-    "resolution_absent": 11,
-    "resolution_exact": 36,
+    "resolution_absent": 10,
+    "resolution_exact": 37,
     "resolution_skew": 6,
 }
 ACCEPTANCE_FALSE_NEGATIVE_BUNDLES = ()
@@ -111,29 +112,54 @@ def serialized_key(row: object) -> str | None:
     return text if text else None
 
 
+def extra_inventory_dirs(rules_dir: pathlib.Path) -> list[pathlib.Path]:
+    """Overlay inventories that must not join the locked 43-form v1 corpus.
+
+    Catalog slug ``2000-dst-2018`` parses to stem ``2000dst``. Live
+    ``rules/forms/2000-v2018`` is stem ``2000``, so the overlay exists so the
+    slug can resolve without stealing 2000 or becoming a 44th v1 form.
+    """
+    try:
+        if rules_dir.resolve() != DEFAULT_RULES.resolve():
+            return []
+    except OSError:
+        return []
+    if DEFAULT_OVERLAY.is_dir():
+        return [DEFAULT_OVERLAY]
+    return []
+
+
 def load_inventories(rules_dir: pathlib.Path) -> dict[str, dict[str, object]]:
     found: dict[str, dict[str, object]] = {}
-    if not rules_dir.is_dir():
-        return found
-    for path in sorted(rules_dir.glob("*/fields.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        rows = field_rows(payload)
-        keys: list[str] = []
-        nulls = 0
-        for row in rows:
-            key = serialized_key(row)
-            if key is None:
-                nulls += 1
-            else:
-                keys.append(key)
-        found[path.parent.name] = {
-            "dir": path.parent.name,
-            "keys": keys,
-            "nulls": nulls,
-            "parsed": parse_slug(path.parent.name),
-            "path": path,
-            "rows": len(rows),
-        }
+    roots = [rules_dir, *extra_inventory_dirs(rules_dir)]
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.glob("*/fields.json")):
+            name = path.parent.name
+            if name in found:
+                raise ValueError(
+                    f"duplicate inventory directory {name!r} at {path} "
+                    f"and {found[name]['path']}"
+                )
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            rows = field_rows(payload)
+            keys: list[str] = []
+            nulls = 0
+            for row in rows:
+                key = serialized_key(row)
+                if key is None:
+                    nulls += 1
+                else:
+                    keys.append(key)
+            found[name] = {
+                "dir": name,
+                "keys": keys,
+                "nulls": nulls,
+                "parsed": parse_slug(name),
+                "path": path,
+                "rows": len(rows),
+            }
     return found
 
 
@@ -527,9 +553,42 @@ def self_test() -> int:
         absent_stem = resolve_slug("2000-dst-2018", inventories, by_stem)
         check(
             "2000-dst-2018 does not steal 2000-v2018",
-            absent_stem["kind"] == "absent",
+            absent_stem["kind"] == "absent"
+            and absent_stem["inventory"] is None,
             str(absent_stem),
         )
+
+        overlay_rules = pathlib.Path(tmp) / "live-forms"
+        overlay_rules.mkdir()
+        write_fields(overlay_rules, "2000-v2018", ["frm2000:txtTIN1"])
+        overlay_root = pathlib.Path(tmp) / "overlay"
+        overlay_root.mkdir()
+        write_fields(overlay_root, "2000-dst-v2018", ["frm2000:txtTIN1"])
+        saved_rules, saved_overlay = DEFAULT_RULES, DEFAULT_OVERLAY
+        try:
+            globals()["DEFAULT_RULES"] = overlay_rules
+            globals()["DEFAULT_OVERLAY"] = overlay_root
+            live_plus_overlay = load_inventories(overlay_rules)
+            overlay_by_stem = index_inventories_by_stem(live_plus_overlay)
+            overlay_hit = resolve_slug(
+                "2000-dst-2018", live_plus_overlay, overlay_by_stem
+            )
+            live_only = resolve_slug("2000-v2018", live_plus_overlay, overlay_by_stem)
+            check(
+                "overlay 2000-dst-v2018 is exact for 2000-dst-2018",
+                overlay_hit["kind"] == "exact"
+                and overlay_hit["inventory"] == "2000-dst-v2018",
+                str(overlay_hit),
+            )
+            check(
+                "overlay does not steal live 2000-v2018",
+                live_only["kind"] == "exact"
+                and live_only["inventory"] == "2000-v2018",
+                str(live_only),
+            )
+        finally:
+            globals()["DEFAULT_RULES"] = saved_rules
+            globals()["DEFAULT_OVERLAY"] = saved_overlay
 
         check(
             "no-harvest + exact is FALSE_NEGATIVE",

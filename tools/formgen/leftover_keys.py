@@ -51,32 +51,32 @@ KEY_CLASSES = (
     CLASS_LEFTOVER_DUPLICATE,
 )
 
-# Pins measured 2026-08-20 on main@9377f71c. Uniqueness in inventory is
-# not a join; leftover_unique must not be copied onto official_field_key.
+# Pins measured 2026-08-21 after landing 1601EQ/1701Q saveXML names and
+# overlay inventory 2000-dst-v2018. Uniqueness in inventory is not a join.
 ACCEPTANCE = {
     "bundles": 53,
-    "bundles_with_leftover_unique": 40,
+    "bundles_with_leftover_unique": 43,
     "claimed": 163,
-    "claimed_absent": 12,
+    "claimed_absent": 0,
     "claimed_duplicate": 4,
-    "claimed_unique": 147,
-    "inventory_files": 43,
-    "inventory_null_keys": 1234,
-    "inventory_rows": 9592,
-    "leftover_duplicate": 4,
-    "leftover_unique": 8028,
+    "claimed_unique": 159,
+    "inventory_files": 44,
+    "inventory_null_keys": 972,
+    "inventory_rows": 9754,
+    "leftover_duplicate": 5,
+    "leftover_unique": 8436,
 }
 # Named-suffix leftovers that look like harvest_tin's shape (one key per
 # bundle matching a leaf). Facts, not joins. A future harvest needs a
 # named rule AND a box role; this pin only detects silent disappearance.
 LEAF_UNIQUE_ACCEPTANCE = {
-    "ebirOnlineUsername": 34,
-    "txtAddress": 16,
-    "txtEmail": 26,
-    "txtFinalFlag": 34,
-    "txtRDOCode": 20,
-    "txtTaxpayerName": 10,
-    "txtZipCode": 17,
+    "ebirOnlineUsername": 36,
+    "txtAddress": 19,
+    "txtEmail": 29,
+    "txtFinalFlag": 36,
+    "txtRDOCode": 22,
+    "txtTaxpayerName": 13,
+    "txtZipCode": 20,
 }
 ACCEPTANCE_CLAIMED_DUPLICATE = (
     ("extra/2200a-2020", "frm2200Av2020:branchCode", 3),
@@ -84,14 +84,11 @@ ACCEPTANCE_CLAIMED_DUPLICATE = (
     ("extra/2200a-2020", "frm2200Av2020:tinB", 3),
     ("extra/2200a-2020", "frm2200Av2020:tinC", 3),
 )
-ACCEPTANCE_CLAIMED_ABSENT_BUNDLES = (
-    "1601eq-2019",
-    "1701q-2018",
-    "2000-dst-2018",
-)
+ACCEPTANCE_CLAIMED_ABSENT_BUNDLES = ()
 ACCEPTANCE_LEFTOVER_DUPLICATE = (
     ("1702q-2018", "frm1702q:txtTelNum", 2),
     ("1707a-2021", "frm1707Av2021:txtI11Email", 2),
+    ("2000-dst-2018", "frm2000:modLabel", 4),
     ("2551q-2018", "txtEmail", 2),
     ("extra/2200a-2020", "frm2200Av2020:registeredName", 3),
 )

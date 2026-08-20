@@ -17,6 +17,7 @@ import field_identity as fi  # noqa: E402
 import join_census as jc  # noqa: E402
 
 RULES_FORMS = REPO / "rules" / "forms"
+OVERLAY_FORMS = FORMGEN / "inventories"
 CENSUS_PATH = FORMGEN / "corrections" / "evidence" / "tin-branch-census-20260808.json"
 EVIDENCE = FORMGEN / "corrections" / "evidence"
 MATCH = {"kind": "field", "tolerance_pt": 0.25, "cardinality": "exactly-one"}
@@ -35,14 +36,19 @@ def page_of(html_id: str) -> int:
 
 def load_inventories() -> dict[str, pathlib.Path]:
     found: dict[str, pathlib.Path] = {}
-    if not RULES_FORMS.is_dir():
-        return found
-    for path in RULES_FORMS.glob("*/fields.json"):
-        found[path.parent.name] = path
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        form_id = str(payload.get("form_id") or "")
-        if form_id:
-            found[form_id] = path
+    roots = [RULES_FORMS]
+    if OVERLAY_FORMS.is_dir():
+        roots.append(OVERLAY_FORMS)
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.glob("*/fields.json"):
+            name = path.parent.name
+            found[name] = path
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            form_id = str(payload.get("form_id") or "")
+            if form_id:
+                found[form_id] = path
     return found
 
 
@@ -398,8 +404,11 @@ def self_test() -> int:
         == RULES_FORMS / "2200t-v2020" / "fields.json",
     )
     check(
-        "2000-dst-2018 stays absent",
-        inventory_path_for_slug("2000-dst-2018", inventories) is None,
+        "2000-dst-2018 resolves overlay without stealing 2000-v2018",
+        inventory_path_for_slug("2000-dst-2018", inventories)
+        == OVERLAY_FORMS / "2000-dst-v2018" / "fields.json"
+        and inventory_path_for_slug("2000-2018", inventories)
+        == RULES_FORMS / "2000-v2018" / "fields.json",
     )
     check(
         "1601eq-2019 still resolves to 1601eq-v2018",
