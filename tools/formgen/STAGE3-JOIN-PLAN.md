@@ -239,9 +239,16 @@ Explicit non-start: no mapper module, no `name="frm…"` in `emit.py`.
 
 ## 4. Still blocked
 
-- **The mapper, R1.** Executable: `map_tin.py` writes the 163 unique
-  harvested TIN keys onto input `name=` in `forms-corrected/` only. It
-  does not invent keys and does not map R2–R7.
+- **The mapper, R1.** Landed as PR #27: `map_tin.py` writes the 163
+  catalog-reported TIN keys onto input `name=` in `forms-corrected/`
+  only. Four of those keys (`extra/2200a-2020` tinA/B/C/branchCode)
+  appear three times each in inventory; the leftover census reports
+  them as `claimed_duplicate` and does not unmap them.
+- **Leftover unique keys.** Measured 2026-08-20: 8028 unclaimed keys
+  appear once in their inventory. That is not a join. Do not copy them
+  onto `official_field_key` or `name=` without a named harvest rule and
+  a box role. Replay: `leftover_keys.py`. Windows dummy-Save discovery:
+  `HANDOFF-WINDOWS-EBIRFORMS.md`.
 - **The mapper, R3/R7.** Still blocked on evidence: zero keyed examples
   in the whole corpus. Do not join them.
 - **The 1334 false negatives.** Reminted 2026-08-19: gap strings on the

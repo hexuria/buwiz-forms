@@ -168,7 +168,8 @@ human verdict or an explicit skip.
 | **P1+P1b** | `gol/tin-stage4` (this commit, stacked on #18) | Charbox hair ticks and X-squares stamp `maxlength="1"`; stay `type=text`. | Stage 1. Never a TIN record. |
 | **P0b** | `gol/tin-stage5` | Named Stage 1 batch now current `main` `forms/` (`0c1def60`). C01–C07 re-anchored 2026-08-20. Sittings 2026-08-18/19. `corrected-tree` PASS. | Stage 2. Status `verified` on this tree. |
 | **I0** | `gol/field-identity` | Durable identity catalog: 180 TIN-strip identities (C01–C07 seed plus 38 corpus strips). `p1cN` is a hint. | Not a mapper. |
-| **M0** | `gol/tin-map` | R1 TIN mapper: 163 harvested keys onto `name=` in `forms-corrected/` only. | Stage 3. R3/R7 stay closed. |
+| **M0** | `gol/tin-map` PR #27 | R1 TIN mapper: 163 harvested keys onto `name=` in `forms-corrected/` only. | Stage 3. R3/R7 stay closed. |
+| **J2** | `gol/leftover-keys` | Leftover-key census: 8028 unique unclaimed keys, not joins. Windows dummy-Save: `HANDOFF-WINDOWS-EBIRFORMS.md`. | 2/3 seam. No harvest. |
 
 Status on C01–C07 is `verified`. Find/replace re-anchored 2026-08-20 to
 current `main` `forms/` (`0c1def60`) after tab-order reordered C01/C03/C04
