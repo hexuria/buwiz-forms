@@ -379,8 +379,10 @@ explain the why.
 - `join_census.py` — read-only R1–R7 join census. Never writes `name=`.
 - `leftover_keys.py` — read-only leftover `serialized_key` census. Unique
   leftovers are inventory facts, not joins. Never writes `name=`.
-- `map_tin.py` — Stage 3 TIN mapper: copies the 163 R1 harvest keys onto
+- `map_tin.py` — Stage 3 R1 mapper: copies the 167 R1 harvest keys onto
   input `name=` in `forms-corrected/` only. Fail-closed; never invents a key.
+- `harvest_2550m_headers.py` — named 2550M header harvest (Item 5/7/9/10).
+  Writes catalog `official_field_key` only. Not a corpus-wide text join.
 - `fixtures/make_fixtures.py` — builds the committed synthetic PDF corpus
   (`flip`, `glyphs`, `lean`, `masks`, `paths`, `rules`); `--verify` proves the
   committed bytes rebuild exactly.

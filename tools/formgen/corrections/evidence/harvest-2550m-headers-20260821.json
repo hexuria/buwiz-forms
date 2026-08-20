@@ -1,0 +1,96 @@
+{
+  "title": "2550M header harvest",
+  "date": "2026-08-21",
+  "source_evidence": "tools/formgen/corrections/evidence/w5-2550m-leftover-20260820.json",
+  "bundle": "2550m-2007",
+  "rewritten_record_count": 0,
+  "already_applied_count": 4,
+  "joins": [
+    {
+      "caption": "5 RDO Code",
+      "html_id_hint": "p1c130",
+      "id": "2550m-2007/p1/text-4",
+      "item_number": "5",
+      "serialized_key": "frm2550m:txtRDOCode",
+      "source_printed_box_pt": [
+        273.12,
+        118.8,
+        324.24,
+        133.68
+      ],
+      "w5_emitted": true
+    },
+    {
+      "caption": "7 Taxpayer's Name",
+      "html_id_hint": "p1c17",
+      "id": "2550m-2007/p1/text-6",
+      "item_number": "7",
+      "serialized_key": "frm2550m:txtTaxPayerName",
+      "source_printed_box_pt": [
+        50.4,
+        145.44,
+        445.44,
+        159.36
+      ],
+      "w5_emitted": true
+    },
+    {
+      "caption": "9 Registered Address",
+      "html_id_hint": "p1c20",
+      "id": "2550m-2007/p1/text-8",
+      "item_number": "9",
+      "serialized_key": "frm2550m:txtAddress",
+      "source_printed_box_pt": [
+        50.4,
+        171.12,
+        445.44,
+        185.04
+      ],
+      "w5_emitted": true
+    },
+    {
+      "caption": "10 Zip Code",
+      "html_id_hint": "p1c21",
+      "id": "2550m-2007/p1/text-9",
+      "item_number": "10",
+      "serialized_key": "frm2550m:txtZipCode",
+      "source_printed_box_pt": [
+        526.32,
+        171.12,
+        574.56,
+        185.04
+      ],
+      "w5_emitted": true
+    }
+  ],
+  "refused": [
+    {
+      "key": "txtEmail",
+      "reason": "inventory control_kind is hidden/workflow-metadata; 2550M prints no email caption"
+    },
+    {
+      "key": "txtTaxpayerName",
+      "reason": "wrong spelling; leftover-silent. Item 7 is frm2550m:txtTaxPayerName"
+    },
+    {
+      "key": "frm2550m:txtLineBus",
+      "reason": "Item 6 Line of Business is not this harvest"
+    },
+    {
+      "key": "frm2550m:txtTelephoneNum",
+      "reason": "Item 8 Telephone Number is not this harvest"
+    }
+  ],
+  "notes": [
+    "Named rule plus printed box role. Leftover uniqueness is not the join.",
+    "Do not generalize txtRDOCode / txtAddress / txtZipCode off 2550M.",
+    "Catalog size stays 9990. No HTML name= write."
+  ],
+  "rewritten_ids": [],
+  "already_applied_ids": [
+    "2550m-2007/p1/text-4",
+    "2550m-2007/p1/text-6",
+    "2550m-2007/p1/text-8",
+    "2550m-2007/p1/text-9"
+  ]
+}

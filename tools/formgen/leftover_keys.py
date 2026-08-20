@@ -51,32 +51,34 @@ KEY_CLASSES = (
     CLASS_LEFTOVER_DUPLICATE,
 )
 
-# Pins measured 2026-08-21 after landing 1601EQ/1701Q saveXML names and
-# overlay inventory 2000-dst-v2018. Uniqueness in inventory is not a join.
+# Pins measured 2026-08-21 after the 2550M header harvest (R1 167).
+# Uniqueness in inventory is not a join.
 ACCEPTANCE = {
     "bundles": 53,
     "bundles_with_leftover_unique": 43,
-    "claimed": 163,
+    "claimed": 167,
     "claimed_absent": 0,
     "claimed_duplicate": 4,
-    "claimed_unique": 159,
+    "claimed_unique": 163,
     "inventory_files": 44,
     "inventory_null_keys": 972,
     "inventory_rows": 9754,
     "leftover_duplicate": 5,
-    "leftover_unique": 8436,
+    "leftover_unique": 8432,
 }
 # Named-suffix leftovers that look like harvest_tin's shape (one key per
 # bundle matching a leaf). Facts, not joins. A future harvest needs a
 # named rule AND a box role; this pin only detects silent disappearance.
+# 2550M claimed frm2550m:txtRDOCode / txtAddress / txtZipCode (leaf pins
+# drop by 1) and frm2550m:txtTaxPayerName (does not touch txtTaxpayerName).
 LEAF_UNIQUE_ACCEPTANCE = {
     "ebirOnlineUsername": 36,
-    "txtAddress": 19,
+    "txtAddress": 18,
     "txtEmail": 29,
     "txtFinalFlag": 36,
-    "txtRDOCode": 22,
+    "txtRDOCode": 21,
     "txtTaxpayerName": 13,
-    "txtZipCode": 20,
+    "txtZipCode": 19,
 }
 ACCEPTANCE_CLAIMED_DUPLICATE = (
     ("extra/2200a-2020", "frm2200Av2020:branchCode", 3),

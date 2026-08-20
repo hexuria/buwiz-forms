@@ -54,7 +54,8 @@ does.
 | **W6** | same | Four leftover_duplicate keys (1702Q tel, 1707A email, 2551Q email, 2200A registeredName). | 3 evidence | After W5. |
 | **W7** | same | 1600WP agent TIN (C06) only if W1–W3 done. Item 5 TIN is C05, not this comb. | 3 evidence | After W1–W3. |
 | **W8** | same | Land evidence JSON (+ staging if needed) when Uriah says land. PR, no merge. | 3 evidence | Not until asked. |
-| **W9** | `gol/windows-ebirforms-land` PR #30 | Landed 1601EQ/1701Q `serialized_key` and overlay inventory `tools/formgen/inventories/2000-dst-v2018` (not `rules/forms/`; that tree stays 43). Reminted 142 2000-dst no-harvest gaps to R2. Live 2000-v2018 untouched. 2026-08-21: rebuilt `forms-corrected/` from `--batch HEAD`, `--verify` PASS, identity 9990/9990, `map_tin.py --write` 163/148/15. Mapper still TIN-only. PR, no merge. | 3 inventory | After W8. Done on this branch. |
+| **W9** | `gol/windows-ebirforms-land` PR #30 | Landed 1601EQ/1701Q `serialized_key` and overlay inventory `tools/formgen/inventories/2000-dst-v2018` (not `rules/forms/`; that tree stays 43). Reminted 142 2000-dst no-harvest gaps to R2. Live 2000-v2018 untouched. 2026-08-21: rebuilt `forms-corrected/` from `--batch HEAD`, `--verify` PASS, identity 9990/9990, `map_tin.py --write` 163/148/15. Mapper still TIN-only on that PR. PR, no merge. | 3 inventory | After W8. Done on that branch. |
+| **H0** | `gol/harvest-2550m-headers` | Named 2550M header harvest: Item 5 RDO, Item 7 TaxPayerName, Item 9 Address, Item 10 Zip. `txtEmail` refused (hidden/workflow-metadata). Leftover leaf `txtTaxpayerName` not joined. R1 167 / writable 152 / leftover_unique 8432. PR, no merge. | 3 | After W9. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
@@ -67,7 +68,7 @@ file):
 3. Do **not** run two agents that both edit `lattice.py` or `emit.py`.
 4. Identity work is `tools/formgen/field_identity.py` against
    `tools/formgen/identity/catalog.json` (9990 fillable identities,
-   coverage 0 uncatalogued). Stage 3 R1 TIN mapping is `map_tin.py`; R3/R7
+   coverage 0 uncatalogued). Stage 3 R1 mapping is `map_tin.py`; R3/R7
    stays closed even though the three preconditions hold.
 
 Detail for P0 lives in [corrections/README.md](corrections/README.md).
@@ -389,10 +390,11 @@ shown *not* to be a stage-1 row above.
 
 ## Stage 3 — map
 
-**R1 TIN mapper is `map_tin.py`.** The three preconditions hold. Only the
-163 unique harvested TIN keys are copied onto input `name=`, and only on
-`forms-corrected/`. R3/R7 stay classified, not joined. Comb-referee PASS,
-G10/G16/G17, and C01–C07 `verified` are not this program.
+**R1 mapper is `map_tin.py`.** The three preconditions hold. 167 unique
+harvest keys (163 TIN suffixes + 4 named 2550M headers) are copied onto
+input `name=`, and only on `forms-corrected/`. R3/R7 stay classified,
+not joined. Comb-referee PASS, G10/G16/G17, and C01–C07 `verified` are
+not this program.
 
 The identity catalog is 9990 records, 9990/9990 on `forms/` and
 `forms-corrected/` (`tools/formgen/identity/`). That is the freeze R2

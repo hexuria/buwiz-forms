@@ -218,7 +218,7 @@ assumption, a code path, or a source of truth with the thing it checked. The
 verifies itself would be the largest instance of that defect yet built, because
 it would sit between the generator and everything downstream.
 
-## Stage 3 readiness (preconditions hold; R1 TIN mapper is `map_tin.py`)
+## Stage 3 readiness (preconditions hold; R1 mapper is `map_tin.py`)
 
 `rules/forms/*/fields.json` already carries 43 forms and 9,592 field names
 harvested from the official HTA runtime, with `serialized_key` values like
@@ -234,7 +234,8 @@ one fillable field (including a G11 mixed comb) has its center in
 with a different id is `html_id_hint_stale` and must update the catalog in
 the same commit as the batch that moved it.
 
-R1 (163 unique harvested TIN keys) is executable: `map_tin.py` copies
+R1 (167 unique harvest keys: 163 TIN suffixes plus 4 named 2550M
+headers) is executable: `map_tin.py` copies
 `official_field_key` onto input `name=` in `forms-corrected/` only. It
 refuses `forms/`, gapped records, and any resolve status other than
 `resolved`. R3/R7 have zero keyed examples and stay classified, not

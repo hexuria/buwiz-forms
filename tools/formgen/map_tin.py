@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Stage 3 TIN mapper: copy R1 ``official_field_key`` onto input ``name=``.
+"""Stage 3 R1 mapper: copy R1 ``official_field_key`` onto input ``name=``.
 
 Fail-closed. The only join that may write ``name="frm…"`` is R1: a catalog
-record whose ``official_field_key`` is a non-empty unique harvest key.
-Nothing here invents a key, maps a gapped record, or writes onto ``forms/``.
+record whose ``official_field_key`` is a non-empty unique harvest key
+(TIN suffixes via ``harvest_tin``, plus named harvests such as 2550M
+headers). Nothing here invents a key, maps a gapped record, or writes
+onto ``forms/``.
 Resolution is ``field_identity.resolve_record``; any status other than
 ``resolved`` aborts before a byte is written.
 
@@ -43,6 +45,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import field_identity as fi  # noqa: E402
+import harvest_2550m_headers as harvest_2550m  # noqa: E402
 import join_census as jc  # noqa: E402
 
 REPO = HERE.parent.parent
@@ -52,7 +55,7 @@ CORRECTED_TREE_NAME = "forms-corrected"
 STAGE1_TREE_NAME = "forms"
 FORBIDDEN_KEY_CHARS = frozenset("\"<>&")
 # Pin, not a census. Must equal join_census.ACCEPTANCE["R1_keyed_1to1"].
-EXPECTED_R1 = 163
+EXPECTED_R1 = 167
 # G11: sheet pre-prints the branch digits, emit keeps a mixed comb and
 # refuses empty slots. Those cells resolve as the identity but have no
 # input to name. A field (not mixed) with zero inputs is still an error.
@@ -492,6 +495,16 @@ def self_test() -> int:
         check(
             "every shipped R1 key is a harvested frm… key, not invented empty",
             all(isinstance(key, str) and key.startswith("frm") and ":" in key for key in keys),
+        )
+        header_hits = {
+            record["id"]: jc.claimed_key(record)
+            for record in keyed
+            if record["id"] in {row["id"] for row in harvest_2550m.JOINS}
+        }
+        check(
+            "2550M header harvest is among shipped R1",
+            header_hits == {row["id"]: row["serialized_key"] for row in harvest_2550m.JOINS},
+            str(header_hits),
         )
 
     printed = (180.24, 118.8, 213.12, 134.4)

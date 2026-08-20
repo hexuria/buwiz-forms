@@ -9,14 +9,16 @@ this tree. Mapper not started.
 the dated evidence JSON, and the remint of 1334 mint-path false
 negatives. Section 3 is done.
 
-**R1 mapper (2026-08-20, `gol/tin-map`):** `map_tin.py` copies the 163
-R1 keys onto input `name=` in `forms-corrected/` only. R3/R7 stay
-closed: they still have zero keyed examples.
+**R1 mapper (2026-08-20, `gol/tin-map`):** `map_tin.py` copies R1 keys
+onto input `name=` in `forms-corrected/` only. 2026-08-21: 167 keys
+(163 TIN + 4 named 2550M headers). R3/R7 stay closed: they still have
+zero keyed examples.
 
 **Headline finding: no N:1 or growable join is currently evidenced by a
-single harvested key.** All 163 keyed records are 1:1 TIN suffixes. The
+single harvested key.** All 167 keyed records are 1:1 (163 TIN suffixes
+plus four named 2550M header keys). The
 policy below can therefore *classify* N:1 and growable cases but cannot
-yet *execute* them. R1 is the exception: 163 unique TIN keys, mapped by
+yet *execute* them. R1 is the exception: 167 unique harvest keys, mapped by
 `map_tin.py`. R3/R7 stay closed for lack of evidence, not missing code.
 
 ---
@@ -34,9 +36,9 @@ One identity, one `serialized_key`, harvest unique. This is the only case
 that may write `name="frm…"`, and only after R6 binding holds.
 
 > Example (real): `2550m-2007/p1/tin-1` → `frm2550m:txtTIN1`.
-> All 163 keyed records today are this shape — TIN suffixes via
-> `harvest_tin`. 159 sit in bundles with inventory, 4 in `2000-dst-2018`
-> which has none (seeded by the C01–C07 correction path, not by harvest).
+> 163 keyed records are TIN suffixes via `harvest_tin`. Four more are
+> the named 2550M header harvest (`harvest_2550m_headers.py`): Item 5
+> RDO, Item 7 TaxPayerName, Item 9 Address, Item 10 Zip.
 
 ### R2 — 1:1 by position, no unique key → catalog-only annotation
 
@@ -45,8 +47,8 @@ Counts match but no key is uniquely attributable to this box. Leave
 6221 records sit here (`no unique fields.json key for this box`).
 
 > Example (real): `2550m-2007` — 292 identities against 292 rows, an
-> exact count match, yet only 4 records are keyed. Count symmetry is not
-> evidence of a join.
+> exact count match, yet only 8 records are keyed (4 TIN + 4 named
+> headers). Count symmetry is not evidence of a join.
 
 ### R3 — N:1, many cells → one XML field → **classify, do not join**
 
@@ -239,21 +241,28 @@ Explicit non-start: no mapper module, no `name="frm…"` in `emit.py`.
 
 ## 4. Still blocked
 
-- **The mapper, R1.** Done. PR #27 landed `map_tin.py`. 2026-08-21 replay
-  on `gol/windows-ebirforms-land` after the 1601EQ/1701Q/2000-dst
+- **The mapper, R1.** Done. PR #27 landed `map_tin.py`. 2026-08-21
+  replay on `gol/windows-ebirforms-land` after the 1601EQ/1701Q/2000-dst
   inventory land: `correct.py --batch HEAD` + `--verify`, identity
-  9990/9990, then `map_tin.py --write`. Pins held: R1 163, writable 148,
-  unwritable-mixed 15, inputs 496, files 38. Second run idempotent
+  9990/9990, then `map_tin.py --write`. Pins then: R1 163, writable 148,
+  unwritable-mixed 15. Same day, named 2550M header harvest
+  (`harvest_2550m_headers.py`) keyed Item 5/7/9/10. Rebuild + `--verify`
+  PASS, then `map_tin.py --write`. Pins now: R1 167, writable 152,
+  unwritable-mixed 15, inputs 505, files 38. Second run idempotent
   (`files_touched` 0). Evidence:
-  `corrections/evidence/tin-map-20260821.json`. Four 2200A keys
-  (`tinA`/`tinB`/`tinC`/`branchCode`) stay `claimed_duplicate` in
+  `corrections/evidence/harvest-2550m-headers-20260821.json`,
+  `corrections/evidence/tin-map-20260821-2550m-headers.json`. Four 2200A
+  keys (`tinA`/`tinB`/`tinC`/`branchCode`) stay `claimed_duplicate` in
   leftover census (occ2/occ3 are header mirrors); they stay mapped as
   R1 and are not unmapped.
-- **Leftover unique keys.** Measured 2026-08-21: 8436 unclaimed keys
-  appear once in their inventory. That is not a join. Do not copy them
-  onto `official_field_key` or `name=` without a named harvest rule and
-  a box role. Replay: `leftover_keys.py`. W5 2550M RDO/zip/address/email
-  stay harvest-rule candidates, not joins.
+- **Leftover unique keys.** Measured 2026-08-21 after the 2550M header
+  harvest: 8432 unclaimed keys appear once in their inventory. That is
+  not a join. Do not copy them onto `official_field_key` or `name=`
+  without a named harvest rule and a box role. Replay:
+  `leftover_keys.py`. 2550M `txtEmail` stays refused (hidden/
+  workflow-metadata, no printed caption). Item 6 line of business and
+  Item 8 telephone are still leftover-unique printed boxes, not this
+  harvest.
 - **The mapper, R3/R7.** Still blocked on evidence: zero keyed examples
   in the whole corpus. W4 2550M dummy Save was `other` (one money input
   + modal schedule). Do not join them.
