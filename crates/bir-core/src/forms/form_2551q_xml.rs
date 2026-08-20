@@ -404,7 +404,7 @@ mod tests {
     #[test]
     fn writer_frm_keys_are_in_fields_json_except_collapsed_txt25_through_txt28() {
         let inventory: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../../rules/forms/2551q-v2018/fields.json"
+            "../../../../rules/forms/2551q-v2018/fields.json"
         ))
         .expect("2551Q fields inventory");
         let serialized: std::collections::BTreeSet<String> = inventory["fields"]

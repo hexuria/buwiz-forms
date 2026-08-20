@@ -5,7 +5,9 @@
 //! refs stay on the existing Rust provider.
 
 use gpui::prelude::FluentBuilder;
-use gpui::{Context, Entity, IntoElement, ParentElement, Render, Styled, Window, px};
+use gpui::{
+    AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px,
+};
 use gpui_component::ActiveTheme;
 use gpui_component::Disableable;
 use gpui_component::button::{Button, ButtonVariants};

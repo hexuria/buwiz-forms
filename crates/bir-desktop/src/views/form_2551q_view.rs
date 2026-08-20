@@ -24,7 +24,6 @@ use bir_core::forms::form_2551q::{
 use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
-use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
 use super::email_confirmation_view::EmailConfirmationView;
 use crate::components::form_engine::FormViewTrait;
