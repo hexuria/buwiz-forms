@@ -239,18 +239,24 @@ Explicit non-start: no mapper module, no `name="frm…"` in `emit.py`.
 
 ## 4. Still blocked
 
-- **The mapper, R1.** Landed as PR #27: `map_tin.py` writes the 163
-  catalog-reported TIN keys onto input `name=` in `forms-corrected/`
-  only. Four of those keys (`extra/2200a-2020` tinA/B/C/branchCode)
-  appear three times each in inventory; the leftover census reports
-  them as `claimed_duplicate` and does not unmap them.
-- **Leftover unique keys.** Measured 2026-08-20: 8028 unclaimed keys
+- **The mapper, R1.** Done. PR #27 landed `map_tin.py`. 2026-08-21 replay
+  on `gol/windows-ebirforms-land` after the 1601EQ/1701Q/2000-dst
+  inventory land: `correct.py --batch HEAD` + `--verify`, identity
+  9990/9990, then `map_tin.py --write`. Pins held: R1 163, writable 148,
+  unwritable-mixed 15, inputs 496, files 38. Second run idempotent
+  (`files_touched` 0). Evidence:
+  `corrections/evidence/tin-map-20260821.json`. Four 2200A keys
+  (`tinA`/`tinB`/`tinC`/`branchCode`) stay `claimed_duplicate` in
+  leftover census (occ2/occ3 are header mirrors); they stay mapped as
+  R1 and are not unmapped.
+- **Leftover unique keys.** Measured 2026-08-21: 8436 unclaimed keys
   appear once in their inventory. That is not a join. Do not copy them
   onto `official_field_key` or `name=` without a named harvest rule and
-  a box role. Replay: `leftover_keys.py`. Windows dummy-Save discovery:
-  `HANDOFF-WINDOWS-EBIRFORMS.md`.
+  a box role. Replay: `leftover_keys.py`. W5 2550M RDO/zip/address/email
+  stay harvest-rule candidates, not joins.
 - **The mapper, R3/R7.** Still blocked on evidence: zero keyed examples
-  in the whole corpus. Do not join them.
+  in the whole corpus. W4 2550M dummy Save was `other` (one money input
+  + modal schedule). Do not join them.
 - **The 1334 false negatives.** Reminted 2026-08-19: gap strings on the
   6 skew bundles now say “no unique key”, not “no inventory”. Catalog
   size stays 9990. No keys invented.
@@ -260,6 +266,15 @@ Explicit non-start: no mapper module, no `name="frm…"` in `emit.py`.
   2026-08-18; `proven: false` until `audit.py` is seen to fail on
   `forms-corrected/` for the declared divergences. Stage 2 gate, not
   Stage 3.
-- **Two 100%-null inventories** (`1601eq-2019` 621/621,
-  `1701q-2018` 172/172). Present but unusable; no join is possible from
-  them regardless of policy.
+- **1601EQ / 1701Q / 2000-DST inventories.** Done 2026-08-21. Live
+  `serialized_key` filled where dummy Save emitted the name; overlay
+  snapshot `tools/formgen/inventories/2000-dst-v2018` (not `rules/forms/`).
+  `claimed_absent` 0. 1601EQ still has 531 null rows the Save did not
+  emit — leftover, not a join.
+- **C06 agent TIN.** W7: no distinct WITHHOLDING AGENT TIN key. Item 5
+  is C05. Gap stays.
+- **Ten R5 bundles** still have no `fields.json`: `0620-2019`,
+  `1621-2019`, `1701-2018-attachment`, `1701-2018-conso`,
+  `1702mx-2018c-attachment`, `1709-2020`, `2316-2021`, `2550-ds-2025`,
+  `2551m-2002`, `extra/1604cf-2008`. Gapped by design until an inventory
+  exists.
