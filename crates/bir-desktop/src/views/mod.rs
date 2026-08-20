@@ -14,6 +14,8 @@ pub mod form_1702rt_view;
 pub mod form_2550q_view;
 pub mod form_2551q_view;
 pub mod form_html_preview_launcher;
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub mod frozen_html_preview;
 pub mod global_dashboard;
 pub mod html_form_preview;
 pub mod import_export;

@@ -24,7 +24,7 @@ use bir_core::forms::form_2551q::{
 use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
-use bir_print::html::RenderEnvelope;
+use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
 use super::email_confirmation_view::EmailConfirmationView;
 use crate::components::form_engine::FormViewTrait;
@@ -1248,8 +1248,7 @@ impl Form2551QView {
         cx.notify();
 
         let render_draft = self.preview_draft_snapshot();
-        let envelope = RenderEnvelope::from(&render_draft);
-        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match super::form_html_preview_launcher::launch_frozen_2551q_preview(&render_draft, cx) {
             Ok(launch_kind) => {
                 self.is_generating_pdf = false;
                 self.status_message = Some(launch_kind.status_message().to_string());

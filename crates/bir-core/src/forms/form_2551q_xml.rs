@@ -402,6 +402,58 @@ mod tests {
     }
 
     #[test]
+    fn writer_frm_keys_are_in_fields_json_except_collapsed_txt25_through_txt28() {
+        let inventory: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../../rules/forms/2551q-v2018/fields.json"
+        ))
+        .expect("2551Q fields inventory");
+        let serialized: std::collections::BTreeSet<String> = inventory["fields"]
+            .as_array()
+            .expect("fields array")
+            .iter()
+            .filter_map(|row| row["serialized_key"].as_str().map(str::to_string))
+            .collect();
+
+        let frm_keys: std::collections::BTreeSet<String> = sample_draft()
+            .to_bir_field_map()
+            .into_keys()
+            .filter(|key| key.starts_with("frm2551Qv2018:"))
+            .collect();
+
+        let missing: std::collections::BTreeSet<String> =
+            frm_keys.difference(&serialized).cloned().collect();
+        let expected_missing: std::collections::BTreeSet<String> = [
+            "frm2551Qv2018:txt25",
+            "frm2551Qv2018:txt26",
+            "frm2551Qv2018:txt27",
+            "frm2551Qv2018:txt28",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(
+            missing, expected_missing,
+            "writer frm2551Qv2018:* keys must stay inside fields.json except the pinned txt25-28 collapse"
+        );
+
+        for key in [
+            "frm2551Qv2018:txtTIN1",
+            "frm2551Qv2018:txtTIN2",
+            "frm2551Qv2018:txtTIN3",
+            "frm2551Qv2018:txtBranchCode",
+        ] {
+            assert!(
+                serialized.contains(key),
+                "TIN key {key} missing from fields.json"
+            );
+            assert!(
+                frm_keys.contains(key),
+                "TIN key {key} missing from writer map"
+            );
+        }
+    }
+
+    #[test]
     fn field_map_serializes_explicit_filing_and_legal_values() {
         let mut draft = sample_draft();
         draft.tax_period_basis = TaxPeriodBasis::Fiscal;

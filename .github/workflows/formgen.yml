@@ -28,11 +28,21 @@
 
 name: formgen
 
+# Product PRs (crates/, html-frozen/, rules/) must not wait on this job.
+# The generator gate stays operator-run; this workflow only evaluates the
+# committed forms/ tree and tools/formgen. Path filters keep it off the
+# desktop/print path.
 on:
   push:
     branches: [ "main", "codex/**" ]
+    paths:
+      - "tools/formgen/**"
+      - "forms/**"
   pull_request:
     branches: [ "main" ]
+    paths:
+      - "tools/formgen/**"
+      - "forms/**"
 
 # Same shape as ci.yml. `github.workflow` differs per workflow, so this cannot
 # collide with the CI run on the same ref.
