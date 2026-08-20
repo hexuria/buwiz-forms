@@ -52,7 +52,7 @@ KEY_CLASSES = (
 )
 
 # Pins measured 2026-08-21 after landing 1601EQ/1701Q saveXML names and
-# 2000-dst-v2018. Uniqueness in inventory is not a join.
+# overlay inventory 2000-dst-v2018. Uniqueness in inventory is not a join.
 ACCEPTANCE = {
     "bundles": 53,
     "bundles_with_leftover_unique": 43,

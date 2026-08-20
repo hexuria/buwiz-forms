@@ -53,7 +53,7 @@ does.
 | **W6** | same | Four leftover_duplicate keys (1702Q tel, 1707A email, 2551Q email, 2200A registeredName). | 3 evidence | After W5. |
 | **W7** | same | 1600WP agent TIN (C06) only if W1–W3 done. Item 5 TIN is C05, not this comb. | 3 evidence | After W1–W3. |
 | **W8** | same | Land evidence JSON (+ staging if needed) when Uriah says land. PR, no merge. | 3 evidence | Not until asked. |
-| **W9** | `gol/windows-ebirforms-land` | Land staged 1601EQ/1701Q `serialized_key` and NEW `2000-dst-v2018`. Remint 142 2000-dst no-harvest gaps to R2. Live 2000-v2018 untouched. PR, no merge. | 3 inventory | After W8. |
+| **W9** | `gol/windows-ebirforms-land` | Land staged 1601EQ/1701Q `serialized_key` and overlay inventory `tools/formgen/inventories/2000-dst-v2018` (not `rules/forms/`; that tree stays 43). Remint 142 2000-dst no-harvest gaps to R2. Live 2000-v2018 untouched. PR, no merge. | 3 inventory | After W8. |
 
 How to use agents (compact prompts, no full chat history; one writer per
 file):
