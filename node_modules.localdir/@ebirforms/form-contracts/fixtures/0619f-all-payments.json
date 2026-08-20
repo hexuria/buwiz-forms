@@ -1,0 +1,198 @@
+{
+  "fields": {
+    "any_taxes_withheld": {
+      "type": "boolean",
+      "value": true
+    },
+    "due_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "is_amended": {
+      "type": "boolean",
+      "value": true
+    },
+    "item_13_atc": {
+      "type": "text",
+      "value": "WMF10"
+    },
+    "item_13_interest_final_tax_withheld": {
+      "type": "decimal",
+      "value": 80000.0
+    },
+    "item_14_atc": {
+      "type": "text",
+      "value": "WMF20"
+    },
+    "item_14_other_final_tax_withheld": {
+      "type": "decimal",
+      "value": 45000.0
+    },
+    "item_15_total": {
+      "type": "decimal",
+      "value": 125000.0
+    },
+    "item_16_remitted_previously": {
+      "type": "decimal",
+      "value": 5000.0
+    },
+    "item_17_net_amount_of_remittance": {
+      "type": "decimal",
+      "value": 120000.0
+    },
+    "item_18a_surcharge": {
+      "type": "decimal",
+      "value": 2500.0
+    },
+    "item_18b_interest": {
+      "type": "decimal",
+      "value": 750.0
+    },
+    "item_18c_compromise": {
+      "type": "decimal",
+      "value": 1000.0
+    },
+    "item_18d_total_penalties": {
+      "type": "decimal",
+      "value": 4250.0
+    },
+    "item_19_total_amount_of_remittance": {
+      "type": "decimal",
+      "value": 124250.0
+    },
+    "line_of_business": {
+      "type": "text",
+      "value": "SOFTWARE DEVELOPMENT"
+    },
+    "payment_20_amount": {
+      "type": "decimal",
+      "value": 31000.0
+    },
+    "payment_20_amount_present": {
+      "type": "boolean",
+      "value": true
+    },
+    "payment_20_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "payment_20_drawee_bank_or_agency": {
+      "type": "text",
+      "value": "AAB"
+    },
+    "payment_20_number": {
+      "type": "text",
+      "value": "BDM-001"
+    },
+    "payment_21_amount": {
+      "type": "decimal",
+      "value": 31000.0
+    },
+    "payment_21_amount_present": {
+      "type": "boolean",
+      "value": true
+    },
+    "payment_21_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "payment_21_drawee_bank_or_agency": {
+      "type": "text",
+      "value": "DBP"
+    },
+    "payment_21_number": {
+      "type": "text",
+      "value": "CHECK-002"
+    },
+    "payment_22_amount": {
+      "type": "decimal",
+      "value": 31000.0
+    },
+    "payment_22_amount_present": {
+      "type": "boolean",
+      "value": true
+    },
+    "payment_22_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "payment_22_drawee_bank_or_agency": {
+      "type": "text",
+      "value": "BIR"
+    },
+    "payment_22_number": {
+      "type": "text",
+      "value": "TDM-003"
+    },
+    "payment_23_amount": {
+      "type": "decimal",
+      "value": 31250.0
+    },
+    "payment_23_amount_present": {
+      "type": "boolean",
+      "value": true
+    },
+    "payment_23_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "payment_23_drawee_bank_or_agency": {
+      "type": "text",
+      "value": "RCO"
+    },
+    "payment_23_number": {
+      "type": "text",
+      "value": "OTHER-004"
+    },
+    "payment_23_particular": {
+      "type": "text",
+      "value": "REVENUE COLLECTION OFFICER"
+    },
+    "registered_address_2": {
+      "type": "text",
+      "value": "OLONGAPO CITY, ZAMBALES"
+    },
+    "tax_agent_accreditation_number": {
+      "type": "text",
+      "value": "12-3456-789"
+    },
+    "tax_agent_date_of_expiry": {
+      "type": "text",
+      "value": "01/15/2027"
+    },
+    "tax_agent_date_of_issue": {
+      "type": "text",
+      "value": "01/15/2024"
+    },
+    "tax_type_code": {
+      "type": "text",
+      "value": "WB"
+    },
+    "withholding_agent_category": {
+      "type": "text",
+      "value": "private"
+    }
+  },
+  "form": {
+    "code": "0619F",
+    "version": "2018"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "04/2026",
+    "month": 4,
+    "taxable_year": 2026
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "renderer.0619f@example.com",
+    "name": "JUAN DELA CRUZ",
+    "rdo_code": "018",
+    "registered_address": "53 SANTOL EXTENSION, NEW CABALAN",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": []
+}

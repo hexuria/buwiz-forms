@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/ebirforms/schema/linux-candidate-certification-report-v1.schema.json",
+  "title": "External Linux candidate certification verification report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope",
+    "promotion_eligible",
+    "trusted_producer",
+    "operator_only",
+    "foundation_verification_passed",
+    "promotion_satisfied",
+    "form",
+    "source_revision",
+    "candidate_manifest",
+    "candidate_archive",
+    "renderer_identity",
+    "attestation",
+    "verified_artifact_count",
+    "owned_pdf_validation",
+    "live_linux_verification",
+    "package_boundary",
+    "strict_verifier_gaps"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scope": { "const": "external_linux_candidate_certification_verification" },
+    "promotion_eligible": { "const": false },
+    "trusted_producer": { "const": false },
+    "operator_only": { "const": true },
+    "foundation_verification_passed": { "const": true },
+    "promotion_satisfied": { "const": false },
+    "form": { "const": { "code": "2551Q", "revision": "2018" } },
+    "source_revision": { "$ref": "#/$defs/gitRevision" },
+    "candidate_manifest": { "$ref": "#/$defs/fileRecord" },
+    "candidate_archive": { "$ref": "#/$defs/fileRecord" },
+    "renderer_identity": { "$ref": "#/$defs/fileRecord" },
+    "attestation": { "$ref": "#/$defs/fileRecord" },
+    "verified_artifact_count": { "type": "integer", "minimum": 1 },
+    "owned_pdf_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier_executable_sha256", "backends"],
+      "properties": {
+        "verifier_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "backends": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x11", "wayland"],
+          "properties": {
+            "x11": { "$ref": "#/$defs/pdfResult" },
+            "wayland": { "$ref": "#/$defs/pdfResult" }
+          }
+        }
+      }
+    },
+    "live_linux_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installed_root_hash_verified",
+        "installed_binary_hash_verified",
+        "x11_xvfb_available",
+        "wayland_weston_available",
+        "gtk_version",
+        "webkitgtk_version",
+        "display_output_sha256",
+        "completed_print_jobs_verified",
+        "completed_print_job_output_sha256"
+      ],
+      "properties": {
+        "installed_root_hash_verified": { "const": true },
+        "installed_binary_hash_verified": { "const": true },
+        "x11_xvfb_available": { "const": true },
+        "wayland_weston_available": { "const": true },
+        "gtk_version": { "type": "string", "minLength": 1 },
+        "webkitgtk_version": { "type": "string", "minLength": 1 },
+        "display_output_sha256": { "$ref": "#/$defs/backendHashes" },
+        "completed_print_jobs_verified": { "const": true },
+        "completed_print_job_output_sha256": { "$ref": "#/$defs/backendHashes" }
+      }
+    },
+    "package_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "portable_candidate_verified",
+        "final_release_deb_verified",
+        "final_release_tarball_verified",
+        "release_package_signature_verified"
+      ],
+      "properties": {
+        "portable_candidate_verified": { "const": true },
+        "final_release_deb_verified": { "const": false },
+        "final_release_tarball_verified": { "const": false },
+        "release_package_signature_verified": { "const": false }
+      }
+    },
+    "strict_verifier_gaps": {
+      "type": "array",
+      "minItems": 2,
+      "allOf": [
+        { "contains": { "const": "collector producer is not registered as trusted" } },
+        { "contains": { "const": "portable candidate bytes are not the final deb and release tarball bytes" } }
+      ],
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_count", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "pdfResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_sha256",
+        "actual_page_count",
+        "width_points",
+        "height_points",
+        "content_nonempty"
+      ],
+      "properties": {
+        "output_sha256": { "$ref": "#/$defs/sha256" },
+        "actual_page_count": { "const": 2 },
+        "width_points": { "const": 612 },
+        "height_points": { "const": 936 },
+        "content_nonempty": { "const": true }
+      }
+    },
+    "backendHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x11", "wayland"],
+      "properties": {
+        "x11": { "$ref": "#/$defs/sha256" },
+        "wayland": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

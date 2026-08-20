@@ -1,0 +1,498 @@
+{
+  "fields": {
+    "atc": {
+      "type": "text",
+      "value": "II012"
+    },
+    "attached_sheets": {
+      "type": "text",
+      "value": "02"
+    },
+    "citizenship": {
+      "type": "text",
+      "value": "FILIPINO"
+    },
+    "claims_foreign_tax_credit": {
+      "type": "boolean",
+      "value": false
+    },
+    "date_of_birth": {
+      "type": "text",
+      "value": "01/15/1990"
+    },
+    "deduction_method": {
+      "type": "text",
+      "value": "osd"
+    },
+    "filer_type": {
+      "type": "text",
+      "value": "single_proprietor"
+    },
+    "foreign_tax_number": {
+      "type": "text",
+      "value": ""
+    },
+    "has_spouse": {
+      "type": "boolean",
+      "value": false
+    },
+    "is_amended": {
+      "type": "boolean",
+      "value": false
+    },
+    "item_26_spouse": {
+      "type": "decimal",
+      "value": 13000.0
+    },
+    "item_26_taxpayer": {
+      "type": "decimal",
+      "value": 26000.0
+    },
+    "item_27_spouse": {
+      "type": "decimal",
+      "value": 13500.0
+    },
+    "item_27_taxpayer": {
+      "type": "decimal",
+      "value": 27000.0
+    },
+    "item_28_spouse": {
+      "type": "decimal",
+      "value": 14000.0
+    },
+    "item_28_taxpayer": {
+      "type": "decimal",
+      "value": 28000.0
+    },
+    "item_29_spouse": {
+      "type": "decimal",
+      "value": 14500.0
+    },
+    "item_29_taxpayer": {
+      "type": "decimal",
+      "value": 29000.0
+    },
+    "item_30_spouse": {
+      "type": "decimal",
+      "value": 15000.0
+    },
+    "item_30_taxpayer": {
+      "type": "decimal",
+      "value": 30000.0
+    },
+    "item_31": {
+      "type": "decimal",
+      "value": 45000.0
+    },
+    "item_36_spouse": {
+      "type": "decimal",
+      "value": 22500.0
+    },
+    "item_36_taxpayer": {
+      "type": "decimal",
+      "value": 45000.0
+    },
+    "item_37_spouse": {
+      "type": "decimal",
+      "value": 23125.0
+    },
+    "item_37_taxpayer": {
+      "type": "decimal",
+      "value": 46250.0
+    },
+    "item_38_spouse": {
+      "type": "decimal",
+      "value": 23750.0
+    },
+    "item_38_taxpayer": {
+      "type": "decimal",
+      "value": 47500.0
+    },
+    "item_39_spouse": {
+      "type": "decimal",
+      "value": 24375.0
+    },
+    "item_39_taxpayer": {
+      "type": "decimal",
+      "value": 48750.0
+    },
+    "item_40_spouse": {
+      "type": "decimal",
+      "value": 25000.0
+    },
+    "item_40_taxpayer": {
+      "type": "decimal",
+      "value": 50000.0
+    },
+    "item_41_spouse": {
+      "type": "decimal",
+      "value": 25625.0
+    },
+    "item_41_taxpayer": {
+      "type": "decimal",
+      "value": 51250.0
+    },
+    "item_42_spouse": {
+      "type": "decimal",
+      "value": 26250.0
+    },
+    "item_42_taxpayer": {
+      "type": "decimal",
+      "value": 52500.0
+    },
+    "item_43_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_43_spouse": {
+      "type": "decimal",
+      "value": 26875.0
+    },
+    "item_43_taxpayer": {
+      "type": "decimal",
+      "value": 53750.0
+    },
+    "item_44_spouse": {
+      "type": "decimal",
+      "value": 27500.0
+    },
+    "item_44_taxpayer": {
+      "type": "decimal",
+      "value": 55000.0
+    },
+    "item_45_spouse": {
+      "type": "decimal",
+      "value": 28125.0
+    },
+    "item_45_taxpayer": {
+      "type": "decimal",
+      "value": 56250.0
+    },
+    "item_46_spouse": {
+      "type": "decimal",
+      "value": 28750.0
+    },
+    "item_46_taxpayer": {
+      "type": "decimal",
+      "value": 57500.0
+    },
+    "item_47_spouse": {
+      "type": "decimal",
+      "value": 29375.0
+    },
+    "item_47_taxpayer": {
+      "type": "decimal",
+      "value": 58750.0
+    },
+    "item_48_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_48_spouse": {
+      "type": "decimal",
+      "value": 30000.0
+    },
+    "item_48_taxpayer": {
+      "type": "decimal",
+      "value": 60000.0
+    },
+    "item_49_spouse": {
+      "type": "decimal",
+      "value": 30625.0
+    },
+    "item_49_taxpayer": {
+      "type": "decimal",
+      "value": 61250.0
+    },
+    "item_50_spouse": {
+      "type": "decimal",
+      "value": 31250.0
+    },
+    "item_50_taxpayer": {
+      "type": "decimal",
+      "value": 62500.0
+    },
+    "item_51_spouse": {
+      "type": "decimal",
+      "value": 31875.0
+    },
+    "item_51_taxpayer": {
+      "type": "decimal",
+      "value": 63750.0
+    },
+    "item_52_spouse": {
+      "type": "decimal",
+      "value": 32500.0
+    },
+    "item_52_taxpayer": {
+      "type": "decimal",
+      "value": 65000.0
+    },
+    "item_53_spouse": {
+      "type": "decimal",
+      "value": 33125.0
+    },
+    "item_53_taxpayer": {
+      "type": "decimal",
+      "value": 66250.0
+    },
+    "item_54_spouse": {
+      "type": "decimal",
+      "value": 33750.0
+    },
+    "item_54_taxpayer": {
+      "type": "decimal",
+      "value": 67500.0
+    },
+    "item_55_spouse": {
+      "type": "decimal",
+      "value": 34375.0
+    },
+    "item_55_taxpayer": {
+      "type": "decimal",
+      "value": 68750.0
+    },
+    "item_56_spouse": {
+      "type": "decimal",
+      "value": 35000.0
+    },
+    "item_56_taxpayer": {
+      "type": "decimal",
+      "value": 70000.0
+    },
+    "item_57_spouse": {
+      "type": "decimal",
+      "value": 35625.0
+    },
+    "item_57_taxpayer": {
+      "type": "decimal",
+      "value": 71250.0
+    },
+    "item_58_spouse": {
+      "type": "decimal",
+      "value": 36250.0
+    },
+    "item_58_taxpayer": {
+      "type": "decimal",
+      "value": 72500.0
+    },
+    "item_59_spouse": {
+      "type": "decimal",
+      "value": 36875.0
+    },
+    "item_59_taxpayer": {
+      "type": "decimal",
+      "value": 73750.0
+    },
+    "item_60_spouse": {
+      "type": "decimal",
+      "value": 37500.0
+    },
+    "item_60_taxpayer": {
+      "type": "decimal",
+      "value": 75000.0
+    },
+    "item_61_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_61_spouse": {
+      "type": "decimal",
+      "value": 38125.0
+    },
+    "item_61_taxpayer": {
+      "type": "decimal",
+      "value": 76250.0
+    },
+    "item_62_spouse": {
+      "type": "decimal",
+      "value": 38750.0
+    },
+    "item_62_taxpayer": {
+      "type": "decimal",
+      "value": 77500.0
+    },
+    "item_63_spouse": {
+      "type": "decimal",
+      "value": 39375.0
+    },
+    "item_63_taxpayer": {
+      "type": "decimal",
+      "value": 78750.0
+    },
+    "item_64_spouse": {
+      "type": "decimal",
+      "value": 40000.0
+    },
+    "item_64_taxpayer": {
+      "type": "decimal",
+      "value": 80000.0
+    },
+    "item_65_spouse": {
+      "type": "decimal",
+      "value": 40625.0
+    },
+    "item_65_taxpayer": {
+      "type": "decimal",
+      "value": 81250.0
+    },
+    "item_66_spouse": {
+      "type": "decimal",
+      "value": 41250.0
+    },
+    "item_66_taxpayer": {
+      "type": "decimal",
+      "value": 82500.0
+    },
+    "item_67_spouse": {
+      "type": "decimal",
+      "value": 41875.0
+    },
+    "item_67_taxpayer": {
+      "type": "decimal",
+      "value": 83750.0
+    },
+    "item_68_spouse": {
+      "type": "decimal",
+      "value": 42500.0
+    },
+    "item_68_taxpayer": {
+      "type": "decimal",
+      "value": 85000.0
+    },
+    "machine_validation_or_receipt_details": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_32_amount": {
+      "type": "decimal",
+      "value": 45000.0
+    },
+    "payment_32_bank": {
+      "type": "text",
+      "value": "AAB 018"
+    },
+    "payment_32_date": {
+      "type": "text",
+      "value": "08/15/2026"
+    },
+    "payment_32_number": {
+      "type": "text",
+      "value": "BDM-1701Q-001"
+    },
+    "payment_33_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_33_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_33_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_34_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_34_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_34_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_particular": {
+      "type": "text",
+      "value": ""
+    },
+    "registered_address_2": {
+      "type": "text",
+      "value": "OLONGAPO CITY, ZAMBALES"
+    },
+    "spouse_atc": {
+      "type": "text",
+      "value": "II014"
+    },
+    "spouse_citizenship": {
+      "type": "text",
+      "value": "FILIPINO"
+    },
+    "spouse_claims_foreign_tax_credit": {
+      "type": "boolean",
+      "value": false
+    },
+    "spouse_deduction_method": {
+      "type": "text",
+      "value": "itemized"
+    },
+    "spouse_filer_type": {
+      "type": "text",
+      "value": "professional"
+    },
+    "spouse_foreign_tax_number": {
+      "type": "text",
+      "value": ""
+    },
+    "spouse_name": {
+      "type": "text",
+      "value": "MARIA DELA CRUZ"
+    },
+    "spouse_rdo_code": {
+      "type": "text",
+      "value": "018"
+    },
+    "spouse_tax_rate_choice": {
+      "type": "text",
+      "value": "graduated"
+    },
+    "spouse_tin": {
+      "type": "text",
+      "value": "98765432100000"
+    },
+    "tax_rate_choice": {
+      "type": "text",
+      "value": "graduated"
+    },
+    "taxpayer_last_name": {
+      "type": "text",
+      "value": "DELA CRUZ"
+    }
+  },
+  "form": {
+    "code": "1701Q",
+    "version": "2018"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "2026Q2",
+    "quarter": 2,
+    "taxable_year": 2026
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "renderer.1701q@example.com",
+    "name": "JUAN DELA CRUZ",
+    "rdo_code": "018",
+    "registered_address": "53 SANTOL EXTENSION, NEW CABALAN",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": []
+}

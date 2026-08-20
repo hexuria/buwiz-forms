@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/ebirforms/schema/macos-candidate-certification-report-v1.schema.json",
+  "title": "External macOS candidate certification verification report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope",
+    "promotion_eligible",
+    "trusted_producer",
+    "operator_only",
+    "foundation_verification_passed",
+    "promotion_satisfied",
+    "form",
+    "source_revision",
+    "candidate_manifest",
+    "candidate_archive",
+    "renderer_identity",
+    "attestation",
+    "verified_artifact_count",
+    "owned_pdf_validation",
+    "live_macos_verification",
+    "strict_verifier_gaps"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scope": { "const": "external_macos_candidate_certification_verification" },
+    "promotion_eligible": { "const": false },
+    "trusted_producer": { "const": false },
+    "operator_only": { "const": true },
+    "foundation_verification_passed": { "const": true },
+    "promotion_satisfied": { "const": false },
+    "form": { "const": { "code": "2551Q", "revision": "2018" } },
+    "source_revision": { "$ref": "#/$defs/gitRevision" },
+    "candidate_manifest": { "$ref": "#/$defs/fileRecord" },
+    "candidate_archive": { "$ref": "#/$defs/fileRecord" },
+    "renderer_identity": { "$ref": "#/$defs/fileRecord" },
+    "attestation": { "$ref": "#/$defs/fileRecord" },
+    "verified_artifact_count": { "type": "integer", "minimum": 1 },
+    "owned_pdf_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier_executable_sha256", "output_sha256", "actual_page_count", "width_points", "height_points", "content_nonempty"],
+      "properties": {
+        "verifier_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "output_sha256": { "$ref": "#/$defs/sha256" },
+        "actual_page_count": { "const": 2 },
+        "width_points": { "const": 612 },
+        "height_points": { "const": 936 },
+        "content_nonempty": { "const": true }
+      }
+    },
+    "live_macos_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accessibility_permission_granted",
+        "printer_available",
+        "printer_name",
+        "completed_print_job_verified",
+        "print_job_output_sha256",
+        "developer_id_signed",
+        "team_identifier",
+        "gatekeeper_notarization_verified",
+        "stapling_verified",
+        "gatekeeper_output_sha256",
+        "stapler_output_sha256"
+      ],
+      "properties": {
+        "accessibility_permission_granted": { "const": true },
+        "printer_available": { "const": true },
+        "printer_name": { "type": "string", "minLength": 1 },
+        "completed_print_job_verified": { "const": true },
+        "print_job_output_sha256": { "$ref": "#/$defs/sha256" },
+        "developer_id_signed": { "const": true },
+        "team_identifier": { "type": "string", "minLength": 1 },
+        "gatekeeper_notarization_verified": { "const": true },
+        "stapling_verified": { "const": true },
+        "gatekeeper_output_sha256": { "$ref": "#/$defs/sha256" },
+        "stapler_output_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "strict_verifier_gaps": {
+      "type": "array",
+      "minItems": 1,
+      "contains": { "const": "collector producer is not registered as trusted" },
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_count", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

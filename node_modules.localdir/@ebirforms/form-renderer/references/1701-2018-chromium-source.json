@@ -1,0 +1,83 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "1701",
+    "device_scale_factor": 1.5,
+    "dpi": 144,
+    "form_id": "1701v2018",
+    "official_source_file": "external:1701 Jan 2018 final with rates.pdf",
+    "official_source_sha256": "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e",
+    "page_count": 4,
+    "page_height_pt": 936,
+    "page_width_pt": 612,
+    "pages": [
+      {
+        "chromium_png": "packages/form-renderer/references/1701-2018-page-1-chromium.png",
+        "chromium_png_sha256": "ba3bc9a8b93cce3a41794f11627fe09dcd1cb9be8253ee02a1dd652c9b856df2",
+        "noise_floor_changed_percent": 3.9400731802692586,
+        "noise_floor_changed_pixels": 90280,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 1,
+        "poppler_reference_png": "packages/form-renderer/references/1701-2018-page-1.png",
+        "poppler_reference_png_sha256": "37afb5ac1cfb36970601650e3d24a856e61fd0abc7afd0f36d6af9be48d5dd4a",
+        "reference_height_px": 1872,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "960568ad43f2c47a2c3cb00d4fd84656f8130c0dc58f3da7efd8b86ef7d69d5f"
+      },
+      {
+        "chromium_png": "packages/form-renderer/references/1701-2018-page-2-chromium.png",
+        "chromium_png_sha256": "4c0609dec36d7a1c02f76cdc3310c8dc95f8b214b47b13fdb1fa38cc30ececa4",
+        "noise_floor_changed_percent": 3.985505348863192,
+        "noise_floor_changed_pixels": 91321,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 2,
+        "poppler_reference_png": "packages/form-renderer/references/1701-2018-page-2.png",
+        "poppler_reference_png_sha256": "51a210c01bd188a7ad92dc52136afa98d2469810bf9cc0cfa2b95f7f69b23400",
+        "reference_height_px": 1872,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "e490106ebccc22ad59c70766f65fa46602ec1454e8b23bbfe55f4791e9ddf1a1"
+      },
+      {
+        "chromium_png": "packages/form-renderer/references/1701-2018-page-3-chromium.png",
+        "chromium_png_sha256": "b2105366a8a3cb56e74eed7f48072a097ad77524a720feccd40ac3464007a42f",
+        "noise_floor_changed_percent": 3.445861963018826,
+        "noise_floor_changed_pixels": 78956,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 3,
+        "poppler_reference_png": "packages/form-renderer/references/1701-2018-page-3.png",
+        "poppler_reference_png_sha256": "d9f565209adafb59f71befef2a4523416f71abcd37d0d41ca5c16a490e5bb52c",
+        "reference_height_px": 1872,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "120e9b38c468847dbb0f6c2a0efd5f23ca43dc3cc6bef9280f7e527e26ab4105"
+      },
+      {
+        "chromium_png": "packages/form-renderer/references/1701-2018-page-4-chromium.png",
+        "chromium_png_sha256": "3cddad3456e67f93b9c6212eb25a1b2a2f75df4b043189eeeeb63c8a65460173",
+        "noise_floor_changed_percent": 4.076806114183565,
+        "noise_floor_changed_pixels": 93413,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 4,
+        "poppler_reference_png": "packages/form-renderer/references/1701-2018-page-4.png",
+        "poppler_reference_png_sha256": "8597a626381d0a45164fcdc274e3706965b6290870bd320a2ef87723c2b930a0",
+        "reference_height_px": 1872,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "acc47d664bd7d7acf99cbb6ab3b52078d6248a042a026785f56d4b0bd09ffd11"
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_chromium_raster",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": {
+    "chromium_version": "145.0.7632.6",
+    "name": "prepare_chromium_reference.mjs",
+    "pdftocairo_version": "26.07.0",
+    "platform": "darwin",
+    "playwright_version": "1.58.2"
+  },
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

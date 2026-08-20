@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="95"
+  height="83"
+  viewBox="0 0 95 83"
+  role="img"
+  aria-labelledby="title description"
+>
+  <title id="title">Bureau of Internal Revenue seal</title>
+  <desc id="description">
+    Calibration-only 2551Q January 2018 presentation of the reviewed Commons
+    exact-white binary vector in the exact official 95 by 83 canvas and 75 by
+    73 active bounds. This wrapper does not duplicate or modify source paths.
+  </desc>
+  <image
+    x="9"
+    y="7"
+    width="75"
+    height="73"
+    preserveAspectRatio="none"
+    href="./bir-seal-commons-binary-exact-white.svg"
+    xlink:href="./bir-seal-commons-binary-exact-white.svg"
+  />
+</svg>
