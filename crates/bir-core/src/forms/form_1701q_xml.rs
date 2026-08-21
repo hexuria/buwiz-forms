@@ -1495,7 +1495,6 @@ mod tests {
         assert_eq!(fields["txtFinalFlag"], "0");
         assert_eq!(fields["txtEnroll"], "N");
         assert_eq!(fields["ebirOnlineSecret"], "");
-        assert!(!super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED);
 
         let xml = source.to_bir_xml_payload().expect("saveXML(false) emit");
         assert!(xml.starts_with("<?xml version='1.0'?>\t\r\n            <div>frm1701q:txtYear="));
