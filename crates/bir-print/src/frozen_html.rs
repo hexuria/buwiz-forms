@@ -334,11 +334,9 @@ mod tests {
             assert!(allowed.contains(name), "{name} is not in fields.json");
         }
         assert!(html_2551q().contains("id=\"p1c20-s0\""));
-        assert!(
-            input_tags(html_2551q())
-                .into_iter()
-                .all(|tag| tag.name != "p1c20")
-        );
+        assert!(input_tags(html_2551q())
+            .into_iter()
+            .all(|tag| tag.name != "p1c20"));
     }
 
     #[test]
