@@ -328,21 +328,26 @@ def bind_extracted_app(
     if app.suffix != ".app" or not app.is_dir():
         raise EvidenceError("extracted candidate is not a macOS application bundle")
     binary = common.app_binary(app)
-    renderer = app / common.RENDERER_RELATIVE_PATH
     bundled_identity_path = app / common.IDENTITY_RELATIVE_PATH
-    renderer_hash = common.tree_hash(renderer)
-    if renderer_hash != candidate["renderer_bundle_sha256"]:
-        raise EvidenceError("packaged renderer differs from the candidate manifest")
     bundled_identity_record = common.file_record(bundled_identity_path)
     external_identity_record = common.file_record(external_identity_path)
     if bundled_identity_record["sha256"] != external_identity_record["sha256"]:
         raise EvidenceError("packaged renderer identity differs from the uploaded identity")
-    common.validate_build_identity(bundled_identity_path, renderer_hash)
+    identity = common.validate_build_identity(
+        bundled_identity_path, candidate["renderer_bundle_sha256"]
+    )
+    renderer = app / common.RENDERER_RELATIVE_PATH
+    renderer_hash = identity["renderer_bundle_sha256"]
+    if renderer.exists():
+        renderer_hash = common.tree_hash(renderer)
+        if renderer_hash != candidate["renderer_bundle_sha256"]:
+            raise EvidenceError("packaged renderer differs from the candidate manifest")
+        common.validate_build_identity(bundled_identity_path, renderer_hash)
     return {
         "app_path": str(app),
         "app_tree_sha256": common.tree_hash(app),
         "binary": common.file_record(binary),
-        "renderer_path": str(renderer),
+        "renderer_path": str(renderer) if renderer.exists() else None,
         "renderer_bundle_sha256": renderer_hash,
         "bundled_renderer_identity": bundled_identity_record,
     }

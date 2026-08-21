@@ -123,14 +123,19 @@ def bind_extracted_package(
     binary = regular_file(package / BINARY_RELATIVE_PATH, "packaged Windows executable")
     renderer = package / RENDERER_RELATIVE_PATH
     bundled_identity_path = package / IDENTITY_RELATIVE_PATH
-    renderer_hash = artifact_common.tree_hash(renderer)
-    if renderer_hash != candidate["renderer_bundle_sha256"]:
-        raise EvidenceError("packaged renderer differs from the candidate manifest")
     bundled_identity = artifact_common.file_record(bundled_identity_path)
     external_identity = artifact_common.file_record(external_identity_path)
     if bundled_identity["sha256"] != external_identity["sha256"]:
         raise EvidenceError("packaged renderer identity differs from the uploaded identity")
-    artifact_common.validate_build_identity(bundled_identity_path, renderer_hash)
+    identity = artifact_common.validate_build_identity(
+        bundled_identity_path, candidate["renderer_bundle_sha256"]
+    )
+    renderer_hash = identity["renderer_bundle_sha256"]
+    if renderer.exists():
+        renderer_hash = artifact_common.tree_hash(renderer)
+        if renderer_hash != candidate["renderer_bundle_sha256"]:
+            raise EvidenceError("packaged renderer differs from the candidate manifest")
+        artifact_common.validate_build_identity(bundled_identity_path, renderer_hash)
 
     forbidden = [
         path
@@ -150,7 +155,7 @@ def bind_extracted_package(
         "package_path": str(package),
         "package_tree_sha256": artifact_common.tree_hash(package),
         "binary": artifact_common.file_record(binary),
-        "renderer_path": str(renderer.resolve()),
+        "renderer_path": str(renderer.resolve()) if renderer.exists() else None,
         "renderer_bundle_sha256": renderer_hash,
         "bundled_renderer_identity": bundled_identity,
         "distribution_kind": "portable_zip",

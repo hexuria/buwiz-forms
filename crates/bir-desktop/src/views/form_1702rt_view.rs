@@ -348,8 +348,12 @@ impl FormViewTrait for Form1702RTView {
         }
 
         let render_draft = self.draft.clone();
-        let envelope = bir_print::html::RenderEnvelopeV1::from(&render_draft);
-        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "1702rt-2018c",
+            &render_draft.to_bir_field_map(),
+            "1702RT Frozen HTML",
+            cx,
+        ) {
             Ok(launch_kind) => cx.emit(Form1702RTEvent::PushNotification(
                 "info".into(),
                 "Experimental HTML Preview".into(),

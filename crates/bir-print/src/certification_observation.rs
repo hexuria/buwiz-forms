@@ -10,8 +10,31 @@
 //! expose a broader generated schema.
 
 use crate::html_output::PdfValidationReport;
-use crate::html_support::{RendererGeometryReport, RendererPageRect};
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RendererPageRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub client_width: f64,
+    pub client_height: f64,
+    pub scroll_width: f64,
+    pub scroll_height: f64,
+    pub descendant_overflow_x: usize,
+    pub descendant_overflow_y: usize,
+    pub descendant_clipped_x: usize,
+    pub descendant_clipped_y: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RendererGeometryReport {
+    pub page_count: usize,
+    pub page_width_pt: f64,
+    pub page_height_pt: f64,
+    pub pages: Vec<RendererPageRect>,
+}
 
 pub const MACOS_CANDIDATE_RUNTIME_OBSERVATION_SCHEMA_VERSION: u8 = 1;
 pub const MACOS_CANDIDATE_RUNTIME_OBSERVATION_SCOPE: &str = "macos_candidate_runtime_observation";

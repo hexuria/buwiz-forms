@@ -1514,7 +1514,7 @@ mod tests {
     #[test]
     fn checked_in_provenance_matches_rust_capability_boundary() {
         let provenance: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../packages/form-renderer/references/1701q-2018-source.json"
+            "../../tests/official-source/1701q-2018-source.json"
         ))
         .unwrap();
 

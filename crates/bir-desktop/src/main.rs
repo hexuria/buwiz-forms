@@ -97,9 +97,6 @@ use std::path::PathBuf;
 #[cfg(feature = "dev-tools")]
 const DEV_EXPORT_LIVE_DATABASE_FLAG: &str = "--dev-export-live-database";
 
-#[cfg(all(feature = "dev-tools", target_os = "macos"))]
-const DEV_NATIVE_EVIDENCE_ENVELOPE_FLAG: &str = "--dev-native-evidence-envelope";
-
 #[cfg(feature = "dev-tools")]
 fn parse_dev_export_destination<I>(arguments: I) -> Result<Option<PathBuf>, String>
 where
@@ -176,82 +173,11 @@ fn run_dev_command_if_requested() -> Option<i32> {
     }
 }
 
-#[cfg(all(feature = "dev-tools", target_os = "macos"))]
-fn parse_dev_native_evidence_envelope<I>(arguments: I) -> Result<Option<PathBuf>, String>
-where
-    I: IntoIterator<Item = std::ffi::OsString>,
-{
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let Some(flag) = arguments.next() else {
-        return Ok(None);
-    };
-    if flag != std::ffi::OsStr::new(DEV_NATIVE_EVIDENCE_ENVELOPE_FLAG) {
-        return Ok(None);
-    }
-
-    let envelope = arguments.next().ok_or_else(|| {
-        format!("{DEV_NATIVE_EVIDENCE_ENVELOPE_FLAG} requires an envelope JSON path")
-    })?;
-    if arguments.next().is_some() {
-        return Err(format!(
-            "{DEV_NATIVE_EVIDENCE_ENVELOPE_FLAG} accepts exactly one envelope JSON path"
-        ));
-    }
-    Ok(Some(PathBuf::from(envelope)))
-}
-
-#[cfg(all(feature = "dev-tools", target_os = "macos"))]
-fn load_dev_native_evidence_envelope(
-    path: &std::path::Path,
-) -> Result<bir_print::html::RenderEnvelopeV1, String> {
-    let metadata = std::fs::symlink_metadata(path)
-        .map_err(|error| format!("Evidence envelope metadata could not be read: {error}"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err("Evidence envelope must be a regular non-symlink file".to_string());
-    }
-    if metadata.len() > 4 * 1024 * 1024 {
-        return Err("Evidence envelope exceeds the 4 MiB diagnostic limit".to_string());
-    }
-    let first = std::fs::read(path)
-        .map_err(|error| format!("Evidence envelope could not be read: {error}"))?;
-    let second = std::fs::read(path)
-        .map_err(|error| format!("Evidence envelope could not be read twice: {error}"))?;
-    if first != second {
-        return Err("Evidence envelope changed while it was being read".to_string());
-    }
-    let envelope: bir_print::html::RenderEnvelopeV1 = serde_json::from_slice(&first)
-        .map_err(|error| format!("Evidence envelope JSON is invalid: {error}"))?;
-    if envelope.schema_version != bir_print::html::RENDER_CONTRACT_VERSION {
-        return Err(format!(
-            "Evidence envelope schema {} is not supported",
-            envelope.schema_version
-        ));
-    }
-    if envelope.form.code != "2551Q" || envelope.form.version != "2018" {
-        return Err(format!(
-            "Evidence envelope must target exactly 2551Q:2018, got {}:{}",
-            envelope.form.code, envelope.form.version
-        ));
-    }
-    Ok(envelope)
-}
-
 struct Assets {
     base: PathBuf,
 }
 
-fn persistent_log_appender(
-    is_dev_native_evidence_exercise: bool,
-) -> Option<tracing_appender::rolling::RollingFileAppender> {
-    // The external native-output driver already captures stdout and stderr in
-    // its immutable diagnostic directory. Avoid touching the shared app-group
-    // log during that development-only exercise: a stalled or unavailable
-    // container must not prevent the deterministic preview from opening.
-    if is_dev_native_evidence_exercise {
-        return None;
-    }
-
+fn persistent_log_appender() -> Option<tracing_appender::rolling::RollingFileAppender> {
     let logs_dir = bir_core::platform::data_dir().join("logs");
     let _ = std::fs::create_dir_all(&logs_dir);
     Some(tracing_appender::rolling::never(&logs_dir, "ebirforms.log"))
@@ -283,40 +209,13 @@ impl AssetSource for Assets {
 fn main() {
     dotenvy::dotenv().ok();
 
-    #[cfg(all(feature = "dev-tools", target_os = "macos"))]
-    let dev_native_evidence_envelope = match parse_dev_native_evidence_envelope(std::env::args_os())
-    {
-        Ok(Some(path)) => match load_dev_native_evidence_envelope(&path) {
-            Ok(envelope) => Some(envelope),
-            Err(error) => {
-                eprintln!("{error}");
-                std::process::exit(2);
-            }
-        },
-        Ok(None) => None,
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(2);
-        }
-    };
-
     #[cfg(feature = "dev-tools")]
     if let Some(exit_code) = run_dev_command_if_requested() {
         std::process::exit(exit_code);
     }
 
-    // ── Single-Instance Enforcement ──────────────────────────────────────────
-    // Order matters: IPC runs first because it sends a SHOW command to bring
-    // the existing window forward (visible feedback for the user). The Win32
-    // Mutex is the hard fallback in case IPC fails (e.g. port file stale).
-    #[cfg(all(feature = "dev-tools", target_os = "macos"))]
-    let is_dev_native_evidence_exercise = dev_native_evidence_envelope.is_some();
-    #[cfg(not(all(feature = "dev-tools", target_os = "macos")))]
-    let is_dev_native_evidence_exercise = false;
-    if !is_dev_native_evidence_exercise {
-        crate::ipc::prevent_multiple_instances();
-        crate::platform::enforce_single_instance();
-    }
+    crate::ipc::prevent_multiple_instances();
+    crate::platform::enforce_single_instance();
 
     let developer_mode = std::env::var("DEVELOPER_MODE")
         .unwrap_or_else(|_| "false".to_string())
@@ -348,7 +247,7 @@ fn main() {
         .with_file(developer_mode)
         .with_line_number(developer_mode);
 
-    let file_layer = persistent_log_appender(is_dev_native_evidence_exercise).map(|appender| {
+    let file_layer = persistent_log_appender().map(|appender| {
         tracing_subscriber::fmt::layer()
             .with_writer(appender)
             .with_ansi(false)
@@ -380,51 +279,6 @@ fn main() {
     app.run(move |cx| {
         gpui_component::init(cx);
         crate::platform::bind_global_keys(cx);
-
-        #[cfg(all(feature = "dev-tools", target_os = "macos"))]
-        if let Some(envelope) = dev_native_evidence_envelope {
-            let prepared = match crate::views::html_form_preview::prepare_html_form_preview(&envelope)
-            {
-                Ok(prepared) => prepared,
-                Err(error) => {
-                    eprintln!("Could not prepare deterministic 2551Q evidence preview: {error}");
-                    cx.quit();
-                    return;
-                }
-            };
-            // `MacDisplay::primary()` is derived from the first `NSScreen`, which can
-            // temporarily retain a disconnected display. Select an actually active
-            // CoreGraphics display explicitly so the diagnostic window is observable.
-            let active_display_id = cx
-                .displays()
-                .into_iter()
-                .next()
-                .map(|display| display.id());
-            let options = WindowOptions {
-                // Keep the external diagnostic window fully on an active display.
-                window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: point(px(40.), px(40.)),
-                    size: size(px(1200.), px(900.)),
-                })),
-                display_id: active_display_id,
-                titlebar: Some(TitlebarOptions {
-                    title: Some("2551Q HTML Form Preview - Native Evidence".into()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            };
-            if let Err(error) = cx.open_window(options, move |window, cx| {
-                cx.new(|cx| {
-                    crate::views::html_form_preview::HtmlFormPreviewView::new(
-                        prepared, window, cx,
-                    )
-                })
-            }) {
-                eprintln!("Could not open deterministic 2551Q evidence preview: {error}");
-                cx.quit();
-            }
-            return;
-        }
 
         crate::ipc::start_ipc_listener(cx);
         #[cfg(target_os = "macos")]
@@ -691,7 +545,7 @@ mod startup_tests {
     use super::*;
 
     #[::core::prelude::v1::test]
-    fn native_output_exercise_never_opens_the_shared_persistent_log() {
-        assert!(persistent_log_appender(true).is_none());
+    fn persistent_log_appender_writes_under_the_app_data_dir() {
+        assert!(persistent_log_appender().is_some());
     }
 }

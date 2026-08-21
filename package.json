@@ -1,19 +1,10 @@
 {
   "name": "ebirforms-web",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": ["packages/*"],
   "scripts": {
     "audit:no-legacy": "node scripts/run_python.mjs scripts/audit_no_legacy.py",
-    "audit:forms:migration": "node scripts/run_python.mjs scripts/audit_html_form_migration.py",
-    "build:forms": "npm run build --workspace @ebirforms/form-preview",
-    "dev:calibration": "npm run dev --workspace @ebirforms/form-calibration -- --host 127.0.0.1 --port 4175 --strictPort",
-    "build:calibration": "npm run build --workspace @ebirforms/form-calibration",
     "capabilities:rust": "cargo run -q --locked -p bir-print --bin generate_form_capabilities",
-    "contracts:rust": "cargo run -q --locked -p bir-print --bin generate_render_contract",
-    "contracts:types": "json2ts -i packages/form-contracts/schema/render-envelope-v1.schema.json -o packages/form-contracts/src/generated.ts --bannerComment '/* Generated from Rust RenderEnvelopeV1. Do not edit directly. */'",
-    "contracts:generate": "npm run capabilities:rust && npm run contracts:rust && npm run contracts:types",
-    "contracts:check": "npm run contracts:generate && node scripts/check-generated-contracts.mjs",
-    "references:generate": "cargo run -q --locked -p bir-print --bin generate_render_contract -- --visual-references",
     "rules:audit": "cargo run --locked -p bir-rules-codegen -- audit",
     "rules:validate-v1": "cargo run --locked -p bir-rules-codegen -- validate-v1",
     "rules:status": "cargo run --locked -p bir-rules-codegen -- status",
@@ -22,22 +13,6 @@
     "rules:build-2550q-bindings": "cargo run --locked -p bir-rules-codegen -- build-2550q-bindings",
     "rules:project-2550q": "cargo run --locked -p bir-rules-codegen -- project-2550q",
     "rules:test": "cargo test --locked -p bir-rules -p bir-rules-codegen",
-    "rules:ci": "npm run rules:check && npm run rules:test",
-    "diagnose:fonts": "playwright test --config packages/form-renderer/playwright.font-sweep.config.ts",
-    "report:visual:regions": "playwright test --config packages/form-renderer/playwright.region-report.config.ts",
-    "test:forms": "npm run test --workspace @ebirforms/form-renderer",
-    "test:forms:visual": "playwright test --config packages/form-renderer/playwright.config.ts",
-    "typecheck:forms": "npm run typecheck --workspaces --if-present",
-    "verify:native-output:observation": "cargo run -q --locked -p bir-print --features native-output-evidence --bin verify_native_output_observation --",
-    "verify:forms:offline": "node scripts/run_python.mjs scripts/verify_offline_form_renderer.py assets/form-renderer --build-identity-out assets/form-renderer-build-identity.json --source-root .",
-    "verify:forms:offline:package": "npm run verify:forms:offline -- --require-source-revision"
-  },
-  "devDependencies": {
-    "@playwright/test": "1.58.2",
-    "@types/pngjs": "6.0.5",
-    "json-schema-to-typescript": "^15.0.4",
-    "pixelmatch": "7.1.0",
-    "playwright": "1.58.2",
-    "pngjs": "7.0.0"
+    "rules:ci": "npm run rules:check && npm run rules:test"
   }
 }

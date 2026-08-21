@@ -205,11 +205,11 @@ jobs:
 
     # One command per line: this job's default shell is pwsh on windows-latest,
     # and bash `\` continuations are a parse error there.
-    - name: Frozen HTML inventory and 2551Q name stamps
+    - name: Frozen HTML inventory and TIN name stamps
       run: |
         python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-        python3 .ci-html/tools/formgen/stamp_2551q_names.py --self-test
-        python3 .ci-html/tools/formgen/stamp_2551q_names.py --check --html html-frozen/2551q-2018/index.html --fields rules/forms/2551q-v2018/fields.json --catalog .ci-html/tools/formgen/identity/catalog.json
+        python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
+        python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
 
     - name: Test
       run: cargo test --locked --workspace
@@ -329,98 +329,3 @@ jobs:
     # The targeted steps above are NOT duplicates and stay: they are `cargo run`
     # subcommands plus the exact-name corpus census, none of which `cargo test
     # --workspace` performs.
-
-  renderer:
-    runs-on: ubuntu-22.04
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Rust Toolchain
-      uses: dtolnay/rust-toolchain@stable
-
-    # Reader only - see the sole-writer comment in `check`.
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: workspace-${{ runner.os }}
-        save-if: false
-
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '24'
-        cache: npm
-
-    - name: Install Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
-
-    - name: Install renderer dependencies
-      run: npm ci
-
-    # Chromium is re-downloaded on every run otherwise. Keyed on the lockfile
-    # rather than on a resolved Playwright version, because resolving that
-    # version means invoking the JS runtime to read a manifest, and the
-    # no-legacy audit correctly rejects that shape. Keying on the lockfile
-    # over-invalidates slightly - any npm change re-downloads the browser once -
-    # which is the cheaper trade. `--with-deps` also apt-installs system
-    # libraries a cache cannot hold, so a hit still needs install-deps.
-    - name: Cache Playwright browsers
-      id: playwright-cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-    - name: Install Playwright browsers
-      run: |
-        if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-          npx playwright install-deps chromium
-        else
-          npx playwright install --with-deps chromium
-        fi
-
-    - name: Check generated contracts and official references
-      run: |
-        npm run contracts:check
-        cargo run -q --locked -p bir-print --bin generate_render_contract -- --check-visual-references
-
-    - name: Typecheck and unit test renderer
-      run: |
-        npm run typecheck:forms
-        npm run test:forms
-        python3 -m unittest discover -s scripts/tests -v
-
-    - name: Build and audit offline renderer
-      run: |
-        npm run audit:forms:migration
-        npm run audit:no-legacy
-        npm run build:forms
-        npm run verify:forms:offline
-
-    # Reported, not gating. The 1% threshold below is deliberately unchanged and
-    # must stay unchanged: it is the honest target. It is also unreachable by
-    # proof, not by regression - `pdffonts` shows all 35 source PDFs carry
-    # `emb=no` for their primary faces, so the pinned references encode
-    # Poppler's *substituted* glyph outlines. Glyph shape alone is ~57% of the
-    # residual, and the pinned per-page noise floor (e.g. 3.61% on 2551Q page 1)
-    # sits above 1% before our renderer draws anything. See
-    # docs/form-print-readiness/priority-forms-readiness.md.
-    #
-    # `official-fidelity-v1` supersedes this gate and likewise runs in reporting
-    # mode. The complete-page percentage stays computed, printed and uploaded on
-    # every run - it is never masked, and no assertion or threshold is relaxed.
-    # Only this step's power to block the pipeline is removed.
-    - name: Report strict complete-page visual parity (<= 1%, non-gating)
-      continue-on-error: true
-      env:
-        FORM_VISUAL_MAX_CHANGED_PERCENT: '1'
-      run: npm run test:forms:visual
-
-    - name: Upload visual diagnostics
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: renderer-visual-diagnostics
-        path: test-results/form-renderer

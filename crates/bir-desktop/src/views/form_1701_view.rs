@@ -1257,8 +1257,12 @@ impl FormViewTrait for Form1701View {
         }
 
         let render_draft = self.draft.clone();
-        let envelope = bir_print::html::RenderEnvelopeV1::from(&render_draft);
-        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "1701-2018",
+            &render_draft.to_bir_field_map(),
+            "1701 Frozen HTML",
+            cx,
+        ) {
             Ok(launch_kind) => {
                 let message = format!(
                     "{} Form 1701 HTML parity remains experimental. No filing state was changed.",

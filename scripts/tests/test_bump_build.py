@@ -56,7 +56,7 @@ class BumpBuildTests(unittest.TestCase):
         self.assertIn('just _package-mac-appstore', app_recipe)
         self.assertNotIn('app *args="": bump-build', justfile)
         self.assertIn(
-            '_package-mac-appstore args="": build-packaged-form-renderer',
+            '_package-mac-appstore args="": build-frozen-html-identity',
             justfile,
         )
 

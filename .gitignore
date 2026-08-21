@@ -149,3 +149,4 @@ node_modules/
 /forms-corrected/
 /forms-corrected.manifest.json
 .ci-html/
+/assets/form-renderer-build-identity.json

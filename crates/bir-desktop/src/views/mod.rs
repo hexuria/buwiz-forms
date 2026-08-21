@@ -17,9 +17,7 @@ pub mod form_html_preview_launcher;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub mod frozen_html_preview;
 pub mod global_dashboard;
-pub mod html_form_preview;
 pub mod import_export;
-pub mod linux_html_preview;
 pub mod lock_screen;
 pub mod notifications;
 pub mod profile_manager;

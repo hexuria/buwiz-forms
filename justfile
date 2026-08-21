@@ -44,8 +44,8 @@ bump-build:
 help:
     @just --list
 
-# Run the app locally with the bundled offline HTML renderer.
-run: build-form-renderer
+# Run the app locally. Frozen HTML print previews are compiled into bir-print.
+run:
     cargo run --locked --bin bir --features dev-tools
 
 # Run code formatting, linting, and type checking
@@ -155,82 +155,25 @@ review-clean:
 review-serve:
     cd forms && python3 -m http.server 4190 --bind 127.0.0.1
 
-# Build the tracked-contract, local-only HTML renderer before any package copies
-# the assets directory. The generated bundle stays ignored, so clean packages
-# cannot accidentally reuse stale developer output.
-build-form-renderer:
-    npm ci
-    npm run contracts:check
-    npm run audit:forms:migration
-    npm run audit:no-legacy
-    npm run build:forms
-    npm run verify:forms:offline
+# Confirm committed freeze HTML and write the non-promotional identity
+# copied into packaged assets/. Preview sheets are also embedded at compile time.
+build-frozen-html-identity:
+    python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
 
-# Re-check the generated renderer against a clean curated source revision
-# before copying it into any distributable package. The resulting identity is
-# a non-promotional sibling of assets/form-renderer, so its expected tree hash
-# cannot recursively include itself.
-build-packaged-form-renderer: build-form-renderer
-    npm run verify:forms:offline:package
-
-# Build an ad-hoc-signed macOS app with the development-only native-output
-# observer, exercise a real PDF export interactively, and validate every
-# emitted observation through the Rust-owned schema. This remains diagnostic:
-# it does not create trusted release evidence or change readiness flags.
+# React native-evidence recipes were removed with the form-renderer.
+# Frozen HTML preview is the print path. These names stay so operators
+# do not follow a silent just recipe into a deleted driver.
 [macos]
 native-evidence-macos:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python3 scripts/audit_html_form_migration.py --require-clean-source
-    mkdir -p target/tmp
-    TMPDIR="$PWD/target/tmp" cargo test --locked -p bir-print --features native-output-evidence html_output_evidence
-    TMPDIR="$PWD/target/tmp" cargo test --locked -p bir-desktop --features dev-tools macos_capture_pipeline
-    just _package-mac --native-evidence
-    OBSERVATION_DIR="$PWD/target/native-output-observations"
-    rm -rf "$OBSERVATION_DIR"
-    mkdir -p "$OBSERVATION_DIR"
-    echo "Open 2551Q, export a PDF over an existing destination, then close the app."
-    echo "Observations will remain local in $OBSERVATION_DIR."
-    EBIR_NATIVE_OUTPUT_EVIDENCE_DIR="$OBSERVATION_DIR" \
-        "{{MAC_APP}}/Contents/MacOS/bir"
-    shopt -s nullglob
-    observations=("$OBSERVATION_DIR"/*.observation.json)
-    if [ "${#observations[@]}" -eq 0 ]; then
-        echo "No native-output observation was produced; complete a successful direct PDF export before closing the app." >&2
-        exit 1
-    fi
-    npm run verify:native-output:observation -- "${observations[@]}"
-    echo "Development observations validated. They are non-promotional and must not be added to form-release-evidence.json."
+    @echo "Frozen HTML is the print path. The React native-evidence driver was removed."
+    @echo "This recipe stays non-promotional and cannot write form-release-evidence.json."
+    @exit 1
 
-# Exercise an already-built package through the external diagnostic driver.
-# The driver hashes the unchanged app and renderer before/after, launches the
-# deterministic committed 2551Q fixture, retains WKPDF/final artifacts, and
-# proves a failed overwrite preserves its destination. The PDF exercise uses a
-# development-only destination queue into the same output state machine as the
-# toolbar; it does not claim save-chooser activation. Accessibility permission
-# is required only when system_print=true so an operator can review the native
-# print dialog; the driver cancels it and keeps the print gate incomplete.
 [macos]
-native-evidence-macos-external app=MAC_APP output="target/macos-native-evidence-driver" network_denied="true" system_print="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ "{{app}}" = "{{MAC_APP}}" ]; then
-        python3 scripts/audit_html_form_migration.py --require-clean-source
-        just _package-mac --native-evidence
-    fi
-    rm -rf "{{output}}"
-    args=(
-        run
-        --app "{{app}}"
-        --envelope packages/form-contracts/fixtures/2551q-6-rows.json
-        --output-dir "{{output}}"
-    )
-    if [ "{{network_denied}}" = "true" ]; then args+=(--network-denied); fi
-    if [ "{{system_print}}" = "true" ]; then args+=(--exercise-system-print); fi
-    python3 scripts/macos_native_evidence_driver.py "${args[@]}"
-    python3 scripts/macos_native_evidence_driver.py verify \
-        "{{output}}/macos-native-evidence-driver.transcript.json"
-    echo "External macOS diagnostic validated. It is non-promotional and is not trusted release evidence."
+native-evidence-macos-external:
+    @echo "Frozen HTML is the print path. The React native-evidence driver was removed."
+    @echo "This recipe stays non-promotional and cannot write form-release-evidence.json."
+    @exit 1
 
 # Install a built package (auto-detects available artifacts)
 # Usage: just install [format]
@@ -392,7 +335,7 @@ app *args="":
     fi
 
 # Build the Inno Setup executable installer (Windows only)
-exe *args="": build-packaged-form-renderer
+exe *args="": build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     
@@ -454,7 +397,7 @@ exe *args="": build-packaged-form-renderer
 # This artifact is intentionally excluded from public GitHub releases. Store
 # promotion remains blocked until the manifest artwork dimensions and packaged
 # MSVC runtime behavior pass their separate Windows certification checks.
-msix *args="": build-packaged-form-renderer
+msix *args="": build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
@@ -631,7 +574,7 @@ clean:
 
 # --- Hidden OS-specific packaging tasks ---
 
-_package-mac args="": build-packaged-form-renderer
+_package-mac args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
     FEATURES=""
@@ -686,7 +629,7 @@ _package-mac args="": build-packaged-form-renderer
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
 
-_package-mac-appstore args="": build-packaged-form-renderer
+_package-mac-appstore args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
     CERT="${CODESIGN_IDENTITY:--}"
@@ -771,7 +714,7 @@ _package-mac-appstore args="": build-packaged-form-renderer
 
 # NOTE: _package-win was removed — use 'just exe' or 'just msix' instead.
 
-_package-linux args="": build-packaged-form-renderer
+_package-linux args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
     FEATURES=""
