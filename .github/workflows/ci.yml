@@ -196,6 +196,14 @@ jobs:
       if: runner.os == 'macOS'
       run: cargo clippy --locked -p bir-desktop --features mas_build -- -D warnings
 
+    # Product freeze: 43 inventory HTML bundles plus fail-closed 2551Q name=
+    # stamps. This is not formgen harvest; it reads only committed html-frozen/.
+    - name: Frozen HTML inventory and 2551Q name stamps
+      run: |
+        python3 tools/formgen/freeze_html.py --verify
+        python3 tools/formgen/stamp_2551q_names.py --self-test
+        python3 tools/formgen/stamp_2551q_names.py --check
+
     - name: Test
       run: cargo test --locked --workspace
 

@@ -7,6 +7,7 @@
 //! is validated and written atomically through [`html_output`].
 
 pub mod certification_observation;
+pub mod frozen_html;
 pub mod html;
 pub mod html_forms;
 pub mod html_output;
