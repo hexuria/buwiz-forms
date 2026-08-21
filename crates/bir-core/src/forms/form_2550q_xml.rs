@@ -238,12 +238,9 @@ impl Form2550QDraft {
 
     /// Serialize the exact reviewed editable-save key set. A clone is
     /// recomputed first so stale JSON-derived totals never enter the payload.
-    /// Test-only unchecked projection for exact import/contract calibration.
-    /// Production callers must use [`Self::try_to_bir_xml_payload`], which
-    /// validates captured raw buffers against the typed projection before
-    /// emitting bytes.
-    #[cfg(test)]
-    fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+    /// Print preview uses this map. XML emission still goes through
+    /// [`Self::try_to_bir_xml_payload`], which also gates raw buffers.
+    pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut normalized = self.clone();
         normalized.recompute();
         normalized.to_reviewed_field_map()
