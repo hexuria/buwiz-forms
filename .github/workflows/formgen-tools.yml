@@ -1,47 +1,30 @@
-# formgen — the part of the PDF-native form pipeline a fresh clone can evaluate.
+# formgen-tools — generator scripts only.
 #
-# READ THIS BEFORE TRUSTING A GREEN TICK HERE.
+# HTML corpus CI (validate_tree / tab-order over forms/) lives on
+# hexuria/buwiz-forms-html. This workflow evaluates tools/formgen: fixtures,
+# extract.py's fixture profile, and module self-tests. It does not walk a
+# forms/ tree.
 #
-# The done-condition for tools/formgen is `python3 tools/formgen/gate.py`, and
-# it CANNOT RUN IN CI. It regenerates the corpus twice, drives Chromium
-# print-to-PDF, and reads six pinned official BIR PDFs which are deliberately
-# untracked (`*.pdf` is gitignored, they are official documents, and they are
-# pinned by sha256 precisely so a swapped file fails loudly). It also needs
-# `build/`, which is gitignored regenerable intermediates. None of that exists
-# on a hosted runner, so THE GATE STAYS OPERATOR-RUN. There is no step below
-# that runs it, and there is deliberately no skipped step that would look like
-# coverage for it. What a green tick here means is written out in full in the
-# job summary, every run, pass or fail.
-#
-# What this workflow does run, it runs for real. Nothing is skipped, nothing is
-# `continue-on-error`, and a check that cannot be evaluated exits non-zero. That
-# rule is not stylistic: this project's own gate once reported green on five
-# forms it never measured, and 137 real defects sat behind a numeric audit
-# reporting "100% on 51/51".
-#
-# No Node. Chromium IS installed: audit.py's self-test drives a real browser to
-# prove its render deadline is enforced by an isolated worker, and that is the
-# engine behind the eight correctness assertions, so running it without a
-# browser would be a red job or -- worse -- a skipped one. verify.py's IR-vs-IR
-# differ still needs a pinned BIR PDF to print, so it stays in the not-covered
-# list; the browser does not change that.
+# The done-condition remains `python3 tools/formgen/gate.py`. It CANNOT RUN
+# IN CI (pinned BIR PDFs, two regenerations, `build/`). THE GATE STAYS
+# OPERATOR-RUN.
 
-name: formgen
+name: formgen-tools
 
 # Product PRs (crates/, html-frozen/, rules/) must not wait on this job.
-# The generator gate stays operator-run. Generated/corrected HTML lives in
-# hexuria/buwiz-forms-html; this workflow only evaluates tools/formgen.
+# HTML trees live in hexuria/buwiz-forms-html. This job only evaluates
+# tools/formgen.
 on:
   push:
     branches: [ "main", "codex/**" ]
     paths:
       - "tools/formgen/**"
-      - ".github/workflows/formgen.yml"
+      - ".github/workflows/formgen-tools.yml"
   pull_request:
     branches: [ "main" ]
     paths:
       - "tools/formgen/**"
-      - ".github/workflows/formgen.yml"
+      - ".github/workflows/formgen-tools.yml"
 
 # Same shape as ci.yml. `github.workflow` differs per workflow, so this cannot
 # collide with the CI run on the same ref.
@@ -279,12 +262,11 @@ jobs:
         if: always()
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'MD'
-          ## formgen CI — scope, stated plainly
+          ## formgen-tools CI — scope, stated plainly
 
-          **This job is not the gate.** `python3 tools/formgen/gate.py` is the
-          done-condition for `tools/formgen/`, it takes ~45 minutes, and it
-          cannot run on a hosted runner. A green tick here does **not** mean the
-          gate passed. The gate stays operator-run.
+          **This job is not the gate, and it is not the HTML corpus walk.**
+          Corpus CI is https://github.com/hexuria/buwiz-forms-html/actions
+          (`html-corpus`). `python3 tools/formgen/gate.py` stays operator-run.
 
           ### Covered here
 
@@ -307,7 +289,7 @@ jobs:
           | `verify.py --self-test` | a pinned BIR PDF, and Chromium to print the candidate |
           | `lattice.py`, `fonts.py` `--self-test` | `build/ir/2551q-2018.ir.json`, from a pinned PDF |
           | `guides.py`, `emit.py` `--self-test` | `build/ir` and `build/layout` for named real forms |
-          | `validate_tree.py` / `tab_check.py` corpus | generated HTML now lives in `hexuria/buwiz-forms-html` |
+          | `validate_tree.py` / `tab_check.py` corpus | https://github.com/hexuria/buwiz-forms-html (`html-corpus` workflow) |
 
           Those five module self-tests assert against the real corpus by
           construction — a named form's IR, layout or PDF. They are not skipped
