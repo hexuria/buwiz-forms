@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::Database;
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
-use bir_print::html::RenderEnvelopeV1;
 
 use crate::components::form_engine::FormViewTrait;
 
@@ -718,9 +717,12 @@ impl FormViewTrait for Form1601CView {
         // snapshot. Opening or retrying a preview never changes filing status.
         self.sync_from_inputs(cx);
         let render_draft = self.draft.clone();
-        let envelope = RenderEnvelopeV1::from(&render_draft);
-
-        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "1601c-2018",
+            &render_draft.to_bir_field_map(),
+            "1601C Frozen HTML",
+            cx,
+        ) {
             Ok(launch_kind) => {
                 self.status_message = Some(launch_kind.status_message().to_string());
                 cx.notify();

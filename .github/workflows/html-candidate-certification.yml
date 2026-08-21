@@ -36,11 +36,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -51,16 +46,21 @@ jobs:
           test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          python3 scripts/audit_html_form_migration.py --require-clean-source
+          python3 scripts/audit_no_legacy.py
+
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
 
       - name: Verify non-promotional candidate gates
         run: |
-          npm ci
-          npm run contracts:check
-          npm run typecheck:forms
-          npm run test:forms
-          npm run audit:forms:migration
-          npm run audit:no-legacy
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/audit_no_legacy.py
           python3 -m unittest scripts.tests.test_html_release_gate_policy scripts.tests.test_write_html_candidate_manifest scripts.tests.test_macos_candidate_collector scripts.tests.test_windows_candidate_collector scripts.tests.test_linux_candidate_collector -v
 
       - name: Verify full Rust workspace before candidate construction
@@ -101,27 +101,25 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: '24'
-          cache: npm
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build clean offline renderer without release promotion
+      - name: Verify frozen HTML without release promotion
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          python3 scripts/audit_html_form_migration.py --require-clean-source
-          npm ci
-          npm run contracts:check
-          npm run audit:forms:migration
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline:package
+          python3 scripts/audit_no_legacy.py
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
 
       - name: Build exact non-dev universal binary
         run: |
@@ -141,7 +139,7 @@ jobs:
           ROOT="$PWD/target/certification/macos"
           APP="$ROOT/eBIRForms.app"
           ARCHIVE="$ROOT/eBIRForms-macOS-universal-$GITHUB_SHA.zip"
-          SOURCE_REVISION="$(python3 scripts/audit_html_form_migration.py --print-source-revision --require-clean-source)"
+          SOURCE_REVISION="$GITHUB_SHA"
           NOTARY_ARCHIVE="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.zip"
           NOTARY_RESULT="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.json"
           KEYCHAIN_PATH="$RUNNER_TEMP/candidate-signing.keychain-db"
@@ -286,27 +284,25 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: '24'
-          cache: npm
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build clean offline renderer without release promotion
+      - name: Verify frozen HTML without release promotion
         shell: pwsh
         run: |
           if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw "candidate SHA mismatch" }
           if (git status --porcelain=v1 --untracked-files=all) { throw "candidate source is dirty" }
-          python scripts/audit_html_form_migration.py --require-clean-source
-          npm ci
-          npm run contracts:check
-          npm run audit:forms:migration
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline:package
+          python scripts/audit_no_legacy.py
+          python .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision $env:GITHUB_SHA --out assets/form-renderer-build-identity.json
 
       - name: Build exact non-dev Windows binary
         run: cargo build --locked --release --target x86_64-pc-windows-msvc
@@ -317,7 +313,7 @@ jobs:
           $root = "target/certification/windows"
           $stage = "$root/eBIRForms-Windows-x64"
           $archive = "$root/eBIRForms-Windows-x64-$env:GITHUB_SHA.zip"
-          $sourceRevision = (python scripts/audit_html_form_migration.py --print-source-revision --require-clean-source).Trim()
+          $sourceRevision = $env:GITHUB_SHA
           New-Item -ItemType Directory -Force -Path "$stage/assets" | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$stage/bir.exe"
           Copy-Item "assets/*" "$stage/assets" -Recurse -Force
@@ -369,27 +365,25 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: '24'
-          cache: npm
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build clean offline renderer without release promotion
+      - name: Verify frozen HTML without release promotion
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          python3 scripts/audit_html_form_migration.py --require-clean-source
-          npm ci
-          npm run contracts:check
-          npm run audit:forms:migration
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline:package
+          python3 scripts/audit_no_legacy.py
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
 
       - name: Build exact non-dev Linux binary
         run: cargo build --locked --release --target x86_64-unknown-linux-gnu
@@ -401,7 +395,7 @@ jobs:
           ROOT="$PWD/target/certification/linux"
           STAGE="$ROOT/eBIRForms-Linux-x64"
           ARCHIVE="$ROOT/eBIRForms-Linux-x64-$GITHUB_SHA.tar.gz"
-          SOURCE_REVISION="$(python3 scripts/audit_html_form_migration.py --print-source-revision --require-clean-source)"
+          SOURCE_REVISION="$GITHUB_SHA"
           mkdir -p "$STAGE"
           cp target/x86_64-unknown-linux-gnu/release/bir "$STAGE/"
           cp -R assets "$STAGE/"

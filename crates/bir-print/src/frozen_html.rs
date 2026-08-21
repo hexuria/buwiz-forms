@@ -1,27 +1,18 @@
-//! Frozen 2551Q HTML fill/print: set `input[name='frm2551Qv2018:…']` from the writer map.
+//! Frozen HTML fill/print: set `input[name='frm…']` from the writer map.
 //!
-//! Layout lives in `html-frozen/2551q-2018/`. `name=` is a fail-closed catalog join;
+//! Layout lives in `html-frozen/<slug>/`. `name=` is a fail-closed catalog join;
 //! `id=` stays the cell id. Unstamped writer keys have no matching input.
 
 use bir_core::forms::form_2551q::Form2551QDraft;
 use std::collections::BTreeMap;
 
-pub const FORM_2551Q_2018_HTML: &str = include_str!("../../../html-frozen/2551q-2018/index.html");
-const FORM_2551Q_2018_CSS: &str = include_str!("../../../html-frozen/2551q-2018/form.css");
+include!(concat!(env!("OUT_DIR"), "/frozen_bundles.rs"));
+
 const BASE_CSS: &str = include_str!("../../../html-frozen/base.css");
 const FONT_ARIMO_NORMAL: &[u8] =
     include_bytes!("../../../html-frozen/fonts/arimo-latin-wght-normal.woff2");
 const FONT_ARIMO_ITALIC: &[u8] =
     include_bytes!("../../../html-frozen/fonts/arimo-latin-wght-italic.woff2");
-const ASSET_SEAL: &[u8] = include_bytes!(
-    "../../../html-frozen/assets/ffdc75d1c2cd7c8f2eb00fb2279b9d216001de3d6fdaa576964862fb327f9073.png"
-);
-const ASSET_A: &[u8] = include_bytes!(
-    "../../../html-frozen/assets/603e5f6d53b2211ca7156117ebd61fc5b3db2b0831035d8fb0357a39bd0d19b5.png"
-);
-const ASSET_B: &[u8] = include_bytes!(
-    "../../../html-frozen/assets/a877606ec0d8f015f05e7316c362adf013d9b0a74e4f2c7f2a7e9fdef8d013fc.png"
-);
 
 const STAMPED_TIN_NAMES: [&str; 4] = [
     "frm2551Qv2018:txtTIN1",
@@ -36,6 +27,10 @@ struct InputTag<'a> {
     tag: &'a str,
     name: &'a str,
     slot: Option<usize>,
+}
+
+pub fn html_2551q() -> &'static str {
+    bundle("2551q-2018").expect("2551q-2018 freeze bundle").html
 }
 
 /// Rewrite matching `<input name>` tags. Comb slots (`data-slot-index`) receive
@@ -98,12 +93,22 @@ pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
 
 /// Frozen 2551Q HTML with writer values on stamped `name=` inputs.
 pub fn fill_2551q(draft: &Form2551QDraft) -> String {
-    fill_by_name(FORM_2551Q_2018_HTML, &draft.to_bir_field_map())
+    fill_by_name(html_2551q(), &draft.to_bir_field_map())
 }
 
 /// Self-contained document for a WebView `with_html` host (inline CSS, fonts, PNGs).
+pub fn filled_document(slug: &str, fields: &BTreeMap<String, String>) -> Result<String, String> {
+    let Some(loaded) = bundle(slug) else {
+        return Err(format!("no frozen HTML bundle for {slug}"));
+    };
+    Ok(inline_local_assets(
+        &fill_by_name(loaded.html, fields),
+        &loaded,
+    ))
+}
+
 pub fn filled_2551q_document(draft: &Form2551QDraft) -> String {
-    inline_local_assets(&fill_2551q(draft))
+    filled_document("2551q-2018", &draft.to_bir_field_map()).expect("2551q-2018 freeze bundle")
 }
 
 pub fn stamped_tin_names() -> &'static [&'static str] {
@@ -179,13 +184,13 @@ fn html_escape(value: &str) -> String {
     out
 }
 
-fn inline_local_assets(html: &str) -> String {
+fn inline_local_assets(html: &str, loaded: &FrozenBundle) -> String {
     let mut document = html.to_string();
     let base = BASE_CSS.replace(
         "url(\"fonts/arimo-latin-wght-normal.woff2\")",
         &format!("url(\"{}\")", data_uri("font/woff2", FONT_ARIMO_NORMAL)),
     );
-    let form = FORM_2551Q_2018_CSS.replace(
+    let form = loaded.css.replace(
         "url(\"../fonts/arimo-latin-wght-italic.woff2\")",
         &format!("url(\"{}\")", data_uri("font/woff2", FONT_ARIMO_ITALIC)),
     );
@@ -197,20 +202,7 @@ fn inline_local_assets(html: &str) -> String {
         "<link rel=\"stylesheet\" href=\"form.css\">",
         &format!("<style>{form}</style>"),
     );
-    for (name, bytes) in [
-        (
-            "ffdc75d1c2cd7c8f2eb00fb2279b9d216001de3d6fdaa576964862fb327f9073.png",
-            ASSET_SEAL,
-        ),
-        (
-            "603e5f6d53b2211ca7156117ebd61fc5b3db2b0831035d8fb0357a39bd0d19b5.png",
-            ASSET_A,
-        ),
-        (
-            "a877606ec0d8f015f05e7316c362adf013d9b0a74e4f2c7f2a7e9fdef8d013fc.png",
-            ASSET_B,
-        ),
-    ] {
+    for (name, bytes) in loaded.assets {
         let uri = data_uri("image/png", bytes);
         document = document.replace(&format!("../assets/{name}"), &uri);
     }
@@ -325,7 +317,7 @@ mod tests {
             .filter_map(|row| row["serialized_key"].as_str().map(str::to_string))
             .collect();
 
-        let present: std::collections::BTreeSet<String> = input_tags(FORM_2551Q_2018_HTML)
+        let present: std::collections::BTreeSet<String> = input_tags(html_2551q())
             .into_iter()
             .map(|tag| tag.name.to_string())
             .filter(|name| name.starts_with("frm2551Qv2018:"))
@@ -341,10 +333,37 @@ mod tests {
         for name in &present {
             assert!(allowed.contains(name), "{name} is not in fields.json");
         }
-        assert!(FORM_2551Q_2018_HTML.contains("id=\"p1c20-s0\""));
-        assert!(input_tags(FORM_2551Q_2018_HTML)
+        assert!(html_2551q().contains("id=\"p1c20-s0\""));
+        assert!(
+            input_tags(html_2551q())
+                .into_iter()
+                .all(|tag| tag.name != "p1c20")
+        );
+    }
+
+    #[test]
+    fn frozen_0619e_stamps_only_catalog_tin_names() {
+        let html = bundle("0619e-2018").expect("0619e bundle").html;
+        let present: std::collections::BTreeSet<String> = input_tags(html)
             .into_iter()
-            .all(|tag| tag.name != "p1c20"));
+            .map(|tag| tag.name.to_string())
+            .filter(|name| name.starts_with("frm0619E:"))
+            .collect();
+        assert_eq!(
+            present,
+            [
+                "frm0619E:txtTIN1",
+                "frm0619E:txtTIN2",
+                "frm0619E:txtTIN3",
+                "frm0619E:txtBranchCode",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+        );
+        let document = filled_document("0619e-2018", &BTreeMap::new()).unwrap();
+        assert!(document.contains("<style>"));
+        assert!(!document.contains("href=\"../base.css\""));
     }
 
     #[test]
@@ -390,5 +409,30 @@ mod tests {
         assert!(document.contains("data:image/png;base64,"));
         assert!(document.contains("<style>"));
         assert!(!document.contains("href=\"../base.css\""));
+    }
+
+    #[test]
+    fn frozen_preview_bundles_stamp_only_catalog_frm_names() {
+        let cases = [
+            ("0619f-2018", "frm0619F:", 4usize),
+            ("0605-1999", "frm0605:", 4),
+            ("1601c-2018", "frm1601c:", 4),
+            ("1701q-2018", "frm1701q:", 3),
+            ("2550q-2024", "frm2550qv2024:", 3),
+            ("1701-2018", "frm1701:", 6),
+            ("1702rt-2018c", "frm1702RT:", 3),
+            ("1702mx-2018c", "frm1702MX:", 3),
+        ];
+        for (slug, prefix, count) in cases {
+            let html = bundle(slug).unwrap_or_else(|| panic!("{slug}")).html;
+            let present: std::collections::BTreeSet<String> = input_tags(html)
+                .into_iter()
+                .map(|tag| tag.name.to_string())
+                .filter(|name| name.starts_with(prefix))
+                .collect();
+            assert_eq!(present.len(), count, "{slug} stamped names");
+            let document = filled_document(slug, &BTreeMap::new()).unwrap();
+            assert!(document.contains("<style>"), "{slug}");
+        }
     }
 }

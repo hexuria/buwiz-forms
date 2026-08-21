@@ -568,9 +568,12 @@ impl FormViewTrait for Form0619FView {
         // envelope. Preview remains independent from filing lifecycle state.
         self.sync_from_inputs(cx);
         let render_draft = self.draft.clone();
-        let envelope = bir_print::html::RenderEnvelopeV1::from(&render_draft);
-
-        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "0619f-2018",
+            &render_draft.to_bir_field_map(),
+            "0619F Frozen HTML",
+            cx,
+        ) {
             Ok(launch_kind) => {
                 self.status_message = Some(launch_kind.status_message().to_string());
             }

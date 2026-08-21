@@ -1737,9 +1737,12 @@ impl FormViewTrait for Form2550QV2View {
         }
 
         let render_draft = self.draft.clone();
-        let envelope = bir_print::html::RenderEnvelopeV1::from(&render_draft);
-
-        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "2550q-2024",
+            &render_draft.to_bir_field_map(),
+            "2550Q Frozen HTML",
+            cx,
+        ) {
             Ok(launch_kind) => {
                 self.status_message = Some(format!(
                     "{} Preview is available for review; filing remains manual/external.",

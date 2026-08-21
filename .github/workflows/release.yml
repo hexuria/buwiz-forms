@@ -90,36 +90,17 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
         with:
-          node-version: '24'
-          cache: npm
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
 
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-
-      - name: Install renderer dependencies
-        run: npm ci
-
-      # Same browser cache as ci.yml, keyed on the lockfile. A cache hit still
-      # needs install-deps for the apt-level libraries the cache cannot hold.
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright browsers
-        run: |
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
-          else
-            npx playwright install --with-deps chromium
-          fi
 
       - name: Verify Rust workspace
         run: |
@@ -128,22 +109,12 @@ jobs:
           cargo clippy --locked --workspace -- -D warnings
           cargo test --locked --workspace
 
-      - name: Verify renderer contracts, tests, and offline bundle
+      - name: Verify frozen HTML inventory and TIN name stamps
         run: |
-          npm run contracts:check
-          cargo run -q --locked -p bir-print --bin generate_render_contract -- --check-visual-references
-          npm run typecheck:forms
-          npm run test:forms
-          python3 -m unittest discover -s scripts/tests -v
-          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline
-
-      - name: Enforce strict complete-page visual parity on the tagged source (<= 1%)
-        env:
-          FORM_VISUAL_MAX_CHANGED_PERCENT: '1'
-        run: npm run test:forms:visual
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/audit_no_legacy.py
 
   # ── macOS Universal ───────────────────────────────────────────────────────
   build-macos:
@@ -176,25 +147,23 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build local HTML renderer
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify frozen HTML
         run: |
-          npm ci
-          npm run contracts:check
-          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline:package
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
       - name: Build ARM64
         run: cargo build --locked --release --target aarch64-apple-darwin
@@ -430,25 +399,23 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build local HTML renderer
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify frozen HTML
         run: |
-          npm ci
-          npm run contracts:check
-          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline:package
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
       - name: Build
         run: cargo build --locked --release --target x86_64-pc-windows-msvc
@@ -609,25 +576,23 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build local HTML renderer
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify frozen HTML
         run: |
-          npm ci
-          npm run contracts:check
-          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
-          npm run audit:no-legacy
-          npm run build:forms
-          npm run verify:forms:offline:package
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
       - name: Build
         run: cargo build --locked --release --target x86_64-unknown-linux-gnu

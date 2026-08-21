@@ -358,21 +358,26 @@ def bind_installed_candidate(
         raise EvidenceError("installed Linux candidate binary is not executable")
     renderer = installed_root / RENDERER_RELATIVE_PATH
     bundled_identity_path = installed_root / IDENTITY_RELATIVE_PATH
-    renderer_hash = common.tree_hash(renderer)
-    if renderer_hash != candidate["renderer_bundle_sha256"]:
-        raise EvidenceError("packaged renderer differs from the candidate manifest")
     bundled_identity_record = common.file_record(bundled_identity_path)
     external_identity_record = common.file_record(external_identity_path)
     if bundled_identity_record["sha256"] != external_identity_record["sha256"]:
         raise EvidenceError("packaged renderer identity differs from the uploaded identity")
-    common.validate_build_identity(bundled_identity_path, renderer_hash)
+    identity = common.validate_build_identity(
+        bundled_identity_path, candidate["renderer_bundle_sha256"]
+    )
+    renderer_hash = identity["renderer_bundle_sha256"]
+    if renderer.exists():
+        renderer_hash = common.tree_hash(renderer)
+        if renderer_hash != candidate["renderer_bundle_sha256"]:
+            raise EvidenceError("packaged renderer differs from the candidate manifest")
+        common.validate_build_identity(bundled_identity_path, renderer_hash)
     return {
         "installation_method": "secure_portable_tar_extraction",
         "installed_root": str(installed_root),
         "installed_root_sha256": common.tree_hash(installed_root),
         "binary": common.file_record(binary),
         "assets_tree_sha256": common.tree_hash(installed_root / "assets"),
-        "renderer_path": str(renderer.resolve()),
+        "renderer_path": str(renderer.resolve()) if renderer.exists() else None,
         "renderer_bundle_sha256": renderer_hash,
         "bundled_renderer_identity": bundled_identity_record,
     }

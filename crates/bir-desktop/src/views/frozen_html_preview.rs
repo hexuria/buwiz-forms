@@ -1,8 +1,6 @@
-//! Fill/print host for frozen 2551Q HTML.
+//! Fill/print host for frozen HTML documents.
 //!
-//! This is a thin WebView around `bir_print::frozen_html::filled_2551q_document`.
-//! It does not use the semantic form-renderer, so visual-contract Chromium
-//! refs stay on the existing Rust provider.
+//! This is a thin WebView around `bir_print::frozen_html::filled_document`.
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -43,9 +41,9 @@ impl FrozenHtmlPreviewView {
         let (webview, status) = match result {
             Ok(webview) => (
                 Some(cx.new(|cx| WebView::new(webview, window, cx))),
-                "Frozen 2551Q HTML ready to fill/print.".to_string(),
+                "Frozen HTML ready to fill/print.".to_string(),
             ),
-            Err(error) => (None, format!("Frozen 2551Q HTML preview failed: {error}")),
+            Err(error) => (None, format!("Frozen HTML preview failed: {error}")),
         };
 
         Self { webview, status }
@@ -53,7 +51,7 @@ impl FrozenHtmlPreviewView {
 
     fn print(&mut self, cx: &mut Context<Self>) {
         let Some(webview) = self.webview.clone() else {
-            self.status = "Frozen 2551Q HTML preview is not available to print.".to_string();
+            self.status = "Frozen HTML preview is not available to print.".to_string();
             cx.notify();
             return;
         };
@@ -62,10 +60,10 @@ impl FrozenHtmlPreviewView {
         });
         match outcome {
             Ok(()) => {
-                self.status = "Print dialog opened for the frozen 2551Q HTML.".to_string();
+                self.status = "Print dialog opened for the frozen HTML.".to_string();
             }
             Err(error) => {
-                self.status = format!("Frozen 2551Q HTML could not print: {error}");
+                self.status = format!("Frozen HTML could not print: {error}");
             }
         }
         cx.notify();

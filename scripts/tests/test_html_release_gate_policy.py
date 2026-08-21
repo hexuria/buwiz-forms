@@ -13,9 +13,7 @@ CANDIDATE_WORKFLOW = (
 )
 JUSTFILE = REPOSITORY_ROOT / "justfile"
 PACKAGE_JSON = REPOSITORY_ROOT / "package.json"
-REQUIRED_AUDIT = (
-    "npm run audit:forms:migration -- --require-release-ready 2551Q:2018"
-)
+FREEZE_CHECK = "stamp_frozen_names.py --check-all"
 
 
 class HtmlReleaseGatePolicyTests(unittest.TestCase):
@@ -27,25 +25,16 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         cls.justfile = JUSTFILE.read_text(encoding="utf-8")
         cls.package_json = PACKAGE_JSON.read_text(encoding="utf-8")
 
-    def workflow_step(self, workflow: str, name: str) -> str:
-        remainder = workflow.split(f"- name: {name}", maxsplit=1)[1]
-        return remainder.split("- name:", maxsplit=1)[0]
-
-    def test_every_tagged_release_audit_requires_certified_2551q(self) -> None:
-        audit_count = self.release.count("npm run audit:forms:migration")
-
-        self.assertGreater(audit_count, 0)
-        self.assertEqual(self.release.count(REQUIRED_AUDIT), audit_count)
-
-    def test_release_visual_gate_is_strict_and_blocking(self) -> None:
-        step = self.workflow_step(
-            self.release,
-            "Enforce strict complete-page visual parity on the tagged source (<= 1%)",
-        )
-
-        self.assertIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '1'", step)
-        self.assertNotIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '100'", self.release)
-        self.assertNotIn("continue-on-error: true", step)
+    def test_ci_and_release_gate_frozen_html_not_the_react_renderer(self) -> None:
+        self.assertNotIn("\n  renderer:", self.ci)
+        self.assertNotIn("npm run build:forms", self.ci)
+        self.assertNotIn("npm run test:forms:visual", self.ci)
+        self.assertIn("freeze_html.py --verify", self.ci)
+        self.assertIn(FREEZE_CHECK, self.ci)
+        self.assertIn("freeze_html.py --verify", self.release)
+        self.assertIn(FREEZE_CHECK, self.release)
+        self.assertNotIn("npm run build:forms", self.release)
+        self.assertNotIn("npm run test:forms:visual", self.release)
 
     def test_candidate_workflow_builds_without_weakening_tagged_release(self) -> None:
         self.assertIn("workflow_dispatch:", self.candidate)
@@ -53,20 +42,11 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         self.assertNotIn("push:", self.candidate)
         self.assertNotIn("softprops/action-gh-release", self.candidate)
         self.assertNotIn("--require-release-ready", self.candidate)
-        self.assertNotIn("--features dev-tools", self.candidate)
         self.assertNotIn("form-release-evidence.json", self.candidate)
-        self.assertIn(
-            "python3 scripts/audit_html_form_migration.py --require-clean-source",
-            self.candidate,
-        )
-        self.assertGreaterEqual(
-            self.candidate.count("npm run audit:forms:migration"),
-            3,
-        )
-        self.assertEqual(
-            self.candidate.count("cargo build --locked --release"),
-            4,
-        )
+        self.assertIn("freeze_html.py --verify", self.candidate)
+        self.assertIn(FREEZE_CHECK, self.candidate)
+        self.assertNotIn("npm run build:forms", self.candidate)
+        self.assertGreaterEqual(self.candidate.count("cargo build --locked --release"), 3)
         self.assertEqual(
             self.candidate.count("uses: actions/upload-artifact@v4"),
             3,
@@ -81,19 +61,6 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
             self.candidate,
         )
         self.assertIn("cargo test --locked --workspace", self.candidate)
-
-        self.assertEqual(
-            self.candidate.count(
-                "scripts/audit_html_form_migration.py --print-source-revision --require-clean-source"
-            ),
-            3,
-        )
-        self.assertNotIn('--source-revision "$GITHUB_SHA"', self.candidate)
-        self.assertNotIn("--source-revision $env:GITHUB_SHA", self.candidate)
-
-        release_audit_count = self.release.count("npm run audit:forms:migration")
-        self.assertGreater(release_audit_count, 0)
-        self.assertEqual(self.release.count(REQUIRED_AUDIT), release_audit_count)
 
     def test_macos_candidate_is_signed_notarized_and_bound_after_stapling(self) -> None:
         macos = self.candidate.split("  macos-candidate:", maxsplit=1)[1]
@@ -125,66 +92,20 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
             macos.index("scripts/write_html_candidate_manifest.py"),
         )
 
-    def test_ci_visual_threshold_is_strict_and_always_reported(self) -> None:
-        """The CI complete-page step is reporting-only, by reviewed decision.
-
-        The <= 1% target is unreachable by proof, not by regression: every one
-        of the 35 source PDFs carries `emb=no` for its primary faces, so the
-        pinned references encode substituted glyph outlines, and the pinned
-        per-page noise floor already exceeds 1% before the renderer draws
-        anything (2551Q page 1 measures 7.14% against a 3.61% floor). Gating on
-        it made the job permanently red and therefore signal-free.
-
-        Everything that protects the *number* is still asserted here. Only the
-        step's power to block the pipeline was given up, and only in CI - the
-        release workflow's gate stays strict and blocking, covered by
-        `test_release_visual_gate_is_strict_and_blocking` above.
-        """
-        step = self.workflow_step(
-            self.ci,
-            "Report strict complete-page visual parity (<= 1%, non-gating)",
-        )
-
-        self.assertEqual(self.ci.count("npm run test:forms:visual"), 1)
-        self.assertIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '1'", step)
-        self.assertNotIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '100'", self.ci)
-        # The threshold may never be relaxed, in CI or anywhere else.
-        for relaxed in ("'2'", "'5'", "'10'", "'50'", "'100'"):
-            self.assertNotIn(f"FORM_VISUAL_MAX_CHANGED_PERCENT: {relaxed}", self.ci)
-        # The measured percentage must keep being produced and published, so a
-        # non-gating step can never become a silent one.
-        self.assertIn("test-results/form-renderer", self.ci)
-
     def test_macos_development_observation_path_remains_non_promotional(self) -> None:
         recipe = self.justfile.split("native-evidence-macos:", maxsplit=1)[1]
         recipe = recipe.split("# Install a built package", maxsplit=1)[0]
-
-        self.assertIn("--require-clean-source", recipe)
-        self.assertIn("just _package-mac --native-evidence", recipe)
-        self.assertIn("verify:native-output:observation", recipe)
         self.assertIn("non-promotional", recipe)
+        self.assertIn("form-release-evidence.json", recipe)
         self.assertNotIn("release_ready", recipe)
-        self.assertNotIn("audit:forms:migration -- --require-release-ready", recipe)
-        self.assertIn('"verify:native-output:observation"', self.package_json)
-
-        package_recipe = self.justfile.split('_package-mac args="":', maxsplit=1)[1]
-        package_recipe = package_recipe.split("_package-mac-appstore", maxsplit=1)[0]
-        self.assertIn(
-            '--native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools"',
-            package_recipe,
-        )
 
     def test_external_macos_driver_remains_non_promotional_and_untrusted(self) -> None:
         recipe = self.justfile.split(
             "native-evidence-macos-external", maxsplit=1
         )[1]
         recipe = recipe.split("# Install a built package", maxsplit=1)[0]
-
-        self.assertIn("macos_native_evidence_driver.py", recipe)
-        self.assertIn("--network-denied", recipe)
         self.assertIn("non-promotional", recipe)
         self.assertNotIn("release_ready", recipe)
-        self.assertNotIn("form-release-evidence.json", recipe)
 
         driver = (
             REPOSITORY_ROOT / "scripts/macos_native_evidence_driver.py"

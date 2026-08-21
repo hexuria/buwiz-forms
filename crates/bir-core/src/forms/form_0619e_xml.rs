@@ -959,7 +959,7 @@ mod tests {
     #[test]
     fn checked_in_submission_provenance_matches_the_fail_closed_boundary() {
         let provenance: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../packages/form-renderer/references/0619e-2018-source.json"
+            "../../tests/official-source/0619e-2018-source.json"
         ))
         .unwrap();
 

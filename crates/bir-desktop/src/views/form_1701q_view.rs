@@ -14,7 +14,6 @@ use bir_core::forms::form_1701q::{
     Form1701QPaymentRow, Form1701QSpouseType, Form1701QTaxRate, USER_ENTERED_AMOUNT_ITEMS,
 };
 use bir_core::forms::{FilingStatus, FormValidator};
-use bir_print::html::RenderEnvelopeV1;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
@@ -1064,8 +1063,12 @@ impl FormViewTrait for Form1701QView {
             );
             return;
         }
-        let envelope = RenderEnvelopeV1::from(&self.draft);
-        match crate::views::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+        match crate::views::form_html_preview_launcher::launch_frozen_form_preview(
+            "1701q-2018",
+            &self.draft.to_bir_field_map(),
+            "1701Q Frozen HTML",
+            cx,
+        ) {
             Ok(kind) => self.status_message = Some(kind.status_message().to_string()),
             Err(error) => {
                 self.status_message = Some(format!("Could not open HTML preview: {error}"))

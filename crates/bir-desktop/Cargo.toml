@@ -10,7 +10,7 @@ name = "bir"
 path = "src/main.rs"
 
 [features]
-dev-tools = ["bir-print/native-output-evidence"]
+dev-tools = []
 inspector = []
 # Mac App Store variant. Not a platform: the same `target_os = "macos"` ships
 # both a direct/notarized build and a sandboxed App Store build, so no
