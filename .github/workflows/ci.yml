@@ -36,6 +36,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Check out formgen scripts from buwiz-forms-html
+      uses: actions/checkout@v4
+      with:
+        repository: hexuria/buwiz-forms-html
+        path: .ci-html
+        persist-credentials: false
+
     - name: Install Python
       uses: actions/setup-python@v5
       with:
@@ -196,13 +203,13 @@ jobs:
       if: runner.os == 'macOS'
       run: cargo clippy --locked -p bir-desktop --features mas_build -- -D warnings
 
-    # Product freeze: 43 inventory HTML bundles plus fail-closed 2551Q name=
-    # stamps. This is not formgen harvest; it reads only committed html-frozen/.
+    # One command per line: this job's default shell is pwsh on windows-latest,
+    # and bash `\` continuations are a parse error there.
     - name: Frozen HTML inventory and 2551Q name stamps
       run: |
-        python3 tools/formgen/freeze_html.py --verify
-        python3 tools/formgen/stamp_2551q_names.py --self-test
-        python3 tools/formgen/stamp_2551q_names.py --check
+        python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+        python3 .ci-html/tools/formgen/stamp_2551q_names.py --self-test
+        python3 .ci-html/tools/formgen/stamp_2551q_names.py --check --html html-frozen/2551q-2018/index.html --fields rules/forms/2551q-v2018/fields.json --catalog .ci-html/tools/formgen/identity/catalog.json
 
     - name: Test
       run: cargo test --locked --workspace
