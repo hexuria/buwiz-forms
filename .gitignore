@@ -142,21 +142,21 @@ node_modules/
 .archives
 
 # formgen build intermediates: IR, layouts, font plans, audit PDFs and reports.
-# All regenerable from the pinned source PDFs by tools/formgen/batch.py; the
-# maintained artefact is forms/, not this.
+# Regenerable from the pinned source PDFs by tools/formgen/batch.py.
+# Generated and corrected HTML live in hexuria/buwiz-forms-html; this product
+# repo keeps only html-frozen/ for fill/print.
 /build/
+/forms/
 
 # Stage 2 output (tools/formgen/ARCHITECTURE.md). `forms-corrected/` is
 # copy(named stage-1 batch) + the correction ledger, built by
 # tools/formgen/correct.py and re-derivable from those two inputs alone. Its
 # manifest is written in the same run and binds the resolved source commit.
 #
-# Committing it would create exactly the 53-bundle PARALLEL CORPUS rule 2
-# forbids: 372 files of which 368 are byte-identical copies, that must be
-# re-verified on every regeneration and whose reviewed state would start
-# competing with forms/ as the answer to "what does this form look like". The
-# reviewable artefact is the ledger -- seven small records under
-# tools/formgen/corrections/ -- and it is tracked.
+# Committing it here would create a parallel HTML corpus next to
+# html-frozen/. Generated and corrected trees live in
+# hexuria/buwiz-forms-html. The reviewable artefact in this repo is the
+# ledger -- seven small records under tools/formgen/corrections/.
 /forms-corrected/
 /forms-corrected.manifest.json
 
