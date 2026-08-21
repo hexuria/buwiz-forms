@@ -1520,9 +1520,11 @@ mod tests {
         let filing_errors = imported.validate();
         assert!(filing_errors.iter().any(|(field, _)| field == "filer_type"));
         assert!(filing_errors.iter().any(|(field, _)| field == "atc"));
-        assert!(filing_errors
-            .iter()
-            .any(|(field, _)| field == "taxpayer_tax_rate"));
+        assert!(
+            filing_errors
+                .iter()
+                .any(|(field, _)| field == "taxpayer_tax_rate")
+        );
         assert!(source.to_bir_field_map_checked().is_err());
     }
 
@@ -1534,9 +1536,11 @@ mod tests {
 
         let errors = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
             .expect_err("conflicting radios must fail closed");
-        assert!(errors
-            .iter()
-            .any(|(field, message)| { field == "filer_type" && message.contains("conflicting") }));
+        assert!(
+            errors.iter().any(|(field, message)| {
+                field == "filer_type" && message.contains("conflicting")
+            })
+        );
     }
 
     #[test]
@@ -1691,8 +1695,7 @@ mod tests {
             super::super::form_1701q::XML_ROUND_TRIP_SUPPORTED
         );
         assert_eq!(
-            provenance["official_package_evidence"]["submission_boundary"]
-                ["queue_submission_supported"],
+            provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
             super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED
         );
         assert_eq!(
