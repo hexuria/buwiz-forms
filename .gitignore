@@ -141,36 +141,11 @@ node_modules/
 *.p8
 .archives
 
-# formgen build intermediates: IR, layouts, font plans, audit PDFs and reports.
-# Regenerable from the pinned source PDFs by tools/formgen/batch.py.
-# Generated and corrected HTML live in hexuria/buwiz-forms-html; this product
-# repo keeps only html-frozen/ for fill/print.
+# Regenerable intermediates from a local formgen run. Generated/corrected HTML
+# and tools/formgen live in hexuria/buwiz-forms-html. This product repo keeps
+# only html-frozen/ for fill/print.
 /build/
 /forms/
-
-# Stage 2 output (tools/formgen/ARCHITECTURE.md). `forms-corrected/` is
-# copy(named stage-1 batch) + the correction ledger, built by
-# tools/formgen/correct.py and re-derivable from those two inputs alone. Its
-# manifest is written in the same run and binds the resolved source commit.
-#
-# Committing it here would create a parallel HTML corpus next to
-# html-frozen/. Generated and corrected trees live in
-# hexuria/buwiz-forms-html. The reviewable artefact in this repo is the
-# ledger -- seven small records under tools/formgen/corrections/.
 /forms-corrected/
 /forms-corrected.manifest.json
-
-# Windows Offline eBIRForms dummy-Save scratch. Dated evidence JSON and
-# reviewed staging inventories are tracked; local helpers, screenshots,
-# dummy save XMLs, and extra copied form trees are not.
-/tools/formgen/_tmp_*
-/tools/formgen/corrections/staging/**/00000000000000-*.xml
-/tools/formgen/corrections/staging/w3-20260820/
-/tools/formgen/corrections/staging/w4-20260820/
-/tools/formgen/corrections/staging/*/rules/forms/*
-!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1601eq-v2018
-!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1601eq-v2018/**
-!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1701q-v2018
-!/tools/formgen/corrections/staging/w1-20260820/rules/forms/1701q-v2018/**
-!/tools/formgen/corrections/staging/w2-20260820/rules/forms/2000-dst-v2018
-!/tools/formgen/corrections/staging/w2-20260820/rules/forms/2000-dst-v2018/**
+.ci-html/
