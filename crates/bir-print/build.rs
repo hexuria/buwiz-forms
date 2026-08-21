@@ -63,7 +63,9 @@ fn main() {
         out.push_str("        ");
         out.push_str(&rust_string(slug));
         out.push_str(" => Some(FrozenBundle {\n");
-        out.push_str("            slug,\n");
+        out.push_str("            slug: ");
+        out.push_str(&rust_string(slug));
+        out.push_str(",\n");
         out.push_str(
             "            html: include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../html-frozen/",
         );
