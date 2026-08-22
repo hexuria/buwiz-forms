@@ -1730,10 +1730,18 @@ mod tests {
             .to_bir_xml_payload()
             .expect("saveXML(false) emit");
         let digest = hex::encode(Sha256::digest(xml.as_bytes()));
-        assert_eq!(xml.as_bytes().len(), RECONSTRUCTED_MINIMUM_SAVE_BYTES);
+        assert_eq!(xml.len(), RECONSTRUCTED_MINIMUM_SAVE_BYTES);
         assert_eq!(digest, RECONSTRUCTED_MINIMUM_SAVE_SHA256);
         assert_ne!(digest, LIVE_DUMMY_SAVE_SHA256);
-        assert_ne!(xml.as_bytes().len(), LIVE_DUMMY_SAVE_BYTES);
+        assert_ne!(xml.len(), LIVE_DUMMY_SAVE_BYTES);
+
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("reconstructed-minimum.xml");
+        std::fs::write(&path, xml.as_bytes()).expect("write reconstructed Save bytes");
+        let imported = Form1701QDraft::from_bir_xml_file(&path)
+            .expect("reconstructed minimum Save must import via from_bir_xml_file");
+        assert_live_dummy_public_identity(&imported);
+        assert!(imported.email.is_empty());
     }
 
     #[test]
