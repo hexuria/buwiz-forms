@@ -489,33 +489,7 @@ impl Form1701QDraft {
     ) -> Result<BTreeMap<String, String>, Vec<(String, String)>> {
         let fields = self.to_bir_field_map();
         let mut errors = self.validate();
-        for (field_id, value) in &fields {
-            if !JAVASCRIPT_ESCAPED_FIELDS.contains(&field_id.as_str())
-                && (value.contains("<div") || value.contains("</div>"))
-            {
-                errors.push((
-                    field_id.clone(),
-                    "The official editable serializer does not escape nested div markup in this field"
-                        .to_string(),
-                ));
-            }
-            if value.chars().any(|character| character == '\0') {
-                errors.push((
-                    field_id.clone(),
-                    "XML fields cannot contain NUL".to_string(),
-                ));
-            }
-        }
-        if fields.len() != super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT {
-            errors.push((
-                "xml_contract".to_string(),
-                format!(
-                    "Expected {} exact editable fields, generated {}",
-                    super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT,
-                    fields.len()
-                ),
-            ));
-        }
+        errors.extend(editable_envelope_errors(&fields));
         if errors.is_empty() {
             Ok(fields)
         } else {
@@ -524,11 +498,26 @@ impl Form1701QDraft {
     }
 
     /// Generate the exact editable (non-final, non-submission) HTA shape.
+    ///
+    /// This is official `saveXML(false)`, not Validate. Unset Item 7 / 8 / 16
+    /// radios emit as all-false, matching a minimum official Save. Filing-complete
+    /// checks stay on [`FormValidator::validate`] and
+    /// [`Self::to_bir_field_map_checked`]. Queue submission stays disabled.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
-        self.to_bir_field_map_checked()
-            .map(|fields| serialize_editable_xml(&fields))
+        let fields = self.to_bir_field_map();
+        let errors = editable_envelope_errors(&fields);
+        if errors.is_empty() {
+            Ok(serialize_editable_xml(&fields))
+        } else {
+            Err(errors)
+        }
     }
 
+    /// Import an official `saveXML(false)` envelope.
+    ///
+    /// Unset Item 7 / 8 / 16 radios become `None` on the draft. Malformed
+    /// envelopes, unknown keys, credential-bearing fields, and final/outbound
+    /// copies still fail closed.
     pub fn from_bir_xml_payload(xml: &str) -> Result<Self, Vec<(String, String)>> {
         let mut errors = Vec::new();
         if !xml.starts_with("<?xml version='1.0'?>") {
@@ -597,6 +586,9 @@ impl Form1701QDraft {
             &mut errors,
         );
         let number_of_sheets = parse_required::<u8>(fields, "frm1701q:txtSheets", &mut errors);
+        // Official Save preflight does not require Item 7 / 8 / 16. A live
+        // minimum dummy Save writes every optType_*, optATC_*, and optTaxRate_*
+        // flag as false. Conflicting true values still fail closed.
         let filer_type = parse_one_of(
             fields,
             &[
@@ -605,7 +597,7 @@ impl Form1701QDraft {
                 ("frm1701q:optType_3", Form1701QFilerType::Estate),
                 ("frm1701q:optType_4", Form1701QFilerType::Trust),
             ],
-            true,
+            false,
             "filer_type",
             &mut errors,
         );
@@ -619,7 +611,7 @@ impl Form1701QDraft {
                 ("frm1701q:optATC_5", Form1701QAtc::Ii017),
                 ("frm1701q:optATC_6", Form1701QAtc::Ii016),
             ],
-            true,
+            false,
             "atc",
             &mut errors,
         );
@@ -636,7 +628,7 @@ impl Form1701QDraft {
                 ("frm1701q:optTaxRate_1", Form1701QTaxRate::Graduated),
                 ("frm1701q:optTaxRate_2", Form1701QTaxRate::EightPercent),
             ],
-            true,
+            false,
             "tax_rate",
             &mut errors,
         );
@@ -860,7 +852,9 @@ impl Form1701QDraft {
             draft.item_31_aggregate_amount_payable,
             &mut errors,
         );
-        errors.extend(draft.validate());
+        // Official `saveXML(false)` is not Validate. Filing-complete
+        // `draft.validate()` stays on the Validate / queue path so a minimum
+        // official Save can import as a draft.
 
         if errors.is_empty() {
             Ok(draft)
@@ -911,6 +905,38 @@ fn javascript_escape(value: &str) -> String {
 
 fn is_javascript_escape_safe(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'@' | b'*' | b'_' | b'+' | b'-' | b'.' | b'/')
+}
+
+fn editable_envelope_errors(fields: &BTreeMap<String, String>) -> Vec<(String, String)> {
+    let mut errors = Vec::new();
+    for (field_id, value) in fields {
+        if !JAVASCRIPT_ESCAPED_FIELDS.contains(&field_id.as_str())
+            && (value.contains("<div") || value.contains("</div>"))
+        {
+            errors.push((
+                field_id.clone(),
+                "The official editable serializer does not escape nested div markup in this field"
+                    .to_string(),
+            ));
+        }
+        if value.chars().any(|character| character == '\0') {
+            errors.push((
+                field_id.clone(),
+                "XML fields cannot contain NUL".to_string(),
+            ));
+        }
+    }
+    if fields.len() != super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT {
+        errors.push((
+            "xml_contract".to_string(),
+            format!(
+                "Expected {} exact editable fields, generated {}",
+                super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT,
+                fields.len()
+            ),
+        ));
+    }
+    errors
 }
 
 fn validate_exact_keys(fields: &BTreeMap<String, String>) -> Vec<(String, String)> {
@@ -1315,6 +1341,7 @@ fn split_date(value: &str) -> (String, String, String) {
 
 #[cfg(test)]
 mod tests {
+    use super::FormValidator;
     use super::*;
     use sha2::{Digest, Sha256};
 
@@ -1347,6 +1374,24 @@ mod tests {
         draft.set_amount(64, Form1701QParty::Taxpayer, Some(1_000.0));
         draft.recompute();
         draft
+    }
+
+    /// Reconstructs the live 7.9.6.1 dummy Save *shape* (Fill-up + Save only).
+    /// Item 7 / 8 / 16 radios are all false. Do not commit the live saveXML.
+    fn live_dummy_minimum_save_draft() -> Form1701QDraft {
+        Form1701QDraft {
+            taxable_year: 2026,
+            quarter: 1,
+            tin: "00000000000000".to_string(),
+            rdo_code: "018".to_string(),
+            taxpayer_name: "DELA CRUZ JUAN".to_string(),
+            taxpayer_last_name: "DELA CRUZ JUAN".to_string(),
+            registered_address: "OLONGAPO, ZAMBALES".to_string(),
+            zip_code: "2200".to_string(),
+            line_of_business: "RETAIL".to_string(),
+            status: FilingStatus::Draft,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -1417,6 +1462,121 @@ mod tests {
         assert_eq!(imported.to_bir_field_map(), original_fields);
         assert_eq!(imported.status, FilingStatus::Draft);
         assert!(!imported.can_queue_for_submission());
+    }
+
+    #[test]
+    fn minimum_official_save_with_unset_radios_imports_as_draft() {
+        let source = live_dummy_minimum_save_draft();
+        let fields = source.to_bir_field_map();
+
+        assert_eq!(fields.len(), 172);
+        for key in [
+            "frm1701q:optType_1",
+            "frm1701q:optType_2",
+            "frm1701q:optType_3",
+            "frm1701q:optType_4",
+            "frm1701q:optATC_1",
+            "frm1701q:optATC_2",
+            "frm1701q:optATC_3",
+            "frm1701q:optATC_4",
+            "frm1701q:optATC_5",
+            "frm1701q:optATC_6",
+            "frm1701q:optTaxRate_1",
+            "frm1701q:optTaxRate_2",
+        ] {
+            assert_eq!(fields[key], "false", "{key}");
+        }
+        assert_eq!(fields["frm1701q:txtTIN1"], "000");
+        assert_eq!(fields["frm1701q:txtTIN2"], "000");
+        assert_eq!(fields["frm1701q:txtTIN3"], "000");
+        assert_eq!(fields["frm1701q:txtBranchCode"], "00000");
+        assert_eq!(fields["frm1701q:txtTaxpayerName"], "DELA CRUZ JUAN");
+        assert_eq!(fields["frm1701q:DateQuarter_1"], "true");
+        assert_eq!(fields["txtFinalFlag"], "0");
+        assert_eq!(fields["txtEnroll"], "N");
+        assert_eq!(fields["ebirOnlineSecret"], "");
+
+        let xml = source.to_bir_xml_payload().expect("saveXML(false) emit");
+        assert!(xml.starts_with("<?xml version='1.0'?>\t\r\n            <div>frm1701q:txtYear="));
+        assert!(xml.contains("DELA%20CRUZ%20JUAN"));
+        assert!(xml.contains("OLONGAPO%2C%20ZAMBALES"));
+        let imported = Form1701QDraft::from_bir_xml_payload(&xml)
+            .expect("minimum official Save must import as a draft");
+
+        assert_eq!(imported.filer_type, None);
+        assert_eq!(imported.atc, None);
+        assert_eq!(imported.tax_rate, None);
+        assert_eq!(imported.deduction_method, None);
+        assert_eq!(imported.claims_foreign_tax_credits, None);
+        assert_eq!(imported.tin, "00000000000000");
+        assert_eq!(imported.taxpayer_name, "DELA CRUZ JUAN");
+        assert_eq!(imported.quarter, 1);
+        assert_eq!(imported.taxable_year, 2026);
+        assert_eq!(imported.rdo_code, "018");
+        assert_eq!(imported.status, FilingStatus::Draft);
+        assert!(!imported.can_queue_for_submission());
+        assert_eq!(imported.to_bir_field_map(), fields);
+
+        let filing_errors = imported.validate();
+        assert!(filing_errors.iter().any(|(field, _)| field == "filer_type"));
+        assert!(filing_errors.iter().any(|(field, _)| field == "atc"));
+        assert!(
+            filing_errors
+                .iter()
+                .any(|(field, _)| field == "taxpayer_tax_rate")
+        );
+        assert!(source.to_bir_field_map_checked().is_err());
+    }
+
+    #[test]
+    fn conflicting_official_option_flags_fail_closed() {
+        let mut fields = live_dummy_minimum_save_draft().to_bir_field_map();
+        fields.insert("frm1701q:optType_1".to_string(), "true".to_string());
+        fields.insert("frm1701q:optType_2".to_string(), "true".to_string());
+
+        let errors = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
+            .expect_err("conflicting radios must fail closed");
+        assert!(
+            errors.iter().any(|(field, message)| {
+                field == "filer_type" && message.contains("conflicting")
+            })
+        );
+    }
+
+    #[test]
+    fn live_dummy_save_xml_env_imports_without_birforms_exe() {
+        let Ok(path) = std::env::var("BUWIZ_1701Q_LIVE_SAVE_XML") else {
+            return;
+        };
+        const LIVE_DUMMY_SAVE_SHA256: &str =
+            "bf11bbde0f0f01a416d90bffad00c2eda636604259c49f66e33388e26a259ccc";
+        let bytes = std::fs::read(&path).expect("live Save temp copy must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            LIVE_DUMMY_SAVE_SHA256,
+            "BUWIZ_1701Q_LIVE_SAVE_XML is not the 2026-08-21 dummy Save"
+        );
+        let xml = String::from_utf8(bytes).expect("editable Save is UTF-8");
+        assert!(
+            !xml.contains("261708015") && !xml.contains("261-708-015"),
+            "do not decode a real TIN savefile"
+        );
+        let imported = Form1701QDraft::from_bir_xml_payload(&xml)
+            .expect("minimum official Save must import as a draft");
+        assert_eq!(imported.tin, "00000000000000");
+        assert_eq!(imported.taxpayer_name, "DELA CRUZ JUAN");
+        assert_eq!(imported.filer_type, None);
+        assert_eq!(imported.atc, None);
+        assert_eq!(imported.tax_rate, None);
+        assert_eq!(imported.quarter, 1);
+        assert_eq!(imported.taxable_year, 2026);
+        assert!(!imported.can_queue_for_submission());
+        let emitted = imported
+            .to_bir_xml_payload()
+            .expect("saveXML(false) emit must run after import");
+        assert!(emitted.starts_with("<?xml version='1.0'?>"));
+        assert!(emitted.contains("frm1701q:optType_1=false"));
+        assert_eq!(imported.to_bir_field_map().len(), 172);
     }
 
     #[test]
