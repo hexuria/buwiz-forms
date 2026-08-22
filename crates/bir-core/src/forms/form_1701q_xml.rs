@@ -1500,8 +1500,37 @@ mod tests {
         draft
     }
 
+    /// 2026-08-21 official dummy Save (`00000000000000-1701Qv2018-2026Q1.xml`).
+    /// Bytes stay out of git. Point `BUWIZ_1701Q_LIVE_SAVE_XML` at a temp copy.
+    const LIVE_DUMMY_SAVE_BYTES: usize = 11877;
+    const LIVE_DUMMY_SAVE_SHA256: &str =
+        "bf11bbde0f0f01a416d90bffad00c2eda636604259c49f66e33388e26a259ccc";
+
+    /// Shape-only reconstruction of that Save. It is not the live file: live is
+    /// 40 bytes larger because profile-owned fields (Item 12 email, and any
+    /// other uncommitted values) are not pinned here.
+    const RECONSTRUCTED_MINIMUM_SAVE_BYTES: usize = 11837;
+    const RECONSTRUCTED_MINIMUM_SAVE_SHA256: &str =
+        "ee283cb9a639a2acd78b598ffcb4d3969f62a396ed4a4c6f7e93f8a60e862cde";
+
+    const UNSET_FILING_RADIO_KEYS: [&str; 12] = [
+        "frm1701q:optType_1",
+        "frm1701q:optType_2",
+        "frm1701q:optType_3",
+        "frm1701q:optType_4",
+        "frm1701q:optATC_1",
+        "frm1701q:optATC_2",
+        "frm1701q:optATC_3",
+        "frm1701q:optATC_4",
+        "frm1701q:optATC_5",
+        "frm1701q:optATC_6",
+        "frm1701q:optTaxRate_1",
+        "frm1701q:optTaxRate_2",
+    ];
+
     /// Reconstructs the live 7.9.6.1 dummy Save *shape* (Fill-up + Save only).
     /// Item 7 / 8 / 16 radios are all false. Do not commit the live saveXML.
+    /// Do not pin the dummy profile email.
     fn live_dummy_minimum_save_draft() -> Form1701QDraft {
         Form1701QDraft {
             taxable_year: 2026,
@@ -1516,6 +1545,82 @@ mod tests {
             status: FilingStatus::Draft,
             ..Default::default()
         }
+    }
+
+    fn assert_live_dummy_public_identity(imported: &Form1701QDraft) {
+        assert_eq!(imported.tin, "00000000000000");
+        assert_eq!(imported.taxpayer_name, "DELA CRUZ JUAN");
+        assert!(
+            imported.taxpayer_last_name.is_empty()
+                || imported.taxpayer_last_name == imported.taxpayer_name,
+            "page 2 name is empty or the official copy of Item 9"
+        );
+        assert_eq!(imported.registered_address, "OLONGAPO, ZAMBALES");
+        assert_eq!(imported.zip_code, "2200");
+        assert_eq!(imported.rdo_code, "018");
+        assert_eq!(imported.line_of_business, "RETAIL");
+        assert_eq!(imported.quarter, 1);
+        assert_eq!(imported.taxable_year, 2026);
+        assert!(!imported.is_amended);
+        assert_eq!(imported.number_of_sheets, 0);
+        assert_eq!(imported.filer_type, None);
+        assert_eq!(imported.atc, None);
+        assert_eq!(imported.tax_rate, None);
+        assert_eq!(imported.deduction_method, None);
+        assert_eq!(imported.claims_foreign_tax_credits, None);
+        assert!(imported.date_of_birth.is_empty());
+        assert!(imported.citizenship.is_empty());
+        assert_eq!(imported.status, FilingStatus::Draft);
+        assert!(!imported.can_queue_for_submission());
+
+        let fields = imported.to_bir_field_map();
+        assert_eq!(fields.len(), 172);
+        for key in UNSET_FILING_RADIO_KEYS {
+            assert_eq!(fields[key], "false", "{key}");
+        }
+        for (key, value) in [
+            ("frm1701q:txtTIN1", "000"),
+            ("frm1701q:txtTIN2", "000"),
+            ("frm1701q:txtTIN3", "000"),
+            ("frm1701q:txtBranchCode", "00000"),
+            ("frm1701q:txtPg2TIN1", "000"),
+            ("frm1701q:txtPg2TIN2", "000"),
+            ("frm1701q:txtPg2TIN3", "000"),
+            ("frm1701q:txtPg2BranchCode", "00000"),
+            ("frm1701q:DateQuarter_1", "true"),
+            ("frm1701q:AmendedRtn_2", "true"),
+            ("frm1701q:txtSheets", "0"),
+            ("frm1701q:txt26A", "0.00"),
+            ("frm1701q:txt31", "0.00"),
+            ("txtFinalFlag", "0"),
+            ("txtEnroll", "N"),
+            ("ebirOnlineSecret", ""),
+        ] {
+            assert_eq!(fields[key], value, "{key}");
+        }
+
+        let filing_errors = imported.validate();
+        assert!(filing_errors.iter().any(|(field, _)| field == "filer_type"));
+        assert!(filing_errors.iter().any(|(field, _)| field == "atc"));
+        assert!(filing_errors
+            .iter()
+            .any(|(field, _)| field == "taxpayer_tax_rate"));
+        assert!(imported.to_bir_field_map_checked().is_err());
+    }
+
+    fn encoded_field_keys_that_differ(left: &str, right: &str) -> Vec<String> {
+        let left_fields =
+            crate::bir_xml::parse_bir_xml_encoded_checked(left).expect("left envelope must parse");
+        let right_fields = crate::bir_xml::parse_bir_xml_encoded_checked(right)
+            .expect("right envelope must parse");
+        let keys = left_fields
+            .keys()
+            .chain(right_fields.keys())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        keys.into_iter()
+            .filter(|key| left_fields.get(key) != right_fields.get(key))
+            .collect()
     }
 
     #[test]
@@ -1592,34 +1697,6 @@ mod tests {
     fn minimum_official_save_with_unset_radios_imports_as_draft() {
         let source = live_dummy_minimum_save_draft();
         let fields = source.to_bir_field_map();
-
-        assert_eq!(fields.len(), 172);
-        for key in [
-            "frm1701q:optType_1",
-            "frm1701q:optType_2",
-            "frm1701q:optType_3",
-            "frm1701q:optType_4",
-            "frm1701q:optATC_1",
-            "frm1701q:optATC_2",
-            "frm1701q:optATC_3",
-            "frm1701q:optATC_4",
-            "frm1701q:optATC_5",
-            "frm1701q:optATC_6",
-            "frm1701q:optTaxRate_1",
-            "frm1701q:optTaxRate_2",
-        ] {
-            assert_eq!(fields[key], "false", "{key}");
-        }
-        assert_eq!(fields["frm1701q:txtTIN1"], "000");
-        assert_eq!(fields["frm1701q:txtTIN2"], "000");
-        assert_eq!(fields["frm1701q:txtTIN3"], "000");
-        assert_eq!(fields["frm1701q:txtBranchCode"], "00000");
-        assert_eq!(fields["frm1701q:txtTaxpayerName"], "DELA CRUZ JUAN");
-        assert_eq!(fields["frm1701q:DateQuarter_1"], "true");
-        assert_eq!(fields["txtFinalFlag"], "0");
-        assert_eq!(fields["txtEnroll"], "N");
-        assert_eq!(fields["ebirOnlineSecret"], "");
-
         let xml = source.to_bir_xml_payload().expect("saveXML(false) emit");
         assert!(xml.starts_with("<?xml version='1.0'?>\t\r\n            <div>frm1701q:txtYear="));
         assert!(xml.contains("DELA%20CRUZ%20JUAN"));
@@ -1627,28 +1704,10 @@ mod tests {
         let imported = Form1701QDraft::from_bir_xml_payload(&xml)
             .expect("minimum official Save must import as a draft");
 
-        assert_eq!(imported.filer_type, None);
-        assert_eq!(imported.atc, None);
-        assert_eq!(imported.tax_rate, None);
-        assert_eq!(imported.deduction_method, None);
-        assert_eq!(imported.claims_foreign_tax_credits, None);
-        assert_eq!(imported.tin, "00000000000000");
-        assert_eq!(imported.taxpayer_name, "DELA CRUZ JUAN");
-        assert_eq!(imported.quarter, 1);
-        assert_eq!(imported.taxable_year, 2026);
-        assert_eq!(imported.rdo_code, "018");
-        assert_eq!(imported.status, FilingStatus::Draft);
-        assert!(!imported.can_queue_for_submission());
+        assert_live_dummy_public_identity(&imported);
+        assert!(imported.email.is_empty());
+        assert_eq!(imported.taxpayer_last_name, "DELA CRUZ JUAN");
         assert_eq!(imported.to_bir_field_map(), fields);
-
-        let filing_errors = imported.validate();
-        assert!(filing_errors.iter().any(|(field, _)| field == "filer_type"));
-        assert!(filing_errors.iter().any(|(field, _)| field == "atc"));
-        assert!(
-            filing_errors
-                .iter()
-                .any(|(field, _)| field == "taxpayer_tax_rate")
-        );
         assert!(source.to_bir_field_map_checked().is_err());
     }
 
@@ -1660,47 +1719,73 @@ mod tests {
 
         let errors = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
             .expect_err("conflicting radios must fail closed");
-        assert!(
-            errors.iter().any(|(field, message)| {
-                field == "filer_type" && message.contains("conflicting")
-            })
-        );
+        assert!(errors
+            .iter()
+            .any(|(field, message)| { field == "filer_type" && message.contains("conflicting") }));
+    }
+
+    #[test]
+    fn reconstructed_minimum_save_is_not_the_hash_pinned_live_file() {
+        let xml = live_dummy_minimum_save_draft()
+            .to_bir_xml_payload()
+            .expect("saveXML(false) emit");
+        let digest = hex::encode(Sha256::digest(xml.as_bytes()));
+        assert_eq!(xml.as_bytes().len(), RECONSTRUCTED_MINIMUM_SAVE_BYTES);
+        assert_eq!(digest, RECONSTRUCTED_MINIMUM_SAVE_SHA256);
+        assert_ne!(digest, LIVE_DUMMY_SAVE_SHA256);
+        assert_ne!(xml.as_bytes().len(), LIVE_DUMMY_SAVE_BYTES);
     }
 
     #[test]
     fn live_dummy_save_xml_env_imports_without_birforms_exe() {
+        // Temp copy of C:\eBIRForms\savefile\00000000000000-1701Qv2018-2026Q1.xml
+        // or %TEMP%\buwiz-live-1701q-20260821.xml. Do not commit the XML.
         let Ok(path) = std::env::var("BUWIZ_1701Q_LIVE_SAVE_XML") else {
             return;
         };
-        const LIVE_DUMMY_SAVE_SHA256: &str =
-            "bf11bbde0f0f01a416d90bffad00c2eda636604259c49f66e33388e26a259ccc";
         let bytes = std::fs::read(&path).expect("live Save temp copy must be readable");
+        assert_eq!(
+            bytes.len(),
+            LIVE_DUMMY_SAVE_BYTES,
+            "BUWIZ_1701Q_LIVE_SAVE_XML is not the 2026-08-21 dummy Save"
+        );
         assert_eq!(
             hex::encode(Sha256::digest(&bytes)),
             LIVE_DUMMY_SAVE_SHA256,
             "BUWIZ_1701Q_LIVE_SAVE_XML is not the 2026-08-21 dummy Save"
         );
-        let xml = String::from_utf8(bytes).expect("editable Save is UTF-8");
+        assert!(
+            bytes.windows(2).any(|pair| pair == b"\r\n"),
+            "live Save bytes keep CRLF; compare with read_bytes(), not text mode"
+        );
+        let xml = std::str::from_utf8(&bytes).expect("editable Save is UTF-8");
         assert!(
             !xml.contains("261708015") && !xml.contains("261-708-015"),
             "do not decode a real TIN savefile"
         );
-        let imported = Form1701QDraft::from_bir_xml_payload(&xml)
-            .expect("minimum official Save must import as a draft");
-        assert_eq!(imported.tin, "00000000000000");
-        assert_eq!(imported.taxpayer_name, "DELA CRUZ JUAN");
-        assert_eq!(imported.filer_type, None);
-        assert_eq!(imported.atc, None);
-        assert_eq!(imported.tax_rate, None);
-        assert_eq!(imported.quarter, 1);
-        assert_eq!(imported.taxable_year, 2026);
-        assert!(!imported.can_queue_for_submission());
+
+        let imported = Form1701QDraft::from_bir_xml_file(&path)
+            .expect("minimum official Save must import as a draft via from_bir_xml_file");
+        let from_bytes = Form1701QDraft::from_bir_xml_bytes(&bytes)
+            .expect("minimum official Save must import as a draft via from_bir_xml_bytes");
+        assert_eq!(imported.to_bir_field_map(), from_bytes.to_bir_field_map());
+        assert_live_dummy_public_identity(&imported);
+        assert!(
+            imported.email.contains('@'),
+            "live dummy Save stamps profile email (Item 12); do not pin the address here"
+        );
+
         let emitted = imported
             .to_bir_xml_payload()
             .expect("saveXML(false) emit must run after import");
-        assert!(emitted.starts_with("<?xml version='1.0'?>"));
-        assert!(emitted.contains("frm1701q:optType_1=false"));
-        assert_eq!(imported.to_bir_field_map().len(), 172);
+        if emitted.as_bytes() != bytes.as_slice() {
+            let differing = encoded_field_keys_that_differ(xml, &emitted);
+            panic!(
+                "import then saveXML(false) emit must match the live dummy Save ({} live bytes vs {} emit bytes); differing field keys: {differing:?}",
+                bytes.len(),
+                emitted.len()
+            );
+        }
     }
 
     #[test]
@@ -1905,7 +1990,8 @@ mod tests {
             super::super::form_1701q::XML_ROUND_TRIP_SUPPORTED
         );
         assert_eq!(
-            provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
+            provenance["official_package_evidence"]["submission_boundary"]
+                ["queue_submission_supported"],
             super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED
         );
         assert_eq!(
