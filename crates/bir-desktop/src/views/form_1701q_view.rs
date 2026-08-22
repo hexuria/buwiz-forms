@@ -27,7 +27,7 @@ use crate::components::form_parts::readonly_field;
 pub enum Form1701QEvent {
     BackToDashboard,
     Saved,
-    OfficialSaveImported(Form1701QDraft),
+    OfficialSaveImported(Box<Form1701QDraft>),
     PushNotification(String, String, String),
 }
 
@@ -465,7 +465,9 @@ impl Form1701QView {
                         }
                         draft.updated_at = Some(chrono::Utc::now().to_rfc3339());
                         match this.persist_draft(&draft) {
-                            Ok(()) => cx.emit(Form1701QEvent::OfficialSaveImported(draft)),
+                            Ok(()) => {
+                                cx.emit(Form1701QEvent::OfficialSaveImported(Box::new(draft)))
+                            }
                             Err(error) => {
                                 this.status_message =
                                     Some(format!("Imported Save could not be saved: {error}"));

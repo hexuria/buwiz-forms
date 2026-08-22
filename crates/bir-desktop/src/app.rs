@@ -2059,7 +2059,7 @@ impl Render for AppState {
                     }
                     Form1701QEvent::Saved => cx.notify(),
                     Form1701QEvent::OfficialSaveImported(draft) => {
-                        this.pending_form_1701q_draft = Some(draft.clone());
+                        this.pending_form_1701q_draft = Some(draft.as_ref().clone());
                         this.active_view = ActiveView::Form1701Q;
                         push_notification(
                             "success",
