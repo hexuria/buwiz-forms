@@ -6,6 +6,7 @@
 //! credential-bearing `saveEncryptedProfile`/FTP submission path.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use super::form_1701q::{
     Form1701QAmounts, Form1701QAtc, Form1701QDeductionMethod, Form1701QDraft, Form1701QFilerType,
@@ -16,6 +17,9 @@ use super::{FilingStatus, FormValidator};
 
 const EDITABLE_XML_CLOSE: &str = "All Rights Reserved BIR 2012.";
 const XML_FORMAT: &str = "\t\r\n            ";
+/// Deny-list marker, not a taxpayer to load. Never import or emit this TIN.
+const BLOCKED_SAVE_TIN_DIGITS: &str = "261708015";
+const BLOCKED_SAVE_TIN_DASHED: &str = "261-708-015";
 const JAVASCRIPT_ESCAPED_FIELDS: [&str; 3] = [
     "frm1701q:txtTaxpayerName",
     "frm1701q:txtAddress",
@@ -504,10 +508,16 @@ impl Form1701QDraft {
     /// checks stay on [`FormValidator::validate`] and
     /// [`Self::to_bir_field_map_checked`]. Queue submission stays disabled.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let mut errors = blocked_save_identity_errors(self);
         let fields = self.to_bir_field_map();
-        let errors = editable_envelope_errors(&fields);
+        errors.extend(editable_envelope_errors(&fields));
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let xml = serialize_editable_xml(&fields);
+        errors.extend(blocked_save_text_errors(&xml));
         if errors.is_empty() {
-            Ok(serialize_editable_xml(&fields))
+            Ok(xml)
         } else {
             Err(errors)
         }
@@ -519,6 +529,11 @@ impl Form1701QDraft {
     /// envelopes, unknown keys, credential-bearing fields, and final/outbound
     /// copies still fail closed.
     pub fn from_bir_xml_payload(xml: &str) -> Result<Self, Vec<(String, String)>> {
+        let blocked = blocked_save_text_errors(xml);
+        if !blocked.is_empty() {
+            return Err(blocked);
+        }
+
         let mut errors = Vec::new();
         if !xml.starts_with("<?xml version='1.0'?>") {
             errors.push((
@@ -557,7 +572,72 @@ impl Form1701QDraft {
         if !errors.is_empty() {
             return Err(errors);
         }
-        Self::from_bir_field_map(&fields)
+        let draft = Self::from_bir_field_map(&fields)?;
+        let blocked = blocked_save_identity_errors(&draft);
+        if blocked.is_empty() {
+            Ok(draft)
+        } else {
+            Err(blocked)
+        }
+    }
+
+    /// Read an official `saveXML(false)` file as bytes so CRLF survives.
+    ///
+    /// The filename does not have to match
+    /// [`Self::default_submission_filename`]. Queue submission stays disabled.
+    pub fn from_bir_xml_bytes(bytes: &[u8]) -> Result<Self, Vec<(String, String)>> {
+        let xml = std::str::from_utf8(bytes).map_err(|_| {
+            vec![(
+                "xml_file".to_string(),
+                "Official Save must be UTF-8".to_string(),
+            )]
+        })?;
+        Self::from_bir_xml_payload(xml)
+    }
+
+    pub fn from_bir_xml_file(path: impl AsRef<Path>) -> Result<Self, Vec<(String, String)>> {
+        let path = path.as_ref();
+        if path_looks_blocked(path) {
+            return Err(blocked_save_tin_errors("xml_file"));
+        }
+        let bytes = std::fs::read(path).map_err(|_| {
+            vec![(
+                "xml_file".to_string(),
+                "Could not read official Save file".to_string(),
+            )]
+        })?;
+        Self::from_bir_xml_bytes(&bytes)
+    }
+
+    /// Write official `saveXML(false)` bytes (`fs::write`, not text mode).
+    ///
+    /// Filing `validate()` is not required. Envelope checks and the blocked-TIN
+    /// deny-list still fail closed.
+    pub fn write_bir_xml_file(&self, path: impl AsRef<Path>) -> Result<(), Vec<(String, String)>> {
+        let path = path.as_ref();
+        if path_looks_blocked(path) {
+            return Err(blocked_save_tin_errors("xml_file"));
+        }
+        let xml = self.to_bir_xml_payload()?;
+        std::fs::write(path, xml.as_bytes()).map_err(|_| {
+            vec![(
+                "xml_file".to_string(),
+                "Could not write official Save file".to_string(),
+            )]
+        })
+    }
+
+    /// Import replaces the open editor only when the Save TIN matches.
+    /// Year and quarter may differ; the imported period becomes the draft slot.
+    pub fn reject_unless_same_tin(&self, open_tin: &str) -> Result<(), Vec<(String, String)>> {
+        if tin_digits(&self.tin) == tin_digits(open_tin) {
+            Ok(())
+        } else {
+            Err(vec![(
+                "tin".to_string(),
+                "Official Save TIN does not match the open 1701Q draft".to_string(),
+            )])
+        }
     }
 
     pub fn from_bir_field_map(
@@ -862,6 +942,49 @@ impl Form1701QDraft {
             Err(errors)
         }
     }
+}
+
+fn tin_digits(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_ascii_digit())
+        .collect()
+}
+
+fn blocked_save_tin_message() -> String {
+    "Refusing a savefile that contains a blocked TIN".to_string()
+}
+
+fn blocked_save_tin_errors(field: &str) -> Vec<(String, String)> {
+    vec![(field.to_string(), blocked_save_tin_message())]
+}
+
+fn tin_contains_blocked(value: &str) -> bool {
+    tin_digits(value).contains(BLOCKED_SAVE_TIN_DIGITS)
+}
+
+fn blocked_save_identity_errors(draft: &Form1701QDraft) -> Vec<(String, String)> {
+    let mut errors = Vec::new();
+    if tin_contains_blocked(&draft.tin) {
+        errors.extend(blocked_save_tin_errors("tin"));
+    }
+    if tin_contains_blocked(&draft.spouse_tin) {
+        errors.extend(blocked_save_tin_errors("spouse_tin"));
+    }
+    errors
+}
+
+fn blocked_save_text_errors(text: &str) -> Vec<(String, String)> {
+    if text.contains(BLOCKED_SAVE_TIN_DIGITS) || text.contains(BLOCKED_SAVE_TIN_DASHED) {
+        blocked_save_tin_errors("tin")
+    } else {
+        Vec::new()
+    }
+}
+
+fn path_looks_blocked(path: &Path) -> bool {
+    let displayed = path.to_string_lossy();
+    displayed.contains(BLOCKED_SAVE_TIN_DIGITS) || displayed.contains(BLOCKED_SAVE_TIN_DASHED)
 }
 
 fn serialize_editable_xml(fields: &BTreeMap<String, String>) -> String {
@@ -1344,6 +1467,7 @@ mod tests {
     use super::FormValidator;
     use super::*;
     use sha2::{Digest, Sha256};
+    use tempfile::tempdir;
 
     fn valid_draft() -> Form1701QDraft {
         let mut draft = Form1701QDraft {
@@ -1577,6 +1701,92 @@ mod tests {
         assert!(emitted.starts_with("<?xml version='1.0'?>"));
         assert!(emitted.contains("frm1701q:optType_1=false"));
         assert_eq!(imported.to_bir_field_map().len(), 172);
+    }
+
+    #[test]
+    fn official_save_file_round_trips_bytes_without_official_filename() {
+        let source = live_dummy_minimum_save_draft();
+        assert_eq!(
+            source.default_submission_filename(),
+            "00000000000000-1701Qv2018-2026Q1.xml"
+        );
+
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("scratch.xml");
+        source
+            .write_bir_xml_file(&path)
+            .expect("dummy Save must write");
+
+        let written = std::fs::read(&path).expect("written Save must be readable");
+        assert!(
+            written.windows(2).any(|pair| pair == b"\r\n"),
+            "official Save bytes keep CRLF"
+        );
+        assert_eq!(
+            written,
+            source.to_bir_xml_payload().unwrap().as_bytes(),
+            "write_bir_xml_file must persist payload bytes, not a text-mode rewrite"
+        );
+
+        let imported = Form1701QDraft::from_bir_xml_file(&path)
+            .expect("non-official filename must still import");
+        assert_eq!(imported.tin, "00000000000000");
+        assert_eq!(imported.taxpayer_name, "DELA CRUZ JUAN");
+        assert_eq!(imported.filer_type, None);
+        assert_eq!(imported.atc, None);
+        assert_eq!(imported.tax_rate, None);
+        assert_eq!(imported.to_bir_field_map(), source.to_bir_field_map());
+        assert!(!imported.can_queue_for_submission());
+        imported
+            .reject_unless_same_tin("000-000-000-00000")
+            .expect("dashed dummy TIN matches");
+        assert!(imported.reject_unless_same_tin("12345678900000").is_err());
+    }
+
+    #[test]
+    fn official_save_file_rejects_invalid_utf8() {
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("scratch.xml");
+        std::fs::write(&path, [0xff, 0xfe]).expect("invalid bytes");
+        let errors =
+            Form1701QDraft::from_bir_xml_file(&path).expect_err("non-UTF-8 Save must fail closed");
+        assert!(errors.iter().any(|(field, _)| field == "xml_file"));
+    }
+
+    #[test]
+    fn blocked_save_tin_is_not_emitted_imported_or_written() {
+        let mut blocked = live_dummy_minimum_save_draft();
+        blocked.tin = format!("{BLOCKED_SAVE_TIN_DIGITS}00000");
+        assert!(blocked.to_bir_xml_payload().is_err());
+
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("scratch.xml");
+        assert!(blocked.write_bir_xml_file(&path).is_err());
+        assert!(!path.exists(), "blocked TIN must not write a Save file");
+
+        let mut fields = live_dummy_minimum_save_draft().to_bir_field_map();
+        for (key, value) in [
+            ("frm1701q:txtTIN1", &BLOCKED_SAVE_TIN_DIGITS[0..3]),
+            ("frm1701q:txtTIN2", &BLOCKED_SAVE_TIN_DIGITS[3..6]),
+            ("frm1701q:txtTIN3", &BLOCKED_SAVE_TIN_DIGITS[6..9]),
+            ("frm1701q:txtPg2TIN1", &BLOCKED_SAVE_TIN_DIGITS[0..3]),
+            ("frm1701q:txtPg2TIN2", &BLOCKED_SAVE_TIN_DIGITS[3..6]),
+            ("frm1701q:txtPg2TIN3", &BLOCKED_SAVE_TIN_DIGITS[6..9]),
+        ] {
+            fields.insert(key.to_string(), value.to_string());
+        }
+        let xml = serialize_editable_xml(&fields);
+        assert!(
+            !xml.contains(BLOCKED_SAVE_TIN_DIGITS),
+            "split TIN fields must still be caught by identity checks"
+        );
+        let errors = Form1701QDraft::from_bir_xml_payload(&xml)
+            .expect_err("blocked reconstructed TIN must fail closed");
+        assert!(errors.iter().any(|(field, _)| field == "tin"));
+
+        let mut named = live_dummy_minimum_save_draft();
+        named.registered_address = format!("MARKER {BLOCKED_SAVE_TIN_DASHED}");
+        assert!(named.to_bir_xml_payload().is_err());
     }
 
     #[test]

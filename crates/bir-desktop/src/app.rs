@@ -2058,6 +2058,18 @@ impl Render for AppState {
                         push_notification(level, title, message, window, cx);
                     }
                     Form1701QEvent::Saved => cx.notify(),
+                    Form1701QEvent::OfficialSaveImported(draft) => {
+                        this.pending_form_1701q_draft = Some(draft.clone());
+                        this.active_view = ActiveView::Form1701Q;
+                        push_notification(
+                            "success",
+                            "Official Save imported",
+                            "Imported as a local 1701Q draft. Queue and submit stay disabled.",
+                            window,
+                            cx,
+                        );
+                        cx.notify();
+                    }
                 },
             )
             .detach();
