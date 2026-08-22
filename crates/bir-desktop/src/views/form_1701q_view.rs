@@ -1,9 +1,9 @@
 //! Evidence-safe editor for exact form `1701Qv2018`.
 //!
-//! The editor persists semantic local drafts and previews the owned HTML form.
-//! The exact-revision editable XML contract round-trips locally. Queueing and
-//! submission stay disabled until the reviewed encrypt/transport helpers,
-//! credential handling, and endpoint acceptance semantics are certified.
+//! The editor persists semantic local drafts, imports and exports official
+//! `saveXML(false)` files, and previews the owned HTML form.
+//! Queueing and submission stay disabled until the reviewed encrypt/transport
+//! helpers, credential handling, and endpoint acceptance semantics are certified.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -27,6 +27,7 @@ use crate::components::form_parts::readonly_field;
 pub enum Form1701QEvent {
     BackToDashboard,
     Saved,
+    OfficialSaveImported(Box<Form1701QDraft>),
     PushNotification(String, String, String),
 }
 
@@ -378,6 +379,195 @@ impl Form1701QView {
                 .autohide(true),
             cx,
         );
+    }
+
+    fn persist_draft(&self, draft: &Form1701QDraft) -> Result<(), String> {
+        self.db
+            .lock()
+            .map_err(|_| "Draft database lock is unavailable".to_string())
+            .and_then(|db| {
+                db.save_form_draft(
+                    &draft.tin,
+                    "1701Q",
+                    draft.taxable_year,
+                    Some(draft.quarter),
+                    &draft.status,
+                    draft,
+                )
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+            })
+    }
+
+    fn report_official_save_failure(
+        &mut self,
+        cx: &mut Context<Self>,
+        title: &str,
+        errors: &[(String, String)],
+    ) {
+        let message = format_1701q_xml_errors(errors);
+        self.status_message = Some(message.clone());
+        cx.emit(Form1701QEvent::PushNotification(
+            "error".to_string(),
+            title.to_string(),
+            message,
+        ));
+    }
+
+    fn import_official_save(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.is_editable() {
+            self.status_message =
+                Some("Official Save import is available only for a local 1701Q draft.".to_string());
+            cx.emit(Form1701QEvent::PushNotification(
+                "error".to_string(),
+                "Official Save was not imported".to_string(),
+                "Official Save import is available only for a local 1701Q draft.".to_string(),
+            ));
+            cx.notify();
+            return;
+        }
+
+        let open_tin = self.draft.tin.clone();
+        cx.spawn(async move |this, cx| {
+            let Some(file_handle) = rfd::AsyncFileDialog::new()
+                .set_title("Import Official 1701Q Save")
+                .add_filter("Official Save XML", &["xml"])
+                .pick_file()
+                .await
+            else {
+                return;
+            };
+            let path = file_handle.path().to_path_buf();
+            let imported = Form1701QDraft::from_bir_xml_file(&path);
+            let _ = this.update(cx, |this, cx| {
+                match imported {
+                    Ok(mut draft) => {
+                        if let Err(errors) = draft.reject_unless_same_tin(&open_tin) {
+                            this.report_official_save_failure(
+                                cx,
+                                "Official Save was not imported",
+                                &errors,
+                            );
+                            cx.notify();
+                            return;
+                        }
+                        if draft.can_queue_for_submission() {
+                            this.report_official_save_failure(
+                                cx,
+                                "Official Save was not imported",
+                                &[(
+                                    "submission".to_string(),
+                                    "Queue remains disabled for 1701Q.".to_string(),
+                                )],
+                            );
+                            cx.notify();
+                            return;
+                        }
+                        draft.updated_at = Some(chrono::Utc::now().to_rfc3339());
+                        match this.persist_draft(&draft) {
+                            Ok(()) => {
+                                cx.emit(Form1701QEvent::OfficialSaveImported(Box::new(draft)))
+                            }
+                            Err(error) => {
+                                this.status_message =
+                                    Some(format!("Imported Save could not be saved: {error}"));
+                                cx.emit(Form1701QEvent::PushNotification(
+                                    "error".to_string(),
+                                    "Official Save was not imported".to_string(),
+                                    error,
+                                ));
+                            }
+                        }
+                    }
+                    Err(errors) => {
+                        this.report_official_save_failure(
+                            cx,
+                            "Official Save was not imported",
+                            &errors,
+                        );
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn export_official_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        if !self.input_errors.is_empty() {
+            self.status_message = Some(
+                "Official Save was not exported because one or more fields contain invalid text."
+                    .to_string(),
+            );
+            self.notify(
+                window,
+                cx,
+                gpui_component::notification::NotificationType::Error,
+                "Fix the invalid 1701Q input text before exporting.",
+            );
+            return;
+        }
+        if let Err(errors) = self.draft.to_bir_xml_payload() {
+            self.status_message = Some(format_1701q_xml_errors(&errors));
+            self.notify(
+                window,
+                cx,
+                gpui_component::notification::NotificationType::Error,
+                "Official Save could not be exported.",
+            );
+            return;
+        }
+
+        let suggested = self.draft.default_submission_filename();
+        cx.spawn(async move |this, cx| {
+            let Some(file_handle) = rfd::AsyncFileDialog::new()
+                .set_title("Export Official 1701Q Save")
+                .set_file_name(&suggested)
+                .add_filter("Official Save XML", &["xml"])
+                .save_file()
+                .await
+            else {
+                return;
+            };
+            let path = file_handle.path().to_path_buf();
+            let _ = this.update(cx, |this, cx| {
+                this.sync_from_inputs(cx);
+                if !this.input_errors.is_empty() {
+                    this.report_official_save_failure(
+                        cx,
+                        "Official Save was not exported",
+                        &[(
+                            "editor".to_string(),
+                            "One or more fields contain invalid text.".to_string(),
+                        )],
+                    );
+                    cx.notify();
+                    return;
+                }
+                match this.draft.write_bir_xml_file(&path) {
+                    Ok(()) => {
+                        this.status_message = Some(
+                            "Official Save exported. Queue and submit stay disabled.".to_string(),
+                        );
+                        cx.emit(Form1701QEvent::PushNotification(
+                            "success".to_string(),
+                            "Official Save exported".to_string(),
+                            "Exported saveXML(false). Queue and submit stay disabled.".to_string(),
+                        ));
+                    }
+                    Err(errors) => {
+                        this.report_official_save_failure(
+                            cx,
+                            "Official Save was not exported",
+                            &errors,
+                        );
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn render_choice(
@@ -965,24 +1155,7 @@ impl FormViewTrait for Form1701QView {
         }
 
         self.draft.updated_at = Some(chrono::Utc::now().to_rfc3339());
-        let save_result = self
-            .db
-            .lock()
-            .map_err(|_| "Draft database lock is unavailable".to_string())
-            .and_then(|db| {
-                db.save_form_draft(
-                    &self.draft.tin,
-                    "1701Q",
-                    self.draft.taxable_year,
-                    Some(self.draft.quarter),
-                    &self.draft.status,
-                    &self.draft,
-                )
-                .map(|_| ())
-                .map_err(|error| error.to_string())
-            });
-
-        match save_result {
+        match self.persist_draft(&self.draft) {
             Ok(()) => {
                 self.status_message = Some(if self.validation_errors.is_empty() {
                     "Draft saved locally.".to_string()
@@ -1101,6 +1274,20 @@ impl Render for Form1701QView {
                             cx.emit(Form1701QEvent::BackToDashboard);
                         }))}
                     <div flex gap_3>
+                        {gpui_component::button::Button::new("1701q_import_save")
+                            .label("Import Official Save")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.import_official_save(window, cx);
+                            }))}
+                        {gpui_component::button::Button::new("1701q_export_save")
+                            .label("Export Official Save")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.export_official_save(window, cx);
+                            }))}
                         {gpui_component::button::Button::new("1701q_preview")
                             .label("HTML Preview")
                             .outline()
@@ -1213,6 +1400,14 @@ fn computed_amount(value: Option<f64>, cx: &Context<Form1701QView>) -> AnyElemen
 
 fn format_optional_amount(value: Option<f64>) -> String {
     value.map_or_else(|| "—".to_string(), |amount| format!("₱ {amount:.0}"))
+}
+
+fn format_1701q_xml_errors(errors: &[(String, String)]) -> String {
+    errors
+        .iter()
+        .map(|(field, message)| format!("{field}: {message}"))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn text_input(
