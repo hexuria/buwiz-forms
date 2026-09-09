@@ -15,6 +15,9 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
     let Some(mailbox) = app.agent_mailbox.clone() else {
         return;
     };
+    // Clone so `handle_request` can take `Option<&str>` without holding `&app`
+    // across the later `&mut app` apply. Never log this value.
+    let expected_token = app.agent_token.clone();
     for posted in mailbox.take() {
         let shutdown = matches!(posted.request.op, Op::Shutdown);
         let mutating = matches!(
@@ -37,7 +40,8 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
             )
         } else {
             let mut host = snapshot_host(app, cx);
-            let response = handle_request(&mut host, posted.request.clone(), None);
+            let response =
+                handle_request(&mut host, posted.request.clone(), expected_token.as_deref());
             if mutating && response.ok {
                 apply_host(host, app, window, cx);
             }
@@ -259,9 +263,11 @@ impl AppState {
     pub(crate) fn attach_agent(
         &mut self,
         mailbox: gpui_agent::mailbox::AgentMailbox,
+        token: Option<String>,
         cx: &mut Context<Self>,
     ) {
         self.agent_mailbox = Some(mailbox);
+        self.agent_token = token;
         self.agent_refresh = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()

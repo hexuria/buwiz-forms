@@ -12,12 +12,21 @@ fn auth_banner(token_set: bool) -> &'static str {
     }
 }
 
+/// Mailbox plus the configured host token from `from_env`.
+///
+/// The token is never logged. Do not add `Debug` that would print it.
+#[derive(Clone)]
+pub struct StartedAgent {
+    pub mailbox: AgentMailbox,
+    pub token: Option<String>,
+}
+
 /// Start the localhost control plane when `GPUI_AGENT=1`.
 ///
 /// The TCP thread posts onto `AgentMailbox`; `AppState::render` drains it on
 /// the GPUI UI thread so actions mutate the same widgets humans use.
 /// The token is never logged.
-pub fn maybe_start() -> Option<AgentMailbox> {
+pub fn maybe_start() -> Option<StartedAgent> {
     match from_env() {
         Ok(None) => {
             tracing::info!("gpui-agent control plane off (set GPUI_AGENT=1 to opt in)");
@@ -29,7 +38,8 @@ pub fn maybe_start() -> Option<AgentMailbox> {
         }
         Ok(Some(config)) => {
             let mailbox = AgentMailbox::new();
-            let auth = auth_banner(config.token.is_some());
+            let token = config.token.clone();
+            let auth = auth_banner(token.is_some());
             match spawn_mailbox(
                 config.addr,
                 config.token,
@@ -41,7 +51,7 @@ pub fn maybe_start() -> Option<AgentMailbox> {
                         %addr,
                         "{auth}; platform=desktop app=bir-desktop; loopback only; protocol v1; delivery=semantic (virtual returns virtual_unavailable; no OS HID)"
                     );
-                    Some(mailbox)
+                    Some(StartedAgent { mailbox, token })
                 }
                 Err(err) => {
                     tracing::error!(error = %err, "gpui-agent failed to bind");

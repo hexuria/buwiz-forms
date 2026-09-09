@@ -388,7 +388,7 @@ fn main() {
             };
 
             #[cfg(feature = "agent")]
-            let agent_mailbox = crate::agent::maybe_start();
+            let agent_session = crate::agent::maybe_start();
 
             let _ = cx.open_window(options, move |window, cx| {
                 window.on_window_should_close(cx, |_, _cx| {
@@ -400,8 +400,8 @@ fn main() {
                 let view = cx.new(|cx| {
                     let mut state = app::AppState::new(db, profiles, window, cx);
                     #[cfg(feature = "agent")]
-                    if let Some(mailbox) = agent_mailbox.clone() {
-                        state.attach_agent(mailbox, cx);
+                    if let Some(session) = agent_session.clone() {
+                        state.attach_agent(session.mailbox, session.token, cx);
                     }
                     state
                 });

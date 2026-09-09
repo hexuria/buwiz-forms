@@ -28,7 +28,7 @@ mod drain;
 mod host;
 
 #[cfg(feature = "agent")]
-pub use bridge::maybe_start;
+pub use bridge::{StartedAgent, maybe_start};
 #[cfg(feature = "agent")]
 pub use drain::apply_agent;
 #[cfg(feature = "agent")]

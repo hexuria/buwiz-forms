@@ -1004,7 +1004,9 @@ impl AgentHost for BirAgentHost {
             platform: self.platform,
             ready: true,
             deliveries: vec![DeliveryMode::Semantic],
-            auth: gpui_agent::HelloAuth::None,
+            // Do not set `auth` by hand. `handle_request` / the TCP server fill
+            // it via `HelloAuth::from_token_configured(expected_token)`.
+            auth: Default::default(),
         }
     }
 
@@ -1522,6 +1524,31 @@ mod tests {
         }
         let desktop = BirAgentHost::new(PlatformKind::Desktop);
         assert_eq!(desktop.hello().deliveries, vec![DeliveryMode::Semantic]);
+        // Host hello() leaves auth at Default; handle_request fills it.
+        assert_eq!(desktop.hello().auth, gpui_agent::HelloAuth::default());
+    }
+
+    #[test]
+    fn hello_auth_follows_handle_request_token() {
+        let mut host = empty_host();
+        let none = handle_request(&mut host, req(Op::Hello), None);
+        assert!(none.ok, "{:?}", none.error);
+        assert_eq!(
+            none.hello.as_ref().map(|hello| hello.auth),
+            Some(gpui_agent::HelloAuth::None)
+        );
+
+        let required = handle_request(
+            &mut host,
+            req(Op::Hello).with_token("dev-secret"),
+            Some("dev-secret"),
+        );
+        assert!(required.ok, "{:?}", required.error);
+        assert_eq!(
+            required.hello.as_ref().map(|hello| hello.auth),
+            Some(gpui_agent::HelloAuth::Required)
+        );
+        assert_eq!(host.hello().auth, gpui_agent::HelloAuth::default());
     }
 
     #[test]
