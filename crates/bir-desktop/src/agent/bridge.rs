@@ -39,7 +39,7 @@ pub fn maybe_start() -> Option<AgentMailbox> {
                 Ok((addr, _)) => {
                     tracing::info!(
                         %addr,
-                        "{auth}; platform=desktop app=bir-desktop; loopback only; protocol v1; delivery=semantic (default) or virtual (in-window GPUI events, no OS HID)"
+                        "{auth}; platform=desktop app=bir-desktop; loopback only; protocol v1; delivery=semantic (virtual returns virtual_unavailable; no OS HID)"
                     );
                     Some(mailbox)
                 }

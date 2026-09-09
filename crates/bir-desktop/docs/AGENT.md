@@ -10,6 +10,25 @@ Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
 gpui-kit 0.6.1. Do not depend on gpui-agent PR #20 (macOS screenshot). Do not
 fork the protocol. There is no crates.io release; git/path only.
 
+## Locked protocol contract
+
+These are host constraints. They do not change protocol v1.
+
+- Depend on git/path `gpui-agent` at that rev only (no crates.io).
+- `bir-core` has no GPUI / gpui-agent dependency. Painted-window and virtual
+  glue stay behind bir-desktop `--features agent`.
+- Loopback only via `gpui_agent::security::from_env`. Authenticated remote bind
+  / daemon source of truth is gpui-agent epic #10 and is **not** on main. This
+  host does not invent a remote bind.
+- Preferred BIR `invoke` names (app-only, not CLI/MCP verbs): `nav.go`,
+  `profile.create`, `tax-dues.refresh`, `filing.start`, `filing.validate`,
+  `filing.submit`. `filing.submit` maps to the existing confirmation gate; it
+  does not queue or file.
+- Semantic delivery is the supported path. Virtual ops return
+  `virtual_unavailable` rather than synthesizing OS HID or a half-wired
+  in-window pointer. Protocol is unchanged.
+- Screenshot returns `screenshot_unavailable`. Do not wait on gpui-agent PR #20.
+
 ## Security
 
 - Feature `agent` is **off** by default. Product/release builds must leave it off.
@@ -24,7 +43,8 @@ fork the protocol. There is no crates.io release; git/path only.
 - There is **no** invoke that queues or files a return. `filing.submit` (and a
   semantic click on `submit_btn`) only exposes the confirmation node.
   Confirming `form-1601c-submit-confirm` is refused. Complete filing in the BIR UI.
-  Virtual clicks on submit/queue controls are refused so they cannot hit `mark_submitted`.
+- Virtual `click` / `type` / `key` return `virtual_unavailable`. Do not point
+  agents at `--delivery virtual` on this host.
 - Snapshots include names, last-4 TIN, dues, and editor fields needed to drive
   flows. They do not include PIN hashes, TOTP secrets, or keychain material.
 
@@ -157,6 +177,7 @@ Proven in headless host tests (not a Mac GUI run):
 - Remaining form views: page root + back/save/submit chrome ids.
   Semantic **save** besides 1601-C is not mapped (`draft save for … is not mapped`)
 
-Follow-up: per-widget painted bounds for reliable virtual clicks; semantic save
-for 2551Q / 1701Q / 0619E / 0619F / 0605 / 2550Q / 1701 / 1702RT / 1702MX;
-screenshot once gpui-agent PR #20 lands.
+Follow-up: semantic save for 2551Q / 1701Q / 0619E / 0619F / 0605 / 2550Q /
+1701 / 1702RT / 1702MX. Virtual in-window delivery is intentionally
+`virtual_unavailable` until a later per-widget bounds map. Screenshot stays
+unavailable until gpui-agent PR #20 (not depended on).

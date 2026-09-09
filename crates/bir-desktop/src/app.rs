@@ -228,10 +228,6 @@ pub struct AppState {
     pub(crate) agent_mailbox: Option<gpui_agent::mailbox::AgentMailbox>,
     #[cfg(feature = "agent")]
     pub(crate) agent_refresh: Option<Task<()>>,
-    #[cfg(feature = "agent")]
-    pub(crate) agent_layout_bounds: std::collections::HashMap<String, gpui_agent::Bounds>,
-    #[cfg(feature = "agent")]
-    pub(crate) agent_cursor: gpui_agent::AgentCursor,
     /// Semantic submit reached the existing confirmation gate without queuing.
     #[cfg(feature = "agent")]
     pub(crate) agent_submit_confirmation_visible: bool,
@@ -925,10 +921,6 @@ impl AppState {
             agent_mailbox: None,
             #[cfg(feature = "agent")]
             agent_refresh: None,
-            #[cfg(feature = "agent")]
-            agent_layout_bounds: std::collections::HashMap::new(),
-            #[cfg(feature = "agent")]
-            agent_cursor: gpui_agent::AgentCursor::default(),
             #[cfg(feature = "agent")]
             agent_submit_confirmation_visible: false,
         }
