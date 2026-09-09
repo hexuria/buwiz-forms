@@ -28,7 +28,7 @@ mod theme;
 mod views;
 
 pub mod global_actions {
-    gpui::actions!(
+    gpui_kit::actions!(
         bir_desktop,
         [
             SubmitCurrentForm,
@@ -268,7 +268,7 @@ fn main() {
     );
 
     let assets_dir = crate::platform::find_resource_dir("assets");
-    let app = gpui_platform::application().with_assets(Assets { base: assets_dir });
+    let app = gpui_kit::application().with_assets(Assets { base: assets_dir });
 
     // When the user clicks the dock icon or re-launches via Alfred/Spotlight,
     // macOS fires applicationShouldHandleReopen. Restore the window.
@@ -277,7 +277,7 @@ fn main() {
     });
 
     app.run(move |cx| {
-        gpui_component::init(cx);
+        gpui_kit::init(cx);
         crate::platform::bind_global_keys(cx);
 
         crate::ipc::start_ipc_listener(cx);

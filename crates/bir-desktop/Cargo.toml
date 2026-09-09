@@ -19,9 +19,9 @@ inspector = []
 # the entitlements it needs.
 #
 # The list is empty by design. `bir-core/mas_build` was a passthrough to an
-# empty feature with no `cfg` behind it. `gpui_platform/macos_app_store` is gone
-# because gpui-ce removes the private CoreGraphics Services APIs outright rather
-# than gating them, so there is no renderer-side feature left to enable.
+# empty feature with no `cfg` behind it. Kit's gpui-pre snapshot does not
+# expose a renderer-side `macos_app_store` feature, so there is nothing left
+# to enable here.
 mas_build = []
 
 
@@ -29,8 +29,8 @@ mas_build = []
 dotenvy = { workspace = true }
 bir-core = { path = "../bir-core" }
 bir-print = { path = "../bir-print" }
+gpui-kit = { workspace = true }
 gpui = { workspace = true }
-gpui_platform = { workspace = true }
 gpui-component = { workspace = true }
 gpui-rsx = { workspace = true }
 serde = { workspace = true }
@@ -59,7 +59,7 @@ global-hotkey = "0.8"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
-gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
+gpui-wry = { workspace = true }
 wry = { version = "0.53.3", package = "lb-wry" }
 raw-window-handle = { version = "0.6", features = ["std"] }
 url = "2"
@@ -94,7 +94,7 @@ windows = { version = "0.62.2", features = [
 # Wry's raw child host is X11-only.  The Linux preview uses it when the GPUI
 # window has an X11 handle and uses an application-owned GTK/WebKit window on
 # Wayland.  Both paths render the same locked-down offline document.
-gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
+gpui-wry = { workspace = true }
 wry = { version = "0.53.3", package = "lb-wry" }
 raw-window-handle = { version = "0.6", features = ["std"] }
 url = "2"
