@@ -1,0 +1,57 @@
+{
+  "v": 1,
+  "name": "bir-nav",
+  "app": "bir-desktop",
+  "params": [],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "global",
+      "op": "click",
+      "target": "global_dashboard_btn",
+      "needs": ["wait"]
+    },
+    {
+      "id": "global-seen",
+      "op": "assert",
+      "target": "page-global-dashboard",
+      "needs": ["global"]
+    },
+    {
+      "id": "profile",
+      "op": "click",
+      "target": "add_profile_mini_btn",
+      "needs": ["global-seen"]
+    },
+    {
+      "id": "profile-seen",
+      "op": "assert",
+      "target": "page-profile-manager",
+      "needs": ["profile"]
+    },
+    {
+      "id": "notifications",
+      "op": "click",
+      "target": "notifications_sidebar_btn",
+      "needs": ["profile-seen"]
+    },
+    {
+      "id": "notifications-seen",
+      "op": "assert",
+      "target": "page-notifications",
+      "needs": ["notifications"]
+    },
+    {
+      "id": "import",
+      "op": "click",
+      "target": "import_export_sidebar_btn",
+      "needs": ["notifications-seen"]
+    },
+    {
+      "id": "import-seen",
+      "op": "assert",
+      "target": "page-import-export",
+      "needs": ["import"]
+    }
+  ]
+}
