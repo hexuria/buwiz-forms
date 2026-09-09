@@ -39,7 +39,11 @@ impl ProfileManagerView {
             .flex()
             .flex_col()
             .gap_4()
-            .child(self.tin_input.clone().into_any_element())
+            .child(
+                div()
+                    .id(crate::agent::ids::PROFILE_TIN)
+                    .child(self.tin_input.clone()),
+            )
             .when(self.tin_duplicate_error.is_some(), |this| {
                 let msg = self.tin_duplicate_error.clone().unwrap_or_default();
                 this.child(rsx! {
@@ -71,7 +75,7 @@ impl ProfileManagerView {
                 // Row: RDO + Taxpayer Type (50/50)
                 rsx! {
                     <div flex gap_4 w_full>
-                        <div flex_1 min_w_0>
+                        <div flex_1 min_w_0 id={crate::agent::ids::PROFILE_RDO}>
                             {Self::field_label("Revenue District Office (RDO)", cx)}
                             {Combobox::new(&self.rdo_select)}
                             {self.field_error("rdo_code", cx)}
@@ -120,7 +124,7 @@ impl ProfileManagerView {
             .child(
                 // Line of Business (full width)
                 rsx! {
-                    <div base={v_flex()} w_full>
+                    <div base={v_flex()} w_full id={crate::agent::ids::PROFILE_LOB}>
                         {Self::field_label("Line of Business", cx)}
                         {Input::new(&self.line_of_business)}
                         {self.field_error("line_of_business", cx)}
@@ -130,7 +134,7 @@ impl ProfileManagerView {
             .child(
                 // Taxpayer's Name (full width)
                 rsx! {
-                    <div base={v_flex()} w_full>
+                    <div base={v_flex()} w_full id={crate::agent::ids::PROFILE_NAME}>
                         {Self::field_label("Taxpayer's Name", cx)}
                         {Input::new(&self.name_input)}
                         {self.field_error("full_name", cx)}
@@ -140,7 +144,7 @@ impl ProfileManagerView {
             .child(
                 // Registered Address (full width)
                 rsx! {
-                    <div base={v_flex()} w_full>
+                    <div base={v_flex()} w_full id={crate::agent::ids::PROFILE_ADDRESS}>
                         {Self::field_label("Registered Address", cx)}
                         {Input::new(&self.address_input)}
                         {self.field_error("registered_address", cx)}
@@ -151,12 +155,12 @@ impl ProfileManagerView {
                 // Row: Zip Code + Phone (50/50)
                 rsx! {
                     <div flex gap_4 w_full>
-                        <div flex_1 min_w_0>
+                        <div flex_1 min_w_0 id={crate::agent::ids::PROFILE_ZIP}>
                             {Self::field_label("Zip Code", cx)}
                             {Combobox::new(&self.zip_select)}
                             {self.field_error("zip_code", cx)}
                         </div>
-                        <div flex_1 min_w_0>
+                        <div flex_1 min_w_0 id={crate::agent::ids::PROFILE_PHONE}>
                             {Self::field_label("Phone / Telephone No.", cx)}
                             {Input::new(&self.tel_input)}
                             {self.field_error("phone", cx)}
@@ -167,7 +171,7 @@ impl ProfileManagerView {
             .child(
                 // Email Address (full width)
                 rsx! {
-                    <div base={v_flex()} w_full>
+                    <div base={v_flex()} w_full id={crate::agent::ids::PROFILE_EMAIL}>
                         {Self::field_label("Email Address", cx)}
                         {Input::new(&self.email_input)}
                         {self.field_error("email", cx)}

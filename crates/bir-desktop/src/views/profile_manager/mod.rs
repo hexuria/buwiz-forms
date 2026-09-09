@@ -971,6 +971,61 @@ impl ProfileManagerView {
         self.has_unsaved_profile_changes || self.has_unsaved_forms_set_changes
     }
 
+    pub(crate) fn agent_read_editor(&self, cx: &App) -> crate::agent::ProfileEditor {
+        let rdo = self
+            .rdo_select
+            .read(cx)
+            .selected_value(cx)
+            .split(" - ")
+            .next()
+            .unwrap_or("")
+            .to_string();
+        crate::agent::ProfileEditor {
+            tin: self.tin_input.read(cx).value(cx),
+            full_name: self.name_input.read(cx).value().to_string(),
+            rdo_code: rdo,
+            line_of_business: self.line_of_business.read(cx).value().to_string(),
+            registered_address: self.address_input.read(cx).value().to_string(),
+            zip_code: self.zip_select.read(cx).selected_value(cx),
+            phone: self.tel_input.read(cx).value().to_string(),
+            email: self.email_input.read(cx).value().to_string(),
+            save_message: self.save_message.clone(),
+            errors: self.errors.iter().map(|err| err.message.clone()).collect(),
+        }
+    }
+
+    pub(crate) fn agent_apply_editor(
+        &mut self,
+        editor: &crate::agent::ProfileEditor,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.tin_input.update(cx, |tin, cx| {
+            tin.set_text_value(&editor.tin, window, cx);
+        });
+        self.name_input.update(cx, |input, cx| {
+            input.set_value(editor.full_name.clone(), window, cx);
+        });
+        self.line_of_business.update(cx, |input, cx| {
+            input.set_value(editor.line_of_business.clone(), window, cx);
+        });
+        self.address_input.update(cx, |input, cx| {
+            input.set_value(editor.registered_address.clone(), window, cx);
+        });
+        self.tel_input.update(cx, |input, cx| {
+            input.set_value(editor.phone.clone(), window, cx);
+        });
+        self.email_input.update(cx, |input, cx| {
+            input.set_value(editor.email.clone(), window, cx);
+        });
+        self.rdo_select.update(cx, |select, cx| {
+            select.set_selected_value(&editor.rdo_code, window, cx);
+        });
+        self.zip_select.update(cx, |select, cx| {
+            select.set_selected_value(&editor.zip_code, window, cx);
+        });
+    }
+
     /// Shows the reason cross-view navigation was refused. App-level callers
     /// can use this together with [`Self::has_unsaved_compliance_changes`]
     /// before opening a filing form or replacing the edited profile.

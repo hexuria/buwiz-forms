@@ -530,6 +530,60 @@ impl Form1601CView {
         self.is_validated = false;
     }
 
+    pub(crate) fn agent_draft(&self) -> &Form1601CDraft {
+        &self.draft
+    }
+
+    pub(crate) fn agent_validated(&self) -> bool {
+        self.is_validated
+    }
+
+    pub(crate) fn agent_validation_errors(&self) -> Vec<(String, String)> {
+        self.validation_errors.clone()
+    }
+
+    pub(crate) fn agent_apply_from_host(
+        &mut self,
+        tax_14: Option<f64>,
+        tax_25: Option<f64>,
+        sheets: Option<u32>,
+        save: bool,
+        validate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut dirty = false;
+        if let Some(value) = tax_14 {
+            self.tax_14_total_compensation.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+            dirty = true;
+        }
+        if let Some(value) = tax_25 {
+            self.tax_25_total_taxes_withheld.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+            dirty = true;
+        }
+        if let Some(value) = sheets {
+            self.number_of_sheets.update(cx, |input, cx| {
+                input.set_value(value.to_string(), window, cx);
+            });
+            dirty = true;
+        }
+        if dirty || validate {
+            self.sync_from_inputs(cx);
+        }
+        if validate {
+            self.draft.compute();
+            self.validation_errors = self.draft.validate();
+            self.is_validated = true;
+        }
+        if save {
+            self.save_draft(window, cx);
+        }
+    }
+
     fn show_scaffold_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.status_message = Some(SCAFFOLD_MESSAGE.to_string());
         use gpui_component::WindowExt;
@@ -780,6 +834,17 @@ impl Render for Form1601CView {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.save_draft(window, cx);
                             }))}
+                        {gpui_component::button::Button::new("form-1601c-validate")
+                            .label("Validate")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, _window, cx| {
+                                this.sync_from_inputs(cx);
+                                this.draft.compute();
+                                this.validation_errors = this.draft.validate();
+                                this.is_validated = true;
+                                cx.notify();
+                            }))}
                         {gpui_component::button::Button::new("submit_btn")
                             .label(if queue_supported {
                                 "Generate XML & Submit"
@@ -803,7 +868,7 @@ impl Render for Form1601CView {
                     border_color={cx.theme().border}
                     bg={cx.theme().accent}>
                     {self.render_header(cx)}
-                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                    <div id={crate::agent::ids::FORM_1601C_STATUS} mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>
             })
             .when(!queue_supported, |view| {
@@ -964,11 +1029,11 @@ impl Render for Form1601CView {
                                                             })}
                                                 </div>
                                             })
-                                            .child(self.render_input_row(
+                                            .child(div().id(crate::agent::ids::FORM_1601C_SHEETS).child(self.render_input_row(
                                                 "Number of Sheets Attached",
                                                 &self.number_of_sheets,
                                                 cx,
-                                            ))
+                                            )))
                                             .child(self.render_input_row("ATC", &self.atc, cx))
                                             .child(rsx! {
                                                 <div flex gap_4 items_center>
@@ -1041,11 +1106,11 @@ impl Render for Form1601CView {
                                 <div text_xl font_weight={FontWeight::BOLD}>
                                     {"Part II - Computation of Tax"}
                                 </div>
-                                {self.render_input_row(
+                                {div().id(crate::agent::ids::FORM_1601C_TAX_14).child(self.render_input_row(
                                     "14 Total Amount of Compensation",
                                     &self.tax_14_total_compensation,
                                     cx,
-                                )}
+                                ))}
                                 <div text_lg font_weight={FontWeight::SEMIBOLD} mt_4>
                                     {"Less: Non-Taxable/Exempt Compensation"}
                                 </div>
@@ -1100,11 +1165,11 @@ impl Render for Form1601CView {
                                     self.draft.tax_24_net_taxable,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {div().id(crate::agent::ids::FORM_1601C_TAX_25).child(self.render_input_row(
                                     "25 Total Taxes Withheld",
                                     &self.tax_25_total_taxes_withheld,
                                     cx,
-                                )}
+                                ))}
                                 {self.render_computed_row(
                                     "26 Add/Less: Adjustment from Schedule I",
                                     self.draft.tax_26_adjustment,

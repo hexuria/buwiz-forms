@@ -1,0 +1,388 @@
+//! UI-thread mailbox drain. The TCP thread never touches GPUI entities.
+
+use gpui::*;
+use gpui_agent::protocol::{Op, PlatformKind};
+use gpui_agent::{DispatchResult, handle_request};
+
+use crate::agent::ids;
+use crate::agent::host::BirAgentHost;
+use crate::app::{ActiveView, AppState, ProfileTargetAction};
+use crate::global_actions::CreateProfile;
+use chrono::Datelike;
+
+pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<AppState>) {
+    let Some(mailbox) = app.agent_mailbox.clone() else {
+        return;
+    };
+    record_window_bounds(app, window);
+    for posted in mailbox.take() {
+        let shutdown = matches!(posted.request.op, Op::Shutdown);
+        let mutating = matches!(
+            posted.request.op,
+            Op::Click { .. }
+                | Op::Type { .. }
+                | Op::SetValue { .. }
+                | Op::Key { .. }
+                | Op::Invoke { .. }
+                | Op::Shutdown
+        );
+        let response = if posted.request.op.is_virtual_input() {
+            match dispatch_virtual(app, &posted.request.op, window, cx) {
+                Ok(result) => {
+                    let mut resp = gpui_agent::Response::ok(&posted.request.id);
+                    resp.result = result.value;
+                    resp
+                }
+                Err(error) => gpui_agent::Response::err(&posted.request.id, error),
+            }
+        } else {
+            let mut host = snapshot_host(app, cx);
+            let mut response = handle_request(&mut host, posted.request.clone(), None);
+            if let Some(tree) = response.tree.as_mut() {
+                tree.apply_bounds_map(&app.agent_layout_bounds);
+            }
+            if mutating && response.ok {
+                apply_host(host, app, window, cx);
+            }
+            response
+        };
+        posted.reply(response);
+        if shutdown {
+            cx.quit();
+        }
+        cx.notify();
+    }
+}
+
+fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
+    let admin_lock_enabled = if let Ok(db) = app.db.lock() {
+        let pin = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+        let totp = db.get_setting("app_totp_secret").ok().flatten().is_some();
+        pin || totp
+    } else {
+        false
+    };
+
+    let mut host = BirAgentHost::new(PlatformKind::Desktop).with_database(std::sync::Arc::clone(&app.db));
+    host.set_locked(app.is_locked);
+    host.set_admin_lock_enabled(admin_lock_enabled);
+    host.set_unsaved_compliance(
+        app.profile_manager
+            .read(cx)
+            .has_unsaved_compliance_changes(),
+    );
+    host.set_profile_pins(app.enable_profile_pins);
+    host.restore_view(app.active_view, app.active_profile_tin.clone());
+    host.replace_profiles(
+        app.profiles
+            .iter()
+            .map(|profile| (profile.tin.full(), profile.full_name.clone()))
+            .collect(),
+        app.active_profile_tin.clone(),
+    );
+    host.replace_editor(app.profile_manager.read(cx).agent_read_editor(cx));
+    let dues = match app.active_view {
+        ActiveView::Dashboard => app.dashboard_view.read(cx).agent_dues(),
+        ActiveView::GlobalDashboard => app.global_dashboard_view.read(cx).agent_dues(),
+        _ => Vec::new(),
+    };
+    host.replace_dues(dues);
+    if let Some(view) = &app.form_1601c_view {
+        let form = view.read(cx);
+        host.replace_form_1601c_state(
+            form.agent_draft().clone(),
+            form.agent_validated(),
+            form.agent_draft().id.is_some(),
+            form.agent_validation_errors(),
+        );
+    }
+    host.mark_pending_admin(app.pending_admin_view);
+    host.mark_pending_profile_auth(app.pending_profile.is_some());
+    host.set_submit_confirmation_visible(app.agent_submit_confirmation_visible);
+    host
+}
+
+fn apply_host(
+    host: BirAgentHost,
+    app: &mut AppState,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) {
+    if app.is_locked {
+        return;
+    }
+
+    if let Some(target) = host.pending_admin_view() {
+        app.request_admin_access(target, window, cx);
+        return;
+    }
+
+    if host.pending_profile_auth() {
+        return;
+    }
+
+    if host.active_view() != app.active_view {
+        apply_navigation(host.active_view(), &host, app, window, cx);
+    }
+
+    if let Some(list) = app
+        .db
+        .lock()
+        .ok()
+        .and_then(|db| db.list_profiles().ok())
+    {
+        app.profiles = list;
+    }
+
+    if let Some(tin) = host.selected_tin()
+        && app.active_profile_tin.as_deref() != Some(tin)
+        && let Some(profile) = app
+            .profiles
+            .iter()
+            .find(|profile| profile.tin.full() == tin)
+            .cloned()
+    {
+        let action = match host.active_view() {
+            ActiveView::ProfileManager => ProfileTargetAction::EditProfile,
+            ActiveView::Dashboard => ProfileTargetAction::ViewDashboard,
+            _ => ProfileTargetAction::UnlockOnly,
+        };
+        app.select_profile(profile, action, window, cx);
+    }
+
+    if host.active_view() == ActiveView::ProfileManager
+        && host.editor_snapshot().save_message.is_none()
+    {
+        app.profile_manager.update(cx, |view, cx| {
+            view.agent_apply_editor(&host.editor_snapshot(), window, cx);
+        });
+    }
+
+    if host.active_view() == ActiveView::Form1601C
+        && let Some(view) = &app.form_1601c_view
+    {
+        view.update(cx, |form, cx| {
+            form.agent_apply_from_host(
+                host.form_1601c_tax_14(),
+                host.form_1601c_tax_25(),
+                host.form_1601c_sheets(),
+                host.form_1601c_saved(),
+                host.form_1601c_validated(),
+                window,
+                cx,
+            );
+        });
+    }
+
+    app.agent_submit_confirmation_visible = host.submit_confirmation_visible();
+}
+
+fn apply_navigation(
+    target: ActiveView,
+    host: &BirAgentHost,
+    app: &mut AppState,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) {
+    match target {
+        ActiveView::Settings | ActiveView::CronTasks | ActiveView::AdminCalendarDashboard => {
+            app.request_admin_access(target, window, cx);
+        }
+        ActiveView::GlobalDashboard => {
+            if app.block_unsaved_compliance_navigation(window, cx) {
+                return;
+            }
+            app.active_view = ActiveView::GlobalDashboard;
+            app.active_profile_tin = None;
+            cx.notify();
+        }
+        ActiveView::ProfileManager => {
+            if host.selected_tin().is_none() {
+                app.handle_create_profile(&CreateProfile, window, cx);
+            } else {
+                if app.block_unsaved_compliance_navigation(window, cx) {
+                    return;
+                }
+                app.active_view = ActiveView::ProfileManager;
+                cx.notify();
+            }
+        }
+        ActiveView::Dashboard => {
+            if let Some(tin) = host.selected_tin()
+                && let Some(profile) = app
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.tin.full() == tin)
+                    .cloned()
+            {
+                app.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+            } else {
+                app.active_view = ActiveView::Dashboard;
+                cx.notify();
+            }
+        }
+        ActiveView::Notifications => {
+            if app.block_unsaved_compliance_navigation(window, cx) {
+                return;
+            }
+            let tin = app.active_session_tin.clone();
+            app.notifications_view.update(cx, |view, cx| {
+                view.set_active_session_tin(tin, cx);
+            });
+            app.active_view = ActiveView::Notifications;
+            cx.notify();
+        }
+        ActiveView::ImportExport => {
+            if app.block_unsaved_compliance_navigation(window, cx) {
+                return;
+            }
+            app.active_view = ActiveView::ImportExport;
+            cx.notify();
+        }
+        form if ids::form_chrome(form).is_some() => {
+            let chrome = ids::form_chrome(form).expect("form chrome");
+            if host.selected_tin().is_some() {
+                let year = chrono::Local::now().year() as u16;
+                let period = host.form_period().unwrap_or(1);
+                app.open_named_form(chrome.code, year, period, window, cx);
+            } else {
+                app.active_view = form;
+                cx.notify();
+            }
+        }
+        other => {
+            if app.block_unsaved_compliance_navigation(window, cx) {
+                return;
+            }
+            app.active_view = other;
+            cx.notify();
+        }
+    }
+}
+
+fn dispatch_virtual(
+    app: &mut AppState,
+    op: &Op,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) -> Result<DispatchResult, String> {
+    match op {
+        Op::Click { target, .. } => virtual_click(app, target, window, cx),
+        Op::Type { target, text, .. } => {
+            virtual_click(app, target, window, cx)?;
+            for token in gpui_agent::text_keystrokes(text)? {
+                let keystroke = Keystroke::parse(&token).map_err(|err| err.to_string())?;
+                window.dispatch_keystroke(keystroke, cx);
+            }
+            Ok(DispatchResult::json(serde_json::json!({
+                "delivery": "virtual",
+                "target": target,
+                "path": "gpui.dispatch_keystroke"
+            })))
+        }
+        Op::Key { target, key, .. } => {
+            virtual_click(app, target, window, cx)?;
+            let token = gpui_agent::keystroke_token(key)?;
+            let keystroke = Keystroke::parse(&token).map_err(|err| err.to_string())?;
+            window.dispatch_keystroke(keystroke, cx);
+            Ok(DispatchResult::json(serde_json::json!({
+                "delivery": "virtual",
+                "target": target,
+                "path": "gpui.dispatch_keystroke"
+            })))
+        }
+        _ => Err(gpui_agent::virtual_unavailable(
+            "only click, type, and key support virtual delivery",
+        )),
+    }
+}
+
+fn virtual_click(
+    app: &mut AppState,
+    target: &str,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) -> Result<DispatchResult, String> {
+    if ids::is_filing_submit_control(target) {
+        return Err(
+            "virtual click refused: submit/queue controls must not dispatch into the filing path; use semantic click or invoke filing.submit to reach confirmation only"
+                .into(),
+        );
+    }
+    let mut tree = snapshot_host(app, cx).tree();
+    tree.apply_bounds_map(&app.agent_layout_bounds);
+    let plan = gpui_agent::plan_click(&tree, target)?;
+    app.agent_cursor.move_to(plan.x, plan.y);
+    let position = point(px(plan.x), px(plan.y));
+    let modifiers = Modifiers::default();
+    window.dispatch_event(
+        MouseMoveEvent {
+            position,
+            pressed_button: None,
+            modifiers,
+        }
+        .to_platform_input(),
+        cx,
+    );
+    window.dispatch_event(
+        MouseDownEvent {
+            button: MouseButton::Left,
+            position,
+            modifiers,
+            click_count: 1,
+            first_mouse: false,
+        }
+        .to_platform_input(),
+        cx,
+    );
+    window.dispatch_event(
+        MouseUpEvent {
+            button: MouseButton::Left,
+            position,
+            modifiers,
+            click_count: 1,
+        }
+        .to_platform_input(),
+        cx,
+    );
+    Ok(DispatchResult::json(serde_json::json!({
+        "delivery": "virtual",
+        "target": target,
+        "x": plan.x,
+        "y": plan.y,
+        "path": "gpui.dispatch_event"
+    })))
+}
+
+fn record_window_bounds(app: &mut AppState, window: &Window) {
+    let bounds = window.bounds();
+    app.agent_layout_bounds.insert(
+        ids::WINDOW.into(),
+        gpui_agent::Bounds {
+            x: f32::from(bounds.origin.x),
+            y: f32::from(bounds.origin.y),
+            w: f32::from(bounds.size.width),
+            h: f32::from(bounds.size.height),
+        },
+    );
+}
+
+impl AppState {
+    pub(crate) fn attach_agent(
+        &mut self,
+        mailbox: gpui_agent::mailbox::AgentMailbox,
+        cx: &mut Context<Self>,
+    ) {
+        self.agent_mailbox = Some(mailbox);
+        self.agent_refresh = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(16))
+                    .await;
+                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+}
