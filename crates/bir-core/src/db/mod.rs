@@ -268,11 +268,19 @@ pub fn default_database_path() -> std::path::PathBuf {
 }
 
 impl Database {
-    #[cfg(test)]
-    pub(crate) fn open_in_memory_for_tests() -> Result<Self, DbError> {
+    /// Unencrypted in-memory SQLite for isolated tests and the agent host fixture.
+    ///
+    /// Does not open the live app-group database path and does not touch the OS
+    /// keychain, so automated runs cannot mutate a real user profile.
+    pub fn open_ephemeral() -> Result<Self, DbError> {
         let conn = Connection::open_in_memory()?;
         migrations::migrate_database(&conn)?;
         Ok(Self { conn })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_in_memory_for_tests() -> Result<Self, DbError> {
+        Self::open_ephemeral()
     }
 
     /// Returns the current SQLite `data_version`, which increments whenever another connection
