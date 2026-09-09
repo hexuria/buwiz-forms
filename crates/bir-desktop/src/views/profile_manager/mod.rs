@@ -3,7 +3,7 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::WindowExt;
 use gpui_component::button::ButtonVariants;
-use gpui_component::input::{Input, InputEvent, InputState, OtpInput, OtpState};
+use gpui_component::input::{Input, InputEvent, InputState, OtpEvent, OtpInput, OtpState};
 use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::*;
 use gpui_rsx::rsx;
@@ -747,8 +747,8 @@ impl ProfileManagerView {
             cx.subscribe_in(
                 &setup_totp_state,
                 window,
-                |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                    if let InputEvent::Change = event {
+                |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                    if let OtpEvent::Change = event {
                         let token = this.setup_totp_state.read(cx).value().to_string();
                         if token.len() == 6
                             && let Some(ref secret) = this.totp_secret_temp

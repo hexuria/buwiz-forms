@@ -18,7 +18,7 @@ use crate::views::profile_manager::ProfileManagerView;
 use crate::views::settings::{SettingsEvent, SettingsView};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{InputEvent, InputState, OtpState};
+use gpui_component::input::{InputEvent, InputState, OtpEvent, OtpState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
@@ -312,8 +312,8 @@ impl AppState {
         cx.subscribe_in(
             &profile_otp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     if this.profile_rate_limiter.is_locked() {
                         this.profile_otp_state
                             .update(cx, |input, cx| input.set_value("", window, cx));
@@ -351,8 +351,8 @@ impl AppState {
         cx.subscribe_in(
             &admin_otp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     if this.admin_rate_limiter.is_locked() {
                         this.admin_otp_state
                             .update(cx, |input, cx| input.set_value("", window, cx));
@@ -402,8 +402,8 @@ impl AppState {
         cx.subscribe_in(
             &profile_totp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     let entered_token = this.profile_totp_state.read(cx).value().to_string();
                     if entered_token.len() == 6
                         && let Some((p, a)) = this.pending_profile.clone()
@@ -434,8 +434,8 @@ impl AppState {
         cx.subscribe_in(
             &admin_totp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     if this.admin_rate_limiter.is_locked() {
                         this.admin_totp_state
                             .update(cx, |input, cx| input.set_value("", window, cx));

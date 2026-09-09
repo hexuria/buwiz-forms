@@ -5,16 +5,16 @@
 //!
 //! This module provides [`paste_otp_value`] — a helper that reads the system clipboard,
 //! extracts digits, truncates to the expected OTP length, and calls `set_value()`
-//! on the `OtpState` entity, immediately triggering the `InputEvent::Change` flow.
+//! on the `OtpState` entity, immediately triggering the `OtpEvent::Change` flow.
 //!
 //! It also provides [`wrap_otp_with_paste`] — a convenience that wraps an existing
 //! `OtpInput` element in a div with a `KeyDown` handler intercepting `Cmd+V` / `Ctrl+V`.
 
 use gpui::*;
-use gpui_component::input::{InputEvent, OtpState};
+use gpui_component::input::{OtpEvent, OtpState};
 
 /// Read the system clipboard, extract up to `expected_len` ASCII digits,
-/// and set them as the OTP value. Emits `InputEvent::Change` so validation
+/// and set them as the OTP value. Emits `OtpEvent::Change` so validation
 /// subscribers fire immediately.
 ///
 /// Returns `true` if a valid digit string was pasted.
@@ -48,7 +48,7 @@ pub fn paste_otp_value(
     otp_state.update(cx, |state, cx| {
         state.set_value(&digits, window, cx);
         // Emit Change so validation subscribers fire
-        cx.emit(InputEvent::Change);
+        cx.emit(OtpEvent::Change);
     });
 
     true

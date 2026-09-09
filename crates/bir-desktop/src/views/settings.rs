@@ -4,7 +4,7 @@ use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
-use gpui_component::input::{InputEvent, OtpInput, OtpState};
+use gpui_component::input::{OtpEvent, OtpInput, OtpState};
 use gpui_component::switch::Switch;
 use gpui_component::*;
 use gpui_rsx::rsx;
@@ -121,8 +121,8 @@ impl SettingsView {
         cx.subscribe_in(
             &setup_otp,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, _window, cx| {
-                if let InputEvent::Change = event {
+            |this: &mut Self, _entity, event: &OtpEvent, _window, cx| {
+                if let OtpEvent::Change = event {
                     let pin = this.setup_otp.read(cx).value().to_string();
                     if pin.len() == 4 {
                         let hashed = bir_core::crypto::hash_pin(&pin);
@@ -143,8 +143,8 @@ impl SettingsView {
         cx.subscribe_in(
             &setup_totp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     let token = this.setup_totp_state.read(cx).value().to_string();
                     if token.len() == 6
                         && let Some(ref secret) = this.totp_secret_temp

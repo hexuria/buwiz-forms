@@ -5,7 +5,7 @@ use gpui_component::ActiveTheme;
 use gpui_component::Disableable;
 use gpui_component::Sizable;
 use gpui_component::button::ButtonVariants;
-use gpui_component::input::{InputEvent, OtpInput, OtpState};
+use gpui_component::input::{OtpEvent, OtpInput, OtpState};
 use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
@@ -109,8 +109,8 @@ impl LockScreenView {
         cx.subscribe_in(
             &otp_state,
             window,
-            move |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            move |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     if this.rate_limiter.is_locked() {
                         this.otp_state
                             .update(cx, |s, cx| s.set_value("", window, cx));

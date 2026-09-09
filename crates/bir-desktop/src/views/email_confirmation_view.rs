@@ -209,6 +209,7 @@ impl Render for EmailConfirmationView {
                                                     editor_line_number: None,
                                                     editor_active_line_number: None,
                                                     editor_invisible: None,
+                                                    editor_gutter_background: None,
                                                     status: gpui_component::highlighter::StatusColors::default(),
                                                     syntax: gpui_component::highlighter::SyntaxColors::default(),
                                                 },

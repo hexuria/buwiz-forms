@@ -150,7 +150,7 @@ impl ComboboxState {
         });
         self.reset_filter_to_all(item);
         self.open = false;
-        window.blur();
+        window.blur(cx);
         if !unchanged {
             cx.emit(ComboboxEvent {
                 selected: Some(item.to_string()),
