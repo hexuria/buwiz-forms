@@ -54,10 +54,11 @@ dotenvy = "0.15.7"
 keyring = { version = "3" }
 
 # GPUI via longbridge/gpui-kit 0.6 (pins gpui-pre / gpui-component / assets).
-# `gpui` is the same package under the historical crate name so existing
-# `use gpui::*` / `gpui::Action` paths stay on one graph without rewriting views.
+# `gpui` is package gpui-pre (kit's pin), crate name `gpui`, so existing
+# `use gpui::*` / `gpui::Action` and proc-macros keep resolving. gpui-kit is a
+# different crates.io package, so Cargo allows both names on one gpui-pre graph.
 gpui-kit = "0.6"
-gpui = { package = "gpui-kit", version = "0.6" }
+gpui = { package = "gpui-pre", version = "0.3" }
 gpui-component = "0.6"
 gpui-wry = "0.6"
 # Pure proc-macro (syn/quote/proc-macro2 only, no gpui dependency of its own),
