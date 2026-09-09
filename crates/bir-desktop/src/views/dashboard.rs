@@ -198,7 +198,11 @@ impl DashboardView {
                     deadline.form_code.clone(),
                     year,
                     period,
-                    format!("{} {}", deadline.form_code, deadline.final_deadline_string()),
+                    format!(
+                        "{} {}",
+                        deadline.form_code,
+                        deadline.final_deadline_string()
+                    ),
                     deadline.final_deadline_string(),
                 ))
             })
