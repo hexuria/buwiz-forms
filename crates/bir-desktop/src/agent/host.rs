@@ -140,7 +140,11 @@ impl BirAgentHost {
         self.selected_tin = selected_tin;
     }
 
-    pub fn replace_profiles(&mut self, profiles: Vec<(String, String)>, selected_tin: Option<String>) {
+    pub fn replace_profiles(
+        &mut self,
+        profiles: Vec<(String, String)>,
+        selected_tin: Option<String>,
+    ) {
         self.selected_tin = selected_tin.clone();
         self.profiles = profiles
             .into_iter()
@@ -226,7 +230,9 @@ impl BirAgentHost {
     }
 
     pub fn form_1601c_sheets(&self) -> Option<u32> {
-        self.form_1601c.as_ref().map(|form| form.draft.number_of_sheets)
+        self.form_1601c
+            .as_ref()
+            .map(|form| form.draft.number_of_sheets)
     }
 
     pub fn form_1601c_saved(&self) -> bool {
@@ -242,7 +248,9 @@ impl BirAgentHost {
     }
 
     pub fn form_1601c_status(&self) -> Option<FilingStatus> {
-        self.form_1601c.as_ref().map(|form| form.draft.status.clone())
+        self.form_1601c
+            .as_ref()
+            .map(|form| form.draft.status.clone())
     }
 
     fn reload_from_db(&mut self, db: &Arc<Mutex<Database>>) {
@@ -348,7 +356,9 @@ impl BirAgentHost {
             }
             self.dues.clear();
         }
-        if target == ActiveView::ProfileManager && self.editor.tin.is_empty() && self.selected_tin.is_none()
+        if target == ActiveView::ProfileManager
+            && self.editor.tin.is_empty()
+            && self.selected_tin.is_none()
         {
             self.editor = ProfileEditor::default();
         }
@@ -368,7 +378,9 @@ impl BirAgentHost {
         self.editor = ProfileEditor::default();
         self.active_view = ActiveView::ProfileManager;
         self.pending_admin = None;
-        Ok(DispatchResult::json(serde_json::json!({ "view": "profile-manager" })))
+        Ok(DispatchResult::json(
+            serde_json::json!({ "view": "profile-manager" }),
+        ))
     }
 
     fn select_profile(&mut self, tin: &str) -> Result<DispatchResult, String> {
@@ -410,7 +422,9 @@ impl BirAgentHost {
         match target {
             ids::PROFILE_TIN => self.editor.tin = digits_only(value),
             ids::PROFILE_NAME => self.editor.full_name = value.to_string(),
-            ids::PROFILE_RDO => self.editor.rdo_code = value.split(" - ").next().unwrap_or(value).to_string(),
+            ids::PROFILE_RDO => {
+                self.editor.rdo_code = value.split(" - ").next().unwrap_or(value).to_string()
+            }
             ids::PROFILE_LOB => self.editor.line_of_business = value.to_string(),
             ids::PROFILE_ADDRESS => self.editor.registered_address = value.to_string(),
             ids::PROFILE_ZIP => self.editor.zip_code = value.to_string(),
@@ -470,16 +484,16 @@ impl BirAgentHost {
 
     fn save_profile(&mut self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        let db = self
-            .db
-            .clone()
-            .ok_or("agent host has no database")?;
+        let db = self.db.clone().ok_or("agent host has no database")?;
         let profile = profile_from_editor(&self.editor)?;
         let errors = validate_profile(&profile);
         if !errors.is_empty() {
             self.editor.errors = errors.iter().map(|err| err.message.clone()).collect();
             self.editor.save_message = None;
-            return Err(format!("profile validation failed: {}", self.editor.errors.join("; ")));
+            return Err(format!(
+                "profile validation failed: {}",
+                self.editor.errors.join("; ")
+            ));
         }
         let saved = {
             let guard = db.lock().map_err(|err| err.to_string())?;
@@ -513,7 +527,8 @@ impl BirAgentHost {
             .ok_or("select a taxpayer profile before opening a form")?;
         let profile = self.load_profile(&tin)?;
         let now = chrono::Local::now().date_naive();
-        let mut draft = Form1601CDraft::new_from_profile(&profile, now.year() as u16, now.month() as u8);
+        let mut draft =
+            Form1601CDraft::new_from_profile(&profile, now.year() as u16, now.month() as u8);
         if let Some(db) = &self.db
             && let Ok(guard) = db.lock()
             && let Ok(Some(existing)) = guard.get_1601c_draft(&tin, draft.taxable_year, draft.month)
@@ -531,7 +546,9 @@ impl BirAgentHost {
 
     fn open_form(&mut self, code: &str, year: u16, period: u8) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        let Some(chrome) = ids::FORM_CHROME.iter().find(|item| item.code.eq_ignore_ascii_case(code))
+        let Some(chrome) = ids::FORM_CHROME
+            .iter()
+            .find(|item| item.code.eq_ignore_ascii_case(code))
         else {
             return Err(format!("unknown form `{code}`"));
         };
@@ -743,7 +760,8 @@ impl BirAgentHost {
                     .get("page")
                     .and_then(|value| value.as_str())
                     .ok_or("nav.go requires args.page")?;
-                let view = ids::view_from_slug(page).ok_or_else(|| format!("unknown page `{page}`"))?;
+                let view =
+                    ids::view_from_slug(page).ok_or_else(|| format!("unknown page `{page}`"))?;
                 self.navigate(view)
             }
             "profile.create" | "profile.new" => self.new_profile_editor(),
@@ -757,7 +775,8 @@ impl BirAgentHost {
                 let year = args
                     .get("year")
                     .and_then(|value| value.as_u64())
-                    .unwrap_or_else(|| chrono::Local::now().year() as u64) as u16;
+                    .unwrap_or_else(|| chrono::Local::now().year() as u64)
+                    as u16;
                 let period = args
                     .get("period")
                     .and_then(|value| value.as_u64())
@@ -767,8 +786,12 @@ impl BirAgentHost {
             "filing.validate" | "form.validate" => self.validate_form(),
             "form.save_draft" => self.save_form_draft(),
             "filing.submit" => self.request_submit_confirm(),
-            "form.submit" | "form.queue" | "form.file" | "form.submit_external"
-            | "filing.queue" | "filing.file" => Err(format!(
+            "form.submit"
+            | "form.queue"
+            | "form.file"
+            | "form.submit_external"
+            | "filing.queue"
+            | "filing.file" => Err(format!(
                 "invoke `{name}` is not allow-listed; agent hosts cannot queue or file returns"
             )),
             other => Err(format!("unknown invoke `{other}`")),
@@ -801,9 +824,13 @@ impl BirAgentHost {
         let mut list = UiNode::new(ids::SIDEBAR_PROFILE_LIST, "list", "Taxpayer profiles");
         for profile in &self.profiles {
             list = list.with_child(
-                UiNode::new(ids::profile_row(&profile.tin), "listitem", profile.name.clone())
-                    .with_checked(profile.selected)
-                    .with_value(last4(&profile.tin)),
+                UiNode::new(
+                    ids::profile_row(&profile.tin),
+                    "listitem",
+                    profile.name.clone(),
+                )
+                .with_checked(profile.selected)
+                .with_value(last4(&profile.tin)),
             );
         }
         sidebar = sidebar.with_child(list);
@@ -821,7 +848,11 @@ impl BirAgentHost {
                 textbox(ids::PROFILE_TIN, "TIN", &self.editor.tin),
                 textbox(ids::PROFILE_NAME, "Taxpayer name", &self.editor.full_name),
                 textbox(ids::PROFILE_RDO, "RDO", &self.editor.rdo_code),
-                textbox(ids::PROFILE_LOB, "Line of business", &self.editor.line_of_business),
+                textbox(
+                    ids::PROFILE_LOB,
+                    "Line of business",
+                    &self.editor.line_of_business,
+                ),
                 textbox(
                     ids::PROFILE_ADDRESS,
                     "Registered address",
@@ -880,7 +911,8 @@ impl BirAgentHost {
                     .map(|form| form.validation_errors.is_empty())
                     .unwrap_or(true);
             page = page.with_child(
-                UiNode::new(chrome.submit, "button", submit_label(chrome.code)).with_enabled(submit_enabled),
+                UiNode::new(chrome.submit, "button", submit_label(chrome.code))
+                    .with_enabled(submit_enabled),
             );
         }
 
@@ -889,8 +921,12 @@ impl BirAgentHost {
         {
             page = page.with_child(UiNode::new(ids::FORM_1601C_VALIDATE, "button", "Validate"));
             page = page.with_child(
-                UiNode::new(ids::FORM_1601C_STATUS, "status", format!("{:?}", form.draft.status))
-                    .with_value(format!("{:?}", form.draft.status)),
+                UiNode::new(
+                    ids::FORM_1601C_STATUS,
+                    "status",
+                    format!("{:?}", form.draft.status),
+                )
+                .with_value(format!("{:?}", form.draft.status)),
             );
             page = page.with_child(UiNode::new(
                 ids::FORM_1601C_VALIDATION,
@@ -980,7 +1016,9 @@ impl AgentHost for BirAgentHost {
         let _ = path;
         let detail = match self.platform {
             PlatformKind::Headless => "headless host has no pixel surface",
-            PlatformKind::Desktop => "desktop host has no GPUI surface export yet (gpui-agent PR #20 is not depended on)",
+            PlatformKind::Desktop => {
+                "desktop host has no GPUI surface export yet (gpui-agent PR #20 is not depended on)"
+            }
             _ => "this host has no pixel surface",
         };
         Err(gpui_agent::screenshot_unavailable(detail))
@@ -1005,7 +1043,9 @@ impl AgentHost for BirAgentHost {
                 self.shutdown = true;
                 Ok(DispatchResult::empty())
             }
-            Op::Hello | Op::Snapshot | Op::Assert { .. } | Op::Wait { .. } => Ok(DispatchResult::empty()),
+            Op::Hello | Op::Snapshot | Op::Assert { .. } | Op::Wait { .. } => {
+                Ok(DispatchResult::empty())
+            }
         }
     }
 }
@@ -1022,7 +1062,8 @@ pub fn fixture_host() -> BirAgentHost {
     profile.withholds_compensation = true;
     profile.has_employees = true;
     db.save_profile(profile).expect("fixture profile");
-    let mut host = BirAgentHost::new(PlatformKind::Headless).with_database(Arc::new(Mutex::new(db)));
+    let mut host =
+        BirAgentHost::new(PlatformKind::Headless).with_database(Arc::new(Mutex::new(db)));
     host.select_profile(FIXTURE_TIN).expect("select fixture");
     host
 }
@@ -1071,7 +1112,11 @@ fn dues_for_profile(profile: &TaxpayerProfile) -> Vec<DueItem> {
                 form_code: deadline.form_code.clone(),
                 year: tax_year,
                 period,
-                name: format!("{} {}", deadline.form_code, deadline.final_deadline_string()),
+                name: format!(
+                    "{} {}",
+                    deadline.form_code,
+                    deadline.final_deadline_string()
+                ),
                 deadline: deadline.final_deadline_string(),
             })
         })
@@ -1284,7 +1329,14 @@ mod tests {
             (ids::PROFILE_PHONE, "09170000000"),
             (ids::PROFILE_EMAIL, "created@example.com"),
         ] {
-            let resp = handle_request(&mut host, req(Op::SetValue { target: id.into(), value: value.into() }), None);
+            let resp = handle_request(
+                &mut host,
+                req(Op::SetValue {
+                    target: id.into(),
+                    value: value.into(),
+                }),
+                None,
+            );
             assert!(resp.ok, "{id}: {:?}", resp.error);
         }
         let saved = handle_request(&mut host, req(Op::click(ids::PROFILE_SAVE)), None);
@@ -1355,7 +1407,11 @@ mod tests {
         let submit = handle_request(&mut host, req(Op::click(ids::FORM_1601C_SUBMIT)), None);
         assert!(submit.ok, "{:?}", submit.error);
         assert!(host.submit_confirmation_visible());
-        let confirm = handle_request(&mut host, req(Op::click(ids::FORM_1601C_SUBMIT_CONFIRM)), None);
+        let confirm = handle_request(
+            &mut host,
+            req(Op::click(ids::FORM_1601C_SUBMIT_CONFIRM)),
+            None,
+        );
         assert!(!confirm.ok);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
         let forbidden = handle_request(
@@ -1373,18 +1429,26 @@ mod tests {
     #[test]
     fn preferred_invoke_names_do_not_file() {
         let mut host = fixture_host();
-        let created = handle_request(&mut host, req(Op::Invoke {
-            name: "profile.create".into(),
-            args: serde_json::json!({}),
-        }), None);
+        let created = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.create".into(),
+                args: serde_json::json!({}),
+            }),
+            None,
+        );
         assert!(created.ok, "{:?}", created.error);
         assert_eq!(host.active_view(), ActiveView::ProfileManager);
 
         host = fixture_host();
-        let refreshed = handle_request(&mut host, req(Op::Invoke {
-            name: "tax-dues.refresh".into(),
-            args: serde_json::json!({}),
-        }), None);
+        let refreshed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "tax-dues.refresh".into(),
+                args: serde_json::json!({}),
+            }),
+            None,
+        );
         assert!(refreshed.ok, "{:?}", refreshed.error);
         let year = chrono::Local::now().year() as u16;
         let started = handle_request(
@@ -1446,10 +1510,7 @@ mod tests {
 
     #[test]
     fn virtual_delivery_is_unavailable_on_headless_and_desktop_hosts() {
-        for mut host in [
-            empty_host(),
-            BirAgentHost::new(PlatformKind::Desktop),
-        ] {
+        for mut host in [empty_host(), BirAgentHost::new(PlatformKind::Desktop)] {
             let resp = handle_request(&mut host, req(Op::click_virtual(ids::NAV_SETTINGS)), None);
             assert!(!resp.ok);
             assert!(
@@ -1476,7 +1537,11 @@ mod tests {
                 None,
             );
             let tree = host.tree();
-            assert!(tree.find(ids::page_root(chrome.view)).is_some(), "{}", chrome.code);
+            assert!(
+                tree.find(ids::page_root(chrome.view)).is_some(),
+                "{}",
+                chrome.code
+            );
             assert!(tree.find(chrome.back).is_some(), "{} back", chrome.code);
             assert!(tree.find(chrome.save).is_some(), "{} save", chrome.code);
             assert!(tree.find(chrome.submit).is_some(), "{} submit", chrome.code);
@@ -1489,13 +1554,11 @@ mod tests {
         use std::time::Duration;
 
         let store = Arc::new(Mutex::new(fixture_host()));
-        let (addr, shutdown) = gpui_agent::server::spawn_host(
-            "127.0.0.1:0".parse().unwrap(),
-            None,
-            store.clone(),
-        )
-        .expect("bind");
-        let mut client = gpui_agent::client::AgentClient::connect(addr).with_timeout(Duration::from_secs(5));
+        let (addr, shutdown) =
+            gpui_agent::server::spawn_host("127.0.0.1:0".parse().unwrap(), None, store.clone())
+                .expect("bind");
+        let mut client =
+            gpui_agent::client::AgentClient::connect(addr).with_timeout(Duration::from_secs(5));
         client.wait_ready().expect("hello");
         client
             .invoke("nav.go", serde_json::json!({ "page": "profile-manager" }))
@@ -1507,7 +1570,9 @@ mod tests {
                 ..Default::default()
             })
             .expect("page");
-        let virt = client.rpc(Op::click_virtual(ids::NAV_SETTINGS)).expect("rpc");
+        let virt = client
+            .rpc(Op::click_virtual(ids::NAV_SETTINGS))
+            .expect("rpc");
         assert!(!virt.ok);
         client.expect_ok(Op::Shutdown).unwrap();
         std::thread::sleep(Duration::from_millis(30));

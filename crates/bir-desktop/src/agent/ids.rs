@@ -284,8 +284,7 @@ pub fn form_chrome(view: ActiveView) -> Option<&'static FormChrome> {
 /// Submit / confirm controls that would queue or file if the real widget ran.
 /// Semantic dispatch exposes confirmation only; virtual clicks must not hit these.
 pub fn is_filing_submit_control(id: &str) -> bool {
-    id == FORM_1601C_SUBMIT_CONFIRM
-        || FORM_CHROME.iter().any(|chrome| chrome.submit == id)
+    id == FORM_1601C_SUBMIT_CONFIRM || FORM_CHROME.iter().any(|chrome| chrome.submit == id)
 }
 
 #[cfg(test)]
@@ -309,7 +308,11 @@ mod tests {
     fn due_and_profile_ids_are_not_indices() {
         assert_eq!(due_row("1601C", 2026, 1), "due-1601C-2026-1");
         assert_eq!(profile_row("12345678900000"), "profile-12345678900000");
-        assert!(!due_row("1601C", 2026, 1).chars().all(|c| c.is_ascii_digit()));
+        assert!(
+            !due_row("1601C", 2026, 1)
+                .chars()
+                .all(|c| c.is_ascii_digit())
+        );
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT));
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT_CONFIRM));
         assert!(!is_filing_submit_control(FORM_1601C_SAVE));

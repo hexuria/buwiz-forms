@@ -1,11 +1,11 @@
 //! UI-thread mailbox drain. The TCP thread never touches GPUI entities.
 
 use gpui::*;
-use gpui_agent::protocol::{Op, PlatformKind};
 use gpui_agent::handle_request;
+use gpui_agent::protocol::{Op, PlatformKind};
 
-use crate::agent::ids;
 use crate::agent::host::BirAgentHost;
+use crate::agent::ids;
 use crate::app::{ActiveView, AppState, ProfileTargetAction};
 use crate::global_actions::CreateProfile;
 use chrono::Datelike;
@@ -59,7 +59,8 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
         false
     };
 
-    let mut host = BirAgentHost::new(PlatformKind::Desktop).with_database(std::sync::Arc::clone(&app.db));
+    let mut host =
+        BirAgentHost::new(PlatformKind::Desktop).with_database(std::sync::Arc::clone(&app.db));
     host.set_locked(app.is_locked);
     host.set_admin_lock_enabled(admin_lock_enabled);
     host.set_unsaved_compliance(
@@ -121,12 +122,7 @@ fn apply_host(
         apply_navigation(host.active_view(), &host, app, window, cx);
     }
 
-    if let Some(list) = app
-        .db
-        .lock()
-        .ok()
-        .and_then(|db| db.list_profiles().ok())
-    {
+    if let Some(list) = app.db.lock().ok().and_then(|db| db.list_profiles().ok()) {
         app.profiles = list;
     }
 
