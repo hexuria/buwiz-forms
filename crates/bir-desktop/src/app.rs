@@ -226,6 +226,9 @@ pub struct AppState {
     pub(crate) active_session_tin: Option<String>,
     #[cfg(feature = "agent")]
     pub(crate) agent_mailbox: Option<gpui_agent::mailbox::AgentMailbox>,
+    /// Configured `GPUI_AGENT_TOKEN` from `from_env`. Never log this value.
+    #[cfg(feature = "agent")]
+    pub(crate) agent_token: Option<String>,
     #[cfg(feature = "agent")]
     pub(crate) agent_refresh: Option<Task<()>>,
     /// Semantic submit reached the existing confirmation gate without queuing.
@@ -919,6 +922,8 @@ impl AppState {
             active_session_tin: None,
             #[cfg(feature = "agent")]
             agent_mailbox: None,
+            #[cfg(feature = "agent")]
+            agent_token: None,
             #[cfg(feature = "agent")]
             agent_refresh: None,
             #[cfg(feature = "agent")]

@@ -38,6 +38,10 @@ These are host constraints. They do not change protocol v1.
   Authenticated remote bind is not implemented (gpui-agent epic #10).
 - `GPUI_AGENT_TOKEN`, when set, is required on every request. Recipe run and MCP
   **always** need the same non-empty token on host and client. The token is never logged.
+  `hello.auth` is `"required"` when that token is configured on the host, `"none"`
+  otherwise. The TCP thread enforces the token; the UI-thread mailbox drain passes
+  the same configured token into `handle_request` so hello does not overwrite `auth`
+  to `"none"`. `BirAgentHost::hello()` does not set `auth` by hand.
 - The agent **cannot** skip the lock screen, profile PIN/TOTP, or administrator
   OTP. Unsaved profile compliance still blocks navigation.
 - There is **no** invoke that queues or files a return. `filing.submit` (and a
@@ -176,6 +180,8 @@ Proven in headless host tests (not a Mac GUI run):
   `form.submit` / `filing.queue` rejected
 - Remaining form views: page root + back/save/submit chrome ids.
   Semantic **save** besides 1601-C is not mapped (`draft save for … is not mapped`)
+- `hello.auth` is `Required` when `handle_request` is given a configured token,
+  and `None` when it is not. `BirAgentHost::hello()` leaves `auth` at Default.
 
 Follow-up: semantic save for 2551Q / 1701Q / 0619E / 0619F / 0605 / 2550Q /
 1701 / 1702RT / 1702MX. Virtual in-window delivery is intentionally
