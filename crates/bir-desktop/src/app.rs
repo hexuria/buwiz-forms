@@ -47,7 +47,7 @@ impl AppThemeMode {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveView {
     GlobalDashboard,
     Dashboard,
@@ -73,7 +73,6 @@ pub enum ActiveView {
 pub enum ProfileTargetAction {
     ViewDashboard,
     EditProfile,
-    #[allow(dead_code)]
     UnlockOnly,
 }
 
@@ -225,6 +224,17 @@ pub struct AppState {
     pub(crate) admin_os_auth_triggered: bool,
     /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
     pub(crate) active_session_tin: Option<String>,
+    #[cfg(feature = "agent")]
+    pub(crate) agent_mailbox: Option<gpui_agent::mailbox::AgentMailbox>,
+    #[cfg(feature = "agent")]
+    pub(crate) agent_refresh: Option<Task<()>>,
+    #[cfg(feature = "agent")]
+    pub(crate) agent_layout_bounds: std::collections::HashMap<String, gpui_agent::Bounds>,
+    #[cfg(feature = "agent")]
+    pub(crate) agent_cursor: gpui_agent::AgentCursor,
+    /// Semantic submit reached the existing confirmation gate without queuing.
+    #[cfg(feature = "agent")]
+    pub(crate) agent_submit_confirmation_visible: bool,
 }
 
 impl AppState {
@@ -911,6 +921,16 @@ impl AppState {
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
+            #[cfg(feature = "agent")]
+            agent_mailbox: None,
+            #[cfg(feature = "agent")]
+            agent_refresh: None,
+            #[cfg(feature = "agent")]
+            agent_layout_bounds: std::collections::HashMap::new(),
+            #[cfg(feature = "agent")]
+            agent_cursor: gpui_agent::AgentCursor::default(),
+            #[cfg(feature = "agent")]
+            agent_submit_confirmation_visible: false,
         }
     }
 
@@ -1373,6 +1393,25 @@ impl AppState {
         .detach();
     }
 
+    pub(crate) fn open_named_form(
+        &mut self,
+        form_code: &str,
+        year: u16,
+        quarter: u8,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.handle_file_form(
+            &DashboardEvent::FileForm {
+                form_code: form_code.to_string(),
+                year,
+                quarter,
+            },
+            window,
+            cx,
+        );
+    }
+
     pub(crate) fn request_admin_access(
         &mut self,
         target: ActiveView,
@@ -1436,7 +1475,7 @@ impl AppState {
     // NOTE: render_sidebar() is implemented in sidebar.rs
 
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        match self.active_view {
+        let page = match self.active_view {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
@@ -1528,7 +1567,12 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-        }
+        };
+        div()
+            .id(crate::agent::ids::page_root(self.active_view))
+            .size_full()
+            .child(page)
+            .into_any_element()
     }
 
     pub(crate) fn block_unsaved_compliance_navigation(
@@ -1964,6 +2008,9 @@ fn push_notification(level: &str, title: &str, message: &str, window: &mut Windo
 
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(feature = "agent")]
+        crate::agent::apply_agent(self, window, cx);
+
         // Apply a lifecycle change the administrator prompt authorised. It
         // lands here because this is the first point after the prompt
         // resolves that is guaranteed to hold a `Window`.
@@ -2290,7 +2337,7 @@ impl Render for AppState {
         if self.is_locked
             && let Some(lock_screen) = &self.lock_screen_view
         {
-            let root = rsx! { <div size_full>{lock_screen.clone()}</div> };
+            let root = rsx! { <div id={crate::agent::ids::PAGE_LOCK} size_full>{lock_screen.clone()}</div> };
             return root.into_any_element();
         }
 

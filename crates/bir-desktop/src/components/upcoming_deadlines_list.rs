@@ -96,7 +96,6 @@ impl UpcomingDeadlinesList {
 
                 let form_code_clone = d.form_code.clone();
                 let route = d.route_year_quarter();
-                let date_id = d.final_deadline_string();
                 let month_label = deadline_date
                     .map(|date| date.format("%b").to_string().to_uppercase())
                     .unwrap_or_else(|| "EVT".to_string());
@@ -105,7 +104,11 @@ impl UpcomingDeadlinesList {
                     .unwrap_or_else(|| "--".to_string());
 
                 let mut date_card = div()
-                    .id(format!("deadline-{}-{}", d.form_code, date_id))
+                    .id(crate::agent::ids::due_row(
+                        &d.form_code,
+                        route.map(|(y, _)| y).unwrap_or(0),
+                        route.map(|(_, p)| p).unwrap_or(0),
+                    ))
                     .group("list-item")
                     .flex()
                     .items_center()
@@ -385,7 +388,7 @@ impl UpcomingDeadlinesList {
 impl Render for UpcomingDeadlinesList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         rsx! {
-            <div flex flex_col gap_4>
+            <div id={crate::agent::ids::DUES_LIST} flex flex_col gap_4>
                 <div flex flex_col gap_2>
                     <div
                         text_xl

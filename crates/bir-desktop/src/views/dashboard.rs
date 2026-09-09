@@ -189,6 +189,22 @@ impl DashboardView {
         }
     }
 
+    pub(crate) fn agent_dues(&self) -> Vec<(String, u16, u8, String, String)> {
+        self.deadlines
+            .iter()
+            .filter_map(|deadline| {
+                let (year, period) = deadline.route_year_quarter()?;
+                Some((
+                    deadline.form_code.clone(),
+                    year,
+                    period,
+                    format!("{} {}", deadline.form_code, deadline.final_deadline_string()),
+                    deadline.final_deadline_string(),
+                ))
+            })
+            .collect()
+    }
+
     pub fn set_profile(&mut self, profile: TaxpayerProfile, cx: &mut Context<Self>) {
         let min_year = if let Some(start_date) = &profile.business_start_date {
             use chrono::Datelike;

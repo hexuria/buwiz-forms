@@ -214,6 +214,22 @@ impl GlobalDashboardView {
 
         all
     }
+
+    pub(crate) fn agent_dues(&self) -> Vec<(String, u16, u8, String, String)> {
+        self.deadlines
+            .iter()
+            .filter_map(|deadline| {
+                let (year, period) = deadline.route_year_quarter()?;
+                Some((
+                    deadline.form_code.clone(),
+                    year,
+                    period,
+                    format!("{} {}", deadline.form_code, deadline.final_deadline_string()),
+                    deadline.final_deadline_string(),
+                ))
+            })
+            .collect()
+    }
 }
 
 fn calendar_year_is_affected(calendar_year: i32, affected_years: &[u16]) -> bool {

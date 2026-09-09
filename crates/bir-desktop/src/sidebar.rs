@@ -120,6 +120,7 @@ impl AppState {
             .collect();
         rsx! {
             <div
+                id={crate::agent::ids::SIDEBAR}
                 w={if is_mini { px(72.) } else { px(280.) }}
                 h_full
                 bg={cx.theme().background}
@@ -302,7 +303,7 @@ impl AppState {
                     })
                     .child(
                         v_flex()
-                            .id("sidebar-profile-list")
+                            .id(crate::agent::ids::SIDEBAR_PROFILE_LIST)
                             .flex_1()
                             .overflow_y_scroll()
                             .track_scroll(&self.sidebar_scroll)
@@ -323,7 +324,7 @@ impl AppState {
                                 };
 
                                 div()
-                                    .id(profile.tin.full())
+                                    .id(crate::agent::ids::profile_row(&profile.tin.full()))
                                     .w_full()
                                     .when(!is_mini, |this| this.py_2().px_6())
                                     .when(is_mini, |this| this.py_2().px_3())

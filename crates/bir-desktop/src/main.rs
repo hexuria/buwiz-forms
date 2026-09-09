@@ -12,6 +12,7 @@ use gpui::*;
 use gpui_component::*;
 
 mod actions;
+mod agent;
 mod app;
 mod auth_overlays;
 #[cfg(target_os = "macos")]
@@ -386,6 +387,9 @@ fn main() {
                 ..Default::default()
             };
 
+            #[cfg(feature = "agent")]
+            let agent_mailbox = crate::agent::maybe_start();
+
             let _ = cx.open_window(options, move |window, cx| {
                 window.on_window_should_close(cx, |_, _cx| {
                     // Phase 4: Window Close & macOS Dock Hijacking
@@ -393,7 +397,14 @@ fn main() {
                     false // Prevent window destruction
                 });
 
-                let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
+                let view = cx.new(|cx| {
+                    let mut state = app::AppState::new(db, profiles, window, cx);
+                    #[cfg(feature = "agent")]
+                    if let Some(mailbox) = agent_mailbox.clone() {
+                        state.attach_agent(mailbox, cx);
+                    }
+                    state
+                });
                 let main_window = window.window_handle();
                 let tray_app_state = view.clone();
                 #[cfg(target_os = "macos")]
