@@ -583,7 +583,7 @@ impl Render for FilterState {
             <div flex w_full items_center gap_2>
                 {div()
                     .flex()
-                    .flex_grow()
+                    .flex_grow_1()
                     .items_center()
                     .gap_1()
                     .px_3()
@@ -618,7 +618,7 @@ impl Render for FilterState {
                     }))
                     .child(rsx! {
                         <div
-                            flex_grow
+                            flexGrow
                             on_key_down={cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                                 let key = event.keystroke.key.as_str();
                                 if (key == "backspace" || key == "delete")

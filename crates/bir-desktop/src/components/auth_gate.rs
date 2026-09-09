@@ -8,7 +8,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
-use gpui_component::input::{InputEvent, OtpInput, OtpState};
+use gpui_component::input::{OtpEvent, OtpInput, OtpState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
@@ -46,8 +46,8 @@ impl AuthGateView {
         cx.subscribe_in(
             &otp_state,
             window,
-            move |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
+            move |this: &mut Self, _entity, event: &OtpEvent, window, cx| {
+                if let OtpEvent::Change = event {
                     let entered_pin = this.otp_state.read(cx).value().to_string();
                     if entered_pin.len() == 4 {
                         let hashed = bir_core::crypto::hash_pin(&entered_pin);

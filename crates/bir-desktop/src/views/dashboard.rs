@@ -1860,7 +1860,7 @@ impl Render for DashboardView {
                         {self.render_header_actions(profile, cx)}
                     </div>
                     <div flex items_center justify_between gap_4>
-                        <div flex_grow>
+                        <div flexGrow>
                             {FilterBar::new(&self.filter_state)}
                         </div>
                         {SmartDateFilter::new(&self.smart_date_filter)}

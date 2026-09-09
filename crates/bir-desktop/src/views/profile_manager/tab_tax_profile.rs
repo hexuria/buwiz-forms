@@ -4253,14 +4253,14 @@ impl ProfileManagerView {
                     gap_2
                     when={(!custom_mode, |this| {
                         this.child(rsx! {
-                            <div flex_grow>
+                            <div flexGrow>
                                 {Combobox::new(&self.forms_editor_registry_form_select)}
                             </div>
                         })
                     })}
                     when={(custom_mode, |this| {
                         this.child(rsx! {
-                            <div flex_grow>
+                            <div flexGrow>
                                 {gpui_component::input::Input::new(
                                     &self.forms_editor_new_code_input,
                                 )}
@@ -4271,7 +4271,7 @@ impl ProfileManagerView {
                     <div w={px(180.)}>
                         {Combobox::new(&self.forms_editor_new_frequency_select)}
                     </div>
-                    <div flex_grow>
+                    <div flexGrow>
                         {gpui_component::input::Input::new(
                             &self.forms_editor_new_reason_input,
                         )}
@@ -4403,7 +4403,7 @@ impl ProfileManagerView {
                     >
                         {code.clone()}
                     </div>
-                    <div flex_grow px_3 text_sm text_color={cx.theme().foreground}>
+                    <div flexGrow px_3 text_sm text_color={cx.theme().foreground}>
                         {description}
                     </div>
                     <div w={px(120.)} px_3 text_sm text_color={cx.theme().muted_foreground}>
@@ -4486,7 +4486,7 @@ impl ProfileManagerView {
                         {div()}
                     </div>
                     <div base={header_style(cx)} w={px(100.)}>{"Code"}</div>
-                    <div base={header_style(cx)} flex_grow>{"Description"}</div>
+                    <div base={header_style(cx)} flexGrow>{"Description"}</div>
                     <div base={header_style(cx)} w={px(120.)}>{"Frequency"}</div>
                     <div base={header_style(cx)} w={px(110.)}>{"Source"}</div>
                     <div base={header_style(cx)} w={px(110.)}>{"Support"}</div>
