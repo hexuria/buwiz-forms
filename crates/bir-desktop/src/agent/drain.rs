@@ -2,7 +2,7 @@
 
 use gpui::*;
 use gpui_agent::protocol::{Op, PlatformKind};
-use gpui_agent::{DispatchResult, handle_request};
+use gpui_agent::handle_request;
 
 use crate::agent::ids;
 use crate::agent::host::BirAgentHost;
@@ -14,7 +14,6 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
     let Some(mailbox) = app.agent_mailbox.clone() else {
         return;
     };
-    record_window_bounds(app, window);
     for posted in mailbox.take() {
         let shutdown = matches!(posted.request.op, Op::Shutdown);
         let mutating = matches!(
@@ -27,20 +26,17 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
                 | Op::Shutdown
         );
         let response = if posted.request.op.is_virtual_input() {
-            match dispatch_virtual(app, &posted.request.op, window, cx) {
-                Ok(result) => {
-                    let mut resp = gpui_agent::Response::ok(&posted.request.id);
-                    resp.result = result.value;
-                    resp
-                }
-                Err(error) => gpui_agent::Response::err(&posted.request.id, error),
-            }
+            gpui_agent::Response::err(
+                &posted.request.id,
+                gpui_agent::virtual_unavailable(
+                    "bir-desktop ships semantic delivery first; \
+                     virtual in-window events are not wired (no per-widget painted bounds). \
+                     Protocol is unchanged; this host does not synthesize OS HID",
+                ),
+            )
         } else {
             let mut host = snapshot_host(app, cx);
-            let mut response = handle_request(&mut host, posted.request.clone(), None);
-            if let Some(tree) = response.tree.as_mut() {
-                tree.apply_bounds_map(&app.agent_layout_bounds);
-            }
+            let response = handle_request(&mut host, posted.request.clone(), None);
             if mutating && response.ok {
                 apply_host(host, app, window, cx);
             }
@@ -258,113 +254,6 @@ fn apply_navigation(
             cx.notify();
         }
     }
-}
-
-fn dispatch_virtual(
-    app: &mut AppState,
-    op: &Op,
-    window: &mut Window,
-    cx: &mut Context<AppState>,
-) -> Result<DispatchResult, String> {
-    match op {
-        Op::Click { target, .. } => virtual_click(app, target, window, cx),
-        Op::Type { target, text, .. } => {
-            virtual_click(app, target, window, cx)?;
-            for token in gpui_agent::text_keystrokes(text)? {
-                let keystroke = Keystroke::parse(&token).map_err(|err| err.to_string())?;
-                window.dispatch_keystroke(keystroke, cx);
-            }
-            Ok(DispatchResult::json(serde_json::json!({
-                "delivery": "virtual",
-                "target": target,
-                "path": "gpui.dispatch_keystroke"
-            })))
-        }
-        Op::Key { target, key, .. } => {
-            virtual_click(app, target, window, cx)?;
-            let token = gpui_agent::keystroke_token(key)?;
-            let keystroke = Keystroke::parse(&token).map_err(|err| err.to_string())?;
-            window.dispatch_keystroke(keystroke, cx);
-            Ok(DispatchResult::json(serde_json::json!({
-                "delivery": "virtual",
-                "target": target,
-                "path": "gpui.dispatch_keystroke"
-            })))
-        }
-        _ => Err(gpui_agent::virtual_unavailable(
-            "only click, type, and key support virtual delivery",
-        )),
-    }
-}
-
-fn virtual_click(
-    app: &mut AppState,
-    target: &str,
-    window: &mut Window,
-    cx: &mut Context<AppState>,
-) -> Result<DispatchResult, String> {
-    if ids::is_filing_submit_control(target) {
-        return Err(
-            "virtual click refused: submit/queue controls must not dispatch into the filing path; use semantic click or invoke filing.submit to reach confirmation only"
-                .into(),
-        );
-    }
-    let mut tree = snapshot_host(app, cx).tree();
-    tree.apply_bounds_map(&app.agent_layout_bounds);
-    let plan = gpui_agent::plan_click(&tree, target)?;
-    app.agent_cursor.move_to(plan.x, plan.y);
-    let position = point(px(plan.x), px(plan.y));
-    let modifiers = Modifiers::default();
-    window.dispatch_event(
-        MouseMoveEvent {
-            position,
-            pressed_button: None,
-            modifiers,
-        }
-        .to_platform_input(),
-        cx,
-    );
-    window.dispatch_event(
-        MouseDownEvent {
-            button: MouseButton::Left,
-            position,
-            modifiers,
-            click_count: 1,
-            first_mouse: false,
-        }
-        .to_platform_input(),
-        cx,
-    );
-    window.dispatch_event(
-        MouseUpEvent {
-            button: MouseButton::Left,
-            position,
-            modifiers,
-            click_count: 1,
-        }
-        .to_platform_input(),
-        cx,
-    );
-    Ok(DispatchResult::json(serde_json::json!({
-        "delivery": "virtual",
-        "target": target,
-        "x": plan.x,
-        "y": plan.y,
-        "path": "gpui.dispatch_event"
-    })))
-}
-
-fn record_window_bounds(app: &mut AppState, window: &Window) {
-    let bounds = window.bounds();
-    app.agent_layout_bounds.insert(
-        ids::WINDOW.into(),
-        gpui_agent::Bounds {
-            x: f32::from(bounds.origin.x),
-            y: f32::from(bounds.origin.y),
-            w: f32::from(bounds.size.width),
-            h: f32::from(bounds.size.height),
-        },
-    );
 }
 
 impl AppState {

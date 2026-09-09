@@ -967,10 +967,7 @@ impl AgentHost for BirAgentHost {
             app: "bir-desktop".into(),
             platform: self.platform,
             ready: true,
-            deliveries: match self.platform {
-                PlatformKind::Desktop => vec![DeliveryMode::Semantic, DeliveryMode::Virtual],
-                _ => vec![DeliveryMode::Semantic],
-            },
+            deliveries: vec![DeliveryMode::Semantic],
             auth: gpui_agent::HelloAuth::None,
         }
     }
@@ -992,9 +989,9 @@ impl AgentHost for BirAgentHost {
     fn dispatch(&mut self, op: &Op) -> Result<DispatchResult, String> {
         if op.is_virtual_input() {
             return Err(virtual_unavailable(
-                "this host has no GPUI pointer/key pipeline. \
-                 Virtual delivery synthesizes in-window events on the desktop GPUI host \
-                 after a painted frame. Headless hosts implement semantic dispatch only.",
+                "bir-desktop ships semantic delivery first; \
+                 virtual in-window events are not wired on this host. \
+                 Protocol is unchanged; this host does not synthesize OS HID",
             ));
         }
         match op {
@@ -1448,16 +1445,22 @@ mod tests {
     }
 
     #[test]
-    fn virtual_delivery_is_unavailable_on_headless() {
-        let mut host = empty_host();
-        let resp = handle_request(&mut host, req(Op::click_virtual(ids::NAV_SETTINGS)), None);
-        assert!(!resp.ok);
-        assert!(
-            resp.error
-                .as_deref()
-                .unwrap_or("")
-                .starts_with(gpui_agent::VIRTUAL_UNAVAILABLE)
-        );
+    fn virtual_delivery_is_unavailable_on_headless_and_desktop_hosts() {
+        for mut host in [
+            empty_host(),
+            BirAgentHost::new(PlatformKind::Desktop),
+        ] {
+            let resp = handle_request(&mut host, req(Op::click_virtual(ids::NAV_SETTINGS)), None);
+            assert!(!resp.ok);
+            assert!(
+                resp.error
+                    .as_deref()
+                    .unwrap_or("")
+                    .starts_with(gpui_agent::VIRTUAL_UNAVAILABLE)
+            );
+        }
+        let desktop = BirAgentHost::new(PlatformKind::Desktop);
+        assert_eq!(desktop.hello().deliveries, vec![DeliveryMode::Semantic]);
     }
 
     #[test]
