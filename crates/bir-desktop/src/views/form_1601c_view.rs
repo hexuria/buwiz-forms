@@ -41,6 +41,17 @@ fn submission_disposition() -> SubmissionDisposition {
     }
 }
 
+/// Host-side 1601-C field patch applied on the UI thread. Kept as one value
+/// so the always-compiled accessor stays under clippy's argument limit.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Agent1601CHostPatch {
+    pub tax_14: Option<f64>,
+    pub tax_25: Option<f64>,
+    pub sheets: Option<u32>,
+    pub save: bool,
+    pub validate: bool,
+}
+
 struct ScheduleRowInputs {
     previous_month: Entity<InputState>,
     date_paid: Entity<InputState>,
@@ -544,42 +555,38 @@ impl Form1601CView {
 
     pub(crate) fn agent_apply_from_host(
         &mut self,
-        tax_14: Option<f64>,
-        tax_25: Option<f64>,
-        sheets: Option<u32>,
-        save: bool,
-        validate: bool,
+        patch: Agent1601CHostPatch,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let mut dirty = false;
-        if let Some(value) = tax_14 {
+        if let Some(value) = patch.tax_14 {
             self.tax_14_total_compensation.update(cx, |input, cx| {
                 input.set_value(format!("{value:.2}"), window, cx);
             });
             dirty = true;
         }
-        if let Some(value) = tax_25 {
+        if let Some(value) = patch.tax_25 {
             self.tax_25_total_taxes_withheld.update(cx, |input, cx| {
                 input.set_value(format!("{value:.2}"), window, cx);
             });
             dirty = true;
         }
-        if let Some(value) = sheets {
+        if let Some(value) = patch.sheets {
             self.number_of_sheets.update(cx, |input, cx| {
                 input.set_value(value.to_string(), window, cx);
             });
             dirty = true;
         }
-        if dirty || validate {
+        if dirty || patch.validate {
             self.sync_from_inputs(cx);
         }
-        if validate {
+        if patch.validate {
             self.draft.compute();
             self.validation_errors = self.draft.validate();
             self.is_validated = true;
         }
-        if save {
+        if patch.save {
             self.save_draft(window, cx);
         }
     }
