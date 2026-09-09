@@ -1,0 +1,72 @@
+{
+  "v": 1,
+  "name": "bir-form-1601c-draft-no-file",
+  "app": "bir-desktop",
+  "params": ["due_id"],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "open",
+      "op": "click",
+      "target": "$due_id",
+      "needs": ["wait"]
+    },
+    {
+      "id": "page",
+      "op": "assert",
+      "target": "page-form-1601c",
+      "needs": ["open"]
+    },
+    {
+      "id": "comp",
+      "op": "set_value",
+      "target": "form-1601c-tax-14",
+      "value": "1000.00",
+      "needs": ["page"]
+    },
+    {
+      "id": "withheld",
+      "op": "set_value",
+      "target": "form-1601c-tax-25",
+      "value": "100.00",
+      "needs": ["comp"]
+    },
+    {
+      "id": "validate",
+      "op": "click",
+      "target": "form-1601c-validate",
+      "needs": ["withheld"]
+    },
+    {
+      "id": "save",
+      "op": "click",
+      "target": "save_draft_btn",
+      "needs": ["validate"]
+    },
+    {
+      "id": "draft",
+      "op": "assert",
+      "target": "form-1601c-status",
+      "value": "Draft",
+      "needs": ["save"]
+    },
+    {
+      "id": "submit-available",
+      "op": "assert",
+      "target": "submit_btn",
+      "needs": ["draft"]
+    },
+    {
+      "id": "submit-intent",
+      "op": "click",
+      "target": "submit_btn",
+      "needs": ["submit-available"]
+    },
+    {
+      "id": "confirm-available",
+      "op": "assert",
+      "target": "form-1601c-submit-confirm",
+      "needs": ["submit-intent"]
+    }
+  ]
+}

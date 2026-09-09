@@ -1,0 +1,91 @@
+{
+  "v": 1,
+  "name": "bir-profile-create-throwaway-db-only",
+  "app": "bir-desktop",
+  "params": [],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "new",
+      "op": "click",
+      "target": "add_profile_mini_btn",
+      "needs": ["wait"]
+    },
+    {
+      "id": "page",
+      "op": "assert",
+      "target": "page-profile-manager",
+      "needs": ["new"]
+    },
+    {
+      "id": "tin",
+      "op": "set_value",
+      "target": "profile-tin",
+      "value": "98765432100000",
+      "needs": ["page"]
+    },
+    {
+      "id": "name",
+      "op": "set_value",
+      "target": "profile-name",
+      "value": "AGENT RECIPE DO NOT FILE",
+      "needs": ["tin"]
+    },
+    {
+      "id": "rdo",
+      "op": "set_value",
+      "target": "profile-rdo",
+      "value": "018",
+      "needs": ["name"]
+    },
+    {
+      "id": "lob",
+      "op": "set_value",
+      "target": "profile-lob",
+      "value": "Retail",
+      "needs": ["rdo"]
+    },
+    {
+      "id": "address",
+      "op": "set_value",
+      "target": "profile-address",
+      "value": "Throwaway recipe address",
+      "needs": ["lob"]
+    },
+    {
+      "id": "zip",
+      "op": "set_value",
+      "target": "profile-zip",
+      "value": "1000",
+      "needs": ["address"]
+    },
+    {
+      "id": "phone",
+      "op": "set_value",
+      "target": "profile-phone",
+      "value": "09170000000",
+      "needs": ["zip"]
+    },
+    {
+      "id": "email",
+      "op": "set_value",
+      "target": "profile-email",
+      "value": "agent-recipe@example.com",
+      "needs": ["phone"]
+    },
+    {
+      "id": "save",
+      "op": "click",
+      "target": "save_profile",
+      "needs": ["email"]
+    },
+    {
+      "id": "seen",
+      "op": "assert",
+      "target": "profile-98765432100000",
+      "name": "AGENT RECIPE DO NOT FILE",
+      "checked": true,
+      "needs": ["save"]
+    }
+  ]
+}
