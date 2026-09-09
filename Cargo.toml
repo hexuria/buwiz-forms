@@ -53,10 +53,13 @@ dotenvy = "0.15.7"
 # OS integration
 keyring = { version = "3" }
 
-# GPUI (Desktop)
-gpui = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
-gpui_platform = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5", features = ["font-kit"] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
+# GPUI via longbridge/gpui-kit 0.6 (pins gpui-pre / gpui-component / assets).
+# `gpui` is the same package under the historical crate name so existing
+# `use gpui::*` / `gpui::Action` paths stay on one graph without rewriting views.
+gpui-kit = "0.6"
+gpui = { package = "gpui-kit", version = "0.6" }
+gpui-component = "0.6"
+gpui-wry = "0.6"
 # Pure proc-macro (syn/quote/proc-macro2 only, no gpui dependency of its own),
 # so it inherits whatever `gpui` is in scope at the call site and cannot
 # introduce a second GPUI crate instance.
@@ -86,10 +89,3 @@ panic = "abort"
 strip = true
 opt-level = "z"
 
-# gpui-component declares its GPUI dependencies against zed git. Redirect them
-# onto gpui-ce so the whole graph resolves to a single GPUI instance.
-[patch."https://github.com/zed-industries/zed"]
-gpui = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
-gpui_platform = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
-gpui_web = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
-gpui_macros = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
