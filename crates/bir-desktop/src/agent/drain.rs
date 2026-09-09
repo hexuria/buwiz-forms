@@ -8,6 +8,7 @@ use crate::agent::host::BirAgentHost;
 use crate::agent::ids;
 use crate::app::{ActiveView, AppState, ProfileTargetAction};
 use crate::global_actions::CreateProfile;
+use crate::views::form_1601c_view::Agent1601CHostPatch;
 use chrono::Datelike;
 
 pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<AppState>) {
@@ -155,11 +156,13 @@ fn apply_host(
     {
         view.update(cx, |form, cx| {
             form.agent_apply_from_host(
-                host.form_1601c_tax_14(),
-                host.form_1601c_tax_25(),
-                host.form_1601c_sheets(),
-                host.form_1601c_saved(),
-                host.form_1601c_validated(),
+                Agent1601CHostPatch {
+                    tax_14: host.form_1601c_tax_14(),
+                    tax_25: host.form_1601c_tax_25(),
+                    sheets: host.form_1601c_sheets(),
+                    save: host.form_1601c_saved(),
+                    validate: host.form_1601c_validated(),
+                },
                 window,
                 cx,
             );
