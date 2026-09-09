@@ -12,6 +12,9 @@ path = "src/main.rs"
 [features]
 dev-tools = []
 inspector = []
+# Opt-in gpui-agent control plane. Default off. Runtime still requires
+# `GPUI_AGENT=1` (and `GPUI_AGENT_ALLOW_RELEASE=1` for release binaries).
+agent = ["dep:gpui-agent"]
 # Mac App Store variant. Not a platform: the same `target_os = "macos"` ships
 # both a direct/notarized build and a sandboxed App Store build, so no
 # `cfg(target_os)` can tell them apart. This selects the sandboxed one, which
@@ -56,6 +59,7 @@ tray-icon = "0.24.0"
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "254953f2b6a1d91030f9467caa05f69c063c7204", optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
