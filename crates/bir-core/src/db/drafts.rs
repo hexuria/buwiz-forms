@@ -1019,13 +1019,15 @@ impl Database {
     /// background worker. Once claimed, generic draft writes (including a stale
     /// UI cancel/requeue) are rejected until the worker finishes the claim.
     ///
-    /// A claim deliberately has no lease expiry. A process crash anywhere after
-    /// this transaction and before the result is finalized leaves an unknown
-    /// network outcome: BIR may or may not have received the return. Automatically
-    /// clearing or retrying that claim could file a duplicate return, so an
-    /// abandoned claim remains fail-closed until a person reconciles it against
-    /// the BIR confirmation or receipt. `release_abandoned_claimed_*` is the
-    /// only deliberate human-confirmed path back to Draft.
+    /// A claim deliberately has no lease expiry. The worker claims after the
+    /// FTP session is open and immediately before STOR. A process crash after
+    /// this transaction (or a STOR error) leaves an unknown network outcome:
+    /// BIR may or may not have received the return. Automatically clearing or
+    /// retrying that claim could file a duplicate return, so an abandoned
+    /// claim remains fail-closed until a person reconciles it against the BIR
+    /// confirmation or receipt. `release_abandoned_claimed_*` is the only
+    /// deliberate human-confirmed path back to Draft. Connect/login/CWD
+    /// failures happen before this transaction and stay unclaimed.
     #[allow(clippy::too_many_arguments)]
     pub fn claim_queued_2551q_submission(
         &self,
@@ -1127,7 +1129,7 @@ impl Database {
     }
 
     /// Finish a claimed network attempt as Submitted. Once a claim exists, any
-    /// non-success outcome is unknown and must leave the durable claim frozen
+    /// non-success STOR outcome is unknown and must leave the durable claim frozen
     /// for manual reconciliation. Retry/exhaustion transitions happen only
     /// before the network claim through the unclaimed queue-generation CAS.
     pub(crate) fn finish_claimed_2551q_submission(
@@ -2013,7 +2015,8 @@ impl Database {
     }
 
     /// Atomically revalidate and claim the exact queued 1601C generation
-    /// immediately before the irreversible network boundary.
+    /// immediately before STOR. The worker opens the FTP session first so a
+    /// connect/login/CWD failure stays unclaimed.
     #[allow(clippy::too_many_arguments)]
     pub fn claim_queued_1601c_submission(
         &self,

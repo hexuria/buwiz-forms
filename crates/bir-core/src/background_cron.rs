@@ -360,9 +360,22 @@ fn queued_retry_is_due(
 }
 
 trait SubmissionTransport {
-    fn submit<'a>(
+    type Session: Send;
+
+    fn open_session<'a>(
         &'a self,
         form_type: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
+                + Send
+                + 'a,
+        >,
+    >;
+
+    fn store_session<'a>(
+        &'a self,
+        session: Self::Session,
         filename: &'a str,
         payload: &'a [u8],
     ) -> Pin<Box<dyn Future<Output = Result<(), crate::transport::TransportError>> + Send + 'a>>;
@@ -371,14 +384,29 @@ trait SubmissionTransport {
 struct NetworkSubmissionTransport;
 
 impl SubmissionTransport for NetworkSubmissionTransport {
-    fn submit<'a>(
+    type Session = crate::transport::IafFtpSession;
+
+    fn open_session<'a>(
         &'a self,
         form_type: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(crate::transport::open_iaf_session(form_type))
+    }
+
+    fn store_session<'a>(
+        &'a self,
+        session: Self::Session,
         filename: &'a str,
         payload: &'a [u8],
     ) -> Pin<Box<dyn Future<Output = Result<(), crate::transport::TransportError>> + Send + 'a>>
     {
-        Box::pin(crate::transport::submit_iaf(form_type, filename, payload))
+        Box::pin(session.store(filename, payload))
     }
 }
 
@@ -520,6 +548,22 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         return;
     };
 
+    let session = match transport.open_session(form_type).await {
+        Ok(session) => session,
+        Err(error) => {
+            fail_draft_1601c(
+                &mut draft,
+                &queue_revision,
+                db.clone(),
+                format!("BIR FTP session failed before upload (no STOR attempted): {error}"),
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+    };
+
+    // Claim only after the FTP session is open, immediately before STOR.
+    // Connect/login/CWD timeouts stay unclaimed and use the existing retry CAS.
     let claim_result = {
         let db_guard = match db.lock() {
             Ok(guard) => guard,
@@ -554,7 +598,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
         Ok(Claim1601CSubmissionResult::Superseded) => {
             info!(
-                "Cron: 1601C submission job for {} was canceled or superseded before network I/O",
+                "Cron: 1601C submission job for {} was canceled or superseded before STOR",
                 draft.period_code()
             );
             return;
@@ -569,7 +613,10 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     };
 
-    match transport.submit(form_type, &filename, &encrypted).await {
+    match transport
+        .store_session(session, &filename, &encrypted)
+        .await
+    {
         Ok(()) => {
             info!("Cron: Successfully submitted queued 1601C {}", filename);
             crate::notification::send_notification(
@@ -600,7 +647,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             };
             warn!(
                 error_category,
-                "Cron: 1601C transport ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+                "Cron: 1601C STOR ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
             );
             crate::ipc::post_db_changed();
         }
@@ -813,9 +860,23 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     return;
                 };
 
-                // Atomically claim the exact queue generation immediately
-                // before the irreversible network boundary. Generic UI writes
-                // reject this token, so cancel/requeue cannot win after claim.
+                let session = match crate::transport::open_iaf_session(form_type).await {
+                    Ok(session) => session,
+                    Err(error) => {
+                        fail_draft_2551q(
+                            &mut draft,
+                            &queue_revision,
+                            db_clone.clone(),
+                            format!(
+                                "BIR FTP session failed before upload (no STOR attempted): {error}"
+                            ),
+                        );
+                        crate::ipc::post_db_changed();
+                        return;
+                    }
+                };
+
+                // Claim only after the FTP session is open, immediately before STOR.
                 let claim_result = {
                     let db_guard = match db_clone.lock() {
                         Ok(guard) => guard,
@@ -837,7 +898,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }) => {
                         draft = claimed_draft;
                         // Let an open form window replace its stale Queued copy
-                        // with the claimed row before the network call returns.
+                        // with the claimed row before STOR returns.
                         crate::ipc::post_db_changed();
                         token
                     }
@@ -856,7 +917,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }
                     Ok(Claim2551QSubmissionResult::Superseded) => {
                         info!(
-                            "Cron: Submission job for {} was canceled or superseded before network I/O",
+                            "Cron: Submission job for {} was canceled or superseded before STOR",
                             draft.period_code()
                         );
                         return;
@@ -870,7 +931,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }
                 };
 
-                match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+                match session.store(&filename, &encrypted).await {
                     Ok(_) => {
                         info!("Cron: Successfully submitted queued form {}", filename);
                         let now = Utc::now();
@@ -900,12 +961,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             crate::transport::TransportError::Io(_) => "io",
                             crate::transport::TransportError::Rejected => "rejected",
                         };
-                        // Once `submit_iaf` has started, an error does not prove
-                        // that BIR received no bytes. Keep the durable claim just
-                        // like a process crash: retrying could duplicate a return.
+                        // Once STOR has started, an error does not prove that BIR
+                        // received no bytes. Keep the durable claim just like a
+                        // process crash: retrying could duplicate a return.
                         warn!(
                             error_category,
-                            "Cron: Submission transport ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+                            "Cron: Submission STOR ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
                         );
                         crate::ipc::post_db_changed();
                     }
@@ -1351,6 +1412,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     enum TestTransportOutcome {
         Success,
+        PreStore,
         UnknownIo,
     }
 
@@ -1376,9 +1438,38 @@ mod tests {
     }
 
     impl SubmissionTransport for RecordingSubmissionTransport {
-        fn submit<'a>(
+        type Session = String;
+
+        fn open_session<'a>(
             &'a self,
             form_type: &'a str,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            let outcome = self.outcome;
+            let form_type = form_type.to_string();
+            Box::pin(async move {
+                match outcome {
+                    TestTransportOutcome::PreStore => {
+                        Err(crate::transport::TransportError::Io(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            "simulated ftp connect timeout",
+                        )))
+                    }
+                    TestTransportOutcome::Success | TestTransportOutcome::UnknownIo => {
+                        Ok(form_type)
+                    }
+                }
+            })
+        }
+
+        fn store_session<'a>(
+            &'a self,
+            session: Self::Session,
             filename: &'a str,
             payload: &'a [u8],
         ) -> Pin<Box<dyn Future<Output = Result<(), crate::transport::TransportError>> + Send + 'a>>
@@ -1387,7 +1478,7 @@ mod tests {
                 .lock()
                 .expect("recorded transport calls should not be poisoned")
                 .push(RecordedSubmission {
-                    form_type: form_type.to_string(),
+                    form_type: session,
                     filename: filename.to_string(),
                     payload: payload.to_vec(),
                 });
@@ -1400,6 +1491,9 @@ mod tests {
                             std::io::ErrorKind::ConnectionReset,
                             "simulated unknown network outcome",
                         )))
+                    }
+                    TestTransportOutcome::PreStore => {
+                        panic!("STOR must not run after a pre-store FTP failure")
                     }
                 }
             })
@@ -1732,6 +1826,75 @@ mod tests {
                 .expect("the email-poll job lookup should succeed")
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn process_queued_1601c_pre_store_failure_stays_unclaimed_and_can_retry() {
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        let expected_fingerprint = queued.queued_submission_fingerprint.clone();
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .expect("the reviewed 1601C queue snapshot should persist");
+        let summary = queued_1601c_summary(id, &queued);
+        let failing_transport = RecordingSubmissionTransport::new(TestTransportOutcome::PreStore);
+
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &failing_transport)
+            .await;
+
+        assert!(failing_transport.calls().is_empty());
+        let failed = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .expect("the unclaimed 1601C lookup should succeed")
+            .expect("the unclaimed 1601C snapshot should remain persisted");
+        assert_eq!(failed.status, FilingStatus::Queued);
+        assert_eq!(failed.queued_submission_fingerprint, expected_fingerprint);
+        assert_eq!(failed.submission_attempts, 1);
+        assert!(failed.submission_claim_token.is_none());
+        assert!(failed.submission_claimed_at.is_none());
+        assert!(
+            failed
+                .submission_error
+                .as_deref()
+                .is_some_and(|message| message.contains("no STOR attempted"))
+        );
+        assert!(queued_1601c_revision(&failed).is_some());
+
+        let expected_retry_at = failed.next_retry_at.clone();
+        let mut retryable = failed.clone();
+        retryable.next_retry_at = Some("1999-01-01T00:00:00Z".to_string());
+        assert!(
+            db.lock()
+                .expect("the cron database should not be poisoned")
+                .replace_unclaimed_queued_1601c_submission(
+                    &retryable,
+                    &expected_fingerprint,
+                    &expected_retry_at,
+                    1,
+                )
+                .expect("forcing the retry timestamp should CAS-succeed")
+        );
+
+        let retry_transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &retry_transport).await;
+        assert_eq!(retry_transport.calls().len(), 1);
+        let submitted = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .expect("the submitted 1601C lookup should succeed")
+            .expect("the submitted 1601C snapshot should remain persisted");
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(submitted.submission_claim_token.is_none());
+        assert!(submitted.submission_claimed_at.is_none());
     }
 
     #[test]
