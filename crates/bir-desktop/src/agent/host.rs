@@ -3591,9 +3591,12 @@ mod tests {
         assert!(std::path::Path::new(path).is_absolute());
         let html = std::fs::read_to_string(path).unwrap();
         assert!(html.contains("<html"));
-        assert!(html.contains(FIXTURE_NAME));
-        assert!(html.contains("Olongapo"));
-        assert!(html.contains(FIXTURE_EMAIL));
+        assert!(html.contains(&FIXTURE_NAME.to_ascii_uppercase()));
+        assert!(!html.contains(FIXTURE_NAME));
+        assert!(html.contains("OLONGAPO"));
+        assert!(!html.contains("Olongapo"));
+        assert!(html.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
+        assert!(!html.contains(FIXTURE_EMAIL));
         assert!(html.contains("1000.00"));
         assert!(html.contains("100.00"));
         assert!(pdf.result.as_ref().unwrap().get("bytes").is_none());
@@ -3640,9 +3643,12 @@ mod tests {
             .expect("path");
         assert!(std::path::Path::new(path_q).is_absolute());
         let html_q = std::fs::read_to_string(path_q).unwrap();
-        assert!(html_q.contains(FIXTURE_NAME));
-        assert!(html_q.contains("Olongapo"));
-        assert!(html_q.contains(FIXTURE_EMAIL));
+        assert!(html_q.contains(&FIXTURE_NAME.to_ascii_uppercase()));
+        assert!(!html_q.contains(FIXTURE_NAME));
+        assert!(html_q.contains("OLONGAPO"));
+        assert!(!html_q.contains("Olongapo"));
+        assert!(html_q.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
+        assert!(!html_q.contains(FIXTURE_EMAIL));
         assert!(html_q.contains("500.00"));
         assert!(html_q.contains(&year.to_string()));
         assert!(
