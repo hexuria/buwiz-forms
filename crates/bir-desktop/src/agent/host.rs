@@ -2792,7 +2792,7 @@ mod tests {
         let opened = handle_request(
             &mut host,
             req(Op::Invoke {
-                name: "form.open".into(),
+                name: "filing.start".into(),
                 args: serde_json::json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
             None,
@@ -3544,7 +3544,7 @@ mod tests {
         let opened = handle_request(
             &mut host,
             req(Op::Invoke {
-                name: "form.open".into(),
+                name: "filing.start".into(),
                 args: json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
             None,
@@ -3603,7 +3603,7 @@ mod tests {
         let opened_q = handle_request(
             &mut host,
             req(Op::Invoke {
-                name: "form.open".into(),
+                name: "filing.start".into(),
                 args: json!({ "code": "2551Q", "year": year, "period": 1 }),
             }),
             None,

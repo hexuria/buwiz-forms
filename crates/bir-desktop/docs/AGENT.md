@@ -132,8 +132,6 @@ gpui-agent recipe run crates/bir-desktop/recipes/profile-search-set.json \
   --set profile_row=profile-12345678900000
 ```
 
-```
-
 Natural-language → invoke examples (CLI, not recipe JSON):
 
 ```bash
