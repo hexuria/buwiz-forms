@@ -14,6 +14,7 @@ use bir_core::forms::form_1601c::Form1601CDraft;
 use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::forms::{
     FilingStatus, FormSetSource, FormValidator, PerYearFormsSet, can_queue_for_submission,
+    find_form,
 };
 use bir_core::naming::Tin;
 use bir_core::profile::{TaxpayerProfile, TaxpayerType};
@@ -821,6 +822,103 @@ impl BirAgentHost {
                 "note": "host-written demo HTML (html-demo/theme.css); absolute path, never file bytes or client HTML"
             }),
         )
+    }
+
+    fn profile_forms_set_get(&self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let year = require_year(args, "profile.forms_set.get")?;
+        let tin = match self.resolve_tin_or_q(args)? {
+            TinQuery::Missing => self.selected_tin.clone().ok_or_else(|| {
+                "profile.forms_set.get requires args.tin or args.q or a selected profile"
+                    .to_string()
+            })?,
+            TinQuery::NotFound { query } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "not_found",
+                    "query": query,
+                    "candidates": []
+                })));
+            }
+            TinQuery::Ambiguous { query, candidates } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "ambiguous",
+                    "query": query,
+                    "candidates": candidates
+                })));
+            }
+            TinQuery::One { tin, .. } => tin,
+        };
+        let set = {
+            let db = self.db.as_ref().ok_or("agent host has no database")?;
+            let guard = db.lock().map_err(|err| err.to_string())?;
+            guard
+                .get_per_year_forms(&tin, year)
+                .map_err(|err| err.to_string())?
+        };
+        Ok(DispatchResult::json(json!({
+            "status": "ok",
+            "tin": tin,
+            "year": year,
+            "codes": set.active_form_codes(),
+            "empty": set.is_empty(),
+            "entries": set.entries,
+        })))
+    }
+
+    fn profile_forms_set(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        require_forms_set_confirm(args, "profile.forms_set")?;
+        let year = require_year(args, "profile.forms_set")?;
+        let tin = match self.resolve_tin_or_q(args)? {
+            TinQuery::Missing => self.selected_tin.clone().ok_or_else(|| {
+                "profile.forms_set requires args.tin or args.q or a selected profile".to_string()
+            })?,
+            TinQuery::NotFound { query } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "not_found",
+                    "query": query,
+                    "candidates": []
+                })));
+            }
+            TinQuery::Ambiguous { query, candidates } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "ambiguous",
+                    "query": query,
+                    "candidates": candidates
+                })));
+            }
+            TinQuery::One { tin, .. } => tin,
+        };
+        let codes = parse_forms_set_codes(args)?;
+        let reason = args
+            .get("reason")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let mut set = PerYearFormsSet::from_codes(year, codes.clone(), FormSetSource::Manual);
+        if let Some(reason) = &reason {
+            for entry in &mut set.entries {
+                entry.reason = Some(reason.clone());
+            }
+        }
+        let db = self.db.clone().ok_or("agent host has no database")?;
+        {
+            let guard = db.lock().map_err(|err| err.to_string())?;
+            guard
+                .save_per_year_forms(&tin, year, &set)
+                .map_err(|err| err.to_string())?;
+        }
+        self.reload_from_db(&db);
+        Ok(DispatchResult::json(json!({
+            "status": "ok",
+            "tin": tin,
+            "year": year,
+            "codes": set.active_form_codes(),
+            "source": FormSetSource::Manual.as_str(),
+            "confirm": true,
+            "reason": reason,
+        })))
     }
 
     fn resolve_tin_or_q(&self, args: &Value) -> Result<TinQuery, String> {
@@ -2221,6 +2319,8 @@ impl BirAgentHost {
             "profile.search" => self.profile_search(args),
             "profile.set" => self.profile_set(args),
             "profile.html" => self.profile_html(args),
+            "profile.forms_set.get" => self.profile_forms_set_get(args),
+            "profile.forms_set" | "profile.forms_set.set" => self.profile_forms_set(args),
             "profile.edit" => self.profile_edit(args),
             "profile.tab" => self.profile_tab_invoke(args),
             "dues.list" => self.dues_list(args),
@@ -2874,6 +2974,73 @@ fn parse_optional_year(args: &Value) -> u16 {
     args.get("year")
         .and_then(Value::as_u64)
         .unwrap_or_else(|| chrono::Local::now().year() as u64) as u16
+}
+
+fn require_year(args: &Value, invoke: &str) -> Result<u16, String> {
+    args.get("year")
+        .and_then(Value::as_u64)
+        .map(|year| year as u16)
+        .ok_or_else(|| format!("{invoke} requires args.year as a JSON number"))
+}
+
+fn require_forms_set_confirm(args: &Value, invoke: &str) -> Result<(), String> {
+    match args.get("confirm") {
+        Some(Value::Bool(true)) => Ok(()),
+        Some(Value::Bool(false)) | None => Err(format!(
+            "{invoke} requires args.confirm=true (JSON boolean) after a human confirmed the Forms Set change; the host will not write per_year_forms without it"
+        )),
+        Some(_) => Err(format!(
+            "{invoke} args.confirm must be boolean true, not a string or number"
+        )),
+    }
+}
+
+fn parse_forms_set_codes(args: &Value) -> Result<Vec<String>, String> {
+    let raw = args
+        .get("codes")
+        .ok_or_else(|| "profile.forms_set requires args.codes (comma list or array)".to_string())?;
+    let parts: Vec<String> = match raw {
+        Value::String(s) => s
+            .split([',', ' '])
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(str::to_string)
+            .collect(),
+        Value::Array(items) => {
+            let mut codes = Vec::new();
+            for item in items {
+                let Some(code) = item.as_str().map(str::trim).filter(|s| !s.is_empty()) else {
+                    return Err("profile.forms_set codes[] entries must be strings".into());
+                };
+                codes.push(code.to_string());
+            }
+            codes
+        }
+        _ => {
+            return Err(
+                "profile.forms_set codes must be a comma list or an array of form codes".into(),
+            );
+        }
+    };
+    let mut canonical = Vec::new();
+    let mut unknown = Vec::new();
+    for code in parts {
+        match find_form(&code) {
+            Some(def) => {
+                if !canonical.iter().any(|existing| existing == def.code) {
+                    canonical.push(def.code.to_string());
+                }
+            }
+            None => unknown.push(code),
+        }
+    }
+    if !unknown.is_empty() {
+        return Err(format!(
+            "unknown form code(s) `{}` (not in FORM_REGISTRY); profile.forms_set refuses custom codes",
+            unknown.join(", ")
+        ));
+    }
+    Ok(canonical)
 }
 
 fn parse_optional_limit(args: &Value) -> Result<Option<usize>, String> {
@@ -4189,6 +4356,163 @@ mod tests {
         assert!(none.ok, "{:?}", none.error);
         assert_eq!(none.result.as_ref().unwrap()["status"], "not_found");
         assert!(none.result.as_ref().unwrap().get("path").is_none());
+    }
+
+    #[test]
+    fn profile_forms_set_is_confirm_gated_and_persists_to_get() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+
+        let before = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set.get".into(),
+                args: json!({ "tin": FIXTURE_TIN, "year": year }),
+            }),
+            None,
+        );
+        assert!(before.ok, "{:?}", before.error);
+        assert_eq!(before.result.as_ref().unwrap()["status"], "ok");
+        assert!(
+            before.result.as_ref().unwrap()["codes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|code| code == "1601C")
+        );
+
+        let refused_string = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set".into(),
+                args: json!({
+                    "year": year,
+                    "codes": "1601C,2551Q",
+                    "confirm": "true"
+                }),
+            }),
+            None,
+        );
+        assert!(!refused_string.ok);
+        let err = refused_string.error.as_deref().unwrap_or_default();
+        assert!(err.contains("boolean true"), "{err:?}");
+
+        let refused_missing = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set".into(),
+                args: json!({ "year": year, "codes": "1601C,2551Q" }),
+            }),
+            None,
+        );
+        assert!(!refused_missing.ok);
+
+        let unchanged = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set.get".into(),
+                args: json!({ "year": year }),
+            }),
+            None,
+        );
+        assert_eq!(
+            unchanged.result.as_ref().unwrap()["codes"],
+            before.result.as_ref().unwrap()["codes"]
+        );
+
+        let unknown = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set".into(),
+                args: json!({
+                    "year": year,
+                    "codes": "1601C,NOTAREALFORM",
+                    "confirm": true
+                }),
+            }),
+            None,
+        );
+        assert!(!unknown.ok);
+        assert!(
+            unknown
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("unknown form code"),
+            "{:?}",
+            unknown.error
+        );
+
+        let saved = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set".into(),
+                args: json!({
+                    "year": year,
+                    "codes": "1601C,2551Q",
+                    "confirm": true,
+                    "reason": "agent smoke"
+                }),
+            }),
+            None,
+        );
+        assert!(saved.ok, "{:?}", saved.error);
+        assert_eq!(saved.result.as_ref().unwrap()["status"], "ok");
+        assert_eq!(saved.result.as_ref().unwrap()["source"], "manual");
+        let codes = saved.result.as_ref().unwrap()["codes"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(codes.iter().any(|code| code == "1601C"));
+        assert!(codes.iter().any(|code| code == "2551Q"));
+
+        let got = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set.get".into(),
+                args: json!({ "tin": FIXTURE_TIN, "year": year }),
+            }),
+            None,
+        );
+        assert!(got.ok, "{:?}", got.error);
+        let got_codes = got.result.as_ref().unwrap()["codes"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(got_codes.iter().any(|code| code == "1601C"));
+        assert!(got_codes.iter().any(|code| code == "2551Q"));
+
+        let alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.forms_set.set".into(),
+                args: json!({
+                    "year": year,
+                    "codes": ["1601C", "2551Q"],
+                    "confirm": true
+                }),
+            }),
+            None,
+        );
+        assert!(alias.ok, "{:?}", alias.error);
+
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.list".into(),
+                args: json!({ "filter": "all", "scope": "profile" }),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let dues = listed.result.as_ref().unwrap()["dues"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            dues.iter().any(|due| due["form_code"] == "2551Q"),
+            "saved Forms Set must be visible to dues.list: {dues:?}"
+        );
     }
 
     #[test]
