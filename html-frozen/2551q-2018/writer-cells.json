@@ -1,7 +1,7 @@
 {
   "form_id": "2551q-v2018",
   "html_slug": "2551q-2018",
-  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. This is not an official_field_key harvest. Do not join N:1 peso+cent tax rows, collapsed writer txt25-28, or leftover keys that share an item number with another leftover.",
+  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. That is not an official_field_key harvest. R3 peso+cent tax rows may be listed in money_joins: one leftover money key maps to peso_html_id plus cent_html_id. Split the writer {:.2} string: pesos right-aligned in the peso comb (leading slots empty, not zero-padded, no decimal glyph), cents in the 2-slot comb. Do not stamp name= on either comb. Do not left-align the dotted string into the peso comb. Do not join collapsed writer txt25-28, or leftover keys that share an item number with another leftover except as documented here.",
   "joins": [
     {
       "writer_key": "frm2551Qv2018:registeredName",
@@ -37,16 +37,47 @@
       "catalog_id": "2551q-2018/p1/money-12-1",
       "printed": "10 Telephone",
       "reason": "exactly one 12-slot comb on the item 10 row; leftover-unique telNo; catalog html_id_hint"
+    },
+    {
+      "writer_key": "txtEmail",
+      "html_id": "p1c39",
+      "catalog_id": "2551q-2018/p1/money-28-1",
+      "printed": "11 Email Address",
+      "reason": "page-1 only. fields.json leftover_duplicate (txtEmail occurrence-1 item 11, occurrence-2 page 2). Freeze sheet has exactly one printed email comb, the 28-slot p1c39 beside tel p1c38. Catalog html_id_hint with no official_field_key. Page 2 header is TIN/name, not a second email box. Occurrence-2 stays unfilled."
+    }
+  ],
+  "money_joins": [
+    {
+      "writer_key": "frm2551Qv2018:txt14",
+      "peso_html_id": "p1c50",
+      "cent_html_id": "p1c52",
+      "peso_catalog_id": "2551q-2018/p1/money-12-2",
+      "cent_catalog_id": "2551q-2018/p1/comb-2s-3",
+      "printed": "14 Total Tax Due",
+      "reason": "Stage 3 R3 N:1 fill-path for the page-1 tax-due amount users notice. leftover-unique decimal-money item 14. 12-slot peso comb plus 2-slot cents. Catalog official_field_key is empty on both boxes. Split insert_money {:.2}; do not stamp name=."
+    },
+    {
+      "writer_key": "txtATCAmt1",
+      "peso_html_id": "p2c15",
+      "cent_html_id": "p2c17",
+      "peso_catalog_id": "2551q-2018/p2/money-12-1",
+      "cent_catalog_id": "2551q-2018/p2/comb-2s-1",
+      "printed": "Schedule 1 Taxable Amount row 1",
+      "reason": "Stage 3 R3 N:1 fill-path for schedule 1 row 1 taxable amount (the ~54770 demo figure). Unprefixed XML key txtATCAmt1. Page-2 12-slot peso plus 2-slot cents. Catalog official_field_key is empty. Other schedule amount columns (rate, tax due, rows 2-6) stay unjoined."
     }
   ],
   "not_joined": [
     {
-      "writer_key": "frm2551Qv2018:txt14",
-      "reason": "Stage 3 R3 N:1: item 14 is a peso comb plus a 2-slot cent comb. Do not invent a shared name= or split."
+      "writer_key": "txtEmail#occurrence-2",
+      "reason": "HTA/DOM duplicate of the same serialized key. Page 2 freeze header is TIN/name (p2c5/p2c6), not a second email comb. Page-1 p1c39 is the printed email box."
     },
     {
       "writer_key": "frm2551Qv2018:txt15",
-      "reason": "Same R3 N:1 peso+cent pair as the other Part II amount rows."
+      "reason": "Same R3 N:1 peso+cent pair as the other Part II amount rows. Only txt14 (page 1) and txtATCAmt1 (schedule taxable) are demo-joined."
+    },
+    {
+      "writer_key": "txtATCDue1",
+      "reason": "Schedule 1 tax-due column is a separate peso+cent pair. Demo fill uses txtATCAmt1 plus page-1 txt14; this column stays unjoined."
     },
     {
       "writer_key": "frm2551Qv2018:txt25",

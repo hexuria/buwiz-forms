@@ -35,6 +35,7 @@ use crate::app::ActiveView;
 
 const FIXTURE_TIN: &str = "12345678900000";
 const FIXTURE_NAME: &str = "Agent Fixture Taxpayer";
+const FIXTURE_EMAIL: &str = "agent-fixture@example.com";
 
 #[derive(Debug, Clone, Serialize)]
 struct ListedProfile {
@@ -2208,7 +2209,7 @@ pub fn fixture_profile() -> TaxpayerProfile {
         "registered_address": "Olongapo",
         "zip_code": "2200",
         "phone": "09123456789",
-        "email": "agent-fixture@example.com",
+        "email": FIXTURE_EMAIL,
         "default_form_type": "1601Cv2018",
         "taxpayer_type": "Corporation",
         "withholds_compensation": true,
@@ -3592,6 +3593,9 @@ mod tests {
         assert!(html.contains("<html"));
         assert!(html.contains(FIXTURE_NAME));
         assert!(html.contains("Olongapo"));
+        assert!(html.contains(FIXTURE_EMAIL));
+        assert!(html.contains("1000.00"));
+        assert!(html.contains("100.00"));
         assert!(pdf.result.as_ref().unwrap().get("bytes").is_none());
         assert_eq!(pdf.result.as_ref().unwrap()["kind"], "frozen-html");
         let print = handle_request(
@@ -3638,6 +3642,8 @@ mod tests {
         let html_q = std::fs::read_to_string(path_q).unwrap();
         assert!(html_q.contains(FIXTURE_NAME));
         assert!(html_q.contains("Olongapo"));
+        assert!(html_q.contains(FIXTURE_EMAIL));
+        assert!(html_q.contains("500.00"));
         assert!(pdf_q.result.as_ref().unwrap().get("bytes").is_none());
         let saved = handle_request(
             &mut host,
