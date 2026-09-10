@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main", "codex/**" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "gol/gpui-kit-compile-spike-8c02" ]
 
 env:
   CARGO_TERM_COLOR: always
