@@ -14,7 +14,9 @@ stamps from the identity catalog and `rules/forms/*/fields.json`. See
 `joins` onto those cell ids. Text joins ASCII-uppercase letters for BIR
 CAPITAL LETTERS print; profile/DB values stay as stored. 2551Q Year Ended is
 `rtnMonth` + `txtYear` (MM/YYYY combs). Quarter / Calendar / Fiscal radios use
-`xbox_joins` (`X` when the writer is true). Demo tax amounts use `money_joins`:
-one leftover money key, peso comb + 2-slot cents, `{:.2}` split, pesos
-right-aligned. That is not an `official_field_key` stamp. Other Part II /
-schedule rows stay unjoined.
+`xbox_joins` (`X` when the writer is true). 1601C For the Month is `txtMonth` +
+`txtYear` (MM/YYYY combs `p1c9`/`p1c10`). Amended Return and Any Taxes Withheld
+Yes/No use `xbox_joins` on `p1c21`/`p1c22` and `p1c23`/`p1c20`. Demo tax
+amounts use `money_joins`: one leftover money key, peso comb + 2-slot cents,
+`{:.2}` split, pesos right-aligned. That is not an `official_field_key` stamp.
+Other Part II / schedule rows stay unjoined.
