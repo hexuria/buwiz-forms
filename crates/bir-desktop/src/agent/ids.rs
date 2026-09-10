@@ -41,6 +41,7 @@ pub const NAV_LOGOUT: &str = "logout_btn_full";
 
 pub const OVERLAY_ADMIN_AUTH: &str = "overlay-admin-auth";
 pub const OVERLAY_PROFILE_AUTH: &str = "overlay-profile-auth";
+pub const OVERLAY_COMMAND_PALETTE: &str = "overlay-command-palette";
 
 pub const PROFILE_TIN: &str = "profile-tin";
 pub const PROFILE_NAME: &str = "profile-name";

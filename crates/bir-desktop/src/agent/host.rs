@@ -138,6 +138,7 @@ pub struct BirAgentHost {
     jobs: Vec<JobItem>,
     submissions: Vec<SubmissionItem>,
     print_requested: bool,
+    palette_open: bool,
 }
 
 impl BirAgentHost {
@@ -170,6 +171,7 @@ impl BirAgentHost {
             jobs: Vec::new(),
             submissions: Vec::new(),
             print_requested: false,
+            palette_open: false,
         }
     }
 
@@ -277,6 +279,14 @@ impl BirAgentHost {
         let requested = self.print_requested;
         self.print_requested = false;
         requested
+    }
+
+    pub fn set_palette_open(&mut self, open: bool) {
+        self.palette_open = open;
+    }
+
+    pub fn wants_palette(&self) -> bool {
+        self.palette_open
     }
 
     pub fn dashboard_forms(&self) -> Option<&[String]> {
@@ -921,6 +931,15 @@ impl BirAgentHost {
         }
         self.submissions = submissions;
         Ok(())
+    }
+
+    fn open_command_palette(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        self.palette_open = true;
+        Ok(DispatchResult::json(json!({
+            "open": true,
+            "id": ids::OVERLAY_COMMAND_PALETTE,
+        })))
     }
 
     fn palette_search(&self, args: &Value) -> Result<DispatchResult, String> {
@@ -1701,16 +1720,17 @@ impl BirAgentHost {
             "tax-dues.refresh" => self.refresh_dues(),
             "jobs.list" => self.jobs_list(args),
             "submissions.list" => self.submissions_list(args),
+            "search.open" | "palette.open" => self.open_command_palette(),
             "palette.search" => self.palette_search(args),
             "dashboard.set_forms" => self.dashboard_set_forms(args),
             "dashboard.filter" => self.dashboard_filter(args),
             "form.fields" => self.form_fields(),
             "form.fill" => self.form_fill(args),
-            "form.pdf" => self.form_pdf(),
+            "form.pdf" | "form.preview_pdf" => self.form_pdf(),
             "form.print" => self.form_print(args),
-            "form.revert_draft" => self.form_revert_draft(),
-            "form.mark_paid" => self.form_mark_paid(),
-            "form.upload_receipt" => self.form_upload_receipt(),
+            "form.revert_draft" | "draft.revert" => self.form_revert_draft(),
+            "form.mark_paid" | "payment.mark_paid" => self.form_mark_paid(),
+            "form.upload_receipt" | "receipt.upload" => self.form_upload_receipt(),
             "calendar.add" => self.calendar_add(),
             "profile.calendar_sync" => Err(
                 "profile.calendar_sync needs a linked Google Calendar account and the Profile Manager calendar tab; the agent will not push events"
@@ -1743,6 +1763,11 @@ impl BirAgentHost {
             | "filing.file" => Err(format!(
                 "invoke `{name}` is not allow-listed; agent hosts cannot queue or file returns"
             )),
+            "profile.ensure" => Err(
+                "profile.ensure is not implemented; the host will not auto-create a taxpayer. \
+                 Use profile.create to open the editor; profile.save stays confirm-gated"
+                    .into(),
+            ),
             other => Err(format!("unknown invoke `{other}`")),
         }
     }
@@ -2065,6 +2090,13 @@ impl BirAgentHost {
                 ids::OVERLAY_PROFILE_AUTH,
                 "dialog",
                 "Profile authentication required",
+            ));
+        }
+        if self.palette_open {
+            window = window.with_child(UiNode::new(
+                ids::OVERLAY_COMMAND_PALETTE,
+                "dialog",
+                "Command palette",
             ));
         }
 
@@ -2656,9 +2688,19 @@ mod tests {
         host.set_locked(true);
         let resp = handle_request(&mut host, req(Op::click(ids::NAV_SETTINGS)), None);
         assert!(!resp.ok);
+        let palette = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "search.open".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(!palette.ok);
         let tree = host.tree();
         assert!(tree.find(ids::PAGE_LOCK).is_some());
         assert!(tree.find(ids::PAGE_SETTINGS).is_none());
+        assert!(tree.find(ids::OVERLAY_COMMAND_PALETTE).is_none());
     }
 
     #[test]
@@ -3198,6 +3240,262 @@ mod tests {
         );
         assert!(
             ranked.result.as_ref().unwrap()["matches"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn search_open_and_palette_open_show_overlay_without_creating() {
+        let mut host = empty_host();
+        assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_none());
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "search.open".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        assert_eq!(opened.result.as_ref().unwrap()["open"], true);
+        assert_eq!(
+            opened.result.as_ref().unwrap()["id"],
+            ids::OVERLAY_COMMAND_PALETTE
+        );
+        assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_some());
+        let ranked = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "palette.search".into(),
+                args: json!({ "q": "brand new taxpayer" }),
+            }),
+            None,
+        );
+        assert!(ranked.ok, "{:?}", ranked.error);
+        assert_eq!(ranked.result.as_ref().unwrap()["can_create"], true);
+        assert!(
+            ranked.result.as_ref().unwrap()["matches"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_some());
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        assert!(
+            listed
+                .result
+                .as_ref()
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut alias_host = empty_host();
+        let palette = handle_request(
+            &mut alias_host,
+            req(Op::Invoke {
+                name: "palette.open".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(palette.ok, "{:?}", palette.error);
+        assert_eq!(palette.result.as_ref().unwrap()["open"], true);
+        assert!(
+            alias_host
+                .tree()
+                .find(ids::OVERLAY_COMMAND_PALETTE)
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn palette_search_does_not_require_the_overlay() {
+        let mut host = empty_host();
+        assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_none());
+        let ranked = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "palette.search".into(),
+                args: json!({ "q": "fixture" }),
+            }),
+            None,
+        );
+        assert!(ranked.ok, "{:?}", ranked.error);
+        assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_none());
+    }
+
+    #[test]
+    fn invoke_aliases_share_handlers() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.open".into(),
+                args: json!({ "code": "1601C", "year": year, "period": 1 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        let pdf = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.pdf".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let preview = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.preview_pdf".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(pdf.ok, "{:?}", pdf.error);
+        assert!(preview.ok, "{:?}", preview.error);
+        assert_eq!(pdf.result.as_ref().unwrap()["kind"], "frozen-html");
+        assert_eq!(preview.result.as_ref().unwrap()["kind"], "frozen-html");
+        assert_eq!(pdf.result.as_ref().unwrap()["form"], "1601C");
+        assert_eq!(preview.result.as_ref().unwrap()["form"], "1601C");
+
+        let receipt = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.upload_receipt".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let receipt_alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "receipt.upload".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(receipt.ok, "{:?}", receipt.error);
+        assert!(receipt_alias.ok, "{:?}", receipt_alias.error);
+        assert_eq!(receipt.result.as_ref().unwrap()["status"], "needs_file");
+        assert_eq!(
+            receipt_alias.result.as_ref().unwrap()["status"],
+            "needs_file"
+        );
+
+        let paid = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.mark_paid".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let paid_alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "payment.mark_paid".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(paid.ok, "{:?}", paid.error);
+        assert!(paid_alias.ok, "{:?}", paid_alias.error);
+        assert_eq!(paid.result.as_ref().unwrap()["status"], "unsupported");
+        assert_eq!(paid_alias.result.as_ref().unwrap()["status"], "unsupported");
+
+        let revert = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.revert_draft".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let revert_alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "draft.revert".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert_eq!(revert.ok, revert_alias.ok);
+        assert_eq!(revert.error, revert_alias.error);
+    }
+
+    #[test]
+    fn profile_create_stays_confirm_gated_and_ensure_is_not_auto_write() {
+        let mut host = empty_host();
+        let created = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.create".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(created.ok, "{:?}", created.error);
+        assert_eq!(host.active_view(), ActiveView::ProfileManager);
+        assert!(host.editor_snapshot().tin.is_empty());
+        assert!(host.editor_snapshot().full_name.is_empty());
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        assert!(
+            listed
+                .result
+                .as_ref()
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+
+        let ensure = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.ensure".into(),
+                args: json!({ "q": "should not be written" }),
+            }),
+            None,
+        );
+        assert!(!ensure.ok);
+        let err = ensure.error.as_deref().unwrap_or_default();
+        assert!(err.contains("profile.ensure is not implemented"), "{err:?}");
+        let listed_after = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(
+            listed_after
+                .result
+                .as_ref()
+                .unwrap()
                 .as_array()
                 .unwrap()
                 .is_empty()
