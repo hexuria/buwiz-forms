@@ -271,7 +271,7 @@ However, if you want to automatically codesign and notarize the **macOS** DMG on
 - `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
   - `forms/` — Form data models, `FormValidator` trait, ATC tax code tables, and the form registry.
   - `db/` — Decomposed database layer with domain-specific modules (`profiles.rs`, `drafts.rs`, `submissions.rs`, `receipts.rs`, `jobs.rs`, `notices.rs`, `migrations.rs`).
-- `crates/bir-desktop/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming.
+- `crates/bir-desktop/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming. Opt-in gpui-agent / `bir-headless` runbook: [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
   - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
   - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
   - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
@@ -328,9 +328,11 @@ so developers can run the workflow without an agent-specific command wrapper.
 - **Database Location:** 
   - macOS: `~/Library/Application Support/Taxman/eBIRForms/bir_data.db`
   - Linux/Windows: `~/.taxman-ebir/bir_data.db`
+  - gpui-agent / `bir-headless` live path, token, and `--wait` handoff: [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md)
 - **Background Engine:** Background cron tasks (auto-fetch) run in-process on a dedicated thread and are decoupled from the active taxpayer profile.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
 - **Feature Flags:**
   - `dev-tools` — Enables additional developer diagnostics. Automatically included in `just run`.
+  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features …,agent`) and the `bir-headless` daemon. Off in product/release builds. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
 - **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).

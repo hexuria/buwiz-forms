@@ -3,7 +3,10 @@
 Opt-in control plane so Grok Bot (or any MCP/CLI client) can drive **eBIRForms**
 beside a human: navigate pages, create a tax profile, inspect dues, and prepare
 a form draft. It speaks the generic gpui-agent protocol only. BIR-specific
-verbs live in this host as `invoke` names.
+verbs live in this host as `invoke` names. Start at the
+[AI agent playbook](#ai-agent-playbook) and
+[Authorization](#authorization) if you are driving painted `bir` or
+`bir-headless` from CLI / MCP / Grok Bot.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
 `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6` (`main` tip, Merge PR #32 / epic
@@ -11,6 +14,23 @@ children). Host GPUI is **gpui-pre** through gpui-kit 0.6.1. Cookbook:
 [`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/INTEGRATING.md)
 and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/SDK.md).
 Do not fork the protocol. There is no crates.io release; git/path only.
+
+## Contents
+
+- [Locked protocol contract](#locked-protocol-contract)
+- [Two hosts, one agent port](#two-hosts-one-agent-port) (`--wait` handoff)
+- [Authorization](#authorization)
+- [Security gates](#security-gates)
+- [AI agent playbook](#ai-agent-playbook) (capabilities / limits, including Forms Set)
+- [Mac: build and run beside Grok Bot](#mac-build-and-run-beside-grok-bot)
+- [Mac: `bir-headless`](#mac-bir-headless)
+- [Linux CLI smoke](#linux-cli-smoke-buwiz-box)
+- [Recipes](#recipes)
+- [Invoke allow-list](#invoke-allow-list-bir-host-only)
+- [Alias table](#alias-table)
+- [Stable IDs](#stable-ids)
+- [Coverage](#coverage-this-slice)
+- [Claimed queue without BIR outcome](#claimed-queue-without-bir-outcome-facts)
 
 ## Locked protocol contract
 
@@ -22,25 +42,10 @@ These are host constraints. They do not change protocol v1.
 - Loopback default via `gpui_agent::from_env` / `authorize_bind`. Non-loopback
   needs `GPUI_AGENT_REMOTE=1` and a non-empty `GPUI_AGENT_TOKEN` (SDK, not a
   BIR-invented bind). This host does not add a second bind path.
-- **Two AgentHosts must not share a bind.** Painted `bir` (`spawn_mailbox` on
-  the GPUI window) and `bir-headless serve` (`spawn_host`, no GPU) both default
-  to `127.0.0.1:17421`. If the port is in use, headless **without `--wait`**
-  exits (today’s refuse). `bir-headless serve --wait` (also
-  `bir-headless --wait`) polls until bind and the live-DB owner lock are free,
-  then `spawn_host`. Clean GUI **Quit** (Cmd+Q / tray Quit /
-  `gpui-agent shutdown`) releases bind + owner lock; hiding or closing the
-  window does **not**. Prefer **quit the GUI** while headless serves (Uriah’s
-  smoke C), then `bir-headless shutdown` and open the GUI again to see live-DB
-  writes. There is **no** protocol `Op::Yield` / `Takeover`.
-- **Single live-DB owner.** Painted `bir` and `bir-headless serve` both take
-  an exclusive sidecar lock (`bir_data.db.owner.lock`) around
-  `default_database_path()` (or `BIR_DATABASE_PATH` in CI). A second process
-  **without `--wait`** fails immediately with `LiveDatabaseInUse`. With
-  `--wait`, headless prints `waiting for live DB owner lock …` until the
-  owner drops. Do not run the in-process mailbox AgentHost and headless against
-  the same app-group file at once (no dual-write). There is no silent
-  two-writer bridge. If Uriah later wants GUI updates while the daemon runs,
-  that is a protocol client — not this slice.
+- **Two AgentHosts must not share a bind or a live SQLCipher file.** Painted
+  `bir` and `bir-headless serve` both default to `127.0.0.1:17421` and take
+  `bir_data.db.owner.lock`. See [Two hosts, one agent port](#two-hosts-one-agent-port).
+  There is **no** protocol `Op::Yield` / `Takeover`.
 - ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
@@ -70,42 +75,217 @@ These are host constraints. They do not change protocol v1.
   `form-1601c-status` overlay that row; a stale local Draft cannot mask
   Queued+claimed until the release CAS writes Draft.
 
-## Security
+## Two hosts, one agent port
 
-- Feature `agent` is **off** by default. Product/release builds must leave it off.
-- Runtime starts only when `GPUI_AGENT=1` (`true`/`yes`/`on`).
-- Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`.
-- Bind defaults to loopback (`127.0.0.1:17421` unless `GPUI_AGENT_ADDR` is set).
-  `from_env` calls `authorize_bind`: non-loopback requires `GPUI_AGENT_REMOTE=1`
-  **and** a token. Do not invent a second remote bind. Transport is still
-  plaintext TCP.
-- `GPUI_AGENT_TOKEN` is **required** for `bir-headless serve` against the live
-  `default_database_path()` (Mac app-group / `~/.taxman-ebir`). A temp
-  `BIR_DATABASE_PATH` override may omit it. When set, the token is required on
-  every request. Recipe run and MCP **always** need the same non-empty token on
-  host and client. The token is never logged.
-  `hello.auth` is `"required"` when that token is configured on the host, `"none"`
-  otherwise. The TCP thread enforces the token; the UI-thread mailbox drain passes
-  the same configured token into `handle_request` so hello does not overwrite `auth`
-  to `"none"`. `BirAgentHost::hello()` does not set `auth` by hand.
-- Opt-in request log: `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`). **Off by
-  default** so `serve` stays a startup banner only. Not enabled by `RUST_LOG`.
-  When set, one stderr line per request after handle:
-  `timestamp gpui-agent id=… op=hello|invoke|… name=profile.list ok=true`.
-  Invoke args, `set_value` values, typed text, screenshot paths, and tokens are
-  never included. Same helper on painted `bir` mailbox drain. `tail -f` the
-  serve log to watch actions.
-- The agent **cannot** skip the lock screen, profile PIN/TOTP, or administrator
-  OTP. Unsaved profile compliance still blocks navigation.
-- There is **no** invoke that queues or files a return. `filing.submit` (and a
-  semantic click on `submit_btn`) only exposes the confirmation node.
-  Confirming `form-1601c-submit-confirm` is refused. Complete filing in the BIR UI.
+Painted GUI `bir` (`--features …,agent`, in-process mailbox on the GPUI window)
+and daemon `bir-headless serve` (no GPU) both speak the **same**
+gpui-agent protocol on loopback **`127.0.0.1:17421`** (override with
+`GPUI_AGENT_ADDR`). Clients (CLI / MCP / Grok Bot) talk to whoever currently
+holds that bind. `hello.platform` is `desktop` vs `headless`.
+
+**One owner at a time** of the TCP bind **and** the live SQLCipher file.
+Painted `bir` and `bir-headless serve` both take an exclusive sidecar lock
+(`bir_data.db.owner.lock`) around `default_database_path()` (or
+`BIR_DATABASE_PATH` in CI). A second AgentHost on the same live DB is refused
+(`LiveDatabaseInUse`). There is no silent two-writer bridge.
+
+### Who should own the port
+
+- **Day-to-day Mac:** the painted app is the host **when it is open**.
+- **Headless:** when the GUI is closed, and on Linux/box VMs with no GUI.
+
+Do **not** run GUI and headless concurrently as writers. After headless work,
+`bir-headless shutdown` (or kill) then open painted `bir`. If Uriah later
+wants GUI updates while the daemon runs, that is a protocol client — not this
+slice.
+
+### `--wait` handoff
+
+There is **no** protocol `Op::Yield`. Handoff is process ownership, not a
+semantic yield.
+
+- `bir-headless serve --wait` (also `bir-headless --wait`) waits for bind
+  **and** the live-DB owner lock. While the GUI holds them, headless prints
+  `waiting for bind 127.0.0.1:17421 …` or `waiting for live DB owner lock …`.
+  After GUI quit, headless binds and serves.
+- **Without `--wait`**, a busy bind fails immediately (exit 2) and a busy
+  live-DB lock fails immediately (`LiveDatabaseInUse`, exit 1).
+- Clean GUI **Quit** (Cmd+Q / tray Quit / `gpui-agent shutdown`) releases bind
+  + owner lock. Hiding or closing the window does **not**.
+
+```bash
+# GUI already up on 17421 with the live app-group DB
+cargo run --locked --bin bir-headless --features agent -- serve --wait
+# quit painted bir (Cmd+Q) → headless owns 17421
+# after headless work:
+cargo run --locked --bin bir-headless --features agent -- shutdown
+# then open painted bir
+```
+
+## Authorization
+
+This is the token model AI agents must follow. Never print or log the token.
+
+| Gate | Rule |
+| --- | --- |
+| Feature | `agent` is **off** by default. Product/release builds must leave it off. |
+| Opt-in | Runtime starts only when `GPUI_AGENT=1` (`true`/`yes`/`on`). |
+| Release | Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. |
+| Bind | Loopback `127.0.0.1:17421` unless `GPUI_AGENT_ADDR` is set. `from_env` calls `authorize_bind`. Non-loopback needs `GPUI_AGENT_REMOTE=1` **and** a non-empty token. Transport is still plaintext TCP. Do not invent a second bind path. |
+| Shared secret | `GPUI_AGENT_TOKEN` (local smokes use `dev-secret`). CLI / MCP / Grok Bot must send the **same** token. When set, it is required on every request. |
+| Live default DB | **`bir-headless serve` requires a token** against live `default_database_path()` (Mac app-group `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`, Linux `~/.taxman-ebir/bir_data.db`). Landed as “Require a token on live default_database_path for bir-headless”. |
+| Path override | `BIR_DATABASE_PATH` is for CI / temp demos. A **non-empty** override may omit the token (`live_database_token_required` is false). Prefer still setting a token so recipe/MCP clients match. Do **not** set `BIR_DATABASE_PATH` for live Mac smokes. |
+| Painted `bir` | Does **not** apply that live-path token refuse (mailbox starts from `from_env` alone). Recipes and MCP still need the same non-empty token on host and client when you set one. |
+| `hello.auth` | `"required"` when a token is configured on the host, `"none"` otherwise. The TCP thread enforces the token; the mailbox drain (painted `bir` and `bir-headless`) passes it into `handle_request` so hello does not overwrite `auth` to `"none"`. `BirAgentHost::hello()` does not set `auth` by hand. |
+| Logging | **Never log the token.** Opt-in `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`) emits one stderr line per request: `timestamp gpui-agent id=… op=hello\|invoke\|… name=profile.list ok=true`. Off by default. Not enabled by `RUST_LOG`. Invoke args, `set_value` values, typed text, screenshot paths, and tokens are never included. Same helper on the painted mailbox drain. |
+
+## Security gates
+
+These still apply to every agent, painted or headless:
+
+- No auto `profile.ensure` (rejected). `profile.create` opens the editor only.
+  `profile.save` is the explicit persist after human confirm for live
+  taxpayers.
+- Never queue or file externally. `filing.submit` is confirmation-only (exposes
+  the confirmation node; does not queue or file). Confirming
+  `form-1601c-submit-confirm` is refused. Complete filing in the BIR UI.
   `form.release_abandoned_claim` only returns a claimed Queued snapshot to Draft
   after a human confirmed nothing reached BIR; it does **not** file.
-- Virtual `click` / `type` / `key` return `virtual_unavailable`. Do not point
-  agents at `--delivery virtual` on this host.
+- Never skip the lock screen, profile PIN/TOTP, or administrator OTP. Unsaved
+  profile compliance still blocks navigation.
+- No virtual HID on this host. `hello.deliveries` is `["semantic"]`. Virtual
+  `click` / `type` / `key` return `virtual_unavailable`. Do not point agents at
+  `--delivery virtual`.
 - Snapshots include names, last-4 TIN, dues, and editor fields needed to drive
   flows. They do not include PIN hashes, TOTP secrets, or keychain material.
+
+## AI agent playbook
+
+Use this section as the day-to-day recipe. Invoke names must match the
+[allow-list](#invoke-allow-list-bir-host-only). Do not invent verbs
+(`profile.forms_set`, `Op::Yield`, `filing.queue`, …).
+
+### Client env
+
+```bash
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+export GPUI_AGENT_TOKEN=dev-secret   # must match the host
+```
+
+Host (whichever owns the port):
+
+```bash
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+# optional: export GPUI_AGENT_LOG_REQUESTS=1
+# painted:
+#   cargo run --locked --bin bir --features dev-tools,agent
+# headless (GUI closed, or Linux/box):
+#   cargo run --locked --bin bir-headless --features agent -- serve
+#   cargo run --locked --bin bir-headless --features agent -- serve --wait
+```
+
+CLI `--arg`s are repeated **`KEY=VALUE`**. Values are JSON if they parse
+(`true`, `2026`, `{"any_taxes_withheld":false}`), otherwise strings. Do **not**
+pass a single JSON-object `--arg`. Invokes with no args omit `--arg`.
+`set-value` is positional: `gpui-agent set-value <TARGET> <VALUE>` — not
+`--id`. (`assert --id` is a different command.)
+
+### Probe
+
+```bash
+gpui-agent hello
+```
+
+Check:
+
+- `platform` — `desktop` (painted `bir`) vs `headless` (`bir-headless`)
+- `ready`
+- `auth` — `"required"` when the host has `GPUI_AGENT_TOKEN`
+- `deliveries` — `["semantic"]` only
+
+```bash
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
+```
+
+### Profile
+
+Never auto-create. 0 hits → `not_found`; 1 hit → set; many hits → `ambiguous`
+plus candidate widgets for the human.
+
+```bash
+gpui-agent invoke profile.list
+gpui-agent invoke profile.search --arg q=acme
+gpui-agent invoke profile.set --arg q=acme --arg view=dashboard
+```
+
+`profile.create` only opens the editor. On a live taxpayer DB, ask the human
+before `profile.save`. Do **not** run `recipes/profile-create.json` against a
+Mac app-group DB.
+
+### Forms workflow
+
+`filing.start` → `form.fill` → `filing.validate` → `form.save_draft` →
+`form.pdf`. `form.pdf` returns a **frozen HTML** absolute `path`
+(`kind: "frozen-html"`). Convert to PDF **client-side**; the invoke does not
+put file bytes on the result and does not run `filing.validate`.
+
+Zero-tax 1601-C (`any_taxes_withheld=false`):
+
+```bash
+gpui-agent invoke filing.start --arg code=1601C --arg year=2026 --arg period=8
+gpui-agent invoke form.fill --arg any_taxes_withheld=false
+gpui-agent invoke filing.validate
+gpui-agent invoke form.save_draft
+gpui-agent invoke form.pdf
+```
+
+### Headless capabilities
+
+Semantic invokes that do not need a GPU/window:
+
+- Profiles: `profile.list` / `search` / `set` / `create` / `save` / `edit` / `tab`
+- Dues / jobs: `dues.list`, `tax-dues.refresh`, `jobs.list`, `submissions.list`
+- 1601-C / 2551Q: `filing.start`, `form.fill`, `form.fields`, `filing.validate`,
+  `form.save_draft`, `form.pdf` (frozen HTML path)
+- Daemon: `bir-headless serve` / `status` / `shutdown` (and `gpui-agent hello` /
+  `shutdown`)
+
+### Headless limits
+
+- No GPU. Screenshot is `screenshot_unavailable`.
+- `form.print` errors (`form.print needs the desktop window's frozen HTML preview`).
+- No cron / FTP submission path on headless (painted `bir` starts in-process
+  cron; headless does not).
+- UI-only navigation/chrome may be thinner than painted (semantic tree, not
+  pixels).
+- **Forms Set editing is not an agent invoke today.** Agents cannot toggle
+  1601C / 2551Q onto a profile via gpui-agent alone. There is **no**
+  `profile.forms_set`. Use the painted Profile Manager Forms Set UI, or a
+  deliberate offline DB helper. Do not confuse this with `dashboard.set_forms`,
+  which only filters dashboard chips / host tree.
+
+### Linux / box demo DB
+
+Prefer a **fresh** `BIR_DATABASE_PATH` for demos. Set `EBIR_TEST_ENV` **only**
+when you intentionally want the test zero SQLCipher key (same as unit tests).
+The live default path uses the OS keyring / keychain key.
+
+Mixing keyring vs `EBIR_TEST_ENV` keys on the **same file** makes the DB
+unreadable (`file is not a database` / SQLCipher `NotADatabase`).
+`bir-headless` uses `Database::open` and will **not** quarantine or recreate
+that file. Painted `bir` uses `open_or_recreate` and may quarantine a bad
+open — do not “fix” a live taxpayer file that way.
+
+```bash
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+export BIR_DATABASE_PATH=/tmp/bir-headless-demo.db   # fresh path
+export EBIR_TEST_ENV=1                               # test zero key; demo only
+cargo run --locked --bin bir-headless --features agent -- serve
+```
 
 ## Mac: build and run beside Grok Bot
 
@@ -148,19 +328,23 @@ gpui-agent assert --id page-global-dashboard
 gpui-agent invoke nav.go --arg page=profile-manager
 ```
 
-### Mac: `bir-headless` (clap `serve` / `status` / `shutdown`)
+### Mac: bir-headless
 
-Shell matches gpui-agent `apps/todo-headless` on pin `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6`:
-`from_env` + `spawn_host`, `PlatformKind::Headless`, loop until shutdown.
+Clap: `serve` / `status` / `shutdown`, global `--wait`. Shell matches
+gpui-agent `apps/todo-headless` on pin `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6`:
+`from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
 
 #### Smoke matrix
 
-| Mode | This SHA | Notes |
+Status is babysitting fact, not marketing. Commands below stay copy-pasteable.
+SHA `f273eec7` is `--wait` + `GPUI_AGENT_LOG_REQUESTS` on this branch.
+
+| Mode | Status | Notes |
 | --- | --- | --- |
-| **A** Mac app + gpui-agent only | yes | Painted `bir --features agent`. Headless not required. |
-| **B** Mac app + headless wait/resume | **this SHA** | No `Op::Yield`. `serve --wait` while GUI holds bind+DB; quit GUI → headless owns port; CLI talks to whoever holds `17421`. launchd KeepAlive is an optional example, not a shipped LaunchAgent. |
-| **C** Mac headless only (GUI quit) | **first live smoke** | Recipe below. TIN `00000000000002`. |
-| **D** Linux box headless | yes | Default `default_database_path()`; CI may set `BIR_DATABASE_PATH`. |
+| **A** Mac painted + gpui-agent | **working** | Painted `bir --features …,agent`. Headless not required. |
+| **B** Mac GUI then `serve --wait` then quit GUI → headless owns | **PASSED** around `f273eec7` | No `Op::Yield`. `--wait` while GUI holds bind+DB; quit GUI → headless owns `17421`. `GPUI_AGENT_LOG_REQUESTS` optional. launchd KeepAlive is an optional example, not a shipped LaunchAgent. |
+| **C** Mac headless-only create on live app-group DB then GUI verify | **PASSED** | Recipe below. TIN `00000000000002` / Headless Live TIN. Do **not** set `BIR_DATABASE_PATH`. Token required. |
+| **D** Linux box `bir-headless serve` with temp DB | **PASSED** | `BIR_DATABASE_PATH` temp/demo (+ `EBIR_TEST_ENV` only for the test zero key). See Linux smoke D. |
 
 #### Smoke B (Mac) — GUI owns port → headless `--wait` → quit GUI → headless owns
 
@@ -290,7 +474,27 @@ invent a second bind. `hello.auth` is `"required"` when that token is set
 because the mailbox drain (painted `bir` and `bir-headless serve`) pass it into
 `handle_request` (never `None` when configured).
 
-**Display-less Linux — live DB daemon** (`todo-headless` pattern):
+**Display-less Linux — smoke D (temp / demo DB, PASSED):**
+
+```bash
+# Prefer a fresh file. Do not point this at a keyring-encrypted taxpayer DB.
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+export BIR_DATABASE_PATH=/tmp/bir-headless-demo.db
+export EBIR_TEST_ENV=1   # test zero key; omit if this file was created with the OS keyring
+# optional: export GPUI_AGENT_LOG_REQUESTS=1
+cargo run --locked --bin bir-headless --features agent -- serve
+# other terminal:
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
+# hello.platform=headless
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke profile.list
+```
+
+Mixing `EBIR_TEST_ENV` vs keyring keys on the same file makes it unreadable
+(`file is not a database`). Headless will not quarantine/recreate.
+
+**Display-less Linux — live default path** (`~/.taxman-ebir/bir_data.db`):
 
 ```bash
 # Quit painted bir first so 17421 is free (connection refused today is expected
@@ -300,7 +504,8 @@ export GPUI_AGENT_TOKEN=dev-secret
 export GPUI_AGENT_ADDR=127.0.0.1:17421
 # optional: export GPUI_AGENT_LOG_REQUESTS=1
 # default path = default_database_path() = platform::data_dir()/bir_data.db
-# CI only: export BIR_DATABASE_PATH=/tmp/bir-ci.db
+# Token is required on this live path (same refuse as Mac smoke C).
+# Do not set BIR_DATABASE_PATH. Do not set EBIR_TEST_ENV against a keyring file.
 cargo run --locked --bin bir-headless --features agent -- serve
 # other terminal:
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
@@ -358,7 +563,11 @@ Claude Code / MCP (same token as the host):
 }
 ```
 
-### Recipes
+## Recipes
+
+Day-to-day AI flow (env, hello probe, profile, 1601-C, headless limits):
+[AI agent playbook](#ai-agent-playbook). CLI `invoke` `--arg`s are `KEY=VALUE`;
+`set-value` is positional (`<TARGET> <VALUE>`), not `--id`.
 
 Pinned `gpui-agent` CLI `recipe validate` / `recipe run` uses a baked **todo**
 schema registry. Host `invoke` names such as `nav.go` fail that registry, so
@@ -460,8 +669,9 @@ gpui-agent invoke form.save_draft
 gpui-agent invoke form.pdf
 ```
 
-Linux/cloud agents can compile and run the headless host tests. **macOS runtime
-is not claimed until Uriah runs the commands above on a Mac.**
+Linux/cloud agents can compile and run the headless host tests. Mac painted +
+`--wait` + live app-group smokes **A/B/C** are **PASSED** (see the smoke
+matrix). Day-to-day AI flow: [AI agent playbook](#ai-agent-playbook).
 
 ## Invoke allow-list (BIR host only)
 
@@ -525,6 +735,7 @@ search is the query invoke.
 Not implemented (on purpose):
 
 - `profile.ensure` — no auto-create / upsert. Opening the editor is `profile.create`. Persisting is `profile.save` after human confirmation.
+- `profile.forms_set` — **does not exist.** Yearly Forms Set include/exclude is the painted Profile Manager UI (or a deliberate offline DB helper), not a gpui-agent invoke. `dashboard.set_forms` only filters dashboard chips.
 
 ## Stable IDs
 
@@ -613,6 +824,8 @@ Remaining (not faked):
   processes must not open the live DB together. Matrix B is
   `serve --wait` plus GUI quit releasing bind+lock, not a protocol op.
   launchd KeepAlive remains an optional supervisor (docs example only).
+- Forms Set editing via gpui-agent (`profile.forms_set` or similar). Agents
+  cannot toggle 1601C/2551Q onto a profile from the allow-list today.
 
 ## Claimed queue without BIR outcome (facts)
 
