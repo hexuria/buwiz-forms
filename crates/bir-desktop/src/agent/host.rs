@@ -3612,7 +3612,7 @@ mod tests {
             &mut host,
             req(Op::Invoke {
                 name: "filing.start".into(),
-                args: json!({ "code": "2551Q", "year": year, "period": 1 }),
+                args: json!({ "code": "2551Q", "year": year, "period": 2 }),
             }),
             None,
         );
@@ -3644,6 +3644,19 @@ mod tests {
         assert!(html_q.contains("Olongapo"));
         assert!(html_q.contains(FIXTURE_EMAIL));
         assert!(html_q.contains("500.00"));
+        assert!(html_q.contains(&year.to_string()));
+        assert!(
+            html_q
+                .split("<input")
+                .any(|tag| { tag.contains("name=\"p1c15\"") && tag.contains("value=\"X\"") }),
+            "Q2 xbox should be marked X"
+        );
+        assert!(
+            html_q.split("<input").any(|tag| {
+                tag.contains("name=\"p1c10\"") && tag.contains("data-writer-value=\"")
+            }),
+            "year comb should carry data-writer-value"
+        );
         assert!(pdf_q.result.as_ref().unwrap().get("bytes").is_none());
         let saved = handle_request(
             &mut host,

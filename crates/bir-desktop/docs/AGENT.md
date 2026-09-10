@@ -218,7 +218,7 @@ table; do not use them in recipes.
 | `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q |
 | `form.fill` | `fields` object | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
-| `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, demo tax `money_joins`). Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
+| `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, header period, demo tax `money_joins`). Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
 | `form.revert_draft` | — | Unclaimed queued 1601-C / 2551Q cancel APIs only |
 | `form.mark_paid` | — | 1601-C: `{status:"unsupported"}` (UI does not actually mark paid). 2551Q: only from Confirmed via `save_paid_2551q_draft` |
@@ -285,7 +285,11 @@ Proven in headless host tests (not a Mac GUI run):
 - 1601-C draft save + validate + confirmation node; status stays `Draft`;
   `form.submit` / `filing.queue` rejected
 - `form.fill` refuses unknown keys; `form.pdf` writes frozen HTML to an
-  absolute `path` via the real print pipeline (no bytes on the result);
+  absolute `path` via the real print pipeline (no bytes on the result) and
+  does **not** call `filing.validate`. A Confirmed 2551Q can still have
+  draft validation errors (stale `profile_snapshot`, missing
+  `annual_income_tax_election` / `taxpayer_type` / `item_13_election`, stale
+  surcharge/interest/compromise); those are orthogonal to print fill.
   headless `form.print` errors; `form.upload_receipt` is `needs_file` with
   `path: null`; 2551Q `form.save_draft` is mapped
 - `profile.create` opens the editor and does not save; `profile.ensure` is
