@@ -1003,7 +1003,7 @@ impl Render for Form1601CView {
                                                 <div flex gap_4 items_center>
                                                     <div>{"Any Taxes Withheld?"}</div>
                                                     {div()
-                                                            .id("withheld_btn")
+                                                            .id(crate::agent::ids::FORM_1601C_WITHHELD)
                                                             .p_2()
                                                             .border_1()
                                                             .border_color(
