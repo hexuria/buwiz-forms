@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use bir_core::calendar_rules::{DeadlineResolver, ResolvedTaxDeadline};
-use bir_core::db::Database;
+use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::forms::form_1601c::Form1601CDraft;
 use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::forms::{
@@ -1516,6 +1516,162 @@ impl BirAgentHost {
         Err("open form 1601C or 2551Q first".into())
     }
 
+    fn form_release_abandoned_claim(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        match args.get("confirm") {
+            Some(Value::Bool(true)) => {}
+            Some(Value::Bool(false)) | None => {
+                return Err(
+                    "form.release_abandoned_claim requires args.confirm=true (boolean) after a human confirmed nothing reached BIR"
+                        .into(),
+                );
+            }
+            Some(_) => {
+                return Err(
+                    "form.release_abandoned_claim args.confirm must be boolean true, not a string or number"
+                        .into(),
+                );
+            }
+        }
+        let reason = args.get("reason").and_then(Value::as_str).unwrap_or("");
+        if reason != ABANDONED_CLAIM_RELEASE_REASON {
+            return Err(format!(
+                "form.release_abandoned_claim requires args.reason=\"{ABANDONED_CLAIM_RELEASE_REASON}\""
+            ));
+        }
+
+        if let Some(resolved) = self.resolve_release_profile(args)? {
+            return Ok(resolved);
+        }
+
+        let (form, year, period) = self.release_form_period(args)?;
+        let tin = self.selected_tin.clone().ok_or(
+            "form.release_abandoned_claim requires args.tin or args.q, or a selected profile",
+        )?;
+        let payload = {
+            let db = self.db.as_ref().ok_or("agent host has no database")?;
+            let guard = db.lock().map_err(|err| err.to_string())?;
+            if form == "1601C" {
+                abandoned_claim_result_json(
+                    form,
+                    &tin,
+                    year,
+                    period,
+                    guard
+                        .release_abandoned_claimed_1601c_submission(&tin, year, period, reason)
+                        .map_err(|err| err.to_string())?,
+                    |draft| draft.status.clone(),
+                )
+            } else {
+                abandoned_claim_result_json(
+                    form,
+                    &tin,
+                    year,
+                    period,
+                    guard
+                        .release_abandoned_claimed_2551q_submission(&tin, year, period, reason)
+                        .map_err(|err| err.to_string())?,
+                    |draft| draft.status.clone(),
+                )
+            }
+        };
+        let _ = self.open_form(form, year, period)?;
+        Ok(DispatchResult::json(payload))
+    }
+
+    /// Returns Some(not_found/ambiguous JSON) when tin/q does not uniquely
+    /// select. None means the selected TIN is ready.
+    fn resolve_release_profile(&mut self, args: &Value) -> Result<Option<DispatchResult>, String> {
+        let tin_arg = args
+            .get("tin")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let query = args
+            .get("q")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        if tin_arg.is_none() && query.is_none() {
+            return Ok(None);
+        }
+        let matches = if let Some(tin) = tin_arg.as_deref() {
+            self.search_hits(tin)
+                .into_iter()
+                .filter(|hit| hit.tin == tin)
+                .collect::<Vec<_>>()
+        } else if let Some(query) = query.as_deref() {
+            self.search_hits(query)
+        } else {
+            Vec::new()
+        };
+        match matches.as_slice() {
+            [] => Ok(Some(DispatchResult::json(json!({
+                "status": "not_found",
+                "released": false,
+                "queued": false,
+                "filed": false,
+                "query": tin_arg.or(query).unwrap_or_default(),
+                "candidates": []
+            })))),
+            [only] => {
+                self.select_profile(&only.tin)?;
+                Ok(None)
+            }
+            _ => Ok(Some(DispatchResult::json(json!({
+                "status": "ambiguous",
+                "released": false,
+                "queued": false,
+                "filed": false,
+                "query": tin_arg.or(query),
+                "candidates": matches
+            })))),
+        }
+    }
+
+    fn release_form_period(&self, args: &Value) -> Result<(&'static str, u16, u8), String> {
+        let code = args
+            .get("form")
+            .and_then(Value::as_str)
+            .or_else(|| args.get("code").and_then(Value::as_str));
+        let year = args.get("year").and_then(Value::as_u64).map(|y| y as u16);
+        let period = args.get("period").and_then(Value::as_u64).map(|p| p as u8);
+        if let Some(code) = code {
+            let form = normalize_release_form(code)?;
+            let year = year.ok_or("form.release_abandoned_claim requires args.year")?;
+            let period = period.ok_or("form.release_abandoned_claim requires args.period")?;
+            let period = match form {
+                "1601C" => period.clamp(1, 12),
+                _ => period.clamp(1, 4),
+            };
+            return Ok((form, year, period));
+        }
+        if let Some(form) = &self.form_1601c
+            && self.active_view == ActiveView::Form1601C
+        {
+            return Ok((
+                "1601C",
+                year.unwrap_or(form.draft.taxable_year),
+                period.unwrap_or(form.draft.month).clamp(1, 12),
+            ));
+        }
+        if let Some(form) = &self.form_2551q
+            && self.active_view == ActiveView::Form2551Q
+        {
+            return Ok((
+                "2551Q",
+                year.unwrap_or(form.draft.taxable_year),
+                period.unwrap_or(form.draft.quarter).clamp(1, 4),
+            ));
+        }
+        Err(
+            "form.release_abandoned_claim requires args.form (or code) plus year and period, or an open 1601C/2551Q"
+                .into(),
+        )
+    }
+
     fn form_mark_paid(&mut self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
         if self.active_view == ActiveView::Form1601C {
@@ -1735,6 +1891,7 @@ impl BirAgentHost {
             "form.pdf" | "form.preview_pdf" => self.form_pdf(),
             "form.print" => self.form_print(args),
             "form.revert_draft" | "draft.revert" => self.form_revert_draft(),
+            "form.release_abandoned_claim" => self.form_release_abandoned_claim(args),
             "form.mark_paid" | "payment.mark_paid" => self.form_mark_paid(),
             "form.upload_receipt" | "receipt.upload" => self.form_upload_receipt(),
             "calendar.add" => self.calendar_add(),
@@ -2575,6 +2732,79 @@ fn last4(tin: &str) -> String {
         .collect()
 }
 
+fn normalize_release_form(code: &str) -> Result<&'static str, String> {
+    let compact: String = code
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect();
+    match compact.to_ascii_uppercase().as_str() {
+        "1601C" => Ok("1601C"),
+        "2551Q" => Ok("2551Q"),
+        _ => Err(format!(
+            "form.release_abandoned_claim supports 1601C and 2551Q only, not `{code}`"
+        )),
+    }
+}
+
+fn abandoned_claim_result_json<T>(
+    form: &'static str,
+    tin: &str,
+    year: u16,
+    period: u8,
+    outcome: AbandonedClaimRelease<T>,
+    status_of: impl Fn(&T) -> FilingStatus,
+) -> Value {
+    let (released, previous_status, new_status, previous_claim, previous_claimed_at, reason) =
+        match outcome {
+            AbandonedClaimRelease::Released {
+                previous_status,
+                previous_claim_present,
+                previous_claimed_at,
+                draft,
+                reason,
+            } => (
+                true,
+                format!("{previous_status:?}"),
+                format!("{:?}", status_of(&draft)),
+                previous_claim_present,
+                previous_claimed_at,
+                reason,
+            ),
+            AbandonedClaimRelease::AlreadyClear {
+                previous_status,
+                draft,
+                reason,
+            } => (
+                false,
+                previous_status
+                    .map(|status| format!("{status:?}"))
+                    .unwrap_or_else(|| "none".into()),
+                draft
+                    .as_ref()
+                    .map(|draft| format!("{:?}", status_of(draft)))
+                    .unwrap_or_else(|| "Draft".into()),
+                false,
+                None,
+                reason,
+            ),
+        };
+    json!({
+        "form": form,
+        "tin_last4": last4(tin),
+        "year": year,
+        "period": period,
+        "released": released,
+        "previous_status": previous_status,
+        "new_status": new_status,
+        "previous_claim": previous_claim,
+        "previous_claimed_at": previous_claimed_at,
+        "reason": reason,
+        "queued": false,
+        "filed": false,
+        "note": "does not queue or file; Withheld/tax fields stay as stored until the human edits the Draft"
+    })
+}
+
 fn parse_money(value: &str) -> Result<f64, String> {
     value
         .trim()
@@ -2641,6 +2871,7 @@ impl WithEnabled for UiNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bir_core::db::Claim1601CSubmissionResult;
     use gpui_agent::dispatch::handle_request;
     use gpui_agent::protocol::{AssertSpec, Request};
 
@@ -3702,6 +3933,169 @@ mod tests {
             None,
         );
         assert!(!sync.ok);
+    }
+
+    fn claim_queued_1601c(host: &BirAgentHost, year: u16, month: u8) -> Form1601CDraft {
+        let db = host.db.as_ref().expect("fixture host has a database");
+        let guard = db.lock().expect("db");
+        let profile = guard
+            .get_profile(FIXTURE_TIN)
+            .unwrap()
+            .expect("fixture profile");
+        let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
+        draft.any_taxes_withheld = false;
+        draft.compute();
+        draft
+            .transition_to_queued()
+            .expect("zero-tax withheld=no 1601C should queue");
+        guard.save_queued_1601c_draft(&draft).unwrap();
+        let stored = guard
+            .get_1601c_draft(FIXTURE_TIN, year, month)
+            .unwrap()
+            .unwrap();
+        match guard
+            .claim_queued_1601c_submission(
+                &stored.tin,
+                stored.taxable_year,
+                stored.month,
+                &stored.queued_submission_fingerprint,
+                &stored.next_retry_at,
+                stored.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim1601CSubmissionResult::Claimed { draft, .. } => draft,
+            _ => panic!("fixture 1601C should be claimed"),
+        }
+    }
+
+    #[test]
+    fn form_release_abandoned_claim_is_confirm_gated_and_returns_draft() {
+        let mut host = fixture_host();
+        let claimed = claim_queued_1601c(&host, 2026, 8);
+        assert_eq!(claimed.status, FilingStatus::Queued);
+        assert!(claimed.submission_claim_token.is_some());
+
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 8 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+
+        let revert = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.revert_draft".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(!revert.ok);
+        let revert_err = revert.error.as_deref().unwrap_or_default();
+        assert!(
+            revert_err.contains("Only an unclaimed queued 1601C snapshot can be canceled"),
+            "{revert_err:?}"
+        );
+
+        let missing = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.release_abandoned_claim".into(),
+                args: json!({
+                    "form": "1601-C",
+                    "year": 2026,
+                    "period": 8
+                }),
+            }),
+            None,
+        );
+        assert!(!missing.ok);
+        assert!(
+            missing
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("confirm=true")
+        );
+
+        let string_confirm = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.release_abandoned_claim".into(),
+                args: json!({
+                    "form": "1601C",
+                    "year": 2026,
+                    "period": 8,
+                    "confirm": "true",
+                    "reason": ABANDONED_CLAIM_RELEASE_REASON
+                }),
+            }),
+            None,
+        );
+        assert!(!string_confirm.ok);
+
+        let released = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.release_abandoned_claim".into(),
+                args: json!({
+                    "q": FIXTURE_NAME,
+                    "form": "1601-C",
+                    "year": 2026,
+                    "period": 8,
+                    "confirm": true,
+                    "reason": ABANDONED_CLAIM_RELEASE_REASON
+                }),
+            }),
+            None,
+        );
+        assert!(released.ok, "{:?}", released.error);
+        let body = released.result.as_ref().unwrap();
+        assert_eq!(body["released"], true);
+        assert_eq!(body["previous_status"], "Queued");
+        assert_eq!(body["new_status"], "Draft");
+        assert_eq!(body["previous_claim"], true);
+        assert_eq!(body["form"], "1601C");
+        assert_eq!(body["period"], 8);
+        assert_eq!(body["year"], 2026);
+        assert_eq!(body["queued"], false);
+        assert_eq!(body["filed"], false);
+        assert_eq!(body["reason"], ABANDONED_CLAIM_RELEASE_REASON);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
+        assert!(!host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        assert!(
+            host.form_1601c
+                .as_ref()
+                .unwrap()
+                .draft
+                .submission_claim_token
+                .is_none()
+        );
+
+        let again = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.release_abandoned_claim".into(),
+                args: json!({
+                    "tin": FIXTURE_TIN,
+                    "form": "1601C",
+                    "year": 2026,
+                    "period": 8,
+                    "confirm": true,
+                    "reason": ABANDONED_CLAIM_RELEASE_REASON
+                }),
+            }),
+            None,
+        );
+        assert!(again.ok, "{:?}", again.error);
+        assert_eq!(again.result.as_ref().unwrap()["released"], false);
+        assert_eq!(again.result.as_ref().unwrap()["new_status"], "Draft");
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
     }
 
     #[test]

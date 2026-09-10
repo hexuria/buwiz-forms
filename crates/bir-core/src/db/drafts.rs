@@ -13,7 +13,7 @@ use crate::forms::{
 };
 use crate::profile::TaxpayerProfile;
 
-pub(crate) enum Claim2551QSubmissionResult {
+pub enum Claim2551QSubmissionResult {
     Claimed {
         draft: Form2551QDraft,
         token: String,
@@ -25,7 +25,7 @@ pub(crate) enum Claim2551QSubmissionResult {
     Superseded,
 }
 
-pub(crate) enum Claim1601CSubmissionResult {
+pub enum Claim1601CSubmissionResult {
     Claimed {
         draft: Form1601CDraft,
         token: String,
@@ -35,6 +35,47 @@ pub(crate) enum Claim1601CSubmissionResult {
         errors: Vec<(String, String)>,
     },
     Superseded,
+}
+
+/// Only allow-listed reason for a human-confirmed abandoned-claim release.
+/// The outer agent must pass this after a person confirms nothing reached BIR.
+pub const ABANDONED_CLAIM_RELEASE_REASON: &str = "abandoned_no_bir_filing";
+
+/// Result of a fail-closed abandoned-claim release. Does not queue or file.
+pub enum AbandonedClaimRelease<T> {
+    Released {
+        previous_status: FilingStatus,
+        previous_claim_present: bool,
+        previous_claimed_at: Option<String>,
+        draft: T,
+        reason: String,
+    },
+    AlreadyClear {
+        previous_status: Option<FilingStatus>,
+        draft: Option<T>,
+        reason: String,
+    },
+}
+
+fn abandoned_claim_audit(reason: &str) -> String {
+    format!("Abandoned claim released ({reason}); human confirmed nothing reached BIR")
+}
+
+fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
+    if reason != ABANDONED_CLAIM_RELEASE_REASON {
+        return Err(DbError::Other(format!(
+            "Abandoned claim release requires reason `{ABANDONED_CLAIM_RELEASE_REASON}`"
+        )));
+    }
+    Ok(())
+}
+
+fn claim_fields_present(token: &Option<String>, claimed_at: &Option<String>) -> bool {
+    token.is_some() && claimed_at.is_some()
+}
+
+fn claim_fields_partial(token: &Option<String>, claimed_at: &Option<String>) -> bool {
+    token.is_some() != claimed_at.is_some()
 }
 
 fn filing_status_to_db(status: &FilingStatus) -> &'static str {
@@ -865,6 +906,115 @@ impl Database {
         Ok(draft)
     }
 
+    /// Human-confirmed release of a claimed 2551Q queue snapshot back to Draft.
+    /// Unclaimed queues use [`Self::cancel_queued_2551q_submission`]. Does not
+    /// queue, transmit, or invent Submitted.
+    pub fn release_abandoned_claimed_2551q_submission(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        reason: &str,
+    ) -> Result<AbandonedClaimRelease<Form2551QDraft>, DbError> {
+        require_abandoned_release_reason(reason)?;
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(AbandonedClaimRelease::AlreadyClear {
+                previous_status: None,
+                draft: None,
+                reason: reason.to_string(),
+            });
+        };
+        let current: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        let claimed = claim_fields_present(
+            &current.submission_claim_token,
+            &current.submission_claimed_at,
+        );
+        let partial = claim_fields_partial(
+            &current.submission_claim_token,
+            &current.submission_claimed_at,
+        );
+        if matches!(current.status, FilingStatus::Draft)
+            && db_status == "Draft"
+            && !claimed
+            && !partial
+        {
+            return Ok(AbandonedClaimRelease::AlreadyClear {
+                previous_status: Some(FilingStatus::Draft),
+                draft: Some(current),
+                reason: reason.to_string(),
+            });
+        }
+        if matches!(
+            current.status,
+            FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+        ) || matches!(db_status.as_str(), "Submitted" | "Confirmed" | "Paid")
+        {
+            return Err(DbError::Other(
+                "Will not release a 2551Q claim that is already Submitted, Confirmed, or Paid"
+                    .to_string(),
+            ));
+        }
+        if partial {
+            return Err(DbError::Other(
+                "2551Q claim metadata is incomplete; refusing to wipe an unknown filing state"
+                    .to_string(),
+            ));
+        }
+        if matches!(current.status, FilingStatus::Queued) && db_status == "Queued" && !claimed {
+            return Err(DbError::Other(
+                "Only a claimed queued 2551Q snapshot can use abandoned-claim release; unclaimed queues use form.revert_draft"
+                    .to_string(),
+            ));
+        }
+        if !(matches!(current.status, FilingStatus::Queued) && db_status == "Queued" && claimed) {
+            return Err(DbError::Other(
+                "2551Q is not an abandoned claimed queue snapshot".to_string(),
+            ));
+        }
+
+        let previous_claimed_at = current.submission_claimed_at.clone();
+        let mut draft = current;
+        draft.revert_to_draft();
+        draft.last_error = Some(abandoned_claim_audit(reason));
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q claim changed before abandoned-claim release completed".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(AbandonedClaimRelease::Released {
+            previous_status: FilingStatus::Queued,
+            previous_claim_present: true,
+            previous_claimed_at,
+            draft,
+            reason: reason.to_string(),
+        })
+    }
+
     /// Atomically claim the exact queue generation that was revalidated by the
     /// background worker. Once claimed, generic draft writes (including a stale
     /// UI cancel/requeue) are rejected until the worker finishes the claim.
@@ -874,9 +1024,10 @@ impl Database {
     /// network outcome: BIR may or may not have received the return. Automatically
     /// clearing or retrying that claim could file a duplicate return, so an
     /// abandoned claim remains fail-closed until a person reconciles it against
-    /// the BIR confirmation or receipt.
+    /// the BIR confirmation or receipt. `release_abandoned_claimed_*` is the
+    /// only deliberate human-confirmed path back to Draft.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn claim_queued_2551q_submission(
+    pub fn claim_queued_2551q_submission(
         &self,
         tin: &str,
         taxable_year: u16,
@@ -1752,10 +1903,119 @@ impl Database {
         Ok(draft)
     }
 
+    /// Human-confirmed release of a claimed 1601C queue snapshot back to Draft.
+    /// Unclaimed queues use [`Self::cancel_queued_1601c_submission`]. Does not
+    /// queue, transmit, or invent Submitted.
+    pub fn release_abandoned_claimed_1601c_submission(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        reason: &str,
+    ) -> Result<AbandonedClaimRelease<Form1601CDraft>, DbError> {
+        require_abandoned_release_reason(reason)?;
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(AbandonedClaimRelease::AlreadyClear {
+                previous_status: None,
+                draft: None,
+                reason: reason.to_string(),
+            });
+        };
+        let current: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        let claimed = claim_fields_present(
+            &current.submission_claim_token,
+            &current.submission_claimed_at,
+        );
+        let partial = claim_fields_partial(
+            &current.submission_claim_token,
+            &current.submission_claimed_at,
+        );
+        if matches!(current.status, FilingStatus::Draft)
+            && db_status == "Draft"
+            && !claimed
+            && !partial
+        {
+            return Ok(AbandonedClaimRelease::AlreadyClear {
+                previous_status: Some(FilingStatus::Draft),
+                draft: Some(current),
+                reason: reason.to_string(),
+            });
+        }
+        if matches!(
+            current.status,
+            FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+        ) || matches!(db_status.as_str(), "Submitted" | "Confirmed" | "Paid")
+        {
+            return Err(DbError::Other(
+                "Will not release a 1601C claim that is already Submitted, Confirmed, or Paid"
+                    .to_string(),
+            ));
+        }
+        if partial {
+            return Err(DbError::Other(
+                "1601C claim metadata is incomplete; refusing to wipe an unknown filing state"
+                    .to_string(),
+            ));
+        }
+        if matches!(current.status, FilingStatus::Queued) && db_status == "Queued" && !claimed {
+            return Err(DbError::Other(
+                "Only a claimed queued 1601C snapshot can use abandoned-claim release; unclaimed queues use form.revert_draft"
+                    .to_string(),
+            ));
+        }
+        if !(matches!(current.status, FilingStatus::Queued) && db_status == "Queued" && claimed) {
+            return Err(DbError::Other(
+                "1601C is not an abandoned claimed queue snapshot".to_string(),
+            ));
+        }
+
+        let previous_claimed_at = current.submission_claimed_at.clone();
+        let mut draft = current;
+        draft.revert_to_draft();
+        draft.submission_error = Some(abandoned_claim_audit(reason));
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "1601C claim changed before abandoned-claim release completed".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(AbandonedClaimRelease::Released {
+            previous_status: FilingStatus::Queued,
+            previous_claim_present: true,
+            previous_claimed_at,
+            draft,
+            reason: reason.to_string(),
+        })
+    }
+
     /// Atomically revalidate and claim the exact queued 1601C generation
     /// immediately before the irreversible network boundary.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn claim_queued_1601c_submission(
+    pub fn claim_queued_1601c_submission(
         &self,
         tin: &str,
         taxable_year: u16,
@@ -2871,6 +3131,165 @@ mod tests {
             .unwrap();
         assert_eq!(requeued.status, FilingStatus::Queued);
         assert_eq!(requeued.to_bir_field_map(), canceled.to_bir_field_map());
+    }
+
+    #[test]
+    fn claimed_1601c_cannot_cancel_but_human_confirmed_release_returns_draft() {
+        let db = test_db();
+        let queued = queued_1601c_draft(&test_profile());
+        db.save_queued_1601c_draft(&queued).unwrap();
+        let stored = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        let (claimed, token) = match db
+            .claim_queued_1601c_submission(
+                &stored.tin,
+                stored.taxable_year,
+                stored.month,
+                &stored.queued_submission_fingerprint,
+                &stored.next_retry_at,
+                stored.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim1601CSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("queued 1601C should be claimed"),
+        };
+        assert!(
+            db.cancel_queued_1601c_submission(&claimed).is_err(),
+            "claimed queued 1601C must still refuse form.revert_draft cancel"
+        );
+        let wrong_reason = db.release_abandoned_claimed_1601c_submission(
+            &claimed.tin,
+            claimed.taxable_year,
+            claimed.month,
+            "because I want to",
+        );
+        assert!(wrong_reason.is_err());
+
+        let released = db
+            .release_abandoned_claimed_1601c_submission(
+                &claimed.tin,
+                claimed.taxable_year,
+                claimed.month,
+                ABANDONED_CLAIM_RELEASE_REASON,
+            )
+            .unwrap();
+        let AbandonedClaimRelease::Released {
+            previous_status,
+            previous_claim_present,
+            draft,
+            reason,
+            ..
+        } = released
+        else {
+            panic!("claimed 1601C should release to Draft");
+        };
+        assert_eq!(previous_status, FilingStatus::Queued);
+        assert!(previous_claim_present);
+        assert_eq!(reason, ABANDONED_CLAIM_RELEASE_REASON);
+        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(draft.submission_claim_token.is_none());
+        assert!(draft.submission_claimed_at.is_none());
+        assert!(
+            draft
+                .submission_error
+                .as_deref()
+                .is_some_and(|message| message.contains("Abandoned claim released"))
+        );
+        assert!(
+            !draft
+                .submission_error
+                .as_deref()
+                .is_some_and(|message| message.contains("Automatic retry is disabled"))
+        );
+
+        let persisted = db
+            .get_1601c_draft(&draft.tin, draft.taxable_year, draft.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Draft);
+        assert!(persisted.submission_claim_token.is_none());
+
+        let mut finished = claimed.clone();
+        finished.transition_to_submitted(claimed.default_submission_filename());
+        assert!(
+            db.finish_claimed_1601c_submission(&finished, &token)
+                .is_err(),
+            "finish_claimed must not invent Submitted after a human release"
+        );
+
+        let again = db
+            .release_abandoned_claimed_1601c_submission(
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                ABANDONED_CLAIM_RELEASE_REASON,
+            )
+            .unwrap();
+        assert!(matches!(again, AbandonedClaimRelease::AlreadyClear { .. }));
+
+        let mut other = editable_1601c_draft(&test_profile());
+        other.month = 6;
+        other.compute();
+        other.transition_to_queued().unwrap();
+        db.save_queued_1601c_draft(&other).unwrap();
+        let refuse_unclaimed = db.release_abandoned_claimed_1601c_submission(
+            &other.tin,
+            other.taxable_year,
+            other.month,
+            ABANDONED_CLAIM_RELEASE_REASON,
+        );
+        assert!(
+            refuse_unclaimed.is_err(),
+            "unclaimed queued 1601C must keep using cancel, not abandoned release"
+        );
+    }
+
+    #[test]
+    fn finish_claimed_1601c_path_is_unchanged_without_release() {
+        let db = test_db();
+        let queued = queued_1601c_draft(&test_profile());
+        db.save_queued_1601c_draft(&queued).unwrap();
+        let stored = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        let (mut claimed, token) = match db
+            .claim_queued_1601c_submission(
+                &stored.tin,
+                stored.taxable_year,
+                stored.month,
+                &stored.queued_submission_fingerprint,
+                &stored.next_retry_at,
+                stored.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim1601CSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("queued 1601C should be claimed"),
+        };
+        let filename = claimed.default_submission_filename();
+        claimed.transition_to_submitted(filename.clone());
+        db.finish_claimed_1601c_submission(&claimed, &token)
+            .expect("finish_claimed remains the success path");
+        let submitted = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(submitted.submission_claim_token.is_none());
+        assert!(
+            db.release_abandoned_claimed_1601c_submission(
+                &submitted.tin,
+                submitted.taxable_year,
+                submitted.month,
+                ABANDONED_CLAIM_RELEASE_REASON,
+            )
+            .is_err(),
+            "must not wipe a Submitted 1601C"
+        );
     }
 
     #[test]
@@ -4673,6 +5092,65 @@ mod tests {
         let mut stale_cancel = queued;
         stale_cancel.revert_to_draft();
         assert!(db.save_2551q_draft(&stale_cancel).is_err());
+    }
+
+    #[test]
+    fn claimed_2551q_cannot_cancel_but_human_confirmed_release_returns_draft() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before claiming");
+        let (claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("queued 2551Q should be claimed"),
+        };
+        assert!(db.cancel_queued_2551q_submission(&claimed).is_err());
+
+        let released = db
+            .release_abandoned_claimed_2551q_submission(
+                &claimed.tin,
+                claimed.taxable_year,
+                claimed.quarter,
+                ABANDONED_CLAIM_RELEASE_REASON,
+            )
+            .unwrap();
+        let AbandonedClaimRelease::Released { draft, .. } = released else {
+            panic!("claimed 2551Q should release to Draft");
+        };
+        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(draft.submission_claim_token.is_none());
+        assert!(draft.submission_claimed_at.is_none());
+        assert!(
+            draft
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("Abandoned claim released"))
+        );
+        assert!(
+            !draft
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("Automatic retry is disabled"))
+        );
+
+        let mut finished = claimed.clone();
+        finished.transition_to_submitted(claimed.default_submission_filename());
+        assert!(
+            db.finish_claimed_2551q_submission(&finished, &token)
+                .is_err()
+        );
     }
 
     #[test]

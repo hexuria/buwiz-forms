@@ -15,7 +15,10 @@
 mod alerts;
 pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
 mod drafts;
-pub(crate) use drafts::{Claim1601CSubmissionResult, Claim2551QSubmissionResult};
+pub use drafts::{
+    ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Claim1601CSubmissionResult,
+    Claim2551QSubmissionResult,
+};
 mod form_rule_state;
 pub use form_rule_state::{FormFinalCopy, FormRuleIdentity, FormRuleState, FormRuleStateError};
 mod forms_set;
