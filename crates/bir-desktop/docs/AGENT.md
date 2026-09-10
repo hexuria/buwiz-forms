@@ -25,7 +25,8 @@ These are host constraints. They do not change protocol v1.
   `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
   `profile.tab`, `dues.list`, `jobs.list`, `search.open`, `palette.search`,
   `form.fill` / `form.pdf`, plus the original `profile.create`,
-  `tax-dues.refresh`, `filing.start`, `filing.validate`, `filing.submit`.
+  `tax-dues.refresh`, `filing.start`, `filing.validate`, `filing.submit`,
+  and `form.release_abandoned_claim`.
   `filing.submit` maps to the existing confirmation gate; it does not queue or
   file. Match-arm synonyms (see the Alias table) are not a second allow-list.
   There is **no** `profile.ensure` auto-write; `profile.create` only opens the
@@ -55,6 +56,8 @@ These are host constraints. They do not change protocol v1.
 - There is **no** invoke that queues or files a return. `filing.submit` (and a
   semantic click on `submit_btn`) only exposes the confirmation node.
   Confirming `form-1601c-submit-confirm` is refused. Complete filing in the BIR UI.
+  `form.release_abandoned_claim` only returns a claimed Queued snapshot to Draft
+  after a human confirmed nothing reached BIR; it does **not** file.
 - Virtual `click` / `type` / `key` return `virtual_unavailable`. Do not point
   agents at `--delivery virtual` on this host.
 - Snapshots include names, last-4 TIN, dues, and editor fields needed to drive
@@ -159,6 +162,10 @@ gpui-agent invoke submissions.list --arg '{}'
 gpui-agent invoke form.fill --arg '{"fields":{"tax_14":"1000.00","tax_25":"100.00"}}'
 gpui-agent invoke form.pdf --arg '{}'
 
+# "release an abandoned 1601-C claim after a human confirmed nothing reached BIR"
+# Never call this unless Uriah confirmed no BIR filing. Still never form.file / filing.queue.
+gpui-agent invoke form.release_abandoned_claim --arg '{"q":"Juan","form":"1601-C","year":2026,"period":8,"confirm":true,"reason":"abandoned_no_bir_filing"}'
+
 # "open command palette" (Cmd+K overlay). palette.search stays the query invoke.
 gpui-agent invoke search.open --arg '{}'
 gpui-agent invoke palette.search --arg '{"q":"acme"}'
@@ -221,6 +228,7 @@ table; do not use them in recipes.
 | `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
 | `form.revert_draft` | — | Unclaimed queued 1601-C / 2551Q cancel APIs only |
+| `form.release_abandoned_claim` | `confirm` must be boolean `true`; `reason`=`abandoned_no_bir_filing`; `tin` **or** `q` (same as `profile.set`, refuse ambiguous); `form` or `code` (`1601C` / `1601-C` / `2551Q`); `year` + `period` as `filing.start` (1601-C month, 2551Q quarter). Open 1601C/2551Q can supply form/period if omitted | Claimed **Queued** snapshot → **Draft** (CAS, same durable write family as unclaimed cancel). Clears claim token/`claimed_at` and the pending-retry error; stores the release reason on the draft. Does **not** queue or file. Unclaimed queues stay on `form.revert_draft`. Submitted/Confirmed/Paid refuse. Already-Draft / no row is idempotent `{released:false}`. **Never** use unless a human confirmed nothing reached BIR |
 | `form.mark_paid` | — | 1601-C: `{status:"unsupported"}` (UI does not actually mark paid). 2551Q: only from Confirmed via `save_paid_2551q_draft` |
 | `form.upload_receipt` | — | `{status:"needs_file", path:null}` — file picker required. A later success must return an absolute `path`, never file bytes |
 | `calendar.add` | — | Writes a native `.ics` via `build_desired_events` + `write_profile_calendar_ics` to a temp path. Does not open a calendar app |
@@ -292,6 +300,10 @@ Proven in headless host tests (not a Mac GUI run):
   surcharge/interest/compromise); those are orthogonal to print fill.
   headless `form.print` errors; `form.upload_receipt` is `needs_file` with
   `path: null`; 2551Q `form.save_draft` is mapped
+- `form.release_abandoned_claim` is confirm-gated (`confirm` boolean true +
+  `reason=abandoned_no_bir_filing`). Claimed queued 1601-C cannot
+  `form.revert_draft`; with confirm it returns Draft and clears the claim.
+  Without confirm it refuses. It does not file.
 - `profile.create` opens the editor and does not save; `profile.ensure` is
   rejected (no auto-write)
 - Selected profile: checked `profile-{tin}` listitem and `context.selected_tin`
