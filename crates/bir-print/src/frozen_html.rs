@@ -1,7 +1,11 @@
-//! Frozen HTML fill/print: set `input[name='frm…']` from the writer map.
+//! Frozen HTML fill/print: set `input[name]` from the writer map.
 //!
-//! Layout lives in `html-frozen/<slug>/`. `name=` is a fail-closed catalog join;
-//! `id=` stays the cell id. Unstamped writer keys have no matching input.
+//! Layout lives in `html-frozen/<slug>/`. `name=` is a fail-closed catalog
+//! join; `id=` stays the cell id. Catalog `official_field_key` stamps are
+//! TIN/branch only. Unstamped leftover keys keep cell-id `name=`;
+//! `html-frozen/<slug>/writer-cells.json` may copy a writer value onto that
+//! cell when the freeze sheet has a 1:1 printed-caption join. That is not
+//! an `official_field_key` harvest and must not invent N:1 peso+cent rows.
 
 use bir_core::forms::form_2551q::Form2551QDraft;
 use std::collections::BTreeMap;
@@ -36,6 +40,14 @@ pub fn html_2551q() -> &'static str {
 /// Rewrite matching `<input name>` tags. Comb slots (`data-slot-index`) receive
 /// one character each. Unknown keys are ignored. `id=` is never changed.
 pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
+    fill_by_name_with_cells(html, fields, &BTreeMap::new())
+}
+
+fn fill_by_name_with_cells(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &BTreeMap<String, String>,
+) -> String {
     let tags = input_tags(html);
     if tags.is_empty() {
         return html.to_string();
@@ -48,7 +60,14 @@ pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
     }
 
     for (name, value) in fields {
-        let Some(indices) = grouped.get(name.as_str()) else {
+        let (input_name, via_cell) = if grouped.contains_key(name.as_str()) {
+            (name.as_str(), false)
+        } else if let Some(cell) = cells.get(name) {
+            (cell.as_str(), true)
+        } else {
+            continue;
+        };
+        let Some(indices) = grouped.get(input_name) else {
             continue;
         };
         let comb = indices.iter().any(|&index| tags[index].slot.is_some());
@@ -62,18 +81,20 @@ pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
                     .copied()
                     .map(|c| c.to_string())
                     .unwrap_or_default();
+                let writer = (via_cell && offset == 0).then_some(value.as_str());
                 replacements.push((
                     tags[index].start,
                     tags[index].end,
-                    set_value(tags[index].tag, &ch),
+                    set_value(tags[index].tag, &ch, writer),
                 ));
             }
         } else {
             for &index in indices {
+                let writer = via_cell.then_some(value.as_str());
                 replacements.push((
                     tags[index].start,
                     tags[index].end,
-                    set_value(tags[index].tag, value),
+                    set_value(tags[index].tag, value, writer),
                 ));
             }
         }
@@ -91,9 +112,86 @@ pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
     out
 }
 
-/// Frozen 2551Q HTML with writer values on stamped `name=` inputs.
+fn writer_cells_json(slug: &str) -> Option<&'static str> {
+    match slug {
+        "1601c-2018" => Some(include_str!(
+            "../../../html-frozen/1601c-2018/writer-cells.json"
+        )),
+        "2551q-2018" => Some(include_str!(
+            "../../../html-frozen/2551q-2018/writer-cells.json"
+        )),
+        _ => None,
+    }
+}
+
+fn parse_writer_cells(json: &str) -> Result<BTreeMap<String, String>, String> {
+    let payload: serde_json::Value =
+        serde_json::from_str(json).map_err(|error| format!("writer-cells.json: {error}"))?;
+    let joins = payload
+        .get("joins")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| "writer-cells.json missing joins[]".to_string())?;
+    let mut cells = BTreeMap::new();
+    for join in joins {
+        let key = join
+            .get("writer_key")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "writer-cells.json join missing writer_key".to_string())?;
+        let html_id = join
+            .get("html_id")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
+        if html_id.starts_with("frm") {
+            return Err(format!(
+                "writer-cells.json {key} must target a cell id, not {html_id}"
+            ));
+        }
+        if cells.insert(key.to_string(), html_id.to_string()).is_some() {
+            return Err(format!("writer-cells.json duplicate writer_key {key}"));
+        }
+    }
+    Ok(cells)
+}
+
+fn writer_cell_map(slug: &str) -> Result<BTreeMap<String, String>, String> {
+    match writer_cells_json(slug) {
+        Some(json) => parse_writer_cells(json),
+        None => Ok(BTreeMap::new()),
+    }
+}
+
+fn fill_bundle(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    slug: &str,
+) -> Result<String, String> {
+    let cells = writer_cell_map(slug)?;
+    if !cells.is_empty() {
+        let present: std::collections::BTreeSet<&str> =
+            input_tags(html).into_iter().map(|tag| tag.name).collect();
+        for (key, html_id) in &cells {
+            if !present.contains(html_id.as_str()) {
+                return Err(format!(
+                    "{slug}: writer-cells.html_id {html_id} for {key} is not an input name="
+                ));
+            }
+            if present.iter().any(|name| *name == key.as_str()) {
+                return Err(format!(
+                    "{slug}: writer-cells {key} is already a stamped name=; remove the fill join"
+                ));
+            }
+        }
+    }
+    Ok(fill_by_name_with_cells(html, fields, &cells))
+}
+
+/// Frozen 2551Q HTML with writer values on stamped `name=` inputs and
+/// writer-cell identity joins.
 pub fn fill_2551q(draft: &Form2551QDraft) -> String {
-    fill_by_name(html_2551q(), &draft.to_bir_field_map())
+    fill_bundle(html_2551q(), &draft.to_bir_field_map(), "2551q-2018")
+        .expect("2551q-2018 writer-cells")
 }
 
 /// Self-contained document for a WebView `with_html` host (inline CSS, fonts, PNGs).
@@ -102,7 +200,7 @@ pub fn filled_document(slug: &str, fields: &BTreeMap<String, String>) -> Result<
         return Err(format!("no frozen HTML bundle for {slug}"));
     };
     Ok(inline_local_assets(
-        &fill_by_name(loaded.html, fields),
+        &fill_bundle(loaded.html, fields, slug)?,
         &loaded,
     ))
 }
@@ -147,27 +245,38 @@ fn attr<'a>(tag: &'a str, key: &str) -> Option<&'a str> {
     rest.get(..end)
 }
 
-fn set_value(tag: &str, value: &str) -> String {
+fn set_value(tag: &str, value: &str, writer_value: Option<&str>) -> String {
     let escaped = html_escape(value);
     let needle = "value=\"";
-    if let Some(value_at) = tag.find(needle) {
+    let mut out = if let Some(value_at) = tag.find(needle) {
         let content_at = value_at + needle.len();
         if let Some(close) = tag[content_at..].find('"') {
             let close_at = content_at + close;
-            let mut out = String::with_capacity(tag.len() + escaped.len());
-            out.push_str(&tag[..content_at]);
-            out.push_str(&escaped);
-            out.push_str(&tag[close_at..]);
-            return out;
+            let mut rewritten = String::with_capacity(tag.len() + escaped.len());
+            rewritten.push_str(&tag[..content_at]);
+            rewritten.push_str(&escaped);
+            rewritten.push_str(&tag[close_at..]);
+            rewritten
+        } else {
+            tag.to_string()
+        }
+    } else {
+        let insert_at = tag.rfind('>').unwrap_or(tag.len());
+        format!(
+            "{} value=\"{}\"{}",
+            &tag[..insert_at],
+            escaped,
+            &tag[insert_at..]
+        )
+    };
+    if let Some(writer) = writer_value.filter(|value| !value.is_empty()) {
+        let attr = format!(" data-writer-value=\"{}\"", html_escape(writer));
+        if !out.contains("data-writer-value=\"") {
+            let insert_at = out.rfind('>').unwrap_or(out.len());
+            out.insert_str(insert_at, &attr);
         }
     }
-    let insert_at = tag.rfind('>').unwrap_or(tag.len());
-    format!(
-        "{} value=\"{}\"{}",
-        &tag[..insert_at],
-        escaped,
-        &tag[insert_at..]
-    )
+    out
 }
 
 fn html_escape(value: &str) -> String {
@@ -431,6 +540,118 @@ mod tests {
             assert_eq!(present.len(), count, "{slug} stamped names");
             let document = filled_document(slug, &BTreeMap::new()).unwrap();
             assert!(document.contains("<style>"), "{slug}");
+        }
+    }
+
+    fn comb_text(html: &str, name: &str) -> String {
+        named_values(html, name).concat()
+    }
+
+    fn identity_map(
+        name_key: &str,
+        name: &str,
+        address_key: &str,
+        address: &str,
+    ) -> BTreeMap<String, String> {
+        let mut fields = BTreeMap::new();
+        fields.insert(name_key.to_string(), name.to_string());
+        fields.insert(address_key.to_string(), address.to_string());
+        fields
+    }
+
+    #[test]
+    fn fill_by_name_without_writer_cells_leaves_unstamped_identity_blank() {
+        let html = bundle("1601c-2018").expect("1601c").html;
+        let fields = identity_map(
+            "frm1601c:txtTaxpayerName",
+            "NEXUS PAYROLL CORP",
+            "frm1601c:txtAddress",
+            "42 Banahaw Street",
+        );
+        let filled = fill_by_name(html, &fields);
+        assert_eq!(comb_text(&filled, "p1c36"), "");
+        assert_eq!(comb_text(&filled, "p1c38"), "");
+        assert!(!filled.contains("NEXUS PAYROLL CORP"));
+        assert!(!filled.contains("42 Banahaw Street"));
+    }
+
+    #[test]
+    fn filled_document_1601c_fills_taxpayer_name_and_address() {
+        let fields = identity_map(
+            "frm1601c:txtTaxpayerName",
+            "NEXUS PAYROLL CORP",
+            "frm1601c:txtAddress",
+            "42 Banahaw Street",
+        );
+        let html = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c36"), "NEXUS PAYROLL CORP");
+        assert_eq!(comb_text(&html, "p1c38"), "42 Banahaw Street");
+        assert!(html.contains("NEXUS PAYROLL CORP"));
+        assert!(html.contains("42 Banahaw Street"));
+        let stamped: std::collections::BTreeSet<String> = input_tags(&html)
+            .into_iter()
+            .map(|tag| tag.name.to_string())
+            .filter(|name| name.starts_with("frm1601c:"))
+            .collect();
+        assert_eq!(stamped.len(), 4);
+    }
+
+    #[test]
+    fn filled_document_2551q_fills_taxpayer_name_and_address() {
+        let html = filled_2551q_document(&sample_draft());
+        assert_eq!(comb_text(&html, "p1c30"), "Frozen Html Fixture");
+        assert_eq!(comb_text(&html, "p1c32"), "New Cabalan");
+        assert!(html.contains("Frozen Html Fixture"));
+        assert!(html.contains("New Cabalan"));
+        let stamped: std::collections::BTreeSet<String> = input_tags(&html)
+            .into_iter()
+            .map(|tag| tag.name.to_string())
+            .filter(|name| name.starts_with("frm2551Qv2018:"))
+            .collect();
+        assert_eq!(
+            stamped,
+            STAMPED_TIN_NAMES
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect()
+        );
+    }
+
+    #[test]
+    fn filled_document_does_not_invent_1601c_tax_peso_cent_join() {
+        let mut fields = BTreeMap::new();
+        fields.insert("frm1601c:txtTax14".to_string(), "8888.88".to_string());
+        fields.insert("frm1601c:txtTax25".to_string(), "7777.77".to_string());
+        let html = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c56"), "");
+        assert_eq!(comb_text(&html, "p1c58"), "");
+        assert!(!html.contains("8888.88"));
+        assert!(!html.contains("7777.77"));
+    }
+
+    #[test]
+    fn writer_cells_target_catalog_cell_ids_not_stamps() {
+        for slug in ["1601c-2018", "2551q-2018"] {
+            let html = bundle(slug).unwrap().html;
+            let cells = writer_cell_map(slug).unwrap();
+            assert!(!cells.is_empty(), "{slug}");
+            let present: std::collections::BTreeSet<&str> =
+                input_tags(html).into_iter().map(|tag| tag.name).collect();
+            for (key, html_id) in &cells {
+                assert!(
+                    present.contains(html_id.as_str()),
+                    "{slug} {key} -> {html_id}"
+                );
+                assert!(
+                    !key.starts_with("p"),
+                    "{slug} writer_key looks like a cell id: {key}"
+                );
+                assert!(
+                    html_id.starts_with("p"),
+                    "{slug} html_id must be a cell id: {html_id}"
+                );
+                assert!(!present.contains(key.as_str()), "{slug} {key} is stamped");
+            }
         }
     }
 }

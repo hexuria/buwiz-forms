@@ -1,0 +1,56 @@
+{
+  "form_id": "2551q-v2018",
+  "html_slug": "2551q-2018",
+  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. This is not an official_field_key harvest. Do not join N:1 peso+cent tax rows, collapsed writer txt25-28, or leftover keys that share an item number with another leftover.",
+  "joins": [
+    {
+      "writer_key": "frm2551Qv2018:registeredName",
+      "html_id": "p1c30",
+      "catalog_id": "2551q-2018/p1/money-40-1",
+      "printed": "8 Taxpayer's Name",
+      "reason": "exactly one 40-slot comb immediately under the item 8 caption; leftover-unique registeredName; catalog html_id_hint"
+    },
+    {
+      "writer_key": "frm2551Qv2018:registeredAddress",
+      "html_id": "p1c32",
+      "catalog_id": "2551q-2018/p1/money-40-2",
+      "printed": "9 Registered Address",
+      "reason": "exactly one full-width 40-slot comb immediately under the item 9 caption; leftover-unique registeredAddress; catalog html_id_hint"
+    },
+    {
+      "writer_key": "frm2551Qv2018:txtRDOCode",
+      "html_id": "p1c28",
+      "catalog_id": "2551q-2018/p1/comb-3s-1",
+      "printed": "7 RDO Code",
+      "reason": "exactly one 3-slot comb on the TIN row under the item 7 caption. fields.json lists the HTA select on page 2; the freeze sheet's printed RDO box is this page-1 cell."
+    },
+    {
+      "writer_key": "frm2551Qv2018:zipCode",
+      "html_id": "p1c35",
+      "catalog_id": "2551q-2018/p1/date-yyyy-2",
+      "printed": "ZIP Code",
+      "reason": "exactly one 4-slot comb under the ZIP Code caption. item_number 9 is shared with registeredAddress, so this join is the caption+cell, not leftover uniqueness of item 9."
+    },
+    {
+      "writer_key": "frm2551Qv2018:telNo",
+      "html_id": "p1c38",
+      "catalog_id": "2551q-2018/p1/money-12-1",
+      "printed": "10 Telephone",
+      "reason": "exactly one 12-slot comb on the item 10 row; leftover-unique telNo; catalog html_id_hint"
+    }
+  ],
+  "not_joined": [
+    {
+      "writer_key": "frm2551Qv2018:txt14",
+      "reason": "Stage 3 R3 N:1: item 14 is a peso comb plus a 2-slot cent comb. Do not invent a shared name= or split."
+    },
+    {
+      "writer_key": "frm2551Qv2018:txt15",
+      "reason": "Same R3 N:1 peso+cent pair as the other Part II amount rows."
+    },
+    {
+      "writer_key": "frm2551Qv2018:txt25",
+      "reason": "Writer emits collapsed txt25-28 blanks; fields.json inventories payment columns as txtAgency/txtAmount/txtDate/txtNumber. name-gaps already pins this absence."
+    }
+  ]
+}
