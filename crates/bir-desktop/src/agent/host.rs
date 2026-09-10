@@ -3588,7 +3588,11 @@ mod tests {
         assert!(pdf.ok, "{:?}", pdf.error);
         let path = pdf.result.as_ref().unwrap()["path"].as_str().expect("path");
         assert!(std::path::Path::new(path).is_absolute());
-        assert!(std::fs::read_to_string(path).unwrap().contains("<html"));
+        let html = std::fs::read_to_string(path).unwrap();
+        assert!(html.contains("<html"));
+        assert!(html.contains(FIXTURE_NAME));
+        assert!(html.contains("Olongapo"));
+        assert!(pdf.result.as_ref().unwrap().get("bytes").is_none());
         assert_eq!(pdf.result.as_ref().unwrap()["kind"], "frozen-html");
         let print = handle_request(
             &mut host,
@@ -3618,6 +3622,23 @@ mod tests {
             None,
         );
         assert!(filled_q.ok, "{:?}", filled_q.error);
+        let pdf_q = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.pdf".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(pdf_q.ok, "{:?}", pdf_q.error);
+        let path_q = pdf_q.result.as_ref().unwrap()["path"]
+            .as_str()
+            .expect("path");
+        assert!(std::path::Path::new(path_q).is_absolute());
+        let html_q = std::fs::read_to_string(path_q).unwrap();
+        assert!(html_q.contains(FIXTURE_NAME));
+        assert!(html_q.contains("Olongapo"));
+        assert!(pdf_q.result.as_ref().unwrap().get("bytes").is_none());
         let saved = handle_request(
             &mut host,
             req(Op::Invoke {
