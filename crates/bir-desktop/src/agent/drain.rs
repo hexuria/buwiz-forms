@@ -74,11 +74,19 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
             .has_unsaved_compliance_changes(),
     );
     host.set_profile_pins(app.enable_profile_pins);
+    host.set_hide_tax_profiles(app.hide_tax_profiles);
     host.restore_view(app.active_view, app.active_profile_tin.clone());
+    host.set_profile_tab(app.profile_manager.read(cx).agent_active_tab());
     host.replace_profiles(
         app.profiles
             .iter()
-            .map(|profile| (profile.tin.full(), profile.full_name.clone()))
+            .map(|profile| {
+                (
+                    profile.tin.full(),
+                    profile.full_name.clone(),
+                    profile.is_archived,
+                )
+            })
             .collect(),
         app.active_profile_tin.clone(),
     );
@@ -98,6 +106,16 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
             form.agent_validation_errors(),
         );
     }
+    if let Some(view) = &app.form_2551q_view {
+        let form = view.read(cx);
+        host.replace_form_2551q_state(
+            form.agent_draft().clone(),
+            form.agent_validated(),
+            form.agent_draft().id.is_some(),
+            form.agent_validation_errors(),
+        );
+    }
+    let _ = host.reload_jobs_and_submissions();
     host.mark_pending_admin(app.pending_admin_view);
     host.mark_pending_profile_auth(app.pending_profile.is_some());
     host.set_submit_confirmation_visible(app.agent_submit_confirmation_visible);
@@ -105,7 +123,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
 }
 
 fn apply_host(
-    host: BirAgentHost,
+    mut host: BirAgentHost,
     app: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppState>,
@@ -131,29 +149,41 @@ fn apply_host(
         app.profiles = list;
     }
 
-    if let Some(tin) = host.selected_tin()
-        && app.active_profile_tin.as_deref() != Some(tin)
-        && let Some(profile) = app
-            .profiles
-            .iter()
-            .find(|profile| profile.tin.full() == tin)
-            .cloned()
-    {
-        let action = match host.active_view() {
-            ActiveView::ProfileManager => ProfileTargetAction::EditProfile,
-            ActiveView::Dashboard => ProfileTargetAction::ViewDashboard,
-            _ => ProfileTargetAction::UnlockOnly,
-        };
-        app.select_profile(profile, action, window, cx);
+    if let Some(tin) = host.selected_tin() {
+        let already_selected = app.active_profile_tin.as_deref() == Some(tin);
+        let edit = host.active_view() == ActiveView::ProfileManager;
+        if (!already_selected || edit)
+            && let Some(profile) = app
+                .profiles
+                .iter()
+                .find(|profile| profile.tin.full() == tin)
+                .cloned()
+        {
+            let action = match host.active_view() {
+                ActiveView::ProfileManager => ProfileTargetAction::EditProfile,
+                ActiveView::Dashboard => ProfileTargetAction::ViewDashboard,
+                _ => ProfileTargetAction::UnlockOnly,
+            };
+            app.select_profile(profile, action, window, cx);
+        }
     }
 
-    if host.active_view() == ActiveView::ProfileManager
-        && host.editor_snapshot().save_message.is_none()
-    {
+    if host.active_view() == ActiveView::ProfileManager {
         app.profile_manager.update(cx, |view, cx| {
-            view.agent_apply_editor(&host.editor_snapshot(), window, cx);
+            view.agent_set_tab(host.profile_tab());
+            if host.editor_snapshot().save_message.is_none() {
+                view.agent_apply_editor(&host.editor_snapshot(), window, cx);
+            }
         });
     }
+
+    if host.active_view() == ActiveView::Dashboard {
+        app.dashboard_view.update(cx, |view, cx| {
+            view.agent_apply_filters(host.dashboard_forms(), host.dashboard_query(), window, cx);
+        });
+    }
+
+    let print_requested = host.take_print_request();
 
     if host.active_view() == ActiveView::Form1601C
         && let Some(view) = &app.form_1601c_view
@@ -170,6 +200,30 @@ fn apply_host(
                 window,
                 cx,
             );
+            if print_requested {
+                form.agent_preview_pdf(window, cx);
+            }
+        });
+    }
+
+    if host.active_view() == ActiveView::Form2551Q
+        && let Some(view) = &app.form_2551q_view
+    {
+        view.update(cx, |form, cx| {
+            form.agent_apply_from_host(
+                crate::views::form_2551q_view::Agent2551QHostPatch {
+                    creditable_tax_withheld: host.form_2551q_creditable(),
+                    other_tax_credit: host.form_2551q_other_credit(),
+                    taxable_amount_0: host.form_2551q_taxable_0(),
+                    save: host.form_2551q_saved(),
+                    validate: host.form_2551q_validated(),
+                },
+                window,
+                cx,
+            );
+            if print_requested {
+                form.agent_preview_pdf(window, cx);
+            }
         });
     }
 
@@ -198,6 +252,14 @@ fn apply_navigation(
         ActiveView::ProfileManager => {
             if host.selected_tin().is_none() {
                 app.handle_create_profile(&CreateProfile, window, cx);
+            } else if let Some(tin) = host.selected_tin()
+                && let Some(profile) = app
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.tin.full() == tin)
+                    .cloned()
+            {
+                app.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
             } else {
                 if app.block_unsaved_compliance_navigation(window, cx) {
                     return;

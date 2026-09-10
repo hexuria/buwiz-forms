@@ -4,51 +4,107 @@
 //! dispatches, then applies the result back on the UI thread. Headless tests
 //! use this host directly with an ephemeral SQLite database.
 
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use bir_core::calendar_rules::DeadlineResolver;
+use bir_core::calendar_rules::{DeadlineResolver, ResolvedTaxDeadline};
 use bir_core::db::Database;
 use bir_core::forms::form_1601c::Form1601CDraft;
+use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::forms::{
     FilingStatus, FormSetSource, FormValidator, PerYearFormsSet, can_queue_for_submission,
 };
 use bir_core::naming::Tin;
 use bir_core::profile::TaxpayerProfile;
 use bir_core::validation::validate_profile;
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use gpui_agent::dispatch::DispatchResult;
 use gpui_agent::host::AgentHost;
 use gpui_agent::protocol::{DeliveryMode, HelloInfo, Op, PROTOCOL_VERSION, PlatformKind};
 use gpui_agent::tree::{UiNode, UiTree};
 use gpui_agent::virtual_unavailable;
+use serde::Serialize;
+use serde_json::{Value, json};
 
 use crate::agent::ProfileEditor;
 use crate::agent::ids;
+use crate::agent::search::{self, ProfileHit};
 
 use crate::app::ActiveView;
 
 const FIXTURE_TIN: &str = "12345678900000";
 const FIXTURE_NAME: &str = "Agent Fixture Taxpayer";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 struct ListedProfile {
     tin: String,
     name: String,
+    last4: String,
     selected: bool,
+    archived: bool,
 }
 
-#[derive(Debug, Clone)]
+impl ListedProfile {
+    fn new(tin: String, name: String, selected: bool, archived: bool) -> Self {
+        Self {
+            last4: last4(&tin),
+            tin,
+            name,
+            selected,
+            archived,
+        }
+    }
+
+    fn hit(&self) -> ProfileHit {
+        ProfileHit {
+            tin: self.tin.clone(),
+            name: self.name.clone(),
+            last4: self.last4.clone(),
+            selected: self.selected,
+            archived: self.archived,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct DueItem {
     form_code: String,
     year: u16,
     period: u8,
     name: String,
     deadline: String,
+    status: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct JobItem {
+    id: i64,
+    name: String,
+    status: String,
+    job_type: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SubmissionItem {
+    id: i64,
+    tin: String,
+    form_code: String,
+    status: String,
+    period: String,
 }
 
 #[derive(Debug, Clone)]
 struct Form1601CState {
     draft: Form1601CDraft,
+    validation_errors: Vec<(String, String)>,
+    validated: bool,
+    saved: bool,
+}
+
+#[derive(Debug, Clone)]
+struct Form2551QState {
+    draft: Form2551QDraft,
     validation_errors: Vec<(String, String)>,
     validated: bool,
     saved: bool,
@@ -69,9 +125,19 @@ pub struct BirAgentHost {
     editor: ProfileEditor,
     dues: Vec<DueItem>,
     form_1601c: Option<Form1601CState>,
+    form_2551q: Option<Form2551QState>,
     submit_confirmation_visible: bool,
     form_loaded: bool,
     db: Option<Arc<Mutex<Database>>>,
+    profile_tab: ids::ProfileManagerTab,
+    hide_tax_profiles: bool,
+    dues_filter: String,
+    dues_scope: String,
+    dashboard_forms: Option<Vec<String>>,
+    dashboard_query: String,
+    jobs: Vec<JobItem>,
+    submissions: Vec<SubmissionItem>,
+    print_requested: bool,
 }
 
 impl BirAgentHost {
@@ -91,9 +157,19 @@ impl BirAgentHost {
             editor: ProfileEditor::default(),
             dues: Vec::new(),
             form_1601c: None,
+            form_2551q: None,
             submit_confirmation_visible: false,
             form_loaded: false,
             db: None,
+            profile_tab: ids::ProfileManagerTab::Tax,
+            hide_tax_profiles: false,
+            dues_filter: "upcoming".into(),
+            dues_scope: "profile".into(),
+            dashboard_forms: None,
+            dashboard_query: String::new(),
+            jobs: Vec::new(),
+            submissions: Vec::new(),
+            print_requested: false,
         }
     }
 
@@ -142,16 +218,19 @@ impl BirAgentHost {
 
     pub fn replace_profiles(
         &mut self,
-        profiles: Vec<(String, String)>,
+        profiles: Vec<(String, String, bool)>,
         selected_tin: Option<String>,
     ) {
         self.selected_tin = selected_tin.clone();
         self.profiles = profiles
             .into_iter()
-            .map(|(tin, name)| ListedProfile {
-                selected: selected_tin.as_deref() == Some(tin.as_str()),
-                tin,
-                name,
+            .map(|(tin, name, archived)| {
+                ListedProfile::new(
+                    tin.clone(),
+                    name,
+                    selected_tin.as_deref() == Some(tin.as_str()),
+                    archived,
+                )
             })
             .collect();
     }
@@ -165,16 +244,74 @@ impl BirAgentHost {
     }
 
     pub fn replace_dues(&mut self, dues: Vec<(String, u16, u8, String, String)>) {
+        let today = dues_as_of();
         self.dues = dues
             .into_iter()
-            .map(|(form_code, year, period, name, deadline)| DueItem {
-                form_code,
-                year,
-                period,
-                name,
-                deadline,
+            .map(|(form_code, year, period, name, deadline)| {
+                let status = classify_due(&deadline, today).to_string();
+                DueItem {
+                    form_code,
+                    year,
+                    period,
+                    name,
+                    deadline,
+                    status,
+                }
             })
             .collect();
+    }
+
+    pub fn set_hide_tax_profiles(&mut self, hide: bool) {
+        self.hide_tax_profiles = hide;
+    }
+
+    pub fn set_profile_tab(&mut self, tab: ids::ProfileManagerTab) {
+        self.profile_tab = tab;
+    }
+
+    pub fn profile_tab(&self) -> ids::ProfileManagerTab {
+        self.profile_tab
+    }
+
+    pub fn take_print_request(&mut self) -> bool {
+        let requested = self.print_requested;
+        self.print_requested = false;
+        requested
+    }
+
+    pub fn dashboard_forms(&self) -> Option<&[String]> {
+        self.dashboard_forms.as_deref()
+    }
+
+    pub fn dashboard_query(&self) -> &str {
+        &self.dashboard_query
+    }
+
+    pub fn form_2551q_creditable(&self) -> Option<f64> {
+        self.form_2551q
+            .as_ref()
+            .map(|form| form.draft.creditable_tax_withheld)
+    }
+
+    pub fn form_2551q_other_credit(&self) -> Option<f64> {
+        self.form_2551q
+            .as_ref()
+            .map(|form| form.draft.other_tax_credit)
+    }
+
+    pub fn form_2551q_taxable_0(&self) -> Option<f64> {
+        self.form_2551q
+            .as_ref()
+            .and_then(|form| form.draft.schedule_1.first())
+            .map(|row| row.taxable_amount)
+    }
+
+    pub fn form_2551q_saved(&self) -> bool {
+        self.form_2551q.as_ref().is_some_and(|form| form.saved)
+    }
+
+    pub fn form_2551q_validated(&self) -> bool {
+        self.form_2551q.as_ref().is_some_and(|form| form.validated)
     }
 
     pub fn replace_form_1601c(&mut self, draft: Form1601CDraft) {
@@ -190,6 +327,22 @@ impl BirAgentHost {
     ) {
         self.form_loaded = true;
         self.form_1601c = Some(Form1601CState {
+            draft,
+            validation_errors,
+            validated,
+            saved,
+        });
+    }
+
+    pub fn replace_form_2551q_state(
+        &mut self,
+        draft: Form2551QDraft,
+        validated: bool,
+        saved: bool,
+        validation_errors: Vec<(String, String)>,
+    ) {
+        self.form_loaded = true;
+        self.form_2551q = Some(Form2551QState {
             draft,
             validation_errors,
             validated,
@@ -244,7 +397,10 @@ impl BirAgentHost {
     }
 
     pub fn form_period(&self) -> Option<u8> {
-        self.form_1601c.as_ref().map(|form| form.draft.month)
+        self.form_1601c
+            .as_ref()
+            .map(|form| form.draft.month)
+            .or_else(|| self.form_2551q.as_ref().map(|form| form.draft.quarter))
     }
 
     pub fn form_1601c_status(&self) -> Option<FilingStatus> {
@@ -260,10 +416,13 @@ impl BirAgentHost {
         let listed = guard.list_profiles().unwrap_or_default();
         self.profiles = listed
             .iter()
-            .map(|profile| ListedProfile {
-                tin: profile.tin.full(),
-                name: profile.full_name.clone(),
-                selected: self.selected_tin.as_deref() == Some(profile.tin.full().as_str()),
+            .map(|profile| {
+                ListedProfile::new(
+                    profile.tin.full(),
+                    profile.full_name.clone(),
+                    self.selected_tin.as_deref() == Some(profile.tin.full().as_str()),
+                    profile.is_archived,
+                )
             })
             .collect();
         if let Some(tin) = &self.selected_tin
@@ -384,22 +543,39 @@ impl BirAgentHost {
     }
 
     fn select_profile(&mut self, tin: &str) -> Result<DispatchResult, String> {
+        self.select_profile_view(tin, ActiveView::Dashboard)
+    }
+
+    fn select_profile_view(
+        &mut self,
+        tin: &str,
+        view: ActiveView,
+    ) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        self.gate_dirty(ActiveView::Dashboard)?;
+        self.gate_dirty(view)?;
         let profile = self
             .listed_profile(tin)
-            .ok_or_else(|| format!("profile `{tin}` not found"))?
-            .clone();
-        if self.enable_profile_pins {
-            if let Ok(stored) = self.load_profile(tin)
-                && (stored.profile_pin_hash.is_some() || stored.totp_secret.is_some())
-            {
-                self.pending_profile_auth = true;
-                return Ok(DispatchResult::json(serde_json::json!({
-                    "pending_profile_auth": true,
-                    "tin_last4": last4(tin),
-                })));
-            }
+            .cloned()
+            .or_else(|| {
+                self.load_profile(tin).ok().map(|stored| {
+                    ListedProfile::new(
+                        stored.tin.full(),
+                        stored.full_name.clone(),
+                        true,
+                        stored.is_archived,
+                    )
+                })
+            })
+            .ok_or_else(|| format!("profile `{tin}` not found"))?;
+        if self.enable_profile_pins
+            && let Ok(stored) = self.load_profile(tin)
+            && (stored.profile_pin_hash.is_some() || stored.totp_secret.is_some())
+        {
+            self.pending_profile_auth = true;
+            return Ok(DispatchResult::json(json!({
+                "pending_profile_auth": true,
+                "tin_last4": last4(tin),
+            })));
         }
         self.pending_profile_auth = false;
         self.selected_tin = Some(profile.tin.clone());
@@ -410,11 +586,394 @@ impl BirAgentHost {
             self.dues = dues_for_profile(&full);
             self.editor = editor_from_profile(&full);
         }
-        self.active_view = ActiveView::Dashboard;
-        Ok(DispatchResult::json(serde_json::json!({
+        self.form_1601c = None;
+        self.form_2551q = None;
+        self.active_view = view;
+        Ok(DispatchResult::json(json!({
             "selected": last4(&profile.tin),
-            "view": "dashboard",
+            "tin": profile.tin,
+            "name": profile.name,
+            "view": ids::view_slug(view),
         })))
+    }
+
+    fn listed_hits(&self) -> Vec<ProfileHit> {
+        self.profiles.iter().map(ListedProfile::hit).collect()
+    }
+
+    fn search_hits(&self, query: &str) -> Vec<ProfileHit> {
+        let q = query.trim().to_lowercase();
+        self.profiles
+            .iter()
+            .filter(|profile| {
+                q.is_empty()
+                    || profile.tin.to_lowercase().contains(&q)
+                    || profile.name.to_lowercase().contains(&q)
+            })
+            .map(ListedProfile::hit)
+            .collect()
+    }
+
+    fn parse_select_view(raw: Option<&str>) -> Result<ActiveView, String> {
+        match raw.map(str::trim).filter(|s| !s.is_empty()) {
+            None | Some("dashboard") => Ok(ActiveView::Dashboard),
+            Some("profile-manager") => Ok(ActiveView::ProfileManager),
+            Some(other) => Err(format!(
+                "unknown view `{other}` (expected dashboard or profile-manager)"
+            )),
+        }
+    }
+
+    fn profile_list(&self) -> Result<DispatchResult, String> {
+        Ok(DispatchResult::json(json!(self.listed_hits())))
+    }
+
+    fn profile_search(&self, args: &Value) -> Result<DispatchResult, String> {
+        let query = args.get("q").and_then(Value::as_str).unwrap_or("");
+        Ok(DispatchResult::json(json!(self.search_hits(query))))
+    }
+
+    fn profile_set(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        let tin_arg = args
+            .get("tin")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let query = args
+            .get("q")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let view = Self::parse_select_view(args.get("view").and_then(Value::as_str))?;
+        let matches = if let Some(tin) = tin_arg.as_deref() {
+            self.search_hits(tin)
+                .into_iter()
+                .filter(|hit| hit.tin == tin)
+                .collect::<Vec<_>>()
+        } else if let Some(query) = query.as_deref() {
+            self.search_hits(query)
+        } else {
+            return Err("profile.set requires args.tin or args.q".into());
+        };
+        match matches.as_slice() {
+            [] => Ok(DispatchResult::json(json!({
+                "status": "not_found",
+                "query": tin_arg.or(query).unwrap_or_default(),
+                "candidates": []
+            }))),
+            [only] => {
+                let selected = self.select_profile_view(&only.tin, view)?;
+                Ok(DispatchResult::json(json!({
+                    "status": "ok",
+                    "selected": selected.value,
+                    "candidates": matches
+                })))
+            }
+            _ => Ok(DispatchResult::json(json!({
+                "status": "ambiguous",
+                "query": tin_arg.or(query),
+                "candidates": matches
+            }))),
+        }
+    }
+
+    fn profile_edit(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        let tin = args
+            .get("tin")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .or_else(|| self.selected_tin.clone())
+            .ok_or_else(|| "profile.edit requires args.tin or a selected profile".to_string())?;
+        let selected = self.select_profile_view(&tin, ActiveView::ProfileManager)?;
+        Ok(DispatchResult::json(json!({
+            "status": "ok",
+            "selected": selected.value,
+            "tab": self.profile_tab.slug()
+        })))
+    }
+
+    fn profile_tab_invoke(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        if self.active_view != ActiveView::ProfileManager {
+            return Err("open Profile Manager with profile.edit first".into());
+        }
+        let slug = args
+            .get("tab")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "profile.tab requires args.tab".to_string())?;
+        let tab = ids::ProfileManagerTab::from_slug(slug).ok_or_else(|| {
+            format!(
+                "unknown profile tab `{slug}` (expected tax, cor, email, export, calendar, or security)"
+            )
+        })?;
+        if tab == ids::ProfileManagerTab::Calendar && !self.calendar_available() {
+            return Err(
+                "calendar tab is unavailable until a Google Calendar account is linked".into(),
+            );
+        }
+        self.profile_tab = tab;
+        Ok(DispatchResult::json(json!({
+            "tab": tab.slug(),
+            "id": tab.id(),
+            "section": tab.section_id()
+        })))
+    }
+
+    fn calendar_available(&self) -> bool {
+        let Some(db) = &self.db else {
+            return false;
+        };
+        let Ok(guard) = db.lock() else {
+            return false;
+        };
+        bir_core::google_calendar::google_calendar_connection_from_db(&guard)
+            .profile_calendar_available()
+    }
+
+    fn dues_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.dues_filter = match args
+            .get("filter")
+            .and_then(Value::as_str)
+            .unwrap_or("upcoming")
+        {
+            "upcoming" | "overdue" | "all" => args
+                .get("filter")
+                .and_then(Value::as_str)
+                .unwrap_or("upcoming")
+                .to_string(),
+            other => {
+                return Err(format!(
+                    "unknown dues filter `{other}` (expected upcoming, overdue, or all)"
+                ));
+            }
+        };
+        let selected = self.selected_tin.clone();
+        self.dues_scope = match args.get("scope").and_then(Value::as_str) {
+            None => {
+                if selected.is_some() {
+                    "profile".into()
+                } else {
+                    "global".into()
+                }
+            }
+            Some("profile") | Some("global") => {
+                args.get("scope").and_then(Value::as_str).unwrap().into()
+            }
+            Some(other) => {
+                return Err(format!(
+                    "unknown dues scope `{other}` (expected profile or global)"
+                ));
+            }
+        };
+        if self.dues_scope == "profile" && self.selected_tin.is_none() {
+            return Err("dues.list scope=profile requires a selected profile".into());
+        }
+        self.reload_dues_filtered()?;
+        Ok(DispatchResult::json(json!({
+            "filter": self.dues_filter,
+            "scope": self.dues_scope,
+            "as_of": dues_as_of().to_string(),
+            "date_basis": "local-calendar-date (chrono::Local::now().date_naive())",
+            "dues": self.dues
+        })))
+    }
+
+    fn reload_dues_filtered(&mut self) -> Result<(), String> {
+        let today = dues_as_of();
+        let mut dues = if self.dues_scope == "global" {
+            global_month_dues(today)
+        } else {
+            let tin = self
+                .selected_tin
+                .clone()
+                .ok_or("dues.list scope=profile requires a selected profile")?;
+            dues_for_profile(&self.load_profile(&tin)?)
+        };
+        let filter = self.dues_filter.as_str();
+        dues.retain(|due| match filter {
+            "upcoming" => due.status == "upcoming",
+            "overdue" => due.status == "overdue",
+            _ => true,
+        });
+        if let Some(forms) = &self.dashboard_forms {
+            dues.retain(|due| {
+                forms
+                    .iter()
+                    .any(|code| due.form_code.eq_ignore_ascii_case(code))
+            });
+        }
+        if !self.dashboard_query.is_empty() {
+            let q = self.dashboard_query.to_lowercase();
+            dues.retain(|due| {
+                due.form_code.to_lowercase().contains(&q) || due.name.to_lowercase().contains(&q)
+            });
+        }
+        self.dues = dues;
+        Ok(())
+    }
+
+    fn jobs_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.reload_jobs_and_submissions()?;
+        let status = args
+            .get("status")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let jobs: Vec<&JobItem> = self
+            .jobs
+            .iter()
+            .filter(|job| {
+                status
+                    .map(|want| job.status.eq_ignore_ascii_case(want))
+                    .unwrap_or(true)
+            })
+            .collect();
+        Ok(DispatchResult::json(json!({ "jobs": jobs })))
+    }
+
+    fn submissions_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.reload_jobs_and_submissions()?;
+        let tin = args
+            .get("tin")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let status = args
+            .get("status")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let submissions: Vec<&SubmissionItem> = self
+            .submissions
+            .iter()
+            .filter(|item| tin.map(|want| item.tin == want).unwrap_or(true))
+            .filter(|item| {
+                status
+                    .map(|want| item.status.eq_ignore_ascii_case(want))
+                    .unwrap_or(true)
+            })
+            .collect();
+        Ok(DispatchResult::json(json!({ "submissions": submissions })))
+    }
+
+    pub fn reload_jobs_and_submissions(&mut self) -> Result<(), String> {
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        self.jobs = guard
+            .list_jobs()
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .filter_map(|job| {
+                Some(JobItem {
+                    id: job.id?,
+                    name: job.name,
+                    status: job.status,
+                    job_type: job.job_type,
+                })
+            })
+            .collect();
+        let mut submissions = Vec::new();
+        for summary in guard
+            .list_all_queued_submissions()
+            .map_err(|err| err.to_string())?
+        {
+            submissions.push(SubmissionItem {
+                id: summary.id,
+                tin: summary.tin,
+                form_code: summary.form_code,
+                status: format!("{:?}", summary.status),
+                period: submission_period(summary.taxable_year, summary.month, summary.quarter),
+            });
+        }
+        let tins: Vec<String> = if let Some(tin) = &self.selected_tin {
+            vec![tin.clone()]
+        } else {
+            self.profiles
+                .iter()
+                .map(|profile| profile.tin.clone())
+                .collect()
+        };
+        for tin in tins {
+            for sub in guard
+                .list_submissions_for_tin(&tin)
+                .map_err(|err| err.to_string())?
+            {
+                let Some(id) = sub.id else {
+                    continue;
+                };
+                if submissions
+                    .iter()
+                    .any(|item| item.id == id && item.tin == sub.tin)
+                {
+                    continue;
+                }
+                submissions.push(SubmissionItem {
+                    id,
+                    tin: sub.tin,
+                    form_code: sub.form_type,
+                    status: sub.status,
+                    period: sub.period,
+                });
+            }
+        }
+        self.submissions = submissions;
+        Ok(())
+    }
+
+    fn palette_search(&self, args: &Value) -> Result<DispatchResult, String> {
+        let query = args.get("q").and_then(Value::as_str).unwrap_or("");
+        let all = self.palette_profiles();
+        let ranked = search::search_profiles_for_palette(&all, query, self.hide_tax_profiles);
+        let matches: Vec<ProfileHit> = ranked
+            .matches
+            .iter()
+            .map(|profile| ProfileHit::from_profile(profile, self.selected_tin.as_deref()))
+            .collect();
+        Ok(DispatchResult::json(json!({
+            "matches": matches,
+            "can_create": ranked.can_create,
+            "create_query": ranked.create_query
+        })))
+    }
+
+    fn palette_profiles(&self) -> Vec<TaxpayerProfile> {
+        let Some(db) = &self.db else {
+            return Vec::new();
+        };
+        let Ok(guard) = db.lock() else {
+            return Vec::new();
+        };
+        guard.list_profiles().unwrap_or_default()
+    }
+
+    fn dashboard_set_forms(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.dashboard_forms = parse_dashboard_forms(args.get("forms"))?;
+        if self.dues_scope == "global" || self.active_view == ActiveView::Dashboard {
+            let _ = self.reload_dues_filtered();
+        }
+        Ok(DispatchResult::json(json!({
+            "forms": match &self.dashboard_forms {
+                None => Value::String("all".into()),
+                Some(forms) => json!(forms),
+            }
+        })))
+    }
+
+    fn dashboard_filter(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.dashboard_query = args
+            .get("q")
+            .or_else(|| args.get("query"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if self.dues_scope == "global" || self.active_view == ActiveView::Dashboard {
+            let _ = self.reload_dues_filtered();
+        }
+        Ok(DispatchResult::json(json!({ "q": self.dashboard_query })))
     }
 
     fn set_field(&mut self, target: &str, value: &str) -> Result<DispatchResult, String> {
@@ -447,6 +1006,31 @@ impl BirAgentHost {
                 form.draft.number_of_sheets = value.trim().parse().unwrap_or(0);
                 form.validated = false;
             }
+            ids::FORM_2551Q_CREDITABLE => {
+                let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+                form.draft.creditable_tax_withheld = parse_money(value)?;
+                form.draft.recompute(None);
+                form.validated = false;
+            }
+            ids::FORM_2551Q_OTHER_CREDIT => {
+                let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+                form.draft.other_tax_credit = parse_money(value)?;
+                form.draft.recompute(None);
+                form.validated = false;
+            }
+            ids::FORM_2551Q_TAXABLE_0 => {
+                let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+                let amount = parse_money(value)?;
+                let row = form
+                    .draft
+                    .schedule_1
+                    .first_mut()
+                    .ok_or("2551Q schedule 1 has no rows")?;
+                row.taxable_amount = amount;
+                row.recompute();
+                form.draft.recompute(None);
+                form.validated = false;
+            }
             _ => return Err(format!("`{target}` is not editable")),
         }
         Ok(DispatchResult::json(serde_json::json!({ "value": value })))
@@ -476,6 +1060,22 @@ impl BirAgentHost {
                 .form_1601c
                 .as_ref()
                 .map(|form| form.draft.number_of_sheets.to_string())
+                .unwrap_or_default(),
+            ids::FORM_2551Q_CREDITABLE => self
+                .form_2551q
+                .as_ref()
+                .map(|form| format!("{:.2}", form.draft.creditable_tax_withheld))
+                .unwrap_or_default(),
+            ids::FORM_2551Q_OTHER_CREDIT => self
+                .form_2551q
+                .as_ref()
+                .map(|form| format!("{:.2}", form.draft.other_tax_credit))
+                .unwrap_or_default(),
+            ids::FORM_2551Q_TAXABLE_0 => self
+                .form_2551q
+                .as_ref()
+                .and_then(|form| form.draft.schedule_1.first())
+                .map(|row| format!("{:.2}", row.taxable_amount))
                 .unwrap_or_default(),
             _ => return Err(format!("`{target}` is not editable")),
         };
@@ -517,30 +1117,68 @@ impl BirAgentHost {
     fn open_form_view(&mut self, code: &str) -> Result<(), String> {
         self.form_loaded = true;
         self.submit_confirmation_visible = false;
-        if code != "1601C" {
-            self.form_1601c = None;
-            return Ok(());
+        match code {
+            "1601C" => {
+                let tin = self
+                    .selected_tin
+                    .clone()
+                    .ok_or("select a taxpayer profile before opening a form")?;
+                let profile = self.load_profile(&tin)?;
+                let now = chrono::Local::now().date_naive();
+                let mut draft = Form1601CDraft::new_from_profile(
+                    &profile,
+                    now.year() as u16,
+                    now.month() as u8,
+                );
+                if let Some(db) = &self.db
+                    && let Ok(guard) = db.lock()
+                    && let Ok(Some(existing)) =
+                        guard.get_1601c_draft(&tin, draft.taxable_year, draft.month)
+                {
+                    draft = existing;
+                }
+                self.form_1601c = Some(Form1601CState {
+                    draft,
+                    validation_errors: Vec::new(),
+                    validated: false,
+                    saved: false,
+                });
+                self.form_2551q = None;
+            }
+            "2551Q" => {
+                self.open_2551q_draft(None, None)?;
+            }
+            _ => {
+                self.form_1601c = None;
+                self.form_2551q = None;
+            }
         }
+        Ok(())
+    }
+
+    fn open_2551q_draft(&mut self, year: Option<u16>, quarter: Option<u8>) -> Result<(), String> {
         let tin = self
             .selected_tin
             .clone()
             .ok_or("select a taxpayer profile before opening a form")?;
         let profile = self.load_profile(&tin)?;
         let now = chrono::Local::now().date_naive();
-        let mut draft =
-            Form1601CDraft::new_from_profile(&profile, now.year() as u16, now.month() as u8);
+        let year = year.unwrap_or(now.year() as u16);
+        let quarter = quarter.unwrap_or(((now.month() as u8).saturating_sub(1) / 3) + 1);
+        let mut draft = Form2551QDraft::new_from_profile(&profile, year, quarter.clamp(1, 4));
         if let Some(db) = &self.db
             && let Ok(guard) = db.lock()
-            && let Ok(Some(existing)) = guard.get_1601c_draft(&tin, draft.taxable_year, draft.month)
+            && let Ok(Some(existing)) = guard.get_2551q_draft(&tin, year, draft.quarter)
         {
             draft = existing;
         }
-        self.form_1601c = Some(Form1601CState {
+        self.form_2551q = Some(Form2551QState {
             draft,
             validation_errors: Vec::new(),
             validated: false,
             saved: false,
         });
+        self.form_1601c = None;
         Ok(())
     }
 
@@ -573,8 +1211,12 @@ impl BirAgentHost {
                 validated: false,
                 saved: false,
             });
+            self.form_2551q = None;
+        } else if chrome.code == "2551Q" {
+            self.open_2551q_draft(Some(year), Some(period.clamp(1, 4)))?;
         } else {
             self.form_1601c = None;
+            self.form_2551q = None;
         }
         self.form_loaded = true;
         self.submit_confirmation_visible = false;
@@ -589,41 +1231,81 @@ impl BirAgentHost {
 
     fn validate_form(&mut self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
-        form.draft.compute();
-        form.validation_errors = form.draft.validate();
-        form.validated = true;
-        Ok(DispatchResult::json(serde_json::json!({
-            "ok": form.validation_errors.is_empty(),
-            "errors": form.validation_errors.len(),
-        })))
+        if let Some(form) = self.form_1601c.as_mut()
+            && self.active_view == ActiveView::Form1601C
+        {
+            form.draft.compute();
+            form.validation_errors = form.draft.validate();
+            form.validated = true;
+            return Ok(DispatchResult::json(json!({
+                "ok": form.validation_errors.is_empty(),
+                "errors": form.validation_errors.len(),
+                "form": "1601C",
+            })));
+        }
+        if let Some(form) = self.form_2551q.as_mut()
+            && self.active_view == ActiveView::Form2551Q
+        {
+            form.draft.recompute(None);
+            form.validation_errors = form.draft.validate();
+            form.validated = true;
+            return Ok(DispatchResult::json(json!({
+                "ok": form.validation_errors.is_empty(),
+                "errors": form.validation_errors.len(),
+                "form": "2551Q",
+            })));
+        }
+        Err("open form 1601C or 2551Q first".into())
     }
 
     fn save_form_draft(&mut self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        if self.active_view != ActiveView::Form1601C {
-            return Err(format!(
-                "draft save for {} is not mapped in this agent slice; use 1601C",
-                ids::view_slug(self.active_view)
-            ));
+        match self.active_view {
+            ActiveView::Form1601C => {
+                let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+                if !form.draft.is_editable() {
+                    return Err("this return is no longer a draft".into());
+                }
+                form.draft.compute();
+                let db = self.db.as_ref().ok_or("agent host has no database")?;
+                {
+                    let guard = db.lock().map_err(|err| err.to_string())?;
+                    guard
+                        .save_1601c_draft(&form.draft)
+                        .map_err(|err| err.to_string())?;
+                }
+                form.saved = true;
+                Ok(DispatchResult::json(json!({
+                    "status": format!("{:?}", form.draft.status),
+                    "saved": true,
+                    "form": "1601C",
+                })))
+            }
+            ActiveView::Form2551Q => {
+                let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+                if !form.draft.is_editable() {
+                    return Err("this return is no longer a draft".into());
+                }
+                form.draft.recompute(None);
+                let db = self.db.as_ref().ok_or("agent host has no database")?;
+                {
+                    let guard = db.lock().map_err(|err| err.to_string())?;
+                    guard
+                        .save_2551q_draft(&form.draft)
+                        .map_err(|err| err.to_string())?;
+                }
+                form.saved = true;
+                Ok(DispatchResult::json(json!({
+                    "status": format!("{:?}", form.draft.status),
+                    "saved": true,
+                    "form": "2551Q",
+                })))
+            }
+            other => Err(format!(
+                "draft save for {} is not mapped in this agent slice; use 1601C or 2551Q",
+                ids::view_slug(other)
+            )),
         }
-        let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
-        if !form.draft.is_editable() {
-            return Err("this return is no longer a draft".into());
-        }
-        form.draft.compute();
-        let db = self.db.as_ref().ok_or("agent host has no database")?;
-        {
-            let guard = db.lock().map_err(|err| err.to_string())?;
-            guard
-                .save_1601c_draft(&form.draft)
-                .map_err(|err| err.to_string())?;
-        }
-        form.saved = true;
-        Ok(DispatchResult::json(serde_json::json!({
-            "status": format!("{:?}", form.draft.status),
-            "saved": true,
-        })))
     }
 
     fn request_submit_confirm(&mut self) -> Result<DispatchResult, String> {
@@ -651,6 +1333,235 @@ impl BirAgentHost {
             "agent host refuses to queue or file a return; complete submission in the BIR UI confirmation path"
                 .into(),
         )
+    }
+
+    fn form_fields(&self) -> Result<DispatchResult, String> {
+        if let Some(form) = &self.form_1601c
+            && self.active_view == ActiveView::Form1601C
+        {
+            return Ok(DispatchResult::json(json!({
+                "form": "1601C",
+                "status": format!("{:?}", form.draft.status),
+                "fields": form_1601c_fields(&form.draft),
+            })));
+        }
+        if let Some(form) = &self.form_2551q
+            && self.active_view == ActiveView::Form2551Q
+        {
+            return Ok(DispatchResult::json(json!({
+                "form": "2551Q",
+                "status": format!("{:?}", form.draft.status),
+                "fields": form_2551q_fields(&form.draft),
+            })));
+        }
+        Err("open form 1601C or 2551Q first".into())
+    }
+
+    fn form_fill(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let fields = args
+            .get("fields")
+            .and_then(Value::as_object)
+            .ok_or("form.fill requires args.fields as an object")?;
+        if self.active_view == ActiveView::Form1601C {
+            let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+            if !form.draft.is_editable() {
+                return Err("this return is no longer a draft".into());
+            }
+            for key in fields.keys() {
+                if !is_1601c_fillable(key) {
+                    return Err(format!("unknown or read-only 1601C field `{key}`"));
+                }
+            }
+            for (key, value) in fields {
+                apply_1601c_fill(&mut form.draft, key, value)?;
+            }
+            form.draft.compute();
+            form.validated = false;
+            return Ok(DispatchResult::json(json!({
+                "form": "1601C",
+                "applied": fields.keys().cloned().collect::<Vec<_>>(),
+            })));
+        }
+        if self.active_view == ActiveView::Form2551Q {
+            let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+            if !form.draft.is_editable() {
+                return Err("this return is no longer a draft".into());
+            }
+            for key in fields.keys() {
+                if !is_2551q_fillable(key) {
+                    return Err(format!("unknown or read-only 2551Q field `{key}`"));
+                }
+            }
+            for (key, value) in fields {
+                apply_2551q_fill(&mut form.draft, key, value)?;
+            }
+            form.draft.recompute(None);
+            form.validated = false;
+            return Ok(DispatchResult::json(json!({
+                "form": "2551Q",
+                "applied": fields.keys().cloned().collect::<Vec<_>>(),
+            })));
+        }
+        Err("open form 1601C or 2551Q first".into())
+    }
+
+    fn form_pdf(&self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let (slug, fields, form) = if let Some(form) = &self.form_1601c
+            && self.active_view == ActiveView::Form1601C
+        {
+            ("1601c-2018", form.draft.to_bir_field_map(), "1601C")
+        } else if let Some(form) = &self.form_2551q
+            && self.active_view == ActiveView::Form2551Q
+        {
+            ("2551q-2018", form.draft.to_bir_field_map(), "2551Q")
+        } else {
+            return Err("open form 1601C or 2551Q first".into());
+        };
+        let path = write_agent_frozen_html(slug, &fields)?;
+        Ok(DispatchResult::json(json!({
+            "path": path.to_string_lossy(),
+            "kind": "frozen-html",
+            "form": form,
+            "note": "the app print pipeline is frozen HTML (bir_print::frozen_html::filled_document), not generated PDF bytes"
+        })))
+    }
+
+    fn form_print(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let copies = args.get("copies").and_then(Value::as_u64).unwrap_or(1);
+        if !matches!(
+            self.active_view,
+            ActiveView::Form1601C | ActiveView::Form2551Q
+        ) {
+            return Err("open form 1601C or 2551Q first".into());
+        }
+        if self.platform == PlatformKind::Headless {
+            return Err(
+                "form.print needs the desktop window's frozen HTML preview; headless cannot print"
+                    .into(),
+            );
+        }
+        self.print_requested = true;
+        Ok(DispatchResult::json(json!({
+            "queued": false,
+            "filed": false,
+            "copies": copies,
+            "copies_supported": false,
+            "preview": "frozen-html"
+        })))
+    }
+
+    fn form_revert_draft(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        if self.active_view == ActiveView::Form1601C {
+            let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+            let db = self.db.as_ref().ok_or("agent host has no database")?;
+            let canceled = {
+                let guard = db.lock().map_err(|err| err.to_string())?;
+                guard
+                    .cancel_queued_1601c_submission(&form.draft)
+                    .map_err(|err| err.to_string())?
+            };
+            form.draft = canceled;
+            form.validated = false;
+            form.saved = true;
+            return Ok(DispatchResult::json(json!({
+                "form": "1601C",
+                "status": format!("{:?}", form.draft.status),
+            })));
+        }
+        if self.active_view == ActiveView::Form2551Q {
+            let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+            let db = self.db.as_ref().ok_or("agent host has no database")?;
+            let canceled = {
+                let guard = db.lock().map_err(|err| err.to_string())?;
+                guard
+                    .cancel_queued_2551q_submission(&form.draft)
+                    .map_err(|err| err.to_string())?
+            };
+            form.draft = canceled;
+            form.validated = false;
+            form.saved = true;
+            return Ok(DispatchResult::json(json!({
+                "form": "2551Q",
+                "status": format!("{:?}", form.draft.status),
+            })));
+        }
+        Err("open form 1601C or 2551Q first".into())
+    }
+
+    fn form_mark_paid(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        if self.active_view == ActiveView::Form1601C {
+            return Ok(DispatchResult::json(json!({
+                "status": "unsupported",
+                "form": "1601C",
+                "reason": "1601-C payment status requires a separately verified confirmation workflow; the agent will not fake Paid"
+            })));
+        }
+        if self.active_view == ActiveView::Form2551Q {
+            let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+            if !matches!(form.draft.status, FilingStatus::Confirmed) {
+                return Err("only a Confirmed 2551Q return can be marked paid".into());
+            }
+            form.draft.transition_to_paid();
+            let db = self.db.as_ref().ok_or("agent host has no database")?;
+            {
+                let guard = db.lock().map_err(|err| err.to_string())?;
+                guard
+                    .save_paid_2551q_draft(&form.draft)
+                    .map_err(|err| err.to_string())?;
+            }
+            form.saved = true;
+            return Ok(DispatchResult::json(json!({
+                "form": "2551Q",
+                "status": format!("{:?}", form.draft.status),
+            })));
+        }
+        Err("open form 1601C or 2551Q first".into())
+    }
+
+    fn form_upload_receipt(&self) -> Result<DispatchResult, String> {
+        Ok(DispatchResult::json(json!({
+            "status": "needs_file",
+            "reason": "receipt upload requires the desktop file picker; the agent will not fake an upload"
+        })))
+    }
+
+    fn calendar_add(&self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let tin = self
+            .selected_tin
+            .as_deref()
+            .ok_or("select a taxpayer profile before calendar.add")?;
+        let profile = self.load_profile(tin)?;
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let (events, excluded_undated) = {
+            let guard = db.lock().map_err(|err| err.to_string())?;
+            bir_core::google_calendar::build_desired_events(&guard, &profile)
+                .map_err(|err| err.to_string())?
+        };
+        if events.is_empty() {
+            return Ok(DispatchResult::json(json!({
+                "status": "empty",
+                "excluded_undated": excluded_undated,
+                "reason": "this profile has no dated deadlines for its Forms Set"
+            })));
+        }
+        let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+        let dir = std::env::temp_dir().join(format!("bir-agent-calendar-{}", uuid::Uuid::new_v4()));
+        let path =
+            bir_core::calendar_ics::write_profile_calendar_ics(&dir, &profile, &events, &stamp)
+                .map_err(|err| err.to_string())?;
+        Ok(DispatchResult::json(json!({
+            "status": "ok",
+            "path": path.to_string_lossy(),
+            "kind": "ics",
+            "opened": false,
+            "excluded_undated": excluded_undated
+        })))
     }
 
     fn click_due(&mut self, target: &str) -> Result<DispatchResult, String> {
@@ -688,8 +1599,23 @@ impl BirAgentHost {
             ids::FORM_1601C_SUBMIT => self.request_submit_confirm(),
             ids::FORM_1601C_SUBMIT_CONFIRM => self.refuse_submit_confirm(),
             ids::FORM_1601C_BACK => self.navigate(ActiveView::Dashboard),
-            other if other.starts_with("profile-") => {
-                let tin = other.trim_start_matches("profile-");
+            ids::FORM_2551Q_VALIDATE => self.validate_form(),
+            other if ids::ProfileManagerTab::from_id(other).is_some() => {
+                let tab = ids::ProfileManagerTab::from_id(other).expect("tab id");
+                if tab == ids::ProfileManagerTab::Calendar && !self.calendar_available() {
+                    return Err(
+                        "calendar tab is unavailable until a Google Calendar account is linked"
+                            .into(),
+                    );
+                }
+                self.profile_tab = tab;
+                Ok(DispatchResult::json(json!({
+                    "tab": tab.slug(),
+                    "id": tab.id(),
+                })))
+            }
+            other if ids::profile_row_tin(other).is_some() => {
+                let tin = ids::profile_row_tin(other).expect("profile tin");
                 self.select_profile(tin)
             }
             other if other.starts_with("due-") => self.click_due(other),
@@ -699,11 +1625,11 @@ impl BirAgentHost {
                         return self.navigate(ActiveView::Dashboard);
                     }
                     if other == chrome.save {
-                        if chrome.code == "1601C" {
+                        if chrome.code == "1601C" || chrome.code == "2551Q" {
                             return self.save_form_draft();
                         }
                         return Err(format!(
-                            "draft save for {} is not mapped in this agent slice; use 1601C",
+                            "draft save for {} is not mapped in this agent slice; use 1601C or 2551Q",
                             chrome.code
                         ));
                     }
@@ -766,7 +1692,30 @@ impl BirAgentHost {
             }
             "profile.create" | "profile.new" => self.new_profile_editor(),
             "profile.save" => self.save_profile(),
+            "profile.list" => self.profile_list(),
+            "profile.search" => self.profile_search(args),
+            "profile.set" => self.profile_set(args),
+            "profile.edit" => self.profile_edit(args),
+            "profile.tab" => self.profile_tab_invoke(args),
+            "dues.list" => self.dues_list(args),
             "tax-dues.refresh" => self.refresh_dues(),
+            "jobs.list" => self.jobs_list(args),
+            "submissions.list" => self.submissions_list(args),
+            "palette.search" => self.palette_search(args),
+            "dashboard.set_forms" => self.dashboard_set_forms(args),
+            "dashboard.filter" => self.dashboard_filter(args),
+            "form.fields" => self.form_fields(),
+            "form.fill" => self.form_fill(args),
+            "form.pdf" => self.form_pdf(),
+            "form.print" => self.form_print(args),
+            "form.revert_draft" => self.form_revert_draft(),
+            "form.mark_paid" => self.form_mark_paid(),
+            "form.upload_receipt" => self.form_upload_receipt(),
+            "calendar.add" => self.calendar_add(),
+            "profile.calendar_sync" => Err(
+                "profile.calendar_sync needs a linked Google Calendar account and the Profile Manager calendar tab; the agent will not push events"
+                    .into(),
+            ),
             "filing.start" | "form.open" => {
                 let code = args
                     .get("code")
@@ -835,6 +1784,10 @@ impl BirAgentHost {
         }
         sidebar = sidebar.with_child(list);
         window = window.with_child(sidebar);
+        window = window.with_child(
+            UiNode::new(ids::CONTEXT_SELECTED_TIN, "status", "Selected taxpayer")
+                .with_value(self.selected_tin.clone().unwrap_or_default()),
+        );
 
         let mut page = UiNode::new(
             ids::page_root(self.active_view),
@@ -844,58 +1797,136 @@ impl BirAgentHost {
         .with_value(ids::view_slug(self.active_view));
 
         if self.active_view == ActiveView::ProfileManager {
-            page = page.with_children(vec![
-                textbox(ids::PROFILE_TIN, "TIN", &self.editor.tin),
-                textbox(ids::PROFILE_NAME, "Taxpayer name", &self.editor.full_name),
-                textbox(ids::PROFILE_RDO, "RDO", &self.editor.rdo_code),
-                textbox(
-                    ids::PROFILE_LOB,
-                    "Line of business",
-                    &self.editor.line_of_business,
-                ),
-                textbox(
-                    ids::PROFILE_ADDRESS,
-                    "Registered address",
-                    &self.editor.registered_address,
-                ),
-                textbox(ids::PROFILE_ZIP, "ZIP code", &self.editor.zip_code),
-                textbox(ids::PROFILE_PHONE, "Phone", &self.editor.phone),
-                textbox(ids::PROFILE_EMAIL, "Email", &self.editor.email),
-                UiNode::new(ids::PROFILE_SAVE, "button", "Save Profile"),
+            let mut tabs = UiNode::new("profile-tabs", "tablist", "Profile tabs");
+            for tab in [
+                ids::ProfileManagerTab::Tax,
+                ids::ProfileManagerTab::Cor,
+                ids::ProfileManagerTab::Email,
+                ids::ProfileManagerTab::Security,
+                ids::ProfileManagerTab::Export,
+            ] {
+                tabs = tabs.with_child(
+                    UiNode::new(tab.id(), "tab", tab.slug())
+                        .with_checked(self.profile_tab == tab)
+                        .with_value(tab.slug().to_string()),
+                );
+            }
+            if self.calendar_available() {
+                tabs = tabs.with_child(
+                    UiNode::new(ids::ProfileManagerTab::Calendar.id(), "tab", "calendar")
+                        .with_checked(self.profile_tab == ids::ProfileManagerTab::Calendar)
+                        .with_value("calendar".to_string()),
+                );
+            }
+            page = page.with_child(tabs);
+            page = page.with_child(
                 UiNode::new(
-                    ids::PROFILE_SAVE_MESSAGE,
-                    "status",
-                    self.editor.save_message.clone().unwrap_or_default(),
-                ),
-                UiNode::new(
-                    ids::PROFILE_VALIDATION,
-                    "status",
-                    if self.editor.errors.is_empty() {
-                        "valid".into()
-                    } else {
-                        self.editor.errors.join("; ")
-                    },
-                ),
-            ]);
+                    self.profile_tab.section_id(),
+                    "region",
+                    self.profile_tab.slug(),
+                )
+                .with_value(self.profile_tab.slug().to_string()),
+            );
+            page = page.with_child(textbox(ids::PROFILE_TIN, "TIN", &self.editor.tin));
+            page = page.with_child(textbox(
+                ids::PROFILE_NAME,
+                "Taxpayer name",
+                &self.editor.full_name,
+            ));
+            page = page.with_child(textbox(ids::PROFILE_RDO, "RDO", &self.editor.rdo_code));
+            page = page.with_child(textbox(
+                ids::PROFILE_LOB,
+                "Line of business",
+                &self.editor.line_of_business,
+            ));
+            page = page.with_child(textbox(
+                ids::PROFILE_ADDRESS,
+                "Registered address",
+                &self.editor.registered_address,
+            ));
+            page = page.with_child(textbox(ids::PROFILE_ZIP, "ZIP code", &self.editor.zip_code));
+            page = page.with_child(textbox(ids::PROFILE_PHONE, "Phone", &self.editor.phone));
+            page = page.with_child(textbox(ids::PROFILE_EMAIL, "Email", &self.editor.email));
+            page = page.with_child(UiNode::new(ids::PROFILE_SAVE, "button", "Save Profile"));
+            page = page.with_child(UiNode::new(
+                ids::PROFILE_SAVE_MESSAGE,
+                "status",
+                self.editor.save_message.clone().unwrap_or_default(),
+            ));
+            page = page.with_child(UiNode::new(
+                ids::PROFILE_VALIDATION,
+                "status",
+                if self.editor.errors.is_empty() {
+                    "valid".into()
+                } else {
+                    self.editor.errors.join("; ")
+                },
+            ));
         }
 
         if matches!(
             self.active_view,
             ActiveView::Dashboard | ActiveView::GlobalDashboard
         ) {
+            page = page.with_child(
+                UiNode::new(ids::DASHBOARD_FORM_FILTER, "combobox", "Form filter").with_value(
+                    self.dashboard_forms
+                        .as_ref()
+                        .map(|forms| forms.join(","))
+                        .unwrap_or_else(|| "all".into()),
+                ),
+            );
+            page = page.with_child(
+                UiNode::new(ids::DASHBOARD_FILTER_QUERY, "textbox", "Dashboard search")
+                    .with_value(self.dashboard_query.clone()),
+            );
+            if let Some(forms) = &self.dashboard_forms {
+                for code in forms {
+                    page = page.with_child(
+                        UiNode::new(ids::dashboard_form_chip(code), "checkbox", code.clone())
+                            .with_checked(true)
+                            .with_value(code.clone()),
+                    );
+                }
+            }
             let mut dues = UiNode::new(ids::DUES_LIST, "list", "Tax dues");
             for due in &self.dues {
                 dues = dues.with_child(
                     UiNode::new(
                         ids::due_row(&due.form_code, due.year, due.period),
                         "listitem",
-                        due.name.clone(),
+                        format!("{} ({})", due.name, due.status),
                     )
                     .with_value(due.deadline.clone())
-                    .with_states(vec![due.form_code.clone()]),
+                    .with_states(vec![due.form_code.clone(), due.status.clone()]),
                 );
             }
             page = page.with_child(dues);
+        }
+
+        if self.active_view == ActiveView::CronTasks {
+            let mut jobs = UiNode::new(ids::JOBS_LIST, "list", "Background jobs");
+            for job in &self.jobs {
+                jobs = jobs.with_child(
+                    UiNode::new(ids::job_row(job.id), "listitem", job.name.clone())
+                        .with_value(job.status.clone())
+                        .with_states(vec![job.status.clone(), job.job_type.clone()]),
+                );
+            }
+            page = page.with_child(jobs);
+            let mut submissions = UiNode::new(ids::SUBMISSIONS_LIST, "list", "Submissions");
+            for item in &self.submissions {
+                submissions = submissions.with_child(
+                    UiNode::new(
+                        ids::submission_row(item.id),
+                        "listitem",
+                        format!("{} {}", item.form_code, item.period),
+                    )
+                    .with_value(item.status.clone())
+                    .with_states(vec![item.tin.clone(), item.status.clone()]),
+                );
+            }
+            page = page.with_child(submissions);
         }
 
         if let Some(chrome) = ids::form_chrome(self.active_view) {
@@ -968,6 +1999,56 @@ impl BirAgentHost {
                     .with_enabled(false),
                 );
             }
+        }
+
+        if let Some(form) = &self.form_2551q
+            && self.active_view == ActiveView::Form2551Q
+        {
+            page = page.with_child(UiNode::new(ids::FORM_2551Q_VALIDATE, "button", "Validate"));
+            page = page.with_child(
+                UiNode::new(
+                    ids::FORM_2551Q_STATUS,
+                    "status",
+                    format!("{:?}", form.draft.status),
+                )
+                .with_value(format!("{:?}", form.draft.status)),
+            );
+            page = page.with_child(UiNode::new(
+                ids::FORM_2551Q_VALIDATION,
+                "status",
+                if !form.validated {
+                    "not-validated".into()
+                } else if form.validation_errors.is_empty() {
+                    "valid".into()
+                } else {
+                    form.validation_errors
+                        .iter()
+                        .map(|(field, message)| format!("{field}: {message}"))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                },
+            ));
+            page = page.with_child(textbox(
+                ids::FORM_2551Q_CREDITABLE,
+                "Creditable tax withheld",
+                &format!("{:.2}", form.draft.creditable_tax_withheld),
+            ));
+            page = page.with_child(textbox(
+                ids::FORM_2551Q_OTHER_CREDIT,
+                "Other tax credit",
+                &format!("{:.2}", form.draft.other_tax_credit),
+            ));
+            let taxable = form
+                .draft
+                .schedule_1
+                .first()
+                .map(|row| format!("{:.2}", row.taxable_amount))
+                .unwrap_or_else(|| "0.00".into());
+            page = page.with_child(textbox(
+                ids::FORM_2551Q_TAXABLE_0,
+                "Schedule 1 row 1 taxable amount",
+                &taxable,
+            ));
         }
 
         window = window.with_child(page);
@@ -1101,6 +2182,7 @@ pub fn fixture_profile() -> TaxpayerProfile {
 
 fn dues_for_profile(profile: &TaxpayerProfile) -> Vec<DueItem> {
     let year = chrono::Local::now().year();
+    let today = dues_as_of();
     let codes = profile
         .per_year_forms
         .get(&(year as u16))
@@ -1108,21 +2190,283 @@ fn dues_for_profile(profile: &TaxpayerProfile) -> Vec<DueItem> {
         .unwrap_or_default();
     DeadlineResolver::deadlines_for_forms(&codes, year, &[])
         .into_iter()
-        .filter_map(|deadline| {
-            let (tax_year, period) = deadline.route_year_quarter()?;
-            Some(DueItem {
-                form_code: deadline.form_code.clone(),
-                year: tax_year,
-                period,
-                name: format!(
-                    "{} {}",
-                    deadline.form_code,
-                    deadline.final_deadline_string()
-                ),
-                deadline: deadline.final_deadline_string(),
-            })
-        })
+        .filter_map(|deadline| due_item_from_deadline(&deadline, today, false))
         .collect()
+}
+
+fn global_month_dues(today: NaiveDate) -> Vec<DueItem> {
+    DeadlineResolver::resolve_deadline_calendar_year(today.year())
+        .into_iter()
+        .filter_map(|deadline| due_item_from_deadline(&deadline, today, true))
+        .collect()
+}
+
+fn due_item_from_deadline(
+    deadline: &ResolvedTaxDeadline,
+    today: NaiveDate,
+    current_month_only: bool,
+) -> Option<DueItem> {
+    let (tax_year, period) = deadline.route_year_quarter()?;
+    let date = deadline.final_deadline_date()?;
+    if current_month_only && (date.year() != today.year() || date.month() != today.month()) {
+        return None;
+    }
+    let status = if date < today { "overdue" } else { "upcoming" };
+    Some(DueItem {
+        form_code: deadline.form_code.clone(),
+        year: tax_year,
+        period,
+        name: format!(
+            "{} {}",
+            deadline.form_code,
+            deadline.final_deadline_string()
+        ),
+        deadline: deadline.final_deadline_string(),
+        status: status.into(),
+    })
+}
+
+fn dues_as_of() -> NaiveDate {
+    chrono::Local::now().date_naive()
+}
+
+fn classify_due(deadline: &str, today: NaiveDate) -> &'static str {
+    if deadline.eq_ignore_ascii_case("Event Based") {
+        return "event-based";
+    }
+    match NaiveDate::parse_from_str(deadline, "%Y-%m-%d") {
+        Ok(date) if date < today => "overdue",
+        Ok(_) => "upcoming",
+        Err(_) => "unknown",
+    }
+}
+
+fn submission_period(year: u16, month: Option<u8>, quarter: Option<u8>) -> String {
+    if let Some(month) = month {
+        format!("{year}-{month:02}")
+    } else if let Some(quarter) = quarter {
+        format!("{year}-Q{quarter}")
+    } else {
+        year.to_string()
+    }
+}
+
+fn parse_dashboard_forms(raw: Option<&Value>) -> Result<Option<Vec<String>>, String> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    match raw {
+        Value::String(s) if s.eq_ignore_ascii_case("all") => Ok(None),
+        Value::String(s) => {
+            let codes: Vec<String> = s
+                .split([',', ' '])
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+                .map(str::to_string)
+                .collect();
+            if codes.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(codes))
+            }
+        }
+        Value::Array(items) => {
+            let mut codes = Vec::new();
+            for item in items {
+                let Some(code) = item.as_str().map(str::trim).filter(|s| !s.is_empty()) else {
+                    return Err("dashboard.set_forms forms[] entries must be strings".into());
+                };
+                codes.push(code.to_string());
+            }
+            Ok(if codes.is_empty() { None } else { Some(codes) })
+        }
+        _ => Err(
+            "dashboard.set_forms forms must be \"all\", a comma list, or an array of codes".into(),
+        ),
+    }
+}
+
+fn write_agent_frozen_html(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+) -> Result<PathBuf, String> {
+    let html = bir_print::frozen_html::filled_document(slug, fields)?;
+    let dir = std::env::temp_dir().join(format!("bir-agent-export-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir)
+        .map_err(|err| format!("could not create agent export dir: {err}"))?;
+    let path = dir.join("index.html");
+    std::fs::write(&path, html).map_err(|err| format!("could not write frozen HTML: {err}"))?;
+    Ok(path)
+}
+
+fn form_1601c_fields(draft: &Form1601CDraft) -> Vec<Value> {
+    vec![
+        field_desc("tin", true, &draft.tin, true, false),
+        field_desc("taxpayer_name", true, &draft.taxpayer_name, true, false),
+        field_desc("rdo_code", true, &draft.rdo_code, true, false),
+        field_desc(
+            "registered_address",
+            true,
+            &draft.registered_address,
+            true,
+            false,
+        ),
+        field_desc("zip_code", false, &draft.zip_code, true, false),
+        field_desc("contact_number", false, &draft.contact_number, true, false),
+        field_desc("email_address", false, &draft.email_address, true, false),
+        field_desc(
+            "tax_14",
+            true,
+            &format!("{:.2}", draft.tax_14_total_compensation),
+            false,
+            true,
+        ),
+        field_desc(
+            "tax_25",
+            true,
+            &format!("{:.2}", draft.tax_25_total_taxes_withheld),
+            false,
+            true,
+        ),
+        field_desc(
+            "sheets",
+            false,
+            &draft.number_of_sheets.to_string(),
+            false,
+            true,
+        ),
+    ]
+}
+
+fn form_2551q_fields(draft: &Form2551QDraft) -> Vec<Value> {
+    let taxable = draft
+        .schedule_1
+        .first()
+        .map(|row| format!("{:.2}", row.taxable_amount))
+        .unwrap_or_else(|| "0.00".into());
+    vec![
+        field_desc("tin", true, &draft.tin, true, false),
+        field_desc("taxpayer_name", true, &draft.taxpayer_name, true, false),
+        field_desc("rdo_code", true, &draft.rdo_code, true, false),
+        field_desc(
+            "registered_address",
+            true,
+            &draft.registered_address,
+            true,
+            false,
+        ),
+        field_desc("zip_code", false, &draft.zip_code, true, false),
+        field_desc("contact_number", false, &draft.contact_number, true, false),
+        field_desc("email", false, &draft.email, true, false),
+        field_desc(
+            "creditable_tax_withheld",
+            false,
+            &format!("{:.2}", draft.creditable_tax_withheld),
+            false,
+            true,
+        ),
+        field_desc(
+            "other_tax_credit",
+            false,
+            &format!("{:.2}", draft.other_tax_credit),
+            false,
+            true,
+        ),
+        field_desc("taxable_amount", false, &taxable, false, true),
+    ]
+}
+
+fn field_desc(
+    key: &str,
+    required: bool,
+    value: &str,
+    profile_defaulted: bool,
+    fillable: bool,
+) -> Value {
+    json!({
+        "key": key,
+        "required": required,
+        "value": value,
+        "profile_defaulted": profile_defaulted,
+        "fillable": fillable,
+    })
+}
+
+fn is_1601c_fillable(key: &str) -> bool {
+    matches!(
+        key,
+        "tax_14"
+            | "tax_25"
+            | "sheets"
+            | ids::FORM_1601C_TAX_14
+            | ids::FORM_1601C_TAX_25
+            | ids::FORM_1601C_SHEETS
+    )
+}
+
+fn apply_1601c_fill(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Result<(), String> {
+    let text = value_as_text(value)?;
+    match key {
+        "tax_14" | ids::FORM_1601C_TAX_14 => {
+            draft.tax_14_total_compensation = parse_money(&text)?;
+        }
+        "tax_25" | ids::FORM_1601C_TAX_25 => {
+            draft.tax_25_total_taxes_withheld = parse_money(&text)?;
+        }
+        "sheets" | ids::FORM_1601C_SHEETS => {
+            draft.number_of_sheets = text
+                .trim()
+                .parse()
+                .map_err(|_| format!("invalid sheets `{text}`"))?;
+        }
+        _ => return Err(format!("unknown 1601C field `{key}`")),
+    }
+    Ok(())
+}
+
+fn is_2551q_fillable(key: &str) -> bool {
+    matches!(
+        key,
+        "creditable_tax_withheld"
+            | "other_tax_credit"
+            | "taxable_amount"
+            | "schedule_1.0.taxable_amount"
+            | ids::FORM_2551Q_CREDITABLE
+            | ids::FORM_2551Q_OTHER_CREDIT
+            | ids::FORM_2551Q_TAXABLE_0
+    )
+}
+
+fn apply_2551q_fill(draft: &mut Form2551QDraft, key: &str, value: &Value) -> Result<(), String> {
+    let text = value_as_text(value)?;
+    match key {
+        "creditable_tax_withheld" | ids::FORM_2551Q_CREDITABLE => {
+            draft.creditable_tax_withheld = parse_money(&text)?;
+        }
+        "other_tax_credit" | ids::FORM_2551Q_OTHER_CREDIT => {
+            draft.other_tax_credit = parse_money(&text)?;
+        }
+        "taxable_amount" | "schedule_1.0.taxable_amount" | ids::FORM_2551Q_TAXABLE_0 => {
+            let amount = parse_money(&text)?;
+            if let Some(row) = draft.schedule_1.first_mut() {
+                row.taxable_amount = amount;
+                row.recompute();
+            } else {
+                return Err("2551Q schedule 1 has no rows".into());
+            }
+        }
+        _ => return Err(format!("unknown 2551Q field `{key}`")),
+    }
+    Ok(())
+}
+
+fn value_as_text(value: &Value) -> Result<String, String> {
+    match value {
+        Value::String(text) => Ok(text.clone()),
+        Value::Number(number) => Ok(number.to_string()),
+        Value::Bool(flag) => Ok(flag.to_string()),
+        _ => Err("field values must be strings or numbers".into()),
+    }
 }
 
 fn editor_from_profile(profile: &TaxpayerProfile) -> ProfileEditor {
@@ -1607,5 +2951,393 @@ mod tests {
             shutdown.load(std::sync::atomic::Ordering::SeqCst)
                 || store.lock().unwrap().wants_shutdown()
         );
+    }
+
+    #[test]
+    fn profile_search_set_ambiguous_and_not_found() {
+        let mut host = fixture_host();
+        let extra = {
+            let mut profile = fixture_profile();
+            profile.full_name = "Agent Other Shop".into();
+            profile.tin = bir_core::naming::Tin {
+                segment1: "987".into(),
+                segment2: "654".into(),
+                segment3: "321".into(),
+                branch: "00000".into(),
+            };
+            profile
+        };
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            db.lock()
+                .unwrap()
+                .save_profile(extra)
+                .expect("second profile");
+            host.reload_from_db(&db);
+        }
+
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let profiles = listed.result.as_ref().expect("profiles");
+        assert!(profiles.as_array().map(|rows| rows.len()).unwrap_or(0) >= 2);
+
+        let none = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.set".into(),
+                args: json!({ "q": "zzz-no-such-taxpayer" }),
+            }),
+            None,
+        );
+        assert!(none.ok, "{:?}", none.error);
+        assert_eq!(none.result.as_ref().unwrap()["status"], "not_found");
+
+        let ambiguous = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.set".into(),
+                args: json!({ "q": "agent" }),
+            }),
+            None,
+        );
+        assert!(ambiguous.ok, "{:?}", ambiguous.error);
+        assert_eq!(ambiguous.result.as_ref().unwrap()["status"], "ambiguous");
+        assert!(
+            ambiguous.result.as_ref().unwrap()["candidates"]
+                .as_array()
+                .map(|rows| rows.len())
+                .unwrap_or(0)
+                >= 2
+        );
+        assert_eq!(host.selected_tin(), Some(FIXTURE_TIN));
+
+        let set = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.set".into(),
+                args: json!({ "q": "Other Shop", "view": "profile-manager" }),
+            }),
+            None,
+        );
+        assert!(set.ok, "{:?}", set.error);
+        assert_eq!(set.result.as_ref().unwrap()["status"], "ok");
+        assert_eq!(host.active_view(), ActiveView::ProfileManager);
+        assert_eq!(host.selected_tin(), Some("98765432100000"));
+        assert_eq!(host.editor_snapshot().full_name, "Agent Other Shop");
+        assert!(host.tree().find(ids::PROFILE_TAB_TAX).is_some());
+        assert!(host.tree().find(ids::CONTEXT_SELECTED_TIN).is_some());
+        assert_eq!(
+            host.tree()
+                .find(ids::CONTEXT_SELECTED_TIN)
+                .and_then(|node| node.value.as_deref()),
+            Some("98765432100000")
+        );
+    }
+
+    #[test]
+    fn profile_edit_stays_on_profile_manager() {
+        let mut host = fixture_host();
+        assert_eq!(host.active_view(), ActiveView::Dashboard);
+        let edited = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.edit".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(edited.ok, "{:?}", edited.error);
+        assert_eq!(host.active_view(), ActiveView::ProfileManager);
+        assert_eq!(host.editor_snapshot().tin, FIXTURE_TIN);
+        let tab = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.tab".into(),
+                args: json!({ "tab": "security" }),
+            }),
+            None,
+        );
+        assert!(tab.ok, "{:?}", tab.error);
+        assert_eq!(host.profile_tab(), ids::ProfileManagerTab::Security);
+        assert!(host.tree().find(ids::PROFILE_SECTION_SECURITY).is_some());
+    }
+
+    #[test]
+    fn dues_list_filters_upcoming_and_overdue() {
+        let mut host = fixture_host();
+        let upcoming = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.list".into(),
+                args: json!({ "filter": "upcoming", "scope": "profile" }),
+            }),
+            None,
+        );
+        assert!(upcoming.ok, "{:?}", upcoming.error);
+        let overdue = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.list".into(),
+                args: json!({ "filter": "overdue", "scope": "profile" }),
+            }),
+            None,
+        );
+        assert!(overdue.ok, "{:?}", overdue.error);
+        let all = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.list".into(),
+                args: json!({ "filter": "all", "scope": "profile" }),
+            }),
+            None,
+        );
+        assert!(all.ok, "{:?}", all.error);
+        let all_count = all.result.as_ref().unwrap()["dues"]
+            .as_array()
+            .map(|rows| rows.len())
+            .unwrap_or(0);
+        let up_count = upcoming.result.as_ref().unwrap()["dues"]
+            .as_array()
+            .map(|rows| rows.len())
+            .unwrap_or(0);
+        let over_count = overdue.result.as_ref().unwrap()["dues"]
+            .as_array()
+            .map(|rows| rows.len())
+            .unwrap_or(0);
+        assert_eq!(all_count, up_count + over_count);
+        let global = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.list".into(),
+                args: json!({ "filter": "all", "scope": "global" }),
+            }),
+            None,
+        );
+        assert!(global.ok, "{:?}", global.error);
+        assert!(
+            global.result.as_ref().unwrap()["date_basis"]
+                .as_str()
+                .unwrap()
+                .contains("local-calendar-date")
+        );
+    }
+
+    #[test]
+    fn jobs_list_is_read_only() {
+        let mut host = fixture_host();
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            db.lock()
+                .unwrap()
+                .save_job(bir_core::db::Job {
+                    id: None,
+                    name: "Nightly sync".into(),
+                    job_type: "Custom".into(),
+                    cron_expr: None,
+                    command: None,
+                    status: "Idle".into(),
+                    retries: 0,
+                    last_run_at: None,
+                    next_run_at: None,
+                    created_at: String::new(),
+                    output_log: None,
+                })
+                .expect("job");
+        }
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "jobs.list".into(),
+                args: json!({ "status": "Idle" }),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let jobs = listed.result.as_ref().unwrap()["jobs"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            jobs.iter()
+                .any(|job| job["name"] == "Nightly sync" && job["status"] == "Idle")
+        );
+        handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "nav.go".into(),
+                args: json!({ "page": "cron-tasks" }),
+            }),
+            None,
+        );
+        let _ = host.reload_jobs_and_submissions();
+        assert!(host.tree().find("job-1").is_some() || host.tree().find(ids::JOBS_LIST).is_some());
+    }
+
+    #[test]
+    fn palette_search_does_not_create() {
+        let ranked = handle_request(
+            &mut empty_host(),
+            req(Op::Invoke {
+                name: "palette.search".into(),
+                args: json!({ "q": "brand new taxpayer" }),
+            }),
+            None,
+        );
+        assert!(ranked.ok, "{:?}", ranked.error);
+        assert_eq!(ranked.result.as_ref().unwrap()["can_create"], true);
+        assert_eq!(
+            ranked.result.as_ref().unwrap()["create_query"],
+            "brand new taxpayer"
+        );
+        assert!(
+            ranked.result.as_ref().unwrap()["matches"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn form_fill_fields_pdf_and_2551q_draft() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.open".into(),
+                args: json!({ "code": "1601C", "year": year, "period": 1 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "fields": { "tax_14": "1000.00", "tax_25": "100.00" } }),
+            }),
+            None,
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let unknown = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "fields": { "not_a_field": "1" } }),
+            }),
+            None,
+        );
+        assert!(!unknown.ok);
+        let fields = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(fields.ok, "{:?}", fields.error);
+        let pdf = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.pdf".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(pdf.ok, "{:?}", pdf.error);
+        let path = pdf.result.as_ref().unwrap()["path"].as_str().expect("path");
+        assert!(std::path::Path::new(path).is_absolute());
+        assert!(std::fs::read_to_string(path).unwrap().contains("<html"));
+        assert_eq!(pdf.result.as_ref().unwrap()["kind"], "frozen-html");
+        let print = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.print".into(),
+                args: json!({ "copies": 2 }),
+            }),
+            None,
+        );
+        assert!(!print.ok);
+
+        let opened_q = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.open".into(),
+                args: json!({ "code": "2551Q", "year": year, "period": 1 }),
+            }),
+            None,
+        );
+        assert!(opened_q.ok, "{:?}", opened_q.error);
+        let filled_q = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "fields": { "taxable_amount": "500.00" } }),
+            }),
+            None,
+        );
+        assert!(filled_q.ok, "{:?}", filled_q.error);
+        let saved = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.save_draft".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(saved.ok, "{:?}", saved.error);
+        let receipt = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.upload_receipt".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(receipt.ok, "{:?}", receipt.error);
+        assert_eq!(receipt.result.as_ref().unwrap()["status"], "needs_file");
+        let paid = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.mark_paid".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(!paid.ok);
+        let sync = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.calendar_sync".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(!sync.ok);
+    }
+
+    #[test]
+    fn hello_auth_still_required_when_token_configured() {
+        let mut host = empty_host();
+        let required = handle_request(
+            &mut host,
+            req(Op::Hello).with_token("dev-secret"),
+            Some("dev-secret"),
+        );
+        assert!(required.ok, "{:?}", required.error);
+        assert_eq!(
+            required.hello.as_ref().map(|hello| hello.auth),
+            Some(gpui_agent::HelloAuth::Required)
+        );
+        let missing = handle_request(&mut host, req(Op::Hello), Some("dev-secret"));
+        assert!(!missing.ok);
     }
 }

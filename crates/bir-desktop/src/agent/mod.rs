@@ -5,6 +5,7 @@
 //! drain live behind `--features agent`.
 
 pub mod ids;
+pub mod search;
 
 #[derive(Debug, Clone, Default)]
 pub struct ProfileEditor {

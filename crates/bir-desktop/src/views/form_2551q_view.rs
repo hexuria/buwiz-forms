@@ -21,7 +21,7 @@ use bir_core::forms::form_2551q::{
     FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election, OverpaymentDisposition,
     Schedule1Row, TaxPeriodBasis,
 };
-use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus};
+use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus, FormValidator};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
@@ -37,6 +37,15 @@ pub enum Form2551QEvent {
 }
 
 impl EventEmitter<Form2551QEvent> for Form2551QView {}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Agent2551QHostPatch {
+    pub creditable_tax_withheld: Option<f64>,
+    pub other_tax_credit: Option<f64>,
+    pub taxable_amount_0: Option<f64>,
+    pub save: bool,
+    pub validate: bool,
+}
 
 struct ScheduleRowInputs {
     taxable_amount: Entity<InputState>,
@@ -731,6 +740,62 @@ impl Form2551QView {
         self.suppressed_sections.insert("schedule_1");
         self.validation_errors = self.validate_for_submit(cx);
         cx.notify();
+    }
+
+    pub(crate) fn agent_draft(&self) -> &Form2551QDraft {
+        &self.draft
+    }
+
+    pub(crate) fn agent_validated(&self) -> bool {
+        self.is_validated
+    }
+
+    pub(crate) fn agent_validation_errors(&self) -> Vec<(String, String)> {
+        self.validation_errors.clone()
+    }
+
+    pub(crate) fn agent_apply_from_host(
+        &mut self,
+        patch: Agent2551QHostPatch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut dirty = false;
+        if let Some(value) = patch.creditable_tax_withheld {
+            self.creditable_withheld_input.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+            dirty = true;
+        }
+        if let Some(value) = patch.other_tax_credit {
+            self.other_tax_credit_input.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+            dirty = true;
+        }
+        if let Some(value) = patch.taxable_amount_0
+            && let Some(row) = self.row_inputs.first()
+        {
+            row.taxable_amount.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+            dirty = true;
+        }
+        if dirty || patch.validate {
+            self.sync_from_inputs(cx);
+        }
+        if patch.validate {
+            self.draft.recompute(None);
+            self.validation_errors = self.draft.validate();
+            self.is_validated = true;
+        }
+        if patch.save {
+            self.save(window, cx);
+        }
+    }
+
+    pub(crate) fn agent_preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_pdf(window, cx);
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {

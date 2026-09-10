@@ -591,6 +591,10 @@ impl Form1601CView {
         }
     }
 
+    pub(crate) fn agent_preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_pdf(window, cx);
+    }
+
     fn show_scaffold_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.status_message = Some(SCAFFOLD_MESSAGE.to_string());
         use gpui_component::WindowExt;

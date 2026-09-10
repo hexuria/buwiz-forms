@@ -1026,6 +1026,19 @@ impl ProfileManagerView {
         });
     }
 
+    pub(crate) fn agent_active_tab(&self) -> crate::agent::ids::ProfileManagerTab {
+        crate::agent::ids::ProfileManagerTab::from_index(self.active_tab)
+            .unwrap_or(crate::agent::ids::ProfileManagerTab::Tax)
+    }
+
+    pub(crate) fn agent_set_tab(&mut self, tab: crate::agent::ids::ProfileManagerTab) {
+        if tab == crate::agent::ids::ProfileManagerTab::Cor {
+            self.ocr_selected_version_id = None;
+            self.interactive_document_viewer = None;
+        }
+        self.active_tab = tab.index();
+    }
+
     /// Shows the reason cross-view navigation was refused. App-level callers
     /// can use this together with [`Self::has_unsaved_compliance_changes`]
     /// before opening a filing form or replacing the edited profile.
@@ -4680,7 +4693,7 @@ impl Render for ProfileManagerView {
                                             .bg(cx.theme().secondary)
                                             .child(rsx! {
                                                 <div
-                                                    id="tab_0"
+                                                    id={crate::agent::ids::PROFILE_TAB_TAX}
                                                     px_4
                                                     py_1p5
                                                     rounded_md
@@ -4706,7 +4719,7 @@ impl Render for ProfileManagerView {
                                             })
                                             .child(rsx! {
                                                 <div
-                                                    id="tab_1"
+                                                    id={crate::agent::ids::PROFILE_TAB_COR}
                                                     px_4
                                                     py_1p5
                                                     rounded_md
@@ -4734,7 +4747,7 @@ impl Render for ProfileManagerView {
                                             })
                                             .child(rsx! {
                                                 <div
-                                                    id="tab_2"
+                                                    id={crate::agent::ids::PROFILE_TAB_EMAIL}
                                                     px_4
                                                     py_1p5
                                                     rounded_md
@@ -4761,7 +4774,7 @@ impl Render for ProfileManagerView {
                                             .when(global_pins_enabled, |this| {
                                                 this.child(rsx! {
                                                     <div
-                                                        id="tab_3"
+                                                        id={crate::agent::ids::PROFILE_TAB_SECURITY}
                                                         px_4
                                                         py_1p5
                                                         rounded_md
@@ -4789,7 +4802,7 @@ impl Render for ProfileManagerView {
                                             .when(self.editing_id.is_some(), |this| {
                                                 this.child(rsx! {
                                                     <div
-                                                        id="tab_4"
+                                                        id={crate::agent::ids::PROFILE_TAB_EXPORT}
                                                         px_4
                                                         py_1p5
                                                         rounded_md
@@ -4816,7 +4829,7 @@ impl Render for ProfileManagerView {
                                                 .when(profile_calendar_available, |this| {
                                                     this.child(rsx! {
                                                         <div
-                                                            id="tab_6"
+                                                            id={crate::agent::ids::PROFILE_TAB_CALENDAR}
                                                             px_4
                                                             py_1p5
                                                             rounded_md
@@ -4850,18 +4863,42 @@ impl Render for ProfileManagerView {
                                     .flex_col()
                                     .gap_4()
                                     .w_full()
-                                    .child(self.render_tax_profile_tab(
-                                        is_individual,
-                                        is_cooperative,
-                                        date_label,
-                                        cx,
-                                    ))
-                                    .child(self.render_ocr_tab(cx))
-                                    .child(self.render_email_settings_tab(cx))
-                                    .child(self.render_security_tab(global_pins_enabled, cx))
-                                    .child(self.render_export_tab(cx))
+                                    .child(
+                                        div()
+                                            .id(crate::agent::ids::PROFILE_SECTION_TAX)
+                                            .child(self.render_tax_profile_tab(
+                                                is_individual,
+                                                is_cooperative,
+                                                date_label,
+                                                cx,
+                                            )),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(crate::agent::ids::PROFILE_SECTION_COR)
+                                            .child(self.render_ocr_tab(cx)),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(crate::agent::ids::PROFILE_SECTION_EMAIL)
+                                            .child(self.render_email_settings_tab(cx)),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(crate::agent::ids::PROFILE_SECTION_SECURITY)
+                                            .child(self.render_security_tab(global_pins_enabled, cx)),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(crate::agent::ids::PROFILE_SECTION_EXPORT)
+                                            .child(self.render_export_tab(cx)),
+                                    )
                                     .when(profile_calendar_available, |this| {
-                                        this.child(self.render_calendar_tab(cx))
+                                        this.child(
+                                            div()
+                                                .id(crate::agent::ids::PROFILE_SECTION_CALENDAR)
+                                                .child(self.render_calendar_tab(cx)),
+                                        )
                                     })
                             )
                             .when(self.active_tab != 1 && self.active_tab != 6, |this| {

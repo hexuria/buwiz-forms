@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "name": "bir-dues-overdue",
+  "app": "bir-desktop",
+  "params": [],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "global",
+      "op": "click",
+      "target": "global_dashboard_btn",
+      "needs": ["wait"]
+    },
+    {
+      "id": "page",
+      "op": "assert",
+      "target": "page-global-dashboard",
+      "needs": ["global"]
+    },
+    {
+      "id": "list",
+      "op": "assert",
+      "target": "dues-list",
+      "needs": ["page"]
+    }
+  ]
+}
