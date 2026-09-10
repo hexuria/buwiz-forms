@@ -4,11 +4,14 @@
 //! join; `id=` stays the cell id. Catalog `official_field_key` stamps are
 //! TIN/branch only. Unstamped leftover keys keep cell-id `name=`;
 //! `html-frozen/<slug>/writer-cells.json` may copy a writer value onto that
-//! cell when the freeze sheet has a 1:1 printed-caption join. That is not
-//! an `official_field_key` harvest and must not invent N:1 peso+cent rows.
+//! cell when the freeze sheet has a 1:1 printed-caption join (`joins`) or
+//! split a leftover `{:.2}` money key onto a catalog peso comb plus 2-slot
+//! cents comb (`money_joins`). Those are fill-paths, not `official_field_key`
+//! harvests. Do not stamp `name=` on peso/cent boxes and do not left-align
+//! the dotted writer string into the peso comb.
 
 use bir_core::forms::form_2551q::Form2551QDraft;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 include!(concat!(env!("OUT_DIR"), "/frozen_bundles.rs"));
 
@@ -100,6 +103,10 @@ fn fill_by_name_with_cells(
         }
     }
 
+    apply_replacements(html, replacements)
+}
+
+fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>) -> String {
     replacements.sort_by_key(|(start, _, _)| *start);
     let mut out = String::with_capacity(html.len() + replacements.len() * 8);
     let mut last = 0;
@@ -124,7 +131,18 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_writer_cells(json: &str) -> Result<BTreeMap<String, String>, String> {
+struct MoneyJoin {
+    writer_key: String,
+    peso_html_id: String,
+    cent_html_id: String,
+}
+
+struct WriterCells {
+    joins: BTreeMap<String, String>,
+    money_joins: Vec<MoneyJoin>,
+}
+
+fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
     let payload: serde_json::Value =
         serde_json::from_str(json).map_err(|error| format!("writer-cells.json: {error}"))?;
     let joins = payload
@@ -152,14 +170,257 @@ fn parse_writer_cells(json: &str) -> Result<BTreeMap<String, String>, String> {
             return Err(format!("writer-cells.json duplicate writer_key {key}"));
         }
     }
-    Ok(cells)
+
+    let mut money_joins = Vec::new();
+    if let Some(rows) = payload
+        .get("money_joins")
+        .and_then(|value| value.as_array())
+    {
+        for join in rows {
+            let key = join
+                .get("writer_key")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "writer-cells.json money_join missing writer_key".to_string())?;
+            let peso_html_id = join
+                .get("peso_html_id")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| format!("writer-cells.json {key} missing peso_html_id"))?;
+            let cent_html_id = join
+                .get("cent_html_id")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| format!("writer-cells.json {key} missing cent_html_id"))?;
+            if peso_html_id.starts_with("frm") || cent_html_id.starts_with("frm") {
+                return Err(format!(
+                    "writer-cells.json {key} must target cell ids, not stamped names"
+                ));
+            }
+            if peso_html_id == cent_html_id {
+                return Err(format!(
+                    "writer-cells.json {key} peso and cent cells must differ"
+                ));
+            }
+            if cells.contains_key(key) {
+                return Err(format!(
+                    "writer-cells.json duplicate writer_key {key} across joins and money_joins"
+                ));
+            }
+            if money_joins
+                .iter()
+                .any(|row: &MoneyJoin| row.writer_key == key)
+            {
+                return Err(format!(
+                    "writer-cells.json duplicate money writer_key {key}"
+                ));
+            }
+            money_joins.push(MoneyJoin {
+                writer_key: key.to_string(),
+                peso_html_id: peso_html_id.to_string(),
+                cent_html_id: cent_html_id.to_string(),
+            });
+        }
+    }
+
+    let mut used_cells: BTreeSet<&str> = cells.values().map(|id| id.as_str()).collect();
+    for join in &money_joins {
+        if !used_cells.insert(&join.peso_html_id) {
+            return Err(format!(
+                "writer-cells.json {} peso cell {} is already a fill target",
+                join.writer_key, join.peso_html_id
+            ));
+        }
+        if !used_cells.insert(&join.cent_html_id) {
+            return Err(format!(
+                "writer-cells.json {} cent cell {} is already a fill target",
+                join.writer_key, join.cent_html_id
+            ));
+        }
+    }
+
+    Ok(WriterCells {
+        joins: cells,
+        money_joins,
+    })
 }
 
-fn writer_cell_map(slug: &str) -> Result<BTreeMap<String, String>, String> {
+fn writer_cells(slug: &str) -> Result<WriterCells, String> {
     match writer_cells_json(slug) {
         Some(json) => parse_writer_cells(json),
-        None => Ok(BTreeMap::new()),
+        None => Ok(WriterCells {
+            joins: BTreeMap::new(),
+            money_joins: Vec::new(),
+        }),
     }
+}
+
+fn grouped_input_indices<'a>(tags: &[InputTag<'a>]) -> BTreeMap<&'a str, Vec<usize>> {
+    let mut grouped: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (index, tag) in tags.iter().enumerate() {
+        grouped.entry(tag.name).or_default().push(index);
+    }
+    grouped
+}
+
+fn ordered_comb_indices(tags: &[InputTag<'_>], indices: &[usize]) -> Vec<usize> {
+    let mut ordered = indices.to_vec();
+    ordered.sort_by_key(|&index| tags[index].slot.unwrap_or(usize::MAX));
+    ordered
+}
+
+fn split_writer_money(value: &str) -> Option<(String, String)> {
+    let cleaned: String = value
+        .chars()
+        .filter(|ch| *ch != ',' && !ch.is_whitespace())
+        .collect();
+    if cleaned.is_empty() || cleaned.starts_with('-') {
+        return None;
+    }
+    let (peso, cents) = match cleaned.split_once('.') {
+        Some((peso, cents)) => (peso, cents),
+        None => (cleaned.as_str(), "00"),
+    };
+    if peso.chars().any(|ch| !ch.is_ascii_digit()) {
+        return None;
+    }
+    if cents.is_empty() || cents.len() > 2 || cents.chars().any(|ch| !ch.is_ascii_digit()) {
+        return None;
+    }
+    Some((peso.to_string(), format!("{cents:0<2}")))
+}
+
+fn right_aligned_slot_values(slots: usize, digits: &str) -> Option<Vec<String>> {
+    if digits.len() > slots {
+        return None;
+    }
+    let pad = slots - digits.len();
+    let mut values = vec![String::new(); slots];
+    for (offset, ch) in digits.chars().enumerate() {
+        values[pad + offset] = ch.to_string();
+    }
+    Some(values)
+}
+
+fn fill_money_joins(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    money_joins: &[MoneyJoin],
+) -> String {
+    if money_joins.is_empty() {
+        return html.to_string();
+    }
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for join in money_joins {
+        let Some(value) = fields.get(&join.writer_key) else {
+            continue;
+        };
+        if value.is_empty() {
+            continue;
+        }
+        let Some((peso, cents)) = split_writer_money(value) else {
+            continue;
+        };
+        let Some(peso_indices) = grouped.get(join.peso_html_id.as_str()) else {
+            continue;
+        };
+        let Some(cent_indices) = grouped.get(join.cent_html_id.as_str()) else {
+            continue;
+        };
+        let peso_ordered = ordered_comb_indices(&tags, peso_indices);
+        let cent_ordered = ordered_comb_indices(&tags, cent_indices);
+        if cent_ordered.len() != 2 {
+            continue;
+        }
+        let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) else {
+            continue;
+        };
+        for (offset, index) in peso_ordered.into_iter().enumerate() {
+            let writer = (offset == 0).then_some(value.as_str());
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, &peso_values[offset], writer),
+            ));
+        }
+        for (offset, index) in cent_ordered.into_iter().enumerate() {
+            let ch = cents
+                .chars()
+                .nth(offset)
+                .map(|ch| ch.to_string())
+                .unwrap_or_default();
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, &ch, None),
+            ));
+        }
+    }
+    apply_replacements(html, replacements)
+}
+
+fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
+    if cells.joins.is_empty() && cells.money_joins.is_empty() {
+        return Ok(());
+    }
+    let tags = input_tags(html);
+    let present: BTreeSet<&str> = tags.iter().map(|tag| tag.name).collect();
+    let grouped = grouped_input_indices(&tags);
+    for (key, html_id) in &cells.joins {
+        if !present.contains(html_id.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells.html_id {html_id} for {key} is not an input name="
+            ));
+        }
+        if present.contains(key.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells {key} is already a stamped name=; remove the fill join"
+            ));
+        }
+    }
+    for join in &cells.money_joins {
+        if !present.contains(join.peso_html_id.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells peso_html_id {} for {} is not an input name=",
+                join.peso_html_id, join.writer_key
+            ));
+        }
+        if !present.contains(join.cent_html_id.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells cent_html_id {} for {} is not an input name=",
+                join.cent_html_id, join.writer_key
+            ));
+        }
+        if present.contains(join.writer_key.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells {} is already a stamped name=; remove the money join",
+                join.writer_key
+            ));
+        }
+        let peso_slots = grouped
+            .get(join.peso_html_id.as_str())
+            .map(|indices| indices.len())
+            .unwrap_or(0);
+        let cent_slots = grouped
+            .get(join.cent_html_id.as_str())
+            .map(|indices| indices.len())
+            .unwrap_or(0);
+        if peso_slots < 3 {
+            return Err(format!(
+                "{slug}: writer-cells {} peso comb {} must have at least 3 slots",
+                join.writer_key, join.peso_html_id
+            ));
+        }
+        if cent_slots != 2 {
+            return Err(format!(
+                "{slug}: writer-cells {} cent comb {} must be a 2-slot comb",
+                join.writer_key, join.cent_html_id
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn fill_bundle(
@@ -167,28 +428,14 @@ fn fill_bundle(
     fields: &BTreeMap<String, String>,
     slug: &str,
 ) -> Result<String, String> {
-    let cells = writer_cell_map(slug)?;
-    if !cells.is_empty() {
-        let present: std::collections::BTreeSet<&str> =
-            input_tags(html).into_iter().map(|tag| tag.name).collect();
-        for (key, html_id) in &cells {
-            if !present.contains(html_id.as_str()) {
-                return Err(format!(
-                    "{slug}: writer-cells.html_id {html_id} for {key} is not an input name="
-                ));
-            }
-            if present.iter().any(|name| *name == key.as_str()) {
-                return Err(format!(
-                    "{slug}: writer-cells {key} is already a stamped name=; remove the fill join"
-                ));
-            }
-        }
-    }
-    Ok(fill_by_name_with_cells(html, fields, &cells))
+    let cells = writer_cells(slug)?;
+    validate_writer_cells(html, slug, &cells)?;
+    let filled = fill_by_name_with_cells(html, fields, &cells.joins);
+    Ok(fill_money_joins(&filled, fields, &cells.money_joins))
 }
 
-/// Frozen 2551Q HTML with writer values on stamped `name=` inputs and
-/// writer-cell identity joins.
+/// Frozen 2551Q HTML with writer values on stamped `name=` inputs,
+/// writer-cell identity joins, and documented money_joins.
 pub fn fill_2551q(draft: &Form2551QDraft) -> String {
     fill_bundle(html_2551q(), &draft.to_bir_field_map(), "2551q-2018")
         .expect("2551q-2018 writer-cells")
@@ -562,17 +809,23 @@ mod tests {
     #[test]
     fn fill_by_name_without_writer_cells_leaves_unstamped_identity_blank() {
         let html = bundle("1601c-2018").expect("1601c").html;
-        let fields = identity_map(
+        let mut fields = identity_map(
             "frm1601c:txtTaxpayerName",
             "NEXUS PAYROLL CORP",
             "frm1601c:txtAddress",
             "42 Banahaw Street",
         );
+        fields.insert("txtEmail".to_string(), "juan@example.com".to_string());
+        fields.insert("frm1601c:txtTax14".to_string(), "8888.88".to_string());
         let filled = fill_by_name(html, &fields);
         assert_eq!(comb_text(&filled, "p1c36"), "");
         assert_eq!(comb_text(&filled, "p1c38"), "");
+        assert_eq!(comb_text(&filled, "p1c48"), "");
+        assert_eq!(comb_text(&filled, "p1c56"), "");
         assert!(!filled.contains("NEXUS PAYROLL CORP"));
         assert!(!filled.contains("42 Banahaw Street"));
+        assert!(!filled.contains("juan@example.com"));
+        assert!(!filled.contains("8888.88"));
     }
 
     #[test]
@@ -597,12 +850,41 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1601c_fills_email_and_splits_tax_money() {
+        let mut fields = BTreeMap::new();
+        fields.insert("txtEmail".to_string(), "juan@example.com".to_string());
+        fields.insert("frm1601c:txtTax14".to_string(), "8888.88".to_string());
+        fields.insert("frm1601c:txtTax25".to_string(), "7777.77".to_string());
+        let html = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c48"), "juan@example.com");
+        assert!(html.contains("juan@example.com"));
+        assert_eq!(comb_text(&html, "p1c56"), "8888");
+        assert_eq!(comb_text(&html, "p1c58"), "88");
+        assert_eq!(comb_text(&html, "p1c101"), "7777");
+        assert_eq!(comb_text(&html, "p1c103"), "77");
+        assert!(!comb_text(&html, "p1c56").contains('.'));
+        assert!(!comb_text(&html, "p1c101").contains('.'));
+        assert!(html.contains("8888.88"));
+        assert!(html.contains("7777.77"));
+        let stamped: std::collections::BTreeSet<String> = input_tags(&html)
+            .into_iter()
+            .map(|tag| tag.name.to_string())
+            .filter(|name| name.starts_with("frm1601c:"))
+            .collect();
+        assert_eq!(stamped.len(), 4);
+        assert!(!html.contains("name=\"frm1601c:txtTax14\""));
+        assert!(!html.contains("name=\"txtEmail\""));
+    }
+
+    #[test]
     fn filled_document_2551q_fills_taxpayer_name_and_address() {
         let html = filled_2551q_document(&sample_draft());
         assert_eq!(comb_text(&html, "p1c30"), "Frozen Html Fixture");
         assert_eq!(comb_text(&html, "p1c32"), "New Cabalan");
+        assert_eq!(comb_text(&html, "p1c39"), "tax@example.com");
         assert!(html.contains("Frozen Html Fixture"));
         assert!(html.contains("New Cabalan"));
+        assert!(html.contains("tax@example.com"));
         let stamped: std::collections::BTreeSet<String> = input_tags(&html)
             .into_iter()
             .map(|tag| tag.name.to_string())
@@ -618,26 +900,37 @@ mod tests {
     }
 
     #[test]
-    fn filled_document_does_not_invent_1601c_tax_peso_cent_join() {
+    fn filled_document_2551q_fills_email_and_splits_tax_money() {
         let mut fields = BTreeMap::new();
-        fields.insert("frm1601c:txtTax14".to_string(), "8888.88".to_string());
-        fields.insert("frm1601c:txtTax25".to_string(), "7777.77".to_string());
-        let html = filled_document("1601c-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c56"), "");
-        assert_eq!(comb_text(&html, "p1c58"), "");
-        assert!(!html.contains("8888.88"));
-        assert!(!html.contains("7777.77"));
+        fields.insert("txtEmail".to_string(), "andrea@example.com".to_string());
+        fields.insert("frm2551Qv2018:txt14".to_string(), "1643.10".to_string());
+        fields.insert("txtATCAmt1".to_string(), "54770.00".to_string());
+        let html = filled_document("2551q-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c39"), "andrea@example.com");
+        assert!(html.contains("andrea@example.com"));
+        assert_eq!(comb_text(&html, "p1c50"), "1643");
+        assert_eq!(comb_text(&html, "p1c52"), "10");
+        assert_eq!(comb_text(&html, "p2c15"), "54770");
+        assert_eq!(comb_text(&html, "p2c17"), "00");
+        assert!(!comb_text(&html, "p1c50").contains('.'));
+        assert!(!comb_text(&html, "p2c15").contains('.'));
+        assert!(html.contains("1643.10"));
+        assert!(html.contains("54770.00"));
+        assert!(!html.contains("name=\"frm2551Qv2018:txt14\""));
+        assert!(!html.contains("name=\"txtATCAmt1\""));
+        assert!(!html.contains("name=\"txtEmail\""));
     }
 
     #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         for slug in ["1601c-2018", "2551q-2018"] {
             let html = bundle(slug).unwrap().html;
-            let cells = writer_cell_map(slug).unwrap();
-            assert!(!cells.is_empty(), "{slug}");
+            let cells = writer_cells(slug).unwrap();
+            assert!(!cells.joins.is_empty(), "{slug}");
+            assert!(!cells.money_joins.is_empty(), "{slug} money_joins");
             let present: std::collections::BTreeSet<&str> =
                 input_tags(html).into_iter().map(|tag| tag.name).collect();
-            for (key, html_id) in &cells {
+            for (key, html_id) in &cells.joins {
                 assert!(
                     present.contains(html_id.as_str()),
                     "{slug} {key} -> {html_id}"
@@ -651,6 +944,24 @@ mod tests {
                     "{slug} html_id must be a cell id: {html_id}"
                 );
                 assert!(!present.contains(key.as_str()), "{slug} {key} is stamped");
+            }
+            for join in &cells.money_joins {
+                assert!(
+                    present.contains(join.peso_html_id.as_str()),
+                    "{slug} {} peso {}",
+                    join.writer_key,
+                    join.peso_html_id
+                );
+                assert!(
+                    present.contains(join.cent_html_id.as_str()),
+                    "{slug} {} cent {}",
+                    join.writer_key,
+                    join.cent_html_id
+                );
+                assert!(join.peso_html_id.starts_with("p"));
+                assert!(join.cent_html_id.starts_with("p"));
+                assert_ne!(join.peso_html_id, join.cent_html_id);
+                assert!(!present.contains(join.writer_key.as_str()));
             }
         }
     }

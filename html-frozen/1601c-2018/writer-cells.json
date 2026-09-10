@@ -1,7 +1,7 @@
 {
   "form_id": "1601c-v2018",
   "html_slug": "1601c-2018",
-  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. This is not an official_field_key harvest. Do not join N:1 peso+cent tax rows or leftover keys that share an item number with another leftover.",
+  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. That is not an official_field_key harvest. R3 peso+cent tax rows may be listed in money_joins: one leftover money key maps to peso_html_id plus cent_html_id. Split the writer {:.2} string: pesos right-aligned in the peso comb (leading slots empty, not zero-padded, no decimal glyph), cents in the 2-slot comb. Do not stamp name= on either comb. Do not left-align the dotted string into the peso comb. Do not join leftover keys that share an item number with another leftover except as documented here.",
   "joins": [
     {
       "writer_key": "frm1601c:txtTaxpayerName",
@@ -37,16 +37,39 @@
       "catalog_id": "1601c-2018/p1/money-12-1",
       "printed": "10 Telephone",
       "reason": "exactly one 12-slot comb on the item 10 row; leftover-unique txtTelNum; catalog html_id_hint"
+    },
+    {
+      "writer_key": "txtEmail",
+      "html_id": "p1c48",
+      "catalog_id": "1601c-2018/p1/money-34-1",
+      "printed": "12 Email Address",
+      "reason": "exactly one 34-slot comb under the item 12 caption; leftover-unique txtEmail (unprefixed XML key); catalog html_id_hint. Catalog has no official_field_key (gap: no unique fields.json key for this box), so this is a fill-path join, not a stamp."
+    }
+  ],
+  "money_joins": [
+    {
+      "writer_key": "frm1601c:txtTax14",
+      "peso_html_id": "p1c56",
+      "cent_html_id": "p1c58",
+      "peso_catalog_id": "1601c-2018/p1/money-11-1",
+      "cent_catalog_id": "1601c-2018/p1/comb-2s-3",
+      "printed": "14 Total Amount of Compensation",
+      "reason": "Stage 3 R3 N:1 fill-path, not a catalog harvest. fields.json leftover-unique decimal-amount item 14. Freeze sheet has an 11-slot peso comb plus a 2-slot cents comb with the printed decimal between them. Catalog official_field_key is empty on both boxes. Split insert_money {:.2}; do not stamp name=."
+    },
+    {
+      "writer_key": "frm1601c:txtTax25",
+      "peso_html_id": "p1c101",
+      "cent_html_id": "p1c103",
+      "peso_catalog_id": "1601c-2018/p1/money-11-12",
+      "cent_catalog_id": "1601c-2018/p1/comb-2s-14",
+      "printed": "25 Total Taxes Withheld",
+      "reason": "Stage 3 R3 N:1 fill-path for the page-1 tax-withheld total users notice. Same peso+cent contract as txtTax14. Other Part II amount rows stay unjoined."
     }
   ],
   "not_joined": [
     {
-      "writer_key": "frm1601c:txtTax14",
-      "reason": "Stage 3 R3 N:1: item 14 is peso comb p1c56 plus cent comb p1c58. Do not invent a shared name= or split."
-    },
-    {
-      "writer_key": "frm1601c:txtTax25",
-      "reason": "Same R3 N:1 peso+cent pair as the other Part II amount rows."
+      "writer_key": "frm1601c:txtTax15",
+      "reason": "Same R3 N:1 peso+cent pair as the other Part II amount rows. Only txtTax14 and txtTax25 are demo-joined."
     },
     {
       "writer_key": "frm1601c:txtLineBus",
