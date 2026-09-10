@@ -1,0 +1,462 @@
+//! Painted GPUI entry. Called from the `bir` binary.
+
+#[cfg(feature = "agent")]
+use crate::agent;
+use crate::global_actions::*;
+use crate::{app, ipc, platform};
+use gpui::*;
+use gpui_component::*;
+
+use std::path::PathBuf;
+
+#[cfg(feature = "dev-tools")]
+const DEV_EXPORT_LIVE_DATABASE_FLAG: &str = "--dev-export-live-database";
+
+#[cfg(feature = "dev-tools")]
+fn parse_dev_export_destination<I>(arguments: I) -> Result<Option<PathBuf>, String>
+where
+    I: IntoIterator<Item = std::ffi::OsString>,
+{
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let Some(flag) = arguments.next() else {
+        return Ok(None);
+    };
+    if flag != std::ffi::OsStr::new(DEV_EXPORT_LIVE_DATABASE_FLAG) {
+        return Ok(None);
+    }
+
+    let destination = arguments.next().ok_or_else(|| {
+        format!("{DEV_EXPORT_LIVE_DATABASE_FLAG} requires a destination ZIP path")
+    })?;
+    if arguments.next().is_some() {
+        return Err(format!(
+            "{DEV_EXPORT_LIVE_DATABASE_FLAG} accepts exactly one destination ZIP path"
+        ));
+    }
+
+    Ok(Some(PathBuf::from(destination)))
+}
+
+#[cfg(feature = "dev-tools")]
+fn export_live_database_for_diagnostics(destination: &std::path::Path) -> Result<(), String> {
+    let source = bir_core::db::default_database_path();
+
+    let file_name = destination
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Destination must have a valid UTF-8 file name".to_string())?;
+    let temporary = destination.with_file_name(format!(
+        ".{file_name}.{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+
+    if let Err(error) = bir_core::export_existing_database_zip(&source, &temporary) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(format!("Could not export database: {error}"));
+    }
+
+    if let Err(error) = std::fs::rename(&temporary, destination) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(format!(
+            "Could not atomically install {}: {error}",
+            destination.display()
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "dev-tools")]
+fn run_dev_command_if_requested() -> Option<i32> {
+    match parse_dev_export_destination(std::env::args_os()) {
+        Ok(None) => None,
+        Err(error) => {
+            eprintln!("{error}");
+            Some(2)
+        }
+        Ok(Some(destination)) => match export_live_database_for_diagnostics(&destination) {
+            Ok(()) => {
+                println!("Exported live database to {}", destination.display());
+                Some(0)
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                Some(1)
+            }
+        },
+    }
+}
+
+struct Assets {
+    base: PathBuf,
+}
+
+fn persistent_log_appender() -> Option<tracing_appender::rolling::RollingFileAppender> {
+    let logs_dir = bir_core::platform::data_dir().join("logs");
+    let _ = std::fs::create_dir_all(&logs_dir);
+    Some(tracing_appender::rolling::never(&logs_dir, "ebirforms.log"))
+}
+
+impl AssetSource for Assets {
+    fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        std::fs::read(self.base.join(path))
+            .map(|data| Some(std::borrow::Cow::Owned(data)))
+            .map_err(|err| err.into())
+    }
+
+    fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
+        std::fs::read_dir(self.base.join(path))
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| {
+                        entry
+                            .ok()
+                            .and_then(|entry| entry.file_name().into_string().ok())
+                            .map(gpui::SharedString::from)
+                    })
+                    .collect()
+            })
+            .map_err(|err| err.into())
+    }
+}
+
+pub fn run_gui() {
+    dotenvy::dotenv().ok();
+
+    #[cfg(feature = "dev-tools")]
+    if let Some(exit_code) = run_dev_command_if_requested() {
+        std::process::exit(exit_code);
+    }
+
+    ipc::prevent_multiple_instances();
+    platform::enforce_single_instance();
+
+    let developer_mode = std::env::var("DEVELOPER_MODE")
+        .unwrap_or_else(|_| "false".to_string())
+        .to_lowercase()
+        == "true";
+
+    // Initialize structured logging. The native-output diagnostic intentionally
+    // remains stdout-only because its external driver captures that stream and
+    // must not depend on the mutable shared app-group log.
+    use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        // The binary crate is `bir` (bin target name); its modules log under
+        // that target, not `bir_desktop`, so both are listed to avoid silently
+        // dropping app-level logs.
+        if developer_mode {
+            "bir=debug,bir_desktop=debug,bir_print=debug,bir_core=info"
+                .parse()
+                .unwrap()
+        } else {
+            "bir=info,bir_desktop=info,bir_print=error,bir_core=info"
+                .parse()
+                .unwrap()
+        }
+    });
+
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_target(true)
+        .with_file(developer_mode)
+        .with_line_number(developer_mode);
+
+    let file_layer = persistent_log_appender().map(|appender| {
+        tracing_subscriber::fmt::layer()
+            .with_writer(appender)
+            .with_ansi(false)
+            .with_target(true)
+            .with_file(developer_mode)
+            .with_line_number(developer_mode)
+    });
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+
+    tracing::info!(
+        "🔍 Tracing initialized (developer_mode: {})",
+        developer_mode
+    );
+
+    let assets_dir = platform::find_resource_dir("assets");
+    let app = gpui_kit::application().with_assets(Assets { base: assets_dir });
+
+    // When the user clicks the dock icon or re-launches via Alfred/Spotlight,
+    // macOS fires applicationShouldHandleReopen. Restore the window.
+    app.on_reopen(|_cx| {
+        platform::show_in_dock();
+    });
+
+    app.run(move |cx| {
+        gpui_kit::init(cx);
+        platform::bind_global_keys(cx);
+
+        ipc::start_ipc_listener(cx);
+        #[cfg(target_os = "macos")]
+        let macos_quit_router = platform::install_app_menu(cx);
+
+        let bounds =
+            gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
+
+        cx.spawn(async move |cx| {
+            let (db, profiles) = cx
+                .background_executor()
+                .spawn(async move {
+                    let (db, db_path, recovered_backup) = bir_core::db::open_live_database()
+                        .expect("Failed to open database");
+                    if let Some(backup_path) = recovered_backup {
+                        eprintln!(
+                            "Recovered unreadable database at {} by moving it to {}",
+                            db_path.display(),
+                            backup_path.display()
+                        );
+                    }
+
+                    bir_core::reference::get_all_rdos();
+                    bir_core::reference::get_all_zipcodes();
+                    bir_core::reference::get_all_tax_types();
+                    bir_core::reference::get_all_regions();
+
+                    let profiles = db.list_profiles().unwrap_or_default();
+                    let db_arc = std::sync::Arc::new(std::sync::Mutex::new(db));
+
+                    (db_arc, profiles)
+                })
+                .await;
+
+            // Phase 2: In-App Background Orchestrator
+            let cron_db = db.clone();
+            std::thread::spawn(move || {
+                if let Ok(rt) = tokio::runtime::Runtime::new() {
+                    rt.block_on(async move {
+                        bir_core::background_cron::start_cron_jobs(cron_db).await;
+                    });
+                } else {
+                    eprintln!("Failed to initialize Tokio runtime for background tasks");
+                }
+            });
+
+            // Phase 2b: Global Hotkey Listener (all platforms, except Mac App
+            // Store). The hotkey manager is created and kept alive inside the
+            // polling task below — a manager dropped here would immediately
+            // unregister the hotkey. This DB handle lets that task re-read the
+            // stored combo and re-register when the user changes it.
+            #[cfg(not(feature = "mas_build"))]
+            let hotkey_db = db.clone();
+
+            // Phase 3: System Tray Integration
+            let tray_menu = tray_icon::menu::Menu::new();
+            let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);
+            let hide_tray_i = tray_icon::menu::MenuItem::new("Hide eBIRForms", true, None);
+            let quit_i = tray_icon::menu::MenuItem::new("Quit", true, None);
+            tray_menu
+                .append_items(&[
+                    &show_i,
+                    &hide_tray_i,
+                    &tray_icon::menu::PredefinedMenuItem::separator(),
+                    &quit_i,
+                ])
+                .expect("Failed to append tray menu items");
+
+            let icon_data = include_bytes!("../../../assets/images/e_logo.png");
+            let img = image::load_from_memory(icon_data)
+                .expect("Failed to load tray icon")
+                .into_rgba8();
+            let (width, height) = img.dimensions();
+            let tray_icon = tray_icon::Icon::from_rgba(img.into_raw(), width, height)
+                .expect("Failed to create tray icon");
+
+            let tray = tray_icon::TrayIconBuilder::new()
+                .with_menu(Box::new(tray_menu))
+                .with_tooltip("eBIRForms")
+                .with_icon(tray_icon)
+                .build()
+                .unwrap();
+
+            let options = WindowOptions {
+                titlebar: Some(TitlebarOptions {
+                    title: Some("e-BIRForms".into()),
+                    ..Default::default()
+                }),
+                window_bounds: Some(WindowBounds::Maximized(bounds)),
+                window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
+                ..Default::default()
+            };
+
+            #[cfg(feature = "agent")]
+            let agent_session = agent::maybe_start();
+
+            let _ = cx.open_window(options, move |window, cx| {
+                window.on_window_should_close(cx, |_, _cx| {
+                    // Phase 4: Window Close & macOS Dock Hijacking
+                    platform::hide_from_dock();
+                    false // Prevent window destruction
+                });
+
+                let view = cx.new(|cx| {
+                    let mut state = app::AppState::new(db, profiles, window, cx);
+                    #[cfg(feature = "agent")]
+                    if let Some(session) = agent_session.clone() {
+                        state.attach_agent(session.mailbox, session.token, cx);
+                    }
+                    state
+                });
+                let main_window = window.window_handle();
+                let tray_app_state = view.clone();
+                #[cfg(target_os = "macos")]
+                macos_quit_router.bind(main_window, &view);
+                #[cfg(target_os = "macos")]
+                platform::register_settings_menu_action(
+                    main_window,
+                    view.clone(),
+                    cx,
+                );
+
+                // Listen to tray events
+                let menu_channel = tray_icon::menu::MenuEvent::receiver();
+                let tray_channel = tray_icon::TrayIconEvent::receiver();
+
+                cx.spawn(async move |cx| {
+                    let mut tray = Some(tray);
+
+                    // Own the global hotkey manager here so it stays alive for
+                    // the app's lifetime (dropping it unregisters the hotkey).
+                    #[cfg(not(feature = "mas_build"))]
+                    let hotkey_manager = match global_hotkey::GlobalHotKeyManager::new() {
+                        Ok(manager) => Some(manager),
+                        Err(error) => {
+                            tracing::warn!(%error, "Failed to initialize global hotkey manager");
+                            None
+                        }
+                    };
+                    #[cfg(not(feature = "mas_build"))]
+                    let mut registered_hotkey: Option<global_hotkey::hotkey::HotKey> = None;
+                    #[cfg(not(feature = "mas_build"))]
+                    let mut current_combo: Option<String> = None;
+                    #[cfg(not(feature = "mas_build"))]
+                    let mut hotkey_tick: u32 = 0;
+
+                    loop {
+                        if let Ok(event) = menu_channel.try_recv() {
+                            if event.id == show_i.id() {
+                                cx.update(|cx| {
+                                    platform::show_in_dock();
+                                    cx.activate(true);
+                                });
+                            } else if event.id == hide_tray_i.id() {
+                                cx.update(|_cx| {
+                                    platform::hide_from_dock();
+                                });
+                            } else if event.id == quit_i.id() {
+                                let should_stop = cx.update(|cx| {
+                                    match main_window.update(cx, |_, window, cx| {
+                                        tray_app_state.update(cx, |state, cx| {
+                                            state.request_application_quit(window, cx, || {
+                                                drop(tray.take());
+                                            })
+                                        })
+                                    }) {
+                                        Ok(should_quit) => should_quit,
+                                        Err(error) => {
+                                            tracing::warn!(%error, "Could not route tray Quit through the application state");
+                                            false
+                                        }
+                                    }
+                                });
+                                if should_stop {
+                                    break;
+                                }
+                            }
+                        }
+
+                        // We no longer bring the app to foreground on tray click.
+                        // This allows native tray menus to open without side effects.
+                        if let Ok(_event) = tray_channel.try_recv() {}
+
+                        // Poll global hotkey events (cross-platform toggle).
+                        // The crate emits an event for both key press AND
+                        // release; toggling on both would hide then instantly
+                        // re-show the window. Act only on the press.
+                        #[cfg(not(feature = "mas_build"))]
+                        while let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv()
+                        {
+                            if event.state == global_hotkey::HotKeyState::Pressed {
+                                let _ = cx.update(|_cx| {
+                                    platform::toggle_app_visibility();
+                                });
+                            }
+                        }
+
+                        // Re-register the global hotkey when the stored combo
+                        // changes (checked immediately, then ~once per second)
+                        // so Settings changes apply without a restart.
+                        #[cfg(not(feature = "mas_build"))]
+                        {
+                            hotkey_tick = hotkey_tick.wrapping_add(1);
+                            if hotkey_tick == 1 || hotkey_tick.is_multiple_of(10) {
+                                let stored = hotkey_db
+                                    .lock()
+                                    .ok()
+                                    .and_then(|db| {
+                                        db.get_setting("global_hotkey_key").ok().flatten()
+                                    })
+                                    .filter(|value| !value.is_empty());
+                                if stored != current_combo {
+                                    if let (Some(manager), Some(old)) =
+                                        (hotkey_manager.as_ref(), registered_hotkey.take())
+                                    {
+                                        let _ = manager.unregister(old);
+                                    }
+                                    if let (Some(manager), Some(combo)) =
+                                        (hotkey_manager.as_ref(), stored.as_deref())
+                                    {
+                                        match platform::build_hotkey(combo) {
+                                            Some(hotkey) => match manager.register(hotkey) {
+                                                Ok(()) => {
+                                                    registered_hotkey = Some(hotkey);
+                                                    tracing::info!(
+                                                        "Global hotkey registered: {combo}"
+                                                    );
+                                                }
+                                                Err(error) => tracing::warn!(
+                                                    %error,
+                                                    "Failed to register global hotkey '{combo}'"
+                                                ),
+                                            },
+                                            None => tracing::warn!(
+                                                "Invalid global hotkey combo '{combo}'"
+                                            ),
+                                        }
+                                    }
+                                    current_combo = stored;
+                                }
+                            }
+                        }
+
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(100))
+                            .await;
+                    }
+                })
+                .detach();
+
+                cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+            });
+        })
+        .detach();
+    });
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn persistent_log_appender_writes_under_the_app_data_dir() {
+        assert!(persistent_log_appender().is_some());
+    }
+}

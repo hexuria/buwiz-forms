@@ -406,7 +406,7 @@ impl BirAgentHost {
     }
 
     /// Same patch `drain::apply_host` writes into `Form1601CView`.
-    pub fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
+    pub(crate) fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
         Agent1601CHostPatch {
             tax_14: self.form_1601c_tax_14(),
             tax_25: self.form_1601c_tax_25(),

@@ -48,6 +48,9 @@ zip = { version = "2", default-features = false, features = ["deflate", "time"] 
 totp-rs = { version = "5.7.1", features = ["gen_secret", "qr"] }
 uuid = { version = "1.23.1", features = ["v4"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6.12"
 keyring = { workspace = true, features = ["apple-native"] }

@@ -26,6 +26,8 @@ mod bridge;
 #[cfg(feature = "agent")]
 mod drain;
 #[cfg(feature = "agent")]
+pub mod headless;
+#[cfg(feature = "agent")]
 mod host;
 #[cfg(all(feature = "agent", target_os = "macos"))]
 mod macos_window;

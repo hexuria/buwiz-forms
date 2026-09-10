@@ -2613,7 +2613,10 @@ mod tests {
     fn test_db() -> Database {
         let conn = Connection::open_in_memory().unwrap();
         super::super::migrations::migrate_database(&conn).unwrap();
-        Database { conn }
+        Database {
+            conn,
+            _owner_lock: None,
+        }
     }
 
     fn test_profile() -> TaxpayerProfile {

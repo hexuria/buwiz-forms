@@ -54,7 +54,10 @@ pub fn maybe_start() -> Option<StartedAgent> {
                     Some(StartedAgent { mailbox, token })
                 }
                 Err(err) => {
-                    tracing::error!(error = %err, "gpui-agent failed to bind");
+                    tracing::error!(
+                        error = %err,
+                        "gpui-agent failed to bind; quit painted bir or bir-headless, or set GPUI_AGENT_ADDR (two AgentHosts cannot share a bind)"
+                    );
                     None
                 }
             }
