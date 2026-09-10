@@ -30,14 +30,17 @@ These are host constraints. They do not change protocol v1.
   writes. There is **no** protocol `Op::Yield` / `Takeover`.
 - **Single live-DB owner.** Painted `bir` and `bir-headless serve` both take
   an exclusive sidecar lock (`bir_data.db.owner.lock`) around
-  `app_database_path()`. A second process fails immediately with
-  `LiveDatabaseInUse`. Do not run GUI + headless against the same app-group
-  file at once (silent two-writer is not a bridge).
+  `default_database_path()` (or `BIR_DATABASE_PATH` in CI). A second process
+  fails immediately with `LiveDatabaseInUse`. Do not run the in-process
+  mailbox AgentHost and headless against the same app-group file at once.
+  There is no silent two-writer bridge. If Uriah later wants GUI updates
+  while the daemon runs, that is a protocol client — not this slice.
 - ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/ADR-001-daemon-sot.md))
-  is the long-term shape. **This slice is shared persistence only:** both
-  processes open `bir_core::db::app_database_path()` (default
-  `platform::data_dir()/bir_data.db` + the same SQLCipher key). The Mac GUI
-  is **not** a protocol client of the daemon yet — that is a follow-up.
+  is the long-term shape. **This slice is shared persistence only:** the
+  daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
+  + the same SQLCipher key). Smoke C reopen of the GUI is offline
+  verification of that file, not live sync. The Mac GUI is **not** a
+  protocol client of the daemon yet.
 - Preferred BIR `invoke` names (app-only, not CLI/MCP verbs) include
   `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
   `profile.tab`, `dues.list`, `jobs.list`, `search.open`, `palette.search`,
@@ -70,8 +73,11 @@ These are host constraints. They do not change protocol v1.
   `from_env` calls `authorize_bind`: non-loopback requires `GPUI_AGENT_REMOTE=1`
   **and** a token. Do not invent a second remote bind. Transport is still
   plaintext TCP.
-- `GPUI_AGENT_TOKEN`, when set, is required on every request. Recipe run and MCP
-  **always** need the same non-empty token on host and client. The token is never logged.
+- `GPUI_AGENT_TOKEN` is **required** for `bir-headless serve` against the live
+  `default_database_path()` (Mac app-group / `~/.taxman-ebir`). A temp
+  `BIR_DATABASE_PATH` override may omit it. When set, the token is required on
+  every request. Recipe run and MCP **always** need the same non-empty token on
+  host and client. The token is never logged.
   `hello.auth` is `"required"` when that token is configured on the host, `"none"`
   otherwise. The TCP thread enforces the token; the UI-thread mailbox drain passes
   the same configured token into `handle_request` so hello does not overwrite `auth`
@@ -145,10 +151,14 @@ Shell matches gpui-agent `apps/todo-headless` on pin `8857139af12fb033b4dd04eabd
 
 #### Smoke C (Mac) — quit GUI → serve → save → shutdown → open GUI
 
-Quit the painted GUI first (`17421` refused is expected). Headless and GUI both
-open `app_database_path()` → by default `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`
-plus the same keychain SQLCipher key. `BIR_DATABASE_PATH` overrides for tests;
-do **not** set it for this smoke. Set `GPUI_AGENT_TOKEN` for the live DB.
+**Daemon-only.** Quit the painted GUI first (`17421` refused is expected). Do
+not leave the mailbox AgentHost running. Headless opens
+`default_database_path()` once (`~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`)
+plus the same keychain SQLCipher key. `BIR_DATABASE_PATH` is CI-only; do
+**not** set it here. **`GPUI_AGENT_TOKEN` is required** for this live path.
+After `shutdown`, opening painted `bir` is **offline verification of the shared
+file**, not live sync. There is no silent two-writer bridge. Shut the
+daemon before GUI reopen.
 
 ```bash
 export GPUI_AGENT=1
