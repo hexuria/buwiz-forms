@@ -11,7 +11,9 @@ belong there. XML `name=` stamps are fail-closed joins from
 stamps from the identity catalog and `rules/forms/*/fields.json`. See
 `name-gaps.json` for writer keys that still sit on cell ids. Identity leftovers
 (name, address, RDO, ZIP, telephone, email) fill through `writer-cells.json`
-`joins` onto those cell ids. Demo tax amounts use `money_joins`: one leftover
+`joins` onto those cell ids. 2551Q Year Ended is `rtnMonth` + `txtYear` (MM/YYYY
+combs). Quarter / Calendar / Fiscal radios use `xbox_joins` (`X` when the
+writer is true). Demo tax amounts use `money_joins`: one leftover
 money key, peso comb + 2-slot cents, `{:.2}` split, pesos right-aligned. That
 is not an `official_field_key` stamp. Other Part II / schedule rows stay
 unjoined.

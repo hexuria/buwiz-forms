@@ -1,7 +1,7 @@
 {
   "form_id": "2551q-v2018",
   "html_slug": "2551q-2018",
-  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. That is not an official_field_key harvest. R3 peso+cent tax rows may be listed in money_joins: one leftover money key maps to peso_html_id plus cent_html_id. Split the writer {:.2} string: pesos right-aligned in the peso comb (leading slots empty, not zero-padded, no decimal glyph), cents in the 2-slot comb. Do not stamp name= on either comb. Do not left-align the dotted string into the peso comb. Do not join collapsed writer txt25-28, or leftover keys that share an item number with another leftover except as documented here.",
+  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. That is not an official_field_key harvest. R3 peso+cent tax rows may be listed in money_joins: one leftover money key maps to peso_html_id plus cent_html_id. Split the writer {:.2} string: pesos right-aligned in the peso comb (leading slots empty, not zero-padded, no decimal glyph), cents in the 2-slot comb. Do not stamp name= on either comb. Do not left-align the dotted string into the peso comb. Leftover boolean/radio keys may be listed in xbox_joins: when the writer is true, put X in the catalog xbox (1-char text, not type=checkbox). Do not write the string true into the box. Do not join collapsed writer txt25-28, or leftover keys that share an item number with another leftover except as documented here (year-ended MM/YYYY pair; quarter radio group).",
   "joins": [
     {
       "writer_key": "frm2551Qv2018:registeredName",
@@ -44,6 +44,20 @@
       "catalog_id": "2551q-2018/p1/money-28-1",
       "printed": "11 Email Address",
       "reason": "page-1 only. fields.json leftover_duplicate (txtEmail occurrence-1 item 11, occurrence-2 page 2). Freeze sheet has exactly one printed email comb, the 28-slot p1c39 beside tel p1c38. Catalog html_id_hint with no official_field_key. Page 2 header is TIN/name, not a second email box. Occurrence-2 stays unfilled."
+    },
+    {
+      "writer_key": "frm2551Qv2018:rtnMonth",
+      "html_id": "p1c9",
+      "catalog_id": "2551q-2018/p1/comb-2s-1",
+      "printed": "2 Year Ended MM",
+      "reason": "item 2 Year Ended is MM + YYYY, not one cell. leftover select-one rtnMonth is the 2-slot comb immediately left of the year comb. Catalog html_id_hint with no official_field_key. Do not dump synthetic __year_ended MMYYYY into either comb."
+    },
+    {
+      "writer_key": "frm2551Qv2018:txtYear",
+      "html_id": "p1c10",
+      "catalog_id": "2551q-2018/p1/date-yyyy-1",
+      "printed": "2 Year Ended YYYY",
+      "reason": "exactly one 4-slot year comb under Year Ended, immediately right of the MM comb. leftover-unique integer txtYear (maxlength 4); catalog html_id_hint with no official_field_key. Shares fields.json item_number 2 with rtnMonth; the join is the caption+cell pair, not leftover uniqueness of item 2."
     }
   ],
   "money_joins": [
@@ -66,7 +80,67 @@
       "reason": "Stage 3 R3 N:1 fill-path for schedule 1 row 1 taxable amount (the ~54770 demo figure). Unprefixed XML key txtATCAmt1. Page-2 12-slot peso plus 2-slot cents. Catalog official_field_key is empty. Other schedule amount columns (rate, tax due, rows 2-6) stay unjoined."
     }
   ],
+  "xbox_joins": [
+    {
+      "writer_key": "frm2551Qv2018:forThe_1",
+      "html_id": "p1c7",
+      "catalog_id": "2551q-2018/p1/xbox-1",
+      "printed": "1 For the Calendar",
+      "reason": "item 1 Calendar xbox at x=85 on the header row above Year Ended. leftover boolean forThe_1. Catalog xbox, not type=checkbox. Fill X when writer is true."
+    },
+    {
+      "writer_key": "frm2551Qv2018:forThe_2",
+      "html_id": "p1c8",
+      "catalog_id": "2551q-2018/p1/xbox-2",
+      "printed": "1 For the Fiscal",
+      "reason": "item 1 Fiscal xbox at x=157. leftover boolean forThe_2. Pair with forThe_1; leave blank when false."
+    },
+    {
+      "writer_key": "frm2551Qv2018:qtr_1",
+      "html_id": "p1c11",
+      "catalog_id": "2551q-2018/p1/xbox-3",
+      "printed": "3 Quarter 1st",
+      "reason": "item 3 quarter radios share item_number; each maps to one xbox in left-to-right printed order after Year Ended (x=244). Not a stamp. Fill X when writer is true."
+    },
+    {
+      "writer_key": "frm2551Qv2018:qtr_2",
+      "html_id": "p1c15",
+      "catalog_id": "2551q-2018/p1/xbox-6",
+      "printed": "3 Quarter 2nd",
+      "reason": "second quarter xbox at x=286 on the Year Ended / Quarter row. leftover qtr_2. Fill X when writer is true so a Q2 draft shows the Q2 mark."
+    },
+    {
+      "writer_key": "frm2551Qv2018:qtr_3",
+      "html_id": "p1c12",
+      "catalog_id": "2551q-2018/p1/xbox-4",
+      "printed": "3 Quarter 3rd",
+      "reason": "third quarter xbox at x=329. leftover qtr_3."
+    },
+    {
+      "writer_key": "frm2551Qv2018:qtr_4",
+      "html_id": "p1c13",
+      "catalog_id": "2551q-2018/p1/xbox-5",
+      "printed": "3 Quarter 4th",
+      "reason": "fourth quarter xbox at x=371. leftover qtr_4."
+    }
+  ],
   "not_joined": [
+    {
+      "writer_key": "__year_ended",
+      "reason": "Synthetic MMYYYY helper on the writer map, not a fields.json key and not a freeze cell. Year Ended is the rtnMonth + txtYear pair (p1c9/p1c10). Do not dump 122026 into one comb."
+    },
+    {
+      "writer_key": "frm2551Qv2018:amendedRtn_1",
+      "reason": "Item 4 Yes/No xboxes (p1c16/p1c17) sit on the same header row but are not the year-ended / quarter demo fill. Same xbox contract as qtr_*; left unjoined this slice."
+    },
+    {
+      "writer_key": "frm2551Qv2018:txtSheets",
+      "reason": "2-slot comb p1c14 on the far right of the header row (number of sheets). Not year-ended."
+    },
+    {
+      "writer_key": "frm2551Qv2018:taxTreaty_1",
+      "reason": "Remaining Part I radios (tax relief, item 13 taxRate, overpayment) stay on cell-id name= without an xbox join."
+    },
     {
       "writer_key": "txtEmail#occurrence-2",
       "reason": "HTA/DOM duplicate of the same serialized key. Page 2 freeze header is TIN/name (p2c5/p2c6), not a second email comb. Page-1 p1c39 is the printed email box."

@@ -9,6 +9,7 @@ The project is under active development. Form filing support and frozen HTML
 preview are tracked separately. Preview fills catalog-stamped TIN/branch
 `name=` values. 1601C and 2551Q also fill leftover identity keys (including email)
 and demo tax money rows onto cell-id inputs via `html-frozen/*/writer-cells.json`.
+2551Q also fills Year Ended (MM/YYYY) and quarter xboxes.
 
 ---
 
@@ -36,7 +37,7 @@ of silently switching document implementations.
 
 Print/preview uses committed freeze sheets in `html-frozen/`. The desktop app
 fills catalog-stamped TIN `input[name]` values via `to_bir_field_map()`, and
-for 1601C/2551Q also leftover identity keys and demo tax money rows listed in
+for 1601C/2551Q also leftover identity keys, 2551Q header period fields, and demo tax money rows listed in
 `writer-cells.json`.
 CI checks the inventory with `freeze_html.py --verify` and the fail-closed name
 stamper with `stamp_frozen_names.py --check-all`.
@@ -72,7 +73,7 @@ stamper with `stamp_frozen_names.py --check-all`.
 - **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
 
 ### 🛠 Form Digitization & Developer Tools
-- **Frozen HTML preview**: Exact BIR revisions print from committed freeze sheets. Catalog TIN/branch keys are stamped onto `name=`. 1601C/2551Q leftover identity keys and demo tax money rows fill onto cell ids via `writer-cells.json`; remaining leftovers stay unjoined. Official PDFs are calibration evidence only.
+- **Frozen HTML preview**: Exact BIR revisions print from committed freeze sheets. Catalog TIN/branch keys are stamped onto `name=`. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill onto cell ids via `writer-cells.json`; remaining leftovers stay unjoined. Official PDFs are calibration evidence only.
 - **Structured Tracing**: Debug builds automatically log form save, sync, and HTML preview/print/export events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
 
 ### 🛡️ Data Integrity
@@ -276,7 +277,7 @@ However, if you want to automatically codesign and notarize the **macOS** DMG on
 - `crates/bir-print/`: Frozen HTML fill/print, native output coordination, PDF validation, and PDF merging.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 - `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
-- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys and demo tax money rows fill through `writer-cells.json`.
+- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`.
 
 ### 🧩 Form Engine
 

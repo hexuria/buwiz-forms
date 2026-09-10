@@ -4,11 +4,13 @@
 //! join; `id=` stays the cell id. Catalog `official_field_key` stamps are
 //! TIN/branch only. Unstamped leftover keys keep cell-id `name=`;
 //! `html-frozen/<slug>/writer-cells.json` may copy a writer value onto that
-//! cell when the freeze sheet has a 1:1 printed-caption join (`joins`) or
+//! cell when the freeze sheet has a 1:1 printed-caption join (`joins`),
 //! split a leftover `{:.2}` money key onto a catalog peso comb plus 2-slot
-//! cents comb (`money_joins`). Those are fill-paths, not `official_field_key`
-//! harvests. Do not stamp `name=` on peso/cent boxes and do not left-align
-//! the dotted writer string into the peso comb.
+//! cents comb (`money_joins`), or mark a catalog xbox when a leftover
+//! boolean/radio writer is `"true"` (`xbox_joins`, glyph `X`). Those are
+//! fill-paths, not `official_field_key` harvests. Do not stamp `name=` on
+//! peso/cent/xbox boxes, do not left-align a dotted money string into the
+//! peso comb, and do not write `"true"` into an xbox.
 
 use bir_core::forms::form_2551q::Form2551QDraft;
 use std::collections::{BTreeMap, BTreeSet};
@@ -131,15 +133,23 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
     }
 }
 
+const XBOX_CHECKED_GLYPH: &str = "X";
+
 struct MoneyJoin {
     writer_key: String,
     peso_html_id: String,
     cent_html_id: String,
 }
 
+struct XboxJoin {
+    writer_key: String,
+    html_id: String,
+}
+
 struct WriterCells {
     joins: BTreeMap<String, String>,
     money_joins: Vec<MoneyJoin>,
+    xbox_joins: Vec<XboxJoin>,
 }
 
 fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
@@ -223,25 +233,73 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         }
     }
 
-    let mut used_cells: BTreeSet<&str> = cells.values().map(|id| id.as_str()).collect();
-    for join in &money_joins {
-        if !used_cells.insert(&join.peso_html_id) {
-            return Err(format!(
-                "writer-cells.json {} peso cell {} is already a fill target",
-                join.writer_key, join.peso_html_id
-            ));
+    let mut xbox_joins = Vec::new();
+    if let Some(rows) = payload.get("xbox_joins").and_then(|value| value.as_array()) {
+        for join in rows {
+            let key = join
+                .get("writer_key")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "writer-cells.json xbox_join missing writer_key".to_string())?;
+            let html_id = join
+                .get("html_id")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
+            if html_id.starts_with("frm") {
+                return Err(format!(
+                    "writer-cells.json {key} must target a cell id, not {html_id}"
+                ));
+            }
+            if cells.contains_key(key)
+                || money_joins
+                    .iter()
+                    .any(|row: &MoneyJoin| row.writer_key == key)
+                || xbox_joins
+                    .iter()
+                    .any(|row: &XboxJoin| row.writer_key == key)
+            {
+                return Err(format!(
+                    "writer-cells.json duplicate writer_key {key} across joins"
+                ));
+            }
+            xbox_joins.push(XboxJoin {
+                writer_key: key.to_string(),
+                html_id: html_id.to_string(),
+            });
         }
-        if !used_cells.insert(&join.cent_html_id) {
-            return Err(format!(
-                "writer-cells.json {} cent cell {} is already a fill target",
-                join.writer_key, join.cent_html_id
-            ));
+    }
+
+    {
+        let mut used_cells: BTreeSet<&str> = cells.values().map(|id| id.as_str()).collect();
+        for join in &money_joins {
+            if !used_cells.insert(&join.peso_html_id) {
+                return Err(format!(
+                    "writer-cells.json {} peso cell {} is already a fill target",
+                    join.writer_key, join.peso_html_id
+                ));
+            }
+            if !used_cells.insert(&join.cent_html_id) {
+                return Err(format!(
+                    "writer-cells.json {} cent cell {} is already a fill target",
+                    join.writer_key, join.cent_html_id
+                ));
+            }
+        }
+        for join in &xbox_joins {
+            if !used_cells.insert(&join.html_id) {
+                return Err(format!(
+                    "writer-cells.json {} xbox cell {} is already a fill target",
+                    join.writer_key, join.html_id
+                ));
+            }
         }
     }
 
     Ok(WriterCells {
         joins: cells,
         money_joins,
+        xbox_joins,
     })
 }
 
@@ -251,6 +309,7 @@ fn writer_cells(slug: &str) -> Result<WriterCells, String> {
         None => Ok(WriterCells {
             joins: BTreeMap::new(),
             money_joins: Vec::new(),
+            xbox_joins: Vec::new(),
         }),
     }
 }
@@ -361,8 +420,49 @@ fn fill_money_joins(
     apply_replacements(html, replacements)
 }
 
+fn writer_is_checked(value: &str) -> bool {
+    matches!(value.trim(), "true" | "TRUE" | "1" | "Y" | "y" | "X" | "x")
+}
+
+fn fill_xbox_joins(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    xbox_joins: &[XboxJoin],
+) -> String {
+    if xbox_joins.is_empty() {
+        return html.to_string();
+    }
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for join in xbox_joins {
+        let Some(value) = fields.get(&join.writer_key) else {
+            continue;
+        };
+        if !writer_is_checked(value) {
+            continue;
+        }
+        let Some(indices) = grouped.get(join.html_id.as_str()) else {
+            continue;
+        };
+        if indices.len() != 1 {
+            continue;
+        }
+        let index = indices[0];
+        if tags[index].slot.is_some() {
+            continue;
+        }
+        replacements.push((
+            tags[index].start,
+            tags[index].end,
+            set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
+        ));
+    }
+    apply_replacements(html, replacements)
+}
+
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
-    if cells.joins.is_empty() && cells.money_joins.is_empty() {
+    if cells.joins.is_empty() && cells.money_joins.is_empty() && cells.xbox_joins.is_empty() {
         return Ok(());
     }
     let tags = input_tags(html);
@@ -420,6 +520,36 @@ fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<
             ));
         }
     }
+    for join in &cells.xbox_joins {
+        if !present.contains(join.html_id.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells xbox html_id {} for {} is not an input name=",
+                join.html_id, join.writer_key
+            ));
+        }
+        if present.contains(join.writer_key.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells {} is already a stamped name=; remove the xbox join",
+                join.writer_key
+            ));
+        }
+        let indices = grouped
+            .get(join.html_id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        if indices.len() != 1 {
+            return Err(format!(
+                "{slug}: writer-cells {} xbox {} must be a single unslotted input",
+                join.writer_key, join.html_id
+            ));
+        }
+        if tags[indices[0]].slot.is_some() {
+            return Err(format!(
+                "{slug}: writer-cells {} xbox {} must not be a comb",
+                join.writer_key, join.html_id
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -431,11 +561,12 @@ fn fill_bundle(
     let cells = writer_cells(slug)?;
     validate_writer_cells(html, slug, &cells)?;
     let filled = fill_by_name_with_cells(html, fields, &cells.joins);
-    Ok(fill_money_joins(&filled, fields, &cells.money_joins))
+    let filled = fill_money_joins(&filled, fields, &cells.money_joins);
+    Ok(fill_xbox_joins(&filled, fields, &cells.xbox_joins))
 }
 
 /// Frozen 2551Q HTML with writer values on stamped `name=` inputs,
-/// writer-cell identity joins, and documented money_joins.
+/// writer-cell identity, money, and xbox joins.
 pub fn fill_2551q(draft: &Form2551QDraft) -> String {
     fill_bundle(html_2551q(), &draft.to_bir_field_map(), "2551q-2018")
         .expect("2551q-2018 writer-cells")
@@ -882,9 +1013,15 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c30"), "Frozen Html Fixture");
         assert_eq!(comb_text(&html, "p1c32"), "New Cabalan");
         assert_eq!(comb_text(&html, "p1c39"), "tax@example.com");
+        assert_eq!(comb_text(&html, "p1c9"), "12");
+        assert_eq!(comb_text(&html, "p1c10"), "2026");
+        assert_eq!(named_values(&html, "p1c7"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c15"), vec!["".to_string()]);
         assert!(html.contains("Frozen Html Fixture"));
         assert!(html.contains("New Cabalan"));
         assert!(html.contains("tax@example.com"));
+        assert!(html.contains("2026"));
         let stamped: std::collections::BTreeSet<String> = input_tags(&html)
             .into_iter()
             .map(|tag| tag.name.to_string())
@@ -922,12 +1059,48 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_2551q_fills_year_ended_and_quarter() {
+        let mut fields = BTreeMap::new();
+        fields.insert("frm2551Qv2018:txtYear".to_string(), "2026".to_string());
+        fields.insert("frm2551Qv2018:rtnMonth".to_string(), "12".to_string());
+        fields.insert("frm2551Qv2018:qtr_1".to_string(), "false".to_string());
+        fields.insert("frm2551Qv2018:qtr_2".to_string(), "true".to_string());
+        fields.insert("frm2551Qv2018:qtr_3".to_string(), "false".to_string());
+        fields.insert("frm2551Qv2018:qtr_4".to_string(), "false".to_string());
+        fields.insert("frm2551Qv2018:forThe_1".to_string(), "true".to_string());
+        fields.insert("frm2551Qv2018:forThe_2".to_string(), "false".to_string());
+        let html = filled_document("2551q-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c10"), "2026");
+        assert_eq!(comb_text(&html, "p1c9"), "12");
+        assert!(html.contains("2026"));
+        assert_eq!(named_values(&html, "p1c15"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c12"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c13"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c7"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["".to_string()]);
+        assert!(!comb_text(&html, "p1c10").contains("true"));
+        assert_ne!(named_values(&html, "p1c15"), vec!["true".to_string()]);
+        assert!(!html.contains("name=\"frm2551Qv2018:txtYear\""));
+        assert!(!html.contains("name=\"frm2551Qv2018:qtr_2\""));
+        let stamped: std::collections::BTreeSet<String> = input_tags(&html)
+            .into_iter()
+            .map(|tag| tag.name.to_string())
+            .filter(|name| name.starts_with("frm2551Qv2018:"))
+            .collect();
+        assert_eq!(stamped.len(), 4);
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         for slug in ["1601c-2018", "2551q-2018"] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
             assert!(!cells.joins.is_empty(), "{slug}");
             assert!(!cells.money_joins.is_empty(), "{slug} money_joins");
+            if slug == "2551q-2018" {
+                assert!(!cells.xbox_joins.is_empty(), "{slug} xbox_joins");
+            }
             let present: std::collections::BTreeSet<&str> =
                 input_tags(html).into_iter().map(|tag| tag.name).collect();
             for (key, html_id) in &cells.joins {
@@ -961,6 +1134,16 @@ mod tests {
                 assert!(join.peso_html_id.starts_with("p"));
                 assert!(join.cent_html_id.starts_with("p"));
                 assert_ne!(join.peso_html_id, join.cent_html_id);
+                assert!(!present.contains(join.writer_key.as_str()));
+            }
+            for join in &cells.xbox_joins {
+                assert!(
+                    present.contains(join.html_id.as_str()),
+                    "{slug} {} xbox {}",
+                    join.writer_key,
+                    join.html_id
+                );
+                assert!(join.html_id.starts_with("p"));
                 assert!(!present.contains(join.writer_key.as_str()));
             }
         }
