@@ -304,7 +304,8 @@ pub fn run_gui() {
 
             let _ = cx.open_window(options, move |window, cx| {
                 window.on_window_should_close(cx, |_, _cx| {
-                    // Phase 4: Window Close & macOS Dock Hijacking
+                    // Hide is not quit: bind + live-DB owner lock stay held until
+                    // Cmd+Q / tray Quit / `gpui-agent shutdown` (request_application_quit).
                     platform::hide_from_dock();
                     false // Prevent window destruction
                 });
@@ -313,7 +314,12 @@ pub fn run_gui() {
                     let mut state = app::AppState::new(db, profiles, window, cx);
                     #[cfg(feature = "agent")]
                     if let Some(session) = agent_session.clone() {
-                        state.attach_agent(session.mailbox, session.token, cx);
+                        state.attach_agent(
+                            session.mailbox,
+                            session.token,
+                            session.shutdown,
+                            cx,
+                        );
                     }
                     state
                 });

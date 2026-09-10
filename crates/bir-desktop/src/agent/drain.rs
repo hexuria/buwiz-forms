@@ -1,5 +1,8 @@
 //! UI-thread mailbox drain. The TCP thread never touches GPUI entities.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use gpui::*;
 use gpui_agent::authorize_request;
 use gpui_agent::handle_request;
@@ -63,6 +66,7 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
             };
         posted.reply(response);
         if shutdown {
+            app.release_agent_listener();
             cx.quit();
         }
         cx.notify();
@@ -369,10 +373,12 @@ impl AppState {
         &mut self,
         mailbox: gpui_agent::mailbox::AgentMailbox,
         token: Option<String>,
+        shutdown: Arc<AtomicBool>,
         cx: &mut Context<Self>,
     ) {
         self.agent_mailbox = Some(mailbox);
         self.agent_token = token;
+        self.agent_shutdown = Some(shutdown);
         self.agent_refresh = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
@@ -383,5 +389,11 @@ impl AppState {
                 }
             }
         }));
+    }
+
+    pub(crate) fn release_agent_listener(&self) {
+        if let Some(flag) = &self.agent_shutdown {
+            flag.store(true, Ordering::SeqCst);
+        }
     }
 }

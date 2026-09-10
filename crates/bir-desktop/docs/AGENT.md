@@ -24,17 +24,23 @@ These are host constraints. They do not change protocol v1.
   BIR-invented bind). This host does not add a second bind path.
 - **Two AgentHosts must not share a bind.** Painted `bir` (`spawn_mailbox` on
   the GPUI window) and `bir-headless serve` (`spawn_host`, no GPU) both default
-  to `127.0.0.1:17421`. If the port is in use, headless exits and the GUI logs
-  the bind failure. Prefer **quit the GUI** while headless serves (Uriah’s
+  to `127.0.0.1:17421`. If the port is in use, headless **without `--wait`**
+  exits (today’s refuse). `bir-headless serve --wait` (also
+  `bir-headless --wait`) polls until bind and the live-DB owner lock are free,
+  then `spawn_host`. Clean GUI **Quit** (Cmd+Q / tray Quit /
+  `gpui-agent shutdown`) releases bind + owner lock; hiding or closing the
+  window does **not**. Prefer **quit the GUI** while headless serves (Uriah’s
   smoke C), then `bir-headless shutdown` and open the GUI again to see live-DB
   writes. There is **no** protocol `Op::Yield` / `Takeover`.
 - **Single live-DB owner.** Painted `bir` and `bir-headless serve` both take
   an exclusive sidecar lock (`bir_data.db.owner.lock`) around
   `default_database_path()` (or `BIR_DATABASE_PATH` in CI). A second process
-  fails immediately with `LiveDatabaseInUse`. Do not run the in-process
-  mailbox AgentHost and headless against the same app-group file at once.
-  There is no silent two-writer bridge. If Uriah later wants GUI updates
-  while the daemon runs, that is a protocol client — not this slice.
+  **without `--wait`** fails immediately with `LiveDatabaseInUse`. With
+  `--wait`, headless prints `waiting for live DB owner lock …` until the
+  owner drops. Do not run the in-process mailbox AgentHost and headless against
+  the same app-group file at once (no dual-write). There is no silent
+  two-writer bridge. If Uriah later wants GUI updates while the daemon runs,
+  that is a protocol client — not this slice.
 - ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
@@ -145,9 +151,68 @@ Shell matches gpui-agent `apps/todo-headless` on pin `8857139af12fb033b4dd04eabd
 | Mode | This SHA | Notes |
 | --- | --- | --- |
 | **A** Mac app + gpui-agent only | yes | Painted `bir --features agent`. Headless not required. |
-| **B** Mac app + headless yield/resume | **not this SHA** | No `Op::Yield`. Orchestrate with `bir-headless shutdown` then GUI, or quit GUI then `serve`. launchd KeepAlive is a follow-up. Never two writers on the live DB. |
+| **B** Mac app + headless wait/resume | **this SHA** | No `Op::Yield`. `serve --wait` while GUI holds bind+DB; quit GUI → headless owns port; CLI talks to whoever holds `17421`. launchd KeepAlive is an optional example, not a shipped LaunchAgent. |
 | **C** Mac headless only (GUI quit) | **first live smoke** | Recipe below. TIN `00000000000002`. |
 | **D** Linux box headless | yes | Default `default_database_path()`; CI may set `BIR_DATABASE_PATH`. |
+
+#### Smoke B (Mac) — GUI owns port → headless `--wait` → quit GUI → headless owns
+
+Painted `bir` must already be running with the same KEY=VALUE (agent on
+`127.0.0.1:17421`, live app-group DB). **Quit means Cmd+Q / tray Quit /
+`gpui-agent shutdown`**, not hide or the red window-close button (those keep
+bind + owner lock). CLI always talks to whoever currently holds the port.
+
+```bash
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+# both bins: cargo build --locked --bins --features agent
+# painted bir already up with the same KEY=VALUE
+cargo run --locked --bin bir-headless --features agent -- serve --wait
+# stderr: waiting for bind 127.0.0.1:17421 …
+#         (or waiting for live DB owner lock …)
+```
+
+Quit painted `bir` (Cmd+Q). Headless should print the usual listening lines
+and become owner. Other terminal:
+
+```bash
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+export GPUI_AGENT_TOKEN=dev-secret
+gpui-agent hello
+# hello.platform=headless
+gpui-agent invoke profile.list
+```
+
+Optional: start painted `bir` again while headless still owns bind+DB. The
+GUI must **not** dual-write — bind/lock fail and the in-process mailbox stays
+off. **Shutdown headless before opening GUI** if both are installed and you
+are not using wait orchestration:
+
+```bash
+cargo run --locked --bin bir-headless --features agent -- shutdown
+# then open painted bir with the same KEY=VALUE
+```
+
+Without `--wait`, a busy bind still exits 2 and a busy live-DB lock exits 1
+(same refuse as smoke C).
+
+launchd KeepAlive is **not** shipped. Optional supervisor later; example
+`ProgramArguments` if you add a LaunchAgent yourself:
+
+```xml
+<key>ProgramArguments</key>
+<array>
+  <string>/path/to/bir-headless</string>
+  <string>serve</string>
+  <string>--wait</string>
+</array>
+<key>KeepAlive</key>
+<true/>
+```
+
+That plist is documentation only. It does not install an agent, does not
+set the token for you, and is not required for smoke B.
 
 #### Smoke C (Mac) — quit GUI → serve → save → shutdown → open GUI
 
@@ -194,10 +259,12 @@ Then open painted `bir` (no `GPUI_AGENT` required). TIN `00000000000002` must
 be visible. Do **not** run `recipes/profile-create.json` against this live DB.
 
 If `bir-headless serve` prints bind-in-use: another AgentHost already owns
-`17421` — quit GUI or the other daemon, or set `GPUI_AGENT_ADDR`.
+`17421` — quit GUI or the other daemon, or set `GPUI_AGENT_ADDR`. Use
+`serve --wait` if you want this process to resume when the owner quits.
 
 If it prints `already open` / `LiveDatabaseInUse`: painted `bir` still has the
-app-group file. Quit the GUI (headless does not auto-yield).
+app-group file. Quit the GUI, or pass `--wait` (headless does not auto-yield
+via a protocol op).
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
@@ -233,7 +300,8 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke profile.list
 will **not** quarantine/recreate a taxpayer file on a bad open. Checkpoint
 WAL on shutdown. Headless does **not** start background cron (no FTP / no
 auto-file). `screenshot_unavailable`, `virtual_unavailable`, `form.print`
-errors as today. Exclusive owner lock + bind probe refuse a second process.
+errors as today. Exclusive owner lock + bind probe refuse a second process
+without `--wait`. `serve --wait` polls until both are free.
 
 **Fixture-host unit test** (ephemeral SQLite, not the taxpayer DB):
 
@@ -515,8 +583,9 @@ Proven in headless host tests (not a Mac GUI run):
   Token mismatch still fails with `automation token required` / invalid token.
 - `bir-headless serve` opens a **file-backed** SQLCipher path (`app_database_path()`,
   not ephemeral). `profile.save` is visible after reopen. Bind-in-use and
-  live-DB owner lock are refused. Headless does not start cron. GUI-as-client
-  (full ADR-001) and Mac yield/resume (matrix B / launchd) are not this slice.
+  live-DB owner lock are refused without `--wait`; `serve --wait` resumes after
+  the owner releases both. Headless does not start cron. GUI-as-client
+  (full ADR-001) and a shipped LaunchAgent are not this slice.
 
 Remaining (not faked):
 
@@ -530,9 +599,9 @@ Remaining (not faked):
   headless stay `screenshot_unavailable`.
 - GUI-as-client of `bir-headless` (full ADR-001). First ship is shared
   persistence only; two AgentHosts must not share `GPUI_AGENT_ADDR`; two
-  processes must not open the live DB together. Matrix B (GUI open ⇒
-  headless yields; quit ⇒ resume) is process orchestration around
-  `serve` / `status` / `shutdown`, not a protocol op.
+  processes must not open the live DB together. Matrix B is
+  `serve --wait` plus GUI quit releasing bind+lock, not a protocol op.
+  launchd KeepAlive remains an optional supervisor (docs example only).
 
 ## Claimed queue without BIR outcome (facts)
 

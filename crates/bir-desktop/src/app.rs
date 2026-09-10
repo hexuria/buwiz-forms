@@ -230,6 +230,8 @@ pub struct AppState {
     #[cfg(feature = "agent")]
     pub(crate) agent_token: Option<String>,
     #[cfg(feature = "agent")]
+    pub(crate) agent_shutdown: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    #[cfg(feature = "agent")]
     pub(crate) agent_refresh: Option<Task<()>>,
     /// Semantic submit reached the existing confirmation gate without queuing.
     #[cfg(feature = "agent")]
@@ -925,6 +927,8 @@ impl AppState {
             #[cfg(feature = "agent")]
             agent_token: None,
             #[cfg(feature = "agent")]
+            agent_shutdown: None,
+            #[cfg(feature = "agent")]
             agent_refresh: None,
             #[cfg(feature = "agent")]
             agent_submit_confirmation_visible: false,
@@ -1606,6 +1610,8 @@ impl AppState {
         );
         match decision {
             crate::quit_guard::ApplicationQuitDecision::Quit => {
+                #[cfg(feature = "agent")]
+                self.release_agent_listener();
                 before_quit();
                 cx.quit();
                 true
@@ -2424,6 +2430,8 @@ impl Render for AppState {
 
 impl Drop for AppState {
     fn drop(&mut self) {
+        #[cfg(feature = "agent")]
+        self.release_agent_listener();
         // Flush any pending WAL data to the main database file before shutdown
         if let Ok(db) = self.db.lock()
             && let Err(e) = db.checkpoint()

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use gpui_agent::mailbox::AgentMailbox;
@@ -19,6 +21,9 @@ fn auth_banner(token_set: bool) -> &'static str {
 pub struct StartedAgent {
     pub mailbox: AgentMailbox,
     pub token: Option<String>,
+    /// Stops `serve_mailbox` so the TCP bind is released on quit, not only
+    /// after process death. Hide-to-dock is not quit.
+    pub shutdown: Arc<AtomicBool>,
 }
 
 /// Start the localhost control plane when `GPUI_AGENT=1`.
@@ -46,12 +51,16 @@ pub fn maybe_start() -> Option<StartedAgent> {
                 mailbox.clone(),
                 Duration::from_secs(8),
             ) {
-                Ok((addr, _)) => {
+                Ok((addr, shutdown)) => {
                     tracing::info!(
                         %addr,
                         "{auth}; platform=desktop app=bir-desktop; loopback default via from_env; protocol v1; delivery=semantic (virtual returns virtual_unavailable; no OS HID); screenshot=macOS mailbox drain screencapture -l, else screenshot_unavailable"
                     );
-                    Some(StartedAgent { mailbox, token })
+                    Some(StartedAgent {
+                        mailbox,
+                        token,
+                        shutdown,
+                    })
                 }
                 Err(err) => {
                     tracing::error!(

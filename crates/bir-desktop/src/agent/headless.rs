@@ -4,14 +4,15 @@
 //! `shutdown`, `from_env` + `spawn_host`, no GPU window. Opens
 //! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
 //! `Database::open_ephemeral()`. Does **not** start background cron / FTP.
-//! There is no protocol `Op::Yield`.
+//! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
+//! lock. `serve --wait` (also `bir-headless --wait`) polls until both are free.
 
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bir_core::db::{self, Database};
 use clap::{Parser, Subcommand};
@@ -29,6 +30,10 @@ use super::host::BirAgentHost;
 #[derive(Parser, Debug)]
 #[command(name = "bir-headless")]
 struct Cli {
+    /// Poll until bind and the live-DB owner lock are free, then serve.
+    /// Without this flag, a busy bind or lock exits immediately.
+    #[arg(long, global = true)]
+    wait: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -53,7 +58,7 @@ pub fn run() -> ExitCode {
 fn run_cli() -> Result<(), ExitCode> {
     let cli = Cli::parse();
     match cli.command.unwrap_or(Command::Serve) {
-        Command::Serve => serve(),
+        Command::Serve => serve(cli.wait),
         Command::Status => status(),
         Command::Shutdown => shutdown(),
     }
@@ -85,10 +90,77 @@ pub fn bind_failure_message(addr: SocketAddr, error: &std::io::Error) -> String 
         format!(
             "gpui-agent bind {addr} is in use. Quit painted `bir` (in-process mailbox) \
              or this `bir-headless` instance, or set GPUI_AGENT_ADDR. Two AgentHosts \
-             must not share a bind (GUI embed vs headless)."
+             must not share a bind (GUI embed vs headless). \
+             `bir-headless serve --wait` polls until the port and live-DB lock are free."
         )
     } else {
         format!("gpui-agent failed to bind {addr}: {error}")
+    }
+}
+
+/// Why `serve` cannot start yet. No protocol `Op::Yield`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServeBlocker {
+    BindInUse,
+    DatabaseInUse,
+}
+
+/// Probe bind then the live-DB sidecar lock. Does not keep either.
+pub fn serve_blocker(addr: SocketAddr) -> Result<Option<ServeBlocker>, String> {
+    match std::net::TcpListener::bind(addr) {
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::AddrInUse => {
+            return Ok(Some(ServeBlocker::BindInUse));
+        }
+        Err(error) => return Err(format!("gpui-agent failed to bind {addr}: {error}")),
+    }
+    match db::try_acquire_live_owner_lock(&db::app_database_path()) {
+        Ok(lock) => drop(lock),
+        Err(db::DbError::LiveDatabaseInUse(_)) => {
+            return Ok(Some(ServeBlocker::DatabaseInUse));
+        }
+        Err(error) => {
+            return Err(format!(
+                "failed to probe live DB lock {}: {error}",
+                db::app_database_path().display()
+            ));
+        }
+    }
+    Ok(None)
+}
+
+/// If `wait` is false, the first blocker is an error. If true, poll until clear.
+pub fn wait_until_unblocked(addr: SocketAddr, wait: bool) -> Result<(), String> {
+    let mut last: Option<ServeBlocker> = None;
+    let mut last_print = Instant::now() - Duration::from_secs(10);
+    loop {
+        match serve_blocker(addr)? {
+            None => return Ok(()),
+            Some(blocker) if wait => {
+                if last != Some(blocker) || last_print.elapsed() >= Duration::from_secs(2) {
+                    match blocker {
+                        ServeBlocker::BindInUse => {
+                            eprintln!("waiting for bind {addr} …")
+                        }
+                        ServeBlocker::DatabaseInUse => {
+                            eprintln!("waiting for live DB owner lock …")
+                        }
+                    }
+                    last = Some(blocker);
+                    last_print = Instant::now();
+                }
+                thread::sleep(Duration::from_millis(200));
+            }
+            Some(ServeBlocker::BindInUse) => {
+                return Err(bind_failure_message(
+                    addr,
+                    &std::io::Error::from(ErrorKind::AddrInUse),
+                ));
+            }
+            Some(ServeBlocker::DatabaseInUse) => {
+                return Err(db::DbError::LiveDatabaseInUse(db::app_database_path()).to_string());
+            }
+        }
     }
 }
 
@@ -101,7 +173,7 @@ pub fn live_database_token_required(token_set: bool, using_path_override: bool) 
     !using_path_override && !token_set
 }
 
-fn serve() -> Result<(), ExitCode> {
+fn serve(wait: bool) -> Result<(), ExitCode> {
     let config = match from_env() {
         Ok(Some(config)) => config,
         Ok(None) => {
@@ -134,62 +206,81 @@ fn serve() -> Result<(), ExitCode> {
         return Err(ExitCode::from(2));
     }
 
-    if let Err(error) = std::net::TcpListener::bind(config.addr) {
-        eprintln!("{}", bind_failure_message(config.addr, &error));
-        return Err(ExitCode::from(2));
-    }
-
-    let (opened, path) = match open_serve_database() {
-        Ok(opened) => opened,
-        Err(error) => {
+    loop {
+        if let Err(error) = wait_until_unblocked(config.addr, wait) {
             eprintln!("{error}");
-            return Err(ExitCode::from(1));
+            return Err(ExitCode::from(if error.contains("already open") {
+                1
+            } else {
+                2
+            }));
         }
-    };
 
-    let db = Arc::new(Mutex::new(opened));
-    let host = Arc::new(Mutex::new(host_for_database(db.clone())));
-    let (addr, shutdown) = match spawn_host(config.addr, config.token, host.clone()) {
-        Ok(started) => started,
-        Err(error) => {
-            eprintln!("{}", bind_failure_message(config.addr, &error));
-            return Err(ExitCode::from(2));
+        let (opened, path) = match open_serve_database() {
+            Ok(opened) => opened,
+            Err(error) if wait && error.contains("already open") => {
+                eprintln!("waiting for live DB owner lock …");
+                thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                return Err(ExitCode::from(1));
+            }
+        };
+
+        let db = Arc::new(Mutex::new(opened));
+        let host = Arc::new(Mutex::new(host_for_database(db.clone())));
+        let (addr, shutdown) = match spawn_host(config.addr, config.token.clone(), host.clone()) {
+            Ok(started) => started,
+            Err(error) if wait && error.kind() == ErrorKind::AddrInUse => {
+                drop(host);
+                drop(db);
+                eprintln!("waiting for bind {} …", config.addr);
+                thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+            Err(error) => {
+                eprintln!("{}", bind_failure_message(config.addr, &error));
+                return Err(ExitCode::from(2));
+            }
+        };
+
+        eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
+        eprintln!("opt-in: GPUI_AGENT=1 · bind via from_env · protocol v1");
+        if token_set {
+            eprintln!(
+                "auth: required (GPUI_AGENT_TOKEN set; recipe/MCP clients must send the same token)"
+            );
+        } else {
+            eprintln!(
+                "auth: none (one-off click/snapshot ok; recipe run and mcp need the same token on host and client)"
+            );
         }
-    };
-
-    eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
-    eprintln!("opt-in: GPUI_AGENT=1 · bind via from_env · protocol v1");
-    if token_set {
+        eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
         eprintln!(
-            "auth: required (GPUI_AGENT_TOKEN set; recipe/MCP clients must send the same token)"
+            "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
+            path.display()
         );
-    } else {
         eprintln!(
-            "auth: none (one-off click/snapshot ok; recipe run and mcp need the same token on host and client)"
+            "BIR: no GPU · screenshot_unavailable · form.print errors · no cron/FTP. \
+             Single bind + single live-DB owner. `serve --wait` resumes after GUI quit. \
+             No Op::Yield. launchd KeepAlive is optional."
         );
-    }
-    eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
-    eprintln!(
-        "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
-        path.display()
-    );
-    eprintln!(
-        "BIR: no GPU · screenshot_unavailable · form.print errors · no cron/FTP. \
-         Shut this daemon before opening painted bir (no silent two-writer bridge)."
-    );
 
-    while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
-        if host.lock().expect("host").wants_shutdown() {
-            break;
+        while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
+            if host.lock().expect("host").wants_shutdown() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
         }
-        thread::sleep(Duration::from_millis(50));
+        if let Ok(guard) = db.lock()
+            && let Err(error) = guard.checkpoint()
+        {
+            eprintln!("wal checkpoint on shutdown: {error}");
+        }
+        return Ok(());
     }
-    if let Ok(guard) = db.lock()
-        && let Err(error) = guard.checkpoint()
-    {
-        eprintln!("wal checkpoint on shutdown: {error}");
-    }
-    Ok(())
 }
 
 fn connect_running() -> Result<AgentClient, ExitCode> {
@@ -293,6 +384,7 @@ mod tests {
     fn default_command_is_serve() {
         let cli = Cli::try_parse_from(["bir-headless"]).unwrap();
         assert_eq!(cli.command, None);
+        assert!(!cli.wait);
         assert_eq!(cli.command.unwrap_or(Command::Serve), Command::Serve);
     }
 
@@ -300,11 +392,25 @@ mod tests {
     fn parses_serve_status_shutdown() {
         let serve = Cli::try_parse_from(["bir-headless", "serve"]).unwrap();
         assert_eq!(serve.command, Some(Command::Serve));
+        assert!(!serve.wait);
         let status = Cli::try_parse_from(["bir-headless", "status"]).unwrap();
         assert_eq!(status.command, Some(Command::Status));
         let shutdown = Cli::try_parse_from(["bir-headless", "shutdown"]).unwrap();
         assert_eq!(shutdown.command, Some(Command::Shutdown));
         assert!(Cli::try_parse_from(["bir-headless", "nope"]).is_err());
+    }
+
+    #[test]
+    fn parses_wait_on_default_and_serve() {
+        let default_wait = Cli::try_parse_from(["bir-headless", "--wait"]).unwrap();
+        assert!(default_wait.wait);
+        assert_eq!(default_wait.command, None);
+        let serve_wait = Cli::try_parse_from(["bir-headless", "serve", "--wait"]).unwrap();
+        assert!(serve_wait.wait);
+        assert_eq!(serve_wait.command, Some(Command::Serve));
+        let wait_before = Cli::try_parse_from(["bir-headless", "--wait", "serve"]).unwrap();
+        assert!(wait_before.wait);
+        assert_eq!(wait_before.command, Some(Command::Serve));
     }
 
     #[test]
@@ -348,6 +454,146 @@ mod tests {
         assert!(message.contains("in use"), "{message}");
         assert!(message.contains("painted"), "{message}");
         assert!(message.contains("Two AgentHosts"), "{message}");
+        assert!(message.contains("serve --wait"), "{message}");
+    }
+
+    #[test]
+    fn wait_without_flag_refuses_busy_bind() {
+        let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
+        let addr = holder.local_addr().expect("addr");
+        let error = wait_until_unblocked(addr, false).expect_err("busy bind");
+        assert!(error.contains("in use"), "{error}");
+        drop(holder);
+    }
+
+    #[test]
+    fn wait_until_unblocked_binds_after_port_released() {
+        let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
+        let addr = holder.local_addr().expect("addr");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let waiter = thread::spawn(move || {
+            tx.send(wait_until_unblocked(addr, true)).ok();
+        });
+        thread::sleep(Duration::from_millis(250));
+        drop(holder);
+        let result = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("waiter finished after bind release");
+        assert!(result.is_ok(), "{result:?}");
+        waiter.join().expect("waiter thread");
+    }
+
+    #[test]
+    fn wait_until_unblocked_opens_after_owner_lock_released() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let path = directory.path().join("wait_lock.db");
+        let path_s = path.to_str().expect("utf8 path");
+        temp_env::with_vars(
+            [
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_DATABASE_PATH", Some(path_s)),
+            ],
+            || {
+                let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
+                let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+                let refused = wait_until_unblocked(addr, false).expect_err("busy lock");
+                assert!(refused.contains("already open"), "{refused}");
+                let (tx, rx) = std::sync::mpsc::channel();
+                let waiter = thread::spawn(move || {
+                    tx.send(wait_until_unblocked(addr, true)).ok();
+                });
+                thread::sleep(Duration::from_millis(250));
+                drop(lock);
+                let result = rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("waiter finished after lock release");
+                assert!(result.is_ok(), "{result:?}");
+                waiter.join().expect("waiter thread");
+            },
+        );
+    }
+
+    #[test]
+    fn serve_without_wait_exits_when_bind_busy() {
+        let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
+        let addr = holder.local_addr().expect("addr");
+        let addr_s = addr.to_string();
+        let directory = tempfile::tempdir().expect("temp dir");
+        let path = directory.path().join("refuse.db");
+        let path_s = path.to_str().expect("utf8 path").to_string();
+        temp_env::with_vars(
+            [
+                ("GPUI_AGENT", Some("1")),
+                ("GPUI_AGENT_TOKEN", Some("wait-secret")),
+                ("GPUI_AGENT_ADDR", Some(addr_s.as_str())),
+                ("BIR_DATABASE_PATH", Some(path_s.as_str())),
+                ("EBIR_TEST_ENV", Some("1")),
+            ],
+            || {
+                let error = serve(false).expect_err("refuse busy bind");
+                assert_eq!(error, ExitCode::from(2));
+            },
+        );
+        drop(holder);
+    }
+
+    #[test]
+    fn serve_wait_binds_after_port_and_lock_released() {
+        let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
+        let addr = holder.local_addr().expect("addr");
+        let directory = tempfile::tempdir().expect("temp dir");
+        let path = directory.path().join("wait.db");
+        let addr_s = addr.to_string();
+        let path_s = path.to_str().expect("utf8 path").to_string();
+        let token = "wait-secret";
+        temp_env::with_vars(
+            [
+                ("GPUI_AGENT", Some("1")),
+                ("GPUI_AGENT_TOKEN", Some(token)),
+                ("GPUI_AGENT_ADDR", Some(addr_s.as_str())),
+                ("BIR_DATABASE_PATH", Some(path_s.as_str())),
+                ("EBIR_TEST_ENV", Some("1")),
+            ],
+            || {
+                let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
+                let server = thread::spawn(|| serve(true));
+                thread::sleep(Duration::from_millis(300));
+                let mut blocked =
+                    AgentClient::connect(addr).with_timeout(Duration::from_millis(200));
+                blocked = blocked.with_token(token.to_string());
+                assert!(
+                    blocked.wait_ready().is_err(),
+                    "headless must not dual-write while bind+lock are held"
+                );
+                drop(lock);
+                drop(holder);
+                let started = Instant::now();
+                let mut ready = false;
+                while started.elapsed() < Duration::from_secs(8) {
+                    let mut client =
+                        AgentClient::connect(addr).with_timeout(Duration::from_secs(1));
+                    client = client.with_token(token.to_string());
+                    if client.wait_ready().is_ok() {
+                        let hello = client.expect_ok(Op::Hello).expect("hello");
+                        assert_eq!(
+                            hello.hello.as_ref().map(|info| info.platform),
+                            Some(PlatformKind::Headless),
+                            "{hello:?}"
+                        );
+                        client
+                            .invoke("profile.list", json!({}))
+                            .expect("profile.list after wait");
+                        client.expect_ok(Op::Shutdown).expect("shutdown");
+                        ready = true;
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+                assert!(ready, "serve --wait never acquired bind+DB after release");
+                let joined = server.join().expect("serve thread");
+                assert!(joined.is_ok(), "{joined:?}");
+            },
+        );
     }
 
     #[test]
