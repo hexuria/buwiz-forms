@@ -1,9 +1,10 @@
 //! Long-running headless AgentHost (`bir-headless serve`).
 //!
 //! Mirrors gpui-agent `apps/todo-headless`: clap `serve` (default) / `status` /
-//! `shutdown`, `from_env` + `spawn_host`, no GPU window. Opens the live
-//! SQLCipher file (`app_database_path()`), not `Database::open_ephemeral()`.
-//! Does **not** start background cron / FTP. There is no protocol `Op::Yield`.
+//! `shutdown`, `from_env` + `spawn_host`, no GPU window. Opens
+//! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
+//! `Database::open_ephemeral()`. Does **not** start background cron / FTP.
+//! There is no protocol `Op::Yield`.
 
 use std::io::ErrorKind;
 use std::net::SocketAddr;
@@ -95,6 +96,11 @@ pub fn host_for_database(db: Arc<Mutex<Database>>) -> BirAgentHost {
     BirAgentHost::new(PlatformKind::Headless).with_database(db)
 }
 
+/// Live `default_database_path()` (no `BIR_DATABASE_PATH`) requires a token.
+pub fn live_database_token_required(token_set: bool, using_path_override: bool) -> bool {
+    !using_path_override && !token_set
+}
+
 fn serve() -> Result<(), ExitCode> {
     let config = match from_env() {
         Ok(Some(config)) => config,
@@ -118,11 +124,14 @@ fn serve() -> Result<(), ExitCode> {
     let token_set = config.token.is_some();
     let using_path_override =
         std::env::var_os("BIR_DATABASE_PATH").is_some_and(|value| !value.is_empty());
-    if !using_path_override && !token_set {
+    if live_database_token_required(token_set, using_path_override) {
         eprintln!(
-            "warning: opening the live app database without GPUI_AGENT_TOKEN. \
-             Set GPUI_AGENT_TOKEN for live-DB smoke."
+            "refusing to open the live app database ({}) without GPUI_AGENT_TOKEN.\n\
+             export GPUI_AGENT_TOKEN=... (never log the value). \
+             CI may set BIR_DATABASE_PATH to a temp file.",
+            db::default_database_path().display()
         );
+        return Err(ExitCode::from(2));
     }
 
     if let Err(error) = std::net::TcpListener::bind(config.addr) {
@@ -149,13 +158,7 @@ fn serve() -> Result<(), ExitCode> {
     };
 
     eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
-    eprintln!(
-        "database: {} (SQLCipher; same key as painted bir; exclusive owner lock; not ephemeral)",
-        path.display()
-    );
-    eprintln!(
-        "opt-in: GPUI_AGENT=1 · bind via from_env · protocol v1 · no GPU window · no cron/FTP"
-    );
+    eprintln!("opt-in: GPUI_AGENT=1 · bind via from_env · protocol v1");
     if token_set {
         eprintln!(
             "auth: required (GPUI_AGENT_TOKEN set; recipe/MCP clients must send the same token)"
@@ -165,13 +168,14 @@ fn serve() -> Result<(), ExitCode> {
             "auth: none (one-off click/snapshot ok; recipe run and mcp need the same token on host and client)"
         );
     }
+    eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
     eprintln!(
-        "delivery: semantic only (virtual_unavailable; screenshot_unavailable; form.print errors)"
+        "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
+        path.display()
     );
     eprintln!(
-        "ADR-001: first ship is shared persistence, not GUI-as-client. \
-         Single bind + single live-DB owner. Prefer quit GUI while this serves. \
-         No Op::Yield — use status / shutdown / serve."
+        "BIR: no GPU · screenshot_unavailable · form.print errors · no cron/FTP. \
+         Shut this daemon before opening painted bir (no silent two-writer bridge)."
     );
 
     while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
@@ -275,6 +279,14 @@ mod tests {
             );
             assert!(resp.ok, "{target}: {:?}", resp.error);
         }
+    }
+
+    #[test]
+    fn live_app_db_requires_token_unless_path_override() {
+        assert!(live_database_token_required(false, false));
+        assert!(!live_database_token_required(true, false));
+        assert!(!live_database_token_required(false, true));
+        assert!(!live_database_token_required(true, true));
     }
 
     #[test]

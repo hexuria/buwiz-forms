@@ -206,8 +206,20 @@ pub fn run_gui() {
             let (db, profiles) = cx
                 .background_executor()
                 .spawn(async move {
-                    let (db, db_path, recovered_backup) = bir_core::db::open_live_database()
-                        .expect("Failed to open database");
+                    let (db, db_path, recovered_backup) = match bir_core::db::open_live_database()
+                    {
+                        Ok(opened) => opened,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            if matches!(error, bir_core::db::DbError::LiveDatabaseInUse(_)) {
+                                eprintln!(
+                                    "Shut bir-headless first (`bir-headless shutdown`), then open painted bir. \
+                                     Reopen is offline verification of the shared DB, not live sync."
+                                );
+                            }
+                            std::process::exit(1);
+                        }
+                    };
                     if let Some(backup_path) = recovered_backup {
                         eprintln!(
                             "Recovered unreadable database at {} by moving it to {}",
