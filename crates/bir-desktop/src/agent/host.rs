@@ -1439,11 +1439,15 @@ impl BirAgentHost {
             return Err("open form 1601C or 2551Q first".into());
         };
         let path = write_agent_frozen_html(slug, &fields)?;
+        let path = path.canonicalize().unwrap_or(path);
+        if !path.is_absolute() {
+            return Err("form.pdf must return an absolute path, not file bytes".into());
+        }
         Ok(DispatchResult::json(json!({
             "path": path.to_string_lossy(),
             "kind": "frozen-html",
             "form": form,
-            "note": "the app print pipeline is frozen HTML (bir_print::frozen_html::filled_document), not generated PDF bytes"
+            "note": "the app print pipeline is frozen HTML (bir_print::frozen_html::filled_document); invoke result is an absolute path, never file bytes"
         })))
     }
 
@@ -1545,7 +1549,8 @@ impl BirAgentHost {
     fn form_upload_receipt(&self) -> Result<DispatchResult, String> {
         Ok(DispatchResult::json(json!({
             "status": "needs_file",
-            "reason": "receipt upload requires the desktop file picker; the agent will not fake an upload"
+            "path": Value::Null,
+            "reason": "receipt upload requires the desktop file picker; a later success returns an absolute path and never file bytes on the invoke result"
         })))
     }
 
@@ -2743,6 +2748,28 @@ mod tests {
             None,
         );
         assert!(resp.ok, "{:?}", resp.error);
+        assert_eq!(
+            host.tree()
+                .find(ids::CONTEXT_SELECTED_TIN)
+                .and_then(|node| node.value.as_deref()),
+            Some("98765432100000")
+        );
+    }
+
+    #[test]
+    fn selected_profile_is_checked_listitem_and_context_tin() {
+        let host = fixture_host();
+        let tree = host.tree();
+        let row = tree
+            .find(&ids::profile_row(FIXTURE_TIN))
+            .expect("selected profile listitem");
+        assert_eq!(row.role, "listitem");
+        assert_eq!(row.checked, Some(true));
+        assert_eq!(
+            tree.find(ids::CONTEXT_SELECTED_TIN)
+                .and_then(|node| node.value.as_deref()),
+            Some(FIXTURE_TIN)
+        );
     }
 
     #[test]
@@ -3372,6 +3399,12 @@ mod tests {
         assert_eq!(preview.result.as_ref().unwrap()["kind"], "frozen-html");
         assert_eq!(pdf.result.as_ref().unwrap()["form"], "1601C");
         assert_eq!(preview.result.as_ref().unwrap()["form"], "1601C");
+        let pdf_path = pdf.result.as_ref().unwrap()["path"].as_str().expect("path");
+        let preview_path = preview.result.as_ref().unwrap()["path"]
+            .as_str()
+            .expect("path");
+        assert!(std::path::Path::new(pdf_path).is_absolute());
+        assert!(std::path::Path::new(preview_path).is_absolute());
 
         let receipt = handle_request(
             &mut host,
@@ -3396,6 +3429,8 @@ mod tests {
             receipt_alias.result.as_ref().unwrap()["status"],
             "needs_file"
         );
+        assert!(receipt.result.as_ref().unwrap()["path"].is_null());
+        assert!(receipt_alias.result.as_ref().unwrap()["path"].is_null());
 
         let paid = handle_request(
             &mut host,
@@ -3602,6 +3637,7 @@ mod tests {
         );
         assert!(receipt.ok, "{:?}", receipt.error);
         assert_eq!(receipt.result.as_ref().unwrap()["status"], "needs_file");
+        assert!(receipt.result.as_ref().unwrap()["path"].is_null());
         let paid = handle_request(
             &mut host,
             req(Op::Invoke {

@@ -22,13 +22,13 @@ These are host constraints. They do not change protocol v1.
   host does not invent a remote bind.
 - Preferred BIR `invoke` names (app-only, not CLI/MCP verbs) include
   `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
-  `profile.tab`, `dues.list`, `jobs.list`, `search.open` / `palette.open`,
-  `palette.search`, `form.fill` / `form.pdf`, plus the original `profile.create`,
+  `profile.tab`, `dues.list`, `jobs.list`, `search.open`, `palette.search`,
+  `form.fill` / `form.pdf`, plus the original `profile.create`,
   `tax-dues.refresh`, `filing.start`, `filing.validate`, `filing.submit`.
   `filing.submit` maps to the existing confirmation gate; it does not queue or
-  file. Interoperable aliases (`form.preview_pdf`, `draft.revert`,
-  `payment.mark_paid`, `receipt.upload`) hit the same handlers. There is **no**
-  `profile.ensure` auto-write; `profile.create` only opens the editor.
+  file. Match-arm synonyms (see the Alias table) are not a second allow-list.
+  There is **no** `profile.ensure` auto-write; `profile.create` only opens the
+  editor.
 - Semantic delivery is the supported path. Virtual ops return
   `virtual_unavailable` rather than synthesizing OS HID or a half-wired
   in-window pointer. Protocol is unchanged.
@@ -157,7 +157,6 @@ gpui-agent invoke submissions.list --arg '{}'
 # "fill 1601-C from the profile then export a print document"
 gpui-agent invoke form.fill --arg '{"fields":{"tax_14":"1000.00","tax_25":"100.00"}}'
 gpui-agent invoke form.pdf --arg '{}'
-gpui-agent invoke form.preview_pdf --arg '{}'   # same handler as form.pdf
 
 # "open command palette" (Cmd+K overlay). palette.search stays the query invoke.
 gpui-agent invoke search.open --arg '{}'
@@ -192,12 +191,13 @@ is not claimed until Uriah runs the commands above on a Mac.**
 
 ## Invoke allow-list (BIR host only)
 
-Preferred names (domain commands). Aliases in parentheses still work.
+One canonical name per row. Match-arm synonyms are listed only in the Alias
+table; do not use them in recipes.
 
 | Name | Args | Effect |
 | --- | --- | --- |
 | `nav.go` | `page` | Navigate to an `ActiveView` slug (`global-dashboard`, `dashboard`, `profile-manager`, `settings`, `form-1601c`, …) |
-| `profile.create` (`profile.new`) | — | Open Create Profile |
+| `profile.create` | — | Open Create Profile (does not save) |
 | `profile.save` | — | Validate + `Database::save_profile` (same checks as the Save Profile button) |
 | `profile.list` | — | `[{tin, name, last4, selected, archived}]` for every listed profile |
 | `profile.search` | `q` | Same shape as list. TIN substring or name, case-insensitive. Empty `q` lists all. Does not create |
@@ -208,43 +208,44 @@ Preferred names (domain commands). Aliases in parentheses still work.
 | `tax-dues.refresh` | — | Reload unfiltered dues for the selected profile |
 | `jobs.list` | optional `status` | Read-only `Database::list_jobs` |
 | `submissions.list` | optional `tin`, `status` | Queued/submitted draft summaries plus `list_submissions_for_tin` |
-| `search.open` (`palette.open`) | — | Open the Command Palette overlay (`overlay-command-palette`). Same as Cmd+K / Ctrl+K. Does **not** select, create, or run a query |
+| `search.open` | — | Open the Command Palette overlay (`overlay-command-palette`). Same as Cmd+K / Ctrl+K. Does **not** select, create, or run a query |
 | `palette.search` | `q` | Same ranking as Command Palette (shared `search_profiles_for_palette`). `{matches, can_create, create_query?}`. Does **not** create and does **not** require the overlay to be open |
 | `dashboard.set_forms` | `forms`=`all` or codes | Agent-side form filter + `dashboard-form-filter` / `dashboard-form-chip-*`. **Global Dashboard UI has no form combobox**; this is host/tree + profile `FilterBar` chips |
 | `dashboard.filter` | `q` | Text filter (`dashboard-filter-query`). Profile dashboard FilterBar search; Global Dashboard has no search box |
-| `filing.start` (`form.open`) | `code`, `year`, `period` | Open a form for the selected profile |
-| `filing.validate` (`form.validate`) | — | Run `FormValidator` for open 1601-C or 2551Q |
+| `filing.start` | `code`, `year`, `period` | Open a form for the selected profile |
+| `filing.validate` | — | Run `FormValidator` for open 1601-C or 2551Q |
 | `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q |
 | `form.fill` | `fields` object | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
-| `form.pdf` (`form.preview_pdf`) | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html`. Returns `{path, kind:"frozen-html"}`. Does **not** invent PDF bytes |
+| `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html`. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
-| `form.revert_draft` (`draft.revert`) | — | Unclaimed queued 1601-C / 2551Q cancel APIs only |
-| `form.mark_paid` (`payment.mark_paid`) | — | 1601-C: `{status:"unsupported"}` (UI does not actually mark paid). 2551Q: only from Confirmed via `save_paid_2551q_draft` |
-| `form.upload_receipt` (`receipt.upload`) | — | `{status:"needs_file"}` — file picker required; no fake upload |
+| `form.revert_draft` | — | Unclaimed queued 1601-C / 2551Q cancel APIs only |
+| `form.mark_paid` | — | 1601-C: `{status:"unsupported"}` (UI does not actually mark paid). 2551Q: only from Confirmed via `save_paid_2551q_draft` |
+| `form.upload_receipt` | — | `{status:"needs_file", path:null}` — file picker required. A later success must return an absolute `path`, never file bytes |
 | `calendar.add` | — | Writes a native `.ics` via `build_desired_events` + `write_profile_calendar_ics` to a temp path. Does not open a calendar app |
 | `profile.calendar_sync` | — | **Error**: Google push needs a linked account and the Profile Manager calendar tab |
 | `filing.submit` | — | Validate and expose confirmation; **does not queue or file** |
 | `form.submit` / `form.queue` / `form.file` / `filing.queue` / `filing.file` | — | **Rejected** |
-| `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` / `profile.new` only open the Create Profile editor; the outer agent asks Uriah before `profile.save` |
+| `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` only opens the editor; the outer agent asks Uriah before `profile.save` |
 
 ## Alias table
 
-Same handler for each pair. Prefer the canonical name in new recipes; aliases stay so gpui (and other outer agents) can use either.
+Match-arm synonyms for the same handler. Allow-list and recipes use the
+**Canonical** name only so spellings do not drift.
 
-| Alias | Canonical |
+| Alias (match-arm only) | Canonical |
 | --- | --- |
 | `form.preview_pdf` | `form.pdf` |
 | `draft.revert` | `form.revert_draft` |
 | `payment.mark_paid` | `form.mark_paid` |
 | `receipt.upload` | `form.upload_receipt` |
-| `search.open` | Command Palette overlay (same handler as `palette.open`) |
-| `palette.open` | Command Palette overlay (same handler as `search.open`) |
+| `palette.open` | `search.open` |
 | `profile.new` | `profile.create` |
 | `form.open` | `filing.start` |
 | `form.validate` | `filing.validate` |
 
-`palette.search` is **not** an alias of `search.open`. Open is Cmd+K / Ctrl+K; search is the query invoke.
+`palette.search` is **not** an alias of `search.open`. Open is Cmd+K / Ctrl+K;
+search is the query invoke.
 
 Not implemented (on purpose):
 
@@ -255,7 +256,8 @@ Not implemented (on purpose):
 See `src/agent/ids.rs`. Page roots are `page-*`. Sidebar nav IDs match existing
 widget ids (`global_dashboard_btn`, `settings_sidebar_btn`, …). Profile rows are
 `profile-{tin}` (TIN digits only; `profile-tab-*` is never parsed as a TIN).
-Session TIN is `context.selected_tin`. Command Palette overlay is
+Selected profile is the checked `profile-{tin}` listitem plus
+`context.selected_tin` (full TIN in `value`). Command Palette overlay is
 `overlay-command-palette`. Dues rows are `due-{form}-{year}-{period}`
 with overdue/upcoming in `states` and the row name. Jobs are `job-{id}` and
 submissions `submission-{id}` under `page-cron-tasks`. Profile Manager tabs:
@@ -278,16 +280,16 @@ Proven in headless host tests (not a Mac GUI run):
   on Profile Manager with editor populated; `profile.tab` switches sections
 - Fixture 1601-C due rows with stable ids; `dues.list` upcoming/overdue/all
 - `jobs.list` read-only; `palette.search` can_create without creating;
-  `search.open` / `palette.open` expose `overlay-command-palette` without
-  creating a profile
+  `search.open` exposes `overlay-command-palette` without creating a profile
 - 1601-C draft save + validate + confirmation node; status stays `Draft`;
   `form.submit` / `filing.queue` rejected
-- `form.fill` refuses unknown keys; `form.pdf` / `form.preview_pdf` write frozen
-  HTML via the real print pipeline; headless `form.print` errors;
-  `form.upload_receipt` / `receipt.upload` is `needs_file`; 2551Q
-  `form.save_draft` is mapped
+- `form.fill` refuses unknown keys; `form.pdf` writes frozen HTML to an
+  absolute `path` via the real print pipeline (no bytes on the result);
+  headless `form.print` errors; `form.upload_receipt` is `needs_file` with
+  `path: null`; 2551Q `form.save_draft` is mapped
 - `profile.create` opens the editor and does not save; `profile.ensure` is
   rejected (no auto-write)
+- Selected profile: checked `profile-{tin}` listitem and `context.selected_tin`
 - Remaining form views: page root + back/save/submit chrome ids.
   Semantic **save** besides 1601-C and 2551Q is not mapped
 - `hello.auth` is `Required` when `handle_request` is given a configured token,
