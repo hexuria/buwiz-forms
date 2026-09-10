@@ -6,10 +6,11 @@ a form draft. It speaks the generic gpui-agent protocol only. BIR-specific
 verbs live in this host as `invoke` names.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
-`254953f2b6a1d91030f9467caa05f69c063c7204`. Host GPUI is **gpui-pre** through
-gpui-kit 0.6.1. Screenshot is unavailable on this pin; it is available after
-bumping gpui-agent to main tip ≥ `b630bf7` (PR #20). Do not fork the protocol.
-There is no crates.io release; git/path only.
+`8857139af12fb033b4dd04eabd8d19b5bfc5ffc6` (`main` tip, Merge PR #32 / epic
+children). Host GPUI is **gpui-pre** through gpui-kit 0.6.1. Cookbook:
+[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/INTEGRATING.md)
+and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/SDK.md).
+Do not fork the protocol. There is no crates.io release; git/path only.
 
 ## Locked protocol contract
 
@@ -18,9 +19,12 @@ These are host constraints. They do not change protocol v1.
 - Depend on git/path `gpui-agent` at that rev only (no crates.io).
 - `bir-core` has no GPUI / gpui-agent dependency. Painted-window and virtual
   glue stay behind bir-desktop `--features agent`.
-- Loopback only via `gpui_agent::security::from_env`. Authenticated remote bind
-  / daemon source of truth is gpui-agent epic #10 and is **not** on main. This
-  host does not invent a remote bind.
+- Loopback default via `gpui_agent::from_env` / `authorize_bind`. Non-loopback
+  needs `GPUI_AGENT_REMOTE=1` and a non-empty `GPUI_AGENT_TOKEN` (SDK, not a
+  BIR-invented bind). This host does not add a second bind path. Product BIR
+  is still an **in-process mailbox** on the painted window (widget E2E), not a
+  `todo-headless` daemon + GUI-as-client (ADR-001). There is no `bir serve`
+  binary.
 - Preferred BIR `invoke` names (app-only, not CLI/MCP verbs) include
   `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
   `profile.tab`, `dues.list`, `jobs.list`, `search.open`, `palette.search`,
@@ -34,17 +38,21 @@ These are host constraints. They do not change protocol v1.
 - Semantic delivery is the supported path. Virtual ops return
   `virtual_unavailable` rather than synthesizing OS HID or a half-wired
   in-window pointer. Protocol is unchanged.
-- Screenshot returns `screenshot_unavailable` on current pin `254953f`.
-  Available after bumping gpui-agent to main tip ≥ `b630bf7` (#20). This BIR
-  branch does not bump the pin.
+- Screenshot is observe-only. The UI-thread mailbox drain intercepts
+  `Op::Screenshot`: macOS writes **this** window via
+  `capture_window_via_screencapture` (`screencapture -l`, Screen Recording).
+  Linux, Windows, and headless `spawn_host` stay `screenshot_unavailable`.
+  The semantic host has no `Window` and does not invent a PNG.
 
 ## Security
 
 - Feature `agent` is **off** by default. Product/release builds must leave it off.
 - Runtime starts only when `GPUI_AGENT=1` (`true`/`yes`/`on`).
 - Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`.
-- Bind is loopback only (`127.0.0.1:17421` unless `GPUI_AGENT_ADDR` is a loopback address).
-  Authenticated remote bind is not implemented (gpui-agent epic #10).
+- Bind defaults to loopback (`127.0.0.1:17421` unless `GPUI_AGENT_ADDR` is set).
+  `from_env` calls `authorize_bind`: non-loopback requires `GPUI_AGENT_REMOTE=1`
+  **and** a token. Do not invent a second remote bind. Transport is still
+  plaintext TCP.
 - `GPUI_AGENT_TOKEN`, when set, is required on every request. Recipe run and MCP
   **always** need the same non-empty token on host and client. The token is never logged.
   `hello.auth` is `"required"` when that token is configured on the host, `"none"`
@@ -88,7 +96,7 @@ Install the CLI from the pinned gpui-agent repo (separate checkout):
 ```bash
 git clone https://github.com/hexuria/gpui-agent
 cd gpui-agent
-git checkout 254953f2b6a1d91030f9467caa05f69c063c7204
+git checkout 8857139af12fb033b4dd04eabd8d19b5bfc5ffc6
 cargo install --path crates/gpui-agent-cli --locked
 ```
 
@@ -102,6 +110,33 @@ gpui-agent snapshot
 gpui-agent click global_dashboard_btn
 gpui-agent assert --id page-global-dashboard
 gpui-agent invoke nav.go --arg page=profile-manager
+```
+
+## Headless vs painted window (CLI smoke)
+
+BIR has **no** `todo-headless serve` binary. Linux can run headless **host unit
+tests** (`spawn_host` + `PlatformKind::Headless`). A long-running daemon that
+owns the live taxpayer DB is not shipped.
+
+Live mailbox (needs a GPUI window + display; Linux X11/Wayland, Mac window):
+
+```bash
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN='dev-secret'
+export GPUI_AGENT_ADDR='127.0.0.1:17421'
+cargo run --locked --bin bir --features agent
+# other terminal:
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
+gpui-agent snapshot
+# macOS only, observe-only PNG of this window (Screen Recording):
+# gpui-agent screenshot --path /tmp/bir-window.png
+```
+
+Headless TCP without a painted window (fixture host, not the live DB):
+
+```bash
+cargo test --locked -p bir-desktop --features agent --bin bir \
+  agent::host::tests::headless_tcp_host_serves_hello_and_nav
 ```
 
 Claude Code / MCP (same token as the host):
@@ -361,9 +396,9 @@ Remaining (not faked):
 - `form.print` copies are ignored (frozen HTML preview has no copies API)
 - `form.mark_paid` on 1601-C is unsupported (UI message only)
 - `profile.calendar_sync` (Google push) needs a linked account
-- Virtual in-window delivery stays `virtual_unavailable`. Screenshot stays
-  unavailable on current pin `254953f`; available after bumping gpui-agent to
-  main tip ≥ `b630bf7` (#20).
+- Virtual in-window delivery stays `virtual_unavailable`. Screenshot: macOS
+  mailbox drain can write this window (`screencapture -l`); Linux / Windows /
+  headless stay `screenshot_unavailable`.
 
 ## Claimed queue without BIR outcome (facts)
 

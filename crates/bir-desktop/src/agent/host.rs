@@ -2457,7 +2457,7 @@ impl AgentHost for BirAgentHost {
         let detail = match self.platform {
             PlatformKind::Headless => "headless host has no pixel surface",
             PlatformKind::Desktop => {
-                "desktop host has no GPUI surface export yet (gpui-agent PR #20 is not depended on)"
+                "semantic host has no Window; the mailbox drain captures this GPUI window on macOS via screencapture -l. Linux/Windows stay screenshot_unavailable"
             }
             _ => "this host has no pixel surface",
         };
@@ -3442,6 +3442,41 @@ mod tests {
         assert_eq!(desktop.hello().deliveries, vec![DeliveryMode::Semantic]);
         // Host hello() leaves auth at Default; handle_request fills it.
         assert_eq!(desktop.hello().auth, gpui_agent::HelloAuth::default());
+    }
+
+    #[test]
+    fn screenshot_is_unavailable_on_the_semantic_host() {
+        let mut host = empty_host();
+        let missing = handle_request(&mut host, req(Op::Screenshot { path: None }), None);
+        assert!(!missing.ok);
+        assert!(
+            missing
+                .error
+                .as_deref()
+                .is_some_and(gpui_agent::is_screenshot_unavailable)
+                || missing.error.as_deref() == Some("screenshot requires path"),
+            "{:?}",
+            missing.error
+        );
+        let resp = handle_request(
+            &mut host,
+            req(Op::Screenshot {
+                path: Some("/tmp/bir-agent-screenshot.png".into()),
+            }),
+            None,
+        );
+        assert!(!resp.ok);
+        assert!(
+            resp.error
+                .as_deref()
+                .is_some_and(gpui_agent::is_screenshot_unavailable),
+            "{:?}",
+            resp.error
+        );
+        assert!(
+            !std::path::Path::new("/tmp/bir-agent-screenshot.png").exists(),
+            "semantic host must not invent a PNG"
+        );
     }
 
     #[test]

@@ -1,8 +1,9 @@
 //! UI-thread mailbox drain. The TCP thread never touches GPUI entities.
 
 use gpui::*;
+use gpui_agent::authorize_request;
 use gpui_agent::handle_request;
-use gpui_agent::protocol::{Op, PlatformKind};
+use gpui_agent::protocol::{Op, PlatformKind, Response};
 
 use crate::agent::host::BirAgentHost;
 use crate::agent::ids;
@@ -28,24 +29,38 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
                 | Op::Invoke { .. }
                 | Op::Shutdown
         );
-        let response = if posted.request.op.is_virtual_input() {
-            gpui_agent::Response::err(
-                &posted.request.id,
-                gpui_agent::virtual_unavailable(
-                    "bir-desktop ships semantic delivery first; \
+        // TCP spawn_mailbox already authorizes. Re-check here so screenshot /
+        // virtual intercepts that skip handle_request cannot skip the token.
+        let response =
+            if let Err(resp) = authorize_request(&posted.request, expected_token.as_deref()) {
+                resp
+            } else if posted.request.op.is_virtual_input() {
+                Response::err(
+                    &posted.request.id,
+                    gpui_agent::virtual_unavailable(
+                        "bir-desktop ships semantic delivery first; \
                      virtual in-window events are not wired (no per-widget painted bounds). \
                      Protocol is unchanged; this host does not synthesize OS HID",
-                ),
-            )
-        } else {
-            let mut host = snapshot_host(app, cx);
-            let response =
-                handle_request(&mut host, posted.request.clone(), expected_token.as_deref());
-            if mutating && response.ok {
-                apply_host(host, app, window, cx);
-            }
-            response
-        };
+                    ),
+                )
+            } else if let Op::Screenshot { path } = &posted.request.op {
+                match screenshot_this_window(window, path.as_deref()) {
+                    Ok(result) => {
+                        let mut resp = Response::ok(&posted.request.id);
+                        resp.result = result.value;
+                        resp
+                    }
+                    Err(error) => Response::err(&posted.request.id, error),
+                }
+            } else {
+                let mut host = snapshot_host(app, cx);
+                let response =
+                    handle_request(&mut host, posted.request.clone(), expected_token.as_deref());
+                if mutating && response.ok {
+                    apply_host(host, app, window, cx);
+                }
+                response
+            };
         posted.reply(response);
         if shutdown {
             cx.quit();
@@ -318,6 +333,28 @@ fn apply_navigation(
             app.active_view = other;
             cx.notify();
         }
+    }
+}
+
+fn screenshot_this_window(
+    window: &Window,
+    path: Option<&str>,
+) -> Result<gpui_agent::DispatchResult, String> {
+    let path = gpui_agent::require_screenshot_path(path)?;
+    #[cfg(target_os = "macos")]
+    {
+        let id = super::macos_window::cgwindow_id(window)?;
+        gpui_agent::capture_window_via_screencapture(id, Some(path))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        let _ = path;
+        Err(gpui_agent::screenshot_unavailable(
+            "desktop PNG of the app window is macOS-only (`screencapture -l` of this window). \
+             Linux/Windows have no production GPUI framebuffer export (`Window::render_to_image` is \
+             test-support only). Headless stays screenshot_unavailable.",
+        ))
     }
 }
 

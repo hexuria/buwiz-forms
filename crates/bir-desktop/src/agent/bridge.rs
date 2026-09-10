@@ -49,7 +49,7 @@ pub fn maybe_start() -> Option<StartedAgent> {
                 Ok((addr, _)) => {
                     tracing::info!(
                         %addr,
-                        "{auth}; platform=desktop app=bir-desktop; loopback only; protocol v1; delivery=semantic (virtual returns virtual_unavailable; no OS HID)"
+                        "{auth}; platform=desktop app=bir-desktop; loopback default via from_env; protocol v1; delivery=semantic (virtual returns virtual_unavailable; no OS HID); screenshot=macOS mailbox drain screencapture -l, else screenshot_unavailable"
                     );
                     Some(StartedAgent { mailbox, token })
                 }
