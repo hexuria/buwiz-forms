@@ -64,6 +64,7 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
                 }
                 response
             };
+        crate::agent::request_log::emit_request_log(&posted.request, &response);
         posted.reply(response);
         if shutdown {
             app.release_agent_listener();
