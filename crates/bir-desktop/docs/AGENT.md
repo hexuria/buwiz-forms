@@ -178,8 +178,10 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.release_abandon
   --arg reason=abandoned_no_bir_filing
 
 # zero-tax 1601-C after release: set Any Taxes Withheld=No (does not file)
+# Fill goes through Agent1601CHostPatch so the next snapshot / form.fields is No.
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.fill \
   --arg any_taxes_withheld=false
+gpui-agent invoke form.fields
 gpui-agent invoke form.save_draft
 gpui-agent invoke filing.validate
 
@@ -240,7 +242,7 @@ table; do not use them in recipes.
 | `filing.start` | `code`, `year`, `period` | Open a form for the selected profile |
 | `filing.validate` | — | Run `FormValidator` for open 1601-C or 2551Q |
 | `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q |
-| `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`). 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
+| `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`). Live window drain applies withheld through `Agent1601CHostPatch` so the painted Yes/No and the next snapshot/`form.fields`/`filing.validate` match. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
 | `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
@@ -312,7 +314,9 @@ Proven in headless host tests (not a Mac GUI run):
 - 1601-C draft save + validate + confirmation node; status stays `Draft`;
   `form.submit` / `filing.queue` rejected
 - `form.fill` refuses unknown keys; `any_taxes_withheld` false/true (or
-  Yes/No) updates `withheld_btn` snapshot `checked`/`value`. `form.pdf` writes frozen HTML to an
+  Yes/No) updates `withheld_btn` snapshot `checked`/`value`. Desktop drain
+  writes that flag through `Agent1601CHostPatch` so the next snapshot /
+  `form.fields` / `filing.validate` see No without a human click. `form.pdf` writes frozen HTML to an
   absolute `path` via the real print pipeline (no bytes on the result) and
   does **not** call `filing.validate`. A Confirmed 2551Q can still have
   draft validation errors (stale `profile_snapshot`, missing
