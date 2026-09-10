@@ -9,7 +9,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
-use bir_core::db::Database;
+use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
 
@@ -87,6 +87,7 @@ pub struct Form1601CView {
     is_validated: bool,
     validation_errors: Vec<(String, String)>,
     status_message: Option<String>,
+    release_claim_confirm_open: bool,
 
     // Header Inputs
     is_amended: bool,
@@ -310,6 +311,7 @@ impl Form1601CView {
                         && updated.status == FilingStatus::Submitted;
                     this.status_message = updated.submission_error.clone();
                     this.draft = updated;
+                    this.release_claim_confirm_open = false;
                     if became_submitted {
                         cx.emit(Form1601CEvent::Submitted);
                     }
@@ -327,6 +329,7 @@ impl Form1601CView {
             is_validated: false,
             validation_errors: Vec::new(),
             status_message: None,
+            release_claim_confirm_open: false,
 
             number_of_sheets,
             atc,
@@ -609,6 +612,29 @@ impl Form1601CView {
         }
     }
 
+    pub(crate) fn agent_sync_filing_snapshot(
+        &mut self,
+        draft: &Form1601CDraft,
+        cx: &mut Context<Self>,
+    ) {
+        let claim_changed = self.draft.submission_claim_token != draft.submission_claim_token
+            || self.draft.submission_claimed_at != draft.submission_claimed_at;
+        if self.draft.status == draft.status
+            && !claim_changed
+            && self.draft.submission_error == draft.submission_error
+        {
+            return;
+        }
+        self.status_message = draft.submission_error.clone();
+        self.is_amended = draft.is_amended;
+        self.any_taxes_withheld = draft.any_taxes_withheld;
+        self.draft = draft.clone();
+        self.is_validated = false;
+        self.validation_errors.clear();
+        self.release_claim_confirm_open = false;
+        cx.notify();
+    }
+
     pub(crate) fn agent_preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_pdf(window, cx);
     }
@@ -623,6 +649,65 @@ impl Form1601CView {
                 .autohide(true),
             cx,
         );
+        cx.notify();
+    }
+
+    fn confirm_release_abandoned_claim(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let tin = self.draft.tin.clone();
+        let year = self.draft.taxable_year;
+        let month = self.draft.month;
+        let outcome = match self.db.lock() {
+            Ok(db) => db.release_abandoned_claimed_1601c_submission(
+                &tin,
+                year,
+                month,
+                ABANDONED_CLAIM_RELEASE_REASON,
+            ),
+            Err(error) => {
+                self.status_message = Some(format!("Could not access the form database: {error}"));
+                cx.notify();
+                return;
+            }
+        };
+        match outcome {
+            Ok(AbandonedClaimRelease::Released { draft, .. })
+            | Ok(AbandonedClaimRelease::AlreadyClear {
+                draft: Some(draft), ..
+            }) => {
+                self.is_amended = draft.is_amended;
+                self.any_taxes_withheld = draft.any_taxes_withheld;
+                self.draft = draft;
+                self.release_claim_confirm_open = false;
+                self.is_validated = false;
+                self.validation_errors.clear();
+                self.status_message =
+                    Some("Returned to editable Draft. Nothing was filed.".to_string());
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message("Returned to editable Draft. Nothing was filed.".to_string())
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form1601CEvent::Saved);
+            }
+            Ok(AbandonedClaimRelease::AlreadyClear { draft: None, .. }) => {
+                self.release_claim_confirm_open = false;
+                self.status_message = Some("No 1601-C row to release.".to_string());
+            }
+            Err(error) => {
+                self.status_message = Some(error.to_string());
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(error.to_string())
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
+            }
+        }
         cx.notify();
     }
 }
@@ -746,9 +831,18 @@ impl FormViewTrait for Form1601CView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !matches!(self.draft.status, FilingStatus::Queued)
-            || self.draft.submission_claim_token.is_some()
-        {
+        let claimed = self.draft.submission_claim_token.is_some()
+            || self.draft.submission_claimed_at.is_some();
+        if claimed && matches!(self.draft.status, FilingStatus::Queued) {
+            self.release_claim_confirm_open = true;
+            self.status_message = Some(
+                "Confirm nothing reached BIR to return this claimed queue to an editable Draft. This does not file."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        if !matches!(self.draft.status, FilingStatus::Queued) {
             self.status_message = Some(
                 "This immutable return cannot be reverted after submission has started."
                     .to_string(),
@@ -788,6 +882,7 @@ impl FormViewTrait for Form1601CView {
             return;
         };
         self.draft = canceled;
+        self.release_claim_confirm_open = false;
         self.status_message = None;
         self.is_validated = false;
         self.validation_errors.clear();
@@ -837,7 +932,52 @@ impl FormViewTrait for Form1601CView {
 impl Render for Form1601CView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let is_draft = matches!(self.draft.status, FilingStatus::Draft);
+        let is_queued = matches!(self.draft.status, FilingStatus::Queued);
+        let claim_active = self.draft.submission_claim_token.is_some()
+            || self.draft.submission_claimed_at.is_some();
+        let release_confirm = self.release_claim_confirm_open;
         let queue_supported = matches!(submission_disposition(), SubmissionDisposition::QueueInApp);
+        let queue_actions = if is_queued && claim_active && release_confirm {
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    gpui_component::button::Button::new("form-1601c-release-claim-confirm")
+                        .label("Confirm nothing reached BIR")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.confirm_release_abandoned_claim(window, cx);
+                        })),
+                )
+                .child(
+                    gpui_component::button::Button::new("form-1601c-keep-queued")
+                        .label("Keep queued")
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.release_claim_confirm_open = false;
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        } else if is_queued && claim_active {
+            gpui_component::button::Button::new("form-1601c-return-draft")
+                .label("Return to Draft")
+                .outline()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.revert_to_draft(window, cx);
+                }))
+                .into_any_element()
+        } else if is_queued {
+            gpui_component::button::Button::new("cancel_queue_btn")
+                .label("Cancel Queue")
+                .ghost()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.revert_to_draft(window, cx);
+                }))
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
 
         div()
             .flex()
@@ -889,6 +1029,7 @@ impl Render for Form1601CView {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.mark_submitted(window, cx);
                             }))}
+                        {queue_actions}
                     </div>
                 </div>
             })

@@ -190,6 +190,9 @@ fn apply_host(
     {
         view.update(cx, |form, cx| {
             form.agent_apply_from_host(host.form_1601c_host_patch(), window, cx);
+            if let Some(draft) = host.form_1601c_draft() {
+                form.agent_sync_filing_snapshot(draft, cx);
+            }
             if print_requested {
                 form.agent_preview_pdf(window, cx);
             }
@@ -211,6 +214,9 @@ fn apply_host(
                 window,
                 cx,
             );
+            if let Some(draft) = host.form_2551q_draft() {
+                form.agent_sync_filing_snapshot(draft, cx);
+            }
             if print_requested {
                 form.agent_preview_pdf(window, cx);
             }

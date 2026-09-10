@@ -164,11 +164,19 @@ gpui-agent invoke jobs.list
 gpui-agent invoke submissions.list
 
 # "fill 1601-C from the profile then export a print document"
-gpui-agent invoke form.fill --arg tax_14=1000.00 --arg tax_25=100.00
+gpui-agent invoke filing.start --arg code=1601C --arg year=2026 --arg period=8
+gpui-agent invoke form.fill --arg any_taxes_withheld=false
 gpui-agent invoke form.pdf
+# HTML: p1c9=08, p1c10=2026, withheld No xbox p1c20=X, amended No xbox p1c22=X
 
-# "release an abandoned 1601-C claim after a human confirmed nothing reached BIR"
+# "return a claimed queued 1601-C to editable Draft after a human confirmed nothing reached BIR"
+# Unclaimed Queued: form.revert_draft with no extra args.
+# Claimed Queued: same confirm gate as form.release_abandoned_claim (either invoke).
 # Never call this unless Uriah confirmed no BIR filing. Still never form.file / filing.queue.
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.revert_draft \
+  --arg confirm=true \
+  --arg reason=abandoned_no_bir_filing
+# equivalent:
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.release_abandoned_claim \
   --arg q=Juan \
   --arg form=1601-C \
@@ -244,10 +252,10 @@ table; do not use them in recipes.
 | `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q |
 | `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`). Live window drain applies withheld through `Agent1601CHostPatch` so the painted Yes/No and the next snapshot/`form.fields`/`filing.validate` match. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
-| `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
+| `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, 1601-C For the Month `txtMonth`/`txtYear` on `p1c9`/`p1c10`, Amended/Withheld `xbox_joins`, 2551Q header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
-| `form.revert_draft` | — | Unclaimed queued 1601-C / 2551Q cancel APIs only |
-| `form.release_abandoned_claim` | `confirm` must be boolean `true`; `reason`=`abandoned_no_bir_filing`; `tin` **or** `q` (same as `profile.set`, refuse ambiguous); `form` or `code` (`1601C` / `1601-C` / `2551Q`); `year` + `period` as `filing.start` (1601-C month, 2551Q quarter). Open 1601C/2551Q can supply form/period if omitted | Claimed **Queued** snapshot → **Draft** (CAS, same durable write family as unclaimed cancel). Clears claim token/`claimed_at` and the pending-retry error; stores the release reason on the draft. Does **not** queue or file. Unclaimed queues stay on `form.revert_draft`. Submitted/Confirmed/Paid refuse. Already-Draft / no row is idempotent `{released:false}`. **Never** use unless a human confirmed nothing reached BIR |
+| `form.revert_draft` | Unclaimed: no args. Claimed Queued: `confirm` boolean `true` + `reason`=`abandoned_no_bir_filing` (same gate as `form.release_abandoned_claim`) | Unclaimed **Queued** → **Draft** via cancel CAS. Claimed **Queued** with unresolved outcome → **Draft** via the abandoned-claim CAS (does not file). Snapshot `form-1601c-status` stays `Queued` + `claimed` until that CAS succeeds. Submitted/Confirmed/Paid refuse. Agent click on `form-1601c-return-draft` does **not** skip the confirm args |
+| `form.release_abandoned_claim` | `confirm` must be boolean `true`; `reason`=`abandoned_no_bir_filing`; `tin` **or** `q` (same as `profile.set`, refuse ambiguous); `form` or `code` (`1601C` / `1601-C` / `2551Q`); `year` + `period` as `filing.start` (1601-C month, 2551Q quarter). Open 1601C/2551Q can supply form/period if omitted | Same claimed **Queued** → **Draft** CAS as confirmed `form.revert_draft`. Clears claim token/`claimed_at` and the pending-retry error; stores the release reason on the draft. Does **not** queue or file. Unclaimed queues stay on `form.revert_draft` without confirm. Submitted/Confirmed/Paid refuse. Already-Draft / no row is idempotent `{released:false}`. **Never** use unless a human confirmed nothing reached BIR |
 | `form.mark_paid` | — | 1601-C: `{status:"unsupported"}` (UI does not actually mark paid). 2551Q: only from Confirmed via `save_paid_2551q_draft` |
 | `form.upload_receipt` | — | `{status:"needs_file", path:null}` — file picker required. A later success must return an absolute `path`, never file bytes |
 | `calendar.add` | — | Writes a native `.ics` via `build_desired_events` + `write_profile_calendar_ics` to a temp path. Does not open a calendar app |
@@ -295,7 +303,11 @@ filter: `dashboard-form-filter`, `dashboard-filter-query`,
 `submit_btn`, `form-1601c-tax-14`, `form-1601c-tax-25`,
 `form-1601c-sheets`, **`withheld_btn`** (Any Taxes Withheld Yes/No; role
 `checkbox`, `checked` plus `value` `Yes`/`No`; Draft-only),
-`form-1601c-submit-confirm`. 2551Q fillables: `form-2551q-creditable`,
+`form-1601c-submit-confirm`, `cancel_queue_btn` (unclaimed Queued),
+`form-1601c-return-draft` / `form-1601c-release-claim-confirm` (claimed Queued;
+confirm click is disabled for the agent). `form-1601c-status` `value` is the
+real `FilingStatus` (`Queued` while claimed; never `Draft` until the release
+CAS). Claimed queues add `claimed` and `outcome-pending` in `states`. 2551Q fillables: `form-2551q-creditable`,
 `form-2551q-other-credit`, `form-2551q-taxable-0`. Item 14/25 must be > 0
 when Any Taxes Withheld is YES; set `any_taxes_withheld=false` for zero-tax.
 
@@ -318,16 +330,21 @@ Proven in headless host tests (not a Mac GUI run):
   writes that flag through `Agent1601CHostPatch` so the next snapshot /
   `form.fields` / `filing.validate` see No without a human click. `form.pdf` writes frozen HTML to an
   absolute `path` via the real print pipeline (no bytes on the result) and
-  does **not** call `filing.validate`. A Confirmed 2551Q can still have
+  does **not** call `filing.validate`. 1601-C Aug 2026 / withheld=No /
+  amended=No fills month `08`, year `2026`, and the No xboxes. A Confirmed 2551Q can still have
   draft validation errors (stale `profile_snapshot`, missing
   `annual_income_tax_election` / `taxpayer_type` / `item_13_election`, stale
   surcharge/interest/compromise); those are orthogonal to print fill.
   headless `form.print` errors; `form.upload_receipt` is `needs_file` with
   `path: null`; 2551Q `form.save_draft` is mapped
 - `form.release_abandoned_claim` is confirm-gated (`confirm` boolean true +
-  `reason=abandoned_no_bir_filing`). Claimed queued 1601-C cannot
-  `form.revert_draft`; with confirm it returns Draft and clears the claim.
-  Without confirm it refuses. It does not file.
+  `reason=abandoned_no_bir_filing`). Claimed queued 1601-C `form.revert_draft`
+  without confirm refuses (same gate). With confirm, either invoke returns Draft
+  and clears the claim. It does not file. Unclaimed Queued still cancels
+  through `form.revert_draft` with no extra args.
+- UI 1601-C / 2551Q Queued: **Cancel Queue** for unclaimed; **Return to Draft**
+  then **Confirm nothing reached BIR** for claimed. Snapshot/status stay
+  Queued until the CAS writes Draft.
 - `profile.create` opens the editor and does not save; `profile.ensure` is
   rejected (no auto-write)
 - Selected profile: checked `profile-{tin}` listitem and `context.selected_tin`
@@ -347,3 +364,23 @@ Remaining (not faked):
 - Virtual in-window delivery stays `virtual_unavailable`. Screenshot stays
   unavailable on current pin `254953f`; available after bumping gpui-agent to
   main tip ≥ `b630bf7` (#20).
+
+## Claimed queue without BIR outcome (facts)
+
+Cron `process_queued_1601c` claims immediately before `transport.submit`.
+Claim writes token + `claimed_at` and `submission_error` “outcome pending /
+auto-retry disabled”. Claimed rows are skipped on the next cron pass
+(`queued_1601c_revision` is none). `filing.submit` only exposes confirmation; it
+does **not** claim or queue.
+
+Pre-network failures (XML / encrypt / revalidate) stay unclaimed and use
+`record_submission_failure` / revert-to-Draft. After claim, a transport `Err`
+is **fail-closed**: the worker logs unknown outcome and does **not** clear the
+claim (`process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried`).
+A crash between claim and `finish_claimed_*` leaves the same state. July vs
+Aug/Jan/Feb is not a month-specific code path; whichever period got
+`finish_claimed` became Submitted, the others hit this fail-closed arm.
+
+No automatic release on worker failure shipped: clearing a claim after unknown
+network I/O can double-file. Uriah decision if product should auto-release on
+transport error vs keep human `form.revert_draft` / `form.release_abandoned_claim`.

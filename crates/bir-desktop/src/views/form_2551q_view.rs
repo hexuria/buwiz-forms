@@ -16,7 +16,9 @@ use gpui_rsx::rsx;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use bir_core::db::{Database, ReceiptConfirmationOutcome};
+use bir_core::db::{
+    ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database, ReceiptConfirmationOutcome,
+};
 use bir_core::forms::form_2551q::{
     FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election, OverpaymentDisposition,
     Schedule1Row, TaxPeriodBasis,
@@ -147,6 +149,7 @@ pub struct Form2551QView {
     show_receipt: bool,
     is_email_tracking_active: bool,
     is_generating_pdf: bool,
+    release_claim_confirm_open: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -411,6 +414,7 @@ impl Form2551QView {
                             || this.draft.last_error != updated.last_error)
                     {
                         this.draft = updated;
+                        this.release_claim_confirm_open = false;
                         // Refresh cached email tracking status
                         this.is_email_tracking_active = db_guard
                             .get_profile(&this.draft.tin)
@@ -547,6 +551,7 @@ impl Form2551QView {
             show_receipt: false,
             is_email_tracking_active,
             is_generating_pdf: false,
+            release_claim_confirm_open: false,
             _subscriptions: subscriptions,
         };
         view.validation_errors = view.validate_for_submit(cx);
@@ -794,6 +799,30 @@ impl Form2551QView {
         }
     }
 
+    pub(crate) fn agent_sync_filing_snapshot(
+        &mut self,
+        draft: &Form2551QDraft,
+        cx: &mut Context<Self>,
+    ) {
+        let claim_changed = self.draft.submission_claim_token != draft.submission_claim_token
+            || self.draft.submission_claimed_at != draft.submission_claimed_at;
+        if self.draft.status == draft.status
+            && !claim_changed
+            && self.draft.last_error == draft.last_error
+        {
+            return;
+        }
+        self.status_message = draft
+            .last_error
+            .clone()
+            .or_else(|| draft.profile_resolution_error.clone());
+        self.is_amended = draft.is_amended;
+        self.draft = draft.clone();
+        self.release_claim_confirm_open = false;
+        self.is_validated = false;
+        cx.notify();
+    }
+
     pub(crate) fn agent_preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_pdf(window, cx);
     }
@@ -947,20 +976,10 @@ impl Form2551QView {
         }
         if self.draft.submission_claim_token.is_some() || self.draft.submission_claimed_at.is_some()
         {
-            use gpui_component::WindowExt;
+            self.release_claim_confirm_open = true;
             self.status_message = Some(
-                "Submission outcome is pending and requires support-assisted reconciliation."
+                "Confirm nothing reached BIR to return this claimed queue to an editable Draft. This does not file."
                     .to_string(),
-            );
-            window.push_notification(
-                gpui_component::notification::Notification::new()
-                    .message(
-                        "Do not retry this return. Keep any BIR confirmation or receipt and contact support for manual reconciliation."
-                            .to_string(),
-                    )
-                    .with_type(gpui_component::notification::NotificationType::Warning)
-                    .autohide(false),
-                cx,
             );
             cx.notify();
             return;
@@ -1028,6 +1047,64 @@ impl Form2551QView {
             cx,
         );
         cx.emit(Form2551QEvent::Saved);
+        cx.notify();
+    }
+
+    fn confirm_release_abandoned_claim(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let tin = self.draft.tin.clone();
+        let year = self.draft.taxable_year;
+        let quarter = self.draft.quarter;
+        let outcome = match self.db.lock() {
+            Ok(db) => db.release_abandoned_claimed_2551q_submission(
+                &tin,
+                year,
+                quarter,
+                ABANDONED_CLAIM_RELEASE_REASON,
+            ),
+            Err(_) => {
+                self.status_message =
+                    Some("The form database is temporarily unavailable".to_string());
+                cx.notify();
+                return;
+            }
+        };
+        use gpui_component::WindowExt;
+        match outcome {
+            Ok(AbandonedClaimRelease::Released { draft, .. })
+            | Ok(AbandonedClaimRelease::AlreadyClear {
+                draft: Some(draft), ..
+            }) => {
+                self.is_amended = draft.is_amended;
+                self.draft = draft;
+                self.release_claim_confirm_open = false;
+                self.is_validated = false;
+                self.validation_errors.clear();
+                self.status_message =
+                    Some("Returned to editable Draft. Nothing was filed.".to_string());
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message("Returned to editable Draft. Nothing was filed.".to_string())
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form2551QEvent::Saved);
+            }
+            Ok(AbandonedClaimRelease::AlreadyClear { draft: None, .. }) => {
+                self.release_claim_confirm_open = false;
+                self.status_message = Some("No 2551Q row to release.".to_string());
+            }
+            Err(error) => {
+                self.status_message = Some(error.to_string());
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(error.to_string())
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
+            }
+        }
         cx.notify();
     }
 
@@ -1703,10 +1780,10 @@ impl Render for Form2551QView {
                     text_color={cx.theme().foreground}
                 >
                     <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().warning}>
-                        {"Submission outcome pending — support-assisted reconciliation required"}
+                        {"Submission outcome pending"}
                     </div>
                     <div text_sm>
-                        {"Do not submit this return again. Keep any BIR confirmation or receipt and contact support; the app will not retry or release this claim automatically."}
+                        {"Do not submit this return again. Keep any BIR confirmation or receipt. Return to Draft only after confirming nothing reached BIR — the app will not retry or release this claim automatically."}
                     </div>
                 </div>
             };
@@ -2818,12 +2895,36 @@ impl Render for Form2551QView {
                                 );
                             }
                             FilingStatus::Queued => {
-                                if submission_claim_active {
-                                    toolbar = toolbar.child(rsx! {
-                                        <div text_sm text_color={cx.theme().warning}>
-                                            {"Contact support — reconciliation required"}
-                                        </div>
-                                    });
+                                if submission_claim_active && self.release_claim_confirm_open {
+                                    toolbar = toolbar.child(
+                                        gpui_component::button::Button::new(
+                                            "form-2551q-release-claim-confirm",
+                                        )
+                                        .label("Confirm nothing reached BIR")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.confirm_release_abandoned_claim(window, cx);
+                                        })),
+                                    );
+                                    toolbar = toolbar.child(
+                                        gpui_component::button::Button::new("form-2551q-keep-queued")
+                                            .label("Keep queued")
+                                            .ghost()
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.release_claim_confirm_open = false;
+                                                cx.notify();
+                                            })),
+                                    );
+                                } else if submission_claim_active {
+                                    toolbar = toolbar.child(
+                                        gpui_component::button::Button::new(
+                                            "form-2551q-return-draft",
+                                        )
+                                        .label("Return to Draft")
+                                        .outline()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.revert_to_draft(window, cx);
+                                        })),
+                                    );
                                 } else {
                                     toolbar = toolbar.child(
                                         gpui_component::button::Button::new("cancel_queue_btn")

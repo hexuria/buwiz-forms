@@ -67,6 +67,9 @@ pub const FORM_1601C_SHEETS: &str = "form-1601c-sheets";
 /// Painted 1601-C “Any Taxes Withheld?” Yes/No control. Same id in the agent tree.
 pub const FORM_1601C_WITHHELD: &str = "withheld_btn";
 pub const FORM_1601C_SUBMIT_CONFIRM: &str = "form-1601c-submit-confirm";
+pub const FORM_1601C_CANCEL_QUEUE: &str = "cancel_queue_btn";
+pub const FORM_1601C_RETURN_DRAFT: &str = "form-1601c-return-draft";
+pub const FORM_1601C_RELEASE_CLAIM_CONFIRM: &str = "form-1601c-release-claim-confirm";
 
 pub const FORM_2551Q_VALIDATE: &str = "form-2551q-validate";
 pub const FORM_2551Q_STATUS: &str = "form-2551q-status";
