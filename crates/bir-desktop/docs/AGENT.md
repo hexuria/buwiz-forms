@@ -7,8 +7,9 @@ verbs live in this host as `invoke` names.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
 `254953f2b6a1d91030f9467caa05f69c063c7204`. Host GPUI is **gpui-pre** through
-gpui-kit 0.6.1. Do not depend on gpui-agent PR #20 (macOS screenshot). Do not
-fork the protocol. There is no crates.io release; git/path only.
+gpui-kit 0.6.1. Screenshot is unavailable on this pin; it is available after
+bumping gpui-agent to main tip ≥ `b630bf7` (PR #20). Do not fork the protocol.
+There is no crates.io release; git/path only.
 
 ## Locked protocol contract
 
@@ -32,7 +33,9 @@ These are host constraints. They do not change protocol v1.
 - Semantic delivery is the supported path. Virtual ops return
   `virtual_unavailable` rather than synthesizing OS HID or a half-wired
   in-window pointer. Protocol is unchanged.
-- Screenshot returns `screenshot_unavailable`. Do not wait on gpui-agent PR #20.
+- Screenshot returns `screenshot_unavailable` on current pin `254953f`.
+  Available after bumping gpui-agent to main tip ≥ `b630bf7` (#20). This BIR
+  branch does not bump the pin.
 
 ## Security
 
@@ -302,4 +305,5 @@ Remaining (not faked):
 - `form.mark_paid` on 1601-C is unsupported (UI message only)
 - `profile.calendar_sync` (Google push) needs a linked account
 - Virtual in-window delivery stays `virtual_unavailable`. Screenshot stays
-  unavailable until gpui-agent PR #20 (not depended on).
+  unavailable on current pin `254953f`; available after bumping gpui-agent to
+  main tip ≥ `b630bf7` (#20).
