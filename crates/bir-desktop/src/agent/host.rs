@@ -28,7 +28,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::agent::ProfileEditor;
-use crate::agent::html_demo::{self, ProfileCard};
+use crate::agent::html_demo::{self, DueRow, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
 use crate::app::ActiveView;
@@ -961,6 +961,72 @@ impl BirAgentHost {
             "date_basis": "local-calendar-date (chrono::Local::now().date_naive())",
             "dues": self.dues
         })))
+    }
+
+    fn dues_html(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        match self.resolve_tin_or_q(args)? {
+            TinQuery::Missing => {}
+            TinQuery::NotFound { query } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "not_found",
+                    "query": query,
+                    "candidates": []
+                })));
+            }
+            TinQuery::Ambiguous { query, candidates } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "ambiguous",
+                    "query": query,
+                    "candidates": candidates
+                })));
+            }
+            TinQuery::One { tin, .. } => {
+                let selected = self.select_profile_view(&tin, ActiveView::Dashboard)?;
+                if self.pending_profile_auth {
+                    return Ok(selected);
+                }
+            }
+        }
+        let listed_args = map_dues_html_args(args, self.selected_tin.is_some())?;
+        self.dues_list(&listed_args)?;
+        let limit = parse_optional_limit(args)?;
+        let dues: Vec<DueItem> = match limit {
+            Some(n) => self.dues.iter().take(n).cloned().collect(),
+            None => self.dues.clone(),
+        };
+        let rows: Vec<DueRow> = dues
+            .iter()
+            .map(|due| DueRow {
+                form_code: due.form_code.clone(),
+                year: due.year,
+                period: due.period,
+                name: due.name.clone(),
+                deadline: due.deadline.clone(),
+                status: due.status.clone(),
+            })
+            .collect();
+        let as_of = dues_as_of().to_string();
+        let path = html_demo::write_dues_card(
+            "Tax dues",
+            &self.dues_filter,
+            &self.dues_scope,
+            &as_of,
+            &rows,
+        )?;
+        html_path_result(
+            path,
+            json!({
+                "status": "ok",
+                "filter": self.dues_filter,
+                "scope": self.dues_scope,
+                "as_of": as_of,
+                "date_basis": "local-calendar-date (chrono::Local::now().date_naive())",
+                "limit": limit,
+                "dues": dues,
+                "note": "host-written demo HTML from dues.list (html-demo/theme.css); absolute path, never file bytes or client HTML"
+            }),
+        )
     }
 
     fn reload_dues_filtered(&mut self) -> Result<(), String> {
@@ -2158,6 +2224,7 @@ impl BirAgentHost {
             "profile.edit" => self.profile_edit(args),
             "profile.tab" => self.profile_tab_invoke(args),
             "dues.list" => self.dues_list(args),
+            "dues.html" | "calendar.html" => self.dues_html(args),
             "tax-dues.refresh" => self.refresh_dues(),
             "jobs.list" => self.jobs_list(args),
             "submissions.list" => self.submissions_list(args),
@@ -2807,6 +2874,49 @@ fn parse_optional_year(args: &Value) -> u16 {
     args.get("year")
         .and_then(Value::as_u64)
         .unwrap_or_else(|| chrono::Local::now().year() as u64) as u16
+}
+
+fn parse_optional_limit(args: &Value) -> Result<Option<usize>, String> {
+    match args.get("limit") {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => {
+            let Some(n) = value.as_u64() else {
+                return Err("dues.html args.limit must be a JSON number".into());
+            };
+            Ok(Some(n as usize))
+        }
+    }
+}
+
+fn map_dues_html_args(args: &Value, has_selected: bool) -> Result<Value, String> {
+    let filter = match args.get("filter").and_then(Value::as_str).map(str::trim) {
+        Some(value @ ("upcoming" | "overdue" | "all")) => value.to_string(),
+        Some(other) => {
+            return Err(format!(
+                "unknown dues filter `{other}` (expected upcoming, overdue, or all)"
+            ));
+        }
+        None => match args.get("scope").and_then(Value::as_str).map(str::trim) {
+            Some(value @ ("upcoming" | "overdue" | "all")) => value.to_string(),
+            _ => "upcoming".into(),
+        },
+    };
+    let scope = match args.get("scope").and_then(Value::as_str).map(str::trim) {
+        Some(value @ ("profile" | "global")) => value.to_string(),
+        Some("upcoming" | "overdue" | "all") | None => {
+            if has_selected {
+                "profile".into()
+            } else {
+                "global".into()
+            }
+        }
+        Some(other) => {
+            return Err(format!(
+                "unknown dues scope `{other}` (expected profile, global, upcoming, overdue, or all)"
+            ));
+        }
+    };
+    Ok(json!({ "filter": filter, "scope": scope }))
 }
 
 fn taxpayer_type_label(kind: &TaxpayerType) -> &'static str {
@@ -4003,6 +4113,82 @@ mod tests {
             "{:?}",
             missing.error
         );
+    }
+
+    #[test]
+    fn dues_html_shares_dues_list_and_writes_demo_bundle() {
+        let mut host = fixture_host();
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.list".into(),
+                args: json!({ "filter": "all", "scope": "profile" }),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let listed_dues = listed.result.as_ref().unwrap()["dues"].clone();
+
+        let html = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.html".into(),
+                args: json!({ "filter": "all", "scope": "profile" }),
+            }),
+            None,
+        );
+        assert!(html.ok, "{:?}", html.error);
+        let result = html.result.as_ref().expect("result");
+        assert_eq!(result["kind"], "html");
+        assert_eq!(result["status"], "ok");
+        assert_eq!(result["filter"], "all");
+        assert_eq!(result["scope"], "profile");
+        assert_eq!(result["dues"], listed_dues);
+        assert!(result.get("bytes").is_none());
+        let path = result["path"].as_str().expect("path");
+        let body = assert_html_demo_bundle(path);
+        assert!(body.contains("Tax dues"));
+        if let Some(first) = listed_dues.as_array().and_then(|rows| rows.first()) {
+            assert!(body.contains(first["form_code"].as_str().unwrap()));
+        }
+
+        let alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "calendar.html".into(),
+                args: json!({ "scope": "upcoming" }),
+            }),
+            None,
+        );
+        assert!(alias.ok, "{:?}", alias.error);
+        assert_eq!(alias.result.as_ref().unwrap()["kind"], "html");
+        assert_eq!(alias.result.as_ref().unwrap()["filter"], "upcoming");
+
+        let limited = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.html".into(),
+                args: json!({ "filter": "all", "scope": "profile", "limit": 1 }),
+            }),
+            None,
+        );
+        assert!(limited.ok, "{:?}", limited.error);
+        let limited_dues = limited.result.as_ref().unwrap()["dues"]
+            .as_array()
+            .expect("dues");
+        assert!(limited_dues.len() <= 1);
+
+        let none = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "dues.html".into(),
+                args: json!({ "q": "zzz-no-such-taxpayer" }),
+            }),
+            None,
+        );
+        assert!(none.ok, "{:?}", none.error);
+        assert_eq!(none.result.as_ref().unwrap()["status"], "not_found");
+        assert!(none.result.as_ref().unwrap().get("path").is_none());
     }
 
     #[test]

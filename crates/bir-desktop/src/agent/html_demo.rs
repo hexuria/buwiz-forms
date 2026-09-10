@@ -40,6 +40,16 @@ pub struct ProfileCard {
     pub form_codes: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DueRow {
+    pub form_code: String,
+    pub year: u16,
+    pub period: u8,
+    pub name: String,
+    pub deadline: String,
+    pub status: String,
+}
+
 pub fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {
@@ -57,6 +67,16 @@ pub fn escape(text: &str) -> String {
 
 pub fn write_profile_card(card: &ProfileCard) -> Result<PathBuf, String> {
     write_demo_bundle("Taxpayer identity", &profile_card_body(card))
+}
+
+pub fn write_dues_card(
+    title: &str,
+    filter: &str,
+    scope: &str,
+    as_of: &str,
+    rows: &[DueRow],
+) -> Result<PathBuf, String> {
+    write_demo_bundle(title, &dues_card_body(title, filter, scope, as_of, rows))
 }
 
 fn write_demo_bundle(title: &str, body: &str) -> Result<PathBuf, String> {
@@ -146,6 +166,56 @@ fn profile_card_body(card: &ProfileCard) -> String {
     )
 }
 
+fn dues_card_body(title: &str, filter: &str, scope: &str, as_of: &str, rows: &[DueRow]) -> String {
+    let table = if rows.is_empty() {
+        "<p class=\"demo-empty\">No dues in this filter.</p>".to_string()
+    } else {
+        let mut rows_html = String::new();
+        for row in rows {
+            let status_class = match row.status.as_str() {
+                "overdue" => "demo-status-overdue",
+                _ => "demo-status-upcoming",
+            };
+            rows_html.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>\
+                 <td class=\"{status_class}\">{}</td></tr>\n",
+                escape(&row.form_code),
+                escape(&row.year.to_string()),
+                escape(&row.period.to_string()),
+                escape(&row.name),
+                escape(&row.deadline),
+                escape(&row.status),
+            ));
+        }
+        format!(
+            "<div class=\"demo-table-wrap\"><table class=\"demo-table\">\n\
+             <thead><tr><th>Form</th><th>Year</th><th>Period</th><th>Name</th>\
+             <th>Deadline</th><th>Status</th></tr></thead>\n<tbody>\n{rows_html}</tbody>\n\
+             </table></div>"
+        )
+    };
+    format!(
+        "<main class=\"demo-shell\">\n\
+         <p class=\"demo-kicker\">Tax dues</p>\n\
+         <h1 class=\"demo-title\">{}</h1>\n\
+         <article class=\"demo-card\">\n\
+         <dl class=\"demo-dl\">\n\
+         <dt>Filter</dt><dd>{}</dd>\n\
+         <dt>Scope</dt><dd>{}</dd>\n\
+         <dt>As of</dt><dd>{}</dd>\n\
+         </dl>\n{table}\n\
+         </article>\n\
+         <p class=\"demo-foot\">{note}</p>\n\
+         </main>",
+        escape(title),
+        escape(filter),
+        escape(scope),
+        escape(as_of),
+        table = table,
+        note = HTML_NOTE,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +264,28 @@ mod tests {
         let theme = std::fs::read_to_string(dir.join("theme.css")).expect("theme");
         assert!(theme.contains("--bir-demo-bg"));
         assert!(!theme.contains(".page { position:relative"));
+    }
+
+    #[test]
+    fn write_dues_card_escapes_row_text() {
+        let path = write_dues_card(
+            "Tax dues",
+            "upcoming",
+            "profile",
+            "2026-09-10",
+            &[DueRow {
+                form_code: "1601C".into(),
+                year: 2026,
+                period: 1,
+                name: "1601C <b>due</b>".into(),
+                deadline: "2026-01-15".into(),
+                status: "upcoming".into(),
+            }],
+        )
+        .expect("write");
+        let html = std::fs::read_to_string(&path).expect("html");
+        assert!(html.contains("1601C"));
+        assert!(html.contains("1601C &lt;b&gt;due&lt;/b&gt;"));
+        assert!(!html.contains("<b>due</b>"));
     }
 }
