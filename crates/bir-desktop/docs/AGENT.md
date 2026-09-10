@@ -112,31 +112,38 @@ gpui-agent assert --id page-global-dashboard
 gpui-agent invoke nav.go --arg page=profile-manager
 ```
 
-## Headless vs painted window (CLI smoke)
+## Linux CLI smoke (Buwiz box)
 
-BIR has **no** `todo-headless serve` binary. Linux can run headless **host unit
-tests** (`spawn_host` + `PlatformKind::Headless`). A long-running daemon that
-owns the live taxpayer DB is not shipped.
+BIR has **no** `todo-headless serve` / `bir serve` binary. Bind is still
+`gpui_agent::from_env` → `authorize_bind` (loopback default). Non-loopback
+needs `GPUI_AGENT_REMOTE=1` **and** `GPUI_AGENT_TOKEN`. Do not invent a second
+bind. `hello.auth` is `"required"` when that token is set because the mailbox
+drain passes it into `handle_request` (never `None` when configured).
 
-Live mailbox (needs a GPUI window + display; Linux X11/Wayland, Mac window):
-
-```bash
-export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN='dev-secret'
-export GPUI_AGENT_ADDR='127.0.0.1:17421'
-cargo run --locked --bin bir --features agent
-# other terminal:
-gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
-gpui-agent snapshot
-# macOS only, observe-only PNG of this window (Screen Recording):
-# gpui-agent screenshot --path /tmp/bir-window.png
-```
-
-Headless TCP without a painted window (fixture host, not the live DB):
+**Display-less Linux** (this is the working headless path — fixture host, not
+the live taxpayer DB):
 
 ```bash
 cargo test --locked -p bir-desktop --features agent --bin bir \
   agent::host::tests::headless_tcp_host_serves_hello_and_nav
+```
+
+**Linux with a painted window** (`DISPLAY` / Wayland). Same KEY=VALUE as Mac:
+
+```bash
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+cargo run --locked --bin bir --features agent
+# other terminal:
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
+gpui-agent snapshot
+```
+
+macOS observe-only PNG of **this** window (Screen Recording), not Linux:
+
+```bash
+gpui-agent screenshot --path /tmp/bir-window.png
 ```
 
 Claude Code / MCP (same token as the host):
