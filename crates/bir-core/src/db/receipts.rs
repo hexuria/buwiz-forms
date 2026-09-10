@@ -233,4 +233,26 @@ mod tests {
             ReceiptConfirmationOutcome::Ignored
         );
     }
+
+    #[test]
+    fn save_submission_receipt_strips_iaf_email_from_period() {
+        let database = Database::open_in_memory_for_tests().unwrap();
+        let confirmation = BirReceiptConfirmation {
+            filename: "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml".to_string(),
+            date_received: chrono::NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+            time_received: chrono::NaiveTime::from_hms_opt(14, 30, 0).unwrap(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "test".to_string(),
+            raw_html: None,
+        };
+        let (saved, is_new) = database.save_submission_receipt(&confirmation).unwrap();
+        assert!(is_new);
+        assert_eq!(saved.tin, "00000000000000");
+        assert_eq!(saved.form_type, "1601Cv2018");
+        assert_eq!(saved.period, "092026");
+        assert_eq!(
+            saved.filename,
+            "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml"
+        );
+    }
 }

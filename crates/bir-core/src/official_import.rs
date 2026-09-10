@@ -237,18 +237,11 @@ fn prepare_validated_payload(
 fn parse_imported_filename(
     file_name: &str,
 ) -> Result<(String, String, String), OfficialImportError> {
-    let stem = file_name
-        .strip_suffix(".xml")
-        .ok_or_else(|| OfficialImportError::InvalidFileName(file_name.to_string()))?;
-    let base = stem.split('#').next().unwrap_or_default();
-    let mut parts = base.splitn(3, '-');
-    let tin = parts.next().unwrap_or_default();
-    let identity = parts.next().unwrap_or_default();
-    let period = parts.next().unwrap_or_default();
-    if tin.is_empty() || identity.is_empty() || period.is_empty() {
+    if !file_name.ends_with(".xml") {
         return Err(OfficialImportError::InvalidFileName(file_name.to_string()));
     }
-    Ok((tin.to_string(), identity.to_string(), period.to_string()))
+    crate::receipt::split_bir_filename(file_name)
+        .ok_or_else(|| OfficialImportError::InvalidFileName(file_name.to_string()))
 }
 
 fn find_capability_identity(identity: &str) -> Option<&'static FormCapabilityRecord> {
@@ -564,5 +557,24 @@ mod tests {
             original_keys
         );
         assert_eq!(parsed["futureUnknownField"], "must survive");
+    }
+
+    #[test]
+    fn imported_filename_parser_matches_split_bir_filename_for_savefile_and_iaf() {
+        let savefile = "00000000000000-1601Cv2018-092026.xml";
+        let iaf = "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml";
+        let expected = (
+            "00000000000000".to_string(),
+            "1601Cv2018".to_string(),
+            "092026".to_string(),
+        );
+        assert_eq!(parse_imported_filename(savefile).unwrap(), expected);
+        assert_eq!(parse_imported_filename(iaf).unwrap(), expected);
+        assert_eq!(
+            crate::receipt::split_bir_filename(savefile),
+            Some(expected.clone())
+        );
+        assert_eq!(crate::receipt::split_bir_filename(iaf), Some(expected));
+        assert!(parse_imported_filename("00000000000000-1601Cv2018-092026").is_err());
     }
 }
