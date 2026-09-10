@@ -20,10 +20,12 @@ These are host constraints. They do not change protocol v1.
 - Loopback only via `gpui_agent::security::from_env`. Authenticated remote bind
   / daemon source of truth is gpui-agent epic #10 and is **not** on main. This
   host does not invent a remote bind.
-- Preferred BIR `invoke` names (app-only, not CLI/MCP verbs): `nav.go`,
-  `profile.create`, `tax-dues.refresh`, `filing.start`, `filing.validate`,
-  `filing.submit`. `filing.submit` maps to the existing confirmation gate; it
-  does not queue or file.
+- Preferred BIR `invoke` names (app-only, not CLI/MCP verbs) include
+  `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
+  `profile.tab`, `dues.list`, `jobs.list`, `palette.search`, `form.fill` /
+  `form.pdf`, plus the original `profile.create`, `tax-dues.refresh`,
+  `filing.start`, `filing.validate`, `filing.submit`. `filing.submit` maps to
+  the existing confirmation gate; it does not queue or file.
 - Semantic delivery is the supported path. Virtual ops return
   `virtual_unavailable` rather than synthesizing OS HID or a half-wired
   in-window pointer. Protocol is unchanged.
