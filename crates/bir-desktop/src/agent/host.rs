@@ -30,8 +30,8 @@ use serde_json::{Value, json};
 use crate::agent::ProfileEditor;
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
-
 use crate::app::ActiveView;
+use crate::views::form_1601c_view::Agent1601CHostPatch;
 
 const FIXTURE_TIN: &str = "12345678900000";
 const FIXTURE_NAME: &str = "Agent Fixture Taxpayer";
@@ -397,6 +397,24 @@ impl BirAgentHost {
         self.form_1601c
             .as_ref()
             .map(|form| form.draft.number_of_sheets)
+    }
+
+    pub fn form_1601c_any_taxes_withheld(&self) -> Option<bool> {
+        self.form_1601c
+            .as_ref()
+            .map(|form| form.draft.any_taxes_withheld)
+    }
+
+    /// Same patch `drain::apply_host` writes into `Form1601CView`.
+    pub fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
+        Agent1601CHostPatch {
+            tax_14: self.form_1601c_tax_14(),
+            tax_25: self.form_1601c_tax_25(),
+            sheets: self.form_1601c_sheets(),
+            any_taxes_withheld: self.form_1601c_any_taxes_withheld(),
+            save: self.form_1601c_saved(),
+            validate: self.form_1601c_validated(),
+        }
     }
 
     pub fn form_1601c_saved(&self) -> bool {
@@ -2980,6 +2998,7 @@ impl WithEnabled for UiNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::views::form_1601c_view::apply_1601c_host_header_patch;
     use bir_core::db::Claim1601CSubmissionResult;
     use gpui_agent::dispatch::handle_request;
     use gpui_agent::protocol::{AssertSpec, Request};
@@ -4132,6 +4151,84 @@ mod tests {
                 .contains("unknown or read-only 1601C field")
         );
         assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+    }
+
+    #[test]
+    fn withheld_fill_survives_drain_apply_host_roundtrip() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": year, "period": 8 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        // Painted view still has Yes until apply_host runs (Mac regression).
+        let mut view_flag = true;
+        let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
+        assert!(view_draft.any_taxes_withheld);
+
+        let filled = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": false }),
+            }),
+            None,
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let patch = host.form_1601c_host_patch();
+        assert_eq!(patch.any_taxes_withheld, Some(false));
+        apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_draft);
+        assert!(!view_flag);
+        assert!(!view_draft.any_taxes_withheld);
+
+        // Next request: snapshot_host reloads from the view/draft validate reads.
+        host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
+        let tree = host.tree();
+        let withheld = tree
+            .find(ids::FORM_1601C_WITHHELD)
+            .expect("withheld_btn after apply_host");
+        assert_eq!(withheld.checked, Some(false));
+        assert_eq!(withheld.value.as_deref(), Some("No"));
+
+        let fields = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(fields.ok, "{:?}", fields.error);
+        let withheld_field = fields.result.as_ref().unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|field| field["key"] == "any_taxes_withheld")
+            .expect("any_taxes_withheld field");
+        assert_eq!(withheld_field["value"], "No");
+
+        let validated = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.validate".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(validated.ok, "{:?}", validated.error);
+        let validate_errors = &host.form_1601c.as_ref().unwrap().validation_errors;
+        assert!(
+            validate_errors.iter().all(|(field, _)| {
+                field != "tax_14_total_compensation" && field != "tax_25_total_taxes_withheld"
+            }),
+            "filing.validate after drain apply must not require items 14/25: {validate_errors:?}"
+        );
     }
 
     fn claim_queued_1601c(host: &BirAgentHost, year: u16, month: u8) -> Form1601CDraft {

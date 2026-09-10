@@ -48,8 +48,25 @@ pub(crate) struct Agent1601CHostPatch {
     pub tax_14: Option<f64>,
     pub tax_25: Option<f64>,
     pub sheets: Option<u32>,
+    pub any_taxes_withheld: Option<bool>,
     pub save: bool,
     pub validate: bool,
+}
+
+/// Writes withheld onto the painted Yes/No flag and the draft `validate` reads.
+/// Same fields the UI toggle updates before `sync_from_inputs`.
+pub(crate) fn apply_1601c_host_header_patch(
+    patch: &Agent1601CHostPatch,
+    any_taxes_withheld: &mut bool,
+    draft: &mut Form1601CDraft,
+) -> bool {
+    if let Some(value) = patch.any_taxes_withheld {
+        *any_taxes_withheld = value;
+        draft.any_taxes_withheld = value;
+        true
+    } else {
+        false
+    }
 }
 
 struct ScheduleRowInputs {
@@ -559,7 +576,8 @@ impl Form1601CView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut dirty = false;
+        let mut dirty =
+            apply_1601c_host_header_patch(&patch, &mut self.any_taxes_withheld, &mut self.draft);
         if let Some(value) = patch.tax_14 {
             self.tax_14_total_compensation.update(cx, |input, cx| {
                 input.set_value(format!("{value:.2}"), window, cx);
@@ -1453,5 +1471,66 @@ impl Form1601CView {
                 </div>
             </div>
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bir_core::profile::TaxpayerProfile;
+
+    fn sample_draft() -> Form1601CDraft {
+        let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Fixture",
+            "tin": {
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "789",
+                "branch": "00000"
+            },
+            "rdo_code": "018",
+            "line_of_business": "Software",
+            "registered_address": "Olongapo",
+            "zip_code": "2200",
+            "phone": "09123456789",
+            "email": "fixture@example.com",
+            "default_form_type": "1601Cv2018",
+            "taxpayer_type": "Corporation"
+        }))
+        .expect("profile");
+        Form1601CDraft::new_from_profile(&profile, 2026, 8)
+    }
+
+    #[test]
+    fn apply_host_writes_withheld_into_view_flag_and_draft() {
+        let mut view_flag = true;
+        let mut draft = sample_draft();
+        assert!(draft.any_taxes_withheld);
+        let patch = Agent1601CHostPatch {
+            any_taxes_withheld: Some(false),
+            ..Agent1601CHostPatch::default()
+        };
+        assert!(apply_1601c_host_header_patch(
+            &patch,
+            &mut view_flag,
+            &mut draft
+        ));
+        assert!(!view_flag);
+        assert!(!draft.any_taxes_withheld);
+        draft.compute();
+        let errors = draft.validate();
+        assert!(
+            errors.iter().all(|(field, _)| {
+                field != "tax_14_total_compensation" && field != "tax_25_total_taxes_withheld"
+            }),
+            "{errors:?}"
+        );
+        assert!(!apply_1601c_host_header_patch(
+            &Agent1601CHostPatch::default(),
+            &mut view_flag,
+            &mut draft
+        ));
+        assert!(!view_flag);
     }
 }
