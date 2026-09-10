@@ -20,6 +20,49 @@ const BIR_FTP_HOST: &str = "103.56.5.254:21";
 const BIR_FTP_USER: &str = "uploadOnly";
 const BIR_FTP_PASS: &str = "12birBIR";
 
+/// Open FTP session through CWD. Connect / login / CWD does not STOR.
+///
+/// Queue workers must claim only after this succeeds, immediately before
+/// [`IafFtpSession::store`]. A connect timeout therefore stays unclaimed.
+pub(crate) async fn open_iaf_session(form_type: &str) -> Result<IafFtpSession, TransportError> {
+    info!("Connecting to BIR Remote Gateway: {}", BIR_FTP_HOST);
+
+    let mut ftp_stream = AsyncFtpStream::connect(BIR_FTP_HOST).await?;
+    ftp_stream.login(BIR_FTP_USER, BIR_FTP_PASS).await?;
+    info!("Securely authenticated to BIR Gateway");
+
+    ftp_stream.transfer_type(FileType::Binary).await?;
+
+    info!("Targeting route: /{}", form_type);
+    ftp_stream.cwd(&format!("/{form_type}")).await?;
+
+    Ok(IafFtpSession {
+        stream: Some(ftp_stream),
+    })
+}
+
+/// Prepared BIR FTP session that has not yet STOR'd the IAF file.
+pub(crate) struct IafFtpSession {
+    stream: Option<AsyncFtpStream>,
+}
+
+impl IafFtpSession {
+    /// Irreversible STOR of the encrypted IAF payload.
+    pub async fn store(mut self, filename: &str, payload: &[u8]) -> Result<(), TransportError> {
+        let mut ftp_stream = self
+            .stream
+            .take()
+            .expect("IafFtpSession carries one FTP stream");
+        info!("Transmitting payload: {}", filename);
+        let mut reader = payload;
+        let result = ftp_stream.put_file(filename, &mut reader).await;
+        let _ = ftp_stream.quit().await;
+        result?;
+        info!("Transmission complete: {}", filename);
+        Ok(())
+    }
+}
+
 /// Uploads an encrypted IAF file to the BIR FTP server.
 /// Returns Ok(()) if the upload is successful.
 ///
@@ -29,40 +72,15 @@ const BIR_FTP_PASS: &str = "12birBIR";
 ///
 /// This raw irreversible boundary is crate-internal. External callers must not
 /// bypass the reviewed Final Copy, queue-admission, and claim workflows.
+/// Queue workers should call [`open_iaf_session`] then claim then
+/// [`IafFtpSession::store`] so a connect timeout does not freeze a claim.
 pub(crate) async fn submit_iaf(
     form_type: &str,
     filename: &str,
     payload: &[u8],
 ) -> Result<(), TransportError> {
-    info!("Connecting to BIR Remote Gateway: {}", BIR_FTP_HOST);
-
-    // Connect to the gateway
-    let mut ftp_stream = AsyncFtpStream::connect(BIR_FTP_HOST).await?;
-
-    // Authenticate
-    ftp_stream.login(BIR_FTP_USER, BIR_FTP_PASS).await?;
-    info!("Securely authenticated to BIR Gateway");
-
-    // `suppaftp` defaults to using passive mode for transfers automatically
-
-    // Switch to Binary mode
-    ftp_stream.transfer_type(FileType::Binary).await?;
-
-    // Navigate to the form type directory
-    info!("Targeting route: /{}", form_type);
-    ftp_stream.cwd(&format!("/{}", form_type)).await?;
-
-    // Upload the file
-    info!("Transmitting payload: {}", filename);
-    let mut reader = payload; // &[u8] implements AsyncRead
-    ftp_stream.put_file(filename, &mut reader).await?;
-
-    info!("Transmission complete: {}", filename);
-
-    // Gracefully disconnect
-    let _ = ftp_stream.quit().await;
-
-    Ok(())
+    let session = open_iaf_session(form_type).await?;
+    session.store(filename, payload).await
 }
 
 #[cfg(test)]

@@ -367,20 +367,28 @@ Remaining (not faked):
 
 ## Claimed queue without BIR outcome (facts)
 
-Cron `process_queued_1601c` claims immediately before `transport.submit`.
+FTP target is hardcoded `103.56.5.254:21` `uploadOnly` (`transport.rs`). The
+worker **opens** that session (connect / login / binary / CWD) **before**
+claim, then claims immediately before STOR (`put_file`).
+
 Claim writes token + `claimed_at` and `submission_error` “outcome pending /
 auto-retry disabled”. Claimed rows are skipped on the next cron pass
 (`queued_1601c_revision` is none). `filing.submit` only exposes confirmation; it
 does **not** claim or queue.
 
-Pre-network failures (XML / encrypt / revalidate) stay unclaimed and use
-`record_submission_failure` / revert-to-Draft. After claim, a transport `Err`
-is **fail-closed**: the worker logs unknown outcome and does **not** clear the
-claim (`process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried`).
-A crash between claim and `finish_claimed_*` leaves the same state. July vs
-Aug/Jan/Feb is not a month-specific code path; whichever period got
-`finish_claimed` became Submitted, the others hit this fail-closed arm.
+Pre-STOR failures (XML / encrypt / revalidate / FTP connect-login-CWD) stay
+unclaimed and use `record_submission_failure` / retry-or-Draft
+(`process_queued_1601c_pre_store_failure_stays_unclaimed_and_can_retry`). A
+TCP timeout to `:21` therefore does **not** freeze a claim. After claim, a
+STOR `Err` is **fail-closed**: the worker logs unknown outcome and does **not**
+clear the claim (`process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried`).
+A crash between claim and `finish_claimed_*` (including mid-STOR) leaves the
+same state. July vs Aug/Jan/Feb is not a month-specific code path; whichever
+period completed STOR + `finish_claimed` became Submitted. Periods that hit
+a connect timeout used to claim first (old order) and freeze; they now retry.
 
-No automatic release on worker failure shipped: clearing a claim after unknown
-network I/O can double-file. Uriah decision if product should auto-release on
-transport error vs keep human `form.revert_draft` / `form.release_abandoned_claim`.
+Do **not** auto-release after STOR: clearing a claim after unknown upload I/O
+can double-file. Stuck rows that already claimed (crash or STOR error, or
+historical connect-then-claimed rows) still need human
+`form.revert_draft` / `form.release_abandoned_claim` with `confirm=true` and
+`reason=abandoned_no_bir_filing`. The FTP host is unchanged unless Uriah asks.
