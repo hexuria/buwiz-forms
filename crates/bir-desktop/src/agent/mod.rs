@@ -29,6 +29,8 @@ mod drain;
 pub mod headless;
 #[cfg(feature = "agent")]
 mod host;
+#[cfg(feature = "agent")]
+mod html_demo;
 #[cfg(all(feature = "agent", target_os = "macos"))]
 mod macos_window;
 #[cfg(feature = "agent")]

@@ -1,0 +1,176 @@
+/* Agent demo cards for profile.html / dues.html.
+   Not BIR print geometry. form.pdf keeps html-frozen/ cell layout. */
+
+@font-face {
+  font-family: "eBIRForms Arimo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/arimo-latin-wght-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "eBIRForms Arimo";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/arimo-latin-wght-italic.woff2") format("woff2");
+}
+
+:root {
+  --bir-demo-bg: #f3efe6;
+  --bir-demo-ink: #1c1914;
+  --bir-demo-muted: #5c564c;
+  --bir-demo-card: #fffcf6;
+  --bir-demo-line: #d9d2c4;
+  --bir-demo-accent: #1f4f46;
+  --bir-demo-accent-soft: #e4f0ec;
+  --bir-demo-warn: #8a3b16;
+  --bir-demo-chip: #eef4f2;
+  --bir-demo-shadow: 0 12px 32px rgba(28, 25, 20, 0.08);
+  --bir-demo-font: "eBIRForms Arimo", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bir-demo-bg);
+  color: var(--bir-demo-ink);
+  font-family: var(--bir-demo-font);
+  line-height: 1.45;
+}
+
+.demo-shell {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.demo-kicker {
+  margin: 0 0 0.35rem;
+  color: var(--bir-demo-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.demo-title {
+  margin: 0 0 1.25rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.demo-card {
+  background: var(--bir-demo-card);
+  border: 1px solid var(--bir-demo-line);
+  border-radius: 16px;
+  box-shadow: var(--bir-demo-shadow);
+  padding: 1.25rem 1.35rem 1.4rem;
+}
+
+.demo-dl {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.55rem 1rem;
+  margin: 0;
+}
+
+.demo-dl dt {
+  margin: 0;
+  color: var(--bir-demo-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.demo-dl dd {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.demo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-chip {
+  background: var(--bir-demo-chip);
+  border: 1px solid var(--bir-demo-line);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.demo-empty {
+  margin: 0.85rem 0 0;
+  color: var(--bir-demo-muted);
+}
+
+.demo-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bir-demo-accent-soft);
+  color: var(--bir-demo-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.demo-badge.is-archived {
+  background: #f6e6dc;
+  color: var(--bir-demo-warn);
+}
+
+.demo-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.35rem;
+}
+
+.demo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.demo-table th,
+.demo-table td {
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--bir-demo-line);
+  vertical-align: top;
+}
+
+.demo-table th {
+  color: var(--bir-demo-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.demo-status-upcoming {
+  color: var(--bir-demo-accent);
+  font-weight: 700;
+}
+
+.demo-status-overdue {
+  color: var(--bir-demo-warn);
+  font-weight: 700;
+}
+
+.demo-foot {
+  margin: 1rem 0 0;
+  color: var(--bir-demo-muted);
+  font-size: 0.78rem;
+}

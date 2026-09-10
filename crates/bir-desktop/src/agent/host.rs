@@ -16,7 +16,7 @@ use bir_core::forms::{
     FilingStatus, FormSetSource, FormValidator, PerYearFormsSet, can_queue_for_submission,
 };
 use bir_core::naming::Tin;
-use bir_core::profile::TaxpayerProfile;
+use bir_core::profile::{TaxpayerProfile, TaxpayerType};
 use bir_core::validation::validate_profile;
 use chrono::{Datelike, NaiveDate};
 use gpui_agent::dispatch::DispatchResult;
@@ -28,6 +28,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::agent::ProfileEditor;
+use crate::agent::html_demo::{self, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
 use crate::app::ActiveView;
@@ -66,6 +67,21 @@ impl ListedProfile {
             archived: self.archived,
         }
     }
+}
+
+enum TinQuery {
+    Missing,
+    NotFound {
+        query: String,
+    },
+    One {
+        tin: String,
+        candidates: Vec<ProfileHit>,
+    },
+    Ambiguous {
+        query: String,
+        candidates: Vec<ProfileHit>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -727,6 +743,87 @@ impl BirAgentHost {
     }
 
     fn profile_set(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        let view = Self::parse_select_view(args.get("view").and_then(Value::as_str))?;
+        match self.resolve_tin_or_q(args)? {
+            TinQuery::Missing => Err("profile.set requires args.tin or args.q".into()),
+            TinQuery::NotFound { query } => Ok(DispatchResult::json(json!({
+                "status": "not_found",
+                "query": query,
+                "candidates": []
+            }))),
+            TinQuery::One { tin, candidates } => {
+                let selected = self.select_profile_view(&tin, view)?;
+                Ok(DispatchResult::json(json!({
+                    "status": "ok",
+                    "selected": selected.value,
+                    "candidates": candidates
+                })))
+            }
+            TinQuery::Ambiguous { query, candidates } => Ok(DispatchResult::json(json!({
+                "status": "ambiguous",
+                "query": query,
+                "candidates": candidates
+            }))),
+        }
+    }
+
+    fn profile_html(&self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let tin = match self.resolve_tin_or_q(args)? {
+            TinQuery::Missing => self.selected_tin.clone().ok_or_else(|| {
+                "profile.html requires args.tin or args.q or a selected profile".to_string()
+            })?,
+            TinQuery::NotFound { query } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "not_found",
+                    "query": query,
+                    "candidates": []
+                })));
+            }
+            TinQuery::Ambiguous { query, candidates } => {
+                return Ok(DispatchResult::json(json!({
+                    "status": "ambiguous",
+                    "query": query,
+                    "candidates": candidates
+                })));
+            }
+            TinQuery::One { tin, .. } => tin,
+        };
+        let profile = self.load_profile(&tin)?;
+        let year = parse_optional_year(args);
+        let form_codes = profile
+            .per_year_forms
+            .get(&year)
+            .map(|set| set.active_form_codes())
+            .unwrap_or_default();
+        let path = html_demo::write_profile_card(&ProfileCard {
+            full_name: profile.full_name.clone(),
+            tin: tin.clone(),
+            last4: last4(&tin),
+            rdo_code: profile.rdo_code.clone(),
+            line_of_business: profile.line_of_business.clone(),
+            registered_address: profile.registered_address.clone(),
+            zip_code: profile.zip_code.clone(),
+            phone: profile.phone.clone(),
+            email: profile.email.clone(),
+            taxpayer_type: taxpayer_type_label(&profile.taxpayer_type).to_string(),
+            archived: profile.is_archived,
+            year,
+            form_codes,
+        })?;
+        html_path_result(
+            path,
+            json!({
+                "status": "ok",
+                "tin": tin,
+                "name": profile.full_name,
+                "year": year,
+                "note": "host-written demo HTML (html-demo/theme.css); absolute path, never file bytes or client HTML"
+            }),
+        )
+    }
+
+    fn resolve_tin_or_q(&self, args: &Value) -> Result<TinQuery, String> {
         let tin_arg = args
             .get("tin")
             .and_then(Value::as_str)
@@ -739,36 +836,28 @@ impl BirAgentHost {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string);
-        let view = Self::parse_select_view(args.get("view").and_then(Value::as_str))?;
+        if tin_arg.is_none() && query.is_none() {
+            return Ok(TinQuery::Missing);
+        }
         let matches = if let Some(tin) = tin_arg.as_deref() {
             self.search_hits(tin)
                 .into_iter()
                 .filter(|hit| hit.tin == tin)
                 .collect::<Vec<_>>()
-        } else if let Some(query) = query.as_deref() {
-            self.search_hits(query)
         } else {
-            return Err("profile.set requires args.tin or args.q".into());
+            self.search_hits(query.as_deref().unwrap_or(""))
         };
+        let query_text = tin_arg.clone().or(query.clone()).unwrap_or_default();
         match matches.as_slice() {
-            [] => Ok(DispatchResult::json(json!({
-                "status": "not_found",
-                "query": tin_arg.or(query).unwrap_or_default(),
-                "candidates": []
-            }))),
-            [only] => {
-                let selected = self.select_profile_view(&only.tin, view)?;
-                Ok(DispatchResult::json(json!({
-                    "status": "ok",
-                    "selected": selected.value,
-                    "candidates": matches
-                })))
-            }
-            _ => Ok(DispatchResult::json(json!({
-                "status": "ambiguous",
-                "query": tin_arg.or(query),
-                "candidates": matches
-            }))),
+            [] => Ok(TinQuery::NotFound { query: query_text }),
+            [only] => Ok(TinQuery::One {
+                tin: only.tin.clone(),
+                candidates: matches,
+            }),
+            _ => Ok(TinQuery::Ambiguous {
+                query: query_text,
+                candidates: matches,
+            }),
         }
     }
 
@@ -2065,6 +2154,7 @@ impl BirAgentHost {
             "profile.list" => self.profile_list(),
             "profile.search" => self.profile_search(args),
             "profile.set" => self.profile_set(args),
+            "profile.html" => self.profile_html(args),
             "profile.edit" => self.profile_edit(args),
             "profile.tab" => self.profile_tab_invoke(args),
             "dues.list" => self.dues_list(args),
@@ -2711,6 +2801,41 @@ fn parse_dashboard_forms(raw: Option<&Value>) -> Result<Option<Vec<String>>, Str
             "dashboard.set_forms forms must be \"all\", a comma list, or an array of codes".into(),
         ),
     }
+}
+
+fn parse_optional_year(args: &Value) -> u16 {
+    args.get("year")
+        .and_then(Value::as_u64)
+        .unwrap_or_else(|| chrono::Local::now().year() as u64) as u16
+}
+
+fn taxpayer_type_label(kind: &TaxpayerType) -> &'static str {
+    match kind {
+        TaxpayerType::Individual => "Individual",
+        TaxpayerType::Corporation => "Corporation",
+        TaxpayerType::Partnership => "Partnership",
+        TaxpayerType::Cooperative => "Cooperative",
+        TaxpayerType::Estate => "Estate",
+        TaxpayerType::Trust => "Trust",
+    }
+}
+
+fn html_path_result(path: PathBuf, extra: Value) -> Result<DispatchResult, String> {
+    let path = path.canonicalize().unwrap_or(path);
+    if !path.is_absolute() {
+        return Err("demo HTML must return an absolute path, not file bytes".into());
+    }
+    let mut value = extra;
+    match &mut value {
+        Value::Object(map) => {
+            map.insert("path".into(), json!(path.to_string_lossy()));
+            map.insert("kind".into(), json!("html"));
+        }
+        _ => {
+            return Err("demo HTML extra fields must be a JSON object".into());
+        }
+    }
+    Ok(DispatchResult::json(value))
 }
 
 fn write_agent_frozen_html(
@@ -3731,6 +3856,152 @@ mod tests {
                 .find(ids::CONTEXT_SELECTED_TIN)
                 .and_then(|node| node.value.as_deref()),
             Some("98765432100000")
+        );
+    }
+
+    fn assert_html_demo_bundle(path: &str) -> String {
+        let path = std::path::Path::new(path);
+        assert!(path.is_absolute(), "{path:?}");
+        assert_eq!(
+            path.file_name().and_then(|n| n.to_str()),
+            Some("index.html")
+        );
+        let dir = path.parent().expect("demo dir");
+        assert!(dir.join("theme.css").is_file(), "missing theme.css");
+        assert!(
+            dir.join("fonts/arimo-latin-wght-normal.woff2").is_file(),
+            "missing demo font"
+        );
+        std::fs::read_to_string(path).expect("index.html")
+    }
+
+    #[test]
+    fn profile_html_writes_absolute_demo_bundle_from_live_profile() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let html = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.html".into(),
+                args: json!({ "tin": FIXTURE_TIN, "year": year }),
+            }),
+            None,
+        );
+        assert!(html.ok, "{:?}", html.error);
+        let result = html.result.as_ref().expect("result");
+        assert_eq!(result["kind"], "html");
+        assert_eq!(result["status"], "ok");
+        assert_eq!(result["tin"], FIXTURE_TIN);
+        assert!(result.get("bytes").is_none());
+        let path = result["path"].as_str().expect("path");
+        let body = assert_html_demo_bundle(path);
+        assert!(body.contains(FIXTURE_NAME));
+        assert!(body.contains(FIXTURE_TIN));
+        assert!(body.contains("0000"));
+        assert!(body.contains("Software Development"));
+        assert!(body.contains("Olongapo"));
+        assert!(body.contains("1601C"));
+        assert!(!body.contains("profile_pin"));
+        assert!(!body.contains("totp_secret"));
+        assert!(!body.contains("<script"));
+        let theme = std::fs::read_to_string(
+            std::path::Path::new(path)
+                .parent()
+                .unwrap()
+                .join("theme.css"),
+        )
+        .unwrap();
+        assert!(theme.contains("--bir-demo-bg"));
+        assert!(!theme.contains(".page { position:relative"));
+
+        let by_q = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.html".into(),
+                args: json!({ "q": FIXTURE_NAME }),
+            }),
+            None,
+        );
+        assert!(by_q.ok, "{:?}", by_q.error);
+        assert_eq!(by_q.result.as_ref().unwrap()["kind"], "html");
+
+        let selected = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.html".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(selected.ok, "{:?}", selected.error);
+        assert_eq!(selected.result.as_ref().unwrap()["tin"], FIXTURE_TIN);
+    }
+
+    #[test]
+    fn profile_html_matches_profile_set_not_found_and_ambiguous() {
+        let mut host = fixture_host();
+        let extra = {
+            let mut profile = fixture_profile();
+            profile.full_name = "Agent Other Shop".into();
+            profile.tin = bir_core::naming::Tin {
+                segment1: "987".into(),
+                segment2: "654".into(),
+                segment3: "321".into(),
+                branch: "00000".into(),
+            };
+            profile
+        };
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            db.lock()
+                .unwrap()
+                .save_profile(extra)
+                .expect("second profile");
+            host.reload_from_db(&db);
+        }
+
+        let none = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.html".into(),
+                args: json!({ "q": "zzz-no-such-taxpayer" }),
+            }),
+            None,
+        );
+        assert!(none.ok, "{:?}", none.error);
+        assert_eq!(none.result.as_ref().unwrap()["status"], "not_found");
+        assert!(none.result.as_ref().unwrap().get("path").is_none());
+
+        let ambiguous = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "profile.html".into(),
+                args: json!({ "q": "agent" }),
+            }),
+            None,
+        );
+        assert!(ambiguous.ok, "{:?}", ambiguous.error);
+        assert_eq!(ambiguous.result.as_ref().unwrap()["status"], "ambiguous");
+        assert!(ambiguous.result.as_ref().unwrap().get("path").is_none());
+
+        let mut empty = empty_host();
+        let missing = handle_request(
+            &mut empty,
+            req(Op::Invoke {
+                name: "profile.html".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(!missing.ok);
+        assert!(
+            missing
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("args.tin or args.q"),
+            "{:?}",
+            missing.error
         );
     }
 
