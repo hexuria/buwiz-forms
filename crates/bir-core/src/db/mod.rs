@@ -33,6 +33,7 @@ pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
@@ -256,6 +257,12 @@ pub enum DbError {
     Zip(#[from] zip::result::ZipError),
     #[error("Other error: {0}")]
     Other(String),
+    #[error(
+        "live database {} is already open (painted bir or bir-headless). \
+         Single live-DB owner: quit the other process. There is no protocol Op::Yield.",
+        .0.display()
+    )]
+    LiveDatabaseInUse(PathBuf),
 }
 
 // =========================================================================
@@ -264,13 +271,140 @@ pub enum DbError {
 
 pub struct Database {
     pub(crate) conn: Connection,
+    /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.
+    /// `None` for ephemeral fixtures and `Database::open` test helpers.
+    _owner_lock: Option<File>,
 }
 
 pub fn default_database_path() -> std::path::PathBuf {
     crate::platform::data_dir().join("bir_data.db")
 }
 
+/// Live DB file painted `bir` and `bir-headless serve` open.
+///
+/// `BIR_DATABASE_PATH` overrides for tests / CI. Empty or unset uses
+/// [`default_database_path`] (`platform::data_dir()/bir_data.db`).
+pub fn app_database_path() -> PathBuf {
+    match std::env::var_os("BIR_DATABASE_PATH") {
+        Some(path) if !path.is_empty() => PathBuf::from(path),
+        _ => default_database_path(),
+    }
+}
+
+/// Create the parent directory and copy a non-empty cwd `bir_data.db` when
+/// the target is missing (same bootstrap as painted `bir`).
+pub fn prepare_app_database_file(path: &Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let legacy_db_path = std::env::current_dir()
+        .unwrap_or_default()
+        .join("bir_data.db");
+    if !path.exists()
+        && legacy_db_path.exists()
+        && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
+        && legacy_db_path != path
+    {
+        let _ = std::fs::copy(&legacy_db_path, path);
+    }
+}
+
+/// Sidecar lock next to the SQLCipher file (`bir_data.db.owner.lock`).
+pub fn live_owner_lock_path(db_path: &Path) -> PathBuf {
+    let mut raw = db_path.as_os_str().to_os_string();
+    raw.push(".owner.lock");
+    PathBuf::from(raw)
+}
+
+/// Exclusive non-blocking lock so painted `bir` and `bir-headless` cannot
+/// both own the live file. There is no protocol `Op::Yield`.
+pub fn try_acquire_live_owner_lock(db_path: &Path) -> Result<File, DbError> {
+    let lock_path = live_owner_lock_path(db_path);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = open_live_owner_lock_file(&lock_path, db_path)?;
+    acquire_exclusive_owner_lock(&file, db_path)?;
+    Ok(file)
+}
+
+fn open_live_owner_lock_file(lock_path: &Path, db_path: &Path) -> Result<File, DbError> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .share_mode(0)
+            .open(lock_path)
+        {
+            Ok(file) => Ok(file),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::PermissionDenied
+                    || error.raw_os_error() == Some(32) =>
+            {
+                Err(DbError::LiveDatabaseInUse(db_path.to_path_buf()))
+            }
+            Err(error) => Err(DbError::Io(error)),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = db_path;
+        Ok(OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(lock_path)?)
+    }
+}
+
+fn acquire_exclusive_owner_lock(file: &File, db_path: &Path) -> Result<(), DbError> {
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        if rc != 0 {
+            return Err(DbError::LiveDatabaseInUse(db_path.to_path_buf()));
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (file, db_path);
+        Ok(())
+    }
+}
+
+/// Open the live SQLCipher database (keychain / file-fallback key), not an
+/// ephemeral in-memory fixture. Painted `bir` uses [`Database::open_or_recreate`].
+pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbError> {
+    let path = app_database_path();
+    prepare_app_database_file(&path);
+    let lock = try_acquire_live_owner_lock(&path)?;
+    let (db, recovered) = Database::open_or_recreate(&path)?;
+    Ok((db.with_owner_lock(lock), path, recovered))
+}
+
+/// Open the live SQLCipher file without quarantining. `bir-headless serve`
+/// must not recreate a taxpayer DB on a transient key/WAL error.
+pub fn open_serve_database() -> Result<(Database, PathBuf), DbError> {
+    let path = app_database_path();
+    prepare_app_database_file(&path);
+    let lock = try_acquire_live_owner_lock(&path)?;
+    let db = Database::open(&path)?;
+    Ok((db.with_owner_lock(lock), path))
+}
+
 impl Database {
+    fn with_owner_lock(mut self, lock: File) -> Self {
+        self._owner_lock = Some(lock);
+        self
+    }
+
     /// Unencrypted in-memory SQLite for isolated tests and the agent host fixture.
     ///
     /// Does not open the live app-group database path and does not touch the OS
@@ -278,7 +412,10 @@ impl Database {
     pub fn open_ephemeral() -> Result<Self, DbError> {
         let conn = Connection::open_in_memory()?;
         migrations::migrate_database(&conn)?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            _owner_lock: None,
+        })
     }
 
     #[cfg(test)]
@@ -361,7 +498,10 @@ impl Database {
             WHERE NOT EXISTS (SELECT 1 FROM bir_notices WHERE external_id = 'legacy-' || announcements.id);
         ");
 
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            _owner_lock: None,
+        })
     }
 
     /// Opens an existing SQLCipher database without creating, migrating, or recovering it.
@@ -397,7 +537,10 @@ impl Database {
             })?;
         drop(check_stmt);
 
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            _owner_lock: None,
+        })
     }
 
     fn should_recreate_after_open_error(err: &DbError) -> bool {
@@ -699,9 +842,11 @@ impl Database {
 
     /// Consume self and close cleanly after a WAL checkpoint.
     pub fn close(self) -> Result<(), DbError> {
-        self.conn
-            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-        self.conn.close().map_err(|(_, e)| DbError::Sqlite(e))
+        let Database { conn, _owner_lock } = self;
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let result = conn.close().map_err(|(_, e)| DbError::Sqlite(e));
+        drop(_owner_lock);
+        result
     }
 
     /// Remove old `.corrupt-*.bak` files, keeping only the most recent `keep`.
@@ -1023,5 +1168,96 @@ mod tests {
             read_only.set_setting("read_only_probe", "changed").is_err(),
             "the diagnostic connection must not modify the source database"
         );
+    }
+
+    #[test]
+    fn app_database_path_defaults_to_data_dir_bir_data() {
+        temp_env::with_var("BIR_DATABASE_PATH", None::<&str>, || {
+            assert_eq!(app_database_path(), default_database_path());
+            assert_eq!(
+                default_database_path(),
+                crate::platform::data_dir().join("bir_data.db")
+            );
+        });
+        temp_env::with_var("BIR_DATABASE_PATH", Some(""), || {
+            assert_eq!(app_database_path(), default_database_path());
+        });
+    }
+
+    #[test]
+    fn app_database_path_honors_bir_database_path_override() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let override_path = directory.path().join("ci-bir.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(&override_path), || {
+            assert_eq!(app_database_path(), override_path);
+            assert_ne!(app_database_path(), default_database_path());
+        });
+    }
+
+    #[test]
+    fn open_live_database_is_file_backed_not_ephemeral() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db_path = directory.path().join("live.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(db_path.as_os_str()), || {
+            let (db, opened, recovered) = open_live_database().expect("open live file db");
+            assert_eq!(opened, db_path);
+            assert!(recovered.is_none());
+            assert!(db_path.is_file());
+            db.set_setting("probe", "visible")
+                .expect("write through the file-backed connection");
+            drop(db);
+            let reopened = Database::open(&db_path).expect("reopen file db");
+            assert_eq!(
+                reopened.get_setting("probe").expect("read"),
+                Some("visible".into())
+            );
+        });
+    }
+
+    #[test]
+    fn second_open_live_database_is_refused_until_first_drops() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db_path = directory.path().join("owned.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(db_path.as_os_str()), || {
+            let (first, opened, _) = open_live_database().expect("first live owner");
+            assert_eq!(opened, db_path);
+            let error = match open_live_database() {
+                Ok(_) => panic!("second live owner must fail"),
+                Err(error) => error,
+            };
+            assert!(matches!(error, DbError::LiveDatabaseInUse(_)), "{error}");
+            let serve_error = match open_serve_database() {
+                Ok(_) => panic!("serve while GUI holds lock must fail"),
+                Err(error) => error,
+            };
+            assert!(
+                matches!(serve_error, DbError::LiveDatabaseInUse(_)),
+                "{serve_error}"
+            );
+            drop(first);
+            let (second, _, _) = open_live_database().expect("owner after drop");
+            drop(second);
+            open_serve_database().expect("serve after GUI drop");
+        });
+    }
+
+    #[test]
+    fn open_serve_database_does_not_quarantine() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db_path = directory.path().join("serve.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(db_path.as_os_str()), || {
+            {
+                let db = Database::open(&db_path).expect("seed");
+                db.set_setting("probe", "keep").expect("write");
+            }
+            let (db, opened) = open_serve_database().expect("serve open");
+            assert_eq!(opened, db_path);
+            assert_eq!(db.get_setting("probe").expect("read"), Some("keep".into()));
+            let corrupt = std::fs::read_dir(directory.path())
+                .expect("dir")
+                .filter_map(|entry| entry.ok())
+                .any(|entry| entry.file_name().to_string_lossy().contains("corrupt"));
+            assert!(!corrupt);
+        });
     }
 }

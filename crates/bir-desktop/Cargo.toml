@@ -5,16 +5,25 @@ edition.workspace = true
 license.workspace = true
 default-run = "bir"
 
+[lib]
+name = "bir_desktop"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bir"
 path = "src/main.rs"
+
+[[bin]]
+name = "bir-headless"
+path = "src/bin/bir-headless.rs"
+required-features = ["agent"]
 
 [features]
 dev-tools = []
 inspector = []
 # Opt-in gpui-agent control plane. Default off. Runtime still requires
 # `GPUI_AGENT=1` (and `GPUI_AGENT_ALLOW_RELEASE=1` for release binaries).
-agent = ["dep:gpui-agent"]
+agent = ["dep:gpui-agent", "dep:clap"]
 # Mac App Store variant. Not a platform: the same `target_os = "macos"` ships
 # both a direct/notarized build and a sandboxed App Store build, so no
 # `cfg(target_os)` can tell them apart. This selects the sandboxed one, which
@@ -60,6 +69,8 @@ image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
 gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "8857139af12fb033b4dd04eabd8d19b5bfc5ffc6", optional = true }
+# Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown).
+clap = { version = "4", features = ["derive"], optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
@@ -111,6 +122,7 @@ webkit2gtk = "2.0.1"
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 tempfile = "3"
+temp-env = "0.3"
 
 [package.metadata.deb]
 name = "ebirforms"

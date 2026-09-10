@@ -21,10 +21,23 @@ These are host constraints. They do not change protocol v1.
   glue stay behind bir-desktop `--features agent`.
 - Loopback default via `gpui_agent::from_env` / `authorize_bind`. Non-loopback
   needs `GPUI_AGENT_REMOTE=1` and a non-empty `GPUI_AGENT_TOKEN` (SDK, not a
-  BIR-invented bind). This host does not add a second bind path. Product BIR
-  is still an **in-process mailbox** on the painted window (widget E2E), not a
-  `todo-headless` daemon + GUI-as-client (ADR-001). There is no `bir serve`
-  binary.
+  BIR-invented bind). This host does not add a second bind path.
+- **Two AgentHosts must not share a bind.** Painted `bir` (`spawn_mailbox` on
+  the GPUI window) and `bir-headless serve` (`spawn_host`, no GPU) both default
+  to `127.0.0.1:17421`. If the port is in use, headless exits and the GUI logs
+  the bind failure. Prefer **quit the GUI** while headless serves (Uriah’s
+  smoke C), then `bir-headless shutdown` and open the GUI again to see live-DB
+  writes. There is **no** protocol `Op::Yield` / `Takeover`.
+- **Single live-DB owner.** Painted `bir` and `bir-headless serve` both take
+  an exclusive sidecar lock (`bir_data.db.owner.lock`) around
+  `app_database_path()`. A second process fails immediately with
+  `LiveDatabaseInUse`. Do not run GUI + headless against the same app-group
+  file at once (silent two-writer is not a bridge).
+- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/ADR-001-daemon-sot.md))
+  is the long-term shape. **This slice is shared persistence only:** both
+  processes open `bir_core::db::app_database_path()` (default
+  `platform::data_dir()/bir_data.db` + the same SQLCipher key). The Mac GUI
+  is **not** a protocol client of the daemon yet — that is a follow-up.
 - Preferred BIR `invoke` names (app-only, not CLI/MCP verbs) include
   `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
   `profile.tab`, `dues.list`, `jobs.list`, `search.open`, `palette.search`,
@@ -116,23 +129,112 @@ gpui-agent assert --id page-global-dashboard
 gpui-agent invoke nav.go --arg page=profile-manager
 ```
 
-## Linux CLI smoke (Buwiz box)
+### Mac: `bir-headless` (clap `serve` / `status` / `shutdown`)
 
-BIR has **no** `todo-headless serve` / `bir serve` binary. Bind is still
-`gpui_agent::from_env` → `authorize_bind` (loopback default). Non-loopback
-needs `GPUI_AGENT_REMOTE=1` **and** `GPUI_AGENT_TOKEN`. Do not invent a second
-bind. `hello.auth` is `"required"` when that token is set because the mailbox
-drain passes it into `handle_request` (never `None` when configured).
+Shell matches gpui-agent `apps/todo-headless` on pin `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6`:
+`from_env` + `spawn_host`, `PlatformKind::Headless`, loop until shutdown.
 
-**Display-less Linux** (this is the working headless path — fixture host, not
-the live taxpayer DB):
+#### Smoke matrix
+
+| Mode | This SHA | Notes |
+| --- | --- | --- |
+| **A** Mac app + gpui-agent only | yes | Painted `bir --features agent`. Headless not required. |
+| **B** Mac app + headless yield/resume | **not this SHA** | No `Op::Yield`. Orchestrate with `bir-headless shutdown` then GUI, or quit GUI then `serve`. launchd KeepAlive is a follow-up. Never two writers on the live DB. |
+| **C** Mac headless only (GUI quit) | **first live smoke** | Recipe below. TIN `00000000000002`. |
+| **D** Linux box headless | yes | Default `default_database_path()`; CI may set `BIR_DATABASE_PATH`. |
+
+#### Smoke C (Mac) — quit GUI → serve → save → shutdown → open GUI
+
+Quit the painted GUI first (`17421` refused is expected). Headless and GUI both
+open `app_database_path()` → by default `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`
+plus the same keychain SQLCipher key. `BIR_DATABASE_PATH` overrides for tests;
+do **not** set it for this smoke. Set `GPUI_AGENT_TOKEN` for the live DB.
 
 ```bash
-cargo test --locked -p bir-desktop --features agent --bin bir \
-  agent::host::tests::headless_tcp_host_serves_hello_and_nav
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
-**Linux with a painted window** (`DISPLAY` / Wayland). Same KEY=VALUE as Mac:
+Other terminal (CLI from pin `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6`):
+
+```bash
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+export GPUI_AGENT_TOKEN=dev-secret
+gpui-agent hello
+gpui-agent invoke profile.create
+gpui-agent set-value profile-tin 00000000000002
+gpui-agent set-value profile-name 'Headless Live TIN'
+gpui-agent set-value profile-rdo 018
+gpui-agent set-value profile-lob Retail
+gpui-agent set-value profile-address Manila
+gpui-agent set-value profile-zip 1000
+gpui-agent set-value profile-phone 09170000000
+gpui-agent set-value profile-email headless@example.com
+# Uriah confirms the live-DB write; profile.save stays the explicit persist
+# (profile.create does not save; profile.ensure is rejected).
+gpui-agent invoke profile.save
+gpui-agent invoke profile.list
+gpui-agent shutdown
+# or: cargo run --locked --bin bir-headless --features agent -- shutdown
+```
+
+Then open painted `bir` (no `GPUI_AGENT` required). TIN `00000000000002` must
+be visible. Do **not** run `recipes/profile-create.json` against this live DB.
+
+If `bir-headless serve` prints bind-in-use: another AgentHost already owns
+`17421` — quit GUI or the other daemon, or set `GPUI_AGENT_ADDR`.
+
+If it prints `already open` / `LiveDatabaseInUse`: painted `bir` still has the
+app-group file. Quit the GUI (headless does not auto-yield).
+
+```bash
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+export GPUI_AGENT_TOKEN=dev-secret
+cargo run --locked --bin bir-headless --features agent -- status
+```
+
+## Linux CLI smoke (Buwiz box)
+
+Bind is `gpui_agent::from_env` → `authorize_bind` (loopback default).
+Non-loopback needs `GPUI_AGENT_REMOTE=1` **and** `GPUI_AGENT_TOKEN`. Do not
+invent a second bind. `hello.auth` is `"required"` when that token is set
+because the mailbox drain (GUI) / `spawn_host` (headless) pass it into
+`handle_request` (never `None` when configured).
+
+**Display-less Linux — live DB daemon** (`todo-headless` pattern):
+
+```bash
+# Quit painted bir first so 17421 is free (connection refused today is expected
+# when the GUI is not running).
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+# default path = default_database_path() = platform::data_dir()/bir_data.db
+# CI only: export BIR_DATABASE_PATH=/tmp/bir-ci.db
+cargo run --locked --bin bir-headless --features agent -- serve
+# other terminal:
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke profile.list
+```
+
+`bir-headless` opens with `Database::open` (same key as painted `bir`) and
+will **not** quarantine/recreate a taxpayer file on a bad open. Checkpoint
+WAL on shutdown. Headless does **not** start background cron (no FTP / no
+auto-file). `screenshot_unavailable`, `virtual_unavailable`, `form.print`
+errors as today. Exclusive owner lock + bind probe refuse a second process.
+
+**Fixture-host unit test** (ephemeral SQLite, not the taxpayer DB):
+
+```bash
+cargo test --locked -p bir-desktop --features agent \
+  agent::host::tests::headless_tcp_host_serves_hello_and_nav
+cargo test --locked -p bir-desktop --features agent agent::
+```
+
+**Linux with a painted window** (`DISPLAY` / Wayland). Same KEY=VALUE as Mac.
+Do not run this at the same time as `bir-headless serve` on the same addr:
 
 ```bash
 export GPUI_AGENT=1
@@ -147,7 +249,7 @@ gpui-agent snapshot
 macOS observe-only PNG of **this** window (Screen Recording), not Linux:
 
 ```bash
-gpui-agent screenshot --path /tmp/bir-window.png
+gpui-agent screenshot --out /tmp/bir-window.png
 ```
 
 Claude Code / MCP (same token as the host):
@@ -244,9 +346,11 @@ gpui-agent invoke search.open
 gpui-agent invoke palette.search --arg q=acme
 ```
 
-`profile-create.json` **writes a taxpayer profile into the live app database**.
-Do not run it against a real Mac app-group DB. Headless tests use
-`Database::open_ephemeral()`.
+`profile-create.json` **writes a taxpayer profile into whichever DB the host
+opened**. Do **not** run it against a real Mac app-group DB. Linux CI uses a
+temp file (`BIR_DATABASE_PATH`) or `Database::open` in unit tests. Host fixture
+tests still use `Database::open_ephemeral()`. Live Mac smoke is the
+`bir-headless serve` recipe above (TIN `00000000000002`), not this recipe.
 
 ```bash
 # throwaway / empty DB only
@@ -399,6 +503,10 @@ Proven in headless host tests (not a Mac GUI run):
 - `hello.auth` is `Required` when `handle_request` is given a configured token,
   and `None` when it is not. `BirAgentHost::hello()` leaves `auth` at Default.
   Token mismatch still fails with `automation token required` / invalid token.
+- `bir-headless serve` opens a **file-backed** SQLCipher path (`app_database_path()`,
+  not ephemeral). `profile.save` is visible after reopen. Bind-in-use and
+  live-DB owner lock are refused. Headless does not start cron. GUI-as-client
+  (full ADR-001) and Mac yield/resume (matrix B / launchd) are not this slice.
 
 Remaining (not faked):
 
@@ -410,6 +518,11 @@ Remaining (not faked):
 - Virtual in-window delivery stays `virtual_unavailable`. Screenshot: macOS
   mailbox drain can write this window (`screencapture -l`); Linux / Windows /
   headless stay `screenshot_unavailable`.
+- GUI-as-client of `bir-headless` (full ADR-001). First ship is shared
+  persistence only; two AgentHosts must not share `GPUI_AGENT_ADDR`; two
+  processes must not open the live DB together. Matrix B (GUI open ⇒
+  headless yields; quit ⇒ resume) is process orchestration around
+  `serve` / `status` / `shutdown`, not a protocol op.
 
 ## Claimed queue without BIR outcome (facts)
 
