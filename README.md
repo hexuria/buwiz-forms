@@ -6,8 +6,9 @@
 A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms is an offline-first reimplementation of the traditional eBIRForms workflow for macOS, Windows, and Linux.
 
 The project is under active development. Form filing support and frozen HTML
-preview are tracked separately. Preview currently fills only catalog-stamped
-TIN/branch `name=` values; full-sheet fill is a later identity-join campaign.
+preview are tracked separately. Preview fills catalog-stamped TIN/branch
+`name=` values. 1601C and 2551Q also fill leftover identity keys onto cell-id
+inputs via `html-frozen/*/writer-cells.json`; tax peso+cent rows stay unjoined.
 
 ---
 
@@ -34,8 +35,9 @@ of silently switching document implementations.
 ### Frozen HTML preview
 
 Print/preview uses committed freeze sheets in `html-frozen/`. The desktop app
-fills catalog-stamped TIN `input[name]` values via `to_bir_field_map()`. CI
-checks the inventory with `freeze_html.py --verify` and the fail-closed name
+fills catalog-stamped TIN `input[name]` values via `to_bir_field_map()`, and
+for 1601C/2551Q also leftover identity keys listed in `writer-cells.json`.
+CI checks the inventory with `freeze_html.py --verify` and the fail-closed name
 stamper with `stamp_frozen_names.py --check-all`.
 
 ## 🌟 Key Features
@@ -69,7 +71,7 @@ stamper with `stamp_frozen_names.py --check-all`.
 - **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
 
 ### 🛠 Form Digitization & Developer Tools
-- **Frozen HTML preview**: Exact BIR revisions print from committed freeze sheets. Catalog TIN/branch keys are stamped onto `name=`; remaining writer keys stay on cell ids until a later join campaign. Official PDFs are calibration evidence only.
+- **Frozen HTML preview**: Exact BIR revisions print from committed freeze sheets. Catalog TIN/branch keys are stamped onto `name=`. 1601C/2551Q leftover identity keys fill onto cell ids via `writer-cells.json`; remaining keys (including N:1 tax rows) stay unjoined. Official PDFs are calibration evidence only.
 - **Structured Tracing**: Debug builds automatically log form save, sync, and HTML preview/print/export events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
 
 ### 🛡️ Data Integrity
@@ -273,7 +275,7 @@ However, if you want to automatically codesign and notarize the **macOS** DMG on
 - `crates/bir-print/`: Frozen HTML fill/print, native output coordination, PDF validation, and PDF merging.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 - `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
-- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog.
+- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys fill through `writer-cells.json`.
 
 ### 🧩 Form Engine
 
@@ -282,7 +284,8 @@ Adding a new BIR tax form now crosses two separately gated tracks:
 1. **Filing support** — authoritative source evidence, typed domain model,
    formulas, validation, XML, persistence, queue submission, and desktop UI.
 2. **Print presentation** — frozen HTML in `html-frozen/`, catalog TIN `name=`
-   stamps, and `fill_by_name` from `to_bir_field_map()`.
+   stamps, `writer-cells.json` identity fills, and `fill_by_name` from
+   `to_bir_field_map()`.
 3. **Promotion evidence** — filing support changes only after the in-app gates
    pass; HTML release changes only after freeze verify/stamp checks and
    packaged identity evidence pass.
