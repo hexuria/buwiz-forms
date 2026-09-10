@@ -43,6 +43,10 @@ These are host constraints. They do not change protocol v1.
   `capture_window_via_screencapture` (`screencapture -l`, Screen Recording).
   Linux, Windows, and headless `spawn_host` stay `screenshot_unavailable`.
   The semantic host has no `Window` and does not invent a PNG.
+- Filing status SoT is the `form_drafts` row for that TIN/year/month (the same
+  queued id `submissions.list` shows). Snapshot / `form.fields` /
+  `form-1601c-status` overlay that row; a stale local Draft cannot mask
+  Queued+claimed until the release CAS writes Draft.
 
 ## Security
 
@@ -291,7 +295,7 @@ table; do not use them in recipes.
 | `dashboard.filter` | `q` | Text filter (`dashboard-filter-query`). Profile dashboard FilterBar search; Global Dashboard has no search box |
 | `filing.start` | `code`, `year`, `period` | Open a form for the selected profile |
 | `filing.validate` | — | Run `FormValidator` for open 1601-C or 2551Q |
-| `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q |
+| `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q. `status` / `claimed` / `id` come from the `form_drafts` row (same id as `submissions.list`), not a stale in-memory Draft |
 | `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`). Live window drain applies withheld through `Agent1601CHostPatch` so the painted Yes/No and the next snapshot/`form.fields`/`filing.validate` match. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
 | `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, 1601-C For the Month `txtMonth`/`txtYear` on `p1c9`/`p1c10`, Amended/Withheld `xbox_joins`, 2551Q header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
@@ -348,7 +352,7 @@ filter: `dashboard-form-filter`, `dashboard-filter-query`,
 `form-1601c-submit-confirm`, `cancel_queue_btn` (unclaimed Queued),
 `form-1601c-return-draft` / `form-1601c-release-claim-confirm` (claimed Queued;
 confirm click is disabled for the agent). `form-1601c-status` `value` is the
-real `FilingStatus` (`Queued` while claimed; never `Draft` until the release
+real `form_drafts` `FilingStatus` (`Queued` while claimed; never `Draft` until the release
 CAS). Claimed queues add `claimed` and `outcome-pending` in `states`. 2551Q fillables: `form-2551q-creditable`,
 `form-2551q-other-credit`, `form-2551q-taxable-0`. Item 14/25 must be > 0
 when Any Taxes Withheld is YES; set `any_taxes_withheld=false` for zero-tax.

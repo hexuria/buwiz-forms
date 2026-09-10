@@ -1575,14 +1575,16 @@ impl Database {
         quarter: u8,
     ) -> Result<Option<Form2551QDraft>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT data_json FROM form_drafts
+            "SELECT id, data_json FROM form_drafts
              WHERE tin = ?1 AND form_code = '2551Q'
                AND taxable_year = ?2 AND quarter = ?3",
         )?;
         let mut rows = stmt.query(params![tin, year as i64, quarter as i64])?;
         if let Some(row) = rows.next()? {
-            let json: String = row.get(0)?;
-            let draft: Form2551QDraft = serde_json::from_str(&json)?;
+            let id: i64 = row.get(0)?;
+            let json: String = row.get(1)?;
+            let mut draft: Form2551QDraft = serde_json::from_str(&json)?;
+            draft.id = Some(id);
             Ok(Some(draft))
         } else {
             Ok(None)
@@ -2188,14 +2190,16 @@ impl Database {
         month: u8,
     ) -> Result<Option<Form1601CDraft>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT data_json FROM form_drafts
+            "SELECT id, data_json FROM form_drafts
              WHERE tin = ?1 AND form_code = '1601C'
                AND taxable_year = ?2 AND quarter = ?3",
         )?;
         let mut rows = stmt.query(params![tin, year as i64, month as i64])?;
         if let Some(row) = rows.next()? {
-            let json: String = row.get(0)?;
-            let draft: Form1601CDraft = serde_json::from_str(&json)?;
+            let id: i64 = row.get(0)?;
+            let json: String = row.get(1)?;
+            let mut draft: Form1601CDraft = serde_json::from_str(&json)?;
+            draft.id = Some(id);
             Ok(Some(draft))
         } else {
             Ok(None)

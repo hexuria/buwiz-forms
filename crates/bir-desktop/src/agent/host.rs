@@ -442,6 +442,62 @@ impl BirAgentHost {
         self.form_1601c.as_ref().map(|form| &form.draft)
     }
 
+    /// Overlay `form_drafts` when local memory disagrees (stale Draft vs Queued).
+    pub fn reconcile_open_forms_from_db(&mut self) {
+        let stored_1601c = self
+            .form_1601c
+            .as_ref()
+            .and_then(|form| self.load_1601c_row(&form.draft));
+        if let Some(form) = self.form_1601c.as_mut()
+            && let Some(stored) = stored_1601c
+            && stored_1601c_wins(&form.draft, &stored)
+        {
+            form.draft = stored;
+            form.validated = false;
+            form.validation_errors.clear();
+        }
+        let stored_2551q = self
+            .form_2551q
+            .as_ref()
+            .and_then(|form| self.load_2551q_row(&form.draft));
+        if let Some(form) = self.form_2551q.as_mut()
+            && let Some(stored) = stored_2551q
+            && stored_2551q_wins(&form.draft, &stored)
+        {
+            form.draft = stored;
+            form.validated = false;
+            form.validation_errors.clear();
+        }
+    }
+
+    fn load_1601c_row(&self, memory: &Form1601CDraft) -> Option<Form1601CDraft> {
+        let db = self.db.as_ref()?;
+        let guard = db.lock().ok()?;
+        guard
+            .get_1601c_draft(&memory.tin, memory.taxable_year, memory.month)
+            .ok()
+            .flatten()
+    }
+
+    fn load_2551q_row(&self, memory: &Form2551QDraft) -> Option<Form2551QDraft> {
+        let db = self.db.as_ref()?;
+        let guard = db.lock().ok()?;
+        guard
+            .get_2551q_draft(&memory.tin, memory.taxable_year, memory.quarter)
+            .ok()
+            .flatten()
+    }
+
+    fn displayed_1601c(&self) -> Option<Form1601CDraft> {
+        let form = self.form_1601c.as_ref()?;
+        if let Some(stored) = self.load_1601c_row(&form.draft)
+            && stored_1601c_wins(&form.draft, &stored)
+        {
+            return Some(stored);
+        }
+        Some(form.draft.clone())
+    }
+
     pub fn form_2551q_draft(&self) -> Option<&Form2551QDraft> {
         self.form_2551q.as_ref().map(|form| &form.draft)
     }
@@ -1415,22 +1471,31 @@ impl BirAgentHost {
         })))
     }
 
-    fn form_fields(&self) -> Result<DispatchResult, String> {
+    fn form_fields(&mut self) -> Result<DispatchResult, String> {
+        self.reconcile_open_forms_from_db();
         if let Some(form) = &self.form_1601c
             && self.active_view == ActiveView::Form1601C
         {
+            let claimed = form.draft.submission_claim_token.is_some()
+                || form.draft.submission_claimed_at.is_some();
             return Ok(DispatchResult::json(json!({
                 "form": "1601C",
                 "status": format!("{:?}", form.draft.status),
+                "claimed": claimed,
+                "id": form.draft.id,
                 "fields": form_1601c_fields(&form.draft),
             })));
         }
         if let Some(form) = &self.form_2551q
             && self.active_view == ActiveView::Form2551Q
         {
+            let claimed = form.draft.submission_claim_token.is_some()
+                || form.draft.submission_claimed_at.is_some();
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
                 "status": format!("{:?}", form.draft.status),
+                "claimed": claimed,
+                "id": form.draft.id,
                 "fields": form_2551q_fields(&form.draft),
             })));
         }
@@ -1439,6 +1504,7 @@ impl BirAgentHost {
 
     fn form_fill(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.gate_locked()?;
+        self.reconcile_open_forms_from_db();
         let fields = collect_fill_fields(args)?;
         if self.active_view == ActiveView::Form1601C {
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
@@ -2258,31 +2324,35 @@ impl BirAgentHost {
             );
         }
 
-        if let Some(form) = &self.form_1601c
-            && self.active_view == ActiveView::Form1601C
+        if self.active_view == ActiveView::Form1601C
+            && let Some(draft) = self.displayed_1601c()
         {
+            let (validated, validation_errors) = self
+                .form_1601c
+                .as_ref()
+                .map(|form| (form.validated, form.validation_errors.clone()))
+                .unwrap_or((false, Vec::new()));
             page = page.with_child(UiNode::new(ids::FORM_1601C_VALIDATE, "button", "Validate"));
             page = page.with_child(
                 UiNode::new(
                     ids::FORM_1601C_STATUS,
                     "status",
-                    format!("{:?}", form.draft.status),
+                    format!("{:?}", draft.status),
                 )
-                .with_value(format!("{:?}", form.draft.status))
-                .with_states(filing_snapshot_states(&form.draft.status, {
-                    form.draft.submission_claim_token.is_some()
-                        || form.draft.submission_claimed_at.is_some()
+                .with_value(format!("{:?}", draft.status))
+                .with_states(filing_snapshot_states(&draft.status, {
+                    draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some()
                 })),
             );
             page = page.with_child(UiNode::new(
                 ids::FORM_1601C_VALIDATION,
                 "status",
-                if !form.validated {
+                if !validated {
                     "not-validated".into()
-                } else if form.validation_errors.is_empty() {
+                } else if validation_errors.is_empty() {
                     "valid".into()
                 } else {
-                    form.validation_errors
+                    validation_errors
                         .iter()
                         .map(|(field, message)| format!("{field}: {message}"))
                         .collect::<Vec<_>>()
@@ -2291,28 +2361,28 @@ impl BirAgentHost {
             ));
             page = page.with_child(
                 UiNode::new(ids::FORM_1601C_WITHHELD, "checkbox", "Any Taxes Withheld")
-                    .with_checked(form.draft.any_taxes_withheld)
-                    .with_value(withheld_snapshot_value(form.draft.any_taxes_withheld))
-                    .with_enabled(form.draft.is_editable()),
+                    .with_checked(draft.any_taxes_withheld)
+                    .with_value(withheld_snapshot_value(draft.any_taxes_withheld))
+                    .with_enabled(draft.is_editable()),
             );
             page = page.with_child(textbox(
                 ids::FORM_1601C_TAX_14,
                 "14 Total Amount of Compensation",
-                &format!("{:.2}", form.draft.tax_14_total_compensation),
+                &format!("{:.2}", draft.tax_14_total_compensation),
             ));
             page = page.with_child(textbox(
                 ids::FORM_1601C_TAX_25,
                 "25 Total Taxes Withheld",
-                &format!("{:.2}", form.draft.tax_25_total_taxes_withheld),
+                &format!("{:.2}", draft.tax_25_total_taxes_withheld),
             ));
             page = page.with_child(textbox(
                 ids::FORM_1601C_SHEETS,
                 "Number of sheets",
-                &form.draft.number_of_sheets.to_string(),
+                &draft.number_of_sheets.to_string(),
             ));
-            if matches!(form.draft.status, FilingStatus::Queued) {
-                let claimed = form.draft.submission_claim_token.is_some()
-                    || form.draft.submission_claimed_at.is_some();
+            if matches!(draft.status, FilingStatus::Queued) {
+                let claimed =
+                    draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some();
                 if claimed {
                     page = page.with_child(UiNode::new(
                         ids::FORM_1601C_RETURN_DRAFT,
@@ -2970,6 +3040,22 @@ fn filing_snapshot_states(status: &FilingStatus, claimed: bool) -> Vec<String> {
         states.push("outcome-pending".into());
     }
     states
+}
+
+fn stored_1601c_wins(memory: &Form1601CDraft, stored: &Form1601CDraft) -> bool {
+    memory.status != stored.status
+        || memory.submission_claim_token != stored.submission_claim_token
+        || memory.submission_claimed_at != stored.submission_claimed_at
+        || memory.submission_error != stored.submission_error
+        || memory.id != stored.id
+}
+
+fn stored_2551q_wins(memory: &Form2551QDraft, stored: &Form2551QDraft) -> bool {
+    memory.status != stored.status
+        || memory.submission_claim_token != stored.submission_claim_token
+        || memory.submission_claimed_at != stored.submission_claimed_at
+        || memory.last_error != stored.last_error
+        || memory.id != stored.id
 }
 
 fn require_abandoned_claim_confirm(args: &Value, invoke: &str) -> Result<(), String> {
@@ -4516,9 +4602,13 @@ mod tests {
             )
             .unwrap()
         {
-            Claim1601CSubmissionResult::Claimed { draft, .. } => draft,
+            Claim1601CSubmissionResult::Claimed { .. } => {}
             _ => panic!("fixture 1601C should be claimed"),
         }
+        guard
+            .get_1601c_draft(FIXTURE_TIN, year, month)
+            .unwrap()
+            .unwrap()
     }
 
     #[test]
@@ -4549,6 +4639,38 @@ mod tests {
             status.states
         );
         assert!(host.tree().find(ids::FORM_1601C_RETURN_DRAFT).is_some());
+
+        let fields = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(fields.ok, "{:?}", fields.error);
+        let fields_body = fields.result.as_ref().unwrap();
+        assert_eq!(fields_body["status"], "Queued");
+        assert_eq!(fields_body["claimed"], true);
+        assert_eq!(fields_body["id"], claimed.id.unwrap());
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "submissions.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let row = listed.result.as_ref().unwrap()["submissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == claimed.id.unwrap())
+            .expect("queued form_drafts id in submissions.list");
+        assert_eq!(row["status"], "Queued");
+        assert_eq!(row["period"], "2026-08");
+        assert_eq!(row["form_code"], "1601C");
 
         let revert = handle_request(
             &mut host,
@@ -4679,6 +4801,143 @@ mod tests {
             "released Draft must not keep claimed state: {:?}",
             draft_status.states
         );
+        let fields_after = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(fields_after.ok, "{:?}", fields_after.error);
+        let after = fields_after.result.as_ref().unwrap();
+        assert_eq!(after["status"], "Draft");
+        assert_eq!(after["claimed"], false);
+        let listed_after = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "submissions.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(listed_after.ok, "{:?}", listed_after.error);
+        let still_queued = listed_after.result.as_ref().unwrap()["submissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == claimed.id.unwrap() && row["status"] == "Queued");
+        assert!(
+            !still_queued,
+            "released row must not stay Queued in submissions.list: {:?}",
+            listed_after.result
+        );
+    }
+
+    #[test]
+    fn form_fields_and_snapshot_follow_form_drafts_not_stale_local_draft() {
+        let mut host = fixture_host();
+        let claimed = claim_queued_1601c(&host, 2026, 8);
+        let queued_id = claimed.id.expect("queued form_drafts id");
+        let stale = Form1601CDraft::new_from_profile(&fixture_profile(), 2026, 8);
+        assert_eq!(stale.status, FilingStatus::Draft);
+        assert!(stale.id.is_none());
+        host.replace_form_1601c_state(stale, false, false, Vec::new());
+        host.restore_view(ActiveView::Form1601C, Some(FIXTURE_TIN.into()));
+
+        let fields = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(fields.ok, "{:?}", fields.error);
+        let body = fields.result.as_ref().unwrap();
+        assert_eq!(body["status"], "Queued");
+        assert_eq!(body["claimed"], true);
+        assert_eq!(body["id"], queued_id);
+        assert_ne!(body["status"], "Draft");
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+
+        let snap = handle_request(&mut host, req(Op::Snapshot), None);
+        assert!(snap.ok, "{:?}", snap.error);
+        let status = snap
+            .tree
+            .as_ref()
+            .expect("snapshot tree")
+            .find(ids::FORM_1601C_STATUS)
+            .expect("form-1601c-status");
+        assert_eq!(status.value.as_deref(), Some("Queued"));
+        assert!(status.states.iter().any(|state| state == "claimed"));
+
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "submissions.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let row = listed.result.as_ref().unwrap()["submissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == queued_id)
+            .expect("same period in submissions.list");
+        assert_eq!(row["status"], "Queued");
+        assert_eq!(row["period"], "2026-08");
+
+        let released = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.release_abandoned_claim".into(),
+                args: json!({
+                    "tin": FIXTURE_TIN,
+                    "form": "1601C",
+                    "year": 2026,
+                    "period": 8,
+                    "confirm": true,
+                    "reason": ABANDONED_CLAIM_RELEASE_REASON
+                }),
+            }),
+            None,
+        );
+        assert!(released.ok, "{:?}", released.error);
+        let fields_after = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let after = fields_after.result.as_ref().unwrap();
+        assert_eq!(after["status"], "Draft");
+        assert_eq!(after["claimed"], false);
+        let snap_after = handle_request(&mut host, req(Op::Snapshot), None);
+        let draft_status = snap_after
+            .tree
+            .as_ref()
+            .unwrap()
+            .find(ids::FORM_1601C_STATUS)
+            .expect("form-1601c-status after release");
+        assert_eq!(draft_status.value.as_deref(), Some("Draft"));
+        let listed_after = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "submissions.list".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        let still_queued = listed_after.result.as_ref().unwrap()["submissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == queued_id && row["status"] == "Queued");
+        assert!(!still_queued);
     }
 
     fn queue_unclaimed_1601c(host: &BirAgentHost, year: u16, month: u8) -> Form1601CDraft {

@@ -129,6 +129,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
             form.agent_validation_errors(),
         );
     }
+    host.reconcile_open_forms_from_db();
     let _ = host.reload_jobs_and_submissions();
     host.mark_pending_admin(app.pending_admin_view);
     host.mark_pending_profile_auth(app.pending_profile.is_some());
@@ -208,6 +209,7 @@ fn apply_host(
             if let Some(draft) = host.form_1601c_draft() {
                 form.agent_sync_filing_snapshot(draft, cx);
             }
+            form.agent_reload_filing_from_db(cx);
             if print_requested {
                 form.agent_preview_pdf(window, cx);
             }
@@ -318,7 +320,11 @@ fn apply_navigation(
         form if ids::form_chrome(form).is_some() => {
             let chrome = ids::form_chrome(form).expect("form chrome");
             if host.selected_tin().is_some() {
-                let year = chrono::Local::now().year() as u16;
+                let year = host
+                    .form_1601c_draft()
+                    .map(|draft| draft.taxable_year)
+                    .or_else(|| host.form_2551q_draft().map(|draft| draft.taxable_year))
+                    .unwrap_or_else(|| chrono::Local::now().year() as u16);
                 let period = host.form_period().unwrap_or(1);
                 app.open_named_form(chrome.code, year, period, window, cx);
             } else {

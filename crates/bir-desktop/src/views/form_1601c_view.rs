@@ -200,11 +200,17 @@ impl Form1601CView {
     }
 
     pub fn new(
-        draft: Form1601CDraft,
+        mut draft: Form1601CDraft,
         db: Arc<Mutex<Database>>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
+        if let Ok(guard) = db.lock()
+            && let Ok(Some(stored)) =
+                guard.get_1601c_draft(&draft.tin, draft.taxable_year, draft.month)
+        {
+            draft = stored;
+        }
         let mut subscriptions = Vec::new();
         let tax_relief = draft.tax_relief;
 
@@ -633,6 +639,21 @@ impl Form1601CView {
         self.validation_errors.clear();
         self.release_claim_confirm_open = false;
         cx.notify();
+    }
+
+    pub(crate) fn agent_reload_filing_from_db(&mut self, cx: &mut Context<Self>) {
+        let tin = self.draft.tin.clone();
+        let year = self.draft.taxable_year;
+        let month = self.draft.month;
+        let Some(updated) = self
+            .db
+            .lock()
+            .ok()
+            .and_then(|db| db.get_1601c_draft(&tin, year, month).ok().flatten())
+        else {
+            return;
+        };
+        self.agent_sync_filing_snapshot(&updated, cx);
     }
 
     pub(crate) fn agent_preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {

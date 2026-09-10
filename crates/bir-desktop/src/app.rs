@@ -1774,9 +1774,41 @@ impl AppState {
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
         {
-            let draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
-                profile, year, quarter,
-            );
+            let month = quarter;
+            let draft = match self.db.lock() {
+                Ok(db) => match db.get_1601c_draft(tin, year, month) {
+                    Ok(Some(existing)) => {
+                        tracing::info!(
+                            tin = %existing.tin,
+                            status = ?existing.status,
+                            year,
+                            month,
+                            id = ?existing.id,
+                            "Loading existing 1601C from form_drafts"
+                        );
+                        existing
+                    }
+                    Ok(None) => {
+                        tracing::info!(tin = %tin, year, month, "Creating new 1601C draft from profile");
+                        bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                            profile, year, month,
+                        )
+                    }
+                    Err(error) => {
+                        tracing::error!(
+                            %error,
+                            tin,
+                            year,
+                            month,
+                            "Refusing to replace an unreadable 1601C draft"
+                        );
+                        return;
+                    }
+                },
+                Err(_) => bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                    profile, year, month,
+                ),
+            };
             self.pending_form_1601c_draft = Some(draft);
             self.active_view = ActiveView::Form1601C;
             cx.notify();
