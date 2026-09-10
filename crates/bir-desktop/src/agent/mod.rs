@@ -27,6 +27,8 @@ mod bridge;
 mod drain;
 #[cfg(feature = "agent")]
 mod host;
+#[cfg(all(feature = "agent", target_os = "macos"))]
+mod macos_window;
 
 #[cfg(feature = "agent")]
 pub use bridge::{StartedAgent, maybe_start};

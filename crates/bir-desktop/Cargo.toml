@@ -59,7 +59,7 @@ tray-icon = "0.24.0"
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "254953f2b6a1d91030f9467caa05f69c063c7204", optional = true }
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "8857139af12fb033b4dd04eabd8d19b5bfc5ffc6", optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
@@ -79,6 +79,7 @@ objc2-core-foundation = { version = "0.3.2", default-features = false, features 
 objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString"] }
 objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow"] }
 objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "block2", "WKWebView", "WKPDFConfiguration"] }
+objc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 webview2-com = "0.38.2"

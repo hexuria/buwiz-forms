@@ -841,6 +841,7 @@ dependencies = [
  "keyring",
  "lb-wry",
  "libc",
+ "objc",
  "objc2 0.5.2",
  "objc2 0.6.4",
  "objc2-app-kit 0.2.2",
@@ -3307,7 +3308,7 @@ dependencies = [
 [[package]]
 name = "gpui-agent"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/gpui-agent?rev=254953f2b6a1d91030f9467caa05f69c063c7204#254953f2b6a1d91030f9467caa05f69c063c7204"
+source = "git+https://github.com/hexuria/gpui-agent?rev=8857139af12fb033b4dd04eabd8d19b5bfc5ffc6#8857139af12fb033b4dd04eabd8d19b5bfc5ffc6"
 dependencies = [
  "serde",
  "serde_json",
