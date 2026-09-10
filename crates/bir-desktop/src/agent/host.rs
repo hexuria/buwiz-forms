@@ -438,6 +438,14 @@ impl BirAgentHost {
             .map(|form| form.draft.status.clone())
     }
 
+    pub fn form_1601c_draft(&self) -> Option<&Form1601CDraft> {
+        self.form_1601c.as_ref().map(|form| &form.draft)
+    }
+
+    pub fn form_2551q_draft(&self) -> Option<&Form2551QDraft> {
+        self.form_2551q.as_ref().map(|form| &form.draft)
+    }
+
     fn reload_from_db(&mut self, db: &Arc<Mutex<Database>>) {
         let Ok(guard) = db.lock() else {
             return;
@@ -1528,40 +1536,108 @@ impl BirAgentHost {
         })))
     }
 
-    fn form_revert_draft(&mut self) -> Result<DispatchResult, String> {
+    fn form_revert_draft(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.gate_locked()?;
         if self.active_view == ActiveView::Form1601C {
-            let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+            let form_ref = self.form_1601c.as_ref().ok_or("form 1601C is not open")?;
+            let claimed = form_ref.draft.submission_claim_token.is_some()
+                || form_ref.draft.submission_claimed_at.is_some();
+            let tin = form_ref.draft.tin.clone();
+            let year = form_ref.draft.taxable_year;
+            let period = form_ref.draft.month;
+            let queued = form_ref.draft.clone();
+            if claimed {
+                require_abandoned_claim_confirm(args, "form.revert_draft")?;
+                let payload = {
+                    let db = self.db.as_ref().ok_or("agent host has no database")?;
+                    let guard = db.lock().map_err(|err| err.to_string())?;
+                    abandoned_claim_result_json(
+                        "1601C",
+                        &tin,
+                        year,
+                        period,
+                        guard
+                            .release_abandoned_claimed_1601c_submission(
+                                &tin,
+                                year,
+                                period,
+                                ABANDONED_CLAIM_RELEASE_REASON,
+                            )
+                            .map_err(|err| err.to_string())?,
+                        |draft| draft.status.clone(),
+                    )
+                };
+                let _ = self.open_form("1601C", year, period)?;
+                return Ok(DispatchResult::json(payload));
+            }
             let db = self.db.as_ref().ok_or("agent host has no database")?;
             let canceled = {
                 let guard = db.lock().map_err(|err| err.to_string())?;
                 guard
-                    .cancel_queued_1601c_submission(&form.draft)
+                    .cancel_queued_1601c_submission(&queued)
                     .map_err(|err| err.to_string())?
             };
+            let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             form.draft = canceled;
             form.validated = false;
             form.saved = true;
             return Ok(DispatchResult::json(json!({
                 "form": "1601C",
                 "status": format!("{:?}", form.draft.status),
+                "released": false,
+                "queued": false,
+                "filed": false,
             })));
         }
         if self.active_view == ActiveView::Form2551Q {
-            let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+            let form_ref = self.form_2551q.as_ref().ok_or("form 2551Q is not open")?;
+            let claimed = form_ref.draft.submission_claim_token.is_some()
+                || form_ref.draft.submission_claimed_at.is_some();
+            let tin = form_ref.draft.tin.clone();
+            let year = form_ref.draft.taxable_year;
+            let period = form_ref.draft.quarter;
+            let queued = form_ref.draft.clone();
+            if claimed {
+                require_abandoned_claim_confirm(args, "form.revert_draft")?;
+                let payload = {
+                    let db = self.db.as_ref().ok_or("agent host has no database")?;
+                    let guard = db.lock().map_err(|err| err.to_string())?;
+                    abandoned_claim_result_json(
+                        "2551Q",
+                        &tin,
+                        year,
+                        period,
+                        guard
+                            .release_abandoned_claimed_2551q_submission(
+                                &tin,
+                                year,
+                                period,
+                                ABANDONED_CLAIM_RELEASE_REASON,
+                            )
+                            .map_err(|err| err.to_string())?,
+                        |draft| draft.status.clone(),
+                    )
+                };
+                let _ = self.open_form("2551Q", year, period)?;
+                return Ok(DispatchResult::json(payload));
+            }
             let db = self.db.as_ref().ok_or("agent host has no database")?;
             let canceled = {
                 let guard = db.lock().map_err(|err| err.to_string())?;
                 guard
-                    .cancel_queued_2551q_submission(&form.draft)
+                    .cancel_queued_2551q_submission(&queued)
                     .map_err(|err| err.to_string())?
             };
+            let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
             form.draft = canceled;
             form.validated = false;
             form.saved = true;
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
                 "status": format!("{:?}", form.draft.status),
+                "released": false,
+                "queued": false,
+                "filed": false,
             })));
         }
         Err("open form 1601C or 2551Q first".into())
@@ -1569,27 +1645,7 @@ impl BirAgentHost {
 
     fn form_release_abandoned_claim(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        match args.get("confirm") {
-            Some(Value::Bool(true)) => {}
-            Some(Value::Bool(false)) | None => {
-                return Err(
-                    "form.release_abandoned_claim requires args.confirm=true (boolean) after a human confirmed nothing reached BIR"
-                        .into(),
-                );
-            }
-            Some(_) => {
-                return Err(
-                    "form.release_abandoned_claim args.confirm must be boolean true, not a string or number"
-                        .into(),
-                );
-            }
-        }
-        let reason = args.get("reason").and_then(Value::as_str).unwrap_or("");
-        if reason != ABANDONED_CLAIM_RELEASE_REASON {
-            return Err(format!(
-                "form.release_abandoned_claim requires args.reason=\"{ABANDONED_CLAIM_RELEASE_REASON}\""
-            ));
-        }
+        require_abandoned_claim_confirm(args, "form.release_abandoned_claim")?;
 
         if let Some(resolved) = self.resolve_release_profile(args)? {
             return Ok(resolved);
@@ -1609,7 +1665,12 @@ impl BirAgentHost {
                     year,
                     period,
                     guard
-                        .release_abandoned_claimed_1601c_submission(&tin, year, period, reason)
+                        .release_abandoned_claimed_1601c_submission(
+                            &tin,
+                            year,
+                            period,
+                            ABANDONED_CLAIM_RELEASE_REASON,
+                        )
                         .map_err(|err| err.to_string())?,
                     |draft| draft.status.clone(),
                 )
@@ -1620,7 +1681,12 @@ impl BirAgentHost {
                     year,
                     period,
                     guard
-                        .release_abandoned_claimed_2551q_submission(&tin, year, period, reason)
+                        .release_abandoned_claimed_2551q_submission(
+                            &tin,
+                            year,
+                            period,
+                            ABANDONED_CLAIM_RELEASE_REASON,
+                        )
                         .map_err(|err| err.to_string())?,
                     |draft| draft.status.clone(),
                 )
@@ -1831,6 +1897,11 @@ impl BirAgentHost {
             ids::FORM_1601C_WITHHELD => self.toggle_1601c_withheld(),
             ids::FORM_1601C_SUBMIT => self.request_submit_confirm(),
             ids::FORM_1601C_SUBMIT_CONFIRM => self.refuse_submit_confirm(),
+            ids::FORM_1601C_CANCEL_QUEUE => self.form_revert_draft(&json!({})),
+            ids::FORM_1601C_RETURN_DRAFT | ids::FORM_1601C_RELEASE_CLAIM_CONFIRM => Err(
+                "claimed queues need form.revert_draft with confirm=true and reason=abandoned_no_bir_filing (same CAS as form.release_abandoned_claim); the agent will not skip that gate"
+                    .into(),
+            ),
             ids::FORM_1601C_BACK => self.navigate(ActiveView::Dashboard),
             ids::FORM_2551Q_VALIDATE => self.validate_form(),
             other if ids::ProfileManagerTab::from_id(other).is_some() => {
@@ -1942,7 +2013,7 @@ impl BirAgentHost {
             "form.fill" => self.form_fill(args),
             "form.pdf" | "form.preview_pdf" => self.form_pdf(),
             "form.print" => self.form_print(args),
-            "form.revert_draft" | "draft.revert" => self.form_revert_draft(),
+            "form.revert_draft" | "draft.revert" => self.form_revert_draft(args),
             "form.release_abandoned_claim" => self.form_release_abandoned_claim(args),
             "form.mark_paid" | "payment.mark_paid" => self.form_mark_paid(),
             "form.upload_receipt" | "receipt.upload" => self.form_upload_receipt(),
@@ -2197,7 +2268,11 @@ impl BirAgentHost {
                     "status",
                     format!("{:?}", form.draft.status),
                 )
-                .with_value(format!("{:?}", form.draft.status)),
+                .with_value(format!("{:?}", form.draft.status))
+                .with_states(filing_snapshot_states(&form.draft.status, {
+                    form.draft.submission_claim_token.is_some()
+                        || form.draft.submission_claimed_at.is_some()
+                })),
             );
             page = page.with_child(UiNode::new(
                 ids::FORM_1601C_VALIDATION,
@@ -2235,6 +2310,31 @@ impl BirAgentHost {
                 "Number of sheets",
                 &form.draft.number_of_sheets.to_string(),
             ));
+            if matches!(form.draft.status, FilingStatus::Queued) {
+                let claimed = form.draft.submission_claim_token.is_some()
+                    || form.draft.submission_claimed_at.is_some();
+                if claimed {
+                    page = page.with_child(UiNode::new(
+                        ids::FORM_1601C_RETURN_DRAFT,
+                        "button",
+                        "Return to Draft",
+                    ));
+                    page = page.with_child(
+                        UiNode::new(
+                            ids::FORM_1601C_RELEASE_CLAIM_CONFIRM,
+                            "button",
+                            "Confirm nothing reached BIR (use form.revert_draft confirm=true)",
+                        )
+                        .with_enabled(false),
+                    );
+                } else {
+                    page = page.with_child(UiNode::new(
+                        ids::FORM_1601C_CANCEL_QUEUE,
+                        "button",
+                        "Cancel Submission Queue",
+                    ));
+                }
+            }
             if self.submit_confirmation_visible {
                 page = page.with_child(
                     UiNode::new(
@@ -2257,7 +2357,11 @@ impl BirAgentHost {
                     "status",
                     format!("{:?}", form.draft.status),
                 )
-                .with_value(format!("{:?}", form.draft.status)),
+                .with_value(format!("{:?}", form.draft.status))
+                .with_states(filing_snapshot_states(&form.draft.status, {
+                    form.draft.submission_claim_token.is_some()
+                        || form.draft.submission_claimed_at.is_some()
+                })),
             );
             page = page.with_child(UiNode::new(
                 ids::FORM_2551Q_VALIDATION,
@@ -2859,6 +2963,38 @@ fn last4(tin: &str) -> String {
         .collect()
 }
 
+fn filing_snapshot_states(status: &FilingStatus, claimed: bool) -> Vec<String> {
+    let mut states = vec![format!("{status:?}")];
+    if claimed {
+        states.push("claimed".into());
+        states.push("outcome-pending".into());
+    }
+    states
+}
+
+fn require_abandoned_claim_confirm(args: &Value, invoke: &str) -> Result<(), String> {
+    match args.get("confirm") {
+        Some(Value::Bool(true)) => {}
+        Some(Value::Bool(false)) | None => {
+            return Err(format!(
+                "{invoke} on a claimed queued return requires args.confirm=true (boolean) after a human confirmed nothing reached BIR; same CAS as form.release_abandoned_claim"
+            ));
+        }
+        Some(_) => {
+            return Err(format!(
+                "{invoke} args.confirm must be boolean true, not a string or number"
+            ));
+        }
+    }
+    let reason = args.get("reason").and_then(Value::as_str).unwrap_or("");
+    if reason != ABANDONED_CLAIM_RELEASE_REASON {
+        return Err(format!(
+            "{invoke} requires args.reason=\"{ABANDONED_CLAIM_RELEASE_REASON}\""
+        ));
+    }
+    Ok(())
+}
+
 fn normalize_release_form(code: &str) -> Result<&'static str, String> {
     let compact: String = code
         .chars()
@@ -3005,6 +3141,13 @@ mod tests {
 
     fn req(op: Op) -> Request {
         Request::new("t", op)
+    }
+
+    fn frozen_input_attr(html: &str, name: &str, needle: &str) -> bool {
+        html.split("<input").any(|tag| {
+            let head = tag.split('>').next().unwrap_or("");
+            head.contains(&format!("name=\"{name}\"")) && head.contains(needle)
+        })
     }
 
     #[test]
@@ -3958,6 +4101,18 @@ mod tests {
         assert!(!html.contains(FIXTURE_EMAIL));
         assert!(html.contains("1000.00"));
         assert!(html.contains("100.00"));
+        assert!(
+            html.split("<input").any(|tag| {
+                tag.contains("name=\"p1c9\"") && tag.contains("data-writer-value=\"01\"")
+            }),
+            "1601-C period 1 should fill month 01"
+        );
+        assert!(
+            html.split("<input").any(|tag| {
+                tag.contains("name=\"p1c10\"") && tag.contains("data-writer-value=\"")
+            }),
+            "1601-C year comb should carry data-writer-value"
+        );
         assert!(pdf.result.as_ref().unwrap().get("bytes").is_none());
         assert_eq!(pdf.result.as_ref().unwrap()["kind"], "frozen-html");
         let print = handle_request(
@@ -4237,6 +4392,66 @@ mod tests {
         );
     }
 
+    #[test]
+    fn form_pdf_1601c_fills_august_2026_month_year_and_withheld_no() {
+        let mut host = fixture_host();
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 8 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": false }),
+            }),
+            None,
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let pdf = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.pdf".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(pdf.ok, "{:?}", pdf.error);
+        let path = pdf.result.as_ref().unwrap()["path"].as_str().expect("path");
+        let html = std::fs::read_to_string(path).unwrap();
+        assert!(
+            frozen_input_attr(&html, "p1c9", "data-writer-value=\"08\""),
+            "Aug 2026 month comb should be 08"
+        );
+        assert!(
+            frozen_input_attr(&html, "p1c10", "data-writer-value=\"2026\""),
+            "year comb should be 2026"
+        );
+        assert!(
+            frozen_input_attr(&html, "p1c20", "value=\"X\""),
+            "withheld=No xbox p1c20 should be X"
+        );
+        assert!(
+            frozen_input_attr(&html, "p1c22", "value=\"X\""),
+            "amended=No xbox p1c22 should be X"
+        );
+        assert!(
+            !frozen_input_attr(&html, "p1c21", "value=\"X\""),
+            "amended Yes xbox should stay empty"
+        );
+        assert!(
+            !frozen_input_attr(&html, "p1c23", "value=\"X\""),
+            "withheld Yes xbox should stay empty"
+        );
+        assert!(!html.contains("name=\"frm1601c:txtMonth\""));
+        assert!(!html.contains("name=\"frm1601c:TaxWithheld_2\""));
+    }
+
     fn claim_queued_1601c(host: &BirAgentHost, year: u16, month: u8) -> Form1601CDraft {
         let db = host.db.as_ref().expect("fixture host has a database");
         let guard = db.lock().expect("db");
@@ -4288,6 +4503,17 @@ mod tests {
         );
         assert!(opened.ok, "{:?}", opened.error);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+        let tree = host.tree();
+        let status = tree
+            .find(ids::FORM_1601C_STATUS)
+            .expect("form-1601c-status");
+        assert_eq!(status.value.as_deref(), Some("Queued"));
+        assert!(
+            status.states.iter().any(|state| state == "claimed"),
+            "claimed queue must not snapshot as a bare Draft: {:?}",
+            status.states
+        );
+        assert!(host.tree().find(ids::FORM_1601C_RETURN_DRAFT).is_some());
 
         let revert = handle_request(
             &mut host,
@@ -4299,10 +4525,20 @@ mod tests {
         );
         assert!(!revert.ok);
         let revert_err = revert.error.as_deref().unwrap_or_default();
+        assert!(revert_err.contains("confirm=true"), "{revert_err:?}");
         assert!(
-            revert_err.contains("Only an unclaimed queued 1601C snapshot can be canceled"),
+            revert_err.contains("abandoned_no_bir_filing")
+                || revert_err.contains("form.release_abandoned_claim"),
             "{revert_err:?}"
         );
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+
+        let click_return = handle_request(
+            &mut host,
+            req(Op::click(ids::FORM_1601C_RETURN_DRAFT)),
+            None,
+        );
+        assert!(!click_return.ok);
 
         let missing = handle_request(
             &mut host,
@@ -4397,6 +4633,126 @@ mod tests {
         assert!(again.ok, "{:?}", again.error);
         assert_eq!(again.result.as_ref().unwrap()["released"], false);
         assert_eq!(again.result.as_ref().unwrap()["new_status"], "Draft");
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
+        let tree = host.tree();
+        let draft_status = tree
+            .find(ids::FORM_1601C_STATUS)
+            .expect("form-1601c-status after release");
+        assert_eq!(draft_status.value.as_deref(), Some("Draft"));
+        assert!(
+            !draft_status.states.iter().any(|state| state == "claimed"),
+            "released Draft must not keep claimed state: {:?}",
+            draft_status.states
+        );
+    }
+
+    fn queue_unclaimed_1601c(host: &BirAgentHost, year: u16, month: u8) -> Form1601CDraft {
+        let db = host.db.as_ref().expect("fixture host has a database");
+        let guard = db.lock().expect("db");
+        let profile = guard
+            .get_profile(FIXTURE_TIN)
+            .unwrap()
+            .expect("fixture profile");
+        let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
+        draft.any_taxes_withheld = false;
+        draft.compute();
+        draft
+            .transition_to_queued()
+            .expect("zero-tax withheld=no 1601C should queue");
+        guard.save_queued_1601c_draft(&draft).unwrap();
+        guard
+            .get_1601c_draft(FIXTURE_TIN, year, month)
+            .unwrap()
+            .unwrap()
+    }
+
+    #[test]
+    fn form_revert_draft_releases_claimed_queue_with_same_confirm_gate() {
+        let mut host = fixture_host();
+        let _claimed = claim_queued_1601c(&host, 2026, 1);
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 1 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let reverted = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.revert_draft".into(),
+                args: json!({
+                    "confirm": true,
+                    "reason": ABANDONED_CLAIM_RELEASE_REASON
+                }),
+            }),
+            None,
+        );
+        assert!(reverted.ok, "{:?}", reverted.error);
+        let body = reverted.result.as_ref().unwrap();
+        assert_eq!(body["released"], true);
+        assert_eq!(body["new_status"], "Draft");
+        assert_eq!(body["queued"], false);
+        assert_eq!(body["filed"], false);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
+        assert!(
+            host.form_1601c
+                .as_ref()
+                .unwrap()
+                .draft
+                .submission_claim_token
+                .is_none()
+        );
+
+        let fill = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": false }),
+            }),
+            None,
+        );
+        assert!(fill.ok, "{:?}", fill.error);
+        let saved = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.save_draft".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(saved.ok, "{:?}", saved.error);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
+    }
+
+    #[test]
+    fn form_revert_draft_cancels_unclaimed_queue_without_confirm() {
+        let mut host = fixture_host();
+        let queued = queue_unclaimed_1601c(&host, 2026, 2);
+        assert!(queued.submission_claim_token.is_none());
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 2 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        assert!(host.tree().find(ids::FORM_1601C_CANCEL_QUEUE).is_some());
+        let reverted = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.revert_draft".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(reverted.ok, "{:?}", reverted.error);
+        assert_eq!(reverted.result.as_ref().unwrap()["status"], "Draft");
+        assert_eq!(reverted.result.as_ref().unwrap()["released"], false);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
     }
 
