@@ -7,7 +7,7 @@ use gpui_agent::protocol::{Op, PlatformKind};
 use crate::agent::host::BirAgentHost;
 use crate::agent::ids;
 use crate::app::{ActiveView, AppState, ProfileTargetAction};
-use crate::global_actions::CreateProfile;
+use crate::global_actions::{CreateProfile, OpenCommandPalette};
 use crate::views::form_1601c_view::Agent1601CHostPatch;
 use chrono::Datelike;
 
@@ -119,6 +119,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.mark_pending_admin(app.pending_admin_view);
     host.mark_pending_profile_auth(app.pending_profile.is_some());
     host.set_submit_confirmation_visible(app.agent_submit_confirmation_visible);
+    host.set_palette_open(app.is_command_palette_open);
     host
 }
 
@@ -228,6 +229,10 @@ fn apply_host(
     }
 
     app.agent_submit_confirmation_visible = host.submit_confirmation_visible();
+
+    if host.wants_palette() && !app.is_command_palette_open {
+        app.handle_open_command_palette(&OpenCommandPalette, window, cx);
+    }
 }
 
 fn apply_navigation(
