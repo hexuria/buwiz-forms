@@ -31,6 +31,8 @@ pub mod headless;
 mod host;
 #[cfg(all(feature = "agent", target_os = "macos"))]
 mod macos_window;
+#[cfg(feature = "agent")]
+mod request_log;
 
 #[cfg(feature = "agent")]
 pub use bridge::{StartedAgent, maybe_start};

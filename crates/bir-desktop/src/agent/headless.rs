@@ -18,11 +18,13 @@ use bir_core::db::{self, Database};
 use clap::{Parser, Subcommand};
 use gpui_agent::DEFAULT_ADDR_STR;
 use gpui_agent::client::AgentClient;
+use gpui_agent::mailbox::AgentMailbox;
 use gpui_agent::protocol::{Op, PlatformKind};
 use gpui_agent::security::from_env;
-use gpui_agent::server::spawn_host;
+use gpui_agent::server::{spawn_host, spawn_mailbox};
 
 use super::host::BirAgentHost;
+use super::request_log;
 
 /// Headless BIR daemon: app domain logic, no GPUI / GPU window.
 ///
@@ -231,7 +233,14 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 
         let db = Arc::new(Mutex::new(opened));
         let host = Arc::new(Mutex::new(host_for_database(db.clone())));
-        let (addr, shutdown) = match spawn_host(config.addr, config.token.clone(), host.clone()) {
+        let mailbox = AgentMailbox::new();
+        let drain_token = config.token.clone();
+        let (addr, shutdown) = match spawn_mailbox(
+            config.addr,
+            config.token.clone(),
+            mailbox.clone(),
+            Duration::from_secs(8),
+        ) {
             Ok(started) => started,
             Err(error) if wait && error.kind() == ErrorKind::AddrInUse => {
                 drop(host);
@@ -257,6 +266,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                 "auth: none (one-off click/snapshot ok; recipe run and mcp need the same token on host and client)"
             );
         }
+        if request_log::log_requests_enabled() {
+            eprintln!(
+                "request log: {} (id/op/invoke/ok; token never logged)",
+                request_log::LOG_REQUESTS_ENV
+            );
+        }
         eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
         eprintln!(
             "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
@@ -269,6 +284,19 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         );
 
         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
+            for posted in mailbox.take() {
+                let req = posted.request.clone();
+                let mut guard = host.lock().expect("host");
+                let resp =
+                    request_log::handle_request_logged(&mut *guard, req, drain_token.as_deref());
+                let stop = guard.wants_shutdown();
+                drop(guard);
+                posted.reply(resp);
+                if stop {
+                    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+                    break;
+                }
+            }
             if host.lock().expect("host").wants_shutdown() {
                 break;
             }

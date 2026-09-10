@@ -88,6 +88,13 @@ These are host constraints. They do not change protocol v1.
   otherwise. The TCP thread enforces the token; the UI-thread mailbox drain passes
   the same configured token into `handle_request` so hello does not overwrite `auth`
   to `"none"`. `BirAgentHost::hello()` does not set `auth` by hand.
+- Opt-in request log: `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`). **Off by
+  default** so `serve` stays a startup banner only. Not enabled by `RUST_LOG`.
+  When set, one stderr line per request after handle:
+  `timestamp gpui-agent id=… op=hello|invoke|… name=profile.list ok=true`.
+  Invoke args, `set_value` values, typed text, screenshot paths, and tokens are
+  never included. Same helper on painted `bir` mailbox drain. `tail -f` the
+  serve log to watch actions.
 - The agent **cannot** skip the lock screen, profile PIN/TOTP, or administrator
   OTP. Unsaved profile compliance still blocks navigation.
 - There is **no** invoke that queues or files a return. `filing.submit` (and a
@@ -168,6 +175,8 @@ export GPUI_AGENT_TOKEN=dev-secret
 export GPUI_AGENT_ADDR=127.0.0.1:17421
 # both bins: cargo build --locked --bins --features agent
 # painted bir already up with the same KEY=VALUE
+# optional: one stderr line per request (off by default; never logs the token)
+# export GPUI_AGENT_LOG_REQUESTS=1
 cargo run --locked --bin bir-headless --features agent -- serve --wait
 # stderr: waiting for bind 127.0.0.1:17421 …
 #         (or waiting for live DB owner lock …)
@@ -229,6 +238,7 @@ daemon before GUI reopen.
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret
 export GPUI_AGENT_ADDR=127.0.0.1:17421
+# optional: export GPUI_AGENT_LOG_REQUESTS=1
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
@@ -277,7 +287,7 @@ cargo run --locked --bin bir-headless --features agent -- status
 Bind is `gpui_agent::from_env` → `authorize_bind` (loopback default).
 Non-loopback needs `GPUI_AGENT_REMOTE=1` **and** `GPUI_AGENT_TOKEN`. Do not
 invent a second bind. `hello.auth` is `"required"` when that token is set
-because the mailbox drain (GUI) / `spawn_host` (headless) pass it into
+because the mailbox drain (painted `bir` and `bir-headless serve`) pass it into
 `handle_request` (never `None` when configured).
 
 **Display-less Linux — live DB daemon** (`todo-headless` pattern):
@@ -288,6 +298,7 @@ because the mailbox drain (GUI) / `spawn_host` (headless) pass it into
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret
 export GPUI_AGENT_ADDR=127.0.0.1:17421
+# optional: export GPUI_AGENT_LOG_REQUESTS=1
 # default path = default_database_path() = platform::data_dir()/bir_data.db
 # CI only: export BIR_DATABASE_PATH=/tmp/bir-ci.db
 cargo run --locked --bin bir-headless --features agent -- serve
