@@ -54,14 +54,15 @@ These are host constraints. They do not change protocol v1.
   protocol client of the daemon yet.
 - Preferred BIR `invoke` names (app-only, not CLI/MCP verbs) include
   `nav.go`, `profile.list` / `profile.search` / `profile.set` / `profile.edit` /
-  `profile.tab`, `dues.list`, `jobs.list`, `search.open`, `palette.search`,
+  `profile.tab`, `profile.html`, `profile.forms_set.get` / `profile.forms_set`,
+  `dues.list` / `dues.html`, `jobs.list`, `search.open`, `palette.search`,
   `form.fill` / `form.pdf`, plus the original `profile.create`,
   `tax-dues.refresh`, `filing.start`, `filing.validate`, `filing.submit`,
   and `form.release_abandoned_claim`.
   `filing.submit` maps to the existing confirmation gate; it does not queue or
   file. Match-arm synonyms (see the Alias table) are not a second allow-list.
   There is **no** `profile.ensure` auto-write; `profile.create` only opens the
-  editor.
+  editor. `profile.forms_set` writes only with `confirm=true` (JSON boolean).
 - Semantic delivery is the supported path. Virtual ops return
   `virtual_unavailable` rather than synthesizing OS HID or a half-wired
   in-window pointer. Protocol is unchanged.
@@ -163,7 +164,8 @@ These still apply to every agent, painted or headless:
 
 Use this section as the day-to-day recipe. Invoke names must match the
 [allow-list](#invoke-allow-list-bir-host-only). Do not invent verbs
-(`profile.forms_set`, `Op::Yield`, `filing.queue`, …).
+(`Op::Yield`, `filing.queue`, …). `profile.forms_set` is allow-listed
+(confirm-gated). Do not send client HTML or file bytes on invoke.
 
 ### Client env
 
@@ -224,6 +226,49 @@ gpui-agent invoke profile.set --arg q=acme --arg view=dashboard
 before `profile.save`. Do **not** run `recipes/profile-create.json` against a
 Mac app-group DB.
 
+Read-only identity card (host-written demo HTML, **not** `html-frozen/` print
+geometry). `tin` and/or `q` resolve like `profile.set`; omit both to use the
+selected profile. Optional `year` shows that year's Forms Set codes.
+Result is `{path, kind:"html"}` — an **absolute** temp `index.html` (plus
+`theme.css` / fonts). Never file bytes, never client-supplied HTML.
+
+```bash
+gpui-agent invoke profile.html --arg tin=00000000000002
+gpui-agent invoke profile.html --arg q='Headless Live TIN' --arg year=2026
+```
+
+Theme tokens live in repo `html-demo/theme.css` and are copied next to the
+temp `index.html`. `form.pdf` still uses `html-frozen/` cell geometry
+(`kind: "frozen-html"`). Do not mix the two pipelines.
+
+### Forms Set
+
+Read with `profile.forms_set.get`. Write with `profile.forms_set` (alias
+`profile.forms_set.set`). Write requires **`confirm=true` as a JSON
+boolean** — string `"true"` is refused. Unknown registry codes refuse.
+Source is Manual. One write path: `Database::save_per_year_forms` →
+`execute_replace_per_year_forms`. No `profile.ensure`. No unconfirmed live
+writes.
+
+```bash
+gpui-agent invoke profile.forms_set.get --arg tin=00000000000002 --arg year=2026
+gpui-agent invoke profile.forms_set --arg year=2026 --arg codes=1601C,2551Q --arg confirm=true
+```
+
+`--arg confirm=true` JSON-parses as boolean. Optional `--arg reason='…'`.
+
+### Dues HTML
+
+Same engine as `dues.list` (no second calendar). Optional `tin`/`q`; `filter`
+or `scope` `upcoming`|`overdue`|`all`; `scope` `profile`|`global` still
+selects list scope; optional `limit`. Alias `calendar.html`. Same
+`{path, kind:"html"}` bundle as `profile.html`.
+
+```bash
+gpui-agent invoke dues.html --arg filter=upcoming --arg limit=20
+gpui-agent invoke calendar.html --arg scope=upcoming
+```
+
 ### Forms workflow
 
 `filing.start` → `form.fill` → `filing.validate` → `form.save_draft` →
@@ -246,6 +291,8 @@ gpui-agent invoke form.pdf
 Semantic invokes that do not need a GPU/window:
 
 - Profiles: `profile.list` / `search` / `set` / `create` / `save` / `edit` / `tab`
+- Demo HTML: `profile.html`, `dues.html` (`calendar.html`)
+- Forms Set: `profile.forms_set.get`, `profile.forms_set` (confirm-gated write)
 - Dues / jobs: `dues.list`, `tax-dues.refresh`, `jobs.list`, `submissions.list`
 - 1601-C / 2551Q: `filing.start`, `form.fill`, `form.fields`, `filing.validate`,
   `form.save_draft`, `form.pdf` (frozen HTML path)
@@ -260,11 +307,9 @@ Semantic invokes that do not need a GPU/window:
   cron; headless does not).
 - UI-only navigation/chrome may be thinner than painted (semantic tree, not
   pixels).
-- **Forms Set editing is not an agent invoke today.** Agents cannot toggle
-  1601C / 2551Q onto a profile via gpui-agent alone. There is **no**
-  `profile.forms_set`. Use the painted Profile Manager Forms Set UI, or a
-  deliberate offline DB helper. Do not confuse this with `dashboard.set_forms`,
-  which only filters dashboard chips / host tree.
+- Demo HTML (`profile.html` / `dues.html`) is a host-written temp bundle using
+  `html-demo/theme.css`. It is **not** `form.pdf` / `html-frozen/` print
+  geometry and does not put file bytes on the invoke result.
 
 ### Linux / box demo DB
 
@@ -686,9 +731,13 @@ table; do not use them in recipes.
 | `profile.list` | — | `[{tin, name, last4, selected, archived}]` for every listed profile |
 | `profile.search` | `q` | Same shape as list. TIN substring or name, case-insensitive. Empty `q` lists all. Does not create |
 | `profile.set` | `tin` **or** `q`; optional `view`=`dashboard` (default) or `profile-manager` | 0 hits → `{status:"not_found"}` (does **not** create). 1 hit → select (same lock/PIN/dirty gates as `profile-*`). Many hits → `{status:"ambiguous", candidates}` and no auto-select |
+| `profile.html` | `tin` **or** `q` (same resolve as `profile.set`); omit both to use the selected profile; optional `year` | Read-only identity card from the live DB. Returns `{path, kind:"html"}` with an **absolute** temp `index.html` (plus `html-demo/theme.css` + fonts). Never file bytes, never client HTML. Omits PIN/TOTP/secrets |
+| `profile.forms_set.get` | `tin` **or** `q` (or selected profile); `year` (JSON number) | Read `per_year_forms` for that TIN/year. `{codes, entries, empty}` |
+| `profile.forms_set` | `year`; `codes` comma list or array (e.g. `1601C,2551Q`); **`confirm` JSON boolean `true`** (string `"true"` refuses); optional `reason`; optional `tin`/`q` | Replace that year's Forms Set via `Database::save_per_year_forms` / `execute_replace_per_year_forms`. Source Manual. Unknown codes refuse. No `profile.ensure`. No unconfirmed live writes |
 | `profile.edit` | optional `tin` | Select current or given TIN and stay on Profile Manager with editor fields loaded |
 | `profile.tab` | `tab`=`tax`\|`cor`\|`email`\|`export`\|`calendar`\|`security` | Switch Profile Manager tab. Drain writes `active_tab`. Calendar errors if Google Calendar is not linked |
 | `dues.list` | `filter`=`upcoming` (default) \| `overdue` \| `all`; `scope`=`profile` \| `global` (default: profile if a TIN is selected, else global) | Profile: selected taxpayer obligations. Global: BIR tax calendar deadlines whose **final date falls in the current local calendar month**. Date basis: `chrono::Local::now().date_naive()`. Status is date vs today, not weekend/holiday `DeadlineStatus` |
+| `dues.html` | optional `tin`/`q`; `filter` or `scope`=`upcoming`\|`overdue`\|`all`; `scope`=`profile`\|`global` as in `dues.list`; optional `limit` | Same data path as `dues.list` (no second calendar engine). Returns `{path, kind:"html"}` demo bundle plus the (possibly limited) `dues` JSON |
 | `tax-dues.refresh` | — | Reload unfiltered dues for the selected profile |
 | `jobs.list` | optional `status` | Read-only `Database::list_jobs` |
 | `submissions.list` | optional `tin`, `status` | Queued/submitted draft summaries plus `list_submissions_for_tin` |
@@ -728,6 +777,8 @@ Match-arm synonyms for the same handler. Allow-list and recipes use the
 | `profile.new` | `profile.create` |
 | `form.open` | `filing.start` |
 | `form.validate` | `filing.validate` |
+| `calendar.html` | `dues.html` |
+| `profile.forms_set.set` | `profile.forms_set` |
 
 `palette.search` is **not** an alias of `search.open`. Open is Cmd+K / Ctrl+K;
 search is the query invoke.
@@ -735,7 +786,6 @@ search is the query invoke.
 Not implemented (on purpose):
 
 - `profile.ensure` — no auto-create / upsert. Opening the editor is `profile.create`. Persisting is `profile.save` after human confirmation.
-- `profile.forms_set` — **does not exist.** Yearly Forms Set include/exclude is the painted Profile Manager UI (or a deliberate offline DB helper), not a gpui-agent invoke. `dashboard.set_forms` only filters dashboard chips.
 
 ## Stable IDs
 
@@ -797,6 +847,10 @@ Proven in headless host tests (not a Mac GUI run):
   Queued until the CAS writes Draft.
 - `profile.create` opens the editor and does not save; `profile.ensure` is
   rejected (no auto-write)
+- `profile.html` / `dues.html` write a temp `html-demo` bundle (`kind:"html"`,
+  absolute `path`, no bytes). `profile.forms_set` is confirm-gated (string
+  `"true"` refuses); a bool-true write is visible to `profile.forms_set.get`
+  and `dues.list`
 - Selected profile: checked `profile-{tin}` listitem and `context.selected_tin`
 - Remaining form views: page root + back/save/submit chrome ids.
   Semantic **save** besides 1601-C and 2551Q is not mapped
@@ -824,8 +878,6 @@ Remaining (not faked):
   processes must not open the live DB together. Matrix B is
   `serve --wait` plus GUI quit releasing bind+lock, not a protocol op.
   launchd KeepAlive remains an optional supervisor (docs example only).
-- Forms Set editing via gpui-agent (`profile.forms_set` or similar). Agents
-  cannot toggle 1601C/2551Q onto a profile from the allow-list today.
 
 ## Claimed queue without BIR outcome (facts)
 
