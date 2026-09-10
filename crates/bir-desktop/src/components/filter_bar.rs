@@ -302,6 +302,39 @@ impl FilterState {
         cx.notify();
     }
 
+    pub(crate) fn agent_set_form_codes(
+        &mut self,
+        forms: Option<&[String]>,
+        query: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.active_chips.retain(|chip| chip.group != "Form Type");
+        if let Some(forms) = forms {
+            for code in forms {
+                if !self
+                    .active_chips
+                    .iter()
+                    .any(|chip| chip.id == format!("form_type_{code}"))
+                {
+                    self.active_chips.push(FilterChip {
+                        id: format!("form_type_{code}"),
+                        label: code.clone(),
+                        group: "Form Type".to_string(),
+                    });
+                }
+            }
+        }
+        self.input_state.update(cx, |input, cx| {
+            input.set_value(query.to_string(), window, cx);
+        });
+        cx.emit(FilterEvent {
+            chips_changed: self.active_chips.clone(),
+            query_changed: query.to_string(),
+        });
+        cx.notify();
+    }
+
     fn render_popover<T>(entity: &Entity<Self>, cx: &mut Context<T>) -> impl IntoElement {
         let state = entity.read(cx);
         let form_types = state.available_form_types.clone();

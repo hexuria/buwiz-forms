@@ -173,57 +173,24 @@ impl ListDelegate for ProfileListDelegate {
         _window: &mut Window,
         _cx: &mut Context<ListState<Self>>,
     ) -> Task<()> {
-        let q = query.to_lowercase();
-        let filtered: Vec<TaxpayerProfile> = if self.hide_tax_profiles {
-            if q.is_empty() {
-                Vec::new()
-            } else {
-                self.all_items
-                    .iter()
-                    .filter(|p| {
-                        p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim()
-                    })
-                    .cloned()
-                    .collect()
-            }
-        } else {
-            self.all_items
-                .iter()
-                .filter(|p| {
-                    q.is_empty()
-                        || p.full_name.to_lowercase().contains(&q)
-                        || p.tin.full().contains(&q)
-                        || p.tin.formatted().to_lowercase().contains(&q)
-                })
-                .take(5) // Limit to 5 max
-                .cloned()
-                .collect()
-        };
-
-        self.active_items = filtered
+        let ranked = crate::agent::search::search_profiles_for_palette(
+            &self.all_items,
+            query,
+            self.hide_tax_profiles,
+        );
+        self.active_items = ranked
+            .matches
             .iter()
-            .filter(|p| !p.is_archived)
+            .filter(|profile| !profile.is_archived)
             .cloned()
             .collect();
-        self.archived_items = filtered.iter().filter(|p| p.is_archived).cloned().collect();
-
-        let exact_tin_match = self
-            .all_items
+        self.archived_items = ranked
+            .matches
             .iter()
-            .any(|p| p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim());
-
-        if !query.trim().is_empty()
-            && !exact_tin_match
-            && !self
-                .all_items
-                .iter()
-                .any(|p| p.full_name.to_lowercase() == q.trim())
-        {
-            self.create_query = Some(query.trim().to_string());
-        } else {
-            self.create_query = None;
-        }
-
+            .filter(|profile| profile.is_archived)
+            .cloned()
+            .collect();
+        self.create_query = ranked.create_query;
         Task::ready(())
     }
 }

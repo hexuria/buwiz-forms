@@ -65,6 +65,13 @@ pub const FORM_1601C_TAX_25: &str = "form-1601c-tax-25";
 pub const FORM_1601C_SHEETS: &str = "form-1601c-sheets";
 pub const FORM_1601C_SUBMIT_CONFIRM: &str = "form-1601c-submit-confirm";
 
+pub const FORM_2551Q_VALIDATE: &str = "form-2551q-validate";
+pub const FORM_2551Q_STATUS: &str = "form-2551q-status";
+pub const FORM_2551Q_VALIDATION: &str = "form-2551q-validation";
+pub const FORM_2551Q_CREDITABLE: &str = "form-2551q-creditable";
+pub const FORM_2551Q_OTHER_CREDIT: &str = "form-2551q-other-credit";
+pub const FORM_2551Q_TAXABLE_0: &str = "form-2551q-taxable-0";
+
 /// Chrome IDs already used by the other form views (not invented here).
 pub const FORM_2551Q_BACK: &str = "back_btn";
 pub const FORM_2551Q_SAVE: &str = "save_btn";
@@ -95,13 +102,141 @@ pub const FORM_1702MX_SAVE: &str = "1702mx_save";
 pub const FORM_1702MX_SUBMIT: &str = "1702mx_submit";
 
 pub const DUES_LIST: &str = "dues-list";
+pub const JOBS_LIST: &str = "jobs-list";
+pub const SUBMISSIONS_LIST: &str = "submissions-list";
+pub const CONTEXT_SELECTED_TIN: &str = "context.selected_tin";
+
+pub const PROFILE_TAB_TAX: &str = "profile-tab-tax";
+pub const PROFILE_TAB_COR: &str = "profile-tab-cor";
+pub const PROFILE_TAB_EMAIL: &str = "profile-tab-email";
+pub const PROFILE_TAB_SECURITY: &str = "profile-tab-security";
+pub const PROFILE_TAB_EXPORT: &str = "profile-tab-export";
+pub const PROFILE_TAB_CALENDAR: &str = "profile-tab-calendar";
+pub const PROFILE_SECTION_TAX: &str = "profile-section-tax";
+pub const PROFILE_SECTION_COR: &str = "profile-section-cor";
+pub const PROFILE_SECTION_EMAIL: &str = "profile-section-email";
+pub const PROFILE_SECTION_SECURITY: &str = "profile-section-security";
+pub const PROFILE_SECTION_EXPORT: &str = "profile-section-export";
+pub const PROFILE_SECTION_CALENDAR: &str = "profile-section-calendar";
+
+pub const DASHBOARD_FORM_FILTER: &str = "dashboard-form-filter";
+pub const DASHBOARD_FILTER_QUERY: &str = "dashboard-filter-query";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfileManagerTab {
+    Tax,
+    Cor,
+    Email,
+    Security,
+    Export,
+    Calendar,
+}
+
+impl ProfileManagerTab {
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug.trim().to_ascii_lowercase().as_str() {
+            "tax" | "tax-profile" => Some(Self::Tax),
+            "cor" => Some(Self::Cor),
+            "email" | "email-settings" => Some(Self::Email),
+            "security" => Some(Self::Security),
+            "export" => Some(Self::Export),
+            "calendar" => Some(Self::Calendar),
+            _ => None,
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Tax => "tax",
+            Self::Cor => "cor",
+            Self::Email => "email",
+            Self::Security => "security",
+            Self::Export => "export",
+            Self::Calendar => "calendar",
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Tax => PROFILE_TAB_TAX,
+            Self::Cor => PROFILE_TAB_COR,
+            Self::Email => PROFILE_TAB_EMAIL,
+            Self::Security => PROFILE_TAB_SECURITY,
+            Self::Export => PROFILE_TAB_EXPORT,
+            Self::Calendar => PROFILE_TAB_CALENDAR,
+        }
+    }
+
+    pub fn section_id(self) -> &'static str {
+        match self {
+            Self::Tax => PROFILE_SECTION_TAX,
+            Self::Cor => PROFILE_SECTION_COR,
+            Self::Email => PROFILE_SECTION_EMAIL,
+            Self::Security => PROFILE_SECTION_SECURITY,
+            Self::Export => PROFILE_SECTION_EXPORT,
+            Self::Calendar => PROFILE_SECTION_CALENDAR,
+        }
+    }
+
+    pub fn index(self) -> usize {
+        match self {
+            Self::Tax => 0,
+            Self::Cor => 1,
+            Self::Email => 2,
+            Self::Security => 3,
+            Self::Export => 4,
+            Self::Calendar => 6,
+        }
+    }
+
+    pub fn from_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(Self::Tax),
+            1 => Some(Self::Cor),
+            2 => Some(Self::Email),
+            3 => Some(Self::Security),
+            4 => Some(Self::Export),
+            6 => Some(Self::Calendar),
+            _ => None,
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            PROFILE_TAB_TAX | PROFILE_SECTION_TAX => Some(Self::Tax),
+            PROFILE_TAB_COR | PROFILE_SECTION_COR => Some(Self::Cor),
+            PROFILE_TAB_EMAIL | PROFILE_SECTION_EMAIL => Some(Self::Email),
+            PROFILE_TAB_SECURITY | PROFILE_SECTION_SECURITY => Some(Self::Security),
+            PROFILE_TAB_EXPORT | PROFILE_SECTION_EXPORT => Some(Self::Export),
+            PROFILE_TAB_CALENDAR | PROFILE_SECTION_CALENDAR => Some(Self::Calendar),
+            _ => None,
+        }
+    }
+}
 
 pub fn profile_row(tin: &str) -> String {
     format!("profile-{tin}")
 }
 
+pub fn profile_row_tin(id: &str) -> Option<&str> {
+    id.strip_prefix("profile-")
+        .filter(|rest| rest.chars().all(|c| c.is_ascii_digit()))
+}
+
 pub fn due_row(form_code: &str, year: u16, period: u8) -> String {
     format!("due-{form_code}-{year}-{period}")
+}
+
+pub fn job_row(id: i64) -> String {
+    format!("job-{id}")
+}
+
+pub fn submission_row(id: i64) -> String {
+    format!("submission-{id}")
+}
+
+pub fn dashboard_form_chip(code: &str) -> String {
+    format!("dashboard-form-chip-{code}")
 }
 
 pub fn page_root(view: ActiveView) -> &'static str {
@@ -316,5 +451,15 @@ mod tests {
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT));
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT_CONFIRM));
         assert!(!is_filing_submit_control(FORM_1601C_SAVE));
+        assert_eq!(
+            profile_row_tin("profile-12345678900000"),
+            Some("12345678900000")
+        );
+        assert_eq!(profile_row_tin(PROFILE_TAB_TAX), None);
+        assert_eq!(profile_row_tin(PROFILE_TIN), None);
+        assert_eq!(
+            ProfileManagerTab::from_id(PROFILE_TAB_CALENDAR).map(|tab| tab.index()),
+            Some(6)
+        );
     }
 }

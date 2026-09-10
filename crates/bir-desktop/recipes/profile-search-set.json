@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "name": "bir-profile-search-set",
+  "app": "bir-desktop",
+  "params": ["profile_row"],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "list",
+      "op": "assert",
+      "target": "sidebar-profile-list",
+      "needs": ["wait"]
+    },
+    {
+      "id": "select",
+      "op": "click",
+      "target": "$profile_row",
+      "needs": ["list"]
+    },
+    {
+      "id": "session",
+      "op": "assert",
+      "target": "context.selected_tin",
+      "needs": ["select"]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "name": "bir-jobs-list",
+  "app": "bir-desktop",
+  "params": [],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "sidebar",
+      "op": "assert",
+      "target": "sidebar",
+      "needs": ["wait"]
+    },
+    {
+      "id": "cron",
+      "op": "click",
+      "target": "cron_tasks_sidebar_btn",
+      "needs": ["sidebar"]
+    }
+  ]
+}

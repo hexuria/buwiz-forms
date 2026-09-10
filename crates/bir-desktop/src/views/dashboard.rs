@@ -209,6 +209,18 @@ impl DashboardView {
             .collect()
     }
 
+    pub(crate) fn agent_apply_filters(
+        &mut self,
+        forms: Option<&[String]>,
+        query: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.filter_state.update(cx, |state, cx| {
+            state.agent_set_form_codes(forms, query, window, cx);
+        });
+    }
+
     pub fn set_profile(&mut self, profile: TaxpayerProfile, cx: &mut Context<Self>) {
         let min_year = if let Some(start_date) = &profile.business_start_date {
             use chrono::Datelike;
