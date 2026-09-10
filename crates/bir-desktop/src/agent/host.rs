@@ -4186,6 +4186,12 @@ mod tests {
         apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_draft);
         assert!(!view_flag);
         assert!(!view_draft.any_taxes_withheld);
+        assert!(!apply_1601c_host_header_patch(
+            &Agent1601CHostPatch::default(),
+            &mut view_flag,
+            &mut view_draft
+        ));
+        assert!(!view_flag);
 
         // Next request: snapshot_host reloads from the view/draft validate reads.
         host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
