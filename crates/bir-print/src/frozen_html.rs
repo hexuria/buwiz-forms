@@ -7,7 +7,10 @@
 //! cell when the freeze sheet has a 1:1 printed-caption join (`joins`),
 //! split a leftover `{:.2}` money key onto a catalog peso comb plus 2-slot
 //! cents comb (`money_joins`), or mark a catalog xbox when a leftover
-//! boolean/radio writer is `"true"` (`xbox_joins`, glyph `X`). Those are
+//! boolean/radio writer is `"true"` (`xbox_joins`, glyph `X`). Text `joins`
+//! ASCII-uppercase letters into comb slots and `data-writer-value` so BIR
+//! CAPITAL LETTERS print matches the form instruction; digits, punctuation,
+//! money, and xbox are unchanged. Profile/DB values stay as stored. Those are
 //! fill-paths, not `official_field_key` harvests. Do not stamp `name=` on
 //! peso/cent/xbox boxes, do not left-align a dotted money string into the
 //! peso comb, and do not write `"true"` into an xbox.
@@ -75,18 +78,22 @@ fn fill_by_name_with_cells(
         let Some(indices) = grouped.get(input_name) else {
             continue;
         };
+        // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
+        // TIN/branch (`via_cell` false) keep the writer map as-is.
+        let print_value = via_cell.then(|| value.to_ascii_uppercase());
+        let print = print_value.as_deref().unwrap_or(value.as_str());
         let comb = indices.iter().any(|&index| tags[index].slot.is_some());
         if comb {
             let mut ordered = indices.clone();
             ordered.sort_by_key(|&index| tags[index].slot.unwrap_or(usize::MAX));
-            let chars: Vec<char> = value.chars().collect();
+            let chars: Vec<char> = print.chars().collect();
             for (offset, index) in ordered.into_iter().enumerate() {
                 let ch = chars
                     .get(offset)
                     .copied()
                     .map(|c| c.to_string())
                     .unwrap_or_default();
-                let writer = (via_cell && offset == 0).then_some(value.as_str());
+                let writer = (via_cell && offset == 0).then_some(print);
                 replacements.push((
                     tags[index].start,
                     tags[index].end,
@@ -95,11 +102,11 @@ fn fill_by_name_with_cells(
             }
         } else {
             for &index in indices {
-                let writer = via_cell.then_some(value.as_str());
+                let writer = via_cell.then_some(print);
                 replacements.push((
                     tags[index].start,
                     tags[index].end,
-                    set_value(tags[index].tag, value, writer),
+                    set_value(tags[index].tag, print, writer),
                 ));
             }
         }
@@ -872,6 +879,26 @@ mod tests {
     }
 
     #[test]
+    fn fill_by_name_with_cells_uppercases_letter_combs_not_stamped_digits() {
+        let html = concat!(
+            r#"<input name="p1c36" data-slot-index="0" maxlength="1">"#,
+            r#"<input name="p1c36" data-slot-index="1" maxlength="1">"#,
+            r#"<input name="p1c36" data-slot-index="2" maxlength="1">"#,
+            r#"<input name="frm1601c:txtTIN1" data-slot-index="0" maxlength="1">"#,
+        );
+        let mut fields = BTreeMap::new();
+        fields.insert("frm1601c:txtTaxpayerName".to_string(), "Ab".to_string());
+        fields.insert("frm1601c:txtTIN1".to_string(), "9".to_string());
+        let mut cells = BTreeMap::new();
+        cells.insert("frm1601c:txtTaxpayerName".to_string(), "p1c36".to_string());
+        let filled = fill_by_name_with_cells(html, &fields, &cells);
+        assert_eq!(comb_text(&filled, "p1c36"), "AB");
+        assert!(filled.contains("data-writer-value=\"AB\""));
+        assert!(!filled.contains("data-writer-value=\"Ab\""));
+        assert_eq!(named_values(&filled, "frm1601c:txtTIN1"), ["9"]);
+    }
+
+    #[test]
     fn fill_2551q_sets_stamped_tin_names_from_the_writer_map() {
         let filled = fill_2551q(&sample_draft());
         assert_eq!(
@@ -963,15 +990,18 @@ mod tests {
     fn filled_document_1601c_fills_taxpayer_name_and_address() {
         let fields = identity_map(
             "frm1601c:txtTaxpayerName",
-            "NEXUS PAYROLL CORP",
+            "Andrea Mae Alicando Galang",
             "frm1601c:txtAddress",
             "42 Banahaw Street",
         );
         let html = filled_document("1601c-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c36"), "NEXUS PAYROLL CORP");
-        assert_eq!(comb_text(&html, "p1c38"), "42 Banahaw Street");
-        assert!(html.contains("NEXUS PAYROLL CORP"));
-        assert!(html.contains("42 Banahaw Street"));
+        assert_eq!(comb_text(&html, "p1c36"), "ANDREA MAE ALICANDO GALANG");
+        assert_eq!(comb_text(&html, "p1c38"), "42 BANAHAW STREET");
+        assert!(html.contains("ANDREA MAE ALICANDO GALANG"));
+        assert!(html.contains("data-writer-value=\"ANDREA MAE ALICANDO GALANG\""));
+        assert!(html.contains("42 BANAHAW STREET"));
+        assert!(!html.contains("Andrea Mae Alicando Galang"));
+        assert!(!html.contains("42 Banahaw Street"));
         let stamped: std::collections::BTreeSet<String> = input_tags(&html)
             .into_iter()
             .map(|tag| tag.name.to_string())
@@ -987,8 +1017,9 @@ mod tests {
         fields.insert("frm1601c:txtTax14".to_string(), "8888.88".to_string());
         fields.insert("frm1601c:txtTax25".to_string(), "7777.77".to_string());
         let html = filled_document("1601c-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c48"), "juan@example.com");
-        assert!(html.contains("juan@example.com"));
+        assert_eq!(comb_text(&html, "p1c48"), "JUAN@EXAMPLE.COM");
+        assert!(html.contains("JUAN@EXAMPLE.COM"));
+        assert!(!html.contains("juan@example.com"));
         assert_eq!(comb_text(&html, "p1c56"), "8888");
         assert_eq!(comb_text(&html, "p1c58"), "88");
         assert_eq!(comb_text(&html, "p1c101"), "7777");
@@ -1009,18 +1040,27 @@ mod tests {
 
     #[test]
     fn filled_document_2551q_fills_taxpayer_name_and_address() {
-        let html = filled_2551q_document(&sample_draft());
-        assert_eq!(comb_text(&html, "p1c30"), "Frozen Html Fixture");
-        assert_eq!(comb_text(&html, "p1c32"), "New Cabalan");
-        assert_eq!(comb_text(&html, "p1c39"), "tax@example.com");
+        let draft = sample_draft();
+        assert_eq!(draft.taxpayer_name, "Frozen Html Fixture");
+        assert_eq!(draft.registered_address, "New Cabalan");
+        assert_eq!(draft.email, "tax@example.com");
+        let html = filled_2551q_document(&draft);
+        assert_eq!(draft.taxpayer_name, "Frozen Html Fixture");
+        assert_eq!(comb_text(&html, "p1c30"), "FROZEN HTML FIXTURE");
+        assert_eq!(comb_text(&html, "p1c32"), "NEW CABALAN");
+        assert_eq!(comb_text(&html, "p1c39"), "TAX@EXAMPLE.COM");
         assert_eq!(comb_text(&html, "p1c9"), "12");
         assert_eq!(comb_text(&html, "p1c10"), "2026");
         assert_eq!(named_values(&html, "p1c7"), vec!["X".to_string()]);
         assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
         assert_eq!(named_values(&html, "p1c15"), vec!["".to_string()]);
-        assert!(html.contains("Frozen Html Fixture"));
-        assert!(html.contains("New Cabalan"));
-        assert!(html.contains("tax@example.com"));
+        assert!(html.contains("FROZEN HTML FIXTURE"));
+        assert!(html.contains("data-writer-value=\"FROZEN HTML FIXTURE\""));
+        assert!(html.contains("NEW CABALAN"));
+        assert!(html.contains("TAX@EXAMPLE.COM"));
+        assert!(!html.contains("Frozen Html Fixture"));
+        assert!(!html.contains("New Cabalan"));
+        assert!(!html.contains("tax@example.com"));
         assert!(html.contains("2026"));
         let stamped: std::collections::BTreeSet<String> = input_tags(&html)
             .into_iter()
@@ -1043,8 +1083,9 @@ mod tests {
         fields.insert("frm2551Qv2018:txt14".to_string(), "1643.10".to_string());
         fields.insert("txtATCAmt1".to_string(), "54770.00".to_string());
         let html = filled_document("2551q-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c39"), "andrea@example.com");
-        assert!(html.contains("andrea@example.com"));
+        assert_eq!(comb_text(&html, "p1c39"), "ANDREA@EXAMPLE.COM");
+        assert!(html.contains("ANDREA@EXAMPLE.COM"));
+        assert!(!html.contains("andrea@example.com"));
         assert_eq!(comb_text(&html, "p1c50"), "1643");
         assert_eq!(comb_text(&html, "p1c52"), "10");
         assert_eq!(comb_text(&html, "p2c15"), "54770");

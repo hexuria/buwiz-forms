@@ -9,7 +9,8 @@ The project is under active development. Form filing support and frozen HTML
 preview are tracked separately. Preview fills catalog-stamped TIN/branch
 `name=` values. 1601C and 2551Q also fill leftover identity keys (including email)
 and demo tax money rows onto cell-id inputs via `html-frozen/*/writer-cells.json`.
-2551Q also fills Year Ended (MM/YYYY) and quarter xboxes.
+2551Q also fills Year Ended (MM/YYYY) and quarter xboxes. Writer-cell letter
+combs ASCII-uppercase for BIR CAPITAL LETTERS print; profile/DB values stay as stored.
 
 ---
 
@@ -38,7 +39,7 @@ of silently switching document implementations.
 Print/preview uses committed freeze sheets in `html-frozen/`. The desktop app
 fills catalog-stamped TIN `input[name]` values via `to_bir_field_map()`, and
 for 1601C/2551Q also leftover identity keys, 2551Q header period fields, and demo tax money rows listed in
-`writer-cells.json`.
+`writer-cells.json` (letter combs ASCII-uppercase on the fill path only).
 CI checks the inventory with `freeze_html.py --verify` and the fail-closed name
 stamper with `stamp_frozen_names.py --check-all`.
 
@@ -277,7 +278,7 @@ However, if you want to automatically codesign and notarize the **macOS** DMG on
 - `crates/bir-print/`: Frozen HTML fill/print, native output coordination, PDF validation, and PDF merging.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 - `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
-- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`.
+- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`. Letter combs ASCII-uppercase on the fill path only.
 
 ### 🧩 Form Engine
 
