@@ -1,7 +1,7 @@
 {
   "form_id": "1601c-v2018",
   "html_slug": "1601c-2018",
-  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. That is not an official_field_key harvest. Text joins ASCII-uppercase letters into comb slots and data-writer-value for BIR CAPITAL LETTERS print; digits and punctuation are unchanged. Do not mutate profile/DB values. R3 peso+cent tax rows may be listed in money_joins: one leftover money key maps to peso_html_id plus cent_html_id. Split the writer {:.2} string: pesos right-aligned in the peso comb (leading slots empty, not zero-padded, no decimal glyph), cents in the 2-slot comb. Do not stamp name= on either comb. Do not left-align the dotted string into the peso comb. Do not join leftover keys that share an item number with another leftover except as documented here.",
+  "rule": "Fill-path only. Stamp name= stays catalog official_field_key (TIN/branch). Unstamped leftover writer keys may be copied onto the existing cell-id name= when the freeze sheet has exactly one fillable under a printed caption that matches one leftover-unique fields.json key, and the identity catalog names that cell as html_id_hint. That is not an official_field_key harvest. Text joins ASCII-uppercase letters into comb slots and data-writer-value for BIR CAPITAL LETTERS print; digits and punctuation are unchanged. Do not mutate profile/DB values. R3 peso+cent tax rows may be listed in money_joins: one leftover money key maps to peso_html_id plus cent_html_id. Split the writer {:.2} string: pesos right-aligned in the peso comb (leading slots empty, not zero-padded, no decimal glyph), cents in the 2-slot comb. Do not stamp name= on either comb. Do not left-align the dotted string into the peso comb. Leftover boolean/radio keys may be listed in xbox_joins: when the writer is true, put X in the catalog xbox (1-char text, not type=checkbox). Do not write the string true into the box. Do not join leftover keys that share an item number with another leftover except as documented here (For the Month MM/YYYY pair; Amended Return and Any Taxes Withheld Yes/No pairs).",
   "joins": [
     {
       "writer_key": "frm1601c:txtTaxpayerName",
@@ -44,6 +44,20 @@
       "catalog_id": "1601c-2018/p1/money-34-1",
       "printed": "12 Email Address",
       "reason": "exactly one 34-slot comb under the item 12 caption; leftover-unique txtEmail (unprefixed XML key); catalog html_id_hint. Catalog has no official_field_key (gap: no unique fields.json key for this box), so this is a fill-path join, not a stamp."
+    },
+    {
+      "writer_key": "frm1601c:txtMonth",
+      "html_id": "p1c9",
+      "catalog_id": "1601c-2018/p1/comb-2s-1",
+      "printed": "1 For the Month MM",
+      "reason": "item 1 For the Month is MM + YYYY, not one cell. leftover txtMonth is the 2-slot comb immediately left of the year comb (left≈46pt, data-comb-slots=2) under the For the Month / (MM/YYYY) caption. Catalog html_id_hint with no official_field_key. Do not stamp name=. Do not put the month in p1c15 (item 4 sheets)."
+    },
+    {
+      "writer_key": "frm1601c:txtYear",
+      "html_id": "p1c10",
+      "catalog_id": "1601c-2018/p1/date-yyyy-1",
+      "printed": "1 For the Month YYYY",
+      "reason": "exactly one 4-slot year comb under For the Month, immediately right of the MM comb. leftover-unique integer txtYear; ZIP already uses date-yyyy-2. Catalog html_id_hint with no official_field_key. Shares fields.json item_number 1 with txtMonth; the join is the caption+cell pair, not leftover uniqueness of item 1."
     }
   ],
   "money_joins": [
@@ -66,7 +80,45 @@
       "reason": "Stage 3 R3 N:1 fill-path for the page-1 tax-withheld total users notice. Same peso+cent contract as txtTax14. Other Part II amount rows stay unjoined."
     }
   ],
+  "xbox_joins": [
+    {
+      "writer_key": "frm1601c:AmendedRtn_1",
+      "html_id": "p1c21",
+      "catalog_id": "1601c-2018/p1/xbox-amended-yes",
+      "printed": "2 Amended Return Yes",
+      "reason": "item 2 Amended Return Yes xbox (p1c21-i, left≈183.6) immediately left of the Yes label at x≈209. leftover boolean AmendedRtn_1. Catalog xbox, not type=checkbox. Fill X when writer is true. Not a stamp."
+    },
+    {
+      "writer_key": "frm1601c:AmendedRtn_2",
+      "html_id": "p1c22",
+      "catalog_id": "1601c-2018/p1/xbox-amended-no",
+      "printed": "2 Amended Return No",
+      "reason": "item 2 Amended Return No xbox (p1c22-i, left≈231.5) immediately left of the No label at x≈252. leftover AmendedRtn_2. Pair with AmendedRtn_1; leave blank when false so a non-amended draft marks No."
+    },
+    {
+      "writer_key": "frm1601c:TaxWithheld_1",
+      "html_id": "p1c23",
+      "catalog_id": "1601c-2018/p1/xbox-withheld-yes",
+      "printed": "3 Any Taxes Withheld Yes",
+      "reason": "item 3 Any Taxes Withheld Yes xbox (p1c23-i, left≈304.7) immediately left of the Yes label at x≈323. leftover TaxWithheld_1. Catalog xbox, not type=checkbox. Fill X when writer is true."
+    },
+    {
+      "writer_key": "frm1601c:TaxWithheld_2",
+      "html_id": "p1c20",
+      "catalog_id": "1601c-2018/p1/xbox-withheld-no",
+      "printed": "3 Any Taxes Withheld No",
+      "reason": "item 3 Any Taxes Withheld No xbox (p1c20-i, left≈345.2) immediately left of the No label at x≈367. leftover TaxWithheld_2. Pair with TaxWithheld_1; leave blank when false so withheld=No marks this box."
+    }
+  ],
   "not_joined": [
+    {
+      "writer_key": "frm1601c:txtSheets",
+      "reason": "2-slot comb p1c15 on the far right of the header row (item 4 Number of Sheet/s Attached). Not For the Month."
+    },
+    {
+      "writer_key": "frm1601c:CatAgent_P",
+      "reason": "Remaining Part I radios (category of agent, item 13 SpecialTax) stay on cell-id name= without an xbox join."
+    },
     {
       "writer_key": "frm1601c:txtTax15",
       "reason": "Same R3 N:1 peso+cent pair as the other Part II amount rows. Only txtTax14 and txtTax25 are demo-joined."

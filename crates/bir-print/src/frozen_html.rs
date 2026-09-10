@@ -1039,6 +1039,47 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1601c_fills_month_year_amended_and_withheld() {
+        let mut fields = BTreeMap::new();
+        fields.insert("frm1601c:txtMonth".to_string(), "08".to_string());
+        fields.insert("frm1601c:txtYear".to_string(), "2026".to_string());
+        fields.insert("frm1601c:AmendedRtn_1".to_string(), "false".to_string());
+        fields.insert("frm1601c:AmendedRtn_2".to_string(), "true".to_string());
+        fields.insert("frm1601c:TaxWithheld_1".to_string(), "false".to_string());
+        fields.insert("frm1601c:TaxWithheld_2".to_string(), "true".to_string());
+        let html = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c9"), "08");
+        assert_eq!(comb_text(&html, "p1c10"), "2026");
+        assert!(html.contains("2026"));
+        assert_eq!(named_values(&html, "p1c22"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c21"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c23"), vec!["".to_string()]);
+        assert!(!comb_text(&html, "p1c9").contains("true"));
+        assert_ne!(named_values(&html, "p1c22"), vec!["true".to_string()]);
+        assert!(!html.contains("name=\"frm1601c:txtMonth\""));
+        assert!(!html.contains("name=\"frm1601c:txtYear\""));
+        assert!(!html.contains("name=\"frm1601c:AmendedRtn_2\""));
+        assert!(!html.contains("name=\"frm1601c:TaxWithheld_2\""));
+        let stamped: std::collections::BTreeSet<String> = input_tags(&html)
+            .into_iter()
+            .map(|tag| tag.name.to_string())
+            .filter(|name| name.starts_with("frm1601c:"))
+            .collect();
+        assert_eq!(stamped.len(), 4);
+
+        fields.insert("frm1601c:AmendedRtn_1".to_string(), "true".to_string());
+        fields.insert("frm1601c:AmendedRtn_2".to_string(), "false".to_string());
+        fields.insert("frm1601c:TaxWithheld_1".to_string(), "true".to_string());
+        fields.insert("frm1601c:TaxWithheld_2".to_string(), "false".to_string());
+        let yes = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(named_values(&yes, "p1c21"), vec!["X".to_string()]);
+        assert_eq!(named_values(&yes, "p1c23"), vec!["X".to_string()]);
+        assert_eq!(named_values(&yes, "p1c22"), vec!["".to_string()]);
+        assert_eq!(named_values(&yes, "p1c20"), vec!["".to_string()]);
+    }
+
+    #[test]
     fn filled_document_2551q_fills_taxpayer_name_and_address() {
         let draft = sample_draft();
         assert_eq!(draft.taxpayer_name, "Frozen Html Fixture");
@@ -1139,9 +1180,7 @@ mod tests {
             let cells = writer_cells(slug).unwrap();
             assert!(!cells.joins.is_empty(), "{slug}");
             assert!(!cells.money_joins.is_empty(), "{slug} money_joins");
-            if slug == "2551q-2018" {
-                assert!(!cells.xbox_joins.is_empty(), "{slug} xbox_joins");
-            }
+            assert!(!cells.xbox_joins.is_empty(), "{slug} xbox_joins");
             let present: std::collections::BTreeSet<&str> =
                 input_tags(html).into_iter().map(|tag| tag.name).collect();
             for (key, html_id) in &cells.joins {
