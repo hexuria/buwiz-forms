@@ -101,7 +101,7 @@ gpui-agent hello
 gpui-agent snapshot
 gpui-agent click global_dashboard_btn
 gpui-agent assert --id page-global-dashboard
-gpui-agent invoke nav.go --arg '{"page":"profile-manager"}'
+gpui-agent invoke nav.go --arg page=profile-manager
 ```
 
 Claude Code / MCP (same token as the host):
@@ -138,37 +138,54 @@ gpui-agent recipe run crates/bir-desktop/recipes/profile-search-set.json \
   --set profile_row=profile-12345678900000
 ```
 
+CLI `invoke` takes **repeated** `--arg KEY=VALUE`. Values are JSON if they parse
+(`true`, `2026`, `{"any_taxes_withheld":false}`), otherwise strings. Do **not**
+pass a single JSON-object `--arg`. `confirm=true` is boolean true, not
+`"true"`. Invokes with no args omit `--arg`.
+
 Natural-language → invoke examples (CLI, not recipe JSON):
 
 ```bash
 # "open the Acme profile"
-gpui-agent invoke profile.set --arg '{"q":"acme","view":"dashboard"}'
+gpui-agent invoke profile.set --arg q=acme --arg view=dashboard
 # 0 hits → result.status=not_found (does not create)
 # many hits → result.status=ambiguous + candidates; prompt the human with widgets
 
 # "edit this taxpayer's COR tab"
-gpui-agent invoke profile.edit --arg '{}'
-gpui-agent invoke profile.tab --arg '{"tab":"cor"}'
+gpui-agent invoke profile.edit
+gpui-agent invoke profile.tab --arg tab=cor
 
 # "what is due this month / what is overdue"
-gpui-agent invoke dues.list --arg '{"filter":"upcoming"}'
-gpui-agent invoke dues.list --arg '{"filter":"overdue","scope":"global"}'
+gpui-agent invoke dues.list --arg filter=upcoming
+gpui-agent invoke dues.list --arg filter=overdue --arg scope=global
 
 # "show background jobs"
-gpui-agent invoke jobs.list --arg '{}'
-gpui-agent invoke submissions.list --arg '{}'
+gpui-agent invoke jobs.list
+gpui-agent invoke submissions.list
 
 # "fill 1601-C from the profile then export a print document"
-gpui-agent invoke form.fill --arg '{"fields":{"tax_14":"1000.00","tax_25":"100.00"}}'
-gpui-agent invoke form.pdf --arg '{}'
+gpui-agent invoke form.fill --arg tax_14=1000.00 --arg tax_25=100.00
+gpui-agent invoke form.pdf
 
 # "release an abandoned 1601-C claim after a human confirmed nothing reached BIR"
 # Never call this unless Uriah confirmed no BIR filing. Still never form.file / filing.queue.
-gpui-agent invoke form.release_abandoned_claim --arg '{"q":"Juan","form":"1601-C","year":2026,"period":8,"confirm":true,"reason":"abandoned_no_bir_filing"}'
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.release_abandoned_claim \
+  --arg q=Juan \
+  --arg form=1601-C \
+  --arg year=2026 \
+  --arg period=8 \
+  --arg confirm=true \
+  --arg reason=abandoned_no_bir_filing
+
+# zero-tax 1601-C after release: set Any Taxes Withheld=No (does not file)
+gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.fill \
+  --arg any_taxes_withheld=false
+gpui-agent invoke form.save_draft
+gpui-agent invoke filing.validate
 
 # "open command palette" (Cmd+K overlay). palette.search stays the query invoke.
-gpui-agent invoke search.open --arg '{}'
-gpui-agent invoke palette.search --arg '{"q":"acme"}'
+gpui-agent invoke search.open
+gpui-agent invoke palette.search --arg q=acme
 ```
 
 `profile-create.json` **writes a taxpayer profile into the live app database**.
@@ -189,9 +206,9 @@ is open:
 ```bash
 gpui-agent recipe run crates/bir-desktop/recipes/form-1601c-draft.json \
   --set due_id=due-1601C-2026-1
-gpui-agent invoke form.fill --arg '{"fields":{"tax_14":"1000.00","tax_25":"100.00"}}'
-gpui-agent invoke form.save_draft --arg '{}'
-gpui-agent invoke form.pdf --arg '{}'
+gpui-agent invoke form.fill --arg tax_14=1000.00 --arg tax_25=100.00
+gpui-agent invoke form.save_draft
+gpui-agent invoke form.pdf
 ```
 
 Linux/cloud agents can compile and run the headless host tests. **macOS runtime
@@ -223,7 +240,7 @@ table; do not use them in recipes.
 | `filing.start` | `code`, `year`, `period` | Open a form for the selected profile |
 | `filing.validate` | — | Run `FormValidator` for open 1601-C or 2551Q |
 | `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q |
-| `form.fill` | `fields` object | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` |
+| `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`). 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
 | `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
@@ -274,9 +291,11 @@ submissions `submission-{id}` under `page-cron-tasks`. Profile Manager tabs:
 filter: `dashboard-form-filter`, `dashboard-filter-query`,
 `dashboard-form-chip-{code}`. 1601-C: `page-form-1601c`, `save_draft_btn`,
 `submit_btn`, `form-1601c-tax-14`, `form-1601c-tax-25`,
+`form-1601c-sheets`, **`withheld_btn`** (Any Taxes Withheld Yes/No; role
+`checkbox`, `checked` plus `value` `Yes`/`No`; Draft-only),
 `form-1601c-submit-confirm`. 2551Q fillables: `form-2551q-creditable`,
-`form-2551q-other-credit`, `form-2551q-taxable-0`. Item 25 is required when
-Any Taxes Withheld is YES.
+`form-2551q-other-credit`, `form-2551q-taxable-0`. Item 14/25 must be > 0
+when Any Taxes Withheld is YES; set `any_taxes_withheld=false` for zero-tax.
 
 ## Coverage (this slice)
 
@@ -292,7 +311,8 @@ Proven in headless host tests (not a Mac GUI run):
   `search.open` exposes `overlay-command-palette` without creating a profile
 - 1601-C draft save + validate + confirmation node; status stays `Draft`;
   `form.submit` / `filing.queue` rejected
-- `form.fill` refuses unknown keys; `form.pdf` writes frozen HTML to an
+- `form.fill` refuses unknown keys; `any_taxes_withheld` false/true (or
+  Yes/No) updates `withheld_btn` snapshot `checked`/`value`. `form.pdf` writes frozen HTML to an
   absolute `path` via the real print pipeline (no bytes on the result) and
   does **not** call `filing.validate`. A Confirmed 2551Q can still have
   draft validation errors (stale `profile_snapshot`, missing

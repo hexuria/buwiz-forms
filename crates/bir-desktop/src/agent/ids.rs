@@ -64,6 +64,8 @@ pub const FORM_1601C_VALIDATION: &str = "form-1601c-validation";
 pub const FORM_1601C_TAX_14: &str = "form-1601c-tax-14";
 pub const FORM_1601C_TAX_25: &str = "form-1601c-tax-25";
 pub const FORM_1601C_SHEETS: &str = "form-1601c-sheets";
+/// Painted 1601-C “Any Taxes Withheld?” Yes/No control. Same id in the agent tree.
+pub const FORM_1601C_WITHHELD: &str = "withheld_btn";
 pub const FORM_1601C_SUBMIT_CONFIRM: &str = "form-1601c-submit-confirm";
 
 pub const FORM_2551Q_VALIDATE: &str = "form-2551q-validate";
@@ -452,6 +454,7 @@ mod tests {
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT));
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT_CONFIRM));
         assert!(!is_filing_submit_control(FORM_1601C_SAVE));
+        assert!(!is_filing_submit_control(FORM_1601C_WITHHELD));
         assert_eq!(
             profile_row_tin("profile-12345678900000"),
             Some("12345678900000")

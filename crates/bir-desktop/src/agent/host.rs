@@ -1026,6 +1026,15 @@ impl BirAgentHost {
                 form.draft.number_of_sheets = value.trim().parse().unwrap_or(0);
                 form.validated = false;
             }
+            ids::FORM_1601C_WITHHELD => {
+                let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+                if !form.draft.is_editable() {
+                    return Err("this return is no longer a draft".into());
+                }
+                form.draft.any_taxes_withheld = parse_withheld_flag(&Value::String(value.into()))?;
+                form.draft.compute();
+                form.validated = false;
+            }
             ids::FORM_2551Q_CREDITABLE => {
                 let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
                 form.draft.creditable_tax_withheld = parse_money(value)?;
@@ -1080,6 +1089,11 @@ impl BirAgentHost {
                 .form_1601c
                 .as_ref()
                 .map(|form| form.draft.number_of_sheets.to_string())
+                .unwrap_or_default(),
+            ids::FORM_1601C_WITHHELD => self
+                .form_1601c
+                .as_ref()
+                .map(|form| withheld_snapshot_value(form.draft.any_taxes_withheld))
                 .unwrap_or_default(),
             ids::FORM_2551Q_CREDITABLE => self
                 .form_2551q
@@ -1355,6 +1369,26 @@ impl BirAgentHost {
         )
     }
 
+    fn toggle_1601c_withheld(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+        if self.active_view != ActiveView::Form1601C {
+            return Err("open form 1601C first".into());
+        }
+        if !form.draft.is_editable() {
+            return Err("this return is no longer a draft".into());
+        }
+        form.draft.any_taxes_withheld = !form.draft.any_taxes_withheld;
+        form.draft.compute();
+        form.validated = false;
+        Ok(DispatchResult::json(json!({
+            "form": "1601C",
+            "any_taxes_withheld": form.draft.any_taxes_withheld,
+            "queued": false,
+            "filed": false,
+        })))
+    }
+
     fn form_fields(&self) -> Result<DispatchResult, String> {
         if let Some(form) = &self.form_1601c
             && self.active_view == ActiveView::Form1601C
@@ -1379,10 +1413,7 @@ impl BirAgentHost {
 
     fn form_fill(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        let fields = args
-            .get("fields")
-            .and_then(Value::as_object)
-            .ok_or("form.fill requires args.fields as an object")?;
+        let fields = collect_fill_fields(args)?;
         if self.active_view == ActiveView::Form1601C {
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             if !form.draft.is_editable() {
@@ -1393,14 +1424,15 @@ impl BirAgentHost {
                     return Err(format!("unknown or read-only 1601C field `{key}`"));
                 }
             }
-            for (key, value) in fields {
+            let applied: Vec<String> = fields.keys().cloned().collect();
+            for (key, value) in &fields {
                 apply_1601c_fill(&mut form.draft, key, value)?;
             }
             form.draft.compute();
             form.validated = false;
             return Ok(DispatchResult::json(json!({
                 "form": "1601C",
-                "applied": fields.keys().cloned().collect::<Vec<_>>(),
+                "applied": applied,
             })));
         }
         if self.active_view == ActiveView::Form2551Q {
@@ -1413,14 +1445,15 @@ impl BirAgentHost {
                     return Err(format!("unknown or read-only 2551Q field `{key}`"));
                 }
             }
-            for (key, value) in fields {
+            let applied: Vec<String> = fields.keys().cloned().collect();
+            for (key, value) in &fields {
                 apply_2551q_fill(&mut form.draft, key, value)?;
             }
             form.draft.recompute(None);
             form.validated = false;
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
-                "applied": fields.keys().cloned().collect::<Vec<_>>(),
+                "applied": applied,
             })));
         }
         Err("open form 1601C or 2551Q first".into())
@@ -1777,6 +1810,7 @@ impl BirAgentHost {
             ids::PROFILE_SAVE => self.save_profile(),
             ids::FORM_1601C_SAVE => self.save_form_draft(),
             ids::FORM_1601C_VALIDATE => self.validate_form(),
+            ids::FORM_1601C_WITHHELD => self.toggle_1601c_withheld(),
             ids::FORM_1601C_SUBMIT => self.request_submit_confirm(),
             ids::FORM_1601C_SUBMIT_CONFIRM => self.refuse_submit_confirm(),
             ids::FORM_1601C_BACK => self.navigate(ActiveView::Dashboard),
@@ -2162,6 +2196,12 @@ impl BirAgentHost {
                         .join("; ")
                 },
             ));
+            page = page.with_child(
+                UiNode::new(ids::FORM_1601C_WITHHELD, "checkbox", "Any Taxes Withheld")
+                    .with_checked(form.draft.any_taxes_withheld)
+                    .with_value(withheld_snapshot_value(form.draft.any_taxes_withheld))
+                    .with_enabled(form.draft.is_editable()),
+            );
             page = page.with_child(textbox(
                 ids::FORM_1601C_TAX_14,
                 "14 Total Amount of Compensation",
@@ -2530,6 +2570,13 @@ fn form_1601c_fields(draft: &Form1601CDraft) -> Vec<Value> {
             false,
             true,
         ),
+        field_desc(
+            "any_taxes_withheld",
+            true,
+            &withheld_snapshot_value(draft.any_taxes_withheld),
+            false,
+            true,
+        ),
     ]
 }
 
@@ -2593,13 +2640,23 @@ fn is_1601c_fillable(key: &str) -> bool {
         "tax_14"
             | "tax_25"
             | "sheets"
+            | "any_taxes_withheld"
             | ids::FORM_1601C_TAX_14
             | ids::FORM_1601C_TAX_25
             | ids::FORM_1601C_SHEETS
+            | ids::FORM_1601C_WITHHELD
+            | "form-1601c-withheld"
     )
 }
 
 fn apply_1601c_fill(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Result<(), String> {
+    match key {
+        "any_taxes_withheld" | ids::FORM_1601C_WITHHELD | "form-1601c-withheld" => {
+            draft.any_taxes_withheld = parse_withheld_flag(value)?;
+            return Ok(());
+        }
+        _ => {}
+    }
     let text = value_as_text(value)?;
     match key {
         "tax_14" | ids::FORM_1601C_TAX_14 => {
@@ -2653,6 +2710,58 @@ fn apply_2551q_fill(draft: &mut Form2551QDraft, key: &str, value: &Value) -> Res
         _ => return Err(format!("unknown 2551Q field `{key}`")),
     }
     Ok(())
+}
+
+fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, String> {
+    let mut fields = serde_json::Map::new();
+    match args.get("fields") {
+        Some(Value::Object(object)) => fields.extend(object.clone()),
+        Some(_) => return Err("form.fill requires args.fields as an object".into()),
+        None => {}
+    }
+    if let Some(object) = args.as_object() {
+        for (key, value) in object {
+            if key != "fields" {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    if fields.is_empty() {
+        return Err(
+            "form.fill requires args.fields as an object, or fillable KEY=VALUE args".into(),
+        );
+    }
+    Ok(fields)
+}
+
+fn withheld_snapshot_value(withheld: bool) -> String {
+    if withheld { "Yes".into() } else { "No".into() }
+}
+
+fn parse_withheld_flag(value: &Value) -> Result<bool, String> {
+    match value {
+        Value::Bool(flag) => Ok(*flag),
+        Value::Number(number) => match number.as_i64() {
+            Some(1) => Ok(true),
+            Some(0) => Ok(false),
+            _ => Err(
+                "any_taxes_withheld must be boolean true/false or Yes/No, not a non-0/1 number"
+                    .into(),
+            ),
+        },
+        Value::String(text) => parse_withheld_text(text),
+        _ => Err("any_taxes_withheld must be boolean true/false or Yes/No".into()),
+    }
+}
+
+fn parse_withheld_text(text: &str) -> Result<bool, String> {
+    match text.trim().to_ascii_lowercase().as_str() {
+        "true" | "yes" | "1" => Ok(true),
+        "false" | "no" | "0" => Ok(false),
+        other => Err(format!(
+            "any_taxes_withheld must be boolean true/false or Yes/No, not `{other}`"
+        )),
+    }
 }
 
 fn value_as_text(value: &Value) -> Result<String, String> {
@@ -3933,6 +4042,96 @@ mod tests {
             None,
         );
         assert!(!sync.ok);
+    }
+
+    #[test]
+    fn form_fill_any_taxes_withheld_updates_snapshot() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": year, "period": 1 }),
+            }),
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        let tree = host.tree();
+        let withheld = tree
+            .find(ids::FORM_1601C_WITHHELD)
+            .expect("withheld_btn in 1601-C tree");
+        assert_eq!(withheld.role, "checkbox");
+        assert_eq!(withheld.checked, Some(true));
+        assert_eq!(withheld.value.as_deref(), Some("Yes"));
+        assert!(withheld.enabled);
+        assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+
+        let off = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": false }),
+            }),
+            None,
+        );
+        assert!(off.ok, "{:?}", off.error);
+        assert!(!host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        let tree = host.tree();
+        let withheld = tree.find(ids::FORM_1601C_WITHHELD).unwrap();
+        assert_eq!(withheld.checked, Some(false));
+        assert_eq!(withheld.value.as_deref(), Some("No"));
+
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let keys: Vec<&str> = listed.result.as_ref().unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|field| field["key"].as_str())
+            .collect();
+        assert!(keys.contains(&"any_taxes_withheld"));
+
+        let on = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "fields": { "any_taxes_withheld": "Yes" } }),
+            }),
+            None,
+        );
+        assert!(on.ok, "{:?}", on.error);
+        assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        let tree = host.tree();
+        let withheld = tree.find(ids::FORM_1601C_WITHHELD).unwrap();
+        assert_eq!(withheld.checked, Some(true));
+        assert_eq!(withheld.value.as_deref(), Some("Yes"));
+
+        let unknown = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "fields": { "not_a_field": false } }),
+            }),
+            None,
+        );
+        assert!(!unknown.ok);
+        assert!(
+            unknown
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("unknown or read-only 1601C field")
+        );
+        assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
     }
 
     fn claim_queued_1601c(host: &BirAgentHost, year: u16, month: u8) -> Form1601CDraft {
