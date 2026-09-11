@@ -113,7 +113,12 @@ async fn import_and_submit_savefile_with_client<C: ImportedSubmissionClient>(
     );
 
     client
-        .submit(prepared.form_id, &prepared.tin, &submit_filename, &prepared.encrypted)
+        .submit(
+            prepared.form_id,
+            &prepared.tin,
+            &submit_filename,
+            &prepared.encrypted,
+        )
         .await?;
 
     let (year, quarter, month) = parse_period_code(&prepared.period_code);

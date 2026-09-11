@@ -615,6 +615,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     };
 
+    let skip_email_poll = crate::transport::is_sftp_dry_run();
     match transport
         .store_session(session, &filename, &encrypted)
         .await
@@ -632,7 +633,15 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             draft.transition_to_submitted(filename);
             if let Ok(db_guard) = db.lock() {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
-                    Ok(_) => schedule_email_poll(profile, "1601C", &db_guard),
+                    Ok(_) => {
+                        if skip_email_poll {
+                            info!(
+                                "Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
+                            );
+                        } else {
+                            schedule_email_poll(profile, "1601C", &db_guard);
+                        }
+                    }
                     Err(error) => warn!(
                         "Cron: 1601C {} was transmitted but its submission claim could not be finalized: {}",
                         draft.period_code(),
@@ -649,6 +658,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                 crate::transport::TransportError::Crypto(_) => "crypto",
                 crate::transport::TransportError::Http(_) => "http",
                 crate::transport::TransportError::Io(_) => "io",
+                crate::transport::TransportError::Config(_) => "config",
                 crate::transport::TransportError::Rejected => "rejected",
             };
             warn!(
@@ -866,7 +876,8 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     return;
                 };
 
-                let session = match crate::transport::open_iaf_session(form_type, &draft.tin).await {
+                let session = match crate::transport::open_iaf_session(form_type, &draft.tin).await
+                {
                     Ok(session) => session,
                     Err(error) => {
                         fail_draft_2551q(
@@ -937,6 +948,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }
                 };
 
+                let session_source = session.source();
                 match session.store(&filename, &encrypted).await {
                     Ok(_) => {
                         info!("Cron: Successfully submitted queued form {}", filename);
@@ -952,7 +964,15 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         draft.transition_to_submitted(filename.clone());
                         if let Ok(db_guard) = db_clone.lock() {
                             match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
-                                Ok(_) => schedule_email_poll(&current_profile, "2551Q", &db_guard),
+                                Ok(_) => {
+                                    if session_source.is_dry_run() {
+                                        info!(
+                                            "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
+                                        );
+                                    } else {
+                                        schedule_email_poll(&current_profile, "2551Q", &db_guard);
+                                    }
+                                }
                                 Err(error) => warn!(
                                     "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
                                     draft.period_code(),
@@ -969,6 +989,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             crate::transport::TransportError::Crypto(_) => "crypto",
                             crate::transport::TransportError::Http(_) => "http",
                             crate::transport::TransportError::Io(_) => "io",
+                            crate::transport::TransportError::Config(_) => "config",
                             crate::transport::TransportError::Rejected => "rejected",
                         };
                         // Once PUT has started, an error does not prove that BIR
@@ -1334,6 +1355,7 @@ mod tests {
     use crate::forms::form_1601c::Form1601CDraft;
     use crate::forms::form_2551q::Item13Election;
     use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
+    use temp_env;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -1770,6 +1792,48 @@ mod tests {
         assert_eq!(
             email_job.command.as_deref(),
             Some("bir_poll_email receipts@example.com")
+        );
+    }
+
+    #[tokio::test]
+    async fn process_queued_1601c_dry_run_submits_without_email_poll() {
+        let mut profile = test_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("receipts@example.com".to_string());
+        let queued = queued_1601c_draft(&profile);
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .expect("the reviewed 1601C queue snapshot should persist");
+        let summary = queued_1601c_summary(id, &queued);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+
+        temp_env::async_with_vars([("BIR_SFTP_DRY_RUN", Some("1"))], async {
+            process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        })
+        .await;
+
+        let submitted = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .expect("the submitted 1601C lookup should succeed")
+            .expect("the submitted 1601C snapshot should remain persisted");
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        let jobs = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .list_jobs()
+            .expect("job lookup should succeed");
+        assert!(
+            jobs.iter()
+                .all(|job| { !job.name.contains("Waiting for 1601C confirmation email") }),
+            "dry-run must not schedule IMAP poll"
         );
     }
 

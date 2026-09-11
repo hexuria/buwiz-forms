@@ -64,7 +64,7 @@ keyring = { workspace = true }
 [dev-dependencies]
 insta = "1"
 tempfile = "3"
-temp-env = "0.3"
+temp-env = { version = "0.3", features = ["async_closure"] }
 tokio = { workspace = true, features = ["test-util"] }
 
 [features]

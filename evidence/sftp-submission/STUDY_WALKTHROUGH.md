@@ -183,7 +183,8 @@ Old queue rule is still correct:
 We changed the session, not the claim machine:
 
 - SubmissionTransport::open_session(form_type, tin)
-- Dispatcher fetch + unwrap, or TEST_SFTP_* for local tests
+- Dispatcher fetch + unwrap by default
+- Optional BIR_SFTP_* env override, deprecated TEST_SFTP_*, or in-process dry-run
 - SSH password auth via russh
 - SFTP PUT via russh-sftp to /{formType}/{basename}
 - Host key: accept any, matching official client
@@ -255,3 +256,42 @@ Do not commit live passwords. Do not PUT a real TIN unless you intend to file.
 - Whether every form folder name in environment.js PROD map matches the SFTP chroot
 
 Those are hardening, not blockers. Submission works.
+
+## Env override and dry-run (after restore)
+
+Production remains dispatcher unwrap + SFTP to ebf2.bir.gov.ph:22. Live BIR email
+proof used that path, not env override.
+
+There are two ways to submit without production BIR credentials. Neither is a
+BIR filing unless the host is actually ebf2.bir.gov.ph.
+
+1. In-process dry-run, like OSS DryRunTransport. No TCP, no dispatcher, no
+   BIR. Set `BIR_SFTP_DRY_RUN=1` or `BIR_SFTP_LIVE=0`. Cron still claims, then
+   "PUTs", then marks Submitted, and skips IMAP. Logs `source=dry-run`.
+2. Real SFTP to a lab or local server. Point `BIR_SFTP_*` at that host. Port
+   defaults to **22**. This is the mock-server path: use any local SFTP
+   daemon. We do not ship a first-party mock SFTP process in this pass.
+
+Optional `.env` (never commit values; load from repo root / launch cwd):
+
+    BIR_SFTP_HOST=127.0.0.1
+    BIR_SFTP_PORT=2222
+    BIR_SFTP_USERNAME=lab
+    BIR_SFTP_PASSWORD=lab
+    BIR_SFTP_FOLDER=1601Cv2018
+    BIR_SFTP_DRY_RUN=0
+    BIR_SFTP_LIVE=1
+
+Resolution in `resolve_sftp_endpoint` / `open_iaf_session`:
+
+1. Dry-run if `BIR_SFTP_DRY_RUN` is on or `BIR_SFTP_LIVE` is off.
+2. Else non-empty `BIR_SFTP_HOST` -> env endpoint. Username is
+   `BIR_SFTP_USERNAME` or `BIR_SFTP_USER`. Password required. Folder is
+   `BIR_SFTP_FOLDER` or the form type. Incomplete override errors; no
+   dispatcher fallback.
+3. Else non-empty `TEST_SFTP_*` (deprecated harness aliases).
+4. Else `tinDispatcherSFTP.php`.
+
+`bir-headless` and `sftp_harness` now call `dotenvy::dotenv().ok()` the same
+way the GUI already did. Harness `--live-connect` / `--live-put` print
+`source=`.
