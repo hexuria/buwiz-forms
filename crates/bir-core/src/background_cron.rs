@@ -1148,7 +1148,7 @@ pub fn schedule_email_poll(
         month,
         quarter,
         tin,
-        email: crate::job_display::known_job_email(Some(email.as_str())),
+        email: known_job_email(Some(email.as_str())),
     }
     .confirmation_poll_name();
 
