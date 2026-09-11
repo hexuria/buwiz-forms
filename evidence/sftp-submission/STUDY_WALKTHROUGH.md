@@ -9,6 +9,8 @@ Authority: Offline eBIRForms 7.9.6.1 at C:\eBIRForms
 
 Companion technical report: EBIRFORMS_SFTP_SUBMISSION_FINDINGS_2026-09-11.md
 
+How the live SFTP login was recovered into local .env (no password in git): HOW_WE_GOT_THE_SFTP_CREDENTIALS.md
+
 ## What working means now
 
 1. Buwiz can log into BIR SFTP.
