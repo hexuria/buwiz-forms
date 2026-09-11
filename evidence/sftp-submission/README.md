@@ -12,7 +12,7 @@ submission protocol, and a secret-free path to restore submission in Buwiz.
 | [`scripts/ildump.ps1`](./scripts/ildump.ps1), [`scripts/ildump_sftp.ps1`](./scripts/ildump_sftp.ps1) | Reflection + IL disassembler for `ebfSFTP.exe` (no external tools). |
 | [`scripts/decrypt_devuat_srv.ps1`](./scripts/decrypt_devuat_srv.ps1) | Validates the credential-wrap crypto against a non-production vector → `ftp2.birgovph.com`. |
 | [`scripts/crypto-verify/`](./scripts/crypto-verify/) | Standalone Rust crate that reproduces the .NET decrypt byte-for-byte (`cargo run`). Verified PASS here. |
-| [`scripts/sftp-loopback/`](./scripts/sftp-loopback/) | In-process russh SFTP server + client loopback upload proof. **Not run on the investigation VM** (needs `clang` for `ring`, disk, no local SSH server); runs on a machine with the workspace toolchain. |
+| [`scripts/sftp-loopback/`](./scripts/sftp-loopback/) | In-process russh SFTP server + client loopback upload proof. **Verified PASS** — connect + password auth + accept-any host key + SFTP upload of a dummy IAF to `/1601Cv2018/…#email#.xml`, bytes confirmed server-side. (Build needs `C:\Program Files\LLVM\bin` on PATH so `ring` finds `clang`.) |
 
 ## Headline findings
 

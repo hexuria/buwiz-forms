@@ -127,12 +127,27 @@ Companion docs: `INVESTIGATION_LOG.md` (findings), `EBIRFORMS_SFTP_PROTOCOL.md`
 25. **Decision (respecting the user's boundary):** do NOT delete shared cargo
     caches or other worktrees' `target/` (could break the codex build that is
     likely filling the disk). Cleaned only my own scratchpad build residue →
-    freed ~6.3 GB. Preserved the harness source as a runnable-elsewhere artifact.
+    freed ~6.3 GB.
 
-    **Conclusion:** a live or loopback SFTP upload is **not achievable on this
-    VM** — no egress to BIR, no `clang` for the `ring` backend, and no local SSH
-    server. It is an environment limitation, not a gap in the protocol
-    understanding or the client design.
+26. **Found `clang`** at `C:\Program Files\LLVM\bin\clang.exe` (v22). Rebuilt the
+    loopback harness with LLVM on PATH; `ring` compiled. Then fixed russh 0.63
+    API by reading the crate sources: `channel_open_session` takes a 4th
+    `reply: ChannelOpenHandle` and you must `reply.accept().await`
+    (`Drop` rejects otherwise → `AdministrativelyProhibited`); russh-sftp 3.0
+    `server::Handler` is native-async by default (drop `#[async_trait]`);
+    `check_server_key(&PublicKeyOrCertificate)`; host key from a fixed test seed
+    via `Ed25519Keypair::from_seed` + `PrivateKey::new` (no RNG, no secret in repo).
+
+27. **RAN IT — PASS:**
+    ```
+    auth=ok (connected to 127.0.0.1:PORT, accept-any host key)
+    uploaded 32 bytes to /1601Cv2018/00000000000000-1601Cv2018-092026#test@example.com#.xml
+    PASS: connect + password auth + accept-any host key + SFTP upload verified
+    ```
+    The SFTP client mechanic (connect → password auth → accept-any host key →
+    upload to `/formType/filename`) is **proven by execution**, with the server
+    holding the exact bytes. The only reason it can't reach BIR is network egress
+    from this VM — not the code.
 
 ---
 
@@ -152,12 +167,16 @@ My `submission_transport.reference.rs` has both correct.
   crypto verified in .NET *and* Rust; live dispatcher confirmed (`mode=2/port=22`);
   arg contract, host-key policy, filename/branch rules, payload boundary; a
   secret-free trait design; two corrections to the parallel branch.
-- **NOT achieved (and why):** a real form submission or live SFTP connection —
-  blocked by no egress to `103.56.5.254:22` from this VM, and by the inability to
-  even run a loopback proof here (`clang` missing for `ring`, disk pressure, no
-  local SSH server). None of these are protocol/knowledge gaps.
-- **To close it** on a suitable machine: run `scripts/sftp-loopback` (needs clang
-  + the workspace toolchain) for the mechanics proof; and/or run the Layer-C plan
-  against a local OpenSSH/atmoz-sftp server with `TEST_SFTP_*` placeholders; a
-  real BIR submission additionally needs egress and live dispatcher credentials
-  with a genuine encrypted IAF (out of scope here).
+- **Proven by execution:** the SFTP client mechanic — `scripts/sftp-loopback`
+  connects, authenticates by password, accepts any host key, and uploads to
+  `/formType/filename`, with bytes verified server-side (built once `clang` was
+  on PATH).
+- **NOT achieved (and why):** a **real BIR** submission or live BIR SFTP
+  connection — blocked by no egress to `103.56.5.254:22` from this VM. A real
+  submission additionally needs live dispatcher credentials + a genuine encrypted
+  IAF (out of scope). BIR's specific SSH algorithm negotiation is therefore still
+  unconfirmed against the real server (the loopback proves our client, not BIR's
+  exact KEX/cipher set).
+- **To close it fully:** run the harness / wired transport on a network with
+  egress to BIR using live dispatcher fields, or against a local OpenSSH server
+  with `TEST_SFTP_*` for a same-stack check.

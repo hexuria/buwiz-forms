@@ -11,5 +11,3 @@ path = "main.rs"
 tokio = { version = "1", features = ["full"] }
 russh = { version = "0.63", default-features = false, features = ["flate2", "ring"] }
 russh-sftp = "3.0"
-async-trait = "0.1"
-rand_core = { version = "0.6", features = ["std"] }

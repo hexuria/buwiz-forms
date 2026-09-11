@@ -1,20 +1,15 @@
-//! Loopback SFTP proof: an in-process russh SFTP server + the same client
-//! pattern Buwiz uses (accept-any host key, password auth, russh-sftp upload),
-//! uploading a dummy IAF over 127.0.0.1. Proves connect + auth + upload work
-//! end-to-end. No BIR, no real data, no network egress.
-//!
-//! NOT RUN in the investigation VM: `ring` needs a C compiler (`clang`, absent)
-//! and the box had no spare disk; there is also no reachable SSH server there.
-//! Runs on any machine with clang + the workspace toolchain. Signatures target
-//! russh 0.63 / russh-sftp 3.0 and may need a nudge from the compiler on exact
-//! struct field names (e.g. Status/Name/Handle) — verify against those versions.
+//! Loopback SFTP proof: in-process russh SFTP server + the client pattern Buwiz
+//! uses (accept-any host key, password auth, russh-sftp upload) over 127.0.0.1.
+//! Proves connect + auth + upload work end-to-end. No BIR, no real data.
+//! Targets russh 0.63 / russh-sftp 3.0.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
-use russh::keys::{Algorithm, PrivateKey};
+use russh::keys::ssh_key::private::{Ed25519Keypair, KeypairData};
+use russh::keys::{PrivateKey, PublicKeyOrCertificate};
 use russh::server::{Auth, Msg, Server as _, Session};
 use russh::{Channel, ChannelId};
 use russh_sftp::protocol::{File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode, Version};
@@ -50,28 +45,30 @@ impl russh::server::Handler for SshSession {
     async fn channel_open_session(
         &mut self,
         channel: Channel<Msg>,
+        reply: russh::server::ChannelOpenHandle,
         _session: &mut Session,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(), Self::Error> {
         self.channels.lock().await.insert(channel.id(), channel);
-        Ok(true)
+        reply.accept().await; // ChannelOpenHandle::Drop rejects unless accepted
+        Ok(())
     }
 
     async fn subsystem_request(
         &mut self,
-        channel_id: ChannelId,
+        channel: ChannelId,
         name: &str,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         if name == "sftp" {
-            let channel = self.channels.lock().await.remove(&channel_id).unwrap();
-            session.channel_success(channel_id)?;
+            let ch = self.channels.lock().await.remove(&channel).unwrap();
+            session.channel_success(channel)?;
             let sftp = SftpSession {
                 received: self.received.clone(),
                 open: HashMap::new(),
             };
-            russh_sftp::server::run(channel.into_stream(), sftp).await;
+            russh_sftp::server::run(ch.into_stream(), sftp).await;
         } else {
-            session.channel_failure(channel_id)?;
+            session.channel_failure(channel)?;
         }
         Ok(())
     }
@@ -91,7 +88,7 @@ fn ok(id: u32) -> Status {
     }
 }
 
-#[async_trait::async_trait]
+// russh-sftp 3.0 Handler is native-async by default (async-trait feature off).
 impl russh_sftp::server::Handler for SftpSession {
     type Error = StatusCode;
     fn unimplemented(&self) -> Self::Error {
@@ -155,14 +152,13 @@ impl russh::client::Handler for AcceptAnyHostKey {
     type Error = russh::Error;
     async fn check_server_key(
         &mut self,
-        _key: &russh::keys::ssh_key::PublicKey,
+        _key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
         Ok(true) // == WinSCP GiveUpSecurityAndAcceptAny
     }
 }
 
 fn iaf_filename() -> String {
-    // 14-digit prefix (9 TIN + 5 branch), matching the live format.
     format!(
         "{}{}{}{}-{}-{}#{}#.xml",
         "000", "000", "000", "00000", "1601Cv2018", "092026", "test@example.com"
@@ -172,7 +168,10 @@ fn iaf_filename() -> String {
 #[tokio::main]
 async fn main() {
     let received: Received = Arc::new(Mutex::new(HashMap::new()));
-    let key = PrivateKey::random(&mut rand_core::OsRng, Algorithm::Ed25519).unwrap();
+    // Deterministic throwaway host key from a fixed test seed — no RNG, no
+    // secret checked into the repo (this is a loopback test-only identity).
+    let kp = Ed25519Keypair::from_seed(&[0x42u8; 32]);
+    let key = PrivateKey::new(KeypairData::Ed25519(kp), "loopback-test").expect("host key");
     let config = Arc::new(russh::server::Config {
         keys: vec![key],
         ..Default::default()
@@ -226,12 +225,12 @@ async fn main() {
     let _ = sftp.close().await;
     println!("uploaded {} bytes to {}", payload.len(), remote);
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     let store = received.lock().await;
     let got = store.get(&remote).expect("server must have stored the file");
     assert_eq!(got, &payload, "server bytes must equal uploaded payload");
     println!(
-        "PASS: connect + password auth + accept-any host key + upload verified; \
+        "PASS: connect + password auth + accept-any host key + SFTP upload verified; \
          server holds {} bytes at {}",
         got.len(),
         remote
