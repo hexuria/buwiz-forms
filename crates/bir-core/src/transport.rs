@@ -563,12 +563,12 @@ fn remote_path(folder: &str, filename: &str) -> String {
     }
 }
 
-fn host_key_fingerprint_sha256(key: &PublicKeyOrCertificate) -> String {
+fn host_key_fingerprint_sha256(key: &PublicKeyOrCertificate) -> Option<String> {
     let encoded = match key {
-        PublicKeyOrCertificate::PublicKey { key, .. } => key.to_bytes(),
-        PublicKeyOrCertificate::Certificate(cert) => cert.to_bytes(),
+        PublicKeyOrCertificate::PublicKey { key, .. } => key.to_bytes().ok()?,
+        PublicKeyOrCertificate::Certificate(cert) => cert.to_bytes().ok()?,
     };
-    hex::encode(Sha256::digest(encoded))
+    Some(hex::encode(Sha256::digest(encoded)))
 }
 
 struct ConfiguredHostKey {
@@ -585,8 +585,8 @@ impl client::Handler for ConfiguredHostKey {
         match &self.policy {
             HostKeyPolicy::AcceptAnyOfficial | HostKeyPolicy::AcceptAnyLab => Ok(true),
             HostKeyPolicy::PinnedSha256(expected) => {
-                let actual = host_key_fingerprint_sha256(server_public_key);
-                Ok(actual.eq_ignore_ascii_case(expected.trim()))
+                Ok(host_key_fingerprint_sha256(server_public_key)
+                    .is_some_and(|actual| actual.eq_ignore_ascii_case(expected.trim())))
             }
         }
     }

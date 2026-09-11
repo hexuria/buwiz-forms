@@ -3,7 +3,7 @@ use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
 use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::profile::TaxpayerProfile;
-use chrono::{Datelike, Local, TimeZone, Utc};
+use chrono::{Datelike, TimeZone, Utc};
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
@@ -447,7 +447,8 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     };
 
-    if loaded_draft.submission_claim_token.is_some() || loaded_draft.submission_claimed_at.is_some()
+    let loaded_draft = if loaded_draft.submission_claim_token.is_some()
+        || loaded_draft.submission_claimed_at.is_some()
     {
         let recovered = {
             let db_guard = match db.lock() {
@@ -471,7 +472,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             crate::ipc::post_db_changed();
             return;
         }
-        let loaded_draft = {
+        let recovered_draft = {
             let db_guard = match db.lock() {
                 Ok(guard) => guard,
                 Err(_) => return,
@@ -481,15 +482,15 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                 _ => return,
             }
         };
-        if loaded_draft.submission_claim_token.is_some()
-            || loaded_draft.submission_claimed_at.is_some()
+        if recovered_draft.submission_claim_token.is_some()
+            || recovered_draft.submission_claimed_at.is_some()
         {
             return;
         }
-        // Fall through with the recovered unclaimed row.
-        process_queued_1601c_with_transport(summary, profile, db, transport).await;
-        return;
-    }
+        recovered_draft
+    } else {
+        loaded_draft
+    };
 
     let (mut draft, queue_revision) = match prepare_queued_1601c(loaded_draft, None) {
         Queued1601CPreparation::Ready { draft, revision } => (draft, revision),
