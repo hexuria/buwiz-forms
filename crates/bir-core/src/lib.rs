@@ -32,6 +32,7 @@ pub mod google_calendar;
 pub mod import;
 pub mod integration;
 pub mod ipc;
+pub mod job_display;
 pub mod naming;
 pub mod news_fetcher;
 pub mod notification;
@@ -84,6 +85,10 @@ pub use integration::{
     resolve_profile_obligations_for_year,
     resolve_profile_obligations_for_year_with_global_overrides, validate_form_applicability,
     validate_payload,
+};
+pub use job_display::{
+    FilingJobLabel, format_confirmation_poll_job_name, format_filing_period_label,
+    format_submit_job_name,
 };
 pub use naming::{Tin, iaf_filename, savefile_name};
 pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};

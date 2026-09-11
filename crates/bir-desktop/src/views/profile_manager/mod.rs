@@ -4375,6 +4375,10 @@ impl ProfileManagerView {
                                                 bir_core::background_cron::schedule_email_poll(
                                                     &saved_profile,
                                                     &sum.form_code,
+                                                    &sum.tin,
+                                                    sum.taxable_year,
+                                                    sum.month,
+                                                    sum.quarter,
                                                     &db,
                                                 );
                                             }

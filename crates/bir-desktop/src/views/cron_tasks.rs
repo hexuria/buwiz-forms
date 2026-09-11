@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use bir_core::db::{Database, Job};
+use bir_core::job_display::FilingJobLabel;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_rsx::rsx;
@@ -8,6 +9,7 @@ use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use chrono::Utc;
 use gpui_component::input::{Input, InputState};
 use gpui_component::*;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // Daemon checking moved out of UI.
@@ -239,16 +241,12 @@ impl CronTasksView {
         if let Ok(db) = self.db.lock() {
             if let Ok(jobs) = db.list_jobs() {
                 for job in jobs {
-                    let mut display_name = job.name.clone();
-                    if display_name.starts_with("Poll Receipts: ") {
-                        let email = display_name.trim_start_matches("Poll Receipts: ");
-                        display_name =
-                            format!("Waiting for 2551Q confirmation email for {}", email);
-                    }
+                    // Stored `name` is the human title. Legacy `Poll Receipts:`
+                    // rows keep their original string; do not invent a form.
                     view_jobs.push(JobViewModel {
                         job_kind: JobKind::EmailPoll,
                         id: job.id,
-                        name: display_name,
+                        name: job.name,
                         job_type: job.job_type,
                         cron_expr: job.cron_expr,
                         command: job.command,
@@ -262,12 +260,24 @@ impl CronTasksView {
                 }
             }
 
+            let emails_by_tin: HashMap<String, String> = db
+                .list_profiles()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|profile| {
+                    profile
+                        .tracking_mailbox()
+                        .map(|email| (profile.tin.full(), email.to_string()))
+                })
+                .collect();
+
             if let Ok(summaries) = db.list_all_queued_submissions() {
                 for sum in summaries {
+                    let email = emails_by_tin.get(&sum.tin).map(String::as_str);
                     view_jobs.push(JobViewModel {
                         job_kind: JobKind::Submission,
                         id: Some(sum.id),
-                        name: format!("Submit {} for {}", sum.form_code, sum.tin),
+                        name: FilingJobLabel::from_summary(&sum, email).submit_name(),
                         job_type: "System".to_string(),
                         cron_expr: None,
                         command: None,

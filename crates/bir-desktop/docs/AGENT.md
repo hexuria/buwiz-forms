@@ -34,6 +34,7 @@ to a v2 host.
 - [Stable IDs](#stable-ids)
 - [Coverage](#coverage-this-slice)
 - [Claimed queue without BIR outcome](#claimed-queue-without-bir-outcome-facts)
+- [Background Tasks titles](#background-tasks-titles)
 - [Durable queue and auth scope](QUEUE_AUTH_SCOPE.md)
 
 ## Locked protocol contract
@@ -791,7 +792,7 @@ table; do not use them in recipes.
 | `dues.list` | `filter`=`upcoming` (default) \| `overdue` \| `all`; `scope`=`profile` \| `global` (default: profile if a TIN is selected, else global) | Profile: selected taxpayer obligations. Global: BIR tax calendar deadlines whose **final date falls in the current local calendar month**. Date basis: `chrono::Local::now().date_naive()`. Status is date vs today, not weekend/holiday `DeadlineStatus` |
 | `dues.html` | optional `tin`/`q`; `filter` or `scope`=`upcoming`\|`overdue`\|`all`; `scope`=`profile`\|`global` as in `dues.list`; optional `limit` | Same data path as `dues.list` (no second calendar engine). Returns `{path, kind:"html"}` demo bundle plus the (possibly limited) `dues` JSON |
 | `tax-dues.refresh` | — | Reload unfiltered dues for the selected profile |
-| `jobs.list` | optional `status` | Read-only `Database::list_jobs` |
+| `jobs.list` | optional `status` | Read-only `Database::list_jobs`. Poll `name` is the human title (`Waiting for {form} {period} confirmation for {TIN} (email?)`). `command` stays `bir_poll_email {email}`. Submit cards are UI-only and are not this list |
 | `submissions.list` | optional `tin`, `status` | Queued/submitted draft summaries plus `list_submissions_for_tin` |
 | `search.open` | — | Open the Command Palette overlay (`overlay-command-palette`). Same as Cmd+K / Ctrl+K. Does **not** select, create, or run a query |
 | `palette.search` | `q` | Same ranking as Command Palette (shared `search_profiles_for_palette`). `{matches, can_create, create_query?}`. Does **not** create and does **not** require the overlay to be open |
@@ -988,4 +989,30 @@ can double-file. Stuck rows that already started PUT (crash or PUT error, or
 legacy no-lease claims) still need human
 `form.revert_draft` / `form.release_abandoned_claim` with `confirm=true` and
 `reason=abandoned_no_bir_filing`.
+
+## Background Tasks titles
+
+Painted **Background Tasks** cards must distinguish returns that share a TIN or
+mailbox. Do not grep for the old shapes `Submit 1601C for 00000000000000` or
+`Waiting for 1601C confirmation email for user@example.com`.
+
+| Kind | Source | Title |
+| --- | --- | --- |
+| Submit | UI from queued/submitted `form_drafts` (not `job_queue`) | `Submit {form} {Mon YYYY \| Qn YYYY} for {TIN-dashed} (email)` |
+| Confirmation poll | `job_queue.name` after a live PUT | `Waiting for {form} {period} confirmation for {TIN-dashed} (email)` |
+
+Examples:
+
+- `Submit 1601C Sep 2026 for 000-000-000-00000 (codeitlikemiley@gmail.com)`
+- `Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)`
+
+The `(email)` parenthetical is omitted when the mailbox is unknown. `command`
+stays `bir_poll_email {email}` so workers and **Run now** still key off the
+mailbox. `jobs.list` returns stored poll-job names only.
+
+Submit titles are computed at display time, so existing queued rows pick up
+the new format immediately. Confirmation poll titles are stored on insert;
+already-Queued poll rows keep their old name until they complete. Operators
+should not treat a leftover `Waiting for 1601C confirmation email for …` row as
+a second return — it is a pre-format poller for that mailbox.
 
