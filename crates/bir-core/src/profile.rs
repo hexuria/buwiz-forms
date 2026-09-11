@@ -674,6 +674,22 @@ impl TaxpayerProfile {
         self.email_tracking_enabled
     }
 
+    /// Mailbox used for BIR confirmation tracking, if one is configured.
+    ///
+    /// Prefers a non-empty IMAP login, then the profile email. Empty values
+    /// are treated as unknown rather than invented.
+    pub fn tracking_mailbox(&self) -> Option<&str> {
+        let imap = self
+            .imap_email
+            .as_deref()
+            .map(str::trim)
+            .filter(|email| !email.is_empty());
+        imap.or_else(|| {
+            let email = self.email.trim();
+            if email.is_empty() { None } else { Some(email) }
+        })
+    }
+
     /// Returns BIR form codes applicable to this taxpayer.
     ///
     /// This resolves the taxpayer's dynamic forms list based on tax
@@ -1290,6 +1306,17 @@ mod tests {
             "default_form_type": "2551Qv2018"
         }))
         .expect("minimal profile fixture must deserialize")
+    }
+
+    #[test]
+    fn tracking_mailbox_prefers_imap_and_omits_empty() {
+        let mut profile = test_profile();
+        assert_eq!(profile.tracking_mailbox(), Some("flat@example.com"));
+        profile.imap_email = Some("  receipts@example.com  ".into());
+        assert_eq!(profile.tracking_mailbox(), Some("receipts@example.com"));
+        profile.imap_email = Some("   ".into());
+        profile.email = "  ".into();
+        assert_eq!(profile.tracking_mailbox(), None);
     }
 
     fn confirmed_version(
