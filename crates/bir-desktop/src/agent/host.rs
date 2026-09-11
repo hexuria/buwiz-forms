@@ -1751,7 +1751,10 @@ impl BirAgentHost {
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty());
-        let year = args.get("year").and_then(Value::as_u64).map(|year| year as u16);
+        let year = args
+            .get("year")
+            .and_then(Value::as_u64)
+            .map(|year| year as u16);
         let period = args
             .get("period")
             .and_then(Value::as_u64)
@@ -1761,20 +1764,18 @@ impl BirAgentHost {
             ActiveView::Form1601C | ActiveView::Form2551Q
         );
         let same_open = match (code, self.active_view) {
-            (Some(code), ActiveView::Form1601C) if code.eq_ignore_ascii_case("1601C") => self
-                .form_1601c
-                .as_ref()
-                .is_some_and(|form| {
+            (Some(code), ActiveView::Form1601C) if code.eq_ignore_ascii_case("1601C") => {
+                self.form_1601c.as_ref().is_some_and(|form| {
                     year.is_none_or(|y| form.draft.taxable_year == y)
                         && period.is_none_or(|m| form.draft.month == m)
-                }),
-            (Some(code), ActiveView::Form2551Q) if code.eq_ignore_ascii_case("2551Q") => self
-                .form_2551q
-                .as_ref()
-                .is_some_and(|form| {
+                })
+            }
+            (Some(code), ActiveView::Form2551Q) if code.eq_ignore_ascii_case("2551Q") => {
+                self.form_2551q.as_ref().is_some_and(|form| {
                     year.is_none_or(|y| form.draft.taxable_year == y)
                         && period.is_none_or(|q| form.draft.quarter == q)
-                }),
+                })
+            }
             _ => false,
         };
         if let Some(code) = code {
