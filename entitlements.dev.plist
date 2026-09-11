@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <!-- NO sandbox — for local/dev builds with ad-hoc signing -->
-    <!-- Network access (IMAP, FTP, HTTP) -->
+    <!-- Network access (IMAP, SFTP, HTTP) -->
     <key>com.apple.security.network.client</key>
     <true/>
 
