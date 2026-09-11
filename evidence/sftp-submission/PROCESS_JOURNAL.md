@@ -168,6 +168,31 @@ Companion docs: `INVESTIGATION_LOG.md` (findings), `EBIRFORMS_SFTP_PROTOCOL.md`
     bir-core` + `Cargo.lock` update should be run when the disk frees; dep risk is
     low (all mainstream crates, resolved cleanly in isolation).
 
+## Phase 9 — Switch queue submission FTP→SFTP + attempt full-crate check
+
+30. Rewrote `transport::submit_iaf` to delegate to
+    `submission_transport::DispatcherSftpTransport` (TIN from the filename prefix),
+    keeping the crate-internal signature and `TransportError` surface so BOTH
+    queue callers switch with **no** change to `background_cron` logic, error
+    labels, or tests. Legacy FTP consts/test retained under `allow(dead_code)` /
+    `#[ignore]`.
+31. Attempted a full `cargo check -p bir-core`. Hit **pre-existing native-dep
+    walls unrelated to the SFTP work:**
+    - `openssl-sys` (vendored) failed at `perl Configure` — the MSYS2 perl lacks
+      `Locale::Maketext::Simple`. Worked around with **Strawberry Perl**
+      (`C:\Strawberry`) on PATH; openssl then configured.
+    - `libsqlite3-sys` (with `sqlcipher`) then failed — needs the full MSVC
+      dev-shell (vcvars `INCLUDE`/`LIB`) + clang, not just `nmake`.
+    Conclusion: the whole crate cannot `cargo check` on this VM without a proper
+    MSVC + Perl + clang toolchain env; this predates and is independent of the
+    SFTP changes.
+32. **Verified the changed files instead**, bounded and honest: extended the
+    `modcheck` crate to `#[path]`-include BOTH `submission_transport.rs` and the
+    rewired `transport.rs` (so `crate::submission_transport::…` resolves) with the
+    same deps → `cargo check` clean. **Workspace dependency resolution also
+    succeeded** — `Cargo.lock` updated with russh 0.63 / russh-sftp 3.0 / pbkdf2 /
+    sha1 / async-trait, no version conflicts.
+
 ## Defects found in `codex/ebirforms-sftp-transport` (documented, not touched)
 
 1. `wrap_dispatcher_field` prepends a UTF-8 **BOM**; the official `Encrypt` uses
