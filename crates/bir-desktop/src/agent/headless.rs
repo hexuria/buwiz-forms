@@ -172,6 +172,8 @@ pub fn host_for_database(db: Arc<Mutex<Database>>) -> BirAgentHost {
 }
 
 /// Live `default_database_path()` (no `BIR_DATABASE_PATH`) requires a token.
+/// `from_env` already default-denies untokened binds; this still refuses
+/// `GPUI_AGENT_INSECURE_NO_TOKEN=1` against the live taxpayer file.
 pub fn live_database_token_required(token_set: bool, using_path_override: bool) -> bool {
     !using_path_override && !token_set
 }
@@ -186,7 +188,8 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                  export GPUI_AGENT=1\n\
                  export GPUI_AGENT_TOKEN=dev-secret\n\
                  export GPUI_AGENT_ADDR=127.0.0.1:17421\n\
-                 cargo run --locked --bin bir-headless --features agent -- serve"
+                 cargo run --locked --bin bir-headless --features agent -- serve\n\
+                 (GPUI_AGENT_INSECURE_NO_TOKEN=1 is demo-only; never against the live DB)"
             );
             return Err(ExitCode::from(2));
         }
@@ -245,7 +248,6 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         });
         let host = Arc::new(Mutex::new(host_for_database(db.clone())));
         let mailbox = AgentMailbox::new();
-        let drain_token = config.token.clone();
         let (addr, shutdown) = match spawn_mailbox(
             config.addr,
             config.token.clone(),
@@ -267,14 +269,16 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         };
 
         eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
-        eprintln!("opt-in: GPUI_AGENT=1 · bind via from_env · protocol v1");
+        eprintln!(
+            "opt-in: GPUI_AGENT=1 · bind via from_env · protocol v2 HMAC · GPUI_AGENT_TOKEN required unless GPUI_AGENT_INSECURE_NO_TOKEN=1"
+        );
         if token_set {
             eprintln!(
-                "auth: required (GPUI_AGENT_TOKEN set; recipe/MCP clients must send the same token)"
+                "auth: required (GPUI_AGENT_TOKEN set; CLI/MCP send protocol v2 HMAC, never the raw token)"
             );
         } else {
             eprintln!(
-                "auth: none (one-off click/snapshot ok; recipe run and mcp need the same token on host and client)"
+                "auth: none (GPUI_AGENT_INSECURE_NO_TOKEN=1 demo only; recipe/MCP still need a client token)"
             );
         }
         if request_log::log_requests_enabled() {
@@ -298,8 +302,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             for posted in mailbox.take() {
                 let req = posted.request.clone();
                 let mut guard = host.lock().expect("host");
-                let resp =
-                    request_log::handle_request_logged(&mut *guard, req, drain_token.as_deref());
+                let resp = request_log::handle_request_logged(&mut *guard, req, None, None);
                 let stop = guard.wants_shutdown();
                 drop(guard);
                 posted.reply(resp);
@@ -388,6 +391,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         for (target, value) in [
             (ids::PROFILE_TIN, tin),
@@ -405,6 +409,7 @@ mod tests {
                     target: target.into(),
                     value: value.into(),
                 }),
+                None,
                 None,
             );
             assert!(resp.ok, "{target}: {:?}", resp.error);
@@ -653,6 +658,7 @@ mod tests {
                         args: json!({}),
                     }),
                     None,
+                    None,
                 );
                 assert!(saved.ok, "{:?}", saved.error);
                 let listed = handle_request(
@@ -661,6 +667,7 @@ mod tests {
                         name: "profile.list".into(),
                         args: json!({}),
                     }),
+                    None,
                     None,
                 );
                 assert!(listed.ok, "{:?}", listed.error);

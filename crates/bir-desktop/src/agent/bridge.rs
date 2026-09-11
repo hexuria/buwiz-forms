@@ -8,9 +8,9 @@ use gpui_agent::server::spawn_mailbox;
 
 fn auth_banner(token_set: bool) -> &'static str {
     if token_set {
-        "auth: required (GPUI_AGENT_TOKEN set; recipe/MCP clients must send the same token)"
+        "auth: required (GPUI_AGENT_TOKEN set; CLI/MCP send protocol v2 HMAC, never the raw token)"
     } else {
-        "auth: none (one-off click/snapshot ok; recipe run and mcp need the same token on host and client)"
+        "auth: none (GPUI_AGENT_INSECURE_NO_TOKEN=1 demo only; recipe/MCP still need a client token)"
     }
 }
 
@@ -54,7 +54,7 @@ pub fn maybe_start() -> Option<StartedAgent> {
                 Ok((addr, shutdown)) => {
                     tracing::info!(
                         %addr,
-                        "{auth}; platform=desktop app=bir-desktop; loopback default via from_env; protocol v1; delivery=semantic (virtual returns virtual_unavailable; no OS HID); screenshot=macOS mailbox drain screencapture -l, else screenshot_unavailable"
+                        "{auth}; platform=desktop app=bir-desktop; loopback default via from_env; protocol v2 HMAC; GPUI_AGENT_TOKEN required to bind unless GPUI_AGENT_INSECURE_NO_TOKEN=1; delivery=semantic (virtual returns virtual_unavailable; no OS HID); screenshot=macOS mailbox drain screencapture -l (relative .png under screenshot dir), else screenshot_unavailable"
                     );
                     Some(StartedAgent {
                         mailbox,
