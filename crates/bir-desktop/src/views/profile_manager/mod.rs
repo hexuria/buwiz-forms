@@ -1699,8 +1699,8 @@ impl ProfileManagerView {
             && tokens.has_usable_refresh()
         {
             self.oauth_connected = true;
-            self.stored_oauth_access_token = Some(tokens.access_token);
-            self.stored_oauth_refresh_token = Some(tokens.refresh_token);
+            self.stored_oauth_access_token = Some(tokens.access_token.clone());
+            self.stored_oauth_refresh_token = Some(tokens.refresh_token.clone());
         }
         self.stored_oauth_inbox_email = if self.oauth_connected {
             Some(profile.inbox_email().to_string())
