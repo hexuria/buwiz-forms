@@ -7,8 +7,8 @@
 //! - BIR pseudo-XML format parsing and generation
 //! - Taxpayer profile management with encrypted storage
 //! - Form schema engine with validation
-//! - ZLib + AES-128 encryption pipeline (BIR-compatible)
-//! - FTP submission transport
+//! - ZLib + AES-256 encryption pipeline (BIR-compatible)
+//! - SFTP submission transport
 //! - Reference data (RDO, ATC codes, regions, etc.)
 //! - PDF generation for form printing
 //!

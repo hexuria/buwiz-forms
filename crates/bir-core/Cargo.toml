@@ -21,7 +21,10 @@ sha2 = { workspace = true }
 flate2 = { workspace = true }
 zeroize = { workspace = true }
 aes-gcm = { workspace = true }
-suppaftp = { workspace = true }
+pbkdf2 = { workspace = true }
+sha1 = { workspace = true }
+russh = { workspace = true }
+russh-sftp = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 rss = { workspace = true }

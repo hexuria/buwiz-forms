@@ -33,10 +33,13 @@ zeroize = { version = "1", features = ["derive"] }
 aes-gcm = "0.10"
 
 # Network
-suppaftp = { version = "6", features = ["async-rustls"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["rustls-tls", "blocking"], default-features = false }
 rss = "2.0"
+pbkdf2 = { version = "0.12.2", default-features = false, features = ["hmac"] }
+sha1 = "0.10.6"
+russh = { version = "0.63", default-features = false, features = ["flate2", "ring"] }
+russh-sftp = "3.0"
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
