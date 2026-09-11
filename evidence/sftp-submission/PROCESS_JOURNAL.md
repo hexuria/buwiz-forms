@@ -151,6 +151,23 @@ Companion docs: `INVESTIGATION_LOG.md` (findings), `EBIRFORMS_SFTP_PROTOCOL.md`
 
 ---
 
+## Phase 8 — Wire `SubmissionTransport` into `bir-core` for real
+
+28. Added `crates/bir-core/src/submission_transport.rs` (the real module: the
+    `SubmissionTransport` trait + `DispatcherSftpTransport` / `StaticSftpTransport`
+    / `MockTransport`, dispatcher client, byte-exact crypto, and the russh SFTP
+    upload proven in Phase 7). Registered `pub mod submission_transport;` in
+    `lib.rs` and added deps to `crates/bir-core/Cargo.toml`
+    (`pbkdf2`, `sha1`, `async-trait`, `russh` 0.63, `russh-sftp` 3.0).
+29. **Verified the exact wired file compiles** via a focused `modcheck` crate that
+    `#[path]`-includes `submission_transport.rs` and pulls the same deps —
+    `cargo check` → `Finished`, no errors (used ~300 MB). I deliberately did NOT
+    run a full cold `cargo check -p bir-core` here: it would pull the whole crate
+    dep tree (openssl-vendored, imap, rusqlite, …) and risked zeroing the shared
+    disk during the concurrent codex build. Workspace-level `cargo check -p
+    bir-core` + `Cargo.lock` update should be run when the disk frees; dep risk is
+    low (all mainstream crates, resolved cleanly in isolation).
+
 ## Defects found in `codex/ebirforms-sftp-transport` (documented, not touched)
 
 1. `wrap_dispatcher_field` prepends a UTF-8 **BOM**; the official `Encrypt` uses

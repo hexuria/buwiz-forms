@@ -8,7 +8,8 @@ submission protocol, and a secret-free path to restore submission in Buwiz.
 | [`PROCESS_JOURNAL.md`](./PROCESS_JOURNAL.md) | Start-to-finish chronological record of *how* the investigation was done (commands, observations, decisions, dead-ends), for review. |
 | [`INVESTIGATION_LOG.md`](./INVESTIGATION_LOG.md) | Running log: what was tested, observed, proven, and what remains — including independent Rust-crypto and live-dispatcher verification. |
 | [`EBIRFORMS_SFTP_PROTOCOL.md`](./EBIRFORMS_SFTP_PROTOCOL.md) | Deliverables 1–8: architecture diagram, component/evidence table, why old FTP broke, FTP↔SFTP diff, verification status, safe test plan, Rust recommendations, `SubmissionTransport` design. |
-| [`submission_transport.reference.rs`](./submission_transport.reference.rs) | Secret-free reference module: `SubmissionTransport` trait + dispatcher/crypto/mock. Crypto unit-verified. |
+| `crates/bir-core/src/submission_transport.rs` | **Wired into `bir-core`** (real module): `SubmissionTransport` trait + `DispatcherSftpTransport`/`StaticSftpTransport`/`MockTransport`, dispatcher client, byte-exact crypto, russh SFTP upload. Exact source verified to `cargo check` in isolation. |
+| [`submission_transport.reference.rs`](./submission_transport.reference.rs) | Earlier secret-free reference design (superseded by the wired module above; kept for annotated context). |
 | [`scripts/ildump.ps1`](./scripts/ildump.ps1), [`scripts/ildump_sftp.ps1`](./scripts/ildump_sftp.ps1) | Reflection + IL disassembler for `ebfSFTP.exe` (no external tools). |
 | [`scripts/decrypt_devuat_srv.ps1`](./scripts/decrypt_devuat_srv.ps1) | Validates the credential-wrap crypto against a non-production vector → `ftp2.birgovph.com`. |
 | [`scripts/crypto-verify/`](./scripts/crypto-verify/) | Standalone Rust crate that reproduces the .NET decrypt byte-for-byte (`cargo run`). Verified PASS here. |
