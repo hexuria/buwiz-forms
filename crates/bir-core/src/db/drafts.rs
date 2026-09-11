@@ -1019,15 +1019,17 @@ impl Database {
     /// background worker. Once claimed, generic draft writes (including a stale
     /// UI cancel/requeue) are rejected until the worker finishes the claim.
     ///
-    /// A claim deliberately has no lease expiry. The worker claims after the
-    /// FTP session is open and immediately before STOR. A process crash after
-    /// this transaction (or a STOR error) leaves an unknown network outcome:
-    /// BIR may or may not have received the return. Automatically clearing or
-    /// retrying that claim could file a duplicate return, so an abandoned
-    /// claim remains fail-closed until a person reconciles it against the BIR
-    /// confirmation or receipt. `release_abandoned_claimed_*` is the only
-    /// deliberate human-confirmed path back to Draft. Connect/login/CWD
-    /// failures happen before this transaction and stay unclaimed.
+    /// After PUT is marked started, the claim is fail-closed (no lease retry).
+    /// The worker claims after the SFTP session is open and immediately
+    /// before PUT. A process crash after PUT start (or a PUT error) leaves an
+    /// unknown network outcome: BIR may or may not have received the return.
+    /// Automatically clearing or retrying that claim could file a duplicate
+    /// return. Unstarted claims may recover after `CLAIM_LEASE` expires.
+    /// Started or legacy (no-lease) claims stay fail-closed until a person
+    /// reconciles them against the BIR confirmation or receipt.
+    /// `release_abandoned_claimed_*` is the only deliberate human-confirmed path
+    /// back to Draft for those rows. Connect/login/CWD failures happen before
+    /// this transaction and stay unclaimed.
     #[allow(clippy::too_many_arguments)]
     pub fn claim_queued_2551q_submission(
         &self,
@@ -1108,10 +1110,14 @@ impl Database {
         }
 
         let token = uuid::Uuid::new_v4().to_string();
+        let claimed_at = chrono::Utc::now();
         draft.submission_claim_token = Some(token.clone());
-        draft.submission_claimed_at = Some(chrono::Utc::now().to_rfc3339());
+        draft.submission_claimed_at = Some(claimed_at.to_rfc3339());
+        draft.submission_claim_lease_until =
+            Some(crate::filing_queue::claim_lease_until(claimed_at));
+        draft.submission_put_started_at = None;
         draft.last_error = Some(
-            "Submission outcome pending. Automatic retry is disabled; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
+            "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
         );
         let claimed_json = serde_json::to_string(&draft)?;
@@ -1211,6 +1217,8 @@ impl Database {
         existing.last_error = None;
         existing.submission_claim_token = None;
         existing.submission_claimed_at = None;
+        existing.submission_claim_lease_until = None;
+        existing.submission_put_started_at = None;
         existing.updated_at = chrono::Utc::now().to_rfc3339();
         let json = serde_json::to_string(&existing)?;
         let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
@@ -1229,6 +1237,100 @@ impl Database {
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
+    }
+
+    pub fn mark_claimed_2551q_put_started(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        claim_token: &str,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if draft.submission_claim_token.as_deref() != Some(claim_token) {
+            return Ok(false);
+        }
+        if draft.submission_put_started_at.is_none() {
+            draft.submission_put_started_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    pub fn recover_expired_unstarted_2551q_claim(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if !crate::filing_queue::claim_is_recoverable(
+            draft.submission_claimed_at.as_deref(),
+            draft.submission_claim_lease_until.as_deref(),
+            draft.submission_put_started_at.as_deref(),
+            now,
+        ) {
+            return Ok(false);
+        }
+        draft.record_submission_failure(
+            "Claim lease expired before PUT started; retrying the same authorized task".to_string(),
+        );
+        if matches!(draft.status, crate::forms::FilingStatus::Queued) {
+            draft.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        let json = serde_json::to_string(&draft)?;
+        let status = match draft.status {
+            crate::forms::FilingStatus::Draft => "Draft",
+            _ => "Queued",
+        };
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        crate::ipc::post_db_changed();
+        Ok(true)
     }
 
     /// CAS-advance one exact Submitted 2551Q snapshot to Confirmed.
@@ -2017,8 +2119,8 @@ impl Database {
     }
 
     /// Atomically revalidate and claim the exact queued 1601C generation
-    /// immediately before STOR. The worker opens the FTP session first so a
-    /// connect/login/CWD failure stays unclaimed.
+    /// immediately before PUT. The worker opens the SFTP session first so a
+    /// connect/login failure stays unclaimed.
     #[allow(clippy::too_many_arguments)]
     pub fn claim_queued_1601c_submission(
         &self,
@@ -2076,10 +2178,14 @@ impl Database {
         }
 
         let token = uuid::Uuid::new_v4().to_string();
+        let claimed_at = chrono::Utc::now();
         draft.submission_claim_token = Some(token.clone());
-        draft.submission_claimed_at = Some(chrono::Utc::now().to_rfc3339());
+        draft.submission_claimed_at = Some(claimed_at.to_rfc3339());
+        draft.submission_claim_lease_until =
+            Some(crate::filing_queue::claim_lease_until(claimed_at));
+        draft.submission_put_started_at = None;
         draft.submission_error = Some(
-            "Submission outcome pending. Automatic retry is disabled; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
+            "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
         );
         let claimed_json = serde_json::to_string(&draft)?;
@@ -2163,6 +2269,8 @@ impl Database {
         let mut finished = draft.clone();
         finished.submission_claim_token = None;
         finished.submission_claimed_at = None;
+        finished.submission_claim_lease_until = None;
+        finished.submission_put_started_at = None;
         let json = serde_json::to_string(&finished)?;
         let period_key = FilingPeriod::Monthly(finished.month).to_period_key();
         let updated = tx.execute(
@@ -2175,6 +2283,293 @@ impl Database {
         if updated != 1 {
             return Err(DbError::Other(
                 "1601C submission claim changed before completion".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// Persist PUT-started on a live claim so a later crash cannot look like
+    /// a pre-PUT lease expiry.
+    pub fn mark_claimed_1601c_put_started(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        claim_token: &str,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if draft.submission_claim_token.as_deref() != Some(claim_token) {
+            return Ok(false);
+        }
+        if draft.submission_put_started_at.is_none() {
+            draft.submission_put_started_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// Recover a claimed 1601C whose lease expired before PUT started.
+    pub fn recover_expired_unstarted_1601c_claim(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if !crate::filing_queue::claim_is_recoverable(
+            draft.submission_claimed_at.as_deref(),
+            draft.submission_claim_lease_until.as_deref(),
+            draft.submission_put_started_at.as_deref(),
+            now,
+        ) {
+            return Ok(false);
+        }
+        draft.record_submission_failure(
+            "Claim lease expired before PUT started; retrying the same authorized task".to_string(),
+        );
+        if matches!(draft.status, crate::forms::FilingStatus::Queued) {
+            draft.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        let json = serde_json::to_string(&draft)?;
+        let status = match draft.status {
+            crate::forms::FilingStatus::Draft => "Draft",
+            _ => "Queued",
+        };
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        crate::ipc::post_db_changed();
+        Ok(true)
+    }
+
+    /// CAS-advance one exact Submitted 1601C snapshot to Confirmed.
+    pub fn save_confirmed_1601c_draft(&self, draft: &Form1601CDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Confirmed)
+            || draft.confirmed_at.is_none()
+            || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
+        {
+            return Err(DbError::Other(
+                "Only a completed 1601C confirmation may use the confirmation persistence path"
+                    .to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.month)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "Submitted 1601C draft disappeared before confirmation".to_string(),
+            ));
+        };
+        let mut existing: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Submitted"
+            || !matches!(existing.status, FilingStatus::Submitted)
+            || draft.to_bir_field_map() != existing.to_bir_field_map()
+            || draft.queued_submission_fingerprint != existing.queued_submission_fingerprint
+            || draft.submitted_at != existing.submitted_at
+            || existing.submitted_at.is_none()
+            || existing.submission_filename.is_none()
+        {
+            return Err(DbError::Other(
+                "1601C confirmation no longer matches the exact submitted snapshot".to_string(),
+            ));
+        }
+
+        let confirmed_at = if let Some(receipt_id) = draft.receipt_id {
+            let receipt = tx
+                .query_row(
+                    "SELECT filename, tin, form_type, period, received_date, received_time
+                     FROM submission_receipts
+                     WHERE id = ?1",
+                    params![receipt_id],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, String>(4)?,
+                            row.get::<_, String>(5)?,
+                        ))
+                    },
+                )
+                .optional()?
+                .ok_or_else(|| {
+                    DbError::Other(format!(
+                        "1601C confirmation receipt {receipt_id} does not exist"
+                    ))
+                })?;
+            let (
+                receipt_filename,
+                receipt_tin,
+                receipt_form,
+                receipt_period,
+                received_date,
+                received_time,
+            ) = receipt;
+            let expected_period = existing.period_code();
+            if receipt_tin != existing.tin
+                || !crate::filing_queue::is_audited_1601c_receipt_form_type(&receipt_form)
+                || receipt_period != expected_period
+            {
+                return Err(DbError::Other(
+                    "1601C confirmation receipt does not match the submitted taxpayer, form, and period"
+                        .to_string(),
+                ));
+            }
+            let submitted_filename = existing
+                .submission_filename
+                .as_deref()
+                .expect("submitted filename checked above");
+            let receipt_identity = crate::receipt::split_bir_filename(&receipt_filename);
+            let submitted_identity = crate::receipt::split_bir_filename(submitted_filename);
+            if receipt_identity != submitted_identity {
+                return Err(DbError::Other(
+                    "1601C confirmation receipt filename does not match the submitted IAF"
+                        .to_string(),
+                ));
+            }
+
+            let received_at = parse_2551q_receipt_timestamp(&received_date, &received_time)
+                .ok_or_else(|| {
+                    DbError::Other(
+                        "1601C confirmation receipt has an invalid received timestamp".to_string(),
+                    )
+                })?;
+            let submitted_at = chrono::DateTime::parse_from_rfc3339(
+                existing
+                    .submitted_at
+                    .as_deref()
+                    .expect("submitted timestamp checked above"),
+            )
+            .map_err(|_| {
+                DbError::Other(
+                    "Submitted 1601C snapshot has an invalid submission timestamp".to_string(),
+                )
+            })?;
+            if received_at < submitted_at {
+                return Err(DbError::Other(
+                    "1601C confirmation receipt predates the submitted snapshot".to_string(),
+                ));
+            }
+            received_at.to_rfc3339()
+        } else {
+            if draft.submission_filename != existing.submission_filename {
+                return Err(DbError::Other(
+                    "Manual 1601C confirmation cannot replace the submitted filename".to_string(),
+                ));
+            }
+            let manual_confirmed_at = draft
+                .confirmed_at
+                .clone()
+                .expect("confirmed timestamp checked above");
+            let manual_confirmed_dt = chrono::DateTime::parse_from_rfc3339(&manual_confirmed_at)
+                .map_err(|_| {
+                    DbError::Other(
+                        "Manual 1601C confirmation has an invalid confirmation timestamp"
+                            .to_string(),
+                    )
+                })?;
+            let submitted_at = chrono::DateTime::parse_from_rfc3339(
+                existing
+                    .submitted_at
+                    .as_deref()
+                    .expect("submitted timestamp checked above"),
+            )
+            .map_err(|_| {
+                DbError::Other(
+                    "Submitted 1601C snapshot has an invalid submission timestamp".to_string(),
+                )
+            })?;
+            if manual_confirmed_dt < submitted_at {
+                return Err(DbError::Other(
+                    "Manual 1601C confirmation predates the submitted snapshot".to_string(),
+                ));
+            }
+            manual_confirmed_at
+        };
+
+        existing.status = FilingStatus::Confirmed;
+        existing.confirmed_at = Some(confirmed_at);
+        existing.receipt_id = draft.receipt_id;
+        if let Some(filename) = draft.submission_filename.clone() {
+            existing.submission_filename = Some(filename);
+        }
+        existing.updated_at = chrono::Utc::now().to_rfc3339();
+        let json = serde_json::to_string(&existing)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Confirmed', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Submitted' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "1601C submission changed before confirmation completed".to_string(),
             ));
         }
         tx.commit()?;

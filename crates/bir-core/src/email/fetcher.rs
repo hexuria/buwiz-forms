@@ -176,12 +176,13 @@ fn fetch_with_auth(
                             // Notify only after the authoritative receipt transition
                             // confirms this exact submitted generation.
                             let confirmed = if is_new {
-                                match db_guard.confirm_2551q_from_receipt(&submission_receipt) {
+                                match db_guard.confirm_submission_from_receipt(&submission_receipt)
+                                {
                                     Ok(crate::db::ReceiptConfirmationOutcome::Confirmed) => true,
                                     Ok(crate::db::ReceiptConfirmationOutcome::Ignored) => false,
                                     Err(error) => {
                                         tracing::warn!(
-                                            "Receipt {} was saved but could not confirm a 2551Q submission: {}",
+                                            "Receipt {} was saved but could not confirm a submission: {}",
                                             submission_receipt.filename,
                                             error
                                         );
@@ -192,18 +193,34 @@ fn fetch_with_auth(
                                 false
                             };
                             if confirmed {
-                                if let Some((_, _, period)) =
+                                if let Some((_, form_type, period)) =
                                     crate::receipt::split_bir_filename(&submission_receipt.filename)
-                                    && let Some((year, quarter)) =
-                                        crate::db::parse_2551q_period(&period)
                                 {
-                                    crate::notification::send_notification(
-                                        "BIR Confirmation Received",
-                                        &format!(
-                                            "Form: 2551Q\nYear: {}\nQuarter: {}",
-                                            year, quarter
-                                        ),
-                                    );
+                                    if crate::filing_queue::is_audited_1601c_receipt_form_type(
+                                        &form_type,
+                                    ) {
+                                        if let Some((year, month)) =
+                                            crate::filing_queue::parse_1601c_period(&period)
+                                        {
+                                            crate::notification::send_notification(
+                                                "BIR Confirmation Received",
+                                                &format!(
+                                                    "Form: 1601C\nYear: {}\nMonth: {}",
+                                                    year, month
+                                                ),
+                                            );
+                                        }
+                                    } else if let Some((year, quarter)) =
+                                        crate::db::parse_2551q_period(&period)
+                                    {
+                                        crate::notification::send_notification(
+                                            "BIR Confirmation Received",
+                                            &format!(
+                                                "Form: 2551Q\nYear: {}\nQuarter: {}",
+                                                year, quarter
+                                            ),
+                                        );
+                                    }
                                 }
                             }
                             processed.push(submission_receipt);
