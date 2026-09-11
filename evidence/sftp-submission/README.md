@@ -8,7 +8,15 @@ Read in this order:
 3. [EBIRFORMS_SFTP_SUBMISSION_FINDINGS_2026-09-11.md](EBIRFORMS_SFTP_SUBMISSION_FINDINGS_2026-09-11.md) - evidence tables, hashes, IL, protocol diff.
 4. [PROTOCOL.md](PROTOCOL.md) - live host `ebf2` vs ftp2, ws2 vs ws1, one PUT path, HTTPS-then-HTTP dispatcher.
 
-Live proof used dummy TIN `00000000000000` / form `1601Cv2018`. BIR later emailed a confirmation. Credentials are fetched at runtime from `tinDispatcherSFTP.php` and are not stored in git.
+Live proof used dummy TIN `00000000000000` / form `1601Cv2018`.
+
+- Automated tests: period **092026** (September 2026) zero-tax.
+- Live PUT + BIR receipt (11 September 2026, PR #41 / `68f773c5`): period
+  **102026** (October), file `00000000000000-1601Cv2018-102026.xml`.
+  Transport is empirically PASS.
+
+Credentials are fetched at runtime from `tinDispatcherSFTP.php` and are not
+stored in git.
 
 Harness:
 

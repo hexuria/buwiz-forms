@@ -3,7 +3,9 @@
 use rusqlite::params;
 
 use super::{Database, DbError, SubmissionReceipt, parse_2551q_period};
-use crate::filing_queue::{is_audited_1601c_receipt_form_type, parse_1601c_period};
+use crate::filing_queue::{
+    is_audited_1601c_receipt_form_type, parse_1601c_period, receipt_belongs_to_this_generation,
+};
 use crate::forms::FilingStatus;
 use crate::receipt::{BirReceiptConfirmation, split_bir_filename};
 
@@ -218,7 +220,7 @@ impl Database {
         let submitted_at = draft.submitted_at.as_deref().ok_or_else(|| {
             DbError::Other("Submitted 1601C draft has no submission timestamp".to_string())
         })?;
-        let submitted_dt = chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|error| {
+        chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|error| {
             DbError::Other(format!(
                 "Submitted 1601C draft has an invalid submission timestamp: {error}"
             ))
@@ -237,11 +239,15 @@ impl Database {
             .from_local_datetime(&receipt_naive)
             .single()
             .ok_or_else(|| DbError::Other("Receipt received timestamp is ambiguous".to_string()))?;
-        if receipt_dt < submitted_dt {
+        let authorized_at = draft
+            .queue_authorization
+            .as_ref()
+            .map(|auth| auth.authorized_at.as_str());
+        if !receipt_belongs_to_this_generation(receipt_dt, authorized_at, submitted_at) {
             tracing::info!(
                 "Ignoring old receipt {} for 1601C draft submitted at {}",
                 receipt.filename,
-                submitted_dt
+                submitted_at
             );
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
@@ -269,6 +275,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::forms::form_1601c::Form1601CDraft;
 
     fn receipt(form_type: &str) -> SubmissionReceipt {
         SubmissionReceipt {
@@ -381,5 +388,205 @@ mod tests {
             .unwrap();
         assert_eq!(confirmed.status, FilingStatus::Confirmed);
         assert_eq!(confirmed.tax_36_total_amount_payable, 0.0);
+        assert_eq!(
+            confirmed.submission_filename.as_deref(),
+            Some(filename.as_str())
+        );
+    }
+
+    fn submit_lab_1601c(db: &Database, mut queued: Form1601CDraft) -> Form1601CDraft {
+        use crate::db::Claim1601CSubmissionResult;
+
+        queued.transition_to_queued().unwrap();
+        db.save_queued_1601c_draft(&queued).unwrap();
+        let fingerprint = queued.queued_submission_fingerprint.clone();
+        let retry = queued.next_retry_at.clone();
+        let claim = db
+            .claim_queued_1601c_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.month,
+                &fingerprint,
+                &retry,
+                0,
+            )
+            .unwrap();
+        let Claim1601CSubmissionResult::Claimed { mut draft, token } = claim else {
+            panic!("expected claim");
+        };
+        let filename = queued.default_submission_filename();
+        draft.transition_to_submitted(filename);
+        db.finish_claimed_1601c_submission(&draft, &token).unwrap();
+        db.get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap()
+    }
+
+    fn overwrite_1601c_generation_timestamps(
+        db: &Database,
+        draft: &Form1601CDraft,
+        authorized_at: &str,
+        submitted_at: &str,
+    ) {
+        let mut stored = db
+            .get_1601c_draft(&draft.tin, draft.taxable_year, draft.month)
+            .unwrap()
+            .unwrap();
+        stored
+            .queue_authorization
+            .as_mut()
+            .expect("queued fixture records authorization")
+            .authorized_at = authorized_at.to_string();
+        stored.submitted_at = Some(submitted_at.to_string());
+        let json = serde_json::to_string(&stored).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1
+                 WHERE tin = ?2 AND form_code = '1601C'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                rusqlite::params![
+                    json,
+                    stored.tin,
+                    i64::from(stored.taxable_year),
+                    i64::from(stored.month)
+                ],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn confirm_1601c_matches_stripped_october_receipt_filename() {
+        use crate::filing_queue::mandatory_lab_1601c_october_2026_draft;
+        use crate::forms::FilingStatus;
+        use crate::receipt::parse_bir_receipt_email;
+
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let submitted = submit_lab_1601c(&db, mandatory_lab_1601c_october_2026_draft());
+        let iaf = submitted
+            .submission_filename
+            .clone()
+            .expect("submitted IAF");
+        assert_eq!(
+            iaf,
+            "00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml"
+        );
+
+        // Live email used 11 September 2026 3:13 PM. Tests must not use that
+        // date against Utc::now() or the receipt can predate queue time.
+        let parsed = parse_bir_receipt_email(
+            r#"ebirforms-noreply@bir.gov.ph
+
+This confirms receipt of your submission with the following details subject to validation by BIR:
+
+File name: 00000000000000-1601Cv2018-102026.xml
+Date received by BIR: 11 September 2026
+Time received by BIR: 3:13 PM
+"#,
+            None,
+        )
+        .unwrap();
+        assert_eq!(parsed.filename, "00000000000000-1601Cv2018-102026.xml");
+
+        let confirmation = BirReceiptConfirmation {
+            filename: parsed.filename,
+            date_received: chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap(),
+            time_received: parsed.time_received,
+            source_from: parsed.source_from,
+            raw_text: parsed.raw_text,
+            raw_html: None,
+        };
+        let (saved, _) = db.save_submission_receipt(&confirmation).unwrap();
+        assert_eq!(saved.period, "102026");
+        assert_eq!(
+            db.confirm_submission_from_receipt(&saved).unwrap(),
+            ReceiptConfirmationOutcome::Confirmed
+        );
+        let confirmed = db
+            .get_1601c_draft(&submitted.tin, submitted.taxable_year, submitted.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(confirmed.status, FilingStatus::Confirmed);
+        assert_eq!(confirmed.month, 10);
+        assert_eq!(confirmed.tax_36_total_amount_payable, 0.0);
+        assert_eq!(confirmed.submission_filename.as_deref(), Some(iaf.as_str()));
+    }
+
+    #[test]
+    fn confirm_1601c_accepts_live_put_to_wal_delay() {
+        use crate::filing_queue::mandatory_lab_1601c_october_2026_draft;
+        use crate::forms::FilingStatus;
+
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let submitted = submit_lab_1601c(&db, mandatory_lab_1601c_october_2026_draft());
+        overwrite_1601c_generation_timestamps(
+            &db,
+            &submitted,
+            "2026-09-11T15:09:54+08:00",
+            "2026-09-11T15:17:25+08:00",
+        );
+
+        let confirmation = BirReceiptConfirmation {
+            filename: "00000000000000-1601Cv2018-102026.xml".to_string(),
+            date_received: chrono::NaiveDate::from_ymd_opt(2026, 9, 11).unwrap(),
+            time_received: chrono::NaiveTime::from_hms_opt(15, 13, 0).unwrap(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "live 102026 receipt".to_string(),
+            raw_html: None,
+        };
+        let (saved, _) = db.save_submission_receipt(&confirmation).unwrap();
+        assert_eq!(
+            db.confirm_submission_from_receipt(&saved).unwrap(),
+            ReceiptConfirmationOutcome::Confirmed
+        );
+        let confirmed = db
+            .get_1601c_draft(&submitted.tin, submitted.taxable_year, submitted.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(confirmed.status, FilingStatus::Confirmed);
+    }
+
+    #[test]
+    fn confirm_1601c_retries_after_saved_receipt_was_ignored() {
+        use crate::filing_queue::mandatory_lab_1601c_october_2026_draft;
+        use crate::forms::FilingStatus;
+
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let submitted = submit_lab_1601c(&db, mandatory_lab_1601c_october_2026_draft());
+        overwrite_1601c_generation_timestamps(
+            &db,
+            &submitted,
+            "2026-09-12T15:09:54+08:00",
+            "2026-09-12T15:17:25+08:00",
+        );
+
+        let confirmation = BirReceiptConfirmation {
+            filename: "00000000000000-1601Cv2018-102026.xml".to_string(),
+            date_received: chrono::NaiveDate::from_ymd_opt(2026, 9, 11).unwrap(),
+            time_received: chrono::NaiveTime::from_hms_opt(15, 13, 0).unwrap(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "prior-day receipt".to_string(),
+            raw_html: None,
+        };
+        let (saved, _) = db.save_submission_receipt(&confirmation).unwrap();
+        assert_eq!(
+            db.confirm_submission_from_receipt(&saved).unwrap(),
+            ReceiptConfirmationOutcome::Ignored
+        );
+
+        overwrite_1601c_generation_timestamps(
+            &db,
+            &submitted,
+            "2026-09-11T15:09:54+08:00",
+            "2026-09-11T15:17:25+08:00",
+        );
+        assert_eq!(
+            db.confirm_submission_from_receipt(&saved).unwrap(),
+            ReceiptConfirmationOutcome::Confirmed
+        );
+        let confirmed = db
+            .get_1601c_draft(&submitted.tin, submitted.taxable_year, submitted.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(confirmed.status, FilingStatus::Confirmed);
     }
 }
