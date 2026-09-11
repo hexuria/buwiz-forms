@@ -313,6 +313,8 @@ Zero-tax 1601-C (`any_taxes_withheld=false`):
 ```bash
 gpui-agent invoke filing.start --arg code=1601C --arg year=2026 --arg period=8
 gpui-agent invoke form.fill --arg any_taxes_withheld=false
+# Item 11 defaults to Private (`P`). Government:
+# gpui-agent invoke form.fill --arg category_of_agent=G
 gpui-agent invoke filing.validate
 gpui-agent invoke form.save_draft
 gpui-agent invoke form.pdf
@@ -727,8 +729,9 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.release_abandon
 
 # zero-tax 1601-C after release: set Any Taxes Withheld=No (does not file)
 # Fill goes through Agent1601CHostPatch so the next snapshot / form.fields is No.
+# Category of Withholding Agent: category_of_agent=P|G (also private/government).
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.fill \
-  --arg any_taxes_withheld=false
+  --arg any_taxes_withheld=false --arg category_of_agent=P
 gpui-agent invoke form.fields
 gpui-agent invoke form.save_draft
 gpui-agent invoke filing.validate
@@ -797,7 +800,7 @@ table; do not use them in recipes.
 | `filing.start` | `code`, `year`, `period` | Open a form for the selected profile |
 | `filing.validate` | — | Run `FormValidator` for open 1601-C or 2551Q |
 | `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q. `status` / `claimed` / `id` come from the `form_drafts` row (same id as `submissions.list`), not a stale in-memory Draft |
-| `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`). Live window drain applies withheld through `Agent1601CHostPatch` so the painted Yes/No and the next snapshot/`form.fields`/`filing.validate` match. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
+| `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`), **`category_of_agent`** (`P`/`G`, `private`/`government`; boolean `true`/`false` or `Yes`/`No`/`1`/`0` map to Private/Government; aliases `category_btn`, `form-1601c-category`). Live window drain applies withheld and category through `Agent1601CHostPatch` so the painted controls and the next snapshot/`form.fields`/`filing.validate` match. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
 | `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
 | `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, 1601-C For the Month `txtMonth`/`txtYear` on `p1c9`/`p1c10`, Amended/Withheld `xbox_joins`, 2551Q header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result |
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
@@ -853,6 +856,8 @@ filter: `dashboard-form-filter`, `dashboard-filter-query`,
 `submit_btn`, `form-1601c-tax-14`, `form-1601c-tax-25`,
 `form-1601c-sheets`, **`withheld_btn`** (Any Taxes Withheld Yes/No; role
 `checkbox`, `checked` plus `value` `Yes`/`No`; Draft-only),
+**`category_btn`** (Item 11 Category of Withholding Agent; role `checkbox`,
+`checked` means Private, `value` `P`/`G`; Draft-only),
 `form-1601c-submit-confirm`, `cancel_queue_btn` (unclaimed Queued),
 `form-1601c-return-draft` / `form-1601c-release-claim-confirm` (claimed Queued;
 confirm click is disabled for the agent). `form-1601c-status` `value` is the
@@ -860,6 +865,20 @@ real `form_drafts` `FilingStatus` (`Queued` while claimed; never `Draft` until t
 CAS). Claimed queues add `claimed` and `outcome-pending` in `states`. 2551Q fillables: `form-2551q-creditable`,
 `form-2551q-other-credit`, `form-2551q-taxable-0`. Item 14/25 must be > 0
 when Any Taxes Withheld is YES; set `any_taxes_withheld=false` for zero-tax.
+
+### 1601-C `form.fields` / `form.fill`
+
+| key | required | fillable | values |
+| --- | --- | --- | --- |
+| `tin` / `taxpayer_name` / `rdo_code` / `registered_address` | yes | no (profile) | profile defaults |
+| `zip_code` / `contact_number` / `email_address` | no | no (profile) | profile defaults |
+| `tax_14` | yes when withheld Yes | yes | money |
+| `tax_25` | yes when withheld Yes | yes | money |
+| `sheets` | no | yes | whole number |
+| `any_taxes_withheld` | yes | yes | `true`/`false`, `Yes`/`No`; snapshot `Yes`/`No` |
+| `category_of_agent` | yes (exactly one) | yes | **`P`** Private (new-draft default) or **`G`** Government. Also `private`/`government`. Boolean `true`/`Yes`/`1` → `P`; `false`/`No`/`0` → `G`. Snapshot value is `P` or `G`. |
+
+Print/PDF: Item 11 CatAgent radios stay XML-only for submit (`frm1601c:CatAgent_P` / `CatAgent_G`). Frozen HTML has no xbox join for them (same as Item 13 SpecialTax); Amended/Withheld header xboxes are the joined print path.
 
 ## Coverage (this slice)
 
@@ -876,9 +895,11 @@ Proven in headless host tests (not a Mac GUI run):
 - 1601-C draft save + validate + confirmation node; status stays `Draft`;
 - 1601-C draft save + validate + confirmation node; unconfirmed filing.queue stays Draft; filing.queue confirm=true queues; headless can pass tin/code/year/period
 - `form.fill` refuses unknown keys; `any_taxes_withheld` false/true (or
-  Yes/No) updates `withheld_btn` snapshot `checked`/`value`. Desktop drain
-  writes that flag through `Agent1601CHostPatch` so the next snapshot /
-  `form.fields` / `filing.validate` see No without a human click. `form.pdf` writes frozen HTML to an
+  Yes/No) updates `withheld_btn` snapshot `checked`/`value`. `category_of_agent`
+  `P`/`G` (or `private`/`government`, bool true/false) updates `category_btn`
+  snapshot `checked`/`value` (`P` Private default). Desktop drain
+  writes those flags through `Agent1601CHostPatch` so the next snapshot /
+  `form.fields` / `filing.validate` see the fill without a human click. `form.pdf` writes frozen HTML to an
   absolute `path` via the real print pipeline (no bytes on the result) and
   does **not** call `filing.validate`. 1601-C Aug 2026 / withheld=No /
   amended=No fills month `08`, year `2026`, and the No xboxes. A Confirmed 2551Q can still have

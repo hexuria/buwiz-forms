@@ -1127,6 +1127,14 @@ mod tests {
         let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
         draft.any_taxes_withheld = false;
         assert_eq!(draft.atc, FORM_1601C_ATC);
+        assert_eq!(draft.category_of_agent, "P");
+        draft.compute();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "category_of_agent")
+        );
 
         draft.atc = "WC010".to_string();
         draft.category_of_agent.clear();
@@ -1143,6 +1151,24 @@ mod tests {
                 .iter()
                 .all(|(_, message)| !message.contains("Item 12"))
         );
+    }
+
+    #[test]
+    fn government_category_validates_and_maps_exclusive_xml_xboxes() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        draft.category_of_agent = "G".to_string();
+        draft.compute();
+
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "category_of_agent")
+        );
+        let fields = draft.to_bir_field_map();
+        assert_eq!(fields["frm1601c:CatAgent_P"], "false");
+        assert_eq!(fields["frm1601c:CatAgent_G"], "true");
     }
 
     #[test]
