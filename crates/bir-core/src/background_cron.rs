@@ -3,7 +3,7 @@ use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
 use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::profile::TaxpayerProfile;
-use chrono::{Datelike, TimeZone, Utc};
+use chrono::Utc;
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
@@ -732,7 +732,9 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     }
 }
 
-fn submission_queue_year_at<Tz: TimeZone>(now: &chrono::DateTime<Tz>) -> u16 {
+#[cfg(test)]
+fn submission_queue_year_at<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> u16 {
+    use chrono::Datelike;
     now.year() as u16
 }
 
@@ -1451,6 +1453,7 @@ mod tests {
     use crate::forms::form_1601c::Form1601CDraft;
     use crate::forms::form_2551q::Item13Election;
     use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
+    use chrono::{Datelike, TimeZone};
     use tempfile::NamedTempFile;
 
     #[test]
