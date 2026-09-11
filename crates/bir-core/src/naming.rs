@@ -32,6 +32,30 @@ impl Tin {
             self.segment1, self.segment2, self.segment3, self.branch
         )
     }
+
+    /// Parse a compact or dashed TIN string (12–14 digits, including branch).
+    pub fn parse_digits(raw: &str) -> Option<Self> {
+        let digits: String = raw.chars().filter(|ch| ch.is_ascii_digit()).collect();
+        if !(12..=14).contains(&digits.len()) {
+            return None;
+        }
+        Some(Self {
+            segment1: digits[0..3].to_string(),
+            segment2: digits[3..6].to_string(),
+            segment3: digits[6..9].to_string(),
+            branch: digits[9..].to_string(),
+        })
+    }
+
+    /// Dashed display for a stored TIN string.
+    ///
+    /// 12–14 digit values (with or without dashes) become `XXX-XXX-XXX-XXXXX`.
+    /// Unrecognized shapes are returned trimmed, not invented.
+    pub fn dashed_display(raw: &str) -> String {
+        Self::parse_digits(raw)
+            .map(|tin| tin.formatted())
+            .unwrap_or_else(|| raw.trim().to_string())
+    }
 }
 
 /// Generate savefile name: {TIN}-{FormType}-{Period}.xml
@@ -71,6 +95,17 @@ mod tests {
         assert_eq!(tin.full(), "01055805400000");
         assert_eq!(tin.formatted(), "010-558-054-00000");
         assert_eq!(tin.full().len(), 14);
+    }
+
+    #[test]
+    fn dashed_display_formats_compact_and_dashed_tins() {
+        assert_eq!(Tin::dashed_display("00000000000000"), "000-000-000-00000");
+        assert_eq!(
+            Tin::dashed_display("000-000-000-00000"),
+            "000-000-000-00000"
+        );
+        assert_eq!(Tin::dashed_display("123456789000"), "123-456-789-000");
+        assert_eq!(Tin::dashed_display("not-a-tin"), "not-a-tin");
     }
 
     #[test]
