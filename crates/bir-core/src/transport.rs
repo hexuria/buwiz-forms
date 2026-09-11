@@ -316,6 +316,34 @@ impl IafSftpSession {
         info!("Transmission complete: {}", path);
         Ok(())
     }
+
+    /// Authenticate and open SFTP without uploading. Used by the live-connect probe.
+    pub async fn probe(mut self) -> Result<String, TransportError> {
+        let handle = self
+            .handle
+            .take()
+            .ok_or_else(|| TransportError::Sftp("SFTP session was already consumed".into()))?;
+        let channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|error| TransportError::Ssh(error.to_string()))?;
+        channel
+            .request_subsystem(true, "sftp")
+            .await
+            .map_err(|error| TransportError::Ssh(error.to_string()))?;
+        let sftp = SftpSession::new(channel.into_stream())
+            .await
+            .map_err(|error| TransportError::Sftp(error.to_string()))?;
+        let cwd = sftp
+            .canonicalize(".")
+            .await
+            .map_err(|error| TransportError::Sftp(error.to_string()))?;
+        let _ = sftp.close().await;
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "", "en")
+            .await;
+        Ok(cwd)
+    }
 }
 
 impl Drop for IafSftpSession {
@@ -383,6 +411,15 @@ pub(crate) async fn submit_iaf(
 ) -> Result<(), TransportError> {
     let session = open_iaf_session(form_type, tin).await?;
     session.store(filename, payload).await
+}
+
+/// Authenticate and open SFTP without uploading. Used by the live-connect probe.
+pub async fn probe_iaf_endpoint(
+    form_type: &str,
+    endpoint: SftpEndpoint,
+) -> Result<String, TransportError> {
+    let session = open_iaf_session_with_endpoint(form_type, endpoint).await?;
+    session.probe().await
 }
 
 /// Direct upload helper for the local harness. Never talks to BIR unless the

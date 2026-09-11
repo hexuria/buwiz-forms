@@ -440,3 +440,30 @@ Do not embed BIR passwords. Keep IAF encryption on `crypto.rs`. Prefer matching 
 ## Safety
 
 This work is interoperability with the official client for the operator's own application. Dispatcher passwords were unwrapped only as needed to prove the algorithm and identify host/port. They are not in this report and not in source. Dummy TIN `000000000` / `00000000000000` was used. No live filing of a real return was completed.
+
+## Runtime proof — 2026-09-11
+
+Dummy TIN `00000000000000` / form `1601Cv2018`. No live taxpayer return. No email-receipt wait.
+
+Live connect (`cargo run -p bir-core --bin sftp_harness -- --live-connect`):
+
+```
+host=ebf2.bir.gov.ph
+port=22
+username_len=15
+password_len=18
+folder=1601Cv2018
+auth=ok
+sftp=ok
+cwd=/
+```
+
+Live PUT of the existing dummy encrypted IAF (`--live-put`):
+
+```
+payload_len=986
+upload=ok
+filename=00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml
+```
+
+This proves dispatcher unwrap, SSH password auth, SFTP subsystem, home `/`, and a successful PUT into the `1601Cv2018` folder. Secrets were not printed.
