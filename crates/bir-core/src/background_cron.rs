@@ -2,6 +2,7 @@ use crate::db::{Claim1601CSubmissionResult, Claim2551QSubmissionResult, Database
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
 use crate::forms::{FilingStatus, FormDraftSummary};
+use crate::job_display::{FilingJobLabel, known_job_email};
 use crate::profile::TaxpayerProfile;
 use chrono::Utc;
 use std::collections::HashSet;
@@ -701,7 +702,15 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                                 "Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
                             );
                         } else {
-                            schedule_email_poll(profile, "1601C", &db_guard);
+                            schedule_email_poll(
+                                profile,
+                                "1601C",
+                                &draft.tin,
+                                draft.taxable_year,
+                                Some(draft.month),
+                                None,
+                                &db_guard,
+                            );
                         }
                     }
                     Err(error) => warn!(
@@ -1068,7 +1077,15 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                                             "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
                                         );
                                     } else {
-                                        schedule_email_poll(&current_profile, "2551Q", &db_guard);
+                                        schedule_email_poll(
+                                            &current_profile,
+                                            "2551Q",
+                                            &draft.tin,
+                                            draft.taxable_year,
+                                            None,
+                                            Some(draft.quarter),
+                                            &db_guard,
+                                        );
                                     }
                                 }
                                 Err(error) => warn!(
@@ -1112,44 +1129,49 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 pub fn schedule_email_poll(
     profile: &TaxpayerProfile,
     form_code: &str,
+    tin: &str,
+    taxable_year: u16,
+    month: Option<u8>,
+    quarter: Option<u8>,
     db_guard: &std::sync::MutexGuard<Database>,
 ) {
-    if profile.is_email_tracking_active() {
-        let email = profile
-            .imap_email
-            .clone()
-            .unwrap_or_else(|| profile.email.clone());
-        let job_name = format!("Waiting for {} confirmation email for {}", form_code, email);
-        let legacy_job_name = format!("Poll Receipts: {}", email);
+    if !profile.is_email_tracking_active() {
+        return;
+    }
 
-        let jobs = db_guard.list_jobs().unwrap_or_default();
-        let mut exists = false;
-        for job in jobs.iter() {
-            if (job.name == job_name || job.name == legacy_job_name)
-                && job.status != "Archived"
-                && job.status != "Done"
-            {
-                exists = true;
-                break;
-            }
-        }
+    // Command identity stays `bir_poll_email {email}` so the worker and
+    // "Run now" path keep matching on the mailbox, not the display title.
+    let email = profile.tracking_mailbox().unwrap_or("").to_string();
+    let job_name = FilingJobLabel {
+        form_code,
+        taxable_year,
+        month,
+        quarter,
+        tin,
+        email: crate::job_display::known_job_email(Some(email.as_str())),
+    }
+    .confirmation_poll_name();
 
-        if !exists {
-            let new_job = crate::db::Job {
-                id: None,
-                name: job_name,
-                job_type: "System".to_string(),
-                cron_expr: Some("0 * * * * *".to_string()),
-                command: Some(format!("bir_poll_email {}", email)),
-                status: "Queued".to_string(),
-                retries: 0,
-                last_run_at: None,
-                next_run_at: None,
-                created_at: Utc::now().to_rfc3339(),
-                output_log: None,
-            };
-            let _ = db_guard.save_job(new_job);
-        }
+    let jobs = db_guard.list_jobs().unwrap_or_default();
+    let exists = jobs
+        .iter()
+        .any(|job| job.name == job_name && job.status != "Archived" && job.status != "Done");
+
+    if !exists {
+        let new_job = crate::db::Job {
+            id: None,
+            name: job_name,
+            job_type: "System".to_string(),
+            cron_expr: Some("0 * * * * *".to_string()),
+            command: Some(format!("bir_poll_email {email}")),
+            status: "Queued".to_string(),
+            retries: 0,
+            last_run_at: None,
+            next_run_at: None,
+            created_at: Utc::now().to_rfc3339(),
+            output_log: None,
+        };
+        let _ = db_guard.save_job(new_job);
     }
 }
 
@@ -1449,12 +1471,21 @@ impl Drop for JobCleanup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Database;
+    use crate::db::{Database, Job};
     use crate::forms::form_1601c::Form1601CDraft;
     use crate::forms::form_2551q::Item13Election;
     use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
     use chrono::{Datelike, TimeZone};
     use tempfile::NamedTempFile;
+
+    fn is_email_poll_job(job: &Job) -> bool {
+        job.command
+            .as_deref()
+            .is_some_and(|command| command.starts_with("bir_poll_email "))
+            || job.name.contains(" confirmation for ")
+            || job.name.contains("confirmation email")
+            || job.name.starts_with("Poll Receipts:")
+    }
 
     #[test]
     fn retry_gate_is_due_only_for_absent_or_elapsed_valid_timestamps() {
@@ -1898,7 +1929,10 @@ mod tests {
             .expect("the email-poll job lookup should succeed");
         let email_job = jobs
             .iter()
-            .find(|job| job.name == "Waiting for 1601C confirmation email for receipts@example.com")
+            .find(|job| {
+                job.name
+                    == "Waiting for 1601C May 2099 confirmation for 123-456-789-000 (receipts@example.com)"
+            })
             .expect("successful submission should schedule its confirmation email poll");
         assert_eq!(email_job.status, "Queued");
         assert_eq!(
@@ -1940,8 +1974,7 @@ mod tests {
             .list_jobs()
             .expect("job lookup should succeed");
         assert!(
-            jobs.iter()
-                .all(|job| { !job.name.contains("Waiting for 1601C confirmation email") }),
+            jobs.iter().all(|job| !is_email_poll_job(job)),
             "dry-run must not schedule IMAP poll"
         );
     }
@@ -2255,8 +2288,140 @@ mod tests {
                 .list_jobs()
                 .unwrap()
                 .iter()
-                .all(|job| !job.name.contains("confirmation email")),
+                .all(|job| !is_email_poll_job(job)),
             "dry-run source must skip IMAP"
         );
+    }
+
+    #[test]
+    fn schedule_email_poll_uses_period_dashed_tin_and_optional_email() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("codeitlikemiley@gmail.com".to_string());
+        let draft = crate::filing_queue::mandatory_lab_1601c_draft();
+        let db = Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        );
+        let guard = db.lock().expect("the cron database should not be poisoned");
+        schedule_email_poll(
+            &profile,
+            "1601C",
+            &draft.tin,
+            draft.taxable_year,
+            Some(draft.month),
+            None,
+            &guard,
+        );
+        schedule_email_poll(
+            &profile,
+            "1601C",
+            &draft.tin,
+            draft.taxable_year,
+            Some(draft.month),
+            None,
+            &guard,
+        );
+        let jobs = guard
+            .list_jobs()
+            .expect("the email-poll job lookup should succeed");
+        assert_eq!(
+            jobs.len(),
+            1,
+            "identical identity must not insert a second poll job"
+        );
+        assert_eq!(
+            jobs[0].name,
+            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+        );
+        assert_eq!(
+            jobs[0].command.as_deref(),
+            Some("bir_poll_email codeitlikemiley@gmail.com")
+        );
+        assert_eq!(jobs[0].status, "Queued");
+        assert_eq!(jobs[0].job_type, "System");
+    }
+
+    #[test]
+    fn schedule_email_poll_creates_distinct_jobs_per_period() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        let september = crate::filing_queue::mandatory_lab_1601c_draft();
+        let october = crate::filing_queue::mandatory_lab_1601c_october_2026_draft();
+        let db = Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        );
+        let guard = db.lock().expect("the cron database should not be poisoned");
+        schedule_email_poll(
+            &profile,
+            "1601C",
+            &september.tin,
+            september.taxable_year,
+            Some(september.month),
+            None,
+            &guard,
+        );
+        schedule_email_poll(
+            &profile,
+            "1601C",
+            &october.tin,
+            october.taxable_year,
+            Some(october.month),
+            None,
+            &guard,
+        );
+        let mut names: Vec<String> = guard
+            .list_jobs()
+            .expect("the email-poll job lookup should succeed")
+            .into_iter()
+            .map(|job| job.name)
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                "Waiting for 1601C Oct 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+                    .to_string(),
+                "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn schedule_email_poll_omits_email_parenthetical_when_unknown() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.email.clear();
+        profile.imap_email = None;
+        let draft = crate::filing_queue::mandatory_lab_1601c_draft();
+        let db = Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        );
+        let guard = db.lock().expect("the cron database should not be poisoned");
+        schedule_email_poll(
+            &profile,
+            "1601C",
+            &draft.tin,
+            draft.taxable_year,
+            Some(draft.month),
+            None,
+            &guard,
+        );
+        let jobs = guard
+            .list_jobs()
+            .expect("the email-poll job lookup should succeed");
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(
+            jobs[0].name,
+            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000"
+        );
+        assert!(
+            !jobs[0].name.contains("()"),
+            "unknown email must not invent a parenthetical"
+        );
+        assert_eq!(jobs[0].command.as_deref(), Some("bir_poll_email "));
     }
 }

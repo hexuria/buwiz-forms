@@ -50,7 +50,10 @@ Live 1601-C: Submitted → Confirmed when IMAP matches TIN / form / period
 receipt belongs to this queued generation. Floor is
 `queue_authorization.authorized_at`, not `submitted_at`. BIR stamps the file
 when PUT lands; the app writes Submitted after PUT returns. 2551Q still
-compares the receipt to `submitted_at`.
+compares the receipt to `submitted_at`. The poller's `job_queue.name` is
+`Waiting for {form} {Mon YYYY} confirmation for {TIN} (email)`; `command`
+remains `bir_poll_email {email}`. See [AGENT.md](AGENT.md) “Background Tasks
+titles”.
 
 Live proof (PR #41 / `68f773c5`, dummy TIN `00000000000000`, **not** re-run
 here): 1601-C period **102026** (October). Queued ~3:09:54 PM local 11
