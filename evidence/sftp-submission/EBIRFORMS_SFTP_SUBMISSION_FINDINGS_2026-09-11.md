@@ -6,6 +6,8 @@ Worktree: `C:\Users\uriah\Code\buwiz-forms-wt-sftp`
 Authority: installed Offline eBIRForms 7.9.6.1 at `C:\eBIRForms`
 Scope: restore automated IAF submission for Buwiz Forms without embedding live BIR passwords
 
+Study walkthrough of the process: `STUDY_WALKTHROUGH.md`.
+
 This report is evidence-driven. Hostnames, ports, filename rules, and crypto mechanics below were recovered from the local official client, extracted HTA/JS/VBS, `ebfSFTP.exe` IL, a live dispatcher response, and an SSH banner check. Username and password values were unwrapped only to confirm the algorithm and are not recorded here.
 
 ## Investigation log
@@ -467,3 +469,7 @@ filename=00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml
 ```
 
 This proves dispatcher unwrap, SSH password auth, SFTP subsystem, home `/`, and a successful PUT into the `1601Cv2018` folder. Secrets were not printed.
+
+Operator follow-up: BIR sent a confirmation email for this dummy upload. That is
+the official receipt path. Transport success remains PUT ok; filing evidence is
+the email. Passwords still are not in source.

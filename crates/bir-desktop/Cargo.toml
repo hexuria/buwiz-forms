@@ -131,7 +131,7 @@ priority = "optional"
 section = "utils"
 depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
 extended-description = """eBIRForms Desktop — Philippine BIR tax return filing application.
-Supports form preparation, validation, submission via FTP, email confirmation
+Supports form preparation, validation, submission via SFTP, email confirmation
 tracking, and PDF generation for BIR Form 2551Q and related forms."""
 assets = [
     ["target/release/bir", "usr/bin/ebirforms", "755"],
