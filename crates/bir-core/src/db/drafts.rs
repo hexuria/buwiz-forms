@@ -2500,20 +2500,25 @@ impl Database {
                         "1601C confirmation receipt has an invalid received timestamp".to_string(),
                     )
                 })?;
-            let submitted_at = chrono::DateTime::parse_from_rfc3339(
-                existing
-                    .submitted_at
-                    .as_deref()
-                    .expect("submitted timestamp checked above"),
-            )
-            .map_err(|_| {
+            let submitted_at = existing
+                .submitted_at
+                .as_deref()
+                .expect("submitted timestamp checked above");
+            chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|_| {
                 DbError::Other(
                     "Submitted 1601C snapshot has an invalid submission timestamp".to_string(),
                 )
             })?;
-            if received_at < submitted_at {
+            if !crate::filing_queue::receipt_belongs_to_this_generation(
+                received_at,
+                existing
+                    .queue_authorization
+                    .as_ref()
+                    .map(|auth| auth.authorized_at.as_str()),
+                submitted_at,
+            ) {
                 return Err(DbError::Other(
-                    "1601C confirmation receipt predates the submitted snapshot".to_string(),
+                    "1601C confirmation receipt predates this queued generation".to_string(),
                 ));
             }
             received_at.to_rfc3339()
@@ -2556,9 +2561,6 @@ impl Database {
         existing.status = FilingStatus::Confirmed;
         existing.confirmed_at = Some(confirmed_at);
         existing.receipt_id = draft.receipt_id;
-        if let Some(filename) = draft.submission_filename.clone() {
-            existing.submission_filename = Some(filename);
-        }
         existing.updated_at = chrono::Utc::now().to_rfc3339();
         let json = serde_json::to_string(&existing)?;
         let updated = tx.execute(

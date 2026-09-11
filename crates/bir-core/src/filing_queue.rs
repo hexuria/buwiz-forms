@@ -13,7 +13,7 @@
 //! Persistence lives on the `form_drafts` row (SQLCipher JSON). There is no
 //! second queue table.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::forms::form_1601c::Form1601CDraft;
@@ -22,6 +22,19 @@ use crate::profile::TaxpayerProfile;
 /// How long a claim may sit with **no PUT started** before a worker may
 /// recover it. Once PUT is marked started, the claim is fail-closed.
 pub const CLAIM_LEASE: Duration = Duration::seconds(120);
+
+/// Slack when the BIR receipt is compared to queue `authorized_at`.
+///
+/// Covers BIR vs local clock skew. Live 102026 did not need this: queue
+/// ~3:09:54 PM, BIR stamp 3:13 PM.
+pub const RECEIPT_AUTH_CLOCK_SKEW: Duration = Duration::minutes(2);
+
+/// Slack when a legacy Submitted row has no `authorized_at`.
+///
+/// Local `submitted_at` is written after PUT returns. Live 102026: BIR
+/// 3:13 PM, row Submitted ~3:17:25 PM. Without this, IMAP would ignore the
+/// same-generation confirmation email.
+pub const RECEIPT_SUBMITTED_CLOCK_SKEW: Duration = Duration::minutes(15);
 
 /// What the authorizer accepted as "this task is done".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,18 +177,55 @@ pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
     .expect("mandatory lab 1601-C profile must deserialize")
 }
 
-/// Zero-tax September 2026 1601-C on the mandatory lab profile.
+/// Zero-tax 1601-C on the mandatory lab profile for one month.
 ///
 /// Amended No, Any Taxes Withheld No, Category Private. All money fields stay
 /// `0.00`. Constructor default withheld=Yes is explicitly cleared.
-pub fn mandatory_lab_1601c_draft() -> Form1601CDraft {
+///
+/// Automated tests use **September 2026** (`mandatory_lab_1601c_draft`).
+/// Live proof on PR #41 / `68f773c5` used **October 2026**.
+pub fn mandatory_lab_1601c_draft_for(year: u16, month: u8) -> Form1601CDraft {
     let profile = mandatory_lab_1601c_profile();
-    let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 9);
+    let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
     draft.is_amended = false;
     draft.any_taxes_withheld = false;
     draft.category_of_agent = "P".to_string();
     draft.compute();
     draft
+}
+
+/// Zero-tax September 2026 1601-C — automated-test fixture period.
+pub fn mandatory_lab_1601c_draft() -> Form1601CDraft {
+    mandatory_lab_1601c_draft_for(2026, 9)
+}
+
+/// Zero-tax October 2026 1601-C — live BIR receipt period (102026).
+pub fn mandatory_lab_1601c_october_2026_draft() -> Form1601CDraft {
+    mandatory_lab_1601c_draft_for(2026, 10)
+}
+
+/// Whether a BIR confirmation belongs to this queued generation.
+///
+/// Floor is `queue_authorization.authorized_at` when present, not
+/// `submitted_at`. BIR stamps the file when SFTP PUT lands; the app writes
+/// Submitted after PUT returns. Live 102026 (11 September 2026): queued
+/// ~3:09:54 PM, BIR `Time received` 3:13 PM, Submitted ~3:17:25 PM. Comparing
+/// the receipt to `submitted_at` would ignore a valid confirmation.
+///
+/// A previous generation (revert + requeue) gets a new `authorized_at`, so
+/// an older receipt stays ignored.
+pub fn receipt_belongs_to_this_generation(
+    receipt: DateTime<FixedOffset>,
+    authorized_at: Option<&str>,
+    submitted_at: &str,
+) -> bool {
+    let Ok(submitted) = DateTime::parse_from_rfc3339(submitted_at) else {
+        return false;
+    };
+    match authorized_at.and_then(|value| DateTime::parse_from_rfc3339(value).ok()) {
+        Some(authorized) => receipt + RECEIPT_AUTH_CLOCK_SKEW >= authorized,
+        None => receipt + RECEIPT_SUBMITTED_CLOCK_SKEW >= submitted,
+    }
 }
 
 pub fn parse_1601c_period(period: &str) -> Option<(u16, u8)> {
@@ -313,8 +363,60 @@ mod tests {
     #[test]
     fn parse_1601c_period_reads_mmyyyy() {
         assert_eq!(parse_1601c_period("092026"), Some((2026, 9)));
+        assert_eq!(parse_1601c_period("102026"), Some((2026, 10)));
         assert_eq!(parse_1601c_period("122026"), Some((2026, 12)));
         assert_eq!(parse_1601c_period("132026"), None);
         assert_eq!(parse_1601c_period("122026Q1"), None);
+    }
+
+    #[test]
+    fn live_october_receipt_matches_queue_generation_not_submitted_at() {
+        // 11 September 2026 PHT: queued 3:09:54, BIR 3:13, Submitted 3:17:25.
+        let pht = FixedOffset::east_opt(8 * 3600).expect("UTC+08:00");
+        let receipt = chrono::NaiveDate::from_ymd_opt(2026, 9, 11)
+            .unwrap()
+            .and_hms_opt(15, 13, 0)
+            .unwrap()
+            .and_local_timezone(pht)
+            .single()
+            .unwrap();
+        let authorized = "2026-09-11T15:09:54+08:00";
+        let submitted = "2026-09-11T15:17:25+08:00";
+
+        assert!(receipt_belongs_to_this_generation(
+            receipt,
+            Some(authorized),
+            submitted
+        ));
+        assert!(
+            receipt_belongs_to_this_generation(receipt, None, submitted),
+            "legacy rows without authorized_at still accept the live 4-minute PUT-to-WAL delay"
+        );
+
+        let prior = chrono::NaiveDate::from_ymd_opt(2026, 9, 10)
+            .unwrap()
+            .and_hms_opt(15, 13, 0)
+            .unwrap()
+            .and_local_timezone(pht)
+            .single()
+            .unwrap();
+        assert!(!receipt_belongs_to_this_generation(
+            prior,
+            Some(authorized),
+            submitted
+        ));
+    }
+
+    #[test]
+    fn october_live_fixture_is_zero_tax_period_102026() {
+        let draft = mandatory_lab_1601c_october_2026_draft();
+        assert_eq!(draft.month, 10);
+        assert_eq!(draft.taxable_year, 2026);
+        assert_eq!(draft.period_code(), "102026");
+        assert_eq!(draft.tax_36_total_amount_payable, 0.0);
+        assert_eq!(
+            draft.default_submission_filename(),
+            "00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml"
+        );
     }
 }

@@ -170,27 +170,27 @@ fn fetch_with_auth(
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
                         if let Ok(db_guard) = db.lock()
-                            && let Ok((submission_receipt, is_new)) =
+                            && let Ok((submission_receipt, _is_new)) =
                                 db_guard.save_submission_receipt(&receipt)
                         {
-                            // Notify only after the authoritative receipt transition
-                            // confirms this exact submitted generation.
-                            let confirmed = if is_new {
-                                match db_guard.confirm_submission_from_receipt(&submission_receipt)
-                                {
-                                    Ok(crate::db::ReceiptConfirmationOutcome::Confirmed) => true,
-                                    Ok(crate::db::ReceiptConfirmationOutcome::Ignored) => false,
-                                    Err(error) => {
-                                        tracing::warn!(
-                                            "Receipt {} was saved but could not confirm a submission: {}",
-                                            submission_receipt.filename,
-                                            error
-                                        );
-                                        false
-                                    }
+                            // Always attempt confirm. A previous poll may have
+                            // saved the receipt while Submitted→Confirmed was
+                            // ignored (clock skew, 1601-C matcher gap). UNIQUE
+                            // filename makes a second save a no-op; confirm
+                            // of an already-Confirmed row is Ignored.
+                            let confirmed = match db_guard
+                                .confirm_submission_from_receipt(&submission_receipt)
+                            {
+                                Ok(crate::db::ReceiptConfirmationOutcome::Confirmed) => true,
+                                Ok(crate::db::ReceiptConfirmationOutcome::Ignored) => false,
+                                Err(error) => {
+                                    tracing::warn!(
+                                        "Receipt {} was saved but could not confirm a submission: {}",
+                                        submission_receipt.filename,
+                                        error
+                                    );
+                                    false
                                 }
-                            } else {
-                                false
                             };
                             if confirmed {
                                 if let Some((_, form_type, period)) =

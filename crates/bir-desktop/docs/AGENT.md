@@ -924,8 +924,10 @@ connect timeout therefore does **not** freeze a claim. After PUT start, a
 PUT `Err` is **fail-closed**: the worker logs unknown outcome and does **not**
 clear the claim (`process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried`).
 
-Live 1601-C Submitted rows become Confirmed when IMAP matches the IAF
-filename (same path as 2551Q). Dry-run never schedules that poll.
+Live 1601-C Submitted rows become Confirmed when IMAP matches TIN / form /
+period (BIR may strip `#email#` from the receipt filename) and the receipt
+belongs to this queued generation (`authorized_at` floor). Dry-run never
+schedules that poll.
 
 Do **not** auto-release after PUT: clearing a claim after unknown upload I/O
 can double-file. Stuck rows that already started PUT (crash or PUT error, or

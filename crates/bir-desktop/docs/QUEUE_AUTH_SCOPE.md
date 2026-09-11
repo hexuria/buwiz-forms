@@ -41,10 +41,22 @@ Do not blind re-PUT after an unknown mid-transfer.
 
 ## Eventual completion
 
-Live 1601-C and 2551Q: Submitted → Confirmed when IMAP matches the exact
-filename/TIN/period and the receipt is not older than `submitted_at`. Dry-run
-stops at Submitted. IMAP skip is taken from the **session source**, not from
-process-global `BIR_SFTP_DRY_RUN` (parallel tests must not leak).
+Live 1601-C: Submitted → Confirmed when IMAP matches TIN / form / period
+(`#email#` stripped on the receipt, present on the submitted IAF) and the
+receipt belongs to this queued generation. Floor is
+`queue_authorization.authorized_at`, not `submitted_at`. BIR stamps the file
+when PUT lands; the app writes Submitted after PUT returns. 2551Q still
+compares the receipt to `submitted_at`.
+
+Live proof (PR #41 / `68f773c5`, dummy TIN `00000000000000`, **not** re-run
+here): 1601-C period **102026** (October). Queued ~3:09:54 PM local 11
+September 2026; BIR email `00000000000000-1601Cv2018-102026.xml` at 3:13 PM
+from `ebirforms-noreply@bir.gov.ph`; row Submitted ~3:17:25 PM. Transport
+PUT is empirically PASS. Automated tests still use **092026** (September
+2026) zero-tax.
+
+Dry-run stops at Submitted. IMAP skip is taken from the **session source**,
+not from process-global `BIR_SFTP_DRY_RUN` (parallel tests must not leak).
 
 ## Secrets
 

@@ -133,8 +133,22 @@ override:
 
 00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml
 
-Local status became Submitted. Wait for email before treating that as a
-second BIR receipt.
+Uriah verified that live PUT on the PR #41 / `68f773c5` stack (original
+author session, 11 September 2026), not a cloud dry-run:
+
+- Queued Juan TIN `00000000000000` 1601-C period **102026** ~3:09:54 PM local
+- Headless WAL write ~3:14; row **Submitted** ~3:17:25 PM
+- BIR email from `ebirforms-noreply@bir.gov.ph`: file
+  `00000000000000-1601Cv2018-102026.xml` (`#email#` stripped as designed),
+  Date 11 September 2026, Time 3:13 PM
+- Treat live SFTP PUT + BIR receipt email as empirically PASS for transport.
+  Do not re-prove dispatcher PUT.
+
+Automated tests still use **092026 / September 2026** zero-tax. The IMAP
+matcher must accept both periods and both filename shapes (`#email#` on the
+submitted IAF, stripped on the receipt). Submitted → Confirmed floors the
+receipt against queue `authorized_at` so the 3:13 PM BIR stamp is not
+ignored just because Submitted was written at 3:17.
 
 ## How to refresh credentials later
 
