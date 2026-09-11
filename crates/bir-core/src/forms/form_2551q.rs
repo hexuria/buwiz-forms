@@ -3,6 +3,7 @@
 //! Data model, carry-forward logic, and auto-computation.
 
 use super::FilingStatus;
+use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 use crate::penalties::{
     PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
@@ -291,11 +292,17 @@ pub struct Form2551QDraft {
     #[serde(default)]
     pub queued_submission_fingerprint: Option<String>,
     /// Short-lived database claim established immediately before network I/O.
-    /// Generic draft writes cannot replace a claimed queue generation.
+    /// Recoverable only when PUT was never marked started and the lease expired.
     #[serde(default)]
     pub submission_claim_token: Option<String>,
     #[serde(default)]
     pub submission_claimed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_authorization: Option<QueueAuthorization>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_claim_lease_until: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_put_started_at: Option<String>,
     /// A filed/queued snapshot is immutable. When the taxpayer profile later
     /// changes, we mark the return for an explicit revert/amendment workflow
     /// instead of silently rewriting the reviewed submission fields.
@@ -421,6 +428,9 @@ impl Form2551QDraft {
             queued_submission_fingerprint: None,
             submission_claim_token: None,
             submission_claimed_at: None,
+            queue_authorization: None,
+            submission_claim_lease_until: None,
+            submission_put_started_at: None,
             profile_snapshot_stale: false,
             profile_snapshot_stale_reason: None,
             effective_profile_version_id: None,
@@ -1007,8 +1017,16 @@ impl Form2551QDraft {
             };
         }
         self.queued_submission_fingerprint = Some(self.submission_fingerprint());
+        self.queue_authorization = Some(QueueAuthorization::new(
+            "2551Q",
+            self.tin.clone(),
+            self.period_code(),
+            QueueAuthSource::Gui,
+        ));
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         self.status = FilingStatus::Queued;
         self.submission_attempts = 0;
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
@@ -1019,7 +1037,13 @@ impl Form2551QDraft {
         Ok(())
     }
 
-    /// Transition: Queued → Submitted (called by background cron after successful FTP upload).
+    pub fn set_queue_auth_source(&mut self, source: QueueAuthSource) {
+        if let Some(auth) = &mut self.queue_authorization {
+            auth.source = source;
+        }
+    }
+
+    /// Transition: Queued → Submitted (called by background cron after successful SFTP PUT).
     pub fn transition_to_submitted(&mut self, filename: String) {
         assert!(
             matches!(self.status, FilingStatus::Queued),
@@ -1035,6 +1059,8 @@ impl Form2551QDraft {
         self.last_error = None;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         self.updated_at = now.to_rfc3339();
     }
 
@@ -1082,8 +1108,11 @@ impl Form2551QDraft {
         self.receipt_id = None;
         self.submission_filename = None;
         self.queued_submission_fingerprint = None;
+        self.queue_authorization = None;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
@@ -1130,6 +1159,14 @@ impl Form2551QDraft {
                     .to_string(),
             )),
         }
+        if let Some(error) = crate::filing_queue::scoped_authorization_error(
+            self.queue_authorization.as_ref(),
+            "2551Q",
+            &self.tin,
+            &self.period_code(),
+        ) {
+            errors.push(error);
+        }
         if errors.is_empty() {
             return Ok(());
         }
@@ -1158,11 +1195,14 @@ impl Form2551QDraft {
         self.last_error = Some(error_msg);
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
 
         if self.submission_attempts >= 5 {
             self.status = FilingStatus::Draft;
             self.next_retry_at = None;
             self.queued_submission_fingerprint = None;
+            self.queue_authorization = None;
         } else {
             let delay_mins = 2i64.pow(self.submission_attempts - 1);
             let next_time = chrono::Utc::now() + chrono::Duration::minutes(delay_mins);
