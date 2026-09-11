@@ -40,7 +40,7 @@ pub fn select_imap_auth_profile(
         .filter(|profile| profile.has_usable_oauth_refresh())
         .collect();
     if !with_refresh.is_empty() {
-        with_refresh.sort_by(|left, right| right.id.cmp(&left.id));
+        with_refresh.sort_by_key(|profile| std::cmp::Reverse(profile.id));
         return Some(with_refresh[0].clone());
     }
 
