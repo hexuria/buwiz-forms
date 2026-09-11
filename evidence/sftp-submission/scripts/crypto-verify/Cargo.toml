@@ -1,0 +1,15 @@
+[package]
+name = "crypto-verify"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "verify"
+path = "main.rs"
+
+[dependencies]
+aes = "0.8"
+cbc = "0.1"
+pbkdf2 = "0.12"
+sha1 = "0.10"
+data-encoding = "2"
