@@ -879,9 +879,10 @@ Remaining (not faked):
 
 ## Claimed queue without BIR outcome (facts)
 
-SFTP target is no longer a hardcoded FTP IP. `transport.rs` fetches
-`tinDispatcherSFTP.php`, unwraps host/user/pass, then opens SSH/SFTP on
-port 22 **before** claim, and claims immediately before PUT.
+SFTP default is `tinDispatcherSFTP.php` (unwrap host/user/pass, SSH/SFTP :22).
+If `BIR_SFTP_HOST` is set, that env endpoint is used instead. `BIR_SFTP_DRY_RUN=1`
+(or `BIR_SFTP_LIVE=0`) fakes the PUT in-process (no BIR, skip IMAP). The worker
+still opens the session **before** claim, then claims immediately before PUT.
 
 Claim writes token + `claimed_at` and `submission_error` “outcome pending /
 auto-retry disabled”. Claimed rows are skipped on the next cron pass
@@ -903,4 +904,4 @@ Do **not** auto-release after PUT: clearing a claim after unknown upload I/O
 can double-file. Stuck rows that already claimed (crash or PUT error, or
 historical connect-then-claimed rows) still need human
 `form.revert_draft` / `form.release_abandoned_claim` with `confirm=true` and
-`reason=abandoned_no_bir_filing`. Live SFTP credentials come from the dispatcher, not source.
+`reason=abandoned_no_bir_filing`. Live SFTP credentials come from tinDispatcherSFTP.php unless BIR_SFTP_* / dry-run override the endpoint.
