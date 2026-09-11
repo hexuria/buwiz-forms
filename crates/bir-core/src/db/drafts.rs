@@ -3291,6 +3291,34 @@ mod tests {
     }
 
     #[test]
+    fn save_and_reopen_1601c_preserves_government_category() {
+        use crate::forms::FormValidator;
+        use crate::forms::form_1601c::Form1601CDraft;
+
+        let db = test_db();
+        let profile = test_profile();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        draft.any_taxes_withheld = false;
+        assert_eq!(draft.category_of_agent, "P");
+        draft.category_of_agent = "G".to_string();
+        draft.compute();
+
+        db.save_1601c_draft(&draft)
+            .expect("government category 1601-C draft should save");
+        let reopened = db
+            .get_1601c_draft(&draft.tin, draft.taxable_year, draft.month)
+            .expect("1601-C lookup should succeed")
+            .expect("saved 1601-C draft should exist");
+        assert_eq!(reopened.category_of_agent, "G");
+        assert!(
+            reopened
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "category_of_agent")
+        );
+    }
+
+    #[test]
     fn editable_1601c_to_exact_xml_queue_claim_and_completion_is_immutable() {
         let db = test_db();
         let profile = test_profile();

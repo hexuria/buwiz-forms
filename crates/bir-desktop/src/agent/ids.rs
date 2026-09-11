@@ -66,6 +66,8 @@ pub const FORM_1601C_TAX_25: &str = "form-1601c-tax-25";
 pub const FORM_1601C_SHEETS: &str = "form-1601c-sheets";
 /// Painted 1601-C “Any Taxes Withheld?” Yes/No control. Same id in the agent tree.
 pub const FORM_1601C_WITHHELD: &str = "withheld_btn";
+/// Painted 1601-C Item 11 Category of Withholding Agent (Private / Government).
+pub const FORM_1601C_CATEGORY: &str = "category_btn";
 pub const FORM_1601C_SUBMIT_CONFIRM: &str = "form-1601c-submit-confirm";
 pub const FORM_1601C_CANCEL_QUEUE: &str = "cancel_queue_btn";
 pub const FORM_1601C_RETURN_DRAFT: &str = "form-1601c-return-draft";
@@ -458,6 +460,7 @@ mod tests {
         assert!(is_filing_submit_control(FORM_1601C_SUBMIT_CONFIRM));
         assert!(!is_filing_submit_control(FORM_1601C_SAVE));
         assert!(!is_filing_submit_control(FORM_1601C_WITHHELD));
+        assert!(!is_filing_submit_control(FORM_1601C_CATEGORY));
         assert_eq!(
             profile_row_tin("profile-12345678900000"),
             Some("12345678900000")

@@ -811,6 +811,31 @@ mod tests {
     }
 
     #[test]
+    fn government_category_round_trips_and_rejects_both_xboxes() {
+        let profile = test_profile();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        draft.any_taxes_withheld = false;
+        draft.category_of_agent = "G".to_string();
+        draft.compute();
+
+        let xml = draft
+            .try_to_bir_xml_payload()
+            .expect("government category draft should generate XML");
+        let parsed = Form1601CDraft::from_bir_xml_payload(&xml)
+            .expect("government category XML should parse");
+        assert_eq!(parsed.category_of_agent, "G");
+
+        let mut fields = draft.to_bir_field_map();
+        fields.insert("frm1601c:CatAgent_P".to_string(), "true".to_string());
+        fields.insert("frm1601c:CatAgent_G".to_string(), "true".to_string());
+        let errors = Form1601CDraft::from_bir_field_map(&fields)
+            .expect_err("both category xboxes must be rejected");
+        assert!(errors.iter().any(|(field, message)| {
+            field == "category_of_agent" && message.contains("exactly one")
+        }));
+    }
+
+    #[test]
     fn checked_xml_generation_rejects_schedule_overflow_instead_of_truncating() {
         let profile = test_profile();
         let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);

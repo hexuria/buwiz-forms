@@ -33,7 +33,7 @@ use crate::agent::html_demo::{self, DueRow, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
 use crate::app::ActiveView;
-use crate::views::form_1601c_view::Agent1601CHostPatch;
+use crate::views::form_1601c_view::{Agent1601CCategory, Agent1601CHostPatch};
 
 const FIXTURE_TIN: &str = "12345678900000";
 const FIXTURE_NAME: &str = "Agent Fixture Taxpayer";
@@ -422,6 +422,12 @@ impl BirAgentHost {
             .map(|form| form.draft.any_taxes_withheld)
     }
 
+    pub(crate) fn form_1601c_category_of_agent(&self) -> Option<Agent1601CCategory> {
+        self.form_1601c
+            .as_ref()
+            .and_then(|form| Agent1601CCategory::from_code(&form.draft.category_of_agent))
+    }
+
     /// Same patch `drain::apply_host` writes into `Form1601CView`.
     pub(crate) fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
         Agent1601CHostPatch {
@@ -429,6 +435,7 @@ impl BirAgentHost {
             tax_25: self.form_1601c_tax_25(),
             sheets: self.form_1601c_sheets(),
             any_taxes_withheld: self.form_1601c_any_taxes_withheld(),
+            category_of_agent: self.form_1601c_category_of_agent(),
             save: self.form_1601c_saved(),
             validate: self.form_1601c_validated(),
         }
@@ -1370,6 +1377,16 @@ impl BirAgentHost {
                 form.draft.compute();
                 form.validated = false;
             }
+            ids::FORM_1601C_CATEGORY => {
+                let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+                if !form.draft.is_editable() {
+                    return Err("this return is no longer a draft".into());
+                }
+                form.draft.category_of_agent =
+                    parse_category_of_agent(&Value::String(value.into()))?;
+                form.draft.compute();
+                form.validated = false;
+            }
             ids::FORM_2551Q_CREDITABLE => {
                 let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
                 form.draft.creditable_tax_withheld = parse_money(value)?;
@@ -1429,6 +1446,11 @@ impl BirAgentHost {
                 .form_1601c
                 .as_ref()
                 .map(|form| withheld_snapshot_value(form.draft.any_taxes_withheld))
+                .unwrap_or_default(),
+            ids::FORM_1601C_CATEGORY => self
+                .form_1601c
+                .as_ref()
+                .map(|form| category_snapshot_value(&form.draft.category_of_agent))
                 .unwrap_or_default(),
             ids::FORM_2551Q_CREDITABLE => self
                 .form_2551q
@@ -1903,6 +1925,30 @@ impl BirAgentHost {
         Ok(DispatchResult::json(json!({
             "form": "1601C",
             "any_taxes_withheld": form.draft.any_taxes_withheld,
+            "queued": false,
+            "filed": false,
+        })))
+    }
+
+    fn toggle_1601c_category(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+        if self.active_view != ActiveView::Form1601C {
+            return Err("open form 1601C first".into());
+        }
+        if !form.draft.is_editable() {
+            return Err("this return is no longer a draft".into());
+        }
+        form.draft.category_of_agent = if form.draft.category_of_agent == "P" {
+            "G".to_string()
+        } else {
+            "P".to_string()
+        };
+        form.draft.compute();
+        form.validated = false;
+        Ok(DispatchResult::json(json!({
+            "form": "1601C",
+            "category_of_agent": category_snapshot_value(&form.draft.category_of_agent),
             "queued": false,
             "filed": false,
         })))
@@ -2398,6 +2444,7 @@ impl BirAgentHost {
             ids::FORM_1601C_SAVE => self.save_form_draft(),
             ids::FORM_1601C_VALIDATE => self.validate_form(),
             ids::FORM_1601C_WITHHELD => self.toggle_1601c_withheld(),
+            ids::FORM_1601C_CATEGORY => self.toggle_1601c_category(),
             ids::FORM_1601C_SUBMIT => self.request_submit_confirm(),
             ids::FORM_1601C_SUBMIT_CONFIRM => Err(
                 "form-1601c-submit-confirm needs filing.queue with args.confirm=true (JSON boolean); the agent will not skip that gate"
@@ -2817,6 +2864,16 @@ impl BirAgentHost {
                     .with_checked(draft.any_taxes_withheld)
                     .with_value(withheld_snapshot_value(draft.any_taxes_withheld))
                     .with_enabled(draft.is_editable()),
+            );
+            page = page.with_child(
+                UiNode::new(
+                    ids::FORM_1601C_CATEGORY,
+                    "checkbox",
+                    "Category of Withholding Agent",
+                )
+                .with_checked(draft.category_of_agent == "P")
+                .with_value(category_snapshot_value(&draft.category_of_agent))
+                .with_enabled(draft.is_editable()),
             );
             page = page.with_child(textbox(
                 ids::FORM_1601C_TAX_14,
@@ -3381,6 +3438,13 @@ fn form_1601c_fields(draft: &Form1601CDraft) -> Vec<Value> {
             false,
             true,
         ),
+        field_desc(
+            "category_of_agent",
+            true,
+            &category_snapshot_value(&draft.category_of_agent),
+            false,
+            true,
+        ),
     ]
 }
 
@@ -3445,11 +3509,14 @@ fn is_1601c_fillable(key: &str) -> bool {
             | "tax_25"
             | "sheets"
             | "any_taxes_withheld"
+            | "category_of_agent"
             | ids::FORM_1601C_TAX_14
             | ids::FORM_1601C_TAX_25
             | ids::FORM_1601C_SHEETS
             | ids::FORM_1601C_WITHHELD
             | "form-1601c-withheld"
+            | ids::FORM_1601C_CATEGORY
+            | "form-1601c-category"
     )
 }
 
@@ -3457,6 +3524,10 @@ fn apply_1601c_fill(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Res
     match key {
         "any_taxes_withheld" | ids::FORM_1601C_WITHHELD | "form-1601c-withheld" => {
             draft.any_taxes_withheld = parse_withheld_flag(value)?;
+            return Ok(());
+        }
+        "category_of_agent" | ids::FORM_1601C_CATEGORY | "form-1601c-category" => {
+            draft.category_of_agent = parse_category_of_agent(value)?;
             return Ok(());
         }
         _ => {}
@@ -3542,6 +3613,10 @@ fn withheld_snapshot_value(withheld: bool) -> String {
     if withheld { "Yes".into() } else { "No".into() }
 }
 
+fn category_snapshot_value(category: &str) -> String {
+    category.to_string()
+}
+
 fn parse_withheld_flag(value: &Value) -> Result<bool, String> {
     match value {
         Value::Bool(flag) => Ok(*flag),
@@ -3564,6 +3639,36 @@ fn parse_withheld_text(text: &str) -> Result<bool, String> {
         "false" | "no" | "0" => Ok(false),
         other => Err(format!(
             "any_taxes_withheld must be boolean true/false or Yes/No, not `{other}`"
+        )),
+    }
+}
+
+fn parse_category_of_agent(value: &Value) -> Result<String, String> {
+    match value {
+        Value::Bool(true) => Ok("P".into()),
+        Value::Bool(false) => Ok("G".into()),
+        Value::Number(number) => match number.as_i64() {
+            Some(1) => Ok("P".into()),
+            Some(0) => Ok("G".into()),
+            _ => Err(
+                "category_of_agent must be P or G (private/government); boolean true/false maps to P/G, not a non-0/1 number"
+                    .into(),
+            ),
+        },
+        Value::String(text) => parse_category_of_agent_text(text),
+        _ => Err(
+            "category_of_agent must be P or G (private/government), or boolean true/false for P/G"
+                .into(),
+        ),
+    }
+}
+
+fn parse_category_of_agent_text(text: &str) -> Result<String, String> {
+    match text.trim().to_ascii_lowercase().as_str() {
+        "p" | "private" | "true" | "yes" | "1" => Ok("P".into()),
+        "g" | "government" | "false" | "no" | "0" => Ok("G".into()),
+        other => Err(format!(
+            "category_of_agent must be P or G (private/government), not `{other}`"
         )),
     }
 }
@@ -5651,6 +5756,13 @@ mod tests {
 
         // Painted view still has Yes until apply_host runs (Mac regression).
         let mut view_flag = true;
+        let mut view_category = host
+            .form_1601c
+            .as_ref()
+            .unwrap()
+            .draft
+            .category_of_agent
+            .clone();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
         assert!(view_draft.any_taxes_withheld);
 
@@ -5666,12 +5778,13 @@ mod tests {
         assert!(filled.ok, "{:?}", filled.error);
         let patch = host.form_1601c_host_patch();
         assert_eq!(patch.any_taxes_withheld, Some(false));
-        apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_draft);
+        apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_category, &mut view_draft);
         assert!(!view_flag);
         assert!(!view_draft.any_taxes_withheld);
         assert!(!apply_1601c_host_header_patch(
             &Agent1601CHostPatch::default(),
             &mut view_flag,
+            &mut view_category,
             &mut view_draft
         ));
         assert!(!view_flag);
@@ -5719,6 +5832,213 @@ mod tests {
                 field != "tax_14_total_compensation" && field != "tax_25_total_taxes_withheld"
             }),
             "filing.validate after drain apply must not require items 14/25: {validate_errors:?}"
+        );
+    }
+
+    #[test]
+    fn form_fill_category_of_agent_updates_snapshot() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": year, "period": 1 }),
+            }),
+            None,
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        let tree = host.tree();
+        let category = tree
+            .find(ids::FORM_1601C_CATEGORY)
+            .expect("category_btn in 1601-C tree");
+        assert_eq!(category.role, "checkbox");
+        assert_eq!(category.checked, Some(true));
+        assert_eq!(category.value.as_deref(), Some("P"));
+        assert!(category.enabled);
+        assert_eq!(
+            host.form_1601c.as_ref().unwrap().draft.category_of_agent,
+            "P"
+        );
+
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let category_field = listed.result.as_ref().unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|field| field["key"] == "category_of_agent")
+            .expect("category_of_agent field");
+        assert_eq!(category_field["fillable"], true);
+        assert_eq!(category_field["required"], true);
+        assert_eq!(category_field["value"], "P");
+
+        let government = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "category_of_agent": "G" }),
+            }),
+            None,
+            None,
+        );
+        assert!(government.ok, "{:?}", government.error);
+        assert_eq!(
+            host.form_1601c.as_ref().unwrap().draft.category_of_agent,
+            "G"
+        );
+        let tree = host.tree();
+        let category = tree.find(ids::FORM_1601C_CATEGORY).unwrap();
+        assert_eq!(category.checked, Some(false));
+        assert_eq!(category.value.as_deref(), Some("G"));
+
+        let alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "fields": { "category_of_agent": "private" } }),
+            }),
+            None,
+            None,
+        );
+        assert!(alias.ok, "{:?}", alias.error);
+        assert_eq!(
+            host.form_1601c.as_ref().unwrap().draft.category_of_agent,
+            "P"
+        );
+
+        let bool_alias = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "category_of_agent": false }),
+            }),
+            None,
+            None,
+        );
+        assert!(bool_alias.ok, "{:?}", bool_alias.error);
+        assert_eq!(
+            host.form_1601c.as_ref().unwrap().draft.category_of_agent,
+            "G"
+        );
+
+        let invalid = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "category_of_agent": "both" }),
+            }),
+            None,
+            None,
+        );
+        assert!(!invalid.ok);
+        assert!(
+            invalid
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("category_of_agent")
+        );
+        assert_eq!(
+            host.form_1601c.as_ref().unwrap().draft.category_of_agent,
+            "G"
+        );
+    }
+
+    #[test]
+    fn category_fill_survives_drain_apply_host_roundtrip() {
+        let mut host = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": year, "period": 8 }),
+            }),
+            None,
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        let mut view_flag = host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld;
+        let mut view_category = "P".to_string();
+        let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
+        assert_eq!(view_draft.category_of_agent, "P");
+
+        let filled = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "category_of_agent": "government" }),
+            }),
+            None,
+            None,
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let patch = host.form_1601c_host_patch();
+        assert_eq!(
+            patch.category_of_agent,
+            Some(Agent1601CCategory::Government)
+        );
+        apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_category, &mut view_draft);
+        assert_eq!(view_category, "G");
+        assert_eq!(view_draft.category_of_agent, "G");
+
+        host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
+        let tree = host.tree();
+        let category = tree
+            .find(ids::FORM_1601C_CATEGORY)
+            .expect("category_btn after apply_host");
+        assert_eq!(category.checked, Some(false));
+        assert_eq!(category.value.as_deref(), Some("G"));
+
+        let fields = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fields".into(),
+                args: json!({}),
+            }),
+            None,
+            None,
+        );
+        assert!(fields.ok, "{:?}", fields.error);
+        let category_field = fields.result.as_ref().unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|field| field["key"] == "category_of_agent")
+            .expect("category_of_agent field");
+        assert_eq!(category_field["value"], "G");
+
+        view_draft.any_taxes_withheld = false;
+        view_draft.compute();
+        host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
+        let validated = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.validate".into(),
+                args: json!({}),
+            }),
+            None,
+            None,
+        );
+        assert!(validated.ok, "{:?}", validated.error);
+        let validate_errors = &host.form_1601c.as_ref().unwrap().validation_errors;
+        assert!(
+            validate_errors
+                .iter()
+                .all(|(field, _)| field != "category_of_agent"),
+            "government category must validate: {validate_errors:?}"
         );
     }
 

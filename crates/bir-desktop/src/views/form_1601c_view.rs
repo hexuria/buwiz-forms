@@ -41,6 +41,31 @@ fn submission_disposition() -> SubmissionDisposition {
     }
 }
 
+/// Item 11 Category of Withholding Agent. Copy-sized so it can live on
+/// `Agent1601CHostPatch` without dropping `Copy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Agent1601CCategory {
+    Private,
+    Government,
+}
+
+impl Agent1601CCategory {
+    pub(crate) fn as_code(self) -> &'static str {
+        match self {
+            Self::Private => "P",
+            Self::Government => "G",
+        }
+    }
+
+    pub(crate) fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "P" => Some(Self::Private),
+            "G" => Some(Self::Government),
+            _ => None,
+        }
+    }
+}
+
 /// Host-side 1601-C field patch applied on the UI thread. Kept as one value
 /// so the always-compiled accessor stays under clippy's argument limit.
 #[derive(Debug, Clone, Copy, Default)]
@@ -49,24 +74,32 @@ pub(crate) struct Agent1601CHostPatch {
     pub tax_25: Option<f64>,
     pub sheets: Option<u32>,
     pub any_taxes_withheld: Option<bool>,
+    pub category_of_agent: Option<Agent1601CCategory>,
     pub save: bool,
     pub validate: bool,
 }
 
-/// Writes withheld onto the painted Yes/No flag and the draft `validate` reads.
-/// Same fields the UI toggle updates before `sync_from_inputs`.
+/// Writes header flags onto the painted controls and the draft `validate` reads.
+/// Same fields the UI toggles update before `sync_from_inputs`.
 pub(crate) fn apply_1601c_host_header_patch(
     patch: &Agent1601CHostPatch,
     any_taxes_withheld: &mut bool,
+    category_of_agent: &mut String,
     draft: &mut Form1601CDraft,
 ) -> bool {
+    let mut dirty = false;
     if let Some(value) = patch.any_taxes_withheld {
         *any_taxes_withheld = value;
         draft.any_taxes_withheld = value;
-        true
-    } else {
-        false
+        dirty = true;
     }
+    if let Some(value) = patch.category_of_agent {
+        let code = value.as_code().to_string();
+        *category_of_agent = code.clone();
+        draft.category_of_agent = code;
+        dirty = true;
+    }
+    dirty
 }
 
 struct ScheduleRowInputs {
@@ -92,6 +125,8 @@ pub struct Form1601CView {
     // Header Inputs
     is_amended: bool,
     any_taxes_withheld: bool,
+    /// Item 11: `"P"` Private or `"G"` Government.
+    category_of_agent: String,
     number_of_sheets: Entity<InputState>,
     atc: Entity<InputState>,
     tax_relief: bool,
@@ -329,6 +364,7 @@ impl Form1601CView {
         Self {
             is_amended: draft.is_amended,
             any_taxes_withheld: draft.any_taxes_withheld,
+            category_of_agent: draft.category_of_agent.clone(),
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
@@ -390,6 +426,7 @@ impl Form1601CView {
 
         self.draft.is_amended = self.is_amended;
         self.draft.any_taxes_withheld = self.any_taxes_withheld;
+        self.draft.category_of_agent = self.category_of_agent.clone();
         let number_of_sheets = get_text(&self.number_of_sheets, cx);
         self.draft.number_of_sheets = if number_of_sheets.trim().is_empty() {
             0
@@ -585,8 +622,12 @@ impl Form1601CView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut dirty =
-            apply_1601c_host_header_patch(&patch, &mut self.any_taxes_withheld, &mut self.draft);
+        let mut dirty = apply_1601c_host_header_patch(
+            &patch,
+            &mut self.any_taxes_withheld,
+            &mut self.category_of_agent,
+            &mut self.draft,
+        );
         if let Some(value) = patch.tax_14 {
             self.tax_14_total_compensation.update(cx, |input, cx| {
                 input.set_value(format!("{value:.2}"), window, cx);
@@ -634,6 +675,7 @@ impl Form1601CView {
         self.status_message = draft.submission_error.clone();
         self.is_amended = draft.is_amended;
         self.any_taxes_withheld = draft.any_taxes_withheld;
+        self.category_of_agent = draft.category_of_agent.clone();
         self.draft = draft.clone();
         self.is_validated = false;
         self.validation_errors.clear();
@@ -697,6 +739,7 @@ impl Form1601CView {
             }) => {
                 self.is_amended = draft.is_amended;
                 self.any_taxes_withheld = draft.any_taxes_withheld;
+                self.category_of_agent = draft.category_of_agent.clone();
                 self.draft = draft;
                 self.release_claim_confirm_open = false;
                 self.is_validated = false;
@@ -1226,6 +1269,7 @@ impl Render for Form1601CView {
                                                 cx,
                                             )))
                                             .child(self.render_input_row("ATC", &self.atc, cx))
+                                            .child(self.render_category_of_agent(cx))
                                             .child(rsx! {
                                                 <div flex gap_4 items_center>
                                                     <div>{
@@ -1633,5 +1677,66 @@ impl Form1601CView {
                 </div>
             </div>
         }
+    }
+
+    fn render_category_of_agent(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_private = self.category_of_agent == "P";
+        let is_government = self.category_of_agent == "G";
+        rsx! {
+            <div flex gap_4 items_center>
+                <div>{"11 Category of Withholding Agent"}</div>
+                {div()
+                    .id(crate::agent::ids::FORM_1601C_CATEGORY)
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .child(Self::category_choice_chip(
+                        "1601c_cat_p",
+                        "Private",
+                        is_private,
+                        "P",
+                        cx,
+                    ))
+                    .child(Self::category_choice_chip(
+                        "1601c_cat_g",
+                        "Government",
+                        is_government,
+                        "G",
+                        cx,
+                    ))}
+            </div>
+        }
+    }
+
+    fn category_choice_chip(
+        id: &'static str,
+        label: &'static str,
+        selected: bool,
+        code: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(id)
+            .p_2()
+            .border_1()
+            .border_color(if selected {
+                cx.theme().primary
+            } else {
+                cx.theme().border
+            })
+            .bg(if selected {
+                cx.theme().primary.opacity(0.2)
+            } else {
+                cx.theme().background
+            })
+            .rounded_md()
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if matches!(this.draft.status, FilingStatus::Draft) {
+                    this.category_of_agent = code.to_string();
+                    this.sync_from_inputs(cx);
+                }
+            }))
+            .child(label)
     }
 }
