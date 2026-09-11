@@ -147,10 +147,8 @@ These still apply to every agent, painted or headless:
 - No auto `profile.ensure` (rejected). `profile.create` opens the editor only.
   `profile.save` is the explicit persist after human confirm for live
   taxpayers.
-- Never queue or file externally. `filing.submit` is confirmation-only (exposes
-  the confirmation node; does not queue or file). Confirming
-  `form-1601c-submit-confirm` is refused. Complete filing in the BIR UI.
-  `form.release_abandoned_claim` only returns a claimed Queued snapshot to Draft
+- Queue 1601C/2551Q with filing.queue / form.queue / form.submit and confirm=true (JSON boolean). filing.submit only exposes the confirmation node. Direct click on form-1601c-submit-confirm is refused so that gate cannot be skipped. Cron then PUTs the queued return.
+  form.release_abandoned_claim` only returns a claimed Queued snapshot to Draft
   after a human confirmed nothing reached BIR; it does **not** file.
 - Never skip the lock screen, profile PIN/TOTP, or administrator OTP. Unsaved
   profile compliance still blocks navigation.
@@ -756,8 +754,15 @@ table; do not use them in recipes.
 | `form.upload_receipt` | — | `{status:"needs_file", path:null}` — file picker required. A later success must return an absolute `path`, never file bytes |
 | `calendar.add` | — | Writes a native `.ics` via `build_desired_events` + `write_profile_calendar_ics` to a temp path. Does not open a calendar app |
 | `profile.calendar_sync` | — | **Error**: Google push needs a linked account and the Profile Manager calendar tab |
-| `filing.submit` | — | Validate and expose confirmation; **does not queue or file** |
-| `form.submit` / `form.queue` / `form.file` / `filing.queue` / `filing.file` | — | **Rejected** |
+| `filing.submit` | — | Validate and expose confirmation; does not queue until filing.queue confirm=true |
+| `form.queue` / `filing.queue` / `form.submit` | `confirm=true` JSON boolean | Queue open 1601C/2551Q for cron SFTP PUT |
+| `form.file` / `filing.file` / `form.submit_external` | --- | **Rejected**; queue first, then let cron PUT |
+iling.queue / 
+orm.submit | confirm=true JSON boolean | Queue open 1601C/2551Q for cron SFTP PUT |
+| 
+orm.file / 
+iling.file / 
+orm.submit_external | — | **Rejected**; queue first, then let cron PUT |
 | `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` only opens the editor; the outer agent asks Uriah before `profile.save` |
 
 ## Alias table
