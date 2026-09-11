@@ -61,6 +61,7 @@ trait ImportedSubmissionClient {
     fn submit<'a>(
         &'a self,
         form_type: &'a str,
+        tin: &'a str,
         filename: &'a str,
         payload: &'a [u8],
     ) -> Pin<Box<dyn Future<Output = Result<(), TransportError>> + Send + 'a>>;
@@ -72,10 +73,11 @@ impl ImportedSubmissionClient for NetworkSubmissionClient {
     fn submit<'a>(
         &'a self,
         form_type: &'a str,
+        tin: &'a str,
         filename: &'a str,
         payload: &'a [u8],
     ) -> Pin<Box<dyn Future<Output = Result<(), TransportError>> + Send + 'a>> {
-        Box::pin(submit_iaf(form_type, filename, payload))
+        Box::pin(submit_iaf(form_type, tin, filename, payload))
     }
 }
 
@@ -111,7 +113,7 @@ async fn import_and_submit_savefile_with_client<C: ImportedSubmissionClient>(
     );
 
     client
-        .submit(prepared.form_id, &submit_filename, &prepared.encrypted)
+        .submit(prepared.form_id, &prepared.tin, &submit_filename, &prepared.encrypted)
         .await?;
 
     let (year, quarter, month) = parse_period_code(&prepared.period_code);
@@ -351,6 +353,7 @@ mod tests {
         fn submit<'a>(
             &'a self,
             _form_type: &'a str,
+            _tin: &'a str,
             _filename: &'a str,
             _payload: &'a [u8],
         ) -> Pin<Box<dyn Future<Output = Result<(), TransportError>> + Send + 'a>> {
