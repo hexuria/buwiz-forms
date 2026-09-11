@@ -1717,6 +1717,7 @@ impl BirAgentHost {
     fn queue_open_return(&mut self, args: &Value, invoke: &str) -> Result<DispatchResult, String> {
         self.gate_locked()?;
         require_queue_confirm(args, invoke)?;
+        self.prepare_queue_target(args, invoke)?;
         match self.active_view {
             ActiveView::Form1601C => self.queue_open_1601c(),
             ActiveView::Form2551Q => self.queue_open_2551q(),
@@ -1725,6 +1726,82 @@ impl BirAgentHost {
                 ids::view_slug(other)
             )),
         }
+    }
+
+    fn prepare_queue_target(&mut self, args: &Value, invoke: &str) -> Result<(), String> {
+        match self.resolve_tin_or_q(args)? {
+            TinQuery::Missing => {}
+            TinQuery::NotFound { query } => {
+                return Err(format!("{invoke} taxpayer not found for {query}"));
+            }
+            TinQuery::Ambiguous { query, .. } => {
+                return Err(format!(
+                    "{invoke} taxpayer {query} is ambiguous; pass args.tin as 14 digits"
+                ));
+            }
+            TinQuery::One { tin, .. } => {
+                if self.selected_tin.as_deref() != Some(tin.as_str()) {
+                    self.select_profile_view(&tin, ActiveView::Dashboard)?;
+                }
+            }
+        }
+        let code = args
+            .get("code")
+            .or_else(|| args.get("form"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let year = args.get("year").and_then(Value::as_u64).map(|year| year as u16);
+        let period = args
+            .get("period")
+            .and_then(Value::as_u64)
+            .map(|period| period as u8);
+        let already_open = matches!(
+            self.active_view,
+            ActiveView::Form1601C | ActiveView::Form2551Q
+        );
+        let same_open = match (code, self.active_view) {
+            (Some(code), ActiveView::Form1601C) if code.eq_ignore_ascii_case("1601C") => self
+                .form_1601c
+                .as_ref()
+                .is_some_and(|form| {
+                    year.is_none_or(|y| form.draft.taxable_year == y)
+                        && period.is_none_or(|m| form.draft.month == m)
+                }),
+            (Some(code), ActiveView::Form2551Q) if code.eq_ignore_ascii_case("2551Q") => self
+                .form_2551q
+                .as_ref()
+                .is_some_and(|form| {
+                    year.is_none_or(|y| form.draft.taxable_year == y)
+                        && period.is_none_or(|q| form.draft.quarter == q)
+                }),
+            _ => false,
+        };
+        if let Some(code) = code {
+            if !same_open {
+                let year = year.unwrap_or_else(|| chrono::Local::now().year() as u16);
+                let period = period.unwrap_or(1);
+                self.open_form(code, year, period)?;
+            }
+        } else if !already_open {
+            return Err(format!(
+                "{invoke} needs an open 1601C/2551Q or args.code plus year/period"
+            ));
+        } else if year.is_some() || period.is_some() {
+            let code = match self.active_view {
+                ActiveView::Form1601C => "1601C",
+                ActiveView::Form2551Q => "2551Q",
+                _ => {
+                    return Err(format!(
+                        "{invoke} needs args.code when no 1601C/2551Q is open"
+                    ));
+                }
+            };
+            let year = year.unwrap_or_else(|| chrono::Local::now().year() as u16);
+            let period = period.unwrap_or(1);
+            self.open_form(code, year, period)?;
+        }
+        Ok(())
     }
 
     fn queue_open_1601c(&mut self) -> Result<DispatchResult, String> {
@@ -2468,6 +2545,20 @@ impl BirAgentHost {
                     .get("period")
                     .and_then(|value| value.as_u64())
                     .unwrap_or(1) as u8;
+                match self.resolve_tin_or_q(args)? {
+                    TinQuery::Missing => {}
+                    TinQuery::NotFound { query } => {
+                        return Err(format!("filing.start taxpayer not found for {query}"));
+                    }
+                    TinQuery::Ambiguous { query, .. } => {
+                        return Err(format!(
+                            "filing.start taxpayer {query} is ambiguous; use args.tin as 14 digits"
+                        ));
+                    }
+                    TinQuery::One { tin, .. } => {
+                        self.select_profile_view(&tin, ActiveView::Dashboard)?;
+                    }
+                }
                 self.open_form(code, year, period)
             }
             "filing.validate" | "form.validate" => self.validate_form(),
@@ -4050,6 +4141,61 @@ mod tests {
         assert!(queued.ok, "{:?}", queued.error);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
         assert!(!host.submit_confirmation_visible());
+    }
+
+    #[test]
+    fn filing_queue_can_target_tin_year_period_on_headless_host() {
+        let mut host = fixture_host();
+        host.navigate(ActiveView::GlobalDashboard).unwrap();
+        assert_eq!(host.active_view(), ActiveView::GlobalDashboard);
+        let year = chrono::Local::now().year() as u16;
+        let started = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: serde_json::json!({
+                    "tin": FIXTURE_TIN,
+                    "code": "1601C",
+                    "year": year,
+                    "period": 10
+                }),
+            }),
+            None,
+        );
+        assert!(started.ok, "{:?}", started.error);
+        handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::FORM_1601C_TAX_14.into(),
+                value: "1000.00".into(),
+            }),
+            None,
+        );
+        handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::FORM_1601C_TAX_25.into(),
+                value: "100.00".into(),
+            }),
+            None,
+        );
+        let queued = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.queue".into(),
+                args: serde_json::json!({
+                    "confirm": true,
+                    "tin": FIXTURE_TIN,
+                    "code": "1601C",
+                    "year": year,
+                    "period": 10
+                }),
+            }),
+            None,
+        );
+        assert!(queued.ok, "{:?}", queued.error);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+        assert_eq!(host.selected_tin(), Some(FIXTURE_TIN));
     }
 
     #[test]

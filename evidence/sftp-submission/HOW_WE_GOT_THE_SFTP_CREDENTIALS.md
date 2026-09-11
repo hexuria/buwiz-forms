@@ -166,3 +166,14 @@ argument cannot be skipped.
 - Do not copy OSS port 23; live BIR is port 22.
 - Do not treat dry-run (BIR_SFTP_DRY_RUN=1) as a BIR filing.
 - Do not PUT a real taxpayer TIN unless you mean to file.
+
+## Three ways to queue (for Grok Bot later)
+
+1. Grok Bot / gpui-agent against bir-headless. GUI does not need to be open.
+   filing.start and filing.queue accept tin, code, year, period. Queue with
+   confirm=true. Recipe: crates/bir-desktop/recipes/form-1601c-queue.json
+2. Painted bir confirm button. Cron still needs painted bir or bir-headless
+   running to PUT.
+3. Cron on a row that is already Queued. Cron does not create the queue.
+
+Grok Bot uses the same GPUI_AGENT_TOKEN as the host that owns 127.0.0.1:17421.
