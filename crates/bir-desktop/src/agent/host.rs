@@ -1688,20 +1688,126 @@ impl BirAgentHost {
                 return Err("fix validation errors before submitting".into());
             }
         }
+        if self.active_view == ActiveView::Form2551Q {
+            let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+            form.draft.recompute(None);
+            form.validation_errors = form.draft.validate();
+            form.validated = true;
+            if !form.validation_errors.is_empty() {
+                return Err("fix validation errors before submitting".into());
+            }
+        }
         self.submit_confirmation_visible = true;
         Ok(DispatchResult::json(serde_json::json!({
             "confirmation": true,
             "queued": false,
             "filed": false,
-            "queue_supported": can_queue_for_submission("1601C"),
+            "queue_supported": matches!(
+                self.active_view,
+                ActiveView::Form1601C | ActiveView::Form2551Q
+            ) && can_queue_for_submission(match self.active_view {
+                ActiveView::Form1601C => "1601C",
+                ActiveView::Form2551Q => "2551Q",
+                _ => "",
+            }),
+            "needs_confirm": true,
         })))
     }
 
-    fn refuse_submit_confirm(&self) -> Result<DispatchResult, String> {
-        Err(
-            "agent host refuses to queue or file a return; complete submission in the BIR UI confirmation path"
-                .into(),
-        )
+    fn queue_open_return(&mut self, args: &Value, invoke: &str) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        require_queue_confirm(args, invoke)?;
+        match self.active_view {
+            ActiveView::Form1601C => self.queue_open_1601c(),
+            ActiveView::Form2551Q => self.queue_open_2551q(),
+            other => Err(format!(
+                "{invoke} supports 1601C and 2551Q only; open {} is not queueable from the agent host",
+                ids::view_slug(other)
+            )),
+        }
+    }
+
+    fn queue_open_1601c(&mut self) -> Result<DispatchResult, String> {
+        let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
+        if !form.draft.is_editable() {
+            return Err("this return is already queued or filed and cannot be queued again".into());
+        }
+        form.draft.compute();
+        form.validation_errors = form.draft.validate();
+        form.validated = true;
+        if !form.validation_errors.is_empty() {
+            return Err("fix validation errors before submitting".into());
+        }
+        let before_queue = form.draft.clone();
+        if let Err(errors) = form.draft.transition_to_queued() {
+            form.validation_errors = errors;
+            return Err("fix validation errors before submitting".into());
+        }
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let save_result = {
+            let guard = db.lock().map_err(|err| err.to_string())?;
+            guard
+                .save_queued_1601c_draft(&form.draft)
+                .map_err(|err| err.to_string())
+        };
+        if let Err(error) = save_result {
+            form.draft = before_queue;
+            return Err(format!(
+                "Could not queue Form 1601-C. No submission was started: {error}"
+            ));
+        }
+        form.saved = true;
+        self.submit_confirmation_visible = false;
+        bir_core::background_cron::wake();
+        Ok(DispatchResult::json(json!({
+            "form": "1601C",
+            "status": format!("{:?}", form.draft.status),
+            "queued": true,
+            "filed": false,
+            "message": "Form queued for background submission.",
+        })))
+    }
+
+    fn queue_open_2551q(&mut self) -> Result<DispatchResult, String> {
+        let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
+        if !form.draft.is_editable() {
+            return Err("this return is already queued or filed and cannot be queued again".into());
+        }
+        form.draft.recompute(None);
+        form.validation_errors = form.draft.validate();
+        form.validated = true;
+        if !form.validation_errors.is_empty() {
+            return Err("fix validation errors before submitting".into());
+        }
+        let before_queue = form.draft.clone();
+        if let Err(errors) = form.draft.transition_to_queued() {
+            form.validation_errors = errors;
+            return Err("fix validation errors before submitting".into());
+        }
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let save_result = {
+            let guard = db.lock().map_err(|err| err.to_string())?;
+            guard
+                .save_queued_2551q_draft_and_election_with_post_commit_status(&form.draft)
+                .map(|_| ())
+                .map_err(|err| err.to_string())
+        };
+        if let Err(error) = save_result {
+            form.draft = before_queue;
+            return Err(format!(
+                "Could not queue Form 2551Q. No submission was started: {error}"
+            ));
+        }
+        form.saved = true;
+        self.submit_confirmation_visible = false;
+        bir_core::background_cron::wake();
+        Ok(DispatchResult::json(json!({
+            "form": "2551Q",
+            "status": format!("{:?}", form.draft.status),
+            "queued": true,
+            "filed": false,
+            "message": "Form queued for background submission.",
+        })))
     }
 
     fn toggle_1601c_withheld(&mut self) -> Result<DispatchResult, String> {
@@ -2215,7 +2321,10 @@ impl BirAgentHost {
             ids::FORM_1601C_VALIDATE => self.validate_form(),
             ids::FORM_1601C_WITHHELD => self.toggle_1601c_withheld(),
             ids::FORM_1601C_SUBMIT => self.request_submit_confirm(),
-            ids::FORM_1601C_SUBMIT_CONFIRM => self.refuse_submit_confirm(),
+            ids::FORM_1601C_SUBMIT_CONFIRM => Err(
+                "form-1601c-submit-confirm needs filing.queue with args.confirm=true (JSON boolean); the agent will not skip that gate"
+                    .into(),
+            ),
             ids::FORM_1601C_CANCEL_QUEUE => self.form_revert_draft(&json!({})),
             ids::FORM_1601C_RETURN_DRAFT | ids::FORM_1601C_RELEASE_CLAIM_CONFIRM => Err(
                 "claimed queues need form.revert_draft with confirm=true and reason=abandoned_no_bir_filing (same CAS as form.release_abandoned_claim); the agent will not skip that gate"
@@ -2364,17 +2473,12 @@ impl BirAgentHost {
             "filing.validate" | "form.validate" => self.validate_form(),
             "form.save_draft" => self.save_form_draft(),
             "filing.submit" => self.request_submit_confirm(),
-            "form.submit"
-            | "form.queue"
-            | "form.file"
-            | "form.submit_external"
-            | "filing.queue"
-            | "filing.file" => Err(format!(
-                "invoke `{name}` is not allow-listed; agent hosts cannot queue or file returns"
+            "form.queue" | "filing.queue" | "form.submit" => self.queue_open_return(args, name),
+            "form.file" | "form.submit_external" | "filing.file" => Err(format!(
+                "invoke `{name}` is not allow-listed; queue with form.queue/filing.queue confirm=true, then let cron PUT"
             )),
             "profile.ensure" => Err(
-                "profile.ensure is not implemented; the host will not auto-create a taxpayer. \
-                 Use profile.create to open the editor; profile.save stays confirm-gated"
+                "profile.ensure is not implemented; the host will not auto-create a taxpayer. Use profile.create to open the editor; profile.save stays confirm-gated"
                     .into(),
             ),
             other => Err(format!("unknown invoke `{other}`")),
@@ -2667,7 +2771,7 @@ impl BirAgentHost {
                     UiNode::new(
                         ids::FORM_1601C_SUBMIT_CONFIRM,
                         "button",
-                        "Confirm filing in the BIR window (agent will not queue)",
+                        "Confirm filing in the BIR window (use filing.queue confirm=true)",
                     )
                     .with_enabled(false),
                 );
@@ -2981,6 +3085,18 @@ fn require_year(args: &Value, invoke: &str) -> Result<u16, String> {
         .and_then(Value::as_u64)
         .map(|year| year as u16)
         .ok_or_else(|| format!("{invoke} requires args.year as a JSON number"))
+}
+
+fn require_queue_confirm(args: &Value, invoke: &str) -> Result<(), String> {
+    match args.get("confirm") {
+        Some(Value::Bool(true)) => Ok(()),
+        Some(Value::Bool(false)) | None => Err(format!(
+            "{invoke} requires args.confirm=true (JSON boolean) after a human confirmed the return should be queued for BIR SFTP"
+        )),
+        Some(_) => Err(format!(
+            "{invoke} args.confirm must be boolean true, not a string or number"
+        )),
+    }
 }
 
 fn require_forms_set_confirm(args: &Value, invoke: &str) -> Result<(), String> {
@@ -3777,7 +3893,7 @@ mod tests {
     }
 
     #[test]
-    fn form_1601c_draft_validate_and_confirmation_do_not_file() {
+    fn form_1601c_queue_requires_confirm_then_queues() {
         let mut host = fixture_host();
         let year = chrono::Local::now().year() as u16;
         let opened = handle_request(
@@ -3813,14 +3929,14 @@ mod tests {
         let submit = handle_request(&mut host, req(Op::click(ids::FORM_1601C_SUBMIT)), None);
         assert!(submit.ok, "{:?}", submit.error);
         assert!(host.submit_confirmation_visible());
-        let confirm = handle_request(
+        let confirm_click = handle_request(
             &mut host,
             req(Op::click(ids::FORM_1601C_SUBMIT_CONFIRM)),
             None,
         );
-        assert!(!confirm.ok);
+        assert!(!confirm_click.ok);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
-        let forbidden = handle_request(
+        let missing_confirm = handle_request(
             &mut host,
             req(Op::Invoke {
                 name: "form.submit".into(),
@@ -3828,12 +3944,23 @@ mod tests {
             }),
             None,
         );
-        assert!(!forbidden.ok);
+        assert!(!missing_confirm.ok);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
+        let queued = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.queue".into(),
+                args: serde_json::json!({ "confirm": true }),
+            }),
+            None,
+        );
+        assert!(queued.ok, "{:?}", queued.error);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+        assert!(!host.submit_confirmation_visible());
     }
 
     #[test]
-    fn preferred_invoke_names_do_not_file() {
+    fn preferred_invoke_names_queue_with_confirm() {
         let mut host = fixture_host();
         let created = handle_request(
             &mut host,
@@ -3902,7 +4029,7 @@ mod tests {
         assert!(submit.ok, "{:?}", submit.error);
         assert!(host.submit_confirmation_visible());
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
-        let queued = handle_request(
+        let missing_confirm = handle_request(
             &mut host,
             req(Op::Invoke {
                 name: "filing.queue".into(),
@@ -3910,8 +4037,19 @@ mod tests {
             }),
             None,
         );
-        assert!(!queued.ok);
+        assert!(!missing_confirm.ok);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
+        let queued = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.queue".into(),
+                args: serde_json::json!({ "confirm": true }),
+            }),
+            None,
+        );
+        assert!(queued.ok, "{:?}", queued.error);
+        assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
+        assert!(!host.submit_confirmation_visible());
     }
 
     #[test]
