@@ -51,6 +51,7 @@ enum Command {
 }
 
 pub fn run() -> ExitCode {
+    dotenvy::dotenv().ok();
     match run_cli() {
         Ok(()) => ExitCode::SUCCESS,
         Err(code) => code,

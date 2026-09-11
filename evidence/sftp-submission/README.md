@@ -16,3 +16,17 @@ cargo run -p bir-core --bin sftp_harness -- --dry-run
 cargo run -p bir-core --bin sftp_harness -- --live-connect
 cargo run -p bir-core --bin sftp_harness -- --live-put
 ```
+
+## Env override and dry-run
+
+Default is still `tinDispatcherSFTP.php`. To submit without production BIR
+credentials:
+
+1. Point `BIR_SFTP_*` at a lab or local SFTP (real protocol, not BIR). Port
+   defaults to 22. This is the mock-server path; we do not ship a first-party
+   mock SFTP daemon here.
+2. Set `BIR_SFTP_DRY_RUN=1` (or `BIR_SFTP_LIVE=0`) for an in-process fake PUT
+   with no TCP. Cron still marks Submitted but skips IMAP.
+
+See `.env.example` and [STUDY_WALKTHROUGH.md](STUDY_WALKTHROUGH.md). Do not
+commit real passwords. Dry-run is not a BIR filing.
