@@ -133,7 +133,7 @@ override:
 
 00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml
 
-Uriah verified that live PUT on the PR #41 / `68f773c5` stack (original
+The maintainer verified that live PUT on the PR #41 / `68f773c5` stack (original
 author session, 11 September 2026), not a cloud dry-run:
 
 - Queued Juan TIN `00000000000000` 1601-C period **102026** ~3:09:54 PM local

@@ -2,7 +2,7 @@
 //!
 //! Default `--dry-run` never talks to BIR (filename + wrap roundtrip only).
 //! `--live-connect` / `--live-put` use `resolve_sftp_endpoint`:
-//! dry-run env, then BIR_SFTP_*, then TEST_SFTP_*, else dispatcher.
+//! dry-run env, then a complete BIR_SFTP_* lab override, else dispatcher.
 //! Secrets are never printed.
 //!
 //! Live PUT is **authorized lab only**. A complete `BIR_SFTP_*` set (plus a
@@ -10,7 +10,7 @@
 //! incomplete set is a config error and never falls through. The production
 //! dispatcher (`ebf2.bir.gov.ph`) is reached only with `BIR_SFTP_LIVE=1` and
 //! no override set. Dummy TIN is not production-safe. Leave `--live-put`
-//! BLOCKED unless Uriah authorized that lab endpoint.
+//! BLOCKED unless the maintainer authorized that lab endpoint.
 
 use bir_core::naming::{Tin, iaf_filename};
 use bir_core::transport::{
@@ -124,7 +124,7 @@ async fn main() -> ExitCode {
         filename.split('-').next().unwrap_or("").len()
     );
 
-    match wrap_dispatcher_field("TEST_SFTP_HOST") {
+    match wrap_dispatcher_field("lab.example") {
         Ok(wrapped) => match unwrap_dispatcher_field(&wrapped) {
             Ok(plain) => println!("dispatcher_wrap_roundtrip={plain}"),
             Err(error) => {

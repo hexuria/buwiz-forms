@@ -1,5 +1,9 @@
 # Plan: BIR_SFTP_* env override on top of dispatcher
 
+> **Superseded 2026-09-11:** the `TEST_SFTP_*` compatibility path this plan
+> preserved was removed. `BIR_SFTP_*` is the only override; references to
+> `TEST_SFTP_*` below are historical.
+
 Branch to implement on: `codex/sftp-on-pr39`
 Worktree: C:\Users\uriah\Code\buwiz-forms-wt-sftp-on-pr39
 Do not open a PR unless asked.

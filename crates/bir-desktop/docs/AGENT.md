@@ -97,7 +97,7 @@ Painted `bir` and `bir-headless serve` both take an exclusive sidecar lock
 - **Headless:** when the GUI is closed, and on Linux/box VMs with no GUI.
 
 Do **not** run GUI and headless concurrently as writers. After headless work,
-`bir-headless shutdown` (or kill) then open painted `bir`. If Uriah later
+`bir-headless shutdown` (or kill) then open painted `bir`. If the maintainer later
 wants GUI updates while the daemon runs, that is a protocol client — not this
 slice.
 
@@ -505,7 +505,7 @@ gpui-agent set-value profile-address Manila
 gpui-agent set-value profile-zip 1000
 gpui-agent set-value profile-phone 09170000000
 gpui-agent set-value profile-email headless@example.com
-# Uriah confirms the live-DB write; profile.save stays the explicit persist
+# The maintainer confirms the live-DB write; profile.save stays the explicit persist
 # (profile.create does not save; profile.ensure is rejected).
 gpui-agent invoke profile.save
 gpui-agent invoke profile.list
@@ -681,7 +681,7 @@ gpui-agent invoke form.pdf
 # "return a claimed queued 1601-C to editable Draft after a human confirmed nothing reached BIR"
 # Unclaimed Queued: form.revert_draft with no extra args.
 # Claimed Queued: same confirm gate as form.release_abandoned_claim (either invoke).
-# Never call this unless Uriah confirmed no BIR filing. Still never form.file / filing.queue.
+# Never call this unless the maintainer confirmed no BIR filing. Still never form.file / filing.queue.
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke form.revert_draft \
   --arg confirm=true \
   --arg reason=abandoned_no_bir_filing
@@ -779,7 +779,7 @@ table; do not use them in recipes.
 | `filing.submit` | — | Validate and expose confirmation; does not queue until filing.queue confirm=true |
 | `form.queue` / `filing.queue` / `form.submit` | `confirm=true` JSON boolean (a caller assertion that a human confirmed; the host cannot verify it) | Queue open 1601C/2551Q for cron SFTP PUT |
 | `form.file` / `filing.file` / `form.submit_external` | --- | **Rejected**; queue first, then let cron PUT |
-| `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` only opens the editor; the outer agent asks Uriah before `profile.save` |
+| `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` only opens the editor; the outer agent asks the maintainer before `profile.save` |
 
 ## Alias table
 
@@ -902,8 +902,7 @@ Remaining (not faked):
 
 ## Claimed queue without BIR outcome (facts)
 
-SFTP resolve order: dry-run → complete `BIR_SFTP_*` → deprecated `TEST_SFTP_*`
-→ production dispatcher **only** with `BIR_SFTP_LIVE=1` (HTTPS then official
+SFTP resolve order: dry-run → complete `BIR_SFTP_*` → production dispatcher **only** with `BIR_SFTP_LIVE=1` (HTTPS then official
 HTTP). Lab `BIR_SFTP_*` needs `BIR_SFTP_HOST_KEY_SHA256` or
 `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`. Dispatcher host-key policy remains
 accept-any (official ebfSFTP). `BIR_SFTP_DRY_RUN=1` (or `BIR_SFTP_LIVE=0`)
