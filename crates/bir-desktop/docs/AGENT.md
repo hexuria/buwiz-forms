@@ -31,6 +31,7 @@ Do not fork the protocol. There is no crates.io release; git/path only.
 - [Stable IDs](#stable-ids)
 - [Coverage](#coverage-this-slice)
 - [Claimed queue without BIR outcome](#claimed-queue-without-bir-outcome-facts)
+- [Durable queue and auth scope](QUEUE_AUTH_SCOPE.md)
 
 ## Locked protocol contract
 
@@ -171,6 +172,10 @@ for Grok Bot or bir-headless.
    or bir-headless running to PUT.
 3. Cron on an already-queued row. Queue first via 1 or 2; cron does not invent
    a queue by itself.
+
+Durable worker behavior (lease, 1601-C IMAP confirm, IMAP skip from session
+source) is in [QUEUE_AUTH_SCOPE.md](QUEUE_AUTH_SCOPE.md).
+It does not add a fourth enqueue route.
 
 Grok Bot talks to whoever owns GPUI_AGENT_ADDR (painted bir or bir-headless).
 Two hosts cannot share the bind or the live DB.
@@ -874,7 +879,9 @@ Proven in headless host tests (not a Mac GUI run):
 - `bir-headless serve` opens a **file-backed** SQLCipher path (`app_database_path()`,
   not ephemeral). `profile.save` is visible after reopen. Bind-in-use and
   live-DB owner lock are refused without `--wait`; `serve --wait` resumes after
-  the owner releases both. Headless does not start cron. GUI-as-client
+  the owner releases both. Headless **does** start the same in-process SFTP
+  cron; it executes already-queued work and does not enqueue without
+  `confirm=true`. GUI-as-client
   (full ADR-001) and a shipped LaunchAgent are not this slice.
 
 Remaining (not faked):
@@ -895,29 +902,34 @@ Remaining (not faked):
 
 ## Claimed queue without BIR outcome (facts)
 
-SFTP default is `tinDispatcherSFTP.php` (unwrap host/user/pass, SSH/SFTP :22).
-If `BIR_SFTP_HOST` is set, that env endpoint is used instead. `BIR_SFTP_DRY_RUN=1`
-(or `BIR_SFTP_LIVE=0`) fakes the PUT in-process (no BIR, skip IMAP). The worker
-still opens the session **before** claim, then claims immediately before PUT.
+SFTP resolve order: dry-run → complete `BIR_SFTP_*` → deprecated `TEST_SFTP_*`
+→ production dispatcher **only** with `BIR_SFTP_LIVE=1` (HTTPS then official
+HTTP). Lab `BIR_SFTP_*` needs `BIR_SFTP_HOST_KEY_SHA256` or
+`BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`. Dispatcher host-key policy remains
+accept-any (official ebfSFTP). `BIR_SFTP_DRY_RUN=1` (or `BIR_SFTP_LIVE=0`)
+fakes the PUT in-process. IMAP skip uses the **session source**, not the
+process-global dry-run env flag.
 
-Claim writes token + `claimed_at` and `submission_error` “outcome pending /
-auto-retry disabled”. Claimed rows are skipped on the next cron pass
-(`queued_1601c_revision` is none). `filing.submit` only exposes confirmation; it
-does **not** claim or queue.
+The worker still opens the session **before** claim, then claims immediately
+before PUT. Unstarted claims may recover after a 120s lease. Once PUT is
+marked started, the claim is fail-closed.
+
+`filing.submit` only exposes confirmation; it does **not** claim or queue.
+Enqueue stays the shipped `filing.queue` / GUI Submit paths.
 
 Pre-PUT failures (XML / encrypt / revalidate / SFTP connect-login) stay
 unclaimed and use `record_submission_failure` / retry-or-Draft
 (`process_queued_1601c_pre_store_failure_stays_unclaimed_and_can_retry`). A
-connect timeout therefore does **not** freeze a claim. After claim, a
+connect timeout therefore does **not** freeze a claim. After PUT start, a
 PUT `Err` is **fail-closed**: the worker logs unknown outcome and does **not**
 clear the claim (`process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried`).
-A crash between claim and `finish_claimed_*` (including mid-PUT) leaves the
-same state. July vs Aug/Jan/Feb is not a month-specific code path; whichever
-period completed PUT + `finish_claimed` became Submitted. Periods that hit
-a connect timeout used to claim first (old order) and freeze; they now retry.
+
+Live 1601-C Submitted rows become Confirmed when IMAP matches the IAF
+filename (same path as 2551Q). Dry-run never schedules that poll.
 
 Do **not** auto-release after PUT: clearing a claim after unknown upload I/O
-can double-file. Stuck rows that already claimed (crash or PUT error, or
-historical connect-then-claimed rows) still need human
+can double-file. Stuck rows that already started PUT (crash or PUT error, or
+legacy no-lease claims) still need human
 `form.revert_draft` / `form.release_abandoned_claim` with `confirm=true` and
-`reason=abandoned_no_bir_filing`. Live SFTP credentials come from tinDispatcherSFTP.php unless BIR_SFTP_* / dry-run override the endpoint.
+`reason=abandoned_no_bir_filing`.
+
