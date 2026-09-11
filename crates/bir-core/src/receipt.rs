@@ -97,10 +97,9 @@ pub fn parse_bir_receipt_email(
     let time_str = time_re
         .captures(raw)
         .and_then(|cap| cap.get(1))
-        .map(|m| m.as_str().trim().to_uppercase())
+        .map(|m| m.as_str().trim().to_string())
         .ok_or(ReceiptParseError::MissingTime)?;
-    let time_received = NaiveTime::parse_from_str(&time_str, "%I:%M %p")
-        .map_err(|_| ReceiptParseError::MissingTime)?;
+    let time_received = parse_bir_receipt_time(&time_str).ok_or(ReceiptParseError::MissingTime)?;
 
     let source_from = from_re.captures(raw).and_then(|cap| {
         cap.get(1)
@@ -116,6 +115,34 @@ pub fn parse_bir_receipt_email(
         raw_text: raw.to_string(),
         raw_html,
     })
+}
+
+/// BIR confirmation emails write `3:13 PM` without a leading zero.
+/// Chrono `%I` is zero-padded (`01`–`12`), so pad a single-digit hour.
+fn parse_bir_receipt_time(time: &str) -> Option<NaiveTime> {
+    let normalized = normalize_bir_receipt_meridiem(time);
+    NaiveTime::parse_from_str(&normalized, "%I:%M %p")
+        .or_else(|_| NaiveTime::parse_from_str(&normalized, "%I:%M:%S %p"))
+        .ok()
+}
+
+fn normalize_bir_receipt_meridiem(time: &str) -> String {
+    let compact = time.trim().to_uppercase().replace(' ', "");
+    let (clock, meridiem) = if let Some(clock) = compact.strip_suffix("AM") {
+        (clock, "AM")
+    } else if let Some(clock) = compact.strip_suffix("PM") {
+        (clock, "PM")
+    } else {
+        return time.trim().to_uppercase();
+    };
+    let Some((hour, rest)) = clock.split_once(':') else {
+        return format!("{clock} {meridiem}");
+    };
+    if hour.len() == 1 {
+        format!("0{hour}:{rest} {meridiem}")
+    } else {
+        format!("{hour}:{rest} {meridiem}")
+    }
 }
 
 /// Split `{TIN}-{FormType}-{Period}.xml` and the IAF variant
@@ -234,6 +261,67 @@ Penalties may be imposed for any violation of the provisions of the NIRC and iss
                 "0619F".to_string(),
                 "042026WB".to_string()
             ))
+        );
+    }
+
+    #[test]
+    fn parses_live_1601c_october_receipt_email_shape() {
+        // Live BIR confirmation (PR #41 / 68f773c5 session, 11 September 2026).
+        // Transport PUT is empirically PASS. This proves the matcher can read
+        // the unpadded time and the `#email#`-stripped filename BIR emailed.
+        let raw = r#"ebirforms-noreply@bir.gov.ph
+
+This confirms receipt of your submission with the following details subject to validation by BIR:
+
+File name: 00000000000000-1601Cv2018-102026.xml
+Date received by BIR: 11 September 2026
+Time received by BIR: 3:13 PM
+"#;
+        let receipt = parse_bir_receipt_email(raw, None).unwrap();
+        assert_eq!(receipt.filename, "00000000000000-1601Cv2018-102026.xml");
+        assert_eq!(
+            receipt.date_received,
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 11).unwrap()
+        );
+        assert_eq!(
+            receipt.time_received,
+            chrono::NaiveTime::from_hms_opt(15, 13, 0).unwrap()
+        );
+        assert_eq!(
+            split_bir_filename(&receipt.filename),
+            split_bir_filename("00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml")
+        );
+        assert_eq!(
+            split_bir_filename(&receipt.filename),
+            Some((
+                "00000000000000".to_string(),
+                "1601Cv2018".to_string(),
+                "102026".to_string()
+            ))
+        );
+        assert_eq!(
+            receipt.source_from.as_deref(),
+            Some("ebirforms-noreply@bir.gov.ph")
+        );
+    }
+
+    #[test]
+    fn parse_bir_receipt_time_accepts_unpadded_hour_and_missing_space() {
+        assert_eq!(
+            parse_bir_receipt_time("3:13 PM").unwrap(),
+            NaiveTime::from_hms_opt(15, 13, 0).unwrap()
+        );
+        assert_eq!(
+            parse_bir_receipt_time("3:13PM").unwrap(),
+            NaiveTime::from_hms_opt(15, 13, 0).unwrap()
+        );
+        assert_eq!(
+            parse_bir_receipt_time("05:18 AM").unwrap(),
+            NaiveTime::from_hms_opt(5, 18, 0).unwrap()
+        );
+        assert_eq!(
+            parse_bir_receipt_time("01:33 PM").unwrap(),
+            NaiveTime::from_hms_opt(13, 33, 0).unwrap()
         );
     }
 }

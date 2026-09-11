@@ -32,6 +32,16 @@ cron `SubmissionTransport`). They are not a second production trait.
 
 IAF basename splits on `/` and `\`, so a Windows absolute dummy path still
 yields the file name on Linux CI. `#email#` is stripped before period parse.
+Live BIR confirmation emails use the stripped stem
+(`00000000000000-1601Cv2018-102026.xml`); the submitted IAF still has
+`#email#`. Identity match is TIN / form / period, not byte-equal filenames.
+
+## Periods
+
+- Automated fixture: **092026** (September 2026) zero-tax dummy.
+- Live proof (PR #41 / `68f773c5`, 11 September 2026): **102026** (October).
+  BIR receipt email 3:13 PM, file `00000000000000-1601Cv2018-102026.xml`.
+  Transport PUT is empirically PASS; do not re-prove dispatcher PUT.
 
 ## Unwrap
 
