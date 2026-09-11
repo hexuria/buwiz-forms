@@ -5,11 +5,12 @@
 //! dry-run env, then BIR_SFTP_*, then TEST_SFTP_*, else dispatcher.
 //! Secrets are never printed.
 //!
-//! Live PUT is **authorized lab only**. Without complete `BIR_SFTP_*` (plus a
-//! host-key pin or `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`) the resolver falls through
-//! to production dispatcher → `ebf2.bir.gov.ph`. Dummy TIN is not
-//! production-safe. Leave `--live-put` BLOCKED unless Uriah authorized that
-//! lab endpoint.
+//! Live PUT is **authorized lab only**. A complete `BIR_SFTP_*` set (plus a
+//! host-key pin or `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`) targets that lab host; an
+//! incomplete set is a config error and never falls through. The production
+//! dispatcher (`ebf2.bir.gov.ph`) is reached only with `BIR_SFTP_LIVE=1` and
+//! no override set. Dummy TIN is not production-safe. Leave `--live-put`
+//! BLOCKED unless Uriah authorized that lab endpoint.
 
 use bir_core::naming::{Tin, iaf_filename};
 use bir_core::transport::{

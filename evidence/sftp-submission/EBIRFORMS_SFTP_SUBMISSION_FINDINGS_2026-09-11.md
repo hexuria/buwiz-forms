@@ -105,7 +105,7 @@ File: `C:\\eBIRForms\\ebfSFTP.exe`
 Size: 9216 bytes
 SHA-256: `C6BA25014D30A11B97D9D90C3B87F2F0C13D35EF6188EA5C086F48B3933D297F`
 Target: .NET Framework 4.7.2 (`ebfSFTP.exe.config`)
-PDB: `C:\\Users\\carlo.delacruz\\Documents\\Visual Studio 2019\\Projects\\ebfSFTP\\ebfSFTP\\Program.cs`
+PDB: `C:\\Users\\<redacted>\\Documents\\Visual Studio 2019\\Projects\\ebfSFTP\\ebfSFTP\\Program.cs`
 Also present: `ebfSFTP.pdb` (install listing) / `ebfSFTP.exe.pdb` (virtualized name)
 
 ### Type / methods / fields
