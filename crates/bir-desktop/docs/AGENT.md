@@ -777,7 +777,7 @@ table; do not use them in recipes.
 | `calendar.add` | — | Writes a native `.ics` via `build_desired_events` + `write_profile_calendar_ics` to a temp path. Does not open a calendar app |
 | `profile.calendar_sync` | — | **Error**: Google push needs a linked account and the Profile Manager calendar tab |
 | `filing.submit` | — | Validate and expose confirmation; does not queue until filing.queue confirm=true |
-| `form.queue` / `filing.queue` / `form.submit` | `confirm=true` JSON boolean | Queue open 1601C/2551Q for cron SFTP PUT |
+| `form.queue` / `filing.queue` / `form.submit` | `confirm=true` JSON boolean (a caller assertion that a human confirmed; the host cannot verify it) | Queue open 1601C/2551Q for cron SFTP PUT |
 | `form.file` / `filing.file` / `form.submit_external` | --- | **Rejected**; queue first, then let cron PUT |
 | `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` only opens the editor; the outer agent asks Uriah before `profile.save` |
 

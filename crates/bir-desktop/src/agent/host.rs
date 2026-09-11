@@ -3183,7 +3183,7 @@ fn require_queue_confirm(args: &Value, invoke: &str) -> Result<(), String> {
     match args.get("confirm") {
         Some(Value::Bool(true)) => Ok(()),
         Some(Value::Bool(false)) | None => Err(format!(
-            "{invoke} requires args.confirm=true (JSON boolean) after a human confirmed the return should be queued for BIR SFTP"
+            "{invoke} requires args.confirm=true (JSON boolean). By passing it the caller asserts a human confirmed this return should be queued for BIR SFTP; the host cannot verify that assertion"
         )),
         Some(_) => Err(format!(
             "{invoke} args.confirm must be boolean true, not a string or number"

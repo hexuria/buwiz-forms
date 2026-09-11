@@ -20,10 +20,21 @@ Resolve order:
 1. `BIR_SFTP_DRY_RUN=1` or `BIR_SFTP_LIVE=0` → in-process fake PUT.
 2. Complete `BIR_SFTP_*` (incomplete = config error, no fallthrough). Lab
    host-key must be pinned or `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`.
-3. Deprecated `TEST_SFTP_*`.
+3. Deprecated `TEST_SFTP_*`. Same lab host-key rule as step 2: pin
+   `BIR_SFTP_HOST_KEY_SHA256` or set `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`, else
+   config error. A stale `TEST_SFTP_HOST` in `.env` can no longer PUT with an
+   unverified host key.
 4. Production `tinDispatcherSFTP.php` **only** with `BIR_SFTP_LIVE=1`.
    HTTPS is tried first; official ebfSFTP is HTTP, so HTTP is the fallback.
    Official host-key policy remains accept-any.
+
+   **Known weakness, kept deliberately to match the official client:** the
+   dispatcher fields are unwrapped with a static passphrase, the HTTP fallback
+   fires on any HTTPS error (including a certificate failure), and the SFTP
+   host key is not verified. An on-path attacker can therefore redirect the
+   PUT to a host they control. The IAF payload itself stays encrypted. Pinning
+   the observed `ebf2.bir.gov.ph` fingerprint would close this; the fingerprint
+   has not been recorded yet.
 
 Loopback / Static / Mock are **injected** at tests (`submit_iaf_with_endpoint`,
 cron `SubmissionTransport`). They are not a second production trait.

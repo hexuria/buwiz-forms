@@ -16,7 +16,9 @@
 use chrono::{DateTime, Duration, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
 use crate::forms::form_1601c::Form1601CDraft;
+#[cfg(test)]
 use crate::profile::TaxpayerProfile;
 
 /// How long a claim may sit with **no PUT started** before a worker may
@@ -150,11 +152,12 @@ pub fn claim_is_recoverable(
     }
 }
 
-/// Mandatory lab taxpayer for 1601-C tests and smoke scripts.
+/// Mandatory lab taxpayer for 1601-C tests.
 ///
 /// TIN `00000000000000`, Juan Dela Cruz, RDO 018, Olongapo, Software
 /// Development, ZIP 2200, `codeitlikemiley@gmail.com`, `09156837000`.
 /// Never substitute a real taxpayer. Never invent tax amounts.
+#[cfg(test)]
 pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
     serde_json::from_value(serde_json::json!({
         "id": null,
@@ -184,6 +187,7 @@ pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
 ///
 /// Automated tests use **September 2026** (`mandatory_lab_1601c_draft`).
 /// Live proof on PR #41 / `68f773c5` used **October 2026**.
+#[cfg(test)]
 pub fn mandatory_lab_1601c_draft_for(year: u16, month: u8) -> Form1601CDraft {
     let profile = mandatory_lab_1601c_profile();
     let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
@@ -195,11 +199,13 @@ pub fn mandatory_lab_1601c_draft_for(year: u16, month: u8) -> Form1601CDraft {
 }
 
 /// Zero-tax September 2026 1601-C — automated-test fixture period.
+#[cfg(test)]
 pub fn mandatory_lab_1601c_draft() -> Form1601CDraft {
     mandatory_lab_1601c_draft_for(2026, 9)
 }
 
 /// Zero-tax October 2026 1601-C — live BIR receipt period (102026).
+#[cfg(test)]
 pub fn mandatory_lab_1601c_october_2026_draft() -> Form1601CDraft {
     mandatory_lab_1601c_draft_for(2026, 10)
 }

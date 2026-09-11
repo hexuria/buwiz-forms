@@ -1308,22 +1308,19 @@ impl Database {
         ) {
             return Ok(false);
         }
-        draft.record_submission_failure(
+        // Not a BIR-facing failure: release the claim without spending the
+        // five-attempt budget or revoking the queue authorization.
+        if !draft.release_expired_unstarted_claim(
             "Claim lease expired before PUT started; retrying the same authorized task".to_string(),
-        );
-        if matches!(draft.status, crate::forms::FilingStatus::Queued) {
-            draft.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        ) {
+            return Ok(false);
         }
         let json = serde_json::to_string(&draft)?;
-        let status = match draft.status {
-            crate::forms::FilingStatus::Draft => "Draft",
-            _ => "Queued",
-        };
         let updated = tx.execute(
             "UPDATE form_drafts
-             SET status = ?1, data_json = ?2, updated_at = datetime('now')
-             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
-            params![status, json, id, raw_json],
+             SET status = 'Queued', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
         )?;
         if updated != 1 {
             return Ok(false);
@@ -2362,22 +2359,19 @@ impl Database {
         ) {
             return Ok(false);
         }
-        draft.record_submission_failure(
+        // Not a BIR-facing failure: release the claim without spending the
+        // five-attempt budget or revoking the queue authorization.
+        if !draft.release_expired_unstarted_claim(
             "Claim lease expired before PUT started; retrying the same authorized task".to_string(),
-        );
-        if matches!(draft.status, crate::forms::FilingStatus::Queued) {
-            draft.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        ) {
+            return Ok(false);
         }
         let json = serde_json::to_string(&draft)?;
-        let status = match draft.status {
-            crate::forms::FilingStatus::Draft => "Draft",
-            _ => "Queued",
-        };
         let updated = tx.execute(
             "UPDATE form_drafts
-             SET status = ?1, data_json = ?2, updated_at = datetime('now')
-             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
-            params![status, json, id, raw_json],
+             SET status = 'Queued', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
         )?;
         if updated != 1 {
             return Ok(false);
