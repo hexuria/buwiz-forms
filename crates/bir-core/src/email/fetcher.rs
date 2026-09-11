@@ -4,12 +4,13 @@
 //! module for the actual search → fetch → parse → confirm workflow.
 
 use crate::db::{Database, SubmissionReceipt};
-use crate::profile::{EmailAuthMethod, TaxpayerProfile};
+use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
 use chrono::Datelike;
 
 use super::auth_oauth::GoogleOAuthAuth;
 use super::auth_password::AppPasswordAuth;
+use super::inbox::{plan_email_poll_for_address, resolve_inbox_fetch_profile};
 
 /// Trait that both auth backends implement.
 pub trait ImapAuthenticator {
@@ -31,6 +32,8 @@ pub trait ImapAuthenticator {
 /// Fetch and process BIR confirmation emails for the given profile.
 ///
 /// Automatically selects the correct auth strategy based on `email_auth_method`.
+/// When several profiles share the inbox, Google OAuth credentials come from
+/// the inbox-keyed grant (or a sibling with a refresh token), not list order.
 pub fn fetch_and_process_emails(
     profile: &TaxpayerProfile,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
@@ -39,7 +42,28 @@ pub fn fetch_and_process_emails(
         return Ok(vec![]);
     }
 
-    let email = profile.imap_email.as_deref().unwrap_or(&profile.email);
+    let fetch_profile = overlay_shared_inbox_credentials(profile, &db);
+    fetch_with_resolved_profile(&fetch_profile, db)
+}
+
+fn overlay_shared_inbox_credentials(
+    profile: &TaxpayerProfile,
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+) -> TaxpayerProfile {
+    let Ok(db_guard) = db.lock() else {
+        return profile.clone();
+    };
+    match resolve_inbox_fetch_profile(&db_guard, profile.inbox_email()) {
+        Ok(Some(resolved)) => resolved,
+        _ => profile.clone(),
+    }
+}
+
+fn fetch_with_resolved_profile(
+    profile: &TaxpayerProfile,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
+) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
+    let email = profile.inbox_email();
 
     // Build the right authenticator
     let (authenticator, host): (Box<dyn ImapAuthenticator>, String) = match profile
@@ -58,7 +82,7 @@ pub fn fetch_and_process_emails(
         EmailAuthMethod::GoogleOAuth => {
             let access = profile.oauth_access_token.as_deref().unwrap_or("");
             let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
-            let auth = GoogleOAuthAuth::new(&profile.email, access, refresh)?;
+            let auth = GoogleOAuthAuth::new(email, access, refresh)?;
             let host = "imap.gmail.com".to_string();
             (Box::new(auth), host)
         }
@@ -70,7 +94,7 @@ pub fn fetch_and_process_emails(
 /// Test that a connection can be established and authenticated.
 /// Returns `Ok(())` on success or an error describing the failure.
 pub fn test_connection(profile: &TaxpayerProfile) -> Result<Option<String>, anyhow::Error> {
-    let email = profile.imap_email.as_deref().unwrap_or(&profile.email);
+    let email = profile.inbox_email();
 
     let (authenticator, host): (Box<dyn ImapAuthenticator>, String) = match profile
         .email_auth_method
@@ -88,7 +112,7 @@ pub fn test_connection(profile: &TaxpayerProfile) -> Result<Option<String>, anyh
         EmailAuthMethod::GoogleOAuth => {
             let access = profile.oauth_access_token.as_deref().unwrap_or("");
             let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
-            let auth = GoogleOAuthAuth::new(&profile.email, access, refresh)?;
+            let auth = GoogleOAuthAuth::new(email, access, refresh)?;
             let host = "imap.gmail.com".to_string();
             (Box::new(auth), host)
         }
@@ -114,13 +138,12 @@ fn fetch_with_auth(
     let client = imap::connect((host, 993_u16), host, &tls)?;
     let (mut session, new_access_token) = auth.authenticate(client)?;
 
-    // Save the new access token if it was refreshed
-    if let Some(token) = new_access_token {
-        let mut updated_profile = profile.clone();
-        updated_profile.oauth_access_token = Some(token);
-        if let Ok(db_guard) = db.lock() {
-            let _ = db_guard.save_profile(updated_profile);
-        }
+    // Save the new access token if it was refreshed. Fan-out so siblings and
+    // the inbox-keyed row do not keep a stale access token beside a live refresh.
+    if let Some(token) = new_access_token
+        && let Ok(db_guard) = db.lock()
+    {
+        let _ = db_guard.update_inbox_oauth_access_token(profile.inbox_email(), &token);
     }
 
     session.select("INBOX")?;
@@ -257,35 +280,18 @@ pub fn fetch_and_process_emails_for_address(
             Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
         };
         let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
-        let profiles = db_guard.list_profiles().unwrap_or_default();
-
-        let mut still_pending = false;
-        let mut matched_profile = None;
-
-        for p in profiles {
-            let p_email = p.imap_email.clone().unwrap_or_else(|| p.email.clone());
-            if p_email == email_address {
-                if matched_profile.is_none() {
-                    matched_profile = Some(p.clone());
-                }
-                if let Ok(summaries) = db_guard.list_draft_summaries(&p.tin.full(), current_year)
-                    && summaries
-                        .iter()
-                        .any(|s| s.status == crate::forms::FilingStatus::Submitted)
-                {
-                    still_pending = true;
-                }
-            }
-        }
-
-        (matched_profile, still_pending)
+        let plan = plan_email_poll_for_address(&db_guard, email_address, current_year);
+        (plan.auth_profile, plan.still_pending)
     };
 
     if !still_pending {
         return (true, false, None);
     }
 
-    if let Some(profile) = profile {
+    if let Some(mut profile) = profile {
+        // Sibling Submitted drafts (Jane) must still be polled even when the
+        // grant lives on Juan and Juan's tracking toggle is off.
+        profile.email_tracking_enabled = true;
         match fetch_and_process_emails(&profile, db.clone()) {
             Ok(_) => {
                 let db_guard = match db.lock() {
@@ -296,8 +302,7 @@ pub fn fetch_and_process_emails_for_address(
                 let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
                 let profiles = db_guard.list_profiles().unwrap_or_default();
                 for p in profiles {
-                    let p_email = p.imap_email.clone().unwrap_or_else(|| p.email.clone());
-                    if p_email == email_address
+                    if inbox_emails_match(p.inbox_email(), email_address)
                         && let Ok(summaries) =
                             db_guard.list_draft_summaries(&p.tin.full(), current_year)
                         && summaries
@@ -307,25 +312,22 @@ pub fn fetch_and_process_emails_for_address(
                         remaining_pending = true;
                     }
                 }
-                // The connection works, so clear any standing alert. Done here
-                // rather than when the user clicks "Reconnect", so a token that
-                // starts working again for any reason stops nagging without the
-                // user having to do anything.
-                let _ = db_guard.resolve_alert(
-                    Some(&profile.tin.full()),
-                    crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
-                );
+                // The connection works, so clear any standing alert for every
+                // TIN that shares this inbox. Done here rather than only when
+                // the user clicks Reconnect, so a token that starts working
+                // again for any reason stops nagging.
+                let _ = db_guard.resolve_google_oauth_alerts_for_inbox(email_address);
                 (true, remaining_pending, None)
             }
             Err(e) => {
                 let err_msg = format!("{}", e);
                 tracing::warn!("Email polling failed for {}: {}", email_address, err_msg);
 
-                // Surface it where the user will see it. This path runs every
-                // 60 seconds while broken, which is exactly why `record_alert`
-                // upserts instead of inserting.
                 const TITLE: &str = "Email confirmation checking has stopped";
-                if let Ok(db_guard) = db.lock()
+                // A missing refresh is "not connected", not a failed refresh.
+                // Reconnect nags belong to a grant Google actually rejected.
+                if profile.has_usable_oauth_refresh()
+                    && let Ok(db_guard) = db.lock()
                     && let Ok(outcome) = db_guard.record_alert(
                         Some(&profile.tin.full()),
                         crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
@@ -335,7 +337,6 @@ pub fn fetch_and_process_emails_for_address(
                         crate::db::AlertAction::ReconnectGoogleAccount,
                     )
                 {
-                    // Only when newly active - this runs every 60 seconds.
                     crate::notification::notify_alert_if_newly_active(outcome, TITLE, &err_msg);
                 }
                 (false, still_pending, Some(err_msg))

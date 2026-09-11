@@ -209,6 +209,9 @@ pub struct ProfileManagerView {
     stored_imap_app_password: Option<String>,
     stored_oauth_access_token: Option<String>,
     stored_oauth_refresh_token: Option<String>,
+    /// Google account email for a shared inbox grant. Used so Save Profile
+    /// after Connect writes `imap_email` even if the IMAP input was empty.
+    stored_oauth_inbox_email: Option<String>,
     stored_test_notification_enabled: bool,
     stored_is_archived: bool,
     stored_profile_pin_hash: Option<String>,
@@ -878,6 +881,7 @@ impl ProfileManagerView {
             stored_imap_app_password: None,
             stored_oauth_access_token: None,
             stored_oauth_refresh_token: None,
+            stored_oauth_inbox_email: None,
             stored_test_notification_enabled: false,
             stored_is_archived: false,
             stored_profile_pin_hash: None,
@@ -1426,6 +1430,7 @@ impl ProfileManagerView {
         self.stored_imap_app_password = None;
         self.stored_oauth_access_token = None;
         self.stored_oauth_refresh_token = None;
+        self.stored_oauth_inbox_email = None;
         self.pending_notification = None;
         self.is_editing_password = true;
         self.stored_profile_pin_hash = None;
@@ -1687,8 +1692,21 @@ impl ProfileManagerView {
             )
         });
 
-        self.oauth_connected = profile.oauth_refresh_token.is_some()
-            && !profile.oauth_refresh_token.as_ref().unwrap().is_empty();
+        self.oauth_connected = profile.has_usable_oauth_refresh();
+        if !self.oauth_connected
+            && let Ok(db) = self.db.lock()
+            && let Ok(Some(tokens)) = db.inbox_oauth_tokens(profile.inbox_email())
+            && tokens.has_usable_refresh()
+        {
+            self.oauth_connected = true;
+            self.stored_oauth_access_token = Some(tokens.access_token);
+            self.stored_oauth_refresh_token = Some(tokens.refresh_token);
+        }
+        self.stored_oauth_inbox_email = if self.oauth_connected {
+            Some(profile.inbox_email().to_string())
+        } else {
+            None
+        };
 
         self.errors.clear();
         self.save_message = None;
@@ -2352,8 +2370,18 @@ impl ProfileManagerView {
 
             email_auth_method: self.email_auth_method.clone(),
             imap_email: {
-                let val = self.imap_email_input.read(cx).value().trim().to_string();
-                if val.is_empty() { None } else { Some(val) }
+                if matches!(self.email_auth_method, EmailAuthMethod::GoogleOAuth)
+                    && let Some(email) = self
+                        .stored_oauth_inbox_email
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|email| !email.is_empty())
+                {
+                    Some(email.to_string())
+                } else {
+                    let val = self.imap_email_input.read(cx).value().trim().to_string();
+                    if val.is_empty() { None } else { Some(val) }
+                }
             },
             imap_host: {
                 let val = self.imap_host_input.read(cx).value().trim().to_string();
