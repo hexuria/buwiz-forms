@@ -1,0 +1,56 @@
+{
+  "v": 1,
+  "name": "bir-form-1601c-queue-headless",
+  "app": "bir-desktop",
+  "params": ["tin", "year", "period"],
+  "steps": [
+    { "id": "wait", "op": "wait" },
+    {
+      "id": "select",
+      "op": "invoke",
+      "name": "profile.set",
+      "args": { "tin": "$tin" },
+      "needs": ["wait"]
+    },
+    {
+      "id": "open",
+      "op": "invoke",
+      "name": "filing.start",
+      "args": { "tin": "$tin", "code": "1601C", "year": "$year", "period": "$period" },
+      "needs": ["select"]
+    },
+    {
+      "id": "fill",
+      "op": "invoke",
+      "name": "form.fill",
+      "args": { "any_taxes_withheld": false },
+      "needs": ["open"]
+    },
+    {
+      "id": "validate",
+      "op": "invoke",
+      "name": "filing.validate",
+      "needs": ["fill"]
+    },
+    {
+      "id": "queue",
+      "op": "invoke",
+      "name": "filing.queue",
+      "args": {
+        "confirm": true,
+        "tin": "$tin",
+        "code": "1601C",
+        "year": "$year",
+        "period": "$period"
+      },
+      "needs": ["validate"]
+    },
+    {
+      "id": "queued",
+      "op": "assert",
+      "target": "form-1601c-status",
+      "value": "Queued",
+      "needs": ["queue"]
+    }
+  ]
+}

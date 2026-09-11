@@ -158,6 +158,23 @@ These still apply to every agent, painted or headless:
 - Snapshots include names, last-4 TIN, dues, and editor fields needed to drive
   flows. They do not include PIN hashes, TOTP secrets, or keychain material.
 
+## Three ways to queue a 1601C/2551Q
+
+All three end on the same in-process cron PUT. The GUI does not need to be open
+for Grok Bot or bir-headless.
+
+1. Grok Bot / gpui-agent against bir-headless (no painted window).
+   Start bir-headless with GPUI_AGENT=1 and the same token the bot uses.
+   Then: profile.set tin=00000000000000, filing.start code=1601C year period,
+   form.fill, filing.queue confirm=true. filing.queue can also take tin/code/year/period itself.
+2. Desktop confirm button while painted bir is open. Cron still needs the app
+   or bir-headless running to PUT.
+3. Cron on an already-queued row. Queue first via 1 or 2; cron does not invent
+   a queue by itself.
+
+Grok Bot talks to whoever owns GPUI_AGENT_ADDR (painted bir or bir-headless).
+Two hosts cannot share the bind or the live DB.
+
 ## AI agent playbook
 
 Use this section as the day-to-day recipe. Invoke names must match the
@@ -757,12 +774,6 @@ table; do not use them in recipes.
 | `filing.submit` | — | Validate and expose confirmation; does not queue until filing.queue confirm=true |
 | `form.queue` / `filing.queue` / `form.submit` | `confirm=true` JSON boolean | Queue open 1601C/2551Q for cron SFTP PUT |
 | `form.file` / `filing.file` / `form.submit_external` | --- | **Rejected**; queue first, then let cron PUT |
-iling.queue / 
-orm.submit | confirm=true JSON boolean | Queue open 1601C/2551Q for cron SFTP PUT |
-| 
-orm.file / 
-iling.file / 
-orm.submit_external | — | **Rejected**; queue first, then let cron PUT |
 | `profile.ensure` | — | **Rejected**. The host will not auto-write a taxpayer. `profile.create` only opens the editor; the outer agent asks Uriah before `profile.save` |
 
 ## Alias table
@@ -827,7 +838,7 @@ Proven in headless host tests (not a Mac GUI run):
 - `jobs.list` read-only; `palette.search` can_create without creating;
   `search.open` exposes `overlay-command-palette` without creating a profile
 - 1601-C draft save + validate + confirmation node; status stays `Draft`;
-  `form.submit` / `filing.queue` rejected
+- 1601-C draft save + validate + confirmation node; unconfirmed filing.queue stays Draft; filing.queue confirm=true queues; headless can pass tin/code/year/period
 - `form.fill` refuses unknown keys; `any_taxes_withheld` false/true (or
   Yes/No) updates `withheld_btn` snapshot `checked`/`value`. Desktop drain
   writes that flag through `Agent1601CHostPatch` so the next snapshot /
