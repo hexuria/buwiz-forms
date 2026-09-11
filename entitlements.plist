@@ -6,7 +6,7 @@
     <key>com.apple.security.app-sandbox</key>
     <true/>
 
-    <!-- Network access (IMAP, FTP, HTTP) -->
+    <!-- Network access (IMAP, SFTP, HTTP) -->
     <key>com.apple.security.network.client</key>
     <true/>
     <!-- Localhost listener used for Google OAuth desktop callbacks -->

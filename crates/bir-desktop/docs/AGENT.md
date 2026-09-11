@@ -303,7 +303,7 @@ Semantic invokes that do not need a GPU/window:
 
 - No GPU. Screenshot is `screenshot_unavailable`.
 - `form.print` errors (`form.print needs the desktop window's frozen HTML preview`).
-- No cron / FTP submission path on headless (painted `bir` starts in-process
+- No cron / SFTP submission path on headless (painted `bir` starts in-process
   cron; headless does not).
 - UI-only navigation/chrome may be thinner than painted (semantic tree, not
   pixels).
@@ -559,7 +559,7 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke profile.list
 
 `bir-headless` opens with `Database::open` (same key as painted `bir`) and
 will **not** quarantine/recreate a taxpayer file on a bad open. Checkpoint
-WAL on shutdown. Headless does **not** start background cron (no FTP / no
+WAL on shutdown. Headless does **not** start background cron (no SFTP / no
 auto-file). `screenshot_unavailable`, `virtual_unavailable`, `form.print`
 errors as today. Exclusive owner lock + bind probe refuse a second process
 without `--wait`. `serve --wait` polls until both are free.
@@ -881,28 +881,28 @@ Remaining (not faked):
 
 ## Claimed queue without BIR outcome (facts)
 
-FTP target is hardcoded `103.56.5.254:21` `uploadOnly` (`transport.rs`). The
-worker **opens** that session (connect / login / binary / CWD) **before**
-claim, then claims immediately before STOR (`put_file`).
+SFTP target is no longer a hardcoded FTP IP. `transport.rs` fetches
+`tinDispatcherSFTP.php`, unwraps host/user/pass, then opens SSH/SFTP on
+port 22 **before** claim, and claims immediately before PUT.
 
 Claim writes token + `claimed_at` and `submission_error` “outcome pending /
 auto-retry disabled”. Claimed rows are skipped on the next cron pass
 (`queued_1601c_revision` is none). `filing.submit` only exposes confirmation; it
 does **not** claim or queue.
 
-Pre-STOR failures (XML / encrypt / revalidate / FTP connect-login-CWD) stay
+Pre-PUT failures (XML / encrypt / revalidate / SFTP connect-login) stay
 unclaimed and use `record_submission_failure` / retry-or-Draft
 (`process_queued_1601c_pre_store_failure_stays_unclaimed_and_can_retry`). A
-TCP timeout to `:21` therefore does **not** freeze a claim. After claim, a
-STOR `Err` is **fail-closed**: the worker logs unknown outcome and does **not**
+connect timeout therefore does **not** freeze a claim. After claim, a
+PUT `Err` is **fail-closed**: the worker logs unknown outcome and does **not**
 clear the claim (`process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried`).
-A crash between claim and `finish_claimed_*` (including mid-STOR) leaves the
+A crash between claim and `finish_claimed_*` (including mid-PUT) leaves the
 same state. July vs Aug/Jan/Feb is not a month-specific code path; whichever
-period completed STOR + `finish_claimed` became Submitted. Periods that hit
+period completed PUT + `finish_claimed` became Submitted. Periods that hit
 a connect timeout used to claim first (old order) and freeze; they now retry.
 
-Do **not** auto-release after STOR: clearing a claim after unknown upload I/O
-can double-file. Stuck rows that already claimed (crash or STOR error, or
+Do **not** auto-release after PUT: clearing a claim after unknown upload I/O
+can double-file. Stuck rows that already claimed (crash or PUT error, or
 historical connect-then-claimed rows) still need human
 `form.revert_draft` / `form.release_abandoned_claim` with `confirm=true` and
-`reason=abandoned_no_bir_filing`. The FTP host is unchanged unless Uriah asks.
+`reason=abandoned_no_bir_filing`. Live SFTP credentials come from the dispatcher, not source.
