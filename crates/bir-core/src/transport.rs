@@ -225,15 +225,9 @@ fn from_bir_sftp_env(form_type: &str) -> Option<Result<SftpEndpoint, TransportEr
         None => 22,
     };
     let remote_folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
-    let host_key_policy = match env_nonempty("BIR_SFTP_HOST_KEY_SHA256") {
-        Some(pin) => HostKeyPolicy::PinnedSha256(pin.to_ascii_lowercase()),
-        None if env_flag_enabled("BIR_SFTP_ACCEPT_ANY_HOST_KEY") => HostKeyPolicy::AcceptAnyLab,
-        None => {
-            return Some(Err(TransportError::Config(
-                "BIR_SFTP_HOST is set but lab host-key policy is missing (set BIR_SFTP_HOST_KEY_SHA256 or BIR_SFTP_ACCEPT_ANY_HOST_KEY=1)"
-                    .into(),
-            )));
-        }
+    let host_key_policy = match lab_host_key_policy_from_env("BIR_SFTP_HOST") {
+        Ok(policy) => policy,
+        Err(error) => return Some(Err(error)),
     };
     Some(Ok(SftpEndpoint {
         host,
@@ -243,6 +237,19 @@ fn from_bir_sftp_env(form_type: &str) -> Option<Result<SftpEndpoint, TransportEr
         remote_folder,
         host_key_policy,
     }))
+}
+
+/// Lab hosts never get accept-any silently. Both `BIR_SFTP_*` and the
+/// deprecated `TEST_SFTP_*` override must pin a SHA-256 fingerprint or set
+/// `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`.
+fn lab_host_key_policy_from_env(host_var: &str) -> Result<HostKeyPolicy, TransportError> {
+    match env_nonempty("BIR_SFTP_HOST_KEY_SHA256") {
+        Some(pin) => Ok(HostKeyPolicy::PinnedSha256(pin.to_ascii_lowercase())),
+        None if env_flag_enabled("BIR_SFTP_ACCEPT_ANY_HOST_KEY") => Ok(HostKeyPolicy::AcceptAnyLab),
+        None => Err(TransportError::Config(format!(
+            "{host_var} is set but lab host-key policy is missing (set BIR_SFTP_HOST_KEY_SHA256 or BIR_SFTP_ACCEPT_ANY_HOST_KEY=1)"
+        ))),
+    }
 }
 
 fn from_test_sftp_env() -> Result<Option<SftpEndpoint>, TransportError> {
@@ -264,13 +271,14 @@ fn from_test_sftp_env() -> Result<Option<SftpEndpoint>, TransportError> {
         }
     };
     let remote_folder = env_nonempty("TEST_SFTP_FOLDER").unwrap_or_else(|| "/".to_string());
+    let host_key_policy = lab_host_key_policy_from_env("TEST_SFTP_HOST")?;
     Ok(Some(SftpEndpoint {
         host,
         port,
         username,
         password: Zeroizing::new(password),
         remote_folder,
-        host_key_policy: HostKeyPolicy::AcceptAnyLab,
+        host_key_policy,
     }))
 }
 
@@ -348,7 +356,9 @@ pub async fn resolve_sftp_endpoint(
 struct DispatcherResponse {
     mode: String,
     server: String,
+    /// Present in the official body; the SFTP path never uses it.
     #[serde(rename = "SSLPort")]
+    #[allow(dead_code)]
     ssl_port: Option<String>,
     port: String,
     username: String,
@@ -485,11 +495,11 @@ async fn fetch_dispatcher_prefer_https(
             Ok(parsed)
         }
         Err(error) => {
-            info!(
+            tracing::warn!(
                 scheme = "https",
                 base = https_base.as_str(),
                 error = error.to_string(),
-                "HTTPS dispatcher failed; falling back to official HTTP"
+                "HTTPS dispatcher failed; falling back to official plaintext HTTP (dispatcher fields are MITM-recoverable on this path)"
             );
             fetch_dispatcher(client, http_base, tin, form_type).await
         }
@@ -533,7 +543,6 @@ pub async fn fetch_sftp_endpoint(
         .port
         .parse::<u16>()
         .map_err(|error| TransportError::Dispatcher(format!("invalid SFTP port: {error}")))?;
-    let _ssl_port = parsed.ssl_port;
     Ok(SftpEndpoint {
         host,
         port,
@@ -726,14 +735,6 @@ pub(crate) async fn open_iaf_session(
     }
 }
 
-/// Open SFTP using an already-resolved endpoint. Used by the local harness.
-pub(crate) async fn open_iaf_session_with_endpoint(
-    form_type: &str,
-    endpoint: SftpEndpoint,
-) -> Result<IafSftpSession, TransportError> {
-    open_iaf_session_with_source(form_type, endpoint, SftpEndpointSource::Env).await
-}
-
 async fn open_iaf_session_with_source(
     form_type: &str,
     endpoint: SftpEndpoint,
@@ -778,7 +779,15 @@ async fn open_iaf_session_with_source(
 }
 
 /// Uploads an encrypted IAF file to the BIR SFTP server.
-pub async fn submit_iaf(
+///
+/// `form_type` must match the subfolder on the BIR server (e.g. "2551Qv2018").
+/// `filename` is the IAF filename; `payload` is the encrypted IAF bytes.
+///
+/// This raw irreversible boundary is crate-internal. External callers must not
+/// bypass the reviewed Final Copy, queue-admission, and claim workflows.
+/// Queue workers call [`open_iaf_session`], then claim, then
+/// [`IafSftpSession::store`] so a connect timeout does not freeze a claim.
+pub(crate) async fn submit_iaf(
     form_type: &str,
     tin: &str,
     filename: &str,
@@ -788,16 +797,11 @@ pub async fn submit_iaf(
     session.store(filename, payload).await
 }
 
-/// Authenticate and open SFTP without uploading. Used by the live-connect probe.
-pub async fn probe_iaf_endpoint(
-    form_type: &str,
-    endpoint: SftpEndpoint,
-) -> Result<String, TransportError> {
-    let session = open_iaf_session_with_endpoint(form_type, endpoint).await?;
-    session.probe().await
-}
-
 /// Probe using an already-resolved target, including in-process dry-run.
+///
+/// Public only for the `sftp_harness` binary. It authenticates and lists the
+/// working directory; it never uploads. Application code must go through the
+/// queue worker, never call this.
 pub async fn probe_sftp_target(
     form_type: &str,
     target: ResolvedSftpTarget,
@@ -818,19 +822,29 @@ pub async fn probe_sftp_target(
     }
 }
 
-/// Direct upload helper for the local harness. Never talks to BIR unless the
-/// supplied endpoint does.
-pub async fn submit_iaf_with_endpoint(
+/// Direct upload against a caller-supplied endpoint. Crate-internal: only the
+/// loopback test exercises it. The logged provenance follows the host-key
+/// policy, so a dispatcher endpoint is never mislabelled as `env`.
+#[cfg(test)]
+pub(crate) async fn submit_iaf_with_endpoint(
     form_type: &str,
     filename: &str,
     payload: &[u8],
     endpoint: SftpEndpoint,
 ) -> Result<(), TransportError> {
-    let session = open_iaf_session_with_endpoint(form_type, endpoint).await?;
+    let source = match endpoint.host_key_policy {
+        HostKeyPolicy::AcceptAnyOfficial => SftpEndpointSource::Dispatcher,
+        HostKeyPolicy::AcceptAnyLab | HostKeyPolicy::PinnedSha256(_) => SftpEndpointSource::Env,
+    };
+    let session = open_iaf_session_with_source(form_type, endpoint, source).await?;
     session.store(filename, payload).await
 }
 
 /// Upload using an already-resolved target, including in-process dry-run.
+///
+/// Public only for the `sftp_harness` binary. This is the same irreversible
+/// boundary as [`submit_iaf`]: it bypasses Final Copy, queue admission, claim
+/// and lease. Never call it from application, agent, or cron code.
 pub async fn submit_sftp_target(
     form_type: &str,
     filename: &str,
@@ -1141,6 +1155,7 @@ mod tests {
                 ("TEST_SFTP_PORT", Some("2222")),
                 ("TEST_SFTP_USER", Some("lab")),
                 ("TEST_SFTP_PASSWORD", Some("secret")),
+                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
             ],
             async {
                 let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
@@ -1153,6 +1168,31 @@ mod tests {
                         assert_eq!(endpoint.remote_folder, "1601Cv2018");
                     }
                     ResolvedSftpTarget::DryRun { .. } => panic!("expected test-env target"),
+                }
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_sftp_env_without_host_key_policy_is_config_error() {
+        isolated_sftp_env_async(
+            [
+                ("TEST_SFTP_HOST", Some("127.0.0.1")),
+                ("TEST_SFTP_PORT", Some("2222")),
+                ("TEST_SFTP_USER", Some("lab")),
+                ("TEST_SFTP_PASSWORD", Some("secret")),
+            ],
+            async {
+                let err = resolve_sftp_endpoint("1601Cv2018", "000000000")
+                    .await
+                    .unwrap_err();
+                match err {
+                    TransportError::Config(message) => {
+                        assert!(message.contains("TEST_SFTP_HOST"), "{message}");
+                        assert!(message.contains("BIR_SFTP_HOST_KEY_SHA256"), "{message}");
+                    }
+                    other => panic!("expected config refuse, got {other:?}"),
                 }
             },
         )

@@ -1185,6 +1185,28 @@ impl Form2551QDraft {
 
     /// Record a failed submission attempt with exponential backoff.
     /// After 5 failures, automatically reverts to Draft.
+    /// Release a claim whose lease expired before PUT started.
+    ///
+    /// Nothing reached BIR, so this is not a submission failure: the attempt
+    /// counter, retry back-off and `queue_authorization` are untouched and the
+    /// same authorized task is retried immediately. Returns `false` (no change)
+    /// unless the draft is `Queued` and carries a claim.
+    pub fn release_expired_unstarted_claim(&mut self, note: String) -> bool {
+        if !matches!(self.status, FilingStatus::Queued)
+            || (self.submission_claim_token.is_none() && self.submission_claimed_at.is_none())
+        {
+            return false;
+        }
+        self.last_error = Some(note);
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
+        self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+        true
+    }
+
     pub fn record_submission_failure(&mut self, error_msg: String) {
         assert!(
             matches!(self.status, FilingStatus::Queued),

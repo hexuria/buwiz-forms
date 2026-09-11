@@ -15,7 +15,11 @@ Queued row:
 3. Cron executing an **already-queued** row. Cron never invents a queue.
 
 Headless executes authorized work. Interactive approve stays GUI or agent
-`confirm=true`. There is no blanket permission.
+`confirm=true`. There is no blanket permission. `confirm=true` is a
+**caller assertion**: the host records it as the authorization source but
+cannot verify that a human was consulted. An unattended agent that sets it
+causes a real PUT once cron runs, so operators must gate the agent token, not
+rely on this flag.
 
 ## Scope
 

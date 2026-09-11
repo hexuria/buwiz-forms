@@ -2148,7 +2148,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(recovered.submission_claim_token.is_none());
-        assert_eq!(recovered.submission_attempts, 1);
+        assert_eq!(recovered.submission_attempts, 0);
+        assert!(recovered.queue_authorization.is_some());
 
         let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
         process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
