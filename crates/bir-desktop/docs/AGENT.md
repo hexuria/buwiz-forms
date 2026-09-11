@@ -303,8 +303,7 @@ Semantic invokes that do not need a GPU/window:
 
 - No GPU. Screenshot is `screenshot_unavailable`.
 - `form.print` errors (`form.print needs the desktop window's frozen HTML preview`).
-- No cron / SFTP submission path on headless (painted `bir` starts in-process
-  cron; headless does not).
+- Headless now starts the same in-process SFTP submission cron as painted `bir`.
 - UI-only navigation/chrome may be thinner than painted (semantic tree, not
   pixels).
 - Demo HTML (`profile.html` / `dues.html`) is a host-written temp bundle using
@@ -559,8 +558,7 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke profile.list
 
 `bir-headless` opens with `Database::open` (same key as painted `bir`) and
 will **not** quarantine/recreate a taxpayer file on a bad open. Checkpoint
-WAL on shutdown. Headless does **not** start background cron (no SFTP / no
-auto-file). `screenshot_unavailable`, `virtual_unavailable`, `form.print`
+WAL on shutdown. Headless **does** start background cron (dispatcher-backed SFTP PUT). `screenshot_unavailable`, `virtual_unavailable`, `form.print`
 errors as today. Exclusive owner lock + bind probe refuse a second process
 without `--wait`. `serve --wait` polls until both are free.
 
