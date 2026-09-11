@@ -115,6 +115,8 @@ fn pid_alive(pid: u32) -> bool {
     {
         std::process::Command::new("kill")
             .args(["-0", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
             .map(|status| status.success())
             .unwrap_or(false)
@@ -129,6 +131,8 @@ fn pid_alive(pid: u32) -> bool {
 fn terminate_pid(pid: u32) {
     let _ = std::process::Command::new("kill")
         .args(["-TERM", &pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status();
 }
 
