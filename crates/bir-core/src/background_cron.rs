@@ -365,6 +365,7 @@ trait SubmissionTransport {
     fn open_session<'a>(
         &'a self,
         form_type: &'a str,
+        tin: &'a str,
     ) -> Pin<
         Box<
             dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
@@ -384,11 +385,12 @@ trait SubmissionTransport {
 struct NetworkSubmissionTransport;
 
 impl SubmissionTransport for NetworkSubmissionTransport {
-    type Session = crate::transport::IafFtpSession;
+    type Session = crate::transport::IafSftpSession;
 
     fn open_session<'a>(
         &'a self,
         form_type: &'a str,
+        tin: &'a str,
     ) -> Pin<
         Box<
             dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
@@ -396,7 +398,7 @@ impl SubmissionTransport for NetworkSubmissionTransport {
                 + 'a,
         >,
     > {
-        Box::pin(crate::transport::open_iaf_session(form_type))
+        Box::pin(crate::transport::open_iaf_session(form_type, tin))
     }
 
     fn store_session<'a>(
@@ -548,22 +550,22 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         return;
     };
 
-    let session = match transport.open_session(form_type).await {
+    let session = match transport.open_session(form_type, &draft.tin).await {
         Ok(session) => session,
         Err(error) => {
             fail_draft_1601c(
                 &mut draft,
                 &queue_revision,
                 db.clone(),
-                format!("BIR FTP session failed before upload (no STOR attempted): {error}"),
+                format!("BIR SFTP session failed before upload (no PUT attempted): {error}"),
             );
             crate::ipc::post_db_changed();
             return;
         }
     };
 
-    // Claim only after the FTP session is open, immediately before STOR.
-    // Connect/login/CWD timeouts stay unclaimed and use the existing retry CAS.
+    // Claim only after the SFTP session is open, immediately before PUT.
+    // Connect/login timeouts stay unclaimed and use the existing retry CAS.
     let claim_result = {
         let db_guard = match db.lock() {
             Ok(guard) => guard,
@@ -598,7 +600,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
         Ok(Claim1601CSubmissionResult::Superseded) => {
             info!(
-                "Cron: 1601C submission job for {} was canceled or superseded before STOR",
+                "Cron: 1601C submission job for {} was canceled or superseded before PUT",
                 draft.period_code()
             );
             return;
@@ -641,13 +643,17 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
         Err(error) => {
             let error_category = match error {
-                crate::transport::TransportError::Ftp(_) => "ftp",
+                crate::transport::TransportError::Sftp(_) => "sftp",
+                crate::transport::TransportError::Ssh(_) => "ssh",
+                crate::transport::TransportError::Dispatcher(_) => "dispatcher",
+                crate::transport::TransportError::Crypto(_) => "crypto",
+                crate::transport::TransportError::Http(_) => "http",
                 crate::transport::TransportError::Io(_) => "io",
                 crate::transport::TransportError::Rejected => "rejected",
             };
             warn!(
                 error_category,
-                "Cron: 1601C STOR ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+                "Cron: 1601C PUT ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
             );
             crate::ipc::post_db_changed();
         }
@@ -860,7 +866,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     return;
                 };
 
-                let session = match crate::transport::open_iaf_session(form_type).await {
+                let session = match crate::transport::open_iaf_session(form_type, &draft.tin).await {
                     Ok(session) => session,
                     Err(error) => {
                         fail_draft_2551q(
@@ -868,7 +874,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             &queue_revision,
                             db_clone.clone(),
                             format!(
-                                "BIR FTP session failed before upload (no STOR attempted): {error}"
+                                "BIR SFTP session failed before upload (no PUT attempted): {error}"
                             ),
                         );
                         crate::ipc::post_db_changed();
@@ -876,7 +882,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }
                 };
 
-                // Claim only after the FTP session is open, immediately before STOR.
+                // Claim only after the SFTP session is open, immediately before PUT.
                 let claim_result = {
                     let db_guard = match db_clone.lock() {
                         Ok(guard) => guard,
@@ -898,7 +904,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }) => {
                         draft = claimed_draft;
                         // Let an open form window replace its stale Queued copy
-                        // with the claimed row before STOR returns.
+                        // with the claimed row before PUT returns.
                         crate::ipc::post_db_changed();
                         token
                     }
@@ -917,7 +923,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }
                     Ok(Claim2551QSubmissionResult::Superseded) => {
                         info!(
-                            "Cron: Submission job for {} was canceled or superseded before STOR",
+                            "Cron: Submission job for {} was canceled or superseded before PUT",
                             draft.period_code()
                         );
                         return;
@@ -957,16 +963,20 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     }
                     Err(error) => {
                         let error_category = match error {
-                            crate::transport::TransportError::Ftp(_) => "ftp",
+                            crate::transport::TransportError::Sftp(_) => "sftp",
+                            crate::transport::TransportError::Ssh(_) => "ssh",
+                            crate::transport::TransportError::Dispatcher(_) => "dispatcher",
+                            crate::transport::TransportError::Crypto(_) => "crypto",
+                            crate::transport::TransportError::Http(_) => "http",
                             crate::transport::TransportError::Io(_) => "io",
                             crate::transport::TransportError::Rejected => "rejected",
                         };
-                        // Once STOR has started, an error does not prove that BIR
+                        // Once PUT has started, an error does not prove that BIR
                         // received no bytes. Keep the durable claim just like a
                         // process crash: retrying could duplicate a return.
                         warn!(
                             error_category,
-                            "Cron: Submission STOR ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+                            "Cron: Submission PUT ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
                         );
                         crate::ipc::post_db_changed();
                     }
@@ -1443,6 +1453,7 @@ mod tests {
         fn open_session<'a>(
             &'a self,
             form_type: &'a str,
+            _tin: &'a str,
         ) -> Pin<
             Box<
                 dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
@@ -1457,7 +1468,7 @@ mod tests {
                     TestTransportOutcome::PreStore => {
                         Err(crate::transport::TransportError::Io(std::io::Error::new(
                             std::io::ErrorKind::TimedOut,
-                            "simulated ftp connect timeout",
+                            "simulated sftp connect timeout",
                         )))
                     }
                     TestTransportOutcome::Success | TestTransportOutcome::UnknownIo => {
@@ -1493,7 +1504,7 @@ mod tests {
                         )))
                     }
                     TestTransportOutcome::PreStore => {
-                        panic!("STOR must not run after a pre-store FTP failure")
+                        panic!("PUT must not run after a pre-store SFTP failure")
                     }
                 }
             })
@@ -1864,7 +1875,7 @@ mod tests {
             failed
                 .submission_error
                 .as_deref()
-                .is_some_and(|message| message.contains("no STOR attempted"))
+                .is_some_and(|message| message.contains("no PUT attempted"))
         );
         assert!(queued_1601c_revision(&failed).is_some());
 
