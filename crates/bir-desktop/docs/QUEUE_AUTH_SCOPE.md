@@ -65,6 +65,13 @@ PUT is empirically PASS. Automated tests still use **092026** (September
 Dry-run stops at Submitted. IMAP skip is taken from the **session source**,
 not from process-global `BIR_SFTP_DRY_RUN` (parallel tests must not leak).
 
+One Gmail inbox shared across profiles is one OAuth grant
+(`inbox_oauth_tokens`, copied onto every matching profile). Reconnect must
+replace the refresh token the poller uses; the poller must not keep the first
+`list_profiles()` row’s dead token. Receipt matching stays TIN / form / period
+for every Submitted sibling under that inbox. See
+[AGENT.md](AGENT.md) “Email Settings: shared inbox OAuth”.
+
 ## Secrets
 
 `BIR_SFTP_*` env only. Never commit, print, or log passwords. Production

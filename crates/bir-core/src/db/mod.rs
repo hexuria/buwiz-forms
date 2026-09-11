@@ -23,6 +23,7 @@ mod form_rule_state;
 pub use form_rule_state::{FormFinalCopy, FormRuleIdentity, FormRuleState, FormRuleStateError};
 mod forms_set;
 mod google_calendar;
+mod inbox_oauth;
 mod jobs;
 mod migrations;
 mod notices;
@@ -31,6 +32,7 @@ mod providers;
 mod receipts;
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
+pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
 use std::fs::{File, OpenOptions};

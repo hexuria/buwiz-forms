@@ -35,6 +35,7 @@ to a v2 host.
 - [Coverage](#coverage-this-slice)
 - [Claimed queue without BIR outcome](#claimed-queue-without-bir-outcome-facts)
 - [Background Tasks titles](#background-tasks-titles)
+- [Email Settings: shared inbox OAuth](#email-settings-shared-inbox-oauth)
 - [Durable queue and auth scope](QUEUE_AUTH_SCOPE.md)
 
 ## Locked protocol contract
@@ -994,4 +995,24 @@ the new format immediately. Confirmation poll titles are stored on insert;
 already-Queued poll rows keep their old name until they complete. Operators
 should not treat a leftover `Waiting for 1601C confirmation email for …` row as
 a second return — it is a pre-format poller for that mailbox.
+
+## Email Settings: shared inbox OAuth
+
+Several taxpayer profiles can use one Gmail inbox (the production Mac setup
+is Alejandro / Andrea / Juan / Jane on `codeitlikemiley@gmail.com`). That
+inbox has **one** Google OAuth credential set:
+
+- Connect / Re-authorize / Disconnect on any profile writes
+  `inbox_oauth_tokens` and copies the grant onto every sibling that shares
+  the IMAP/email address. A dead refresh on the first `list_profiles()` row
+  must not survive a reconnect on Jane or Juan.
+- The confirmation poller authenticates with that shared grant, then matches
+  BIR receipts by TIN / form / period. Jane’s Submitted 1601-C is confirmed
+  even when Juan owns the grant.
+- Google omits `refresh_token` unless consent is re-granted. The app already
+  sends `prompt=consent`; an empty refresh is rejected and must not show
+  Connected.
+
+Do not log access or refresh tokens. Do not point tests at the live Mac
+app-group DB.
 
