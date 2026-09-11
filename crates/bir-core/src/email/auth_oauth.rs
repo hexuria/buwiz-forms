@@ -405,23 +405,41 @@ fn exchange_code_for_tokens(
         }
 
         let body: serde_json::Value = serde_json::from_str(&text)?;
-
-        let access_token = body
-            .get("access_token")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing access_token in token response"))?
-            .to_string();
-
-        let refresh_token = body
-            .get("refresh_token")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing refresh_token in token response"))?
-            .to_string();
-
-        Ok((access_token, refresh_token))
+        access_and_refresh_from_token_body(&body)
     })
     .join()
     .unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
+}
+
+/// Parse Google's token endpoint JSON.
+///
+/// An empty `refresh_token` is treated as missing. Reconnect without
+/// `prompt=consent` often omits it; showing Connected while a dead refresh stays
+/// stored is how the poller kept failing after a successful browser handshake.
+fn access_and_refresh_from_token_body(
+    body: &serde_json::Value,
+) -> Result<(String, String), anyhow::Error> {
+    let access_token = body
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Missing access_token in token response"))?
+        .to_string();
+
+    let refresh_token = body
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Google did not return a refresh token. Re-authorize with consent so a new refresh token is issued."
+            )
+        })?
+        .to_string();
+
+    Ok((access_token, refresh_token))
 }
 
 // ── PKCE Helpers ─────────────────────────────────────────────────────────────
@@ -524,5 +542,27 @@ mod token_endpoint_failure_tests {
         // Slicing by byte index panics mid-character; the guard must not.
         let msg = describe_token_endpoint_failure(400, &"日本語テキスト".repeat(100));
         assert!(msg.contains("400"), "{msg}");
+    }
+
+    #[test]
+    fn omitted_or_empty_refresh_token_is_rejected() {
+        let missing = serde_json::json!({"access_token": "access-only"});
+        let err = super::access_and_refresh_from_token_body(&missing).unwrap_err();
+        assert!(format!("{err}").contains("refresh token"), "{err}");
+
+        let empty = serde_json::json!({"access_token": "access-only", "refresh_token": "  "});
+        let err = super::access_and_refresh_from_token_body(&empty).unwrap_err();
+        assert!(format!("{err}").contains("refresh token"), "{err}");
+    }
+
+    #[test]
+    fn present_refresh_token_is_returned() {
+        let body = serde_json::json!({
+            "access_token": " access ",
+            "refresh_token": " refresh "
+        });
+        let (access, refresh) = super::access_and_refresh_from_token_body(&body).unwrap();
+        assert_eq!(access, "access");
+        assert_eq!(refresh, "refresh");
     }
 }

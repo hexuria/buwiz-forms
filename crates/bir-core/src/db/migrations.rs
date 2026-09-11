@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 17;
+const CURRENT_MIGRATION_VERSION: i32 = 18;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -311,6 +311,17 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // Nullable additive columns leave projected legacy pins fail-closed
         // until a reviewed migration supplies the omitted identity fields.
         "SELECT 1; -- v17 marker: exact form-rule revision identity (Rust-side)",
+        // v18: One Google OAuth credential set per shared inbox, so reconnect
+        // replaces the tokens the confirmation poller actually uses.
+        "
+        CREATE TABLE IF NOT EXISTS inbox_oauth_tokens (
+            email TEXT PRIMARY KEY NOT NULL,
+            imap_user TEXT NOT NULL,
+            access_token TEXT,
+            refresh_token TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        ",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -364,6 +375,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 17 {
                 migrate_v17_exact_form_rule_identity(conn)?;
             }
+
+            if version == 18 {
+                ensure_inbox_oauth_tokens_table(conn)?;
+            }
         } else {
             break;
         }
@@ -389,6 +404,11 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // Heal partially upgraded v17 databases without inferring any omitted
     // exact-key component from a registry or from mutable application state.
     migrate_v17_exact_form_rule_identity(conn)?;
+
+    // Heal partially upgraded v18 databases. CREATE TABLE IF NOT EXISTS is
+    // idempotent; the poller must never keep using a sibling profile's dead
+    // refresh token after reconnect wrote a shared inbox row.
+    ensure_inbox_oauth_tokens_table(conn)?;
 
     Ok(())
 }
@@ -466,6 +486,24 @@ fn migrate_v17_exact_form_rule_identity(conn: &Connection) -> Result<(), DbError
             added_columns
         );
     }
+    Ok(())
+}
+
+/// Shared Gmail / IMAP OAuth credentials keyed by inbox email.
+///
+/// Several taxpayer profiles can point at the same mailbox. The confirmation
+/// poller must read this row rather than the first matching `profiles` row,
+/// otherwise a reconnect on Jane leaves Alejandro's dead refresh token in use.
+fn ensure_inbox_oauth_tokens_table(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS inbox_oauth_tokens (
+            email TEXT PRIMARY KEY NOT NULL,
+            imap_user TEXT NOT NULL,
+            access_token TEXT,
+            refresh_token TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );",
+    )?;
     Ok(())
 }
 
@@ -1541,6 +1579,7 @@ mod tests {
             "profile_calendar_events",
             "form_finalizations",
             "form_rule_migrations",
+            "inbox_oauth_tokens",
         ];
         for table in tables {
             let exists: bool = conn
@@ -1741,6 +1780,41 @@ mod tests {
             (legacy_pin.3, legacy_pin.4, legacy_pin.5),
             (None, None, None)
         );
+    }
+
+    #[test]
+    fn test_v18_creates_inbox_oauth_tokens_table() {
+        let conn = test_conn();
+        conn.execute_batch("PRAGMA user_version = 17;").unwrap();
+        migrate_database(&conn).unwrap();
+
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='inbox_oauth_tokens'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(exists, "v18 must create inbox_oauth_tokens");
+
+        let columns = {
+            let mut stmt = conn
+                .prepare("PRAGMA table_info(inbox_oauth_tokens)")
+                .unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+        for column in [
+            "email",
+            "imap_user",
+            "access_token",
+            "refresh_token",
+            "updated_at",
+        ] {
+            assert!(columns.contains(column), "missing v18 column {column}");
+        }
     }
 
     #[test]

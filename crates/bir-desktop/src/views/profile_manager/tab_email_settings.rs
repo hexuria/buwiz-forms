@@ -197,7 +197,13 @@ impl ProfileManagerView {
                         rsx! {
                             <div flex flex_col gap_3 w_full overflow_x_hidden>
                                 {if self.oauth_connected {
-                                    let email = self.imap_email_input.read(cx).value();
+                                    let email = self
+                                        .stored_oauth_inbox_email
+                                        .clone()
+                                        .filter(|email| !email.trim().is_empty())
+                                        .unwrap_or_else(|| {
+                                            self.imap_email_input.read(cx).value().to_string()
+                                        });
                                     div()
                                         .text_sm()
                                         .text_color(cx.theme().muted_foreground)
@@ -207,6 +213,11 @@ impl ProfileManagerView {
                                 } else {
                                     div()
                                 }}
+                                {div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .w_full()
+                                    .child("Profiles that share this inbox share one Google OAuth credential set. Re-authorize or Disconnect updates every profile using this email.")}
                                 {
                                     div()
                                         .flex()
@@ -220,7 +231,7 @@ impl ProfileManagerView {
                                                     "Connect Google Account"
                                                 })
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    let editing_id = this.editing_id;
+                                                    let source_tin = this.persisted_profile_tin.clone();
                                                     cx.spawn(async move |this, cx| {
                                                         let (tx, rx) =
                                                             tokio::sync::oneshot::channel();
@@ -238,41 +249,9 @@ impl ProfileManagerView {
                                                         );
 
                                                         let _ = this.update(cx, |this, cx| {
-                                                            match result {
-                                                                Ok((
-                                                                    email,
-                                                                    access_token,
-                                                                    refresh_token,
-                                                                )) => {
-                                                                    this.oauth_connected = true;
-                                                                    this.email_tracking_enabled =
-                                                                        true;
-                                                                    this.stored_oauth_access_token =
-                                                                        Some(
-                                                                            access_token.clone(),
-                                                                        );
-                                                                    this.stored_oauth_refresh_token = Some(refresh_token.clone());
-                                                                    this.connection_test_message = Some((true, format!("Google account connected successfully for {}.", email)));
-
-                                                                    if let Some(id) = editing_id
-                                                                        && let Ok(db) =
-                                                                            this.db.lock()
-                                                                        && let Ok(Some(mut profile)) = db.get_profile(&id.to_string())
-                                                                    {
-                                                                        profile.email = email;
-                                                                        profile.oauth_access_token =
-                                                                            Some(access_token);
-                                                                        profile.oauth_refresh_token =
-                                                                            Some(refresh_token);
-                                                                        let _ = db.save_profile(
-                                                                            profile,
-                                                                        );
-                                                                    }
-                                                                }
-                                                                Err(e) => {
-                                                                    this.connection_test_message = Some((false, format!("OAuth failed: {}", e)));
-                                                                }
-                                                            }
+                                                            this.apply_google_oauth_result(
+                                                                result, source_tin,
+                                                            );
                                                             cx.notify();
                                                         });
                                                     })
@@ -287,6 +266,16 @@ impl ProfileManagerView {
                                                         0x22c55eff,
                                                     )))
                                                     .child("● Connected ✓"),
+                                            )
+                                            .child(
+                                                gpui_component::button::Button::new(
+                                                    "disconnect_google",
+                                                )
+                                                .ghost()
+                                                .label("Disconnect")
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.disconnect_shared_google_oauth(cx);
+                                                })),
                                             )
                                         })
                                 }
@@ -353,16 +342,19 @@ impl ProfileManagerView {
                                                         if let Some(token) = new_access_token {
                                                             this.stored_oauth_access_token =
                                                                 Some(token.clone());
-                                                            if let Ok(db) = this.db.lock()
-                                                                && let Some(id) = this.editing_id
-                                                                && let Ok(Some(mut prof)) =
-                                                                    db.get_profile(
-                                                                        &id.to_string(),
-                                                                    )
-                                                            {
-                                                                prof.oauth_access_token =
-                                                                    Some(token);
-                                                                let _ = db.save_profile(prof);
+                                                            let inbox = this
+                                                                .stored_oauth_inbox_email
+                                                                .clone()
+                                                                .unwrap_or_else(|| {
+                                                                    this.current_profile(cx)
+                                                                        .inbox_email()
+                                                                        .to_string()
+                                                                });
+                                                            if let Ok(db) = this.db.lock() {
+                                                                let _ = db
+                                                                    .update_inbox_oauth_access_token(
+                                                                        &inbox, &token,
+                                                                    );
                                                             }
                                                         }
                                                     }
@@ -420,5 +412,116 @@ impl ProfileManagerView {
             </div>
         };
         root.into_any_element()
+    }
+
+    fn apply_google_oauth_result(
+        &mut self,
+        result: Result<(String, String, String), anyhow::Error>,
+        source_tin: Option<String>,
+    ) {
+        match result {
+            Ok((email, access_token, refresh_token)) => {
+                if refresh_token.trim().is_empty() {
+                    self.oauth_connected = false;
+                    self.connection_test_message = Some((
+                        false,
+                        "Google did not return a refresh token. Re-authorize with consent so a new refresh token is issued.".to_string(),
+                    ));
+                    return;
+                }
+
+                self.oauth_connected = true;
+                self.email_tracking_enabled = true;
+                self.email_auth_method = EmailAuthMethod::GoogleOAuth;
+                self.stored_oauth_access_token = Some(access_token.clone());
+                self.stored_oauth_refresh_token = Some(refresh_token.clone());
+                self.stored_oauth_inbox_email = Some(email.clone());
+                self.connection_test_message = Some((
+                    true,
+                    format!("Google account connected successfully for {}.", email),
+                ));
+
+                match self.db.lock() {
+                    Ok(db) => match db.persist_google_oauth_for_inbox(
+                        &email,
+                        &access_token,
+                        &refresh_token,
+                        source_tin.as_deref(),
+                    ) {
+                        Ok(_) => {}
+                        Err(error) => {
+                            self.oauth_connected = false;
+                            self.connection_test_message = Some((
+                                false,
+                                format!(
+                                    "Google authorized {}, but the tokens could not be saved: {}",
+                                    email, error
+                                ),
+                            ));
+                        }
+                    },
+                    Err(_) => {
+                        self.oauth_connected = false;
+                        self.connection_test_message = Some((
+                            false,
+                            "Google authorized the account, but the database lock was busy. Try Re-authorize.".to_string(),
+                        ));
+                    }
+                }
+            }
+            Err(error) => {
+                self.connection_test_message = Some((false, format!("OAuth failed: {}", error)));
+            }
+        }
+    }
+
+    fn disconnect_shared_google_oauth(&mut self, cx: &mut Context<Self>) {
+        let inbox = self
+            .stored_oauth_inbox_email
+            .clone()
+            .filter(|email| !email.trim().is_empty())
+            .unwrap_or_else(|| self.imap_email_input.read(cx).value().trim().to_string());
+
+        if inbox.trim().is_empty() {
+            self.connection_test_message = Some((
+                false,
+                "No inbox email is set, so there is nothing to disconnect.".to_string(),
+            ));
+            cx.notify();
+            return;
+        }
+
+        match self.db.lock() {
+            Ok(db) => {
+                if let Err(error) = db.disconnect_google_oauth_for_inbox(&inbox) {
+                    self.connection_test_message =
+                        Some((false, format!("Disconnect failed: {}", error)));
+                    cx.notify();
+                    return;
+                }
+            }
+            Err(_) => {
+                self.connection_test_message = Some((
+                    false,
+                    "Could not disconnect because the database lock was busy.".to_string(),
+                ));
+                cx.notify();
+                return;
+            }
+        }
+
+        self.oauth_connected = false;
+        self.email_tracking_enabled = false;
+        self.stored_oauth_access_token = None;
+        self.stored_oauth_refresh_token = None;
+        self.stored_oauth_inbox_email = None;
+        self.connection_test_message = Some((
+            true,
+            format!(
+                "Disconnected Google OAuth for {} across every profile sharing this inbox.",
+                inbox
+            ),
+        ));
+        cx.notify();
     }
 }
