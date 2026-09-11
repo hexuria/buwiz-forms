@@ -1,0 +1,75 @@
+{
+  "schemas": [
+    {
+      "name": "profile.set",
+      "kind": "invoke",
+      "description": "Select one taxpayer by tin or q. 0 hits not_found; many hits ambiguous.",
+      "effects": ["write"],
+      "idempotent": true,
+      "verified": true,
+      "args": {
+        "tin": { "type": "string" },
+        "q": { "type": "string" },
+        "view": { "type": "string" }
+      },
+      "keywords": ["profile", "select", "tin"]
+    },
+    {
+      "name": "filing.start",
+      "kind": "invoke",
+      "description": "Open a form for the selected (or given) profile.",
+      "effects": ["write"],
+      "idempotent": false,
+      "verified": true,
+      "required": ["code", "year", "period"],
+      "args": {
+        "tin": { "type": "string" },
+        "code": { "type": "string", "required": true },
+        "year": { "type": "number", "required": true },
+        "period": { "type": "number", "required": true }
+      },
+      "keywords": ["filing", "open", "form"]
+    },
+    {
+      "name": "form.fill",
+      "kind": "invoke",
+      "description": "Set fillable keys on the open 1601-C or 2551Q. Does not queue.",
+      "effects": ["write"],
+      "idempotent": true,
+      "verified": true,
+      "args": {
+        "any_taxes_withheld": { "type": "boolean" },
+        "tax_14": { "type": "string" },
+        "tax_25": { "type": "string" }
+      },
+      "keywords": ["fill", "form", "withheld"]
+    },
+    {
+      "name": "filing.validate",
+      "kind": "invoke",
+      "description": "Run FormValidator for the open 1601-C or 2551Q.",
+      "effects": ["read"],
+      "idempotent": true,
+      "verified": true,
+      "args": {},
+      "keywords": ["validate", "filing"]
+    },
+    {
+      "name": "filing.queue",
+      "kind": "invoke",
+      "description": "Queue open 1601C/2551Q for cron SFTP PUT. confirm must be JSON boolean true.",
+      "effects": ["write"],
+      "idempotent": false,
+      "verified": true,
+      "required": ["confirm"],
+      "args": {
+        "confirm": { "type": "boolean", "required": true },
+        "tin": { "type": "string" },
+        "code": { "type": "string" },
+        "year": { "type": "number" },
+        "period": { "type": "number" }
+      },
+      "keywords": ["queue", "submit", "filing"]
+    }
+  ]
+}

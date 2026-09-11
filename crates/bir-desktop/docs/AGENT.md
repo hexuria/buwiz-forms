@@ -9,11 +9,14 @@ verbs live in this host as `invoke` names. Start at the
 `bir-headless` from CLI / MCP / Grok Bot.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
-`8857139af12fb033b4dd04eabd8d19b5bfc5ffc6` (`main` tip, Merge PR #32 / epic
-children). Host GPUI is **gpui-pre** through gpui-kit 0.6.1. Cookbook:
-[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/INTEGRATING.md)
-and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/SDK.md).
+`45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e` (`main` tip, Merge PR #33 —
+protocol v2 HMAC + default-deny token). Host GPUI is **gpui-pre** through
+gpui-kit 0.6. Cookbook:
+[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e/docs/INTEGRATING.md)
+and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e/docs/SDK.md).
 Do not fork the protocol. There is no crates.io release; git/path only.
+CLI and host **must** both be on this rev (or later). A v1 CLI cannot talk
+to a v2 host.
 
 ## Contents
 
@@ -35,19 +38,21 @@ Do not fork the protocol. There is no crates.io release; git/path only.
 
 ## Locked protocol contract
 
-These are host constraints. They do not change protocol v1.
+These are host constraints. They do not fork protocol v2.
 
 - Depend on git/path `gpui-agent` at that rev only (no crates.io).
 - `bir-core` has no GPUI / gpui-agent dependency. Painted-window and virtual
   glue stay behind bir-desktop `--features agent`.
-- Loopback default via `gpui_agent::from_env` / `authorize_bind`. Non-loopback
-  needs `GPUI_AGENT_REMOTE=1` and a non-empty `GPUI_AGENT_TOKEN` (SDK, not a
+- Loopback default via `gpui_agent::from_env` / `authorize_bind`. **A
+  non-empty `GPUI_AGENT_TOKEN` is required to bind.** `GPUI_AGENT_INSECURE_NO_TOKEN=1`
+  restores untokened loopback for **local demos only** (prints a banner).
+  Non-loopback needs `GPUI_AGENT_REMOTE=1` and a non-empty token (SDK, not a
   BIR-invented bind). This host does not add a second bind path.
 - **Two AgentHosts must not share a bind or a live SQLCipher file.** Painted
   `bir` and `bir-headless serve` both default to `127.0.0.1:17421` and take
   `bir_data.db.owner.lock`. See [Two hosts, one agent port](#two-hosts-one-agent-port).
   There is **no** protocol `Op::Yield` / `Takeover`.
-- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8857139af12fb033b4dd04eabd8d19b5bfc5ffc6/docs/ADR-001-daemon-sot.md))
+- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
   + the same SQLCipher key). Smoke C reopen of the GUI is offline
@@ -68,7 +73,11 @@ These are host constraints. They do not change protocol v1.
   `virtual_unavailable` rather than synthesizing OS HID or a half-wired
   in-window pointer. Protocol is unchanged.
 - Screenshot is observe-only. The UI-thread mailbox drain intercepts
-  `Op::Screenshot`: macOS writes **this** window via
+  `Op::Screenshot`: it **confines** the client path (`require_screenshot_path`
+  then `confine_screenshot_path`) **before** capture or
+  `screenshot_unavailable`. Clients send a **relative `.png` name**, not an
+  absolute path. Host writes under `GPUI_AGENT_SCREENSHOT_DIR` (default
+  `{temp_dir}/gpui-agent-screenshots/`). macOS then writes **this** window via
   `capture_window_via_screencapture` (`screencapture -l`, Screen Recording).
   Linux, Windows, and headless `spawn_host` stay `screenshot_unavailable`.
   The semantic host has no `Window` and does not invent a PNG.
@@ -133,13 +142,15 @@ This is the token model AI agents must follow. Never print or log the token.
 | Feature | `agent` is **off** by default. Product/release builds must leave it off. |
 | Opt-in | Runtime starts only when `GPUI_AGENT=1` (`true`/`yes`/`on`). |
 | Release | Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. |
-| Bind | Loopback `127.0.0.1:17421` unless `GPUI_AGENT_ADDR` is set. `from_env` calls `authorize_bind`. Non-loopback needs `GPUI_AGENT_REMOTE=1` **and** a non-empty token. Transport is still plaintext TCP. Do not invent a second bind path. |
-| Shared secret | `GPUI_AGENT_TOKEN` (local smokes use `dev-secret`). CLI / MCP / Grok Bot must send the **same** token. When set, it is required on every request. |
-| Live default DB | **`bir-headless serve` requires a token** against live `default_database_path()` (Mac app-group `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`, Linux `~/.taxman-ebir/bir_data.db`). Landed as “Require a token on live default_database_path for bir-headless”. |
-| Path override | `BIR_DATABASE_PATH` is for CI / temp demos. A **non-empty** override may omit the token (`live_database_token_required` is false). Prefer still setting a token so recipe/MCP clients match. Do **not** set `BIR_DATABASE_PATH` for live Mac smokes. |
-| Painted `bir` | Does **not** apply that live-path token refuse (mailbox starts from `from_env` alone). Recipes and MCP still need the same non-empty token on host and client when you set one. |
-| `hello.auth` | `"required"` when a token is configured on the host, `"none"` otherwise. The TCP thread enforces the token; the mailbox drain (painted `bir` and `bir-headless`) passes it into `handle_request` so hello does not overwrite `auth` to `"none"`. `BirAgentHost::hello()` does not set `auth` by hand. |
-| Logging | **Never log the token.** Opt-in `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`) emits one stderr line per request: `timestamp gpui-agent id=… op=hello\|invoke\|… name=profile.list ok=true`. Off by default. Not enabled by `RUST_LOG`. Invoke args, `set_value` values, typed text, screenshot paths, and tokens are never included. Same helper on the painted mailbox drain. |
+| Bind | Loopback `127.0.0.1:17421` unless `GPUI_AGENT_ADDR` is set. `from_env` calls `authorize_bind_with_insecure`. **Token required to bind** on loopback. Non-loopback needs `GPUI_AGENT_REMOTE=1` **and** a non-empty token. Transport is still plaintext TCP. Do not invent a second bind path. |
+| Shared secret | **`GPUI_AGENT_TOKEN` is required** on painted `bir` and `bir-headless serve` (local smokes use `dev-secret`). CLI / MCP / Grok Bot must set the **same** value. The wire field is protocol **v2 `auth`** = hex(`HMAC-SHA256(token, per-connection nonce)`). Never send the raw token on NDJSON. v1 CLI / raw `token` field fail closed (`token must not be sent on the wire`). |
+| Insecure demo | `GPUI_AGENT_INSECURE_NO_TOKEN=1` binds loopback without a token and prints a loud banner. **Demos only.** Never on a shared machine, agent VM, or live taxpayer DB. Recipe `run` and `mcp` still require a client token. |
+| Live default DB | **`bir-headless serve` requires a token** against live `default_database_path()` (Mac app-group `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`, Linux `~/.taxman-ebir/bir_data.db`). This refuse still applies if someone sets `GPUI_AGENT_INSECURE_NO_TOKEN=1`. |
+| Path override | `BIR_DATABASE_PATH` is for CI / temp demos. A **non-empty** override may omit the *headless live-path* refuse (`live_database_token_required` is false), but **`from_env` still requires `GPUI_AGENT_TOKEN` unless `GPUI_AGENT_INSECURE_NO_TOKEN=1`**. Prefer still setting a token so recipe/MCP clients match. Do **not** set `BIR_DATABASE_PATH` for live Mac smokes. |
+| Painted `bir` | Bind is `from_env` alone (no extra live-path refuse). Without `GPUI_AGENT_TOKEN` (and without the insecure flag) the mailbox **does not start**. Recipes and MCP need the same token on host and client. |
+| `hello.auth` | `"required"` when a token is configured on the host, `"none"` only for the insecure/no-token demo. The TCP thread enforces HMAC and stamps `hello.auth` on the mailbox path. `BirAgentHost::hello()` does not set `auth` by hand. |
+| Protocol | **v2.** After accept the host writes a challenge nonce. Clients (`gpui-agent` CLI / `AgentClient::with_token`) send `auth` HMAC. Host and CLI must both be ≥ pin `45ccb94`. |
+| Logging | **Never log the token.** Opt-in `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`) emits one stderr line per request: `timestamp gpui-agent id=… op=hello\|invoke\|… name=profile.list ok=true`. Off by default. Not enabled by `RUST_LOG`. Invoke args, `set_value` values, typed text, screenshot paths, tokens, and HMAC hex are never included. Same helper on the painted mailbox drain. |
 
 ## Security gates
 
@@ -191,16 +202,17 @@ Use this section as the day-to-day recipe. Invoke names must match the
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
-export GPUI_AGENT_TOKEN=dev-secret   # must match the host
+export GPUI_AGENT_TOKEN=dev-secret   # required; must match the host
 ```
 
 Host (whichever owns the port):
 
 ```bash
 export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_TOKEN=dev-secret   # required to bind (default-deny)
 export GPUI_AGENT_ADDR=127.0.0.1:17421
 # optional: export GPUI_AGENT_LOG_REQUESTS=1
+# demo-only (never live DB): export GPUI_AGENT_INSECURE_NO_TOKEN=1
 # painted:
 #   cargo run --locked --bin bir --features dev-tools,agent
 # headless (GUI closed, or Linux/box):
@@ -224,7 +236,7 @@ Check:
 
 - `platform` — `desktop` (painted `bir`) vs `headless` (`bir-headless`)
 - `ready`
-- `auth` — `"required"` when the host has `GPUI_AGENT_TOKEN`
+- `auth` — `"required"` when the host has `GPUI_AGENT_TOKEN` (`"none"` only with `GPUI_AGENT_INSECURE_NO_TOKEN=1`)
 - `deliveries` — `["semantic"]` only
 
 ```bash
@@ -344,10 +356,11 @@ open — do not “fix” a live taxpayer file that way.
 
 ```bash
 export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_TOKEN=dev-secret   # required to bind
 export GPUI_AGENT_ADDR=127.0.0.1:17421
 export BIR_DATABASE_PATH=/tmp/bir-headless-demo.db   # fresh path
 export EBIR_TEST_ENV=1                               # test zero key; demo only
+# do not set GPUI_AGENT_INSECURE_NO_TOKEN=1 here
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
@@ -357,7 +370,7 @@ From the repo root, debug (the usual developer loop):
 
 ```bash
 export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN='dev-secret'
+export GPUI_AGENT_TOKEN='dev-secret'   # required to bind
 export GPUI_AGENT_ADDR='127.0.0.1:17421'
 cargo run --locked --bin bir --features dev-tools,agent
 ```
@@ -371,12 +384,13 @@ export GPUI_AGENT_TOKEN='dev-secret'
 cargo run --release --locked --bin bir --features agent
 ```
 
-Install the CLI from the pinned gpui-agent repo (separate checkout):
+Install the CLI from the pinned gpui-agent repo (separate checkout). **v1
+CLI cannot speak v2 HMAC** — install this rev, not an older `main`:
 
 ```bash
 git clone https://github.com/hexuria/gpui-agent
 cd gpui-agent
-git checkout 8857139af12fb033b4dd04eabd8d19b5bfc5ffc6
+git checkout 45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e
 cargo install --path crates/gpui-agent-cli --locked
 ```
 
@@ -395,8 +409,9 @@ gpui-agent invoke nav.go --arg page=profile-manager
 ### Mac: bir-headless
 
 Clap: `serve` / `status` / `shutdown`, global `--wait`. Shell matches
-gpui-agent `apps/todo-headless` on pin `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6`:
+gpui-agent `apps/todo-headless` on pin `45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e`:
 `from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
+`GPUI_AGENT_TOKEN` is required to bind.
 
 #### Smoke matrix
 
@@ -490,7 +505,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
-Other terminal (CLI from pin `8857139af12fb033b4dd04eabd8d19b5bfc5ffc6`):
+Other terminal (CLI from pin `45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e`):
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
@@ -533,10 +548,10 @@ cargo run --locked --bin bir-headless --features agent -- status
 ## Linux CLI smoke (Buwiz box)
 
 Bind is `gpui_agent::from_env` → `authorize_bind` (loopback default).
+**`GPUI_AGENT_TOKEN` is required to bind** unless `GPUI_AGENT_INSECURE_NO_TOKEN=1`.
 Non-loopback needs `GPUI_AGENT_REMOTE=1` **and** `GPUI_AGENT_TOKEN`. Do not
 invent a second bind. `hello.auth` is `"required"` when that token is set
-because the mailbox drain (painted `bir` and `bir-headless serve`) pass it into
-`handle_request` (never `None` when configured).
+because the TCP thread stamps it (never `None` when configured).
 
 **Display-less Linux — smoke D (temp / demo DB, PASSED):**
 
@@ -603,10 +618,12 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
 gpui-agent snapshot
 ```
 
-macOS observe-only PNG of **this** window (Screen Recording), not Linux:
+macOS observe-only PNG of **this** window (Screen Recording), not Linux.
+Client path is a **relative `.png` name** (confined under
+`GPUI_AGENT_SCREENSHOT_DIR` or `{temp}/gpui-agent-screenshots/`):
 
 ```bash
-gpui-agent screenshot --out /tmp/bir-window.png
+gpui-agent screenshot --out bir-window.png
 ```
 
 Claude Code / MCP (same token as the host):
@@ -632,10 +649,24 @@ Day-to-day AI flow (env, hello probe, profile, 1601-C, headless limits):
 [AI agent playbook](#ai-agent-playbook). CLI `invoke` `--arg`s are `KEY=VALUE`;
 `set-value` is positional (`<TARGET> <VALUE>`), not `--id`.
 
-Pinned `gpui-agent` CLI `recipe validate` / `recipe run` uses a baked **todo**
-schema registry. Host `invoke` names such as `nav.go` fail that registry, so
-checked-in recipes use generic protocol ops only (`wait` / `click` / `set_value`
-/ `assert`). BIR verbs stay available via `gpui-agent invoke`.
+Pinned `gpui-agent` CLI `recipe validate` / `recipe run` uses a **protocol-only**
+schema registry by default (no baked todo invokes). Host `invoke` names such
+as `nav.go` fail that registry unless you pass `--schema` /
+`GPUI_AGENT_SCHEMA`. Checked-in day-to-day recipes use generic protocol ops
+(`wait` / `click` / `set_value` / `assert`). BIR verbs stay in this host and
+are available via `gpui-agent invoke`. Do **not** add BIR verbs to
+gpui-agent.
+
+The one checked-in invoke recipe (`form-1601c-queue.json`) needs the local
+schema (still host-side; not a gpui-agent verb fork):
+
+```bash
+gpui-agent recipe validate crates/bir-desktop/recipes/form-1601c-queue.json \
+  --schema crates/bir-desktop/recipes/schema.json
+export GPUI_AGENT_SCHEMA=crates/bir-desktop/recipes/schema.json
+gpui-agent recipe run crates/bir-desktop/recipes/form-1601c-queue.json \
+  --set tin=00000000000000 --set year=2026 --set period=8
+```
 
 ```bash
 gpui-agent recipe run crates/bir-desktop/recipes/nav.json
@@ -873,9 +904,11 @@ Proven in headless host tests (not a Mac GUI run):
 - Selected profile: checked `profile-{tin}` listitem and `context.selected_tin`
 - Remaining form views: page root + back/save/submit chrome ids.
   Semantic **save** besides 1601-C and 2551Q is not mapped
-- `hello.auth` is `Required` when `handle_request` is given a configured token,
-  and `None` when it is not. `BirAgentHost::hello()` leaves `auth` at Default.
-  Token mismatch still fails with `automation token required` / invalid token.
+- `hello.auth` is `Required` when the host is configured with a token (TCP
+  stamps it on the mailbox path; `handle_request` fills it when given
+  `expected_token` plus a v2 HMAC). `BirAgentHost::hello()` leaves `auth` at
+  Default. Missing HMAC still fails with `automation token required`. A raw
+  wire `token` field fails with `token must not be sent on the wire`.
 - `bir-headless serve` opens a **file-backed** SQLCipher path (`app_database_path()`,
   not ephemeral). `profile.save` is visible after reopen. Bind-in-use and
   live-DB owner lock are refused without `--wait`; `serve --wait` resumes after
@@ -891,9 +924,10 @@ Remaining (not faked):
 - `form.print` copies are ignored (frozen HTML preview has no copies API)
 - `form.mark_paid` on 1601-C is unsupported (UI message only)
 - `profile.calendar_sync` (Google push) needs a linked account
-- Virtual in-window delivery stays `virtual_unavailable`. Screenshot: macOS
-  mailbox drain can write this window (`screencapture -l`); Linux / Windows /
-  headless stay `screenshot_unavailable`.
+- Virtual in-window delivery stays `virtual_unavailable`. Screenshot: hosts
+  confine a relative `.png` name first; macOS mailbox drain can then write this
+  window (`screencapture -l`); Linux / Windows / headless stay
+  `screenshot_unavailable`. Absolute client paths are refused.
 - GUI-as-client of `bir-headless` (full ADR-001). First ship is shared
   persistence only; two AgentHosts must not share `GPUI_AGENT_ADDR`; two
   processes must not open the live DB together. Matrix B is

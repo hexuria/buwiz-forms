@@ -22,12 +22,13 @@ pub fn handle_request_logged(
     host: &mut dyn gpui_agent::AgentHost,
     req: Request,
     expected_token: Option<&str>,
+    session_nonce: Option<&[u8]>,
 ) -> Response {
     if !log_requests_enabled() {
-        return gpui_agent::handle_request(host, req, expected_token);
+        return gpui_agent::handle_request(host, req, expected_token, session_nonce);
     }
     let log_req = req.clone();
-    let resp = gpui_agent::handle_request(host, req, expected_token);
+    let resp = gpui_agent::handle_request(host, req, expected_token, session_nonce);
     emit_request_log(&log_req, &resp);
     resp
 }

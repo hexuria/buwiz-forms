@@ -6,8 +6,9 @@
 //! BIR Desktop library — GPUI app modules plus the headless agent host.
 //!
 //! The painted binary is `bir`. `bir-headless` (`--features agent`) serves the
-//! same `BirAgentHost` over `gpui_agent::from_env` + `spawn_host` with no
-//! GPU window.
+//! same `BirAgentHost` over `gpui_agent::from_env` + mailbox/`spawn_host` with
+//! no GPU window. Protocol v2: `GPUI_AGENT_TOKEN` is required to bind unless
+//! `GPUI_AGENT_INSECURE_NO_TOKEN=1`.
 
 mod actions;
 pub mod agent;

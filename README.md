@@ -334,5 +334,5 @@ so developers can run the workflow without an agent-specific command wrapper.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
 - **Feature Flags:**
   - `dev-tools` — Enables additional developer diagnostics. Automatically included in `just run`.
-  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features …,agent`) and the `bir-headless` daemon. Off in product/release builds. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
+  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features …,agent`) and the `bir-headless` daemon. Off in product/release builds. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
 - **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).

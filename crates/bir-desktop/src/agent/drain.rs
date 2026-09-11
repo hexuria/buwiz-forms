@@ -18,9 +18,6 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
     let Some(mailbox) = app.agent_mailbox.clone() else {
         return;
     };
-    // Clone so `handle_request` can take `Option<&str>` without holding `&app`
-    // across the later `&mut app` apply. Never log this value.
-    let expected_token = app.agent_token.clone();
     for posted in mailbox.take() {
         let shutdown = matches!(posted.request.op, Op::Shutdown);
         let mutating = matches!(
@@ -32,38 +29,39 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
                 | Op::Invoke { .. }
                 | Op::Shutdown
         );
-        // TCP spawn_mailbox already authorizes. Re-check here so screenshot /
-        // virtual intercepts that skip handle_request cannot skip the token.
-        let response =
-            if let Err(resp) = authorize_request(&posted.request, expected_token.as_deref()) {
-                resp
-            } else if posted.request.op.is_virtual_input() {
-                Response::err(
-                    &posted.request.id,
-                    gpui_agent::virtual_unavailable(
-                        "bir-desktop ships semantic delivery first; \
+        // TCP spawn_mailbox already HMAC-authorizes (per-connection nonce is
+        // not on MailboxRequest). Re-check protocol version so screenshot /
+        // virtual intercepts that skip handle_request cannot skip v2. Pass
+        // token=None into handle_request so HMAC does not fail without the
+        // nonce; the TCP thread stamps hello.auth from the bind token.
+        let response = if let Err(resp) = authorize_request(&posted.request, None, None) {
+            *resp
+        } else if posted.request.op.is_virtual_input() {
+            Response::err(
+                &posted.request.id,
+                gpui_agent::virtual_unavailable(
+                    "bir-desktop ships semantic delivery first; \
                      virtual in-window events are not wired (no per-widget painted bounds). \
                      Protocol is unchanged; this host does not synthesize OS HID",
-                    ),
-                )
-            } else if let Op::Screenshot { path } = &posted.request.op {
-                match screenshot_this_window(window, path.as_deref()) {
-                    Ok(result) => {
-                        let mut resp = Response::ok(&posted.request.id);
-                        resp.result = result.value;
-                        resp
-                    }
-                    Err(error) => Response::err(&posted.request.id, error),
+                ),
+            )
+        } else if let Op::Screenshot { path } = &posted.request.op {
+            match screenshot_this_window(window, path.as_deref()) {
+                Ok(result) => {
+                    let mut resp = Response::ok(&posted.request.id);
+                    resp.result = result.value;
+                    resp
                 }
-            } else {
-                let mut host = snapshot_host(app, cx);
-                let response =
-                    handle_request(&mut host, posted.request.clone(), expected_token.as_deref());
-                if mutating && response.ok {
-                    apply_host(host, app, window, cx);
-                }
-                response
-            };
+                Err(error) => Response::err(&posted.request.id, error),
+            }
+        } else {
+            let mut host = snapshot_host(app, cx);
+            let response = handle_request(&mut host, posted.request.clone(), None, None);
+            if mutating && response.ok {
+                apply_host(host, app, window, cx);
+            }
+            response
+        };
         crate::agent::request_log::emit_request_log(&posted.request, &response);
         posted.reply(response);
         if shutdown {
@@ -352,6 +350,7 @@ fn screenshot_this_window(
     path: Option<&str>,
 ) -> Result<gpui_agent::DispatchResult, String> {
     let path = gpui_agent::require_screenshot_path(path)?;
+    let _dest = gpui_agent::confine_screenshot_path(path)?;
     #[cfg(target_os = "macos")]
     {
         let id = super::macos_window::cgwindow_id(window)?;

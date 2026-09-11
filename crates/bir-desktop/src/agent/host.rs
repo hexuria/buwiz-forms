@@ -2965,8 +2965,9 @@ impl AgentHost for BirAgentHost {
             platform: self.platform,
             ready: true,
             deliveries: vec![DeliveryMode::Semantic],
-            // Do not set `auth` by hand. `handle_request` / the TCP server fill
-            // it via `HelloAuth::from_token_configured(expected_token)`.
+            // Do not set `auth` by hand. `handle_request` (when given a token)
+            // and the TCP mailbox path stamp it via
+            // `HelloAuth::from_token_configured`.
             auth: Default::default(),
         }
     }
@@ -2976,7 +2977,8 @@ impl AgentHost for BirAgentHost {
     }
 
     fn screenshot(&self, path: Option<&str>) -> Result<DispatchResult, String> {
-        let _ = path;
+        let path = gpui_agent::require_screenshot_path(path)?;
+        let _dest = gpui_agent::confine_screenshot_path(path)?;
         let detail = match self.platform {
             PlatformKind::Headless => "headless host has no pixel surface",
             PlatformKind::Desktop => {
@@ -3858,6 +3860,7 @@ mod tests {
                     args: serde_json::json!({ "page": slug }),
                 }),
                 None,
+                None,
             );
             let resp = handle_request(
                 &mut host,
@@ -3869,6 +3872,7 @@ mod tests {
                     },
                 }),
                 None,
+                None,
             );
             assert!(resp.ok, "{}: {:?}", slug, resp.error);
         }
@@ -3878,7 +3882,7 @@ mod tests {
     fn admin_gate_is_not_bypassed() {
         let mut host = empty_host();
         host.set_admin_lock_enabled(true);
-        let resp = handle_request(&mut host, req(Op::click(ids::NAV_SETTINGS)), None);
+        let resp = handle_request(&mut host, req(Op::click(ids::NAV_SETTINGS)), None, None);
         assert!(resp.ok, "{:?}", resp.error);
         assert_ne!(host.active_view(), ActiveView::Settings);
         let tree = host.tree();
@@ -3890,7 +3894,7 @@ mod tests {
     fn lock_screen_blocks_navigation() {
         let mut host = empty_host();
         host.set_locked(true);
-        let resp = handle_request(&mut host, req(Op::click(ids::NAV_SETTINGS)), None);
+        let resp = handle_request(&mut host, req(Op::click(ids::NAV_SETTINGS)), None, None);
         assert!(!resp.ok);
         let palette = handle_request(
             &mut host,
@@ -3898,6 +3902,7 @@ mod tests {
                 name: "search.open".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(!palette.ok);
@@ -3910,7 +3915,7 @@ mod tests {
     #[test]
     fn creates_profile_and_asserts_selected() {
         let mut host = empty_host();
-        handle_request(&mut host, req(Op::click(ids::NAV_NEW_PROFILE)), None);
+        handle_request(&mut host, req(Op::click(ids::NAV_NEW_PROFILE)), None, None);
         for (id, value) in [
             (ids::PROFILE_TIN, "98765432100000"),
             (ids::PROFILE_NAME, "Created By Agent"),
@@ -3928,10 +3933,11 @@ mod tests {
                     value: value.into(),
                 }),
                 None,
+                None,
             );
             assert!(resp.ok, "{id}: {:?}", resp.error);
         }
-        let saved = handle_request(&mut host, req(Op::click(ids::PROFILE_SAVE)), None);
+        let saved = handle_request(&mut host, req(Op::click(ids::PROFILE_SAVE)), None, None);
         assert!(saved.ok, "{:?}", saved.error);
         let row = ids::profile_row("98765432100000");
         let resp = handle_request(
@@ -3944,6 +3950,7 @@ mod tests {
                     ..Default::default()
                 },
             }),
+            None,
             None,
         );
         assert!(resp.ok, "{:?}", resp.error);
@@ -3995,6 +4002,7 @@ mod tests {
                 args: serde_json::json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         handle_request(
@@ -4004,6 +4012,7 @@ mod tests {
                 value: "1000.00".into(),
             }),
             None,
+            None,
         );
         handle_request(
             &mut host,
@@ -4012,18 +4021,30 @@ mod tests {
                 value: "100.00".into(),
             }),
             None,
+            None,
         );
-        let validated = handle_request(&mut host, req(Op::click(ids::FORM_1601C_VALIDATE)), None);
+        let validated = handle_request(
+            &mut host,
+            req(Op::click(ids::FORM_1601C_VALIDATE)),
+            None,
+            None,
+        );
         assert!(validated.ok, "{:?}", validated.error);
-        let saved = handle_request(&mut host, req(Op::click(ids::FORM_1601C_SAVE)), None);
+        let saved = handle_request(&mut host, req(Op::click(ids::FORM_1601C_SAVE)), None, None);
         assert!(saved.ok, "{:?}", saved.error);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
-        let submit = handle_request(&mut host, req(Op::click(ids::FORM_1601C_SUBMIT)), None);
+        let submit = handle_request(
+            &mut host,
+            req(Op::click(ids::FORM_1601C_SUBMIT)),
+            None,
+            None,
+        );
         assert!(submit.ok, "{:?}", submit.error);
         assert!(host.submit_confirmation_visible());
         let confirm_click = handle_request(
             &mut host,
             req(Op::click(ids::FORM_1601C_SUBMIT_CONFIRM)),
+            None,
             None,
         );
         assert!(!confirm_click.ok);
@@ -4035,6 +4056,7 @@ mod tests {
                 args: serde_json::json!({}),
             }),
             None,
+            None,
         );
         assert!(!missing_confirm.ok);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
@@ -4044,6 +4066,7 @@ mod tests {
                 name: "filing.queue".into(),
                 args: serde_json::json!({ "confirm": true }),
             }),
+            None,
             None,
         );
         assert!(queued.ok, "{:?}", queued.error);
@@ -4061,6 +4084,7 @@ mod tests {
                 args: serde_json::json!({}),
             }),
             None,
+            None,
         );
         assert!(created.ok, "{:?}", created.error);
         assert_eq!(host.active_view(), ActiveView::ProfileManager);
@@ -4073,6 +4097,7 @@ mod tests {
                 args: serde_json::json!({}),
             }),
             None,
+            None,
         );
         assert!(refreshed.ok, "{:?}", refreshed.error);
         let year = chrono::Local::now().year() as u16;
@@ -4083,6 +4108,7 @@ mod tests {
                 args: serde_json::json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
             None,
+            None,
         );
         assert!(started.ok, "{:?}", started.error);
         handle_request(
@@ -4092,6 +4118,7 @@ mod tests {
                 value: "1000.00".into(),
             }),
             None,
+            None,
         );
         handle_request(
             &mut host,
@@ -4099,6 +4126,7 @@ mod tests {
                 target: ids::FORM_1601C_TAX_25.into(),
                 value: "100.00".into(),
             }),
+            None,
             None,
         );
         let validated = handle_request(
@@ -4108,6 +4136,7 @@ mod tests {
                 args: serde_json::json!({}),
             }),
             None,
+            None,
         );
         assert!(validated.ok, "{:?}", validated.error);
         let submit = handle_request(
@@ -4116,6 +4145,7 @@ mod tests {
                 name: "filing.submit".into(),
                 args: serde_json::json!({}),
             }),
+            None,
             None,
         );
         assert!(submit.ok, "{:?}", submit.error);
@@ -4128,6 +4158,7 @@ mod tests {
                 args: serde_json::json!({}),
             }),
             None,
+            None,
         );
         assert!(!missing_confirm.ok);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Draft));
@@ -4137,6 +4168,7 @@ mod tests {
                 name: "filing.queue".into(),
                 args: serde_json::json!({ "confirm": true }),
             }),
+            None,
             None,
         );
         assert!(queued.ok, "{:?}", queued.error);
@@ -4162,6 +4194,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(started.ok, "{:?}", started.error);
         handle_request(
@@ -4171,6 +4204,7 @@ mod tests {
                 value: "1000.00".into(),
             }),
             None,
+            None,
         );
         handle_request(
             &mut host,
@@ -4178,6 +4212,7 @@ mod tests {
                 target: ids::FORM_1601C_TAX_25.into(),
                 value: "100.00".into(),
             }),
+            None,
             None,
         );
         let queued = handle_request(
@@ -4193,6 +4228,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(queued.ok, "{:?}", queued.error);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
@@ -4202,7 +4238,12 @@ mod tests {
     #[test]
     fn virtual_delivery_is_unavailable_on_headless_and_desktop_hosts() {
         for mut host in [empty_host(), BirAgentHost::new(PlatformKind::Desktop)] {
-            let resp = handle_request(&mut host, req(Op::click_virtual(ids::NAV_SETTINGS)), None);
+            let resp = handle_request(
+                &mut host,
+                req(Op::click_virtual(ids::NAV_SETTINGS)),
+                None,
+                None,
+            );
             assert!(!resp.ok);
             assert!(
                 resp.error
@@ -4220,22 +4261,45 @@ mod tests {
     #[test]
     fn screenshot_is_unavailable_on_the_semantic_host() {
         let mut host = empty_host();
-        let missing = handle_request(&mut host, req(Op::Screenshot { path: None }), None);
+        let missing = handle_request(&mut host, req(Op::Screenshot { path: None }), None, None);
         assert!(!missing.ok);
-        assert!(
-            missing
-                .error
-                .as_deref()
-                .is_some_and(gpui_agent::is_screenshot_unavailable)
-                || missing.error.as_deref() == Some("screenshot requires path"),
+        assert_eq!(
+            missing.error.as_deref(),
+            Some("screenshot requires path"),
             "{:?}",
             missing.error
         );
-        let resp = handle_request(
+
+        let absolute = handle_request(
             &mut host,
             req(Op::Screenshot {
                 path: Some("/tmp/bir-agent-screenshot.png".into()),
             }),
+            None,
+            None,
+        );
+        assert!(!absolute.ok);
+        let abs_err = absolute.error.as_deref().unwrap_or("");
+        assert!(
+            abs_err.contains("relative .png") || abs_err.contains("screenshot path"),
+            "{:?}",
+            absolute.error
+        );
+        assert!(
+            !gpui_agent::is_screenshot_unavailable(abs_err),
+            "unconfined paths must fail before screenshot_unavailable: {abs_err}"
+        );
+        assert!(
+            !std::path::Path::new("/tmp/bir-agent-screenshot.png").exists(),
+            "semantic host must not invent a PNG at an absolute client path"
+        );
+
+        let resp = handle_request(
+            &mut host,
+            req(Op::Screenshot {
+                path: Some("bir-agent-screenshot.png".into()),
+            }),
+            None,
             None,
         );
         assert!(!resp.ok);
@@ -4246,26 +4310,31 @@ mod tests {
             "{:?}",
             resp.error
         );
+        let confined = gpui_agent::screenshot_base_dir().join("bir-agent-screenshot.png");
         assert!(
-            !std::path::Path::new("/tmp/bir-agent-screenshot.png").exists(),
-            "semantic host must not invent a PNG"
+            !confined.exists(),
+            "unavailable must not invent a PNG at {}",
+            confined.display()
         );
     }
 
     #[test]
     fn hello_auth_follows_handle_request_token() {
         let mut host = empty_host();
-        let none = handle_request(&mut host, req(Op::Hello), None);
+        let none = handle_request(&mut host, req(Op::Hello), None, None);
         assert!(none.ok, "{:?}", none.error);
         assert_eq!(
             none.hello.as_ref().map(|hello| hello.auth),
             Some(gpui_agent::HelloAuth::None)
         );
 
+        let nonce = [0x11u8; 32];
+        let auth = gpui_agent::hmac_hex("dev-secret", &nonce).expect("hmac");
         let required = handle_request(
             &mut host,
-            req(Op::Hello).with_token("dev-secret"),
+            req(Op::Hello).with_auth(auth),
             Some("dev-secret"),
+            Some(&nonce),
         );
         assert!(required.ok, "{:?}", required.error);
         assert_eq!(
@@ -4285,6 +4354,7 @@ mod tests {
                     name: "nav.go".into(),
                     args: serde_json::json!({ "page": ids::view_slug(chrome.view) }),
                 }),
+                None,
                 None,
             );
             let tree = host.tree();
@@ -4363,6 +4433,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(listed.ok, "{:?}", listed.error);
         let profiles = listed.result.as_ref().expect("profiles");
@@ -4375,6 +4446,7 @@ mod tests {
                 args: json!({ "q": "zzz-no-such-taxpayer" }),
             }),
             None,
+            None,
         );
         assert!(none.ok, "{:?}", none.error);
         assert_eq!(none.result.as_ref().unwrap()["status"], "not_found");
@@ -4385,6 +4457,7 @@ mod tests {
                 name: "profile.set".into(),
                 args: json!({ "q": "agent" }),
             }),
+            None,
             None,
         );
         assert!(ambiguous.ok, "{:?}", ambiguous.error);
@@ -4404,6 +4477,7 @@ mod tests {
                 name: "profile.set".into(),
                 args: json!({ "q": "Other Shop", "view": "profile-manager" }),
             }),
+            None,
             None,
         );
         assert!(set.ok, "{:?}", set.error);
@@ -4448,6 +4522,7 @@ mod tests {
                 args: json!({ "tin": FIXTURE_TIN, "year": year }),
             }),
             None,
+            None,
         );
         assert!(html.ok, "{:?}", html.error);
         let result = html.result.as_ref().expect("result");
@@ -4483,6 +4558,7 @@ mod tests {
                 args: json!({ "q": FIXTURE_NAME }),
             }),
             None,
+            None,
         );
         assert!(by_q.ok, "{:?}", by_q.error);
         assert_eq!(by_q.result.as_ref().unwrap()["kind"], "html");
@@ -4493,6 +4569,7 @@ mod tests {
                 name: "profile.html".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(selected.ok, "{:?}", selected.error);
@@ -4529,6 +4606,7 @@ mod tests {
                 args: json!({ "q": "zzz-no-such-taxpayer" }),
             }),
             None,
+            None,
         );
         assert!(none.ok, "{:?}", none.error);
         assert_eq!(none.result.as_ref().unwrap()["status"], "not_found");
@@ -4540,6 +4618,7 @@ mod tests {
                 name: "profile.html".into(),
                 args: json!({ "q": "agent" }),
             }),
+            None,
             None,
         );
         assert!(ambiguous.ok, "{:?}", ambiguous.error);
@@ -4553,6 +4632,7 @@ mod tests {
                 name: "profile.html".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(!missing.ok);
@@ -4577,6 +4657,7 @@ mod tests {
                 args: json!({ "filter": "all", "scope": "profile" }),
             }),
             None,
+            None,
         );
         assert!(listed.ok, "{:?}", listed.error);
         let listed_dues = listed.result.as_ref().unwrap()["dues"].clone();
@@ -4587,6 +4668,7 @@ mod tests {
                 name: "dues.html".into(),
                 args: json!({ "filter": "all", "scope": "profile" }),
             }),
+            None,
             None,
         );
         assert!(html.ok, "{:?}", html.error);
@@ -4611,6 +4693,7 @@ mod tests {
                 args: json!({ "scope": "upcoming" }),
             }),
             None,
+            None,
         );
         assert!(alias.ok, "{:?}", alias.error);
         assert_eq!(alias.result.as_ref().unwrap()["kind"], "html");
@@ -4622,6 +4705,7 @@ mod tests {
                 name: "dues.html".into(),
                 args: json!({ "filter": "all", "scope": "profile", "limit": 1 }),
             }),
+            None,
             None,
         );
         assert!(limited.ok, "{:?}", limited.error);
@@ -4636,6 +4720,7 @@ mod tests {
                 name: "dues.html".into(),
                 args: json!({ "q": "zzz-no-such-taxpayer" }),
             }),
+            None,
             None,
         );
         assert!(none.ok, "{:?}", none.error);
@@ -4654,6 +4739,7 @@ mod tests {
                 name: "profile.forms_set.get".into(),
                 args: json!({ "tin": FIXTURE_TIN, "year": year }),
             }),
+            None,
             None,
         );
         assert!(before.ok, "{:?}", before.error);
@@ -4677,6 +4763,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(!refused_string.ok);
         let err = refused_string.error.as_deref().unwrap_or_default();
@@ -4689,6 +4776,7 @@ mod tests {
                 args: json!({ "year": year, "codes": "1601C,2551Q" }),
             }),
             None,
+            None,
         );
         assert!(!refused_missing.ok);
 
@@ -4698,6 +4786,7 @@ mod tests {
                 name: "profile.forms_set.get".into(),
                 args: json!({ "year": year }),
             }),
+            None,
             None,
         );
         assert_eq!(
@@ -4715,6 +4804,7 @@ mod tests {
                     "confirm": true
                 }),
             }),
+            None,
             None,
         );
         assert!(!unknown.ok);
@@ -4740,6 +4830,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(saved.ok, "{:?}", saved.error);
         assert_eq!(saved.result.as_ref().unwrap()["status"], "ok");
@@ -4757,6 +4848,7 @@ mod tests {
                 name: "profile.forms_set.get".into(),
                 args: json!({ "tin": FIXTURE_TIN, "year": year }),
             }),
+            None,
             None,
         );
         assert!(got.ok, "{:?}", got.error);
@@ -4778,6 +4870,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(alias.ok, "{:?}", alias.error);
 
@@ -4787,6 +4880,7 @@ mod tests {
                 name: "dues.list".into(),
                 args: json!({ "filter": "all", "scope": "profile" }),
             }),
+            None,
             None,
         );
         assert!(listed.ok, "{:?}", listed.error);
@@ -4811,6 +4905,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(edited.ok, "{:?}", edited.error);
         assert_eq!(host.active_view(), ActiveView::ProfileManager);
@@ -4821,6 +4916,7 @@ mod tests {
                 name: "profile.tab".into(),
                 args: json!({ "tab": "security" }),
             }),
+            None,
             None,
         );
         assert!(tab.ok, "{:?}", tab.error);
@@ -4838,6 +4934,7 @@ mod tests {
                 args: json!({ "filter": "upcoming", "scope": "profile" }),
             }),
             None,
+            None,
         );
         assert!(upcoming.ok, "{:?}", upcoming.error);
         let overdue = handle_request(
@@ -4847,6 +4944,7 @@ mod tests {
                 args: json!({ "filter": "overdue", "scope": "profile" }),
             }),
             None,
+            None,
         );
         assert!(overdue.ok, "{:?}", overdue.error);
         let all = handle_request(
@@ -4855,6 +4953,7 @@ mod tests {
                 name: "dues.list".into(),
                 args: json!({ "filter": "all", "scope": "profile" }),
             }),
+            None,
             None,
         );
         assert!(all.ok, "{:?}", all.error);
@@ -4877,6 +4976,7 @@ mod tests {
                 name: "dues.list".into(),
                 args: json!({ "filter": "all", "scope": "global" }),
             }),
+            None,
             None,
         );
         assert!(global.ok, "{:?}", global.error);
@@ -4917,6 +5017,7 @@ mod tests {
                 args: json!({ "status": "Idle" }),
             }),
             None,
+            None,
         );
         assert!(listed.ok, "{:?}", listed.error);
         let jobs = listed.result.as_ref().unwrap()["jobs"]
@@ -4934,6 +5035,7 @@ mod tests {
                 args: json!({ "page": "cron-tasks" }),
             }),
             None,
+            None,
         );
         let _ = host.reload_jobs_and_submissions();
         assert!(host.tree().find("job-1").is_some() || host.tree().find(ids::JOBS_LIST).is_some());
@@ -4947,6 +5049,7 @@ mod tests {
                 name: "palette.search".into(),
                 args: json!({ "q": "brand new taxpayer" }),
             }),
+            None,
             None,
         );
         assert!(ranked.ok, "{:?}", ranked.error);
@@ -4974,6 +5077,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         assert_eq!(opened.result.as_ref().unwrap()["open"], true);
@@ -4988,6 +5092,7 @@ mod tests {
                 name: "palette.search".into(),
                 args: json!({ "q": "brand new taxpayer" }),
             }),
+            None,
             None,
         );
         assert!(ranked.ok, "{:?}", ranked.error);
@@ -5005,6 +5110,7 @@ mod tests {
                 name: "profile.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(listed.ok, "{:?}", listed.error);
@@ -5025,6 +5131,7 @@ mod tests {
                 name: "palette.open".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(palette.ok, "{:?}", palette.error);
@@ -5048,6 +5155,7 @@ mod tests {
                 args: json!({ "q": "fixture" }),
             }),
             None,
+            None,
         );
         assert!(ranked.ok, "{:?}", ranked.error);
         assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_none());
@@ -5064,6 +5172,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
 
@@ -5074,6 +5183,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         let preview = handle_request(
             &mut host,
@@ -5081,6 +5191,7 @@ mod tests {
                 name: "form.preview_pdf".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(pdf.ok, "{:?}", pdf.error);
@@ -5103,6 +5214,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         let receipt_alias = handle_request(
             &mut host,
@@ -5110,6 +5222,7 @@ mod tests {
                 name: "receipt.upload".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(receipt.ok, "{:?}", receipt.error);
@@ -5129,6 +5242,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         let paid_alias = handle_request(
             &mut host,
@@ -5136,6 +5250,7 @@ mod tests {
                 name: "payment.mark_paid".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(paid.ok, "{:?}", paid.error);
@@ -5150,6 +5265,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         let revert_alias = handle_request(
             &mut host,
@@ -5157,6 +5273,7 @@ mod tests {
                 name: "draft.revert".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert_eq!(revert.ok, revert_alias.ok);
@@ -5173,6 +5290,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(created.ok, "{:?}", created.error);
         assert_eq!(host.active_view(), ActiveView::ProfileManager);
@@ -5184,6 +5302,7 @@ mod tests {
                 name: "profile.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(listed.ok, "{:?}", listed.error);
@@ -5204,6 +5323,7 @@ mod tests {
                 args: json!({ "q": "should not be written" }),
             }),
             None,
+            None,
         );
         assert!(!ensure.ok);
         let err = ensure.error.as_deref().unwrap_or_default();
@@ -5214,6 +5334,7 @@ mod tests {
                 name: "profile.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(
@@ -5238,6 +5359,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         let filled = handle_request(
@@ -5246,6 +5368,7 @@ mod tests {
                 name: "form.fill".into(),
                 args: json!({ "fields": { "tax_14": "1000.00", "tax_25": "100.00" } }),
             }),
+            None,
             None,
         );
         assert!(filled.ok, "{:?}", filled.error);
@@ -5256,6 +5379,7 @@ mod tests {
                 args: json!({ "fields": { "not_a_field": "1" } }),
             }),
             None,
+            None,
         );
         assert!(!unknown.ok);
         let fields = handle_request(
@@ -5265,6 +5389,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(fields.ok, "{:?}", fields.error);
         let pdf = handle_request(
@@ -5273,6 +5398,7 @@ mod tests {
                 name: "form.pdf".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(pdf.ok, "{:?}", pdf.error);
@@ -5309,6 +5435,7 @@ mod tests {
                 args: json!({ "copies": 2 }),
             }),
             None,
+            None,
         );
         assert!(!print.ok);
 
@@ -5319,6 +5446,7 @@ mod tests {
                 args: json!({ "code": "2551Q", "year": year, "period": 2 }),
             }),
             None,
+            None,
         );
         assert!(opened_q.ok, "{:?}", opened_q.error);
         let filled_q = handle_request(
@@ -5328,6 +5456,7 @@ mod tests {
                 args: json!({ "fields": { "taxable_amount": "500.00" } }),
             }),
             None,
+            None,
         );
         assert!(filled_q.ok, "{:?}", filled_q.error);
         let pdf_q = handle_request(
@@ -5336,6 +5465,7 @@ mod tests {
                 name: "form.pdf".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(pdf_q.ok, "{:?}", pdf_q.error);
@@ -5372,6 +5502,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(saved.ok, "{:?}", saved.error);
         let receipt = handle_request(
@@ -5380,6 +5511,7 @@ mod tests {
                 name: "form.upload_receipt".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(receipt.ok, "{:?}", receipt.error);
@@ -5392,6 +5524,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(!paid.ok);
         let sync = handle_request(
@@ -5400,6 +5533,7 @@ mod tests {
                 name: "profile.calendar_sync".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(!sync.ok);
@@ -5415,6 +5549,7 @@ mod tests {
                 name: "filing.start".into(),
                 args: json!({ "code": "1601C", "year": year, "period": 1 }),
             }),
+            None,
             None,
         );
         assert!(opened.ok, "{:?}", opened.error);
@@ -5436,6 +5571,7 @@ mod tests {
                 args: json!({ "any_taxes_withheld": false }),
             }),
             None,
+            None,
         );
         assert!(off.ok, "{:?}", off.error);
         assert!(!host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
@@ -5450,6 +5586,7 @@ mod tests {
                 name: "form.fields".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(listed.ok, "{:?}", listed.error);
@@ -5468,6 +5605,7 @@ mod tests {
                 args: json!({ "fields": { "any_taxes_withheld": "Yes" } }),
             }),
             None,
+            None,
         );
         assert!(on.ok, "{:?}", on.error);
         assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
@@ -5482,6 +5620,7 @@ mod tests {
                 name: "form.fill".into(),
                 args: json!({ "fields": { "not_a_field": false } }),
             }),
+            None,
             None,
         );
         assert!(!unknown.ok);
@@ -5506,6 +5645,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": year, "period": 8 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
 
@@ -5520,6 +5660,7 @@ mod tests {
                 name: "form.fill".into(),
                 args: json!({ "any_taxes_withheld": false }),
             }),
+            None,
             None,
         );
         assert!(filled.ok, "{:?}", filled.error);
@@ -5551,6 +5692,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(fields.ok, "{:?}", fields.error);
         let withheld_field = fields.result.as_ref().unwrap()["fields"]
@@ -5567,6 +5709,7 @@ mod tests {
                 name: "filing.validate".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(validated.ok, "{:?}", validated.error);
@@ -5589,6 +5732,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": 2026, "period": 8 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         let filled = handle_request(
@@ -5598,6 +5742,7 @@ mod tests {
                 args: json!({ "any_taxes_withheld": false }),
             }),
             None,
+            None,
         );
         assert!(filled.ok, "{:?}", filled.error);
         let pdf = handle_request(
@@ -5606,6 +5751,7 @@ mod tests {
                 name: "form.pdf".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(pdf.ok, "{:?}", pdf.error);
@@ -5691,6 +5837,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": 2026, "period": 8 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
@@ -5713,6 +5860,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(fields.ok, "{:?}", fields.error);
         let fields_body = fields.result.as_ref().unwrap();
@@ -5725,6 +5873,7 @@ mod tests {
                 name: "submissions.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(listed.ok, "{:?}", listed.error);
@@ -5745,6 +5894,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(!revert.ok);
         let revert_err = revert.error.as_deref().unwrap_or_default();
@@ -5760,6 +5910,7 @@ mod tests {
             &mut host,
             req(Op::click(ids::FORM_1601C_RETURN_DRAFT)),
             None,
+            None,
         );
         assert!(!click_return.ok);
 
@@ -5773,6 +5924,7 @@ mod tests {
                     "period": 8
                 }),
             }),
+            None,
             None,
         );
         assert!(!missing.ok);
@@ -5797,6 +5949,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(!string_confirm.ok);
 
@@ -5813,6 +5966,7 @@ mod tests {
                     "reason": ABANDONED_CLAIM_RELEASE_REASON
                 }),
             }),
+            None,
             None,
         );
         assert!(released.ok, "{:?}", released.error);
@@ -5852,6 +6006,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(again.ok, "{:?}", again.error);
         assert_eq!(again.result.as_ref().unwrap()["released"], false);
@@ -5874,6 +6029,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(fields_after.ok, "{:?}", fields_after.error);
         let after = fields_after.result.as_ref().unwrap();
@@ -5885,6 +6041,7 @@ mod tests {
                 name: "submissions.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(listed_after.ok, "{:?}", listed_after.error);
@@ -5918,6 +6075,7 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         assert!(fields.ok, "{:?}", fields.error);
         let body = fields.result.as_ref().unwrap();
@@ -5927,7 +6085,7 @@ mod tests {
         assert_ne!(body["status"], "Draft");
         assert_eq!(host.form_1601c_status(), Some(FilingStatus::Queued));
 
-        let snap = handle_request(&mut host, req(Op::Snapshot), None);
+        let snap = handle_request(&mut host, req(Op::Snapshot), None, None);
         assert!(snap.ok, "{:?}", snap.error);
         let status = snap
             .tree
@@ -5944,6 +6102,7 @@ mod tests {
                 name: "submissions.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         let row = listed.result.as_ref().unwrap()["submissions"]
@@ -5969,6 +6128,7 @@ mod tests {
                 }),
             }),
             None,
+            None,
         );
         assert!(released.ok, "{:?}", released.error);
         let fields_after = handle_request(
@@ -5978,11 +6138,12 @@ mod tests {
                 args: json!({}),
             }),
             None,
+            None,
         );
         let after = fields_after.result.as_ref().unwrap();
         assert_eq!(after["status"], "Draft");
         assert_eq!(after["claimed"], false);
-        let snap_after = handle_request(&mut host, req(Op::Snapshot), None);
+        let snap_after = handle_request(&mut host, req(Op::Snapshot), None, None);
         let draft_status = snap_after
             .tree
             .as_ref()
@@ -5996,6 +6157,7 @@ mod tests {
                 name: "submissions.list".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         let still_queued = listed_after.result.as_ref().unwrap()["submissions"]
@@ -6037,6 +6199,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": 2026, "period": 1 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         let reverted = handle_request(
@@ -6048,6 +6211,7 @@ mod tests {
                     "reason": ABANDONED_CLAIM_RELEASE_REASON
                 }),
             }),
+            None,
             None,
         );
         assert!(reverted.ok, "{:?}", reverted.error);
@@ -6073,6 +6237,7 @@ mod tests {
                 args: json!({ "any_taxes_withheld": false }),
             }),
             None,
+            None,
         );
         assert!(fill.ok, "{:?}", fill.error);
         let saved = handle_request(
@@ -6081,6 +6246,7 @@ mod tests {
                 name: "form.save_draft".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(saved.ok, "{:?}", saved.error);
@@ -6099,6 +6265,7 @@ mod tests {
                 args: json!({ "code": "1601C", "year": 2026, "period": 2 }),
             }),
             None,
+            None,
         );
         assert!(opened.ok, "{:?}", opened.error);
         assert!(host.tree().find(ids::FORM_1601C_CANCEL_QUEUE).is_some());
@@ -6108,6 +6275,7 @@ mod tests {
                 name: "form.revert_draft".into(),
                 args: json!({}),
             }),
+            None,
             None,
         );
         assert!(reverted.ok, "{:?}", reverted.error);
@@ -6119,17 +6287,34 @@ mod tests {
     #[test]
     fn hello_auth_still_required_when_token_configured() {
         let mut host = empty_host();
+        let nonce = [0x22u8; 32];
+        let auth = gpui_agent::hmac_hex("dev-secret", &nonce).expect("hmac");
         let required = handle_request(
             &mut host,
-            req(Op::Hello).with_token("dev-secret"),
+            req(Op::Hello).with_auth(auth),
             Some("dev-secret"),
+            Some(&nonce),
         );
         assert!(required.ok, "{:?}", required.error);
         assert_eq!(
             required.hello.as_ref().map(|hello| hello.auth),
             Some(gpui_agent::HelloAuth::Required)
         );
-        let missing = handle_request(&mut host, req(Op::Hello), Some("dev-secret"));
+        let missing = handle_request(&mut host, req(Op::Hello), Some("dev-secret"), Some(&nonce));
         assert!(!missing.ok);
+        let raw = handle_request(
+            &mut host,
+            req(Op::Hello).with_token("dev-secret"),
+            Some("dev-secret"),
+            Some(&nonce),
+        );
+        assert!(!raw.ok);
+        assert!(
+            raw.error
+                .as_deref()
+                .is_some_and(|e| e.contains("token must not be sent on the wire")),
+            "{:?}",
+            raw.error
+        );
     }
 }
