@@ -57,11 +57,27 @@ pub enum TaxClassification {
 /// How the app authenticates to the user's mail server.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum EmailAuthMethod {
-    /// Standard IMAP LOGIN with an App Password stored in the OS Keychain.
+    /// Standard IMAP LOGIN with an App Password stored in the encrypted DB.
     #[default]
     AppPassword,
-    /// Google OAuth2 PKCE flow — tokens stored in the OS Keychain.
+    /// Google OAuth2 PKCE flow — refresh tokens stored in the encrypted DB.
+    ///
+    /// One inbox shared across taxpayer profiles is one credential set.
     GoogleOAuth,
+}
+
+/// Canonical inbox key for matching and the `inbox_oauth_tokens` row.
+pub fn normalize_inbox_email(email: &str) -> String {
+    email.trim().to_ascii_lowercase()
+}
+
+/// Whether two addresses name the same mailbox for OAuth / IMAP polling.
+pub fn inbox_emails_match(left: &str, right: &str) -> bool {
+    let left = left.trim();
+    let right = right.trim();
+    !left.is_empty()
+        && !right.is_empty()
+        && normalize_inbox_email(left) == normalize_inbox_email(right)
 }
 
 /// Ease of Paying Taxes (EOPT) Act Taxpayer Classification Tiers.
@@ -688,6 +704,25 @@ impl TaxpayerProfile {
             let email = self.email.trim();
             if email.is_empty() { None } else { Some(email) }
         })
+    }
+
+    /// Inbox used for IMAP / Gmail OAuth login.
+    ///
+    /// Several taxpayer profiles can share one mailbox. Tokens and polling
+    /// key off this address (`imap_email`, else the taxpayer `email`), not
+    /// the profile list order.
+    pub fn inbox_email(&self) -> &str {
+        self.tracking_mailbox().unwrap_or("")
+    }
+
+    /// Whether this profile currently holds a refresh token the poller can try.
+    ///
+    /// An empty string is treated as disconnected. A non-empty value can still
+    /// be revoked at Google; reconnect must replace it rather than keep it.
+    pub fn has_usable_oauth_refresh(&self) -> bool {
+        self.oauth_refresh_token
+            .as_deref()
+            .is_some_and(|token| !token.trim().is_empty())
     }
 
     /// Returns BIR form codes applicable to this taxpayer.
@@ -1826,5 +1861,25 @@ mod tests {
                 .map(|version| version.id.as_str()),
             Some("two")
         );
+    }
+
+    #[test]
+    fn inbox_email_prefers_imap_over_taxpayer_email() {
+        let mut profile = test_profile();
+        profile.email = "jane@example.com".to_string();
+        profile.imap_email = None;
+        assert_eq!(profile.inbox_email(), "jane@example.com");
+
+        profile.imap_email = Some("  codeitlikemiley@gmail.com  ".to_string());
+        assert_eq!(profile.inbox_email(), "codeitlikemiley@gmail.com");
+        assert!(inbox_emails_match(
+            profile.inbox_email(),
+            "CodeItLikeMiley@gmail.com"
+        ));
+        assert!(!profile.has_usable_oauth_refresh());
+        profile.oauth_refresh_token = Some("   ".to_string());
+        assert!(!profile.has_usable_oauth_refresh());
+        profile.oauth_refresh_token = Some("refresh-good".to_string());
+        assert!(profile.has_usable_oauth_refresh());
     }
 }

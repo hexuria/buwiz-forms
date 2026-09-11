@@ -331,7 +331,7 @@ so developers can run the workflow without an agent-specific command wrapper.
   - gpui-agent / `bir-headless` live path, token, and `--wait` handoff: [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md)
 - **Background Engine:** Background cron tasks (auto-fetch) run in-process on a dedicated thread and are decoupled from the active taxpayer profile.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
-- **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
+- **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` (SQLCipher) and copied onto every profile that uses that mailbox. Never log raw tokens.
 - **Feature Flags:**
   - `dev-tools` — Enables additional developer diagnostics. Automatically included in `just run`.
   - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features …,agent`) and the `bir-headless` daemon. Off in product/release builds. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
