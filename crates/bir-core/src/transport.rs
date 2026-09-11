@@ -111,7 +111,6 @@ pub enum HostKeyPolicy {
 pub enum SftpEndpointSource {
     DryRun,
     Env,
-    TestEnv,
     Dispatcher,
 }
 
@@ -120,7 +119,6 @@ impl SftpEndpointSource {
         match self {
             Self::DryRun => "dry-run",
             Self::Env => "env",
-            Self::TestEnv => "test-env",
             Self::Dispatcher => "dispatcher",
         }
     }
@@ -225,7 +223,7 @@ fn from_bir_sftp_env(form_type: &str) -> Option<Result<SftpEndpoint, TransportEr
         None => 22,
     };
     let remote_folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
-    let host_key_policy = match lab_host_key_policy_from_env("BIR_SFTP_HOST") {
+    let host_key_policy = match lab_host_key_policy_from_env() {
         Ok(policy) => policy,
         Err(error) => return Some(Err(error)),
     };
@@ -239,50 +237,20 @@ fn from_bir_sftp_env(form_type: &str) -> Option<Result<SftpEndpoint, TransportEr
     }))
 }
 
-/// Lab hosts never get accept-any silently. Both `BIR_SFTP_*` and the
-/// deprecated `TEST_SFTP_*` override must pin a SHA-256 fingerprint or set
-/// `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`.
-fn lab_host_key_policy_from_env(host_var: &str) -> Result<HostKeyPolicy, TransportError> {
+/// Lab hosts never get accept-any silently. A `BIR_SFTP_*` override must pin
+/// a SHA-256 fingerprint or set `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`.
+fn lab_host_key_policy_from_env() -> Result<HostKeyPolicy, TransportError> {
     match env_nonempty("BIR_SFTP_HOST_KEY_SHA256") {
         Some(pin) => Ok(HostKeyPolicy::PinnedSha256(pin.to_ascii_lowercase())),
         None if env_flag_enabled("BIR_SFTP_ACCEPT_ANY_HOST_KEY") => Ok(HostKeyPolicy::AcceptAnyLab),
-        None => Err(TransportError::Config(format!(
-            "{host_var} is set but lab host-key policy is missing (set BIR_SFTP_HOST_KEY_SHA256 or BIR_SFTP_ACCEPT_ANY_HOST_KEY=1)"
-        ))),
+        None => Err(TransportError::Config(
+            "BIR_SFTP_HOST is set but lab host-key policy is missing (set BIR_SFTP_HOST_KEY_SHA256 or BIR_SFTP_ACCEPT_ANY_HOST_KEY=1)"
+                .into(),
+        )),
     }
 }
 
-fn from_test_sftp_env() -> Result<Option<SftpEndpoint>, TransportError> {
-    let Some(host) = env_nonempty("TEST_SFTP_HOST") else {
-        return Ok(None);
-    };
-    let username = env_nonempty("TEST_SFTP_USER").ok_or_else(|| {
-        TransportError::Config("TEST_SFTP_HOST is set but TEST_SFTP_USER is missing".into())
-    })?;
-    let password = env_nonempty("TEST_SFTP_PASSWORD").ok_or_else(|| {
-        TransportError::Config("TEST_SFTP_HOST is set but TEST_SFTP_PASSWORD is missing".into())
-    })?;
-    let port = match env_nonempty("TEST_SFTP_PORT") {
-        Some(raw) => parse_port(&raw, "TEST_SFTP_PORT")?,
-        None => {
-            return Err(TransportError::Config(
-                "TEST_SFTP_HOST is set but TEST_SFTP_PORT is missing".into(),
-            ));
-        }
-    };
-    let remote_folder = env_nonempty("TEST_SFTP_FOLDER").unwrap_or_else(|| "/".to_string());
-    let host_key_policy = lab_host_key_policy_from_env("TEST_SFTP_HOST")?;
-    Ok(Some(SftpEndpoint {
-        host,
-        port,
-        username,
-        password: Zeroizing::new(password),
-        remote_folder,
-        host_key_policy,
-    }))
-}
-
-/// Pick dry-run, BIR_SFTP_*, TEST_SFTP_*, or the official dispatcher.
+/// Pick dry-run, a complete `BIR_SFTP_*` lab override, or the official dispatcher.
 pub async fn resolve_sftp_endpoint(
     form_type: &str,
     tin: &str,
@@ -310,24 +278,6 @@ pub async fn resolve_sftp_endpoint(
         return Ok(ResolvedSftpTarget::Live {
             endpoint,
             source: SftpEndpointSource::Env,
-        });
-    }
-    if let Some(mut endpoint) = from_test_sftp_env()? {
-        if endpoint.remote_folder == "/" || endpoint.remote_folder.is_empty() {
-            endpoint.remote_folder = form_type.to_string();
-        }
-        info!(
-            source = "test-env",
-            host = endpoint.host.as_str(),
-            port = endpoint.port,
-            folder = endpoint.remote_folder.as_str(),
-            username_len = endpoint.username.len(),
-            password_len = endpoint.password.len(),
-            "Using deprecated TEST_SFTP_* override"
-        );
-        return Ok(ResolvedSftpTarget::Live {
-            endpoint,
-            source: SftpEndpointSource::TestEnv,
         });
     }
     if !dispatcher_live_ack_requested() {
@@ -926,7 +876,7 @@ mod tests {
         assert_eq!(name.split('-').next().unwrap().len(), 14);
     }
 
-    const SFTP_ENV_KEYS: [&str; 15] = [
+    const SFTP_ENV_KEYS: [&str; 10] = [
         "BIR_SFTP_DRY_RUN",
         "BIR_SFTP_LIVE",
         "BIR_SFTP_HOST",
@@ -937,11 +887,6 @@ mod tests {
         "BIR_SFTP_FOLDER",
         "BIR_SFTP_HOST_KEY_SHA256",
         "BIR_SFTP_ACCEPT_ANY_HOST_KEY",
-        "TEST_SFTP_HOST",
-        "TEST_SFTP_PORT",
-        "TEST_SFTP_USER",
-        "TEST_SFTP_PASSWORD",
-        "TEST_SFTP_FOLDER",
     ];
 
     fn isolated_sftp_env<T>(
@@ -1094,7 +1039,6 @@ mod tests {
                 ("BIR_SFTP_HOST", Some("should-not-use.example")),
                 ("BIR_SFTP_USERNAME", Some("lab")),
                 ("BIR_SFTP_PASSWORD", Some("secret")),
-                ("TEST_SFTP_HOST", Some("also-not-use.example")),
             ],
             async {
                 let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
@@ -1119,17 +1063,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bir_sftp_env_wins_over_test_sftp_env() {
+    async fn bir_sftp_env_resolves_live_env_target() {
         isolated_sftp_env_async(
             [
                 ("BIR_SFTP_HOST", Some("127.0.0.1")),
                 ("BIR_SFTP_USERNAME", Some("lab")),
                 ("BIR_SFTP_PASSWORD", Some("secret")),
                 ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
-                ("TEST_SFTP_HOST", Some("legacy.example")),
-                ("TEST_SFTP_PORT", Some("2222")),
-                ("TEST_SFTP_USER", Some("old")),
-                ("TEST_SFTP_PASSWORD", Some("oldpass")),
             ],
             async {
                 let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
@@ -1141,58 +1081,6 @@ mod tests {
                         assert_eq!(endpoint.host, "127.0.0.1");
                     }
                     ResolvedSftpTarget::DryRun { .. } => panic!("expected live env target"),
-                }
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn test_sftp_env_used_when_bir_unset() {
-        isolated_sftp_env_async(
-            [
-                ("TEST_SFTP_HOST", Some("127.0.0.1")),
-                ("TEST_SFTP_PORT", Some("2222")),
-                ("TEST_SFTP_USER", Some("lab")),
-                ("TEST_SFTP_PASSWORD", Some("secret")),
-                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
-            ],
-            async {
-                let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
-                    .await
-                    .unwrap();
-                match target {
-                    ResolvedSftpTarget::Live { endpoint, source } => {
-                        assert_eq!(source, SftpEndpointSource::TestEnv);
-                        assert_eq!(endpoint.port, 2222);
-                        assert_eq!(endpoint.remote_folder, "1601Cv2018");
-                    }
-                    ResolvedSftpTarget::DryRun { .. } => panic!("expected test-env target"),
-                }
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn test_sftp_env_without_host_key_policy_is_config_error() {
-        isolated_sftp_env_async(
-            [
-                ("TEST_SFTP_HOST", Some("127.0.0.1")),
-                ("TEST_SFTP_PORT", Some("2222")),
-                ("TEST_SFTP_USER", Some("lab")),
-                ("TEST_SFTP_PASSWORD", Some("secret")),
-            ],
-            async {
-                let err = resolve_sftp_endpoint("1601Cv2018", "000000000")
-                    .await
-                    .unwrap_err();
-                match err {
-                    TransportError::Config(message) => {
-                        assert!(message.contains("TEST_SFTP_HOST"), "{message}");
-                        assert!(message.contains("BIR_SFTP_HOST_KEY_SHA256"), "{message}");
-                    }
-                    other => panic!("expected config refuse, got {other:?}"),
                 }
             },
         )

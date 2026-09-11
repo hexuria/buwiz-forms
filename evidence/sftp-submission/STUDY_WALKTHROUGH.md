@@ -186,7 +186,7 @@ We changed the session, not the claim machine:
 
 - SubmissionTransport::open_session(form_type, tin)
 - Dispatcher fetch + unwrap by default
-- Optional BIR_SFTP_* env override, deprecated TEST_SFTP_*, or in-process dry-run
+- Optional BIR_SFTP_* env override or in-process dry-run
 - SSH password auth via russh
 - SFTP PUT via russh-sftp to /{formType}/{basename}
 - Host key: accept any, matching official client
@@ -291,8 +291,7 @@ Resolution in `resolve_sftp_endpoint` / `open_iaf_session`:
    `BIR_SFTP_USERNAME` or `BIR_SFTP_USER`. Password required. Folder is
    `BIR_SFTP_FOLDER` or the form type. Incomplete override errors; no
    dispatcher fallback.
-3. Else non-empty `TEST_SFTP_*` (deprecated harness aliases).
-4. Else `tinDispatcherSFTP.php`.
+3. Else `tinDispatcherSFTP.php`.
 
 `bir-headless` and `sftp_harness` now call `dotenvy::dotenv().ok()` the same
 way the GUI already did. Harness `--live-connect` / `--live-put` print
