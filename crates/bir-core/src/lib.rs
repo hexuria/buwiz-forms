@@ -24,6 +24,7 @@ pub mod db;
 pub mod email;
 pub mod email_fetcher; // legacy — kept for backward compat, delegates to `email`
 pub mod export;
+pub mod filing_queue;
 pub mod form;
 pub mod form_rules;
 pub mod forms;
@@ -45,6 +46,9 @@ pub mod time_utils;
 pub mod transport;
 pub mod validation;
 
+#[cfg(test)]
+mod sftp_loopback;
+
 // Re-export core types
 pub use bir_rules::{
     BehaviorProfile, CompiledRuleSet, ContextFingerprint, ContextValueSnapshot, EvaluationResult,
@@ -60,6 +64,7 @@ pub use email::{
     ImapAuthenticator, fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
 };
 pub use export::{export_database_zip, export_existing_database_zip, export_profile_data};
+pub use filing_queue::{QueueAuthSource, QueueAuthorization, QueueCompletion, parse_1601c_period};
 pub use form_rules::{
     CheckedFinalCopyPayload, CheckedFinalCopyPayloadError, ShadowEvaluationOutcome,
     TrustedEvaluation, WorkflowDispatchError,

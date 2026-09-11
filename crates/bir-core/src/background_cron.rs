@@ -362,6 +362,8 @@ fn queued_retry_is_due(
 trait SubmissionTransport {
     type Session: Send;
 
+    fn session_source(&self, session: &Self::Session) -> crate::transport::SftpEndpointSource;
+
     fn open_session<'a>(
         &'a self,
         form_type: &'a str,
@@ -386,6 +388,10 @@ struct NetworkSubmissionTransport;
 
 impl SubmissionTransport for NetworkSubmissionTransport {
     type Session = crate::transport::IafSftpSession;
+
+    fn session_source(&self, session: &Self::Session) -> crate::transport::SftpEndpointSource {
+        session.source()
+    }
 
     fn open_session<'a>(
         &'a self,
@@ -443,11 +449,45 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
 
     if loaded_draft.submission_claim_token.is_some() || loaded_draft.submission_claimed_at.is_some()
     {
-        warn!(
-            "Cron: 1601C {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
-            loaded_draft.period_code()
-        );
-        crate::ipc::post_db_changed();
+        let recovered = {
+            let db_guard = match db.lock() {
+                Ok(guard) => guard,
+                Err(_) => return,
+            };
+            db_guard
+                .recover_expired_unstarted_1601c_claim(
+                    &loaded_draft.tin,
+                    loaded_draft.taxable_year,
+                    loaded_draft.month,
+                    Utc::now(),
+                )
+                .unwrap_or(false)
+        };
+        if !recovered {
+            warn!(
+                "Cron: 1601C {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
+                loaded_draft.period_code()
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+        let loaded_draft = {
+            let db_guard = match db.lock() {
+                Ok(guard) => guard,
+                Err(_) => return,
+            };
+            match db_guard.get_1601c_draft(&summary.tin, summary.taxable_year, month) {
+                Ok(Some(draft)) => draft,
+                _ => return,
+            }
+        };
+        if loaded_draft.submission_claim_token.is_some()
+            || loaded_draft.submission_claimed_at.is_some()
+        {
+            return;
+        }
+        // Fall through with the recovered unclaimed row.
+        process_queued_1601c_with_transport(summary, profile, db, transport).await;
         return;
     }
 
@@ -615,7 +655,28 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     };
 
-    let skip_email_poll = crate::transport::is_sftp_dry_run();
+    let skip_email_poll = transport.session_source(&session).is_dry_run();
+    let put_marked = {
+        let db_guard = match db.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        db_guard
+            .mark_claimed_1601c_put_started(
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                &claim_token,
+            )
+            .unwrap_or(false)
+    };
+    if !put_marked {
+        warn!(
+            "Cron: 1601C {} claim disappeared before PUT start was recorded; skipping PUT",
+            draft.period_code()
+        );
+        return;
+    }
     match transport
         .store_session(session, &filename, &encrypted)
         .await
@@ -675,18 +736,17 @@ fn submission_queue_year_at<Tz: TimeZone>(now: &chrono::DateTime<Tz>) -> u16 {
 }
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
-    let current_year = submission_queue_year_at(&Local::now());
-
-    // We only retry current year forms to avoid excessive queries,
-    // but we can query `list_draft_summaries` for the profile.
     let summaries = {
         let db_guard = match db.lock() {
             Ok(g) => g,
             Err(_) => return,
         };
         db_guard
-            .list_draft_summaries(&profile.tin.full(), current_year)
+            .list_all_queued_submissions()
             .unwrap_or_default()
+            .into_iter()
+            .filter(|s| s.tin == profile.tin.full())
+            .collect::<Vec<_>>()
     };
 
     for summary in summaries
@@ -747,14 +807,28 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 if loaded_draft.submission_claim_token.is_some()
                     || loaded_draft.submission_claimed_at.is_some()
                 {
-                    // A prior process may have crashed before or after BIR
-                    // received the upload. Never lease-expire or retry this
-                    // unknown outcome: doing so could create a duplicate filing.
-                    warn!(
-                        "Cron: Form {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
-                        loaded_draft.period_code()
-                    );
-                    crate::ipc::post_db_changed();
+                    let recovered = {
+                        let db_guard = match db_clone.lock() {
+                            Ok(guard) => guard,
+                            Err(_) => return,
+                        };
+                        db_guard
+                            .recover_expired_unstarted_2551q_claim(
+                                &loaded_draft.tin,
+                                loaded_draft.taxable_year,
+                                loaded_draft.quarter,
+                                Utc::now(),
+                            )
+                            .unwrap_or(false)
+                    };
+                    if !recovered {
+                        warn!(
+                            "Cron: Form {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
+                            loaded_draft.period_code()
+                        );
+                        crate::ipc::post_db_changed();
+                        return;
+                    }
                     return;
                 }
 
@@ -949,6 +1023,27 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 };
 
                 let session_source = session.source();
+                let put_marked = {
+                    let db_guard = match db_clone.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    db_guard
+                        .mark_claimed_2551q_put_started(
+                            &draft.tin,
+                            draft.taxable_year,
+                            draft.quarter,
+                            &claim_token,
+                        )
+                        .unwrap_or(false)
+                };
+                if !put_marked {
+                    warn!(
+                        "Cron: Form {} claim disappeared before PUT start was recorded; skipping PUT",
+                        draft.period_code()
+                    );
+                    return;
+                }
                 match session.store(&filename, &encrypted).await {
                     Ok(_) => {
                         info!("Cron: Successfully submitted queued form {}", filename);
@@ -1355,7 +1450,6 @@ mod tests {
     use crate::forms::form_1601c::Form1601CDraft;
     use crate::forms::form_2551q::Item13Election;
     use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
-    use temp_env;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -1451,6 +1545,7 @@ mod tests {
     struct RecordingSubmissionTransport {
         calls: Mutex<Vec<RecordedSubmission>>,
         outcome: TestTransportOutcome,
+        source: crate::transport::SftpEndpointSource,
     }
 
     impl RecordingSubmissionTransport {
@@ -1458,6 +1553,15 @@ mod tests {
             Self {
                 calls: Mutex::new(Vec::new()),
                 outcome,
+                source: crate::transport::SftpEndpointSource::Env,
+            }
+        }
+
+        fn dry_run(outcome: TestTransportOutcome) -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                outcome,
+                source: crate::transport::SftpEndpointSource::DryRun,
             }
         }
 
@@ -1471,6 +1575,10 @@ mod tests {
 
     impl SubmissionTransport for RecordingSubmissionTransport {
         type Session = String;
+
+        fn session_source(&self, _session: &Self::Session) -> crate::transport::SftpEndpointSource {
+            self.source
+        }
 
         fn open_session<'a>(
             &'a self,
@@ -1811,12 +1919,9 @@ mod tests {
             .save_queued_1601c_draft(&queued)
             .expect("the reviewed 1601C queue snapshot should persist");
         let summary = queued_1601c_summary(id, &queued);
-        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
 
-        temp_env::async_with_vars([("BIR_SFTP_DRY_RUN", Some("1"))], async {
-            process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
-        })
-        .await;
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
 
         let submitted = db
             .lock()
@@ -1985,5 +2090,168 @@ mod tests {
         assert_eq!(utc.year(), 2099);
         assert_eq!(local.year(), 2100);
         assert_eq!(submission_queue_year_at(&local), 2100);
+    }
+
+    #[tokio::test]
+    async fn expired_unstarted_1601c_claim_recovers_and_retries() {
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        let fingerprint = queued.queued_submission_fingerprint.clone();
+        let retry = queued.next_retry_at.clone();
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .expect("queue");
+        let summary = queued_1601c_summary(id, &queued);
+        let claim = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .claim_queued_1601c_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.month,
+                &fingerprint,
+                &retry,
+                0,
+            )
+            .expect("claim");
+        assert!(matches!(
+            claim,
+            crate::db::Claim1601CSubmissionResult::Claimed { .. }
+        ));
+
+        let future = Utc::now() + chrono::Duration::hours(1);
+        assert!(
+            db.lock()
+                .expect("the cron database should not be poisoned")
+                .recover_expired_unstarted_1601c_claim(
+                    &queued.tin,
+                    queued.taxable_year,
+                    queued.month,
+                    future,
+                )
+                .expect("recover")
+        );
+        let recovered = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert!(recovered.submission_claim_token.is_none());
+        assert_eq!(recovered.submission_attempts, 1);
+
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        assert_eq!(transport.calls().len(), 1);
+        let submitted = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+    }
+
+    #[tokio::test]
+    async fn put_started_claim_does_not_recover() {
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        let fingerprint = queued.queued_submission_fingerprint.clone();
+        let retry = queued.next_retry_at.clone();
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        db.lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .unwrap();
+        let claim = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .claim_queued_1601c_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.month,
+                &fingerprint,
+                &retry,
+                0,
+            )
+            .unwrap();
+        let crate::db::Claim1601CSubmissionResult::Claimed { token, .. } = claim else {
+            panic!("expected claim");
+        };
+        assert!(
+            db.lock()
+                .expect("the cron database should not be poisoned")
+                .mark_claimed_1601c_put_started(
+                    &queued.tin,
+                    queued.taxable_year,
+                    queued.month,
+                    &token,
+                )
+                .unwrap()
+        );
+        let future = Utc::now() + chrono::Duration::hours(1);
+        assert!(
+            !db.lock()
+                .expect("the cron database should not be poisoned")
+                .recover_expired_unstarted_1601c_claim(
+                    &queued.tin,
+                    queued.taxable_year,
+                    queued.month,
+                    future,
+                )
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn mandatory_fixture_dry_run_transport_submits_without_imap() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("codeitlikemiley@gmail.com".to_string());
+        let mut queued = crate::filing_queue::mandatory_lab_1601c_draft();
+        queued.transition_to_queued().unwrap();
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .unwrap();
+        let summary = queued_1601c_summary(id, &queued);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        assert_eq!(transport.calls().len(), 1);
+        assert_eq!(
+            transport.calls()[0].filename,
+            "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml"
+        );
+        let submitted = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert_eq!(submitted.tax_36_total_amount_payable, 0.0);
+        assert!(
+            db.lock()
+                .expect("the cron database should not be poisoned")
+                .list_jobs()
+                .unwrap()
+                .iter()
+                .all(|job| !job.name.contains("confirmation email")),
+            "dry-run source must skip IMAP"
+        );
     }
 }

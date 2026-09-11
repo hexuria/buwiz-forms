@@ -6,6 +6,7 @@
 //! infer filing dates, deadlines, taxpayer classifications, or penalty rules.
 
 use super::{FilingStatus, FormValidator};
+use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 use serde::{Deserialize, Serialize};
@@ -201,18 +202,30 @@ pub struct Form1601CDraft {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submitted_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submission_filename: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_id: Option<i64>,
 
     /// SHA-256 over the exact reviewed 1601Cv2018 field map at the moment the
     /// user queues the return. Queue retries must reproduce this fingerprint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub queued_submission_fingerprint: Option<String>,
-    /// Durable claim established immediately before network I/O. It has no
-    /// automatic lease expiry because a crash can leave an unknown BIR result.
+    /// Scoped grant recorded at enqueue (form + TIN + period + Confirmed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_authorization: Option<QueueAuthorization>,
+    /// Durable claim established immediately before network I/O.
+    /// Recoverable only when PUT was never marked started and the lease expired.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submission_claim_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submission_claimed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_claim_lease_until: Option<String>,
+    /// Set immediately before PUT. Presence means bytes may have reached BIR.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_put_started_at: Option<String>,
 
     #[serde(default)]
     pub submission_attempts: u32,
@@ -280,10 +293,15 @@ impl Form1601CDraft {
             created_at: now.clone(),
             updated_at: now,
             submitted_at: None,
+            confirmed_at: None,
             submission_filename: None,
+            receipt_id: None,
             queued_submission_fingerprint: None,
+            queue_authorization: None,
             submission_claim_token: None,
             submission_claimed_at: None,
+            submission_claim_lease_until: None,
+            submission_put_started_at: None,
             submission_attempts: 0,
             submission_error: None,
             next_retry_at: None,
@@ -332,14 +350,28 @@ impl Form1601CDraft {
         }
 
         self.queued_submission_fingerprint = Some(self.submission_fingerprint());
+        self.queue_authorization = Some(QueueAuthorization::new(
+            "1601C",
+            self.tin.clone(),
+            self.period_code(),
+            QueueAuthSource::Gui,
+        ));
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         self.status = FilingStatus::Queued;
         self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
         Ok(())
+    }
+
+    pub fn set_queue_auth_source(&mut self, source: QueueAuthSource) {
+        if let Some(auth) = &mut self.queue_authorization {
+            auth.source = source;
+        }
     }
 
     pub fn transition_to_submitted(&mut self, filename: String) {
@@ -357,7 +389,30 @@ impl Form1601CDraft {
         self.next_retry_at = None;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         self.updated_at = now;
+    }
+
+    /// Transition: Submitted → Confirmed (BIR receipt matched).
+    pub fn transition_to_confirmed(
+        &mut self,
+        confirmed_at: String,
+        receipt_id: Option<i64>,
+        filename: Option<String>,
+    ) {
+        assert!(
+            matches!(self.status, FilingStatus::Submitted),
+            "Cannot confirm form in {:?} status - must be Submitted",
+            self.status
+        );
+        self.status = FilingStatus::Confirmed;
+        self.confirmed_at = Some(confirmed_at);
+        self.receipt_id = receipt_id;
+        if let Some(filename) = filename {
+            self.submission_filename = Some(filename);
+        }
+        self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
     pub fn revert_to_draft(&mut self) {
@@ -367,10 +422,15 @@ impl Form1601CDraft {
         );
         self.status = FilingStatus::Draft;
         self.submitted_at = None;
+        self.confirmed_at = None;
+        self.receipt_id = None;
         self.submission_filename = None;
         self.queued_submission_fingerprint = None;
+        self.queue_authorization = None;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = None;
@@ -402,6 +462,14 @@ impl Form1601CDraft {
                     .to_string(),
             )),
         }
+        if let Some(error) = crate::filing_queue::scoped_authorization_error(
+            self.queue_authorization.as_ref(),
+            "1601C",
+            &self.tin,
+            &self.period_code(),
+        ) {
+            errors.push(error);
+        }
         if errors.is_empty() {
             return Ok(());
         }
@@ -428,10 +496,13 @@ impl Form1601CDraft {
         self.submission_error = Some(error_msg);
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
         if self.submission_attempts >= 5 {
             self.status = FilingStatus::Draft;
             self.next_retry_at = None;
             self.queued_submission_fingerprint = None;
+            self.queue_authorization = None;
         } else {
             let delay_minutes = 2i64.pow(self.submission_attempts - 1);
             self.next_retry_at =
@@ -1113,5 +1184,21 @@ mod tests {
                 draft.tax_36_total_amount_payable,
             )
         );
+    }
+
+    #[test]
+    fn queued_revalidate_requires_matching_authorization() {
+        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft();
+        draft.transition_to_queued().expect("fixture must queue");
+        draft.queue_authorization = None;
+        let errors = draft
+            .revalidate_queued_before_submission()
+            .expect_err("missing grant must fail closed");
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "queue_authorization")
+        );
+        assert_eq!(draft.status, FilingStatus::Draft);
     }
 }

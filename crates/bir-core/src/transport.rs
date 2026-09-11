@@ -24,7 +24,6 @@ use russh_sftp::protocol::OpenFlags;
 use serde::Deserialize;
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -34,6 +33,7 @@ use zeroize::Zeroizing;
 
 const DISPATCHER_PRIMARY: &str = "http://birgovph.com/tinDispatcherSFTP.php";
 const DISPATCHER_BACKUP: &str = "http://ws2.birgovph.com/tinDispatcherSFTP.php";
+const DISPATCHER_HTTPS_TIMEOUT: Duration = Duration::from_secs(4);
 const DISPATCHER_CLIENT_VERSION: &str = "7.9.6.0";
 /// Passphrase used by official `ebfSFTP.exe` to unwrap dispatcher ciphertext.
 /// This is a protocol constant present in every 7.9.6 install, not a taxpayer secret.
@@ -86,6 +86,7 @@ pub struct SftpEndpoint {
     pub username: String,
     pub password: Zeroizing<String>,
     pub remote_folder: String,
+    pub host_key_policy: HostKeyPolicy,
 }
 
 impl SftpEndpoint {
@@ -93,6 +94,16 @@ impl SftpEndpoint {
         self.remote_folder = folder.into();
         self
     }
+}
+
+/// SSH host-key policy. Official dispatcher matches ebfSFTP's accept-any.
+/// Lab `BIR_SFTP_*` must pin a SHA-256 fingerprint or set
+/// `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostKeyPolicy {
+    AcceptAnyOfficial,
+    AcceptAnyLab,
+    PinnedSha256(String),
 }
 
 /// How an SFTP session was obtained. Logged without secrets.
@@ -173,6 +184,15 @@ fn sftp_dry_run_requested() -> bool {
     env_flag_enabled("BIR_SFTP_DRY_RUN") || env_flag_disabled("BIR_SFTP_LIVE")
 }
 
+/// Production dispatcher is opt-in. Unset `BIR_SFTP_LIVE` refuses it.
+fn dispatcher_live_ack_requested() -> bool {
+    env_flag_enabled("BIR_SFTP_LIVE")
+}
+
+fn https_dispatcher_url(http_base: &str) -> String {
+    http_base.replacen("http://", "https://", 1)
+}
+
 fn parse_port(raw: &str, name: &str) -> Result<u16, TransportError> {
     raw.parse::<u16>()
         .map_err(|error| TransportError::Config(format!("invalid {name}: {error}")))
@@ -205,12 +225,23 @@ fn from_bir_sftp_env(form_type: &str) -> Option<Result<SftpEndpoint, TransportEr
         None => 22,
     };
     let remote_folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
+    let host_key_policy = match env_nonempty("BIR_SFTP_HOST_KEY_SHA256") {
+        Some(pin) => HostKeyPolicy::PinnedSha256(pin.to_ascii_lowercase()),
+        None if env_flag_enabled("BIR_SFTP_ACCEPT_ANY_HOST_KEY") => HostKeyPolicy::AcceptAnyLab,
+        None => {
+            return Some(Err(TransportError::Config(
+                "BIR_SFTP_HOST is set but lab host-key policy is missing (set BIR_SFTP_HOST_KEY_SHA256 or BIR_SFTP_ACCEPT_ANY_HOST_KEY=1)"
+                    .into(),
+            )));
+        }
+    };
     Some(Ok(SftpEndpoint {
         host,
         port,
         username,
         password: Zeroizing::new(password),
         remote_folder,
+        host_key_policy,
     }))
 }
 
@@ -239,6 +270,7 @@ fn from_test_sftp_env() -> Result<Option<SftpEndpoint>, TransportError> {
         username,
         password: Zeroizing::new(password),
         remote_folder,
+        host_key_policy: HostKeyPolicy::AcceptAnyLab,
     }))
 }
 
@@ -289,6 +321,12 @@ pub async fn resolve_sftp_endpoint(
             endpoint,
             source: SftpEndpointSource::TestEnv,
         });
+    }
+    if !dispatcher_live_ack_requested() {
+        return Err(TransportError::Config(
+            "refusing production tinDispatcherSFTP.php without BIR_SFTP_LIVE=1 (set BIR_SFTP_DRY_RUN=1, complete BIR_SFTP_* for a lab host, or BIR_SFTP_LIVE=1)"
+                .into(),
+        ));
     }
     let endpoint = fetch_sftp_endpoint(tin, form_type).await?;
     info!(
@@ -394,12 +432,18 @@ async fn fetch_dispatcher(
     tin: &str,
     form_type: &str,
 ) -> Result<DispatcherResponse, TransportError> {
+    fetch_dispatcher_timed(client, base, tin, form_type, Duration::from_secs(8)).await
+}
+
+async fn fetch_dispatcher_timed(
+    client: &Client,
+    base: &str,
+    tin: &str,
+    form_type: &str,
+    timeout: Duration,
+) -> Result<DispatcherResponse, TransportError> {
     let url = format!("{base}?t={tin}&f={form_type}&v={DISPATCHER_CLIENT_VERSION}");
-    let response = client
-        .get(&url)
-        .timeout(Duration::from_secs(8))
-        .send()
-        .await?;
+    let response = client.get(&url).timeout(timeout).send().await?;
     if !response.status().is_success() {
         return Err(TransportError::Dispatcher(format!(
             "{base} returned HTTP {}",
@@ -413,6 +457,43 @@ async fn fetch_dispatcher(
         )));
     }
     parse_dispatcher_json(&body)
+}
+
+/// Prefer HTTPS; official ebfSFTP still uses HTTP, so fall back.
+async fn fetch_dispatcher_prefer_https(
+    client: &Client,
+    http_base: &str,
+    tin: &str,
+    form_type: &str,
+) -> Result<DispatcherResponse, TransportError> {
+    let https_base = https_dispatcher_url(http_base);
+    match fetch_dispatcher_timed(
+        client,
+        &https_base,
+        tin,
+        form_type,
+        DISPATCHER_HTTPS_TIMEOUT,
+    )
+    .await
+    {
+        Ok(parsed) => {
+            info!(
+                scheme = "https",
+                base = https_base.as_str(),
+                "dispatcher HTTPS ok"
+            );
+            Ok(parsed)
+        }
+        Err(error) => {
+            info!(
+                scheme = "https",
+                base = https_base.as_str(),
+                error = error.to_string(),
+                "HTTPS dispatcher failed; falling back to official HTTP"
+            );
+            fetch_dispatcher(client, http_base, tin, form_type).await
+        }
+    }
 }
 
 /// Ask the official dispatcher for SFTP connection fields and unwrap them.
@@ -431,10 +512,13 @@ pub async fn fetch_sftp_endpoint(
         .danger_accept_invalid_certs(false)
         .build()?;
     let parsed =
-        match fetch_dispatcher(&client, DISPATCHER_PRIMARY, dispatcher_tin, form_type).await {
+        match fetch_dispatcher_prefer_https(&client, DISPATCHER_PRIMARY, dispatcher_tin, form_type)
+            .await
+        {
             Ok(parsed) if parsed.mode != "0" => parsed,
             Ok(_) | Err(_) => {
-                fetch_dispatcher(&client, DISPATCHER_BACKUP, dispatcher_tin, form_type).await?
+                fetch_dispatcher_prefer_https(&client, DISPATCHER_BACKUP, dispatcher_tin, form_type)
+                    .await?
             }
         };
     if parsed.mode == "0" {
@@ -456,14 +540,21 @@ pub async fn fetch_sftp_endpoint(
         username,
         password: Zeroizing::new(password),
         remote_folder: form_type.to_string(),
+        host_key_policy: HostKeyPolicy::AcceptAnyOfficial,
     })
 }
 
+/// Basename for an IAF remote path. Splits on `/` and `\\` so a Windows
+/// absolute dummy path still yields the file name on Unix CI.
+pub fn iaf_basename(filename: &str) -> &str {
+    filename
+        .rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(filename)
+}
+
 fn remote_path(folder: &str, filename: &str) -> String {
-    let file = Path::new(filename)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(filename);
+    let file = iaf_basename(filename);
     let folder = folder.trim_matches('/');
     if folder.is_empty() {
         format!("/{file}")
@@ -472,17 +563,32 @@ fn remote_path(folder: &str, filename: &str) -> String {
     }
 }
 
-struct AcceptAnyHostKey;
+fn host_key_fingerprint_sha256(key: &PublicKeyOrCertificate) -> String {
+    let encoded = match key {
+        PublicKeyOrCertificate::PublicKey { key, .. } => key.to_bytes(),
+        PublicKeyOrCertificate::Certificate(cert) => cert.to_bytes(),
+    };
+    hex::encode(Sha256::digest(encoded))
+}
 
-impl client::Handler for AcceptAnyHostKey {
+struct ConfiguredHostKey {
+    policy: HostKeyPolicy,
+}
+
+impl client::Handler for ConfiguredHostKey {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &PublicKeyOrCertificate,
+        server_public_key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
-        // Official ebfSFTP.exe sets SshHostKeyPolicy = GiveUpSecurityAndAcceptAny.
-        Ok(true)
+        match &self.policy {
+            HostKeyPolicy::AcceptAnyOfficial | HostKeyPolicy::AcceptAnyLab => Ok(true),
+            HostKeyPolicy::PinnedSha256(expected) => {
+                let actual = host_key_fingerprint_sha256(server_public_key);
+                Ok(actual.eq_ignore_ascii_case(expected.trim()))
+            }
+        }
     }
 }
 
@@ -498,7 +604,7 @@ pub struct DryRunPut {
 
 /// Prepared SFTP session that has not yet uploaded the IAF file.
 pub(crate) struct IafSftpSession {
-    handle: Option<Handle<AcceptAnyHostKey>>,
+    handle: Option<Handle<ConfiguredHostKey>>,
     remote_folder: String,
     source: SftpEndpointSource,
     dry_run_puts: Option<std::sync::Arc<std::sync::Mutex<Vec<DryRunPut>>>>,
@@ -513,11 +619,7 @@ impl IafSftpSession {
         if self.source.is_dry_run() {
             let put = DryRunPut {
                 form_type: self.remote_folder.clone(),
-                filename: Path::new(filename)
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(filename)
-                    .to_string(),
+                filename: iaf_basename(filename).to_string(),
                 remote_path: path.clone(),
                 payload_len: payload.len(),
                 payload_sha256: hex::encode(Sha256::digest(payload)),
@@ -648,7 +750,9 @@ async fn open_iaf_session_with_source(
     let mut handle = client::connect(
         Arc::new(config),
         (endpoint.host.as_str(), endpoint.port),
-        AcceptAnyHostKey,
+        ConfiguredHostKey {
+            policy: endpoint.host_key_policy.clone(),
+        },
     )
     .await
     .map_err(|error| TransportError::Ssh(error.to_string()))?;
@@ -779,7 +883,16 @@ mod tests {
             ),
             "/1601Cv2018/00000000000000-1601Cv2018-092026#a@b.com#.xml"
         );
+        assert_eq!(
+            remote_path(
+                "1601Cv2018",
+                "/tmp/00000000000000-1601Cv2018-092026#a@b.com#.xml"
+            ),
+            "/1601Cv2018/00000000000000-1601Cv2018-092026#a@b.com#.xml"
+        );
         assert_eq!(remote_path("/", "file.xml"), "/file.xml");
+        assert_eq!(iaf_basename(r"C:\dir\file.xml"), "file.xml");
+        assert_eq!(iaf_basename("/unix/dir/file.xml"), "file.xml");
     }
 
     #[test]
@@ -799,7 +912,7 @@ mod tests {
         assert_eq!(name.split('-').next().unwrap().len(), 14);
     }
 
-    const SFTP_ENV_KEYS: [&str; 13] = [
+    const SFTP_ENV_KEYS: [&str; 15] = [
         "BIR_SFTP_DRY_RUN",
         "BIR_SFTP_LIVE",
         "BIR_SFTP_HOST",
@@ -808,6 +921,8 @@ mod tests {
         "BIR_SFTP_USER",
         "BIR_SFTP_PASSWORD",
         "BIR_SFTP_FOLDER",
+        "BIR_SFTP_HOST_KEY_SHA256",
+        "BIR_SFTP_ACCEPT_ANY_HOST_KEY",
         "TEST_SFTP_HOST",
         "TEST_SFTP_PORT",
         "TEST_SFTP_USER",
@@ -842,6 +957,7 @@ mod tests {
                 ("BIR_SFTP_HOST", Some("127.0.0.1")),
                 ("BIR_SFTP_USERNAME", Some("lab")),
                 ("BIR_SFTP_PASSWORD", Some("secret")),
+                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
             ],
             || {
                 let endpoint = from_bir_sftp_env("1601Cv2018").unwrap().unwrap();
@@ -862,6 +978,7 @@ mod tests {
                 ("BIR_SFTP_USER", Some("lab")),
                 ("BIR_SFTP_PASSWORD", Some("secret")),
                 ("BIR_SFTP_FOLDER", Some("labdir")),
+                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
             ],
             || {
                 let endpoint = from_bir_sftp_env("1601Cv2018").unwrap().unwrap();
@@ -897,7 +1014,36 @@ mod tests {
     fn bir_sftp_live_zero_is_dry_run() {
         isolated_sftp_env([("BIR_SFTP_LIVE", Some("0"))], || {
             assert!(sftp_dry_run_requested());
+            assert!(!dispatcher_live_ack_requested());
         });
+    }
+
+    #[test]
+    fn https_dispatcher_url_flips_scheme_only() {
+        assert_eq!(
+            https_dispatcher_url(DISPATCHER_PRIMARY),
+            "https://birgovph.com/tinDispatcherSFTP.php"
+        );
+        assert_eq!(
+            https_dispatcher_url(DISPATCHER_BACKUP),
+            "https://ws2.birgovph.com/tinDispatcherSFTP.php"
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatcher_without_live_ack_is_config_error() {
+        isolated_sftp_env_async([], async {
+            let err = resolve_sftp_endpoint("1601Cv2018", "000000000")
+                .await
+                .unwrap_err();
+            match err {
+                TransportError::Config(message) => {
+                    assert!(message.contains("BIR_SFTP_LIVE=1"), "{message}");
+                }
+                other => panic!("expected config refuse, got {other:?}"),
+            }
+        })
+        .await;
     }
 
     #[test]
@@ -965,6 +1111,7 @@ mod tests {
                 ("BIR_SFTP_HOST", Some("127.0.0.1")),
                 ("BIR_SFTP_USERNAME", Some("lab")),
                 ("BIR_SFTP_PASSWORD", Some("secret")),
+                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
                 ("TEST_SFTP_HOST", Some("legacy.example")),
                 ("TEST_SFTP_PORT", Some("2222")),
                 ("TEST_SFTP_USER", Some("old")),
@@ -1010,5 +1157,39 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[test]
+    fn bir_sftp_host_without_host_key_policy_is_config_error() {
+        isolated_sftp_env(
+            [
+                ("BIR_SFTP_HOST", Some("127.0.0.1")),
+                ("BIR_SFTP_USERNAME", Some("lab")),
+                ("BIR_SFTP_PASSWORD", Some("secret")),
+            ],
+            || {
+                let err = from_bir_sftp_env("1601Cv2018").unwrap().unwrap_err();
+                assert!(matches!(err, TransportError::Config(_)));
+            },
+        );
+    }
+
+    #[test]
+    fn bir_sftp_env_accepts_pinned_host_key() {
+        isolated_sftp_env(
+            [
+                ("BIR_SFTP_HOST", Some("127.0.0.1")),
+                ("BIR_SFTP_USERNAME", Some("lab")),
+                ("BIR_SFTP_PASSWORD", Some("secret")),
+                ("BIR_SFTP_HOST_KEY_SHA256", Some("abc123")),
+            ],
+            || {
+                let endpoint = from_bir_sftp_env("1601Cv2018").unwrap().unwrap();
+                assert_eq!(
+                    endpoint.host_key_policy,
+                    HostKeyPolicy::PinnedSha256("abc123".into())
+                );
+            },
+        );
     }
 }

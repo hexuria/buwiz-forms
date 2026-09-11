@@ -4,15 +4,20 @@
 //! `--live-connect` / `--live-put` use `resolve_sftp_endpoint`:
 //! dry-run env, then BIR_SFTP_*, then TEST_SFTP_*, else dispatcher.
 //! Secrets are never printed.
+//!
+//! Live PUT is **authorized lab only**. Without complete `BIR_SFTP_*` (plus a
+//! host-key pin or `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`) the resolver falls through
+//! to production dispatcher → `ebf2.bir.gov.ph`. Dummy TIN is not
+//! production-safe. Leave `--live-put` BLOCKED unless Uriah authorized that
+//! lab endpoint.
 
 use bir_core::naming::{Tin, iaf_filename};
 use bir_core::transport::{
-    ResolvedSftpTarget, probe_sftp_target, resolve_sftp_endpoint, submit_sftp_target,
+    ResolvedSftpTarget, iaf_basename, probe_sftp_target, resolve_sftp_endpoint, submit_sftp_target,
     unwrap_dispatcher_field, wrap_dispatcher_field,
 };
 use std::env;
 use std::fs;
-use std::path::Path;
 use std::process::ExitCode;
 
 const DUMMY_TIN: &str = "00000000000000";
@@ -57,12 +62,12 @@ async fn live_connect() -> Result<String, String> {
 }
 
 async fn live_put() -> Result<String, String> {
-    let filename = Path::new(DUMMY_IAF)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("dummy.xml")
-        .to_string();
-    let payload = fs::read(DUMMY_IAF).map_err(|error| format!("read dummy iaf: {error}"))?;
+    let filename = iaf_basename(DUMMY_IAF).to_string();
+    let payload = fs::read(DUMMY_IAF).map_err(|error| {
+        format!(
+            "BLOCKED: dummy IAF is a Windows lab path ({DUMMY_IAF}); live PUT is authorized lab only ({error})"
+        )
+    })?;
     println!("payload_len={}", payload.len());
     let target = resolve_sftp_endpoint(DUMMY_FORM, DUMMY_TIN)
         .await
