@@ -22,6 +22,7 @@ to a v2 host.
 
 - [Locked protocol contract](#locked-protocol-contract)
 - [Two hosts, one agent port](#two-hosts-one-agent-port) (`--wait` handoff)
+- [Detach, logs, and production](#detach-logs-and-production-docker-like)
 - [Authorization](#authorization)
 - [Security gates](#security-gates)
 - [AI agent playbook](#ai-agent-playbook) (capabilities / limits, including Forms Set)
@@ -121,6 +122,10 @@ semantic yield.
   After GUI quit, headless binds and serves.
 - **Without `--wait`**, a busy bind fails immediately (exit 2) and a busy
   live-DB lock fails immediately (`LiveDatabaseInUse`, exit 1).
+- `bir-headless serve --detach` (also `bir-headless --detach`) applies the
+  same rules, then backgrounds the child. A second `--detach` while a live
+  pid or bind/lock is held **fails immediately** (exit 2). `--detach --wait`
+  starts a background waiter that takes over after the owner releases both.
 - Clean GUI **Quit** (Cmd+Q / tray Quit / `gpui-agent shutdown`) releases bind
   + owner lock. Hiding or closing the window does **not**.
 
@@ -132,6 +137,93 @@ cargo run --locked --bin bir-headless --features agent -- serve --wait
 cargo run --locked --bin bir-headless --features agent -- shutdown
 # then open painted bir
 ```
+
+## Detach, logs, and production (Docker-like)
+
+Foreground `serve` still occupies the Terminal. Production and lab VMs can
+run without one, then attach to logs the same way as Docker:
+
+| Docker | bir-headless |
+| --- | --- |
+| `docker run -d …` | `bir-headless serve --detach` |
+| `docker logs` | `bir-headless logs` |
+| `docker logs -f` / `tail -f` | `bir-headless logs --follow` (`-f`) |
+| `docker logs --tail N` | `bir-headless logs --tail N` |
+| `docker ps` (is it up?) | `bir-headless status` |
+| `docker stop` | `bir-headless shutdown` |
+
+```bash
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret
+export GPUI_AGENT_ADDR=127.0.0.1:17421
+# optional: BIR_DATABASE_PATH=/tmp/bir-headless-demo.db  (CI / demo only)
+
+cargo run --locked --bin bir-headless --features agent -- serve --detach
+# stdout:
+#   pid=12345
+#   log=/home/you/.taxman-ebir/logs/bir-headless.log
+# parent returns; no Terminal needs to stay open
+
+cargo run --locked --bin bir-headless --features agent -- status
+cargo run --locked --bin bir-headless --features agent -- logs --tail 50
+cargo run --locked --bin bir-headless --features agent -- logs --follow
+# Ctrl-C leaves the daemon running
+cargo run --locked --bin bir-headless --features agent -- shutdown
+```
+
+**Log path** (created automatically; append-only, no rotation in this slice):
+
+| Host | Default logfile |
+| --- | --- |
+| Linux | `~/.taxman-ebir/logs/bir-headless.log` |
+| Mac | `~/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log` |
+| `BIR_DATABASE_PATH` set | `{parent-of-db}/logs/bir-headless.log` |
+| override | `BIR_HEADLESS_LOG` |
+
+Pid file: `…/bir-headless.pid` next to the live DB override, or
+`platform::data_dir()/bir-headless.pid` on the default path (`BIR_HEADLESS_PID`
+overrides). Stdout/stderr of the detached child (including
+`GPUI_AGENT_LOG_REQUESTS`) go to that log. `logs` without `--follow` dumps the
+file; `--follow` dumps existing lines then tails. Missing log → exit 1 with
+a path in the error. Ctrl-C on `--follow` exits the follower only.
+
+**Single instance.** Same exclusivity as foreground `serve`: TCP bind +
+live-DB owner lock. `--detach` also refuses a live pid file. A second
+`serve --detach` while the daemon is running fails clearly. `--detach --wait`
+does **not** fail: it backgrounds a waiter (same as foreground `--wait`).
+`--detach` is invalid on `status` / `logs` / `shutdown` (exit 2).
+
+**Happy path by environment**
+
+| Where | How |
+| --- | --- |
+| Linux box / lab VM / no GUI | `serve --detach` then `logs --follow`. This is enough. |
+| Mac lab (GUI closed, no Terminal) | same `--detach` |
+| **Mac production** | launchd KeepAlive. launchd is the supervisor — **do not** pass `--detach` (KeepAlive would see the parent exit and restart). `--wait` in ProgramArguments so a painted `bir` can own the port during the day. Stdout/err to the **same** logfile `logs` reads. |
+
+Example plist (docs only, not a shipped LaunchAgent):
+[`bir-headless.launchd.plist.example`](bir-headless.launchd.plist.example).
+
+```xml
+<key>ProgramArguments</key>
+<array>
+  <string>/path/to/bir-headless</string>
+  <string>serve</string>
+  <string>--wait</string>
+</array>
+<key>KeepAlive</key>
+<true/>
+<key>StandardOutPath</key>
+<string>/Users/YOU/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log</string>
+<key>StandardErrorPath</key>
+<string>/Users/YOU/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log</string>
+```
+
+Set `GPUI_AGENT=1` in `EnvironmentVariables`. Put `GPUI_AGENT_TOKEN` in a
+root-restricted extras plist or `launchctl setenv` — never in git. launchd
+does not expand `~`; StandardOut/Err must be absolute.
+
+Foreground `serve` / `serve --wait` / `status` / `shutdown` are unchanged.
 
 ## Authorization
 
@@ -408,10 +500,11 @@ gpui-agent invoke nav.go --arg page=profile-manager
 
 ### Mac: bir-headless
 
-Clap: `serve` / `status` / `shutdown`, global `--wait`. Shell matches
-gpui-agent `apps/todo-headless` on pin `45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e`:
+Clap: `serve` / `status` / `shutdown` / `logs`, global `--wait` and `--detach`.
+Shell matches gpui-agent `apps/todo-headless` on pin `45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e`:
 `from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
-`GPUI_AGENT_TOKEN` is required to bind.
+`GPUI_AGENT_TOKEN` is required to bind. `--detach` / `logs --follow` are the
+Docker-like lab path; Mac production uses the launchd example (no `--detach`).
 
 #### Smoke matrix
 
@@ -467,10 +560,15 @@ cargo run --locked --bin bir-headless --features agent -- shutdown
 ```
 
 Without `--wait`, a busy bind still exits 2 and a busy live-DB lock exits 1
-(same refuse as smoke C).
+(same refuse as smoke C). `serve --detach` uses the same refuse, then
+backgrounds; a second `--detach` while running fails. See
+[Detach, logs, and production](#detach-logs-and-production-docker-like).
 
-launchd KeepAlive is **not** shipped. Optional supervisor later; example
-`ProgramArguments` if you add a LaunchAgent yourself:
+launchd KeepAlive is **not** shipped. Mac production example (KeepAlive +
+StandardOut/Err to the same path `bir-headless logs` follows) lives in
+[`bir-headless.launchd.plist.example`](bir-headless.launchd.plist.example).
+**Do not** put `--detach` in ProgramArguments. Lab/Linux can skip launchd and
+use `serve --detach`.
 
 ```xml
 <key>ProgramArguments</key>
@@ -481,10 +579,11 @@ launchd KeepAlive is **not** shipped. Optional supervisor later; example
 </array>
 <key>KeepAlive</key>
 <true/>
+<key>StandardOutPath</key>
+<string>/Users/YOU/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log</string>
+<key>StandardErrorPath</key>
+<string>/Users/YOU/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log</string>
 ```
-
-That plist is documentation only. It does not install an agent, does not
-set the token for you, and is not required for smoke B.
 
 #### Smoke C (Mac) — quit GUI → serve → save → shutdown → open GUI
 
@@ -564,6 +663,9 @@ export BIR_DATABASE_PATH=/tmp/bir-headless-demo.db
 export EBIR_TEST_ENV=1   # test zero key; omit if this file was created with the OS keyring
 # optional: export GPUI_AGENT_LOG_REQUESTS=1
 cargo run --locked --bin bir-headless --features agent -- serve
+# no Terminal (Linux lab happy path):
+# cargo run --locked --bin bir-headless --features agent -- serve --detach
+# cargo run --locked --bin bir-headless --features agent -- logs --follow
 # other terminal:
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
 # hello.platform=headless
@@ -595,7 +697,9 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret invoke profile.list
 will **not** quarantine/recreate a taxpayer file on a bad open. Checkpoint
 WAL on shutdown. Headless **does** start background cron (dispatcher-backed SFTP PUT). `screenshot_unavailable`, `virtual_unavailable`, `form.print`
 errors as today. Exclusive owner lock + bind probe refuse a second process
-without `--wait`. `serve --wait` polls until both are free.
+without `--wait`. `serve --wait` polls until both are free. Linux production
+without a Terminal is `serve --detach` then `logs --follow` (same log path as
+above). Do not invent a second agent port.
 
 **Fixture-host unit test** (ephemeral SQLite, not the taxpayer DB):
 
@@ -603,6 +707,7 @@ without `--wait`. `serve --wait` polls until both are free.
 cargo test --locked -p bir-desktop --features agent \
   agent::host::tests::headless_tcp_host_serves_hello_and_nav
 cargo test --locked -p bir-desktop --features agent agent::
+cargo test --locked -p bir-desktop --features agent --test headless_detach
 ```
 
 **Linux with a painted window** (`DISPLAY` / Wayland). Same KEY=VALUE as Mac.
@@ -912,7 +1017,9 @@ Proven in headless host tests (not a Mac GUI run):
 - `bir-headless serve` opens a **file-backed** SQLCipher path (`app_database_path()`,
   not ephemeral). `profile.save` is visible after reopen. Bind-in-use and
   live-DB owner lock are refused without `--wait`; `serve --wait` resumes after
-  the owner releases both. Headless **does** start the same in-process SFTP
+  the owner releases both. `serve --detach` backgrounds the same process
+  (pid + logfile); `logs --follow` attaches. A second `--detach` while running
+  fails. Headless **does** start the same in-process SFTP
   cron; it executes already-queued work and does not enqueue without
   `confirm=true`. GUI-as-client
   (full ADR-001) and a shipped LaunchAgent are not this slice.
@@ -932,7 +1039,8 @@ Remaining (not faked):
   persistence only; two AgentHosts must not share `GPUI_AGENT_ADDR`; two
   processes must not open the live DB together. Matrix B is
   `serve --wait` plus GUI quit releasing bind+lock, not a protocol op.
-  launchd KeepAlive remains an optional supervisor (docs example only).
+  launchd KeepAlive remains an optional supervisor (docs example only, no
+  `--detach` in ProgramArguments). Lab/Linux uses `serve --detach`.
 
 ## Claimed queue without BIR outcome (facts)
 
