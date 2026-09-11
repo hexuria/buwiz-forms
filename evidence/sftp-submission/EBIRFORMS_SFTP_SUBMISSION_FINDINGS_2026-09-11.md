@@ -296,19 +296,21 @@ Still valid:
 `crates/bir-core/src/bin/sftp_harness.rs` uses only placeholders:
 
 ```
-TEST_SFTP_HOST
-TEST_SFTP_PORT
-TEST_SFTP_USER
-TEST_SFTP_PASSWORD
-TEST_SFTP_FOLDER
+BIR_SFTP_HOST
+BIR_SFTP_PORT
+BIR_SFTP_USERNAME
+BIR_SFTP_PASSWORD
+BIR_SFTP_FOLDER
 ```
+
+(Originally `TEST_SFTP_*`; those aliases were removed on 2026-09-11.)
 
 `--dry-run` verified:
 
 ```
 filename=00000000000000-1601Cv2018-092026#test@example.com#.xml
 filename_prefix_len=14
-dispatcher_wrap_roundtrip=TEST_SFTP_HOST
+dispatcher_wrap_roundtrip=lab.example
 dry_run=1 skipped_sftp_connect
 ```
 
@@ -318,7 +320,7 @@ To test a real PUT, run a local SFTP server and point those env vars at it. Do n
 
 - `crates/bir-core/src/transport.rs` replaced FTP with SFTP.
 - Dispatcher unwrap is implemented locally; live passwords are not stored in source.
-- If `TEST_SFTP_HOST` is set, that endpoint is used instead of the BIR dispatcher.
+- If a complete `BIR_SFTP_*` set is present, that endpoint is used instead of the BIR dispatcher.
 - `SubmissionTransport::open_session(form_type, tin)` now receives TIN so the dispatcher query can be formed.
 - 1601C queued submit uses the trait. 2551Q was updated to `open_iaf_session(form_type, &draft.tin)`.
 - `official_import` passes TIN through `ImportedSubmissionClient`.
@@ -412,7 +414,7 @@ Smallest next experiment: dummy `000-000-000-00000` 1601C Final Copy, Procmon on
 
 Keep the claim/unknown-outcome queue. Replace only the session:
 
-1. `open_session(form_type, tin)` -> dispatcher or `TEST_SFTP_*` -> SSH auth, no PUT.
+1. `open_session(form_type, tin)` -> dispatcher or `BIR_SFTP_*` -> SSH auth, no PUT.
 2. Claim the queued row.
 3. PUT `/formType/filename`.
 4. PUT errors stay unknown-outcome.
