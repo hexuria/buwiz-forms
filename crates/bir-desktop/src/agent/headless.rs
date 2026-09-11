@@ -3,7 +3,7 @@
 //! Mirrors gpui-agent `apps/todo-headless`: clap `serve` (default) / `status` /
 //! `shutdown`, `from_env` + `spawn_host`, no GPU window. Opens
 //! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
-//! `Database::open_ephemeral()`. Does **not** start background cron / FTP.
+//! `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as painted `bir`.
 //! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
 //! lock. `serve --wait` (also `bir-headless --wait`) polls until both are free.
 
@@ -232,6 +232,16 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         };
 
         let db = Arc::new(Mutex::new(opened));
+        let cron_db = db.clone();
+        thread::spawn(move || {
+            if let Ok(rt) = tokio::runtime::Runtime::new() {
+                rt.block_on(async move {
+                    bir_core::background_cron::start_cron_jobs(cron_db).await;
+                });
+            } else {
+                eprintln!("Failed to initialize Tokio runtime for headless background tasks");
+            }
+        });
         let host = Arc::new(Mutex::new(host_for_database(db.clone())));
         let mailbox = AgentMailbox::new();
         let drain_token = config.token.clone();
@@ -278,7 +288,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             path.display()
         );
         eprintln!(
-            "BIR: no GPU · screenshot_unavailable · form.print errors · no cron/FTP. \
+            "BIR: no GPU · screenshot_unavailable · form.print errors · in-process SFTP cron. \
              Single bind + single live-DB owner. `serve --wait` resumes after GUI quit. \
              No Op::Yield. launchd KeepAlive is optional."
         );
