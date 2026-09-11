@@ -196,20 +196,23 @@ fn unix_pid_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn windows_pid_alive(pid: u32) -> bool {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     const STILL_ACTIVE: u32 = 259;
-    // SAFETY: process-query handle is closed before return. `pid` is an OS id.
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+        fn GetExitCodeProcess(handle: *mut std::ffi::c_void, code: *mut u32) -> i32;
+    }
+    // SAFETY: Win32 process-query handles; we close before returning.
     unsafe {
-        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
             return false;
-        };
+        }
         let mut code = 0u32;
-        let ok = GetExitCodeProcess(handle, &mut code).is_ok();
-        let _ = CloseHandle(handle);
+        let ok = GetExitCodeProcess(handle, &mut code) != 0;
+        CloseHandle(handle);
         ok && code == STILL_ACTIVE
     }
 }
