@@ -1260,7 +1260,7 @@ impl FormViewTrait for Form1701View {
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1701-2018",
             &render_draft.to_bir_field_map(),
-            "1701 Frozen HTML",
+            "1701 — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {
@@ -1269,6 +1269,10 @@ impl FormViewTrait for Form1701View {
                     launch_kind.status_message()
                 );
                 self.status_message = Some(message);
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
             }
             Err(error) => {
                 let message = format!(

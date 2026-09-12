@@ -190,12 +190,19 @@ fn fetch_with_auth(
                     text_content = html2text::from_read(html.as_bytes(), 80).unwrap_or_default();
                 }
 
+                // When the message arrived, from its Date header. BIR's own
+                // received stamp is parsed from the body separately.
+                let email_received_at = parsed_mail.date().map(|date| date.to_rfc3339());
+
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
                         let mut pending_notice: Option<(String, String)> = None;
                         if let Ok(db_guard) = db.lock()
-                            && let Ok((submission_receipt, _is_new)) =
-                                db_guard.save_submission_receipt(&receipt)
+                            && let Ok((submission_receipt, _is_new)) = db_guard
+                                .save_submission_receipt_with_email_date(
+                                    &receipt,
+                                    email_received_at.as_deref(),
+                                )
                         {
                             // Always attempt confirm. A previous poll may have
                             // saved the receipt while Submitted→Confirmed was

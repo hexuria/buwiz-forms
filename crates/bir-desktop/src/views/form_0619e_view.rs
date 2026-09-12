@@ -558,11 +558,15 @@ impl FormViewTrait for Form0619EView {
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "0619e-2018",
             &render_draft.to_bir_field_map(),
-            "0619E Frozen HTML",
+            "0619-E — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(launch_kind.status_message().to_string());
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
             }
             Err(error) => {
                 let message = format!(

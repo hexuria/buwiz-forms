@@ -124,6 +124,8 @@ pub struct Form1601CView {
     is_validated: bool,
     validation_errors: Vec<(String, String)>,
     status_message: Option<String>,
+    /// A submission error the user closed; it stays hidden until it changes.
+    dismissed_submission_error: Option<String>,
     release_claim_confirm_open: bool,
 
     // Header Inputs
@@ -375,6 +377,7 @@ impl Form1601CView {
             is_validated: false,
             validation_errors: Vec::new(),
             status_message: None,
+            dismissed_submission_error: None,
             release_claim_confirm_open: false,
 
             number_of_sheets,
@@ -1008,14 +1011,24 @@ impl FormViewTrait for Form1601CView {
         // snapshot. Opening or retrying a preview never changes filing status.
         self.sync_from_inputs(cx);
         let render_draft = self.draft.clone();
-        match super::form_html_preview_launcher::launch_frozen_form_preview(
+        let receipt = super::form_html_preview_launcher::receipt_page_for(
+            &self.db,
+            render_draft.receipt_id,
+            &render_draft.email_address,
+        );
+        match super::form_html_preview_launcher::launch_frozen_form_preview_with_receipt(
             "1601c-2018",
             &render_draft.to_bir_field_map(),
-            "1601C Frozen HTML",
+            receipt,
+            "1601-C — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(launch_kind.status_message().to_string());
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
                 cx.notify();
             }
             Err(error) => {
@@ -1038,6 +1051,85 @@ impl FormViewTrait for Form1601CView {
                 ));
                 cx.notify();
             }
+        }
+    }
+}
+
+/// How the status banner is coloured. The banner carries one line from
+/// many sources (queueing, validation, the preview launcher, the cron
+/// submitter), so the tone is read off the text rather than threaded
+/// through every site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatusTone {
+    Info,
+    Warning,
+    Danger,
+}
+
+fn status_tone(message: &str, is_submission_error: bool) -> StatusTone {
+    if is_submission_error {
+        return StatusTone::Danger;
+    }
+    let lower = message.to_ascii_lowercase();
+    const DANGER: [&str; 6] = [
+        "could not",
+        "cannot",
+        "fix validation",
+        "failed",
+        "error",
+        "no 1601-c row",
+    ];
+    if DANGER.iter().any(|needle| lower.contains(needle)) {
+        StatusTone::Danger
+    } else if lower.contains("unavailable") || lower.contains("stale") {
+        StatusTone::Warning
+    } else {
+        StatusTone::Info
+    }
+}
+
+impl Form1601CView {
+    /// One line above the form, as wide as the form's own content column,
+    /// with a close button when the message is dismissible.
+    fn render_status_banner(
+        &self,
+        message: String,
+        tone: StatusTone,
+        dismissible: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = cx.theme();
+        let (hue, text) = match tone {
+            StatusTone::Info => (theme.info, crate::theme::hue_on_tint(theme, theme.info)),
+            StatusTone::Warning => (theme.warning, crate::theme::warning_on_tint(theme)),
+            StatusTone::Danger => (theme.danger, crate::theme::danger_on_tint(theme)),
+        };
+        let close = dismissible.then(|| {
+            gpui_component::button::Button::new("form-1601c-dismiss-status")
+                .icon(IconName::Close)
+                .ghost()
+                .xsmall()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.dismissed_submission_error = this.draft.submission_error.clone();
+                    this.status_message = None;
+                    cx.notify();
+                }))
+        });
+        rsx! {
+            <div id={crate::agent::ids::FORM_1601C_STATUS_BANNER} px_8 pt_6>
+                <div max_w={px(800.)} mx_auto
+                    flex items_center gap_3
+                    pl_4 pr_2 py_2
+                    rounded_lg
+                    border_1
+                    bg={hue.opacity(0.12)}
+                    border_color={hue.opacity(0.4)}
+                    text_sm
+                    text_color={text}>
+                    <div flex_1 text_center>{message}</div>
+                    <div flex_none>{div().children(close)}</div>
+                </div>
+            </div>
         }
     }
 }
@@ -1155,36 +1247,26 @@ impl Render for Form1601CView {
                 </div>
             })
             .when(!queue_supported, |view| {
-                view.child(rsx! {
-                    <div px_8 py_3
-                        bg={cx.theme().warning.opacity(0.12)}
-                        border_b_1
-                        border_color={cx.theme().warning.opacity(0.4)}
-                        text_sm
-                        text_color={crate::theme::warning_on_tint(cx.theme())}>
-                        {self.status_message
-                            .clone()
-                            .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string())}
-                    </div>
-                })
+                let message = self
+                    .status_message
+                    .clone()
+                    .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string());
+                let tone = status_tone(&message, false);
+                view.child(self.render_status_banner(message, tone, false, cx))
             })
             .when(queue_supported, |view| {
-                let message = self
+                let error = self
                     .draft
                     .submission_error
                     .clone()
-                    .or_else(|| self.status_message.clone());
-                view.when_some(message, |view, message| {
-                    view.child(rsx! {
-                        <div px_8 py_3
-                            bg={cx.theme().warning.opacity(0.12)}
-                            border_b_1
-                            border_color={cx.theme().warning.opacity(0.4)}
-                            text_sm
-                            text_color={crate::theme::warning_on_tint(cx.theme())}>
-                            {message}
-                        </div>
-                    })
+                    .filter(|error| self.dismissed_submission_error.as_ref() != Some(error));
+                let banner = match error {
+                    Some(error) => Some((error, true)),
+                    None => self.status_message.clone().map(|message| (message, false)),
+                };
+                view.when_some(banner, |view, (message, is_error)| {
+                    let tone = status_tone(&message, is_error);
+                    view.child(self.render_status_banner(message, tone, true, cx))
                 })
             })
             .child(rsx! {

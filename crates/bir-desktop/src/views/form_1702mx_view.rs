@@ -426,7 +426,7 @@ impl FormViewTrait for Form1702MXView {
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1702mx-2018c",
             &render_draft.to_bir_field_map(),
-            "1702MX Frozen HTML",
+            "1702-MX — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => cx.emit(Form1702MXEvent::PushNotification(

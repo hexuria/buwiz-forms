@@ -459,13 +459,45 @@ fn fill_xbox_joins(
         if tags[index].slot.is_some() {
             continue;
         }
+        // Char boxes carry `fc` (text-align:center); the catalog xbox inputs
+        // do not, so the X sat against the box's left wall.
         replacements.push((
             tags[index].start,
             tags[index].end,
-            set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
+            with_class(
+                &set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
+                "fc",
+            ),
         ));
     }
     apply_replacements(html, replacements)
+}
+
+/// The tag with `class` present in its class list (added if missing).
+fn with_class(tag: &str, class: &str) -> String {
+    let needle = "class=\"";
+    let Some(at) = tag.find(needle) else {
+        let insert_at = tag.rfind('>').unwrap_or(tag.len());
+        return format!(
+            "{} class=\"{class}\"{}",
+            &tag[..insert_at],
+            &tag[insert_at..]
+        );
+    };
+    let start = at + needle.len();
+    let Some(len) = tag[start..].find('"') else {
+        return tag.to_string();
+    };
+    let classes = &tag[start..start + len];
+    if classes.split_whitespace().any(|c| c == class) {
+        return tag.to_string();
+    }
+    let joined = if classes.trim().is_empty() {
+        class.to_string()
+    } else {
+        format!("{classes} {class}")
+    };
+    format!("{}{}{}", &tag[..start], joined, &tag[start + len..])
 }
 
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
@@ -581,13 +613,135 @@ pub fn fill_2551q(draft: &Form2551QDraft) -> String {
 
 /// Self-contained document for a WebView `with_html` host (inline CSS, fonts, PNGs).
 pub fn filled_document(slug: &str, fields: &BTreeMap<String, String>) -> Result<String, String> {
+    filled_document_with_receipt(slug, fields, None)
+}
+
+/// BIR's receipt confirmation, printed as one more page after the form.
+///
+/// Before the HTML-only print pipeline the PDF preview appended this from
+/// the receipt row linked by `draft.receipt_id`; the migration dropped it.
+/// `body_html` must already be sanitised by the caller.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReceiptPage {
+    pub filename: String,
+    pub subject: String,
+    pub from: String,
+    pub to: String,
+    pub received_at: String,
+    /// When the email arrived, already formatted for display; falls back to
+    /// `received_at` (BIR's stamp) when the row predates the column.
+    pub email_received_at: Option<String>,
+    pub body_text: String,
+    pub body_html: Option<String>,
+}
+
+/// `filled_document` plus, when the return is confirmed, the receipt page.
+pub fn filled_document_with_receipt(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+    receipt: Option<&ReceiptPage>,
+) -> Result<String, String> {
     let Some(loaded) = bundle(slug) else {
         return Err(format!("no frozen HTML bundle for {slug}"));
     };
-    Ok(inline_local_assets(
-        &fill_bundle(loaded.html, fields, slug)?,
-        &loaded,
-    ))
+    let mut document = inline_local_assets(&fill_bundle(loaded.html, fields, slug)?, &loaded);
+    if let Some(receipt) = receipt {
+        let (width, height) = page_size_from_css(loaded.css);
+        document = append_before_body_end(&document, &receipt_page_html(receipt, &width, &height));
+    }
+    Ok(document)
+}
+
+/// `@page { size:612pt 936pt; … }` from the bundle's form.css, so the receipt
+/// sheet matches the form's sheet; letter-long fallback if a bundle omits it.
+fn page_size_from_css(css: &str) -> (String, String) {
+    let fallback = ("612pt".to_string(), "936pt".to_string());
+    let Some(start) = css.find("@page") else {
+        return fallback;
+    };
+    let Some(size_at) = css[start..].find("size:") else {
+        return fallback;
+    };
+    let rest = &css[start + size_at + "size:".len()..];
+    let end = rest.find([';', '}']).unwrap_or(rest.len());
+    let mut parts = rest[..end].split_whitespace();
+    match (parts.next(), parts.next()) {
+        (Some(w), Some(h)) => (w.to_string(), h.to_string()),
+        _ => fallback,
+    }
+}
+
+fn append_before_body_end(document: &str, fragment: &str) -> String {
+    match document.rfind("</body>") {
+        Some(at) => format!("{}{}{}", &document[..at], fragment, &document[at..]),
+        None => format!("{document}{fragment}"),
+    }
+}
+
+/// A `div` like the form pages on purpose: `.page:last-of-type` in base.css
+/// is per element type, so a `<section>` here would leave page 2 counted as
+/// "last" — no page break before the receipt when printing, and no gap on
+/// screen.
+/// The receipt sheet, laid out like a mail client's print of the message:
+/// the mailbox top right, the subject as the title, sender and arrival time,
+/// the recipient, then BIR's email as sent. No labels of our own — the file
+/// name and BIR's stamp are in the email. `.page` in base.css already breaks
+/// after each page and not after the last; `height:auto;overflow:visible`
+/// let a long email flow onto a further sheet.
+fn receipt_page_html(receipt: &ReceiptPage, width: &str, height: &str) -> String {
+    let arrived = receipt
+        .email_received_at
+        .as_deref()
+        .unwrap_or(receipt.received_at.as_str());
+    let mut html = String::new();
+    html.push_str(&format!(
+        "<div class=\"page page-receipt\" id=\"page-receipt\" style=\"width:{width};min-height:{height};height:auto;overflow:visible;padding:28pt 36pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff\">"
+    ));
+    html.push_str(
+        "<style>\
+#page-receipt .receipt-html p{margin:0 0 1em 0}\
+#page-receipt .receipt-html ul,#page-receipt .receipt-html ol{margin:0.5em 0 1em 0;padding-left:2.4em}\
+#page-receipt .receipt-html li{margin:0.15em 0}\
+#page-receipt .receipt-html b,#page-receipt .receipt-html strong{font-weight:700}\
+#page-receipt .receipt-html table{border-collapse:collapse}\
+#page-receipt .receipt-html img{max-width:100%}\
+</style>",
+    );
+    html.push_str(&format!(
+        "<div style=\"text-align:right;color:#666;font-weight:700;font-size:10pt;margin:0 0 10pt 0\">{}</div>",
+        html_escape(&receipt.to)
+    ));
+    html.push_str("<hr style=\"border:0;border-top:1px solid #999;margin:0 0 10pt 0\">");
+    html.push_str(&format!(
+        "<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">{}</h1>",
+        html_escape(&receipt.subject)
+    ));
+    html.push_str("<hr style=\"border:0;border-top:1px solid #999;margin:0 0 8pt 0\">");
+    html.push_str(&format!(
+        "<div style=\"display:flex;justify-content:space-between;gap:12pt\"><div><b>{from}</b> &lt;{from}&gt;</div><div style=\"white-space:nowrap\">{when}</div></div>",
+        from = html_escape(&receipt.from),
+        when = html_escape(arrived)
+    ));
+    html.push_str(&format!(
+        "<div style=\"margin:0 0 14pt 0\">To: {}</div>",
+        html_escape(&receipt.to)
+    ));
+    // The email as BIR sent it when its HTML survived ingest; the plain text
+    // only as a fallback. Both said the same thing, and printing both read
+    // as a duplicate.
+    match &receipt.body_html {
+        Some(body_html) if !body_html.trim().is_empty() => {
+            html.push_str("<div class=\"receipt-html\" style=\"padding:0 12pt\">");
+            html.push_str(body_html);
+            html.push_str("</div>");
+        }
+        _ => html.push_str(&format!(
+            "<pre class=\"receipt-text\" style=\"white-space:pre-wrap;word-break:break-word;margin:0;padding:0 12pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35\">{}</pre>",
+            html_escape(&receipt.body_text)
+        )),
+    }
+    html.push_str("</div>");
+    html
 }
 
 pub fn filled_2551q_document(draft: &Form2551QDraft) -> String {
@@ -732,6 +886,104 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn checked_xbox_is_centred_like_a_char_box() {
+        use std::collections::BTreeMap;
+        let mut fields = BTreeMap::new();
+        fields.insert("frm1601c:AmendedRtn_1".to_string(), "true".to_string());
+        let doc = super::filled_document("1601c-2018", &fields).expect("form");
+        let tag_at = doc.find("id=\"p1c21-i\"").expect("amended-yes xbox");
+        let tag =
+            &doc[doc[..tag_at].rfind('<').unwrap()..doc[tag_at..].find('>').unwrap() + tag_at + 1];
+        assert!(tag.contains("value=\"X\""), "{tag}");
+        assert!(tag.contains("class=\"fi fh3 fc\""), "{tag}");
+        assert_eq!(
+            super::with_class("<input class=\"fi fc\">", "fc"),
+            "<input class=\"fi fc\">"
+        );
+        assert_eq!(super::with_class("<input>", "fc"), "<input class=\"fc\">");
+    }
+
+    #[test]
+    fn receipt_page_follows_the_last_form_page() {
+        use std::collections::BTreeMap;
+        let receipt = super::ReceiptPage {
+            filename: "00000000000000-1601Cv2018-112026.xml".into(),
+            subject: "Tax Return Receipt Confirmation".into(),
+            from: "ebirforms-noreply@bir.gov.ph".into(),
+            to: "codeitlikemiley@gmail.com".into(),
+            received_at: "12 September 2026, 02:52 PM".into(),
+            email_received_at: Some("12 September 2026, 02:59 PM".into()),
+            body_text: "This confirms receipt <of> your submission".into(),
+            body_html: Some("<p>This confirms <b>receipt</b></p>".into()),
+        };
+        let fields = BTreeMap::new();
+        let plain = super::filled_document("1601c-2018", &fields).expect("form");
+        assert!(!plain.contains("page-receipt"));
+
+        let with = super::filled_document_with_receipt("1601c-2018", &fields, Some(&receipt))
+            .expect("form + receipt");
+        let page2 = with.find("id=\"page-2\"").expect("page 2");
+        let receipt_at = with.find("id=\"page-receipt\"").expect("receipt page");
+        let body_end = with.rfind("</body>").expect("body end");
+        assert!(page2 < receipt_at && receipt_at < body_end);
+        assert!(
+            with.contains("<div class=\"page page-receipt\""),
+            "same element type as the form pages so :last-of-type moves to the receipt"
+        );
+        assert!(
+            with.contains("style=\"width:612pt;min-height:936pt"),
+            "sheet matches @page"
+        );
+        assert!(
+            with.contains("<p>This confirms <b>receipt</b></p>"),
+            "html body embedded as given"
+        );
+        assert!(with.contains("<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">Tax Return Receipt Confirmation</h1>"));
+        assert!(with
+            .contains("<b>ebirforms-noreply@bir.gov.ph</b> &lt;ebirforms-noreply@bir.gov.ph&gt;"));
+        assert!(
+            with.contains("12 September 2026, 02:59 PM"),
+            "email arrival time shown"
+        );
+        assert!(with.contains("To: codeitlikemiley@gmail.com"));
+        assert!(!with.contains("<th"), "no label table of our own");
+        assert!(
+            !with.contains("receipt &lt;of&gt;"),
+            "text is not printed beside the html"
+        );
+
+        let text_only = super::ReceiptPage {
+            body_html: None,
+            ..receipt.clone()
+        };
+        let with_text =
+            super::filled_document_with_receipt("1601c-2018", &fields, Some(&text_only))
+                .expect("form + text receipt");
+        assert!(
+            with_text.contains("receipt &lt;of&gt; your submission"),
+            "text fallback is escaped"
+        );
+        assert!(!with_text.contains("class=\"receipt-html\""));
+        assert!(with_text.contains("class=\"receipt-text\""));
+    }
+
+    #[test]
+    fn page_size_comes_from_the_bundle_css() {
+        assert_eq!(
+            super::page_size_from_css("@page { size:612pt 936pt;margin:0 }"),
+            ("612pt".to_string(), "936pt".to_string())
+        );
+        assert_eq!(
+            super::page_size_from_css("@page{size:595pt 842pt}"),
+            ("595pt".to_string(), "842pt".to_string())
+        );
+        assert_eq!(
+            super::page_size_from_css(".page{}"),
+            ("612pt".to_string(), "936pt".to_string())
+        );
+    }
+
     use super::*;
     use serde_json::json;
 

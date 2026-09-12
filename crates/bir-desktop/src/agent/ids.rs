@@ -60,6 +60,7 @@ pub const FORM_1601C_SAVE: &str = "save_draft_btn";
 pub const FORM_1601C_SUBMIT: &str = "submit_btn";
 pub const FORM_1601C_VALIDATE: &str = "form-1601c-validate";
 pub const FORM_1601C_STATUS: &str = "form-1601c-status";
+pub const FORM_1601C_STATUS_BANNER: &str = "form-1601c-status-banner";
 pub const FORM_1601C_VALIDATION: &str = "form-1601c-validation";
 pub const FORM_1601C_TAX_14: &str = "form-1601c-tax-14";
 pub const FORM_1601C_TAX_25: &str = "form-1601c-tax-25";

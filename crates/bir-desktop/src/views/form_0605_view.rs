@@ -807,11 +807,15 @@ impl FormViewTrait for Form0605View {
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "0605-1999",
             &render_draft.to_bir_field_map(),
-            "0605 Frozen HTML",
+            "0605 — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(launch_kind.status_message().to_string());
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
             }
             Err(error) => {
                 let message = format!(

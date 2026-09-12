@@ -134,6 +134,7 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             source_from TEXT,
             raw_text TEXT NOT NULL,
             raw_html TEXT,
+            email_received_at TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
@@ -421,7 +422,7 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
 /// legacy pin whose new columns are NULL, requiring a reviewed migration
 /// instead of silently resolving it through a current registry.
 fn migrate_v17_exact_form_rule_identity(conn: &Connection) -> Result<(), DbError> {
-    let table_columns: [(&str, &[(&str, &str)]); 3] = [
+    let table_columns: [(&str, &[(&str, &str)]); 4] = [
         (
             "form_drafts",
             &[
@@ -436,6 +437,14 @@ fn migrate_v17_exact_form_rule_identity(conn: &Connection) -> Result<(), DbError
                 ("rule_set_form_code", "TEXT"),
                 ("rule_set_form_revision", "TEXT"),
                 ("rule_set_official_package_version", "TEXT"),
+            ],
+        ),
+        (
+            "submission_receipts",
+            &[
+                // The email's own Date header, RFC 3339. BIR's received stamp is
+                // parsed from the body; this is when the message arrived.
+                ("email_received_at", "TEXT"),
             ],
         ),
         (

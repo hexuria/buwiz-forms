@@ -1389,10 +1389,23 @@ impl Form2551QView {
         cx.notify();
 
         let render_draft = self.preview_draft_snapshot();
-        match super::form_html_preview_launcher::launch_frozen_2551q_preview(&render_draft, cx) {
+        let receipt = super::form_html_preview_launcher::receipt_page_for(
+            &self.db,
+            render_draft.receipt_id,
+            &render_draft.email,
+        );
+        match super::form_html_preview_launcher::launch_frozen_2551q_preview(
+            &render_draft,
+            receipt,
+            cx,
+        ) {
             Ok(launch_kind) => {
                 self.is_generating_pdf = false;
                 self.status_message = Some(launch_kind.status_message().to_string());
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
                 cx.notify();
             }
             Err(error) => {
