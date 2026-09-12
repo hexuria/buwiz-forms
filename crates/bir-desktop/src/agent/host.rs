@@ -128,8 +128,33 @@ struct Form2551QState {
     saved: bool,
 }
 
+/// Painted bounds (logical px, window coordinates) of the tree's landmarks.
+/// `None` = not painted this frame (collapsed sidebar, no such view open).
+/// The preview scroller lives in its own window; its bounds are relative to
+/// that window, which is what a `screenshot` of it uses too.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct TreeLayout {
+    pub window: Option<gpui_agent::Bounds>,
+    pub sidebar: Option<gpui_agent::Bounds>,
+    pub page: Option<gpui_agent::Bounds>,
+    pub form_scroll: Option<gpui_agent::Bounds>,
+    pub preview_scroll: Option<gpui_agent::Bounds>,
+}
+
+fn with_bounds_if(node: UiNode, bounds: Option<gpui_agent::Bounds>) -> UiNode {
+    match bounds {
+        Some(bounds) => node.with_bounds(bounds),
+        None => node,
+    }
+}
+
 pub struct BirAgentHost {
     platform: PlatformKind,
+    /// `true` while the sidebar is collapsed (Cmd+B); the tree then reports
+    /// the sidebar and everything in it as not visible.
+    sidebar_hidden: bool,
+    /// Painted geometry copied in by the drain each request, for `in_viewport`.
+    layout: TreeLayout,
     shutdown: bool,
     is_locked: bool,
     admin_lock_enabled: bool,
@@ -162,12 +187,15 @@ pub struct BirAgentHost {
     submissions: Vec<SubmissionItem>,
     print_requested: bool,
     palette_open: bool,
+    app_focused: bool,
 }
 
 impl BirAgentHost {
     pub fn new(platform: PlatformKind) -> Self {
         Self {
             platform,
+            sidebar_hidden: false,
+            layout: TreeLayout::default(),
             shutdown: false,
             is_locked: false,
             admin_lock_enabled: false,
@@ -197,6 +225,7 @@ impl BirAgentHost {
             submissions: Vec::new(),
             print_requested: false,
             palette_open: false,
+            app_focused: false,
         }
     }
 
@@ -208,6 +237,50 @@ impl BirAgentHost {
 
     pub fn wants_shutdown(&self) -> bool {
         self.shutdown
+    }
+
+    pub fn set_sidebar_hidden(&mut self, hidden: bool) {
+        self.sidebar_hidden = hidden;
+    }
+
+    pub fn set_layout(&mut self, layout: TreeLayout) {
+        self.layout = layout;
+    }
+
+    pub fn set_app_focused(&mut self, focused: bool) {
+        self.app_focused = focused;
+    }
+
+    fn fire_keybinding(&mut self, op: &Op) -> Result<DispatchResult, String> {
+        if self.platform == PlatformKind::Desktop {
+            return Err(gpui_agent::keybinding_unavailable(
+                "desktop keybinding fire must run on the GPUI UI thread \
+                 (Action / keymap dispatch). Mailbox intercept missing?",
+            ));
+        }
+        let binding = match op {
+            Op::Keybinding {
+                binding, activate, ..
+            } => {
+                if *activate {
+                    self.app_focused = true;
+                }
+                binding.as_str()
+            }
+            _ => return Err("not a keybinding fire op".into()),
+        };
+        match binding {
+            ids::KEY_QUIT => {
+                self.shutdown = true;
+                Ok(DispatchResult::json(
+                    crate::agent::keybindings::keybinding_result_json(binding, "global"),
+                ))
+            }
+            ids::KEY_TOGGLE_SIDEBAR | ids::KEY_MINIMIZE | ids::KEY_TOGGLE_VISIBILITY => Err(
+                gpui_agent::keybinding_unavailable("headless has no GPUI window for this Action"),
+            ),
+            other => Err(format!("unknown binding `{other}`")),
+        }
     }
 
     pub fn set_locked(&mut self, locked: bool) {
@@ -2751,7 +2824,10 @@ impl BirAgentHost {
     }
 
     pub fn tree(&self) -> UiTree {
-        let mut window = UiNode::new(ids::WINDOW, "window", "eBIRForms");
+        let mut window = with_bounds_if(
+            UiNode::new(ids::WINDOW, "window", "eBIRForms"),
+            self.layout.window,
+        );
 
         if self.is_locked {
             window = window.with_child(UiNode::new(ids::PAGE_LOCK, "page", "Lock screen"));
@@ -2786,11 +2862,19 @@ impl BirAgentHost {
             );
         }
         sidebar = sidebar.with_child(list);
+        sidebar = with_bounds_if(sidebar, self.layout.sidebar);
+        if self.sidebar_hidden {
+            sidebar = sidebar.with_visible_deep(false);
+        }
         window = window.with_child(sidebar);
         window = window.with_child(
             UiNode::new(ids::CONTEXT_SELECTED_TIN, "status", "Selected taxpayer")
                 .with_value(self.selected_tin.clone().unwrap_or_default()),
         );
+        window = window.with_child(with_bounds_if(
+            UiNode::scroll(ids::PRINT_PREVIEW_SCROLL, "Print preview scroll"),
+            self.layout.preview_scroll,
+        ));
 
         let mut page = UiNode::new(
             ids::page_root(self.active_view),
@@ -2798,6 +2882,7 @@ impl BirAgentHost {
             view_title(self.active_view),
         )
         .with_value(ids::view_slug(self.active_view));
+        page = with_bounds_if(page, self.layout.page);
 
         if self.active_view == ActiveView::ProfileManager {
             let mut tabs = UiNode::new("profile-tabs", "tablist", "Profile tabs");
@@ -2964,6 +3049,10 @@ impl BirAgentHost {
                 .map(|form| (form.validated, form.validation_errors.clone()))
                 .unwrap_or((false, Vec::new()));
             page = page.with_child(UiNode::new(ids::FORM_1601C_VALIDATE, "button", "Validate"));
+            page = page.with_child(with_bounds_if(
+                UiNode::scroll(ids::FORM_1601C_SCROLL, "1601-C form scroll"),
+                self.layout.form_scroll,
+            ));
             page = page.with_child(
                 UiNode::new(
                     ids::FORM_1601C_STATUS,
@@ -3148,6 +3237,7 @@ impl BirAgentHost {
 impl AgentHost for BirAgentHost {
     fn hello(&self) -> HelloInfo {
         HelloInfo {
+            os: gpui_agent::protocol::host_os(),
             protocol: PROTOCOL_VERSION,
             app: "bir-desktop".into(),
             platform: self.platform,
@@ -3164,13 +3254,32 @@ impl AgentHost for BirAgentHost {
         self.tree()
     }
 
-    fn screenshot(&self, path: Option<&str>) -> Result<DispatchResult, String> {
-        let path = gpui_agent::require_screenshot_path(path)?;
+    fn keybindings(&self) -> Vec<gpui_agent::KeybindingInfo> {
+        crate::agent::keybindings::catalog()
+    }
+
+    fn is_app_focused(&self) -> bool {
+        self.app_focused
+    }
+
+    fn screenshot(&self, spec: gpui_agent::ScreenshotSpec<'_>) -> Result<DispatchResult, String> {
+        spec.validate_request()?;
+        let path = gpui_agent::require_screenshot_path(spec.path)?;
         let _dest = gpui_agent::confine_screenshot_path(path)?;
+        if spec.mode.is_scrolled() {
+            let target = spec.scrolled_target()?;
+            if !crate::agent::scrolled_shot::known_scroll_target(target) {
+                return Err(gpui_agent::scroll_unavailable(format!(
+                    "unknown scroll target `{target}` (want {} or {})",
+                    ids::FORM_1601C_SCROLL,
+                    ids::PRINT_PREVIEW_SCROLL
+                )));
+            }
+        }
         let detail = match self.platform {
-            PlatformKind::Headless => "headless host has no pixel surface",
+            PlatformKind::Headless => "headless host has no pixel surface (viewport and scrolled)",
             PlatformKind::Desktop => {
-                "semantic host has no Window; the mailbox drain captures this GPUI window on macOS via screencapture -l. Linux/Windows stay screenshot_unavailable"
+                "semantic host has no Window; the mailbox drain captures this GPUI window on macOS via screencapture -l (viewport) or stitches named scrollers (scrolled). Linux/Windows stay screenshot_unavailable"
             }
             _ => "this host has no pixel surface",
         };
@@ -3190,15 +3299,29 @@ impl AgentHost for BirAgentHost {
             Op::Type { target, text, .. } => self.type_into(target, text),
             Op::SetValue { target, value } => self.set_field(target, value),
             Op::Key { target, key, .. } => self.key(target, key),
+            Op::Keybinding { .. } => self.fire_keybinding(op),
+            Op::Keybindings => Ok(DispatchResult::json(gpui_agent::keybinding_list_json(
+                &crate::agent::keybindings::catalog(),
+            ))),
             Op::Invoke { name, args } => self.invoke(name, args),
-            Op::Screenshot { path } => AgentHost::screenshot(self, path.as_deref()),
+            Op::Screenshot {
+                path,
+                mode,
+                target,
+                max_height_px,
+            } => AgentHost::screenshot(
+                self,
+                gpui_agent::ScreenshotSpec::from_op(path, *mode, target, *max_height_px),
+            ),
             Op::Shutdown => {
                 self.shutdown = true;
                 Ok(DispatchResult::empty())
             }
-            Op::Hello | Op::Snapshot | Op::Assert { .. } | Op::Wait { .. } => {
-                Ok(DispatchResult::empty())
-            }
+            Op::Hello
+            | Op::Snapshot
+            | Op::Assert { .. }
+            | Op::Wait { .. }
+            | Op::WaitUntil { .. } => Ok(DispatchResult::empty()),
         }
     }
 }
@@ -4150,6 +4273,50 @@ mod tests {
     }
 
     #[test]
+    fn tree_carries_painted_bounds_and_a_collapsed_sidebar_is_not_visible() {
+        let mut host = empty_host();
+        let b = |x: f32, y: f32, w: f32, h: f32| gpui_agent::Bounds { x, y, w, h };
+        host.set_layout(TreeLayout {
+            window: Some(b(0.0, 0.0, 1800.0, 1098.0)),
+            sidebar: Some(b(0.0, 0.0, 280.0, 1098.0)),
+            page: Some(b(280.0, 0.0, 1520.0, 1098.0)),
+            form_scroll: None,
+            preview_scroll: Some(b(0.0, 48.0, 1200.0, 853.0)),
+        });
+        let tree = host.tree();
+        assert_eq!(
+            tree.find(ids::WINDOW).unwrap().bounds,
+            b(0.0, 0.0, 1800.0, 1098.0)
+        );
+        let sidebar = tree.find(ids::SIDEBAR).unwrap();
+        assert_eq!(sidebar.bounds, b(0.0, 0.0, 280.0, 1098.0));
+        assert!(sidebar.visible, "shown by default");
+        assert!(
+            sidebar
+                .bounds
+                .intersects(tree.find(ids::WINDOW).unwrap().bounds),
+            "a painted sidebar is inside the window clip, so in_viewport can say yes"
+        );
+        assert_eq!(
+            tree.find(ids::PRINT_PREVIEW_SCROLL).unwrap().bounds,
+            b(0.0, 48.0, 1200.0, 853.0)
+        );
+
+        host.set_sidebar_hidden(true);
+        host.set_layout(TreeLayout {
+            sidebar: None,
+            ..host.layout
+        });
+        let tree = host.tree();
+        let sidebar = tree.find(ids::SIDEBAR).unwrap();
+        assert!(!sidebar.visible, "collapsed sidebar reports visible=false");
+        assert!(
+            sidebar.children.iter().all(|child| !child.visible),
+            "nothing inside a collapsed sidebar is visible"
+        );
+    }
+
+    #[test]
     fn the_editor_is_written_back_only_when_the_agent_edited_it() {
         // The drain reads this snapshot out of the profile manager when the
         // request starts and writes it back when the request ends. Writing it
@@ -4566,7 +4733,17 @@ mod tests {
     #[test]
     fn screenshot_is_unavailable_on_the_semantic_host() {
         let mut host = empty_host();
-        let missing = handle_request(&mut host, req(Op::Screenshot { path: None }), None, None);
+        let missing = handle_request(
+            &mut host,
+            req(Op::Screenshot {
+                path: None,
+                mode: Default::default(),
+                target: None,
+                max_height_px: None,
+            }),
+            None,
+            None,
+        );
         assert!(!missing.ok);
         assert_eq!(
             missing.error.as_deref(),
@@ -4579,6 +4756,9 @@ mod tests {
             &mut host,
             req(Op::Screenshot {
                 path: Some("/tmp/bir-agent-screenshot.png".into()),
+                mode: Default::default(),
+                target: None,
+                max_height_px: None,
             }),
             None,
             None,
@@ -4603,6 +4783,9 @@ mod tests {
             &mut host,
             req(Op::Screenshot {
                 path: Some("bir-agent-screenshot.png".into()),
+                mode: Default::default(),
+                target: None,
+                max_height_px: None,
             }),
             None,
             None,
@@ -4621,6 +4804,186 @@ mod tests {
             "unavailable must not invent a PNG at {}",
             confined.display()
         );
+    }
+
+    #[test]
+    fn scrolled_screenshot_is_unavailable_on_the_semantic_host() {
+        let mut host = empty_host();
+        let missing_target = handle_request(
+            &mut host,
+            req(Op::screenshot_scrolled("bir-scrolled.png", "", Some(4096))),
+            None,
+            None,
+        );
+        assert!(!missing_target.ok);
+        let err = missing_target.error.unwrap_or_default();
+        assert!(
+            err.contains("requires target") || err.contains("target"),
+            "{err}"
+        );
+
+        let unknown = handle_request(
+            &mut host,
+            req(Op::screenshot_scrolled(
+                "bir-scrolled.png",
+                "not-a-scroller",
+                Some(4096),
+            )),
+            None,
+            None,
+        );
+        assert!(!unknown.ok);
+        let err = unknown.error.unwrap_or_default();
+        assert!(gpui_agent::is_scroll_unavailable(&err), "{err}");
+        assert!(err.contains("unknown scroll target"), "{err}");
+
+        let unconfined = handle_request(
+            &mut host,
+            req(Op::screenshot_scrolled(
+                "/tmp/evil-scrolled.png",
+                ids::FORM_1601C_SCROLL,
+                Some(4096),
+            )),
+            None,
+            None,
+        );
+        assert!(!unconfined.ok);
+        let err = unconfined.error.unwrap_or_default();
+        assert!(
+            !gpui_agent::is_screenshot_unavailable(&err),
+            "unconfined scrolled path must fail at confine: {err}"
+        );
+        assert!(err.contains("relative"), "{err}");
+        assert!(!std::path::Path::new("/tmp/evil-scrolled.png").exists());
+
+        let resp = handle_request(
+            &mut host,
+            req(Op::screenshot_scrolled(
+                "bir-scrolled.png",
+                ids::FORM_1601C_SCROLL,
+                Some(4096),
+            )),
+            None,
+            None,
+        );
+        assert!(!resp.ok);
+        assert!(
+            resp.error
+                .as_deref()
+                .is_some_and(gpui_agent::is_screenshot_unavailable),
+            "{:?}",
+            resp.error
+        );
+    }
+
+    #[test]
+    fn keybindings_list_and_fire_gates() {
+        use gpui_agent::protocol::KeybindingScope;
+
+        let mut host = empty_host();
+        let list = handle_request(&mut host, req(Op::Keybindings), None, None);
+        assert!(list.ok, "{:?}", list.error);
+        let rows = list.result.unwrap()["keybindings"]
+            .as_array()
+            .cloned()
+            .unwrap();
+        assert_eq!(rows[0]["id"], ids::KEY_TOGGLE_SIDEBAR);
+        assert_eq!(rows[0]["scope"], "focused");
+        assert_eq!(rows[1]["id"], ids::KEY_MINIMIZE);
+        assert_eq!(rows[2]["id"], ids::KEY_TOGGLE_VISIBILITY);
+        assert_eq!(rows[2]["scope"], "global");
+        assert_eq!(rows[3]["id"], ids::KEY_QUIT);
+        assert_eq!(rows[3]["dangerous"], true);
+
+        let unfocused = handle_request(
+            &mut host,
+            req(Op::keybinding(
+                ids::KEY_TOGGLE_SIDEBAR,
+                KeybindingScope::Focused,
+            )),
+            None,
+            None,
+        );
+        assert!(!unfocused.ok);
+        let err = unfocused.error.unwrap_or_default();
+        assert!(gpui_agent::is_keybinding_unavailable(&err), "{err}");
+        assert!(err.contains("app not focused"), "{err}");
+
+        let quit = handle_request(
+            &mut host,
+            req(Op::Keybinding {
+                binding: ids::KEY_QUIT.into(),
+                chord: None,
+                scope: KeybindingScope::Global,
+                confirm: false,
+                activate: false,
+            }),
+            None,
+            None,
+        );
+        assert!(!quit.ok);
+        assert!(
+            quit.error.as_deref().unwrap_or("").contains("confirm=true"),
+            "{:?}",
+            quit.error
+        );
+
+        let confirmed = handle_request(
+            &mut host,
+            req(Op::Keybinding {
+                binding: ids::KEY_QUIT.into(),
+                chord: None,
+                scope: KeybindingScope::Global,
+                confirm: true,
+                activate: false,
+            }),
+            None,
+            None,
+        );
+        assert!(confirmed.ok, "{:?}", confirmed.error);
+        assert!(host.wants_shutdown());
+
+        let mut desktop = BirAgentHost::new(PlatformKind::Desktop);
+        desktop.set_app_focused(true);
+        let desktop_fire = handle_request(
+            &mut desktop,
+            req(Op::keybinding(
+                ids::KEY_TOGGLE_SIDEBAR,
+                KeybindingScope::Focused,
+            )),
+            None,
+            None,
+        );
+        assert!(!desktop_fire.ok);
+        let err = desktop_fire.error.unwrap_or_default();
+        assert!(gpui_agent::is_keybinding_unavailable(&err), "{err}");
+        assert!(err.contains("UI thread"), "{err}");
+    }
+
+    #[test]
+    fn tree_exposes_scroll_target_ids() {
+        let host = empty_host();
+        let tree = host.tree();
+        let preview = tree
+            .find(ids::PRINT_PREVIEW_SCROLL)
+            .expect("preview scroll");
+        assert_eq!(preview.role, gpui_agent::role::SCROLL);
+
+        let mut form = fixture_host();
+        let year = chrono::Local::now().year() as u16;
+        let started = handle_request(
+            &mut form,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: serde_json::json!({ "code": "1601C", "year": year, "period": 1 }),
+            }),
+            None,
+            None,
+        );
+        assert!(started.ok, "{:?}", started.error);
+        let tree = form.tree();
+        let node = tree.find(ids::FORM_1601C_SCROLL).expect("1601c scroll");
+        assert_eq!(node.role, gpui_agent::role::SCROLL);
     }
 
     #[test]

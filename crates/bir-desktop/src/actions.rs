@@ -15,6 +15,36 @@ impl AppState {
         if self.is_sidebar_hidden {
             self.focus_handle.focus(window, cx);
         }
+        #[cfg(feature = "agent")]
+        self.note_keybinding_fired(crate::agent::ids::KEY_TOGGLE_SIDEBAR, "focused");
+        cx.notify();
+    }
+
+    pub(crate) fn handle_toggle_app_visibility(
+        &mut self,
+        _action: &ToggleAppVisibility,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.perform_toggle_app_visibility(cx);
+    }
+
+    pub(crate) fn perform_toggle_app_visibility(&mut self, cx: &mut Context<Self>) {
+        #[cfg(feature = "agent")]
+        if self.toggling_visibility {
+            return;
+        }
+        #[cfg(feature = "agent")]
+        {
+            self.toggling_visibility = true;
+        }
+        crate::platform::toggle_app_visibility();
+        #[cfg(feature = "agent")]
+        self.note_keybinding_fired(crate::agent::ids::KEY_TOGGLE_VISIBILITY, "global");
+        #[cfg(feature = "agent")]
+        {
+            self.toggling_visibility = false;
+        }
         cx.notify();
     }
 
@@ -212,6 +242,8 @@ impl AppState {
         _cx: &mut Context<Self>,
     ) {
         crate::platform::hide_from_dock();
+        #[cfg(feature = "agent")]
+        self.note_keybinding_fired(crate::agent::ids::KEY_QUIT, "global");
     }
 
     pub(crate) fn handle_hide_application(
@@ -245,9 +277,12 @@ impl AppState {
         &mut self,
         _action: &MinimizeWindow,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
         window.minimize_window();
+        #[cfg(feature = "agent")]
+        self.note_keybinding_fired(crate::agent::ids::KEY_MINIMIZE, "focused");
+        cx.notify();
     }
 
     pub(crate) fn handle_zoom_window(

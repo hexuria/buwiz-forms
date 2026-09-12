@@ -34,5 +34,7 @@
     <!-- Privacy Descriptions -->
     <key>NSLocalNetworkUsageDescription</key>
     <string>e-BIRForms needs access to your local network to verify internet connectivity before submitting forms.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>e-BIRForms captures its own window so an agent can take a screenshot of the painted form (not the rest of the desktop).</string>
 </dict>
 </plist>

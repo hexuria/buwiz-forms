@@ -89,9 +89,12 @@ fn op_kind(op: &Op) -> &'static str {
         Op::Key { .. } => "key",
         Op::Invoke { .. } => "invoke",
         Op::Wait { .. } => "wait",
+        Op::WaitUntil { .. } => "wait_until",
         Op::Shutdown => "shutdown",
         Op::Screenshot { .. } => "screenshot",
         Op::Assert { .. } => "assert",
+        Op::Keybinding { .. } => "keybinding",
+        Op::Keybindings => "keybindings",
     }
 }
 
@@ -102,7 +105,8 @@ fn op_extra(op: &Op) -> Option<String> {
         | Op::Type { target, .. }
         | Op::SetValue { target, .. }
         | Op::Key { target, .. } => Some(format!("target={target}")),
-        Op::Assert { spec } => Some(format!("target={}", spec.target)),
+        Op::Assert { spec } | Op::WaitUntil { spec, .. } => Some(format!("target={}", spec.target)),
+        Op::Keybinding { binding, .. } => Some(format!("binding={binding}")),
         _ => None,
     }
 }
@@ -201,6 +205,9 @@ mod tests {
             "id4",
             &Op::Screenshot {
                 path: Some("/Users/uri/secret.png".into()),
+                mode: Default::default(),
+                target: None,
+                max_height_px: None,
             },
             false,
             Some("screenshot_unavailable"),

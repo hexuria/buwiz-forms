@@ -73,6 +73,64 @@ pub const FORM_1601C_SUBMIT_CONFIRM: &str = "form-1601c-submit-confirm";
 pub const FORM_1601C_CANCEL_QUEUE: &str = "cancel_queue_btn";
 pub const FORM_1601C_RETURN_DRAFT: &str = "form-1601c-return-draft";
 pub const FORM_1601C_RELEASE_CLAIM_CONFIRM: &str = "form-1601c-release-claim-confirm";
+/// Painted 1601-C page scroller for `screenshot --mode scrolled`.
+pub const FORM_1601C_SCROLL: &str = "form-1601c-scroll";
+/// Frozen HTML print-preview window scroller (secondary window when painted).
+pub const PRINT_PREVIEW_SCROLL: &str = "print-preview-scroll";
+
+/// Focused keymap Action: toggle the sidebar (`cmd-b` / `ctrl-b`).
+pub const KEY_TOGGLE_SIDEBAR: &str = "app.toggle_sidebar";
+/// Focused keymap Action: minimize the focused window (`cmd-m` / `win-m`).
+pub const KEY_MINIMIZE: &str = "window.minimize";
+/// Global Action: hide/show the app. OS-level hotkey is `global_hotkey`
+/// (default Ctrl+Option+E on macOS; Settings can set Option+F12). Fire still
+/// dispatches `ToggleAppVisibility` — not OS HID.
+pub const KEY_TOGGLE_VISIBILITY: &str = "app.toggle_visibility";
+/// Listed dangerous (`confirm=true`) because protocol `is_quit_binding`.
+/// Painted GUI maps this to `QuitApplication`, which hides to the tray
+/// (same as Cmd+Q). Process exit is `Op::Shutdown` / tray Quit. Headless
+/// still sets shutdown.
+pub const KEY_QUIT: &str = "app.quit";
+
+pub fn toggle_sidebar_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd-b"
+    } else {
+        "ctrl-b"
+    }
+}
+
+pub fn minimize_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd-m"
+    } else if cfg!(target_os = "windows") {
+        "win-m"
+    } else {
+        "super-m"
+    }
+}
+
+/// Default listed chord for `app.toggle_visibility` (Settings may override
+/// the OS-level `global_hotkey` combo; the Action id is stable).
+pub fn toggle_visibility_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "ctrl-alt-e"
+    } else if cfg!(target_os = "windows") {
+        "win-shift-e"
+    } else {
+        "super-shift-e"
+    }
+}
+
+pub fn quit_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd-q"
+    } else if cfg!(target_os = "windows") {
+        "alt-f4"
+    } else {
+        "ctrl-q"
+    }
+}
 
 pub const FORM_2551Q_VALIDATE: &str = "form-2551q-validate";
 pub const FORM_2551Q_STATUS: &str = "form-2551q-status";
@@ -505,5 +563,11 @@ mod tests {
             ProfileManagerTab::from_id(PROFILE_TAB_CALENDAR).map(|tab| tab.index()),
             Some(6)
         );
+        assert_eq!(FORM_1601C_SCROLL, "form-1601c-scroll");
+        assert_eq!(PRINT_PREVIEW_SCROLL, "print-preview-scroll");
+        assert_eq!(KEY_TOGGLE_SIDEBAR, "app.toggle_sidebar");
+        assert_eq!(KEY_MINIMIZE, "window.minimize");
+        assert_eq!(KEY_TOGGLE_VISIBILITY, "app.toggle_visibility");
+        assert_eq!(KEY_QUIT, "app.quit");
     }
 }

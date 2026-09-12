@@ -142,7 +142,13 @@ fn launch_frozen_html<T: 'static>(
             })
             .map_err(|error| format!("the frozen HTML window could not be opened: {error}"));
         match opened {
-            Ok(handle) => Ok(HtmlPreviewLaunchKind::FrozenHtmlWindow(handle)),
+            Ok(handle) => {
+                let generation = handle
+                    .update(cx, |view, _, _| view.generation())
+                    .unwrap_or(0);
+                super::frozen_html_preview::register_live_preview(handle, generation);
+                Ok(HtmlPreviewLaunchKind::FrozenHtmlWindow(handle))
+            }
             Err(error) => {
                 let path = write_frozen_html_document(&html)?;
                 open::that(&path).map_err(|open_error| {

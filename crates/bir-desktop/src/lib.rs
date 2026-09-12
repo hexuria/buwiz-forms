@@ -22,6 +22,7 @@ mod cor_ocr;
 pub mod events;
 mod gui;
 mod ipc;
+pub(crate) mod layout_probe;
 mod platform;
 mod quit_guard;
 mod sidebar;
@@ -35,6 +36,7 @@ pub mod global_actions {
             SubmitCurrentForm,
             ToggleSidebar,
             ToggleSidebarMini,
+            ToggleAppVisibility,
             FocusSearch,
             CreateProfile,
             ToggleTheme,

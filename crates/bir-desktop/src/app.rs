@@ -181,6 +181,8 @@ pub struct AppState {
     pub(crate) global_dashboard_notif_subscribed: bool,
     pub(crate) is_mini_sidebar: bool,
     pub(crate) is_sidebar_hidden: bool,
+    /// Painted bounds of the sidebar and the content column, for the agent tree.
+    pub(crate) layout_probe: crate::layout_probe::LayoutProbe,
     pub(crate) theme_preference: AppThemeMode,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) is_command_palette_open: bool,
@@ -236,6 +238,17 @@ pub struct AppState {
     /// Semantic submit reached the existing confirmation gate without queuing.
     #[cfg(feature = "agent")]
     pub(crate) agent_submit_confirmation_visible: bool,
+    #[cfg(feature = "agent")]
+    pub(crate) agent_request_backlog:
+        std::collections::VecDeque<gpui_agent::mailbox::MailboxRequest>,
+    #[cfg(feature = "agent")]
+    pub(crate) pending_keybinding: Option<crate::agent::drain::PendingKeybindingFire>,
+    #[cfg(feature = "agent")]
+    pub(crate) last_keybinding_result: Option<(String, Result<gpui_agent::DispatchResult, String>)>,
+    #[cfg(feature = "agent")]
+    pub(crate) scrolled_job: Option<crate::agent::scrolled_shot::ScrolledShotJob>,
+    #[cfg(feature = "agent")]
+    pub(crate) toggling_visibility: bool,
 }
 
 impl AppState {
@@ -896,6 +909,7 @@ impl AppState {
             global_dashboard_notif_subscribed: false,
             is_mini_sidebar: false,
             is_sidebar_hidden: false,
+            layout_probe: crate::layout_probe::LayoutProbe::default(),
             theme_preference,
             focus_handle: cx.focus_handle(),
             is_command_palette_open: false,
@@ -935,6 +949,16 @@ impl AppState {
             agent_refresh: None,
             #[cfg(feature = "agent")]
             agent_submit_confirmation_visible: false,
+            #[cfg(feature = "agent")]
+            agent_request_backlog: std::collections::VecDeque::new(),
+            #[cfg(feature = "agent")]
+            pending_keybinding: None,
+            #[cfg(feature = "agent")]
+            last_keybinding_result: None,
+            #[cfg(feature = "agent")]
+            scrolled_job: None,
+            #[cfg(feature = "agent")]
+            toggling_visibility: false,
         }
     }
 
@@ -2387,6 +2411,7 @@ impl Render for AppState {
             .bg(cx.theme().background)
             .on_action(cx.listener(Self::handle_toggle_sidebar))
             .on_action(cx.listener(Self::handle_toggle_sidebar_mini))
+            .on_action(cx.listener(Self::handle_toggle_app_visibility))
             .on_action(cx.listener(Self::handle_focus_search))
             .on_action(cx.listener(Self::handle_create_profile))
             .on_action(cx.listener(Self::handle_toggle_theme))
@@ -2408,10 +2433,20 @@ impl Render for AppState {
                     flex_1
                     min_h_0
                     when={(!self.is_sidebar_hidden, |this| {
-                        this.child(self.render_sidebar(window, cx))
+                        this.child(
+                            div()
+                                .relative()
+                                .flex_none()
+                                .h_full()
+                                .child(crate::layout_probe::bounds_probe(
+                                    self.layout_probe.sidebar.clone(),
+                                ))
+                                .child(self.render_sidebar(window, cx)),
+                        )
                     })}
                 >
-                    <div flex_1 flex flex_col h_full overflow_hidden>
+                    <div flex_1 flex flex_col h_full overflow_hidden relative>
+                        {crate::layout_probe::bounds_probe(self.layout_probe.page.clone())}
                         {self.render_active_view(cx)}
                     </div>
                 </div>
