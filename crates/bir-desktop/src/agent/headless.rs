@@ -657,19 +657,38 @@ mod tests {
 
     #[test]
     fn wait_until_unblocked_binds_after_port_released() {
-        let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
-        let addr = holder.local_addr().expect("addr");
-        let (tx, rx) = std::sync::mpsc::channel();
-        let waiter = thread::spawn(move || {
-            tx.send(wait_until_unblocked(addr, true)).ok();
-        });
-        thread::sleep(Duration::from_millis(250));
-        drop(holder);
-        let result = rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("waiter finished after bind release");
-        assert!(result.is_ok(), "{result:?}");
-        waiter.join().expect("waiter thread");
+        // `serve_blocker` also probes the live-DB owner lock at
+        // `app_database_path()`, which is process-global. The sibling tests
+        // below point `BIR_DATABASE_PATH` at their own temp files and hold that
+        // lock for a moment; without a path of its own this test read theirs
+        // mid-flight, waited on their lock, and timed out — and on a developer
+        // machine with no `BIR_DATABASE_PATH` it probed the real database.
+        // `temp_env` serialises env-touching tests through one mutex, so
+        // running inside it also keeps the siblings from overlapping this one.
+        let directory = tempfile::tempdir().expect("temp dir");
+        let path = directory.path().join("port_only.db");
+        let path_s = path.to_str().expect("utf8 path").to_string();
+        temp_env::with_vars(
+            [
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_DATABASE_PATH", Some(path_s.as_str())),
+            ],
+            || {
+                let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
+                let addr = holder.local_addr().expect("addr");
+                let (tx, rx) = std::sync::mpsc::channel();
+                let waiter = thread::spawn(move || {
+                    tx.send(wait_until_unblocked(addr, true)).ok();
+                });
+                thread::sleep(Duration::from_millis(250));
+                drop(holder);
+                let result = rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("waiter finished after bind release");
+                assert!(result.is_ok(), "{result:?}");
+                waiter.join().expect("waiter thread");
+            },
+        );
     }
 
     #[test]
