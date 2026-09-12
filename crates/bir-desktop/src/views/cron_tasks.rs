@@ -691,7 +691,7 @@ impl Render for CronTasksView {
                                             div().text_color(status_color).font_weight(FontWeight::BOLD).child(format!("Status: {}", job.status))
                                         )
                                         .child(
-                                            div().text_color(cx.theme().muted_foreground).child(format!("| Retries: {}", job.retries))
+                                            div().text_color(cx.theme().muted_foreground).child(format!("| Consecutive failures: {}", job.retries))
                                         )
                                         .when_some(job.next_run_at.clone(), |this, time| {
                                             this.child(div().text_color(cx.theme().muted_foreground).child(format!("| Next run: {}", bir_core::time_utils::format_next_run(&time))))
@@ -772,11 +772,13 @@ impl Render for CronTasksView {
                                                 .on_click(cx.listener(move |_this, _ev, _window, cx| {
                                                     let log = log.clone();
                                                     let jname = jname.clone();
+                                                    // A real title bar: with a transparent one the
+                                                    // view's heading sat under the traffic lights and
+                                                    // a long job name ran off the window edge.
                                                     let options = WindowOptions {
                                                         titlebar: Some(TitlebarOptions {
-                                                            title: None,
-                                                            appears_transparent: true,
-                                                            traffic_light_position: Some(point(px(9.0), px(9.0))),
+                                                            title: Some("Debug Log".into()),
+                                                            ..Default::default()
                                                         }),
                                                         window_bounds: Some(WindowBounds::Windowed(Bounds {
                                                             origin: point(px(100.), px(100.)),
