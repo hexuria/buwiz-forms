@@ -130,6 +130,9 @@ pub mod kinds {
     pub const GOOGLE_OAUTH_REFRESH_FAILED: &str = "google_oauth_refresh_failed";
     /// A profile row could not be deserialized and was skipped from the list.
     pub const PROFILE_ROW_UNREADABLE: &str = "profile_row_unreadable";
+    /// The "test notification" heartbeat a profile can switch on. Recorded as
+    /// a row so the painted app can surface it through its own delivery.
+    pub const CRON_HEARTBEAT: &str = "cron_heartbeat";
 }
 
 impl Database {

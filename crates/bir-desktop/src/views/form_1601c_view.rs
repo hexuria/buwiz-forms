@@ -89,15 +89,19 @@ pub(crate) fn apply_1601c_host_header_patch(
 ) -> bool {
     let mut dirty = false;
     if let Some(value) = patch.any_taxes_withheld {
-        *any_taxes_withheld = value;
-        draft.any_taxes_withheld = value;
-        dirty = true;
+        if *any_taxes_withheld != value || draft.any_taxes_withheld != value {
+            *any_taxes_withheld = value;
+            draft.any_taxes_withheld = value;
+            dirty = true;
+        }
     }
     if let Some(value) = patch.category_of_agent {
         let code = value.as_code().to_string();
-        *category_of_agent = code.clone();
-        draft.category_of_agent = code;
-        dirty = true;
+        if *category_of_agent != code || draft.category_of_agent != code {
+            *category_of_agent = code.clone();
+            draft.category_of_agent = code;
+            dirty = true;
+        }
     }
     dirty
 }
@@ -616,34 +620,70 @@ impl Form1601CView {
         self.validation_errors.clone()
     }
 
+    /// Write `value` into `input` only when it differs, and report whether it
+    /// was written. `InputState::set_value` emits `InputEvent::Change` even for
+    /// an identical value, and this view answers that with `sync_from_inputs`.
+    fn set_input_if_changed(
+        input: &Entity<InputState>,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if input.read(cx).value() == value {
+            return false;
+        }
+        input.update(cx, |input, cx| {
+            input.set_value(value.to_string(), window, cx);
+        });
+        true
+    }
+
     pub(crate) fn agent_apply_from_host(
         &mut self,
         patch: Agent1601CHostPatch,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Queued / Submitted / Confirmed is an immutable snapshot: there is
+        // nothing to fill, save, or re-validate. `apply_host` runs for every
+        // `Op::Invoke`, read-only ones included, so re-applying the patch here
+        // re-ran `sync_from_inputs` (and an `InputEvent::Change` per field) on
+        // every `form.fields` poll for a return that cannot change.
+        if !self.draft.is_editable() {
+            return;
+        }
         let mut dirty = apply_1601c_host_header_patch(
             &patch,
             &mut self.any_taxes_withheld,
             &mut self.category_of_agent,
             &mut self.draft,
         );
-        if let Some(value) = patch.tax_14 {
-            self.tax_14_total_compensation.update(cx, |input, cx| {
-                input.set_value(format!("{value:.2}"), window, cx);
-            });
+        // Only write an input when the text actually differs. `set_value`
+        // emits `InputEvent::Change` unconditionally, and each one costs a
+        // full `sync_from_inputs` + validate pass.
+        if let Some(value) = patch.tax_14
+            && Self::set_input_if_changed(
+                &self.tax_14_total_compensation,
+                &format!("{value:.2}"),
+                window,
+                cx,
+            )
+        {
             dirty = true;
         }
-        if let Some(value) = patch.tax_25 {
-            self.tax_25_total_taxes_withheld.update(cx, |input, cx| {
-                input.set_value(format!("{value:.2}"), window, cx);
-            });
+        if let Some(value) = patch.tax_25
+            && Self::set_input_if_changed(
+                &self.tax_25_total_taxes_withheld,
+                &format!("{value:.2}"),
+                window,
+                cx,
+            )
+        {
             dirty = true;
         }
-        if let Some(value) = patch.sheets {
-            self.number_of_sheets.update(cx, |input, cx| {
-                input.set_value(value.to_string(), window, cx);
-            });
+        if let Some(value) = patch.sheets
+            && Self::set_input_if_changed(&self.number_of_sheets, &value.to_string(), window, cx)
+        {
             dirty = true;
         }
         if dirty || patch.validate {
@@ -655,7 +695,11 @@ impl Form1601CView {
             self.is_validated = true;
         }
         if patch.save {
-            self.save_draft(window, cx);
+            // Queued/Submitted/Confirmed must never take the generic Draft save
+            // path (DB rejects it and the UI toaster spams on every agent drain).
+            if self.draft.is_editable() {
+                self.save_draft(window, cx);
+            }
         }
     }
 
@@ -802,6 +846,11 @@ impl FormViewTrait for Form1601CView {
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.is_editable() {
+            // Immutable snapshot — ignore Save Draft / agent save patches quietly.
+            cx.notify();
+            return;
+        }
         self.sync_from_inputs(cx);
         let save_result = match self.db.lock() {
             Ok(db) => db

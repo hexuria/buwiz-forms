@@ -4,7 +4,7 @@
 //! dispatches, then applies the result back on the UI thread. Headless tests
 //! use this host directly with an ephemeral SQLite database.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -148,6 +148,7 @@ pub struct BirAgentHost {
     form_loaded: bool,
     db: Option<Arc<Mutex<Database>>>,
     profile_tab: ids::ProfileManagerTab,
+    cron_tab: ids::CronTasksTab,
     hide_tax_profiles: bool,
     dues_filter: String,
     dues_scope: String,
@@ -181,6 +182,7 @@ impl BirAgentHost {
             form_loaded: false,
             db: None,
             profile_tab: ids::ProfileManagerTab::Tax,
+            cron_tab: ids::CronTasksTab::Jobs,
             hide_tax_profiles: false,
             dues_filter: "upcoming".into(),
             dues_scope: "profile".into(),
@@ -283,6 +285,14 @@ impl BirAgentHost {
 
     pub fn set_hide_tax_profiles(&mut self, hide: bool) {
         self.hide_tax_profiles = hide;
+    }
+
+    pub fn set_cron_tab(&mut self, tab: ids::CronTasksTab) {
+        self.cron_tab = tab;
+    }
+
+    pub fn cron_tab(&self) -> ids::CronTasksTab {
+        self.cron_tab
     }
 
     pub fn set_profile_tab(&mut self, tab: ids::ProfileManagerTab) {
@@ -430,13 +440,18 @@ impl BirAgentHost {
 
     /// Same patch `drain::apply_host` writes into `Form1601CView`.
     pub(crate) fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
+        let editable = self
+            .form_1601c
+            .as_ref()
+            .is_some_and(|form| form.draft.is_editable());
         Agent1601CHostPatch {
             tax_14: self.form_1601c_tax_14(),
             tax_25: self.form_1601c_tax_25(),
             sheets: self.form_1601c_sheets(),
             any_taxes_withheld: self.form_1601c_any_taxes_withheld(),
             category_of_agent: self.form_1601c_category_of_agent(),
-            save: self.form_1601c_saved(),
+            // One-shot save only while the return is still a Draft.
+            save: editable && self.form_1601c_saved(),
             validate: self.form_1601c_validated(),
         }
     }
@@ -1168,6 +1183,57 @@ impl BirAgentHost {
         Ok(())
     }
 
+    /// The Notifications-page rows, for an agent that cannot see a banner.
+    ///
+    /// `bir-headless` runs the same submission cron as painted `bir`, and the
+    /// cron records `form_submitted:{form}:{period}` and
+    /// `form_confirmed:{form}:{period}` entries when a PUT lands and when
+    /// BIR's receipt email is matched. The protocol is request/response only,
+    /// so an agent polls this with the `last_id` it saw.
+    fn alerts_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let since_id = args.get("since_id").and_then(Value::as_i64).unwrap_or(0);
+        let kind = args
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let tin = args
+            .get("tin")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        let mut alerts: Vec<bir_core::db::AppAlert> = guard
+            .list_active_alerts(None)
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .filter(|alert| alert.id > since_id)
+            .filter(|alert| kind.is_none_or(|want| alert.kind.starts_with(want)))
+            .filter(|alert| tin.is_none_or(|want| alert.tin.as_deref() == Some(want)))
+            .collect();
+        alerts.sort_by_key(|alert| alert.id);
+        let last_id = alerts.last().map(|alert| alert.id).unwrap_or(since_id);
+        Ok(DispatchResult::json(json!({
+            "alerts": alerts,
+            "last_id": last_id,
+        })))
+    }
+
+    /// Same as the Dismiss button on the Notifications page.
+    fn alerts_dismiss(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let id = args
+            .get("id")
+            .and_then(Value::as_i64)
+            .ok_or("alerts.dismiss requires args.id (JSON number)")?;
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        guard.dismiss_alert(id).map_err(|err| err.to_string())?;
+        Ok(DispatchResult::json(json!({ "dismissed": id })))
+    }
+
     fn jobs_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.reload_jobs_and_submissions()?;
         let status = args
@@ -1230,7 +1296,7 @@ impl BirAgentHost {
             .collect();
         let mut submissions = Vec::new();
         for summary in guard
-            .list_all_queued_submissions()
+            .list_all_filed_submissions()
             .map_err(|err| err.to_string())?
         {
             submissions.push(SubmissionItem {
@@ -1249,22 +1315,23 @@ impl BirAgentHost {
                 .map(|profile| profile.tin.clone())
                 .collect()
         };
+        // Linear dedupe, and summaries rather than full rows: this runs on the
+        // GPUI UI thread, so an O(n^2) scan plus a `form_data` JSON decode per
+        // row turned into frame time the moment a taxpayer had real history.
+        let mut seen: HashSet<(i64, String)> = submissions
+            .iter()
+            .map(|item| (item.id, item.tin.clone()))
+            .collect();
         for tin in tins {
             for sub in guard
-                .list_submissions_for_tin(&tin)
+                .list_submission_summaries_for_tin(&tin)
                 .map_err(|err| err.to_string())?
             {
-                let Some(id) = sub.id else {
-                    continue;
-                };
-                if submissions
-                    .iter()
-                    .any(|item| item.id == id && item.tin == sub.tin)
-                {
+                if !seen.insert((sub.id, sub.tin.clone())) {
                     continue;
                 }
                 submissions.push(SubmissionItem {
-                    id,
+                    id: sub.id,
                     tin: sub.tin,
                     form_code: sub.form_type,
                     status: sub.status,
@@ -2457,6 +2524,17 @@ impl BirAgentHost {
             ),
             ids::FORM_1601C_BACK => self.navigate(ActiveView::Dashboard),
             ids::FORM_2551Q_VALIDATE => self.validate_form(),
+            other if ids::CronTasksTab::from_id(other).is_some() => {
+                let tab = ids::CronTasksTab::from_id(other).expect("cron tab id");
+                if self.active_view != ActiveView::CronTasks {
+                    return Err("open Background Tasks first (nav.go page=cron-tasks)".into());
+                }
+                self.cron_tab = tab;
+                Ok(DispatchResult::json(json!({
+                    "tab": tab.slug(),
+                    "id": tab.id(),
+                })))
+            }
             other if ids::ProfileManagerTab::from_id(other).is_some() => {
                 let tab = ids::ProfileManagerTab::from_id(other).expect("tab id");
                 if tab == ids::ProfileManagerTab::Calendar && !self.calendar_available() {
@@ -2561,6 +2639,8 @@ impl BirAgentHost {
             "dues.html" | "calendar.html" => self.dues_html(args),
             "tax-dues.refresh" => self.refresh_dues(),
             "jobs.list" => self.jobs_list(args),
+            "alerts.list" | "notifications.list" => self.alerts_list(args),
+            "alerts.dismiss" | "notifications.dismiss" => self.alerts_dismiss(args),
             "submissions.list" => self.submissions_list(args),
             "search.open" | "palette.open" => self.open_command_palette(),
             "palette.search" => self.palette_search(args),
@@ -2782,6 +2862,11 @@ impl BirAgentHost {
         }
 
         if self.active_view == ActiveView::CronTasks {
+            for tab in [ids::CronTasksTab::Jobs, ids::CronTasksTab::Logs] {
+                page = page.with_child(
+                    UiNode::new(tab.id(), "tab", tab.slug()).with_checked(self.cron_tab == tab),
+                );
+            }
             let mut jobs = UiNode::new(ids::JOBS_LIST, "list", "Background jobs");
             for job in &self.jobs {
                 jobs = jobs.with_child(
@@ -5144,6 +5229,289 @@ mod tests {
         );
         let _ = host.reload_jobs_and_submissions();
         assert!(host.tree().find("job-1").is_some() || host.tree().find(ids::JOBS_LIST).is_some());
+    }
+
+    /// An agent driving a headless host learns about a filing the same way the
+    /// Notifications page does: the cron's alert rows, polled by cursor.
+    #[test]
+    fn alerts_list_exposes_filing_events_by_cursor() {
+        let mut host = fixture_host();
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            for (kind, title) in [
+                ("form_submitted:1601C:08/26", "1601C 08/26 submitted"),
+                ("form_confirmed:1601C:08/26", "BIR received 1601C 08/26"),
+            ] {
+                guard
+                    .record_alert(
+                        Some(FIXTURE_TIN),
+                        kind,
+                        bir_core::db::AlertSeverity::Info,
+                        title,
+                        "detail",
+                        bir_core::db::AlertAction::None,
+                    )
+                    .expect("record");
+            }
+        }
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.list".into(),
+                args: json!({ "kind": "form_" }),
+            }),
+            None,
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let body = listed.result.as_ref().unwrap();
+        let alerts = body["alerts"].as_array().unwrap();
+        assert_eq!(alerts.len(), 2, "{body}");
+        assert_eq!(alerts[0]["kind"], "form_submitted:1601C:08/26");
+        assert_eq!(alerts[1]["kind"], "form_confirmed:1601C:08/26");
+        let last_id = body["last_id"].as_i64().unwrap();
+        assert_eq!(last_id, alerts[1]["id"].as_i64().unwrap());
+
+        let nothing_new = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.list".into(),
+                args: json!({ "since_id": last_id }),
+            }),
+            None,
+            None,
+        );
+        assert!(nothing_new.ok);
+        assert_eq!(
+            nothing_new.result.as_ref().unwrap()["alerts"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(nothing_new.result.as_ref().unwrap()["last_id"], last_id);
+
+        let dismissed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.dismiss".into(),
+                args: json!({ "id": alerts[0]["id"] }),
+            }),
+            None,
+            None,
+        );
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        let remaining = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.list".into(),
+                args: json!({ "kind": "form_" }),
+            }),
+            None,
+            None,
+        );
+        assert_eq!(
+            remaining.result.as_ref().unwrap()["alerts"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    /// The painted Background Tasks tabs are clickable through the host, and
+    /// only while that page is open.
+    #[test]
+    fn background_tasks_tabs_click_through_host() {
+        let mut host = fixture_host();
+        let off_page = handle_request(
+            &mut host,
+            req(Op::Click {
+                target: ids::CRON_TAB_LOGS.into(),
+                delivery: Default::default(),
+            }),
+            None,
+            None,
+        );
+        assert!(!off_page.ok, "logs tab must not be clickable off-page");
+
+        let nav = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "nav.go".into(),
+                args: json!({ "page": "cron-tasks" }),
+            }),
+            None,
+            None,
+        );
+        assert!(nav.ok, "{:?}", nav.error);
+        assert_eq!(host.cron_tab(), ids::CronTasksTab::Jobs);
+        let tree = host.tree();
+        let jobs_node = tree.find(ids::CRON_TAB_JOBS).expect("jobs tab in tree");
+        assert_eq!(jobs_node.checked, Some(true));
+
+        let clicked = handle_request(
+            &mut host,
+            req(Op::Click {
+                target: ids::CRON_TAB_LOGS.into(),
+                delivery: Default::default(),
+            }),
+            None,
+            None,
+        );
+        assert!(clicked.ok, "{:?}", clicked.error);
+        assert_eq!(host.cron_tab(), ids::CronTasksTab::Logs);
+        let tree = host.tree();
+        let logs_node = tree.find(ids::CRON_TAB_LOGS).expect("logs tab in tree");
+        assert_eq!(logs_node.checked, Some(true));
+        assert_eq!(tree.find(ids::CRON_TAB_JOBS).unwrap().checked, Some(false));
+    }
+
+    /// Re-applying an unchanged header patch must report "not dirty". The
+    /// painted view answers dirty with `sync_from_inputs`, and `apply_host`
+    /// runs for every `Op::Invoke` — including read-only `form.fields`.
+    #[test]
+    fn unchanged_header_patch_is_not_dirty() {
+        let mut host = fixture_host();
+        let started = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 9 }),
+            }),
+            None,
+            None,
+        );
+        assert!(started.ok, "{:?}", started.error);
+        let filled = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": false, "category_of_agent": "G" }),
+            }),
+            None,
+            None,
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+
+        let patch = host.form_1601c_host_patch();
+        let mut view_flag = true;
+        let mut view_category = "P".to_string();
+        let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
+        view_draft.any_taxes_withheld = true;
+        view_draft.category_of_agent = "P".to_string();
+
+        assert!(
+            apply_1601c_host_header_patch(
+                &patch,
+                &mut view_flag,
+                &mut view_category,
+                &mut view_draft
+            ),
+            "first apply changes the view"
+        );
+        assert!(!view_flag);
+        assert_eq!(view_category, "G");
+        assert!(
+            !apply_1601c_host_header_patch(
+                &patch,
+                &mut view_flag,
+                &mut view_category,
+                &mut view_draft
+            ),
+            "re-applying the same patch must not report dirty"
+        );
+    }
+
+    /// Queued / Submitted / Confirmed returns carry no one-shot save. A
+    /// read-only poll must never hand the painted view a Draft-save patch.
+    #[test]
+    fn immutable_return_patch_carries_no_save() {
+        let mut host = fixture_host();
+        let mut draft = {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            let profile = guard.get_profile(FIXTURE_TIN).unwrap().unwrap();
+            let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 9);
+            draft.any_taxes_withheld = false;
+            draft.compute();
+            guard.save_1601c_draft(&draft).expect("editable draft");
+            draft
+        };
+        draft.transition_to_queued().expect("queue reviewed draft");
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            guard
+                .save_queued_1601c_draft(&draft)
+                .expect("persist queued");
+        }
+        host.replace_form_1601c_state(draft, false, true, Vec::new());
+
+        let patch = host.form_1601c_host_patch();
+        assert!(
+            !patch.save,
+            "a non-editable return must not carry a Draft-save patch"
+        );
+    }
+
+    /// `submissions.list` merges the `submissions` table into the queued
+    /// `form_drafts` rows. The merge is a set, so a repeated call may not grow
+    /// the list, and the lean summary query must feed it the same identities.
+    #[test]
+    fn submissions_list_merges_history_rows_once() {
+        let mut host = fixture_host();
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            let mut form_data = std::collections::BTreeMap::new();
+            form_data.insert("tax_14".to_string(), "0.00".to_string());
+            guard
+                .save_submission(bir_core::db::Submission {
+                    id: None,
+                    tin: FIXTURE_TIN.to_string(),
+                    form_type: "1601Cv2018".to_string(),
+                    period: "092026".to_string(),
+                    status: "Submitted".to_string(),
+                    form_data,
+                    submitted_at: None,
+                    filename: None,
+                    created_at: None,
+                    updated_at: None,
+                })
+                .expect("history row");
+        }
+
+        let mut rows_each_call = Vec::new();
+        for _ in 0..3 {
+            let listed = handle_request(
+                &mut host,
+                req(Op::Invoke {
+                    name: "submissions.list".into(),
+                    args: json!({ "tin": FIXTURE_TIN }),
+                }),
+                None,
+                None,
+            );
+            assert!(listed.ok, "{:?}", listed.error);
+            let rows = listed.result.as_ref().unwrap()["submissions"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            rows_each_call.push(rows);
+        }
+        assert_eq!(rows_each_call[0].len(), rows_each_call[1].len());
+        assert_eq!(rows_each_call[1].len(), rows_each_call[2].len());
+        assert_eq!(
+            rows_each_call[0]
+                .iter()
+                .filter(|row| row["period"] == "092026")
+                .count(),
+            1,
+            "history row must appear exactly once: {:?}",
+            rows_each_call[0]
+        );
     }
 
     #[test]

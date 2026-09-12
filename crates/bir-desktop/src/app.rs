@@ -528,6 +528,9 @@ impl AppState {
                     | NotificationsEvent::OpenProfileManager => {
                         this.active_view = ActiveView::ProfileManager;
                     }
+                    NotificationsEvent::Open => {
+                        this.active_view = ActiveView::Notifications;
+                    }
                 }
                 cx.notify();
             },

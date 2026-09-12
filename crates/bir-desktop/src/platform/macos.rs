@@ -317,7 +317,12 @@ if args.count > 1 {
 // ── Typography ───────────────────────────────────────────────────────────────
 
 /// The platform's preferred monospace font family.
-pub const MONOSPACE_FONT: &str = ".SF NS Mono";
+/// `Menlo` ships with every macOS. The previous `.SF NS Mono` is a hidden
+/// system family CoreText will not resolve by name, so every monospace text
+/// element fell back to the UI font after a failed lookup — and, with
+/// `RUST_BACKTRACE=1`, after gpui captured a backtrace for the error, per
+/// element, per frame.
+pub const MONOSPACE_FONT: &str = "Menlo";
 
 // ── Dock Management ──────────────────────────────────────────────────────────
 

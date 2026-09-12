@@ -33,6 +33,7 @@ mod receipts;
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
+pub use submissions::SubmissionSummary;
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
 use std::fs::{File, OpenOptions};

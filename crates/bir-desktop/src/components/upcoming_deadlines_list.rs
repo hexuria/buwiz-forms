@@ -110,6 +110,7 @@ impl UpcomingDeadlinesList {
                         route.map(|(_, p)| p).unwrap_or(0),
                     ))
                     .group("list-item")
+                    .w_full()
                     .flex()
                     .items_center()
                     .gap_4()
@@ -282,6 +283,7 @@ impl UpcomingDeadlinesList {
                         <div
                             id={format!("deadline-{}-{}", d.form_code, date_id)}
                             group={"list-item"}
+                            w_full
                             flex
                             items_center
                             gap_4
@@ -388,8 +390,8 @@ impl UpcomingDeadlinesList {
 impl Render for UpcomingDeadlinesList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         rsx! {
-            <div id={crate::agent::ids::DUES_LIST} flex flex_col gap_4>
-                <div flex flex_col gap_2>
+            <div id={crate::agent::ids::DUES_LIST} w_full flex flex_col gap_4>
+                <div w_full flex flex_col gap_2>
                     <div
                         text_xl
                         font_weight={FontWeight::BOLD}

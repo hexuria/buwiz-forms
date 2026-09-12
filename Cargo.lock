@@ -829,7 +829,6 @@ dependencies = [
  "insta",
  "keyring",
  "libc",
- "mac-notification-sys",
  "mail-parser",
  "native-tls",
  "notify-rust",
@@ -3657,7 +3656,7 @@ dependencies = [
 [[package]]
 name = "gpui-agent"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/gpui-agent?rev=45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e#45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e"
+source = "git+https://github.com/hexuria/gpui-agent?rev=926a0ed0fc256b1bfecf71d30937f6e0ba624344#926a0ed0fc256b1bfecf71d30937f6e0ba624344"
 dependencies = [
  "hmac 0.12.1",
  "serde",

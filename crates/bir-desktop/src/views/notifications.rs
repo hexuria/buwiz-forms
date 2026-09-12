@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 pub enum NotificationsEvent {
     ReconnectGoogleAccount,
     OpenProfileManager,
+    /// A toast or system banner for an alert was clicked: show this page.
+    Open,
 }
 
 impl EventEmitter<NotificationsEvent> for NotificationsView {}
@@ -33,23 +35,36 @@ pub struct NotificationsView {
     pub(crate) active_session_tin: Option<String>,
     alerts: Vec<AppAlert>,
     scroll_handle: ScrollHandle,
+    /// Alert ids already shown as a toast / system banner. Seeded with what
+    /// exists at startup so a launch does not replay history.
+    announced: std::collections::HashSet<i64>,
 }
 
 impl NotificationsView {
-    pub fn new(db: Arc<Mutex<Database>>, _window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        // Alerts arrive from background work on a 60-second cron, not from user
-        // interaction, so nothing would otherwise prompt a re-render. Without
-        // this the page shows whatever was true when it was opened and silently
-        // goes stale while the user is looking at it.
-        cx.spawn(async move |this, cx| {
+    pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+        // Alerts arrive from background work — the submission cron, the email
+        // poll — not from user interaction, so nothing would otherwise prompt
+        // a re-render. The cron posts `DatabaseChanged` after each job; the
+        // timer is the fallback so the page cannot silently go stale.
+        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+        cx.subscribe_in(
+            &bus,
+            window,
+            |this: &mut Self, _bus, event: &crate::events::AppEvent, window, cx| {
+                if matches!(event, crate::events::AppEvent::DatabaseChanged) {
+                    this.refresh_and_announce(window, cx);
+                }
+            },
+        )
+        .detach();
+        cx.spawn_in(window, async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_secs(15))
                     .await;
                 if this
-                    .update(cx, |view, cx| {
-                        view.reload();
-                        cx.notify();
+                    .update_in(cx, |view, window, cx| {
+                        view.refresh_and_announce(window, cx);
                     })
                     .is_err()
                 {
@@ -64,6 +79,7 @@ impl NotificationsView {
             active_session_tin: None,
             alerts: Vec::new(),
             scroll_handle: ScrollHandle::new(),
+            announced: std::collections::HashSet::new(),
         };
 
         // Opt-in sample data for checking this page renders. Real alerts only
@@ -81,7 +97,45 @@ impl NotificationsView {
         }
 
         view.reload();
+        view.announced = view.alerts.iter().map(|alert| alert.id).collect();
         view
+    }
+
+    /// Re-read alerts and deliver the ones this session has not shown yet as
+    /// an in-app toast plus a system notification.
+    ///
+    /// This is the painted app's desktop delivery. GPUI posts through
+    /// `UNUserNotificationCenter` when the binary runs from a `.app` (identity,
+    /// icon, permission prompt, click-to-open) and stays silent otherwise, so a
+    /// bare `cargo run` still gets the toast. `bir-core` is not asked to post
+    /// for this process; its path is for `bir-headless`.
+    fn refresh_and_announce(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use gpui_component::WindowExt;
+        use gpui_component::notification::Notification;
+
+        self.reload();
+        let fresh: Vec<AppAlert> = self
+            .alerts
+            .iter()
+            .filter(|alert| !self.announced.contains(&alert.id))
+            .cloned()
+            .collect();
+        for alert in fresh {
+            self.announced.insert(alert.id);
+            let this = cx.entity().downgrade();
+            let notification = match alert.severity {
+                AlertSeverity::Error => Notification::error(alert.detail.clone()),
+                AlertSeverity::Warning => Notification::warning(alert.detail.clone()),
+                AlertSeverity::Info => Notification::info(alert.detail.clone()),
+            }
+            .title(alert.title.clone())
+            .in_app_and_system()
+            .on_click(move |_, _window, cx| {
+                let _ = this.update(cx, |_, cx| cx.emit(NotificationsEvent::Open));
+            });
+            window.push_notification(notification, cx);
+        }
+        cx.notify();
     }
 
     /// Re-read alerts from the database.

@@ -94,6 +94,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.set_hide_tax_profiles(app.hide_tax_profiles);
     host.restore_view(app.active_view, app.active_profile_tin.clone());
     host.set_profile_tab(app.profile_manager.read(cx).agent_active_tab());
+    host.set_cron_tab(app.cron_tasks_view.read(cx).agent_active_tab());
     host.replace_profiles(
         app.profiles
             .iter()
@@ -116,10 +117,14 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.replace_dues(dues);
     if let Some(view) = &app.form_1601c_view {
         let form = view.read(cx);
+        // `saved` is a one-shot host flag set by form.save_draft / queue in this
+        // request. Never derive it from draft.id — that made every mutating
+        // invoke (including form.fields) re-trigger UI Draft-save on
+        // Queued/Submitted returns and spam the toaster.
         host.replace_form_1601c_state(
             form.agent_draft().clone(),
             form.agent_validated(),
-            form.agent_draft().id.is_some(),
+            false,
             form.agent_validation_errors(),
         );
     }
@@ -128,12 +133,19 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
         host.replace_form_2551q_state(
             form.agent_draft().clone(),
             form.agent_validated(),
-            form.agent_draft().id.is_some(),
+            false,
             form.agent_validation_errors(),
         );
     }
     host.reconcile_open_forms_from_db();
-    let _ = host.reload_jobs_and_submissions();
+    // Jobs and submissions are only read back out of the host by `jobs.list` /
+    // `submissions.list` (which reload themselves) and by the Background Tasks
+    // snapshot tree. Loading them for every request put `list_jobs` plus a full
+    // submission history behind every `form.fields` poll, on the UI thread,
+    // inside `render` — roughly half of each frame once a taxpayer had history.
+    if app.active_view == ActiveView::CronTasks {
+        let _ = host.reload_jobs_and_submissions();
+    }
     host.mark_pending_admin(app.pending_admin_view);
     host.mark_pending_profile_auth(app.pending_profile.is_some());
     host.set_submit_confirmation_visible(app.agent_submit_confirmation_visible);
@@ -193,6 +205,12 @@ fn apply_host(
             if host.editor_snapshot().save_message.is_none() {
                 view.agent_apply_editor(&host.editor_snapshot(), window, cx);
             }
+        });
+    }
+
+    if host.active_view() == ActiveView::CronTasks {
+        app.cron_tasks_view.update(cx, |view, cx| {
+            view.agent_set_tab(host.cron_tab(), cx);
         });
     }
 
@@ -379,12 +397,26 @@ impl AppState {
         self.agent_mailbox = Some(mailbox);
         self.agent_token = token;
         self.agent_shutdown = Some(shutdown);
+        // Wake the UI thread only when the TCP thread actually posted work.
+        // `apply_agent` runs inside `AppState::render`, so an unconditional
+        // notify here re-laid out and repainted the whole window 60 times a
+        // second for as long as the agent was attached (~50% of a core at idle
+        // against ~1% without it), leaving no main-thread headroom for input.
         self.agent_refresh = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(16))
                     .await;
-                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                let alive = this.update(cx, |app, cx| {
+                    if app
+                        .agent_mailbox
+                        .as_ref()
+                        .is_some_and(|mailbox| !mailbox.is_empty())
+                    {
+                        cx.notify();
+                    }
+                });
+                if alive.is_err() {
                     break;
                 }
             }

@@ -1,22 +1,81 @@
-/// Send a native system notification.
+/// Post a desktop notification from a process that has no window of its own.
 ///
-/// On macOS, we first register our bundle identifier with the notification
-/// system so that macOS attributes the notification to eBIRForms and
-/// displays the correct app icon.
+/// This is the `bir-headless` (and Linux) path. Painted `bir` does **not**
+/// enable delivery here: it watches the same alert rows and posts through
+/// GPUI's `UNUserNotificationCenter` support, which gives the banner the
+/// app's identity, icon, permission prompt and click-to-open. A headless
+/// daemon can never be a `.app`, and the deprecated `NSUserNotificationCenter`
+/// silently drops posts from anything that is not one, so on macOS it goes
+/// through `osascript`, labelled eBIRForms in the subtitle.
 pub fn send_notification(title: &str, body: &str) {
+    if !delivery_enabled() {
+        tracing::debug!(
+            title,
+            "desktop notification suppressed: delivery not enabled"
+        );
+        return;
+    }
     #[cfg(target_os = "macos")]
     {
-        use std::sync::Once;
-        static SET_APP: Once = Once::new();
-        SET_APP.call_once(|| {
-            let _ = mac_notification_sys::set_application("dev.goldcoders.bir");
-        });
+        display_via_osascript(title, body);
     }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = notify_rust::Notification::new()
+            .summary(title)
+            .body(body)
+            .show();
+    }
+}
 
-    let _ = notify_rust::Notification::new()
-        .summary(title)
-        .body(body)
-        .show();
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Off until `bir-headless` turns it on. Test suites and one-off tools link
+/// this crate too, and their cron / alert tests reach `send_notification`
+/// with fixture data — which used to post straight into the developer's
+/// Notification Center as "1601C 05/99 submitted — Queue Guard Taxpayer".
+static DELIVERY_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Called once at startup by `bir-headless`.
+pub fn enable_desktop_delivery() {
+    DELIVERY_ENABLED.store(true, Ordering::SeqCst);
+}
+
+pub fn delivery_enabled() -> bool {
+    DELIVERY_ENABLED.load(Ordering::SeqCst)
+}
+
+#[cfg(target_os = "macos")]
+fn display_via_osascript(title: &str, body: &str) -> bool {
+    let script = format!(
+        "display notification {} with title \"eBIRForms\" subtitle {}",
+        applescript_string(body),
+        applescript_string(title)
+    );
+    std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+/// Quote arbitrary text as an AppleScript string literal.
+#[cfg(target_os = "macos")]
+fn applescript_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for ch in text.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Post a desktop notification for an alert, but only when it is *news*.
@@ -86,6 +145,22 @@ mod tests {
     #[test]
     fn multibyte_detail_does_not_panic() {
         assert!(!truncate_for_banner(&"日本語テキスト".repeat(50), 140).is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn applescript_string_escapes_quotes_and_backslashes() {
+        assert_eq!(applescript_string("plain"), "\"plain\"");
+        assert_eq!(applescript_string("say \"hi\""), "\"say \\\"hi\\\"\"");
+        assert_eq!(applescript_string("a\\b"), "\"a\\\\b\"");
+        assert_eq!(applescript_string("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    /// Nothing links this crate with delivery on except the two binaries.
+    #[test]
+    fn delivery_is_off_unless_a_binary_enables_it() {
+        assert!(!delivery_enabled());
+        send_notification("must not appear", "test suite");
     }
 
     /// The cron re-reports every 60s. This must post nothing.

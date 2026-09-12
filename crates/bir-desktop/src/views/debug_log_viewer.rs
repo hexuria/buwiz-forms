@@ -30,13 +30,18 @@ impl Render for DebugLogViewerView {
                     border_color={cx.theme().border}
                     bg={cx.theme().background}
                 >
-                    <div flex items_center gap_3>
+                    <div flex flex_col gap_1 flex_1 min_w_0>
                         <div
                             text_lg
                             font_weight={FontWeight::BOLD}
                             text_color={cx.theme().foreground}
                         >
-                            {format!("Debug Log: {}", self.job_name)}
+                            {"Debug Log"}
+                        </div>
+                        // The job title can be long; let it wrap inside the
+                        // body rather than fight the window title bar.
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {self.job_name.clone()}
                         </div>
                     </div>
                 </div>
