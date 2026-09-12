@@ -68,7 +68,7 @@ tray-icon = "0.24.0"
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "8b864fbbd9de08565f4a90cb9284446a44f85d7f", optional = true }
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4", optional = true }
 # Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown / logs).
 clap = { version = "4", features = ["derive"], optional = true }
 
@@ -90,9 +90,9 @@ objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSMenu", "NSR
 block2 = "0.6.2"
 objc2-modern = { package = "objc2", version = "0.6.4" }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
-objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString"] }
-objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow"] }
-objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "block2", "WKWebView", "WKPDFConfiguration"] }
+objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString", "NSValue"] }
+objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-app-kit", "block2", "WKWebView", "WKPDFConfiguration", "WKSnapshotConfiguration"] }
 objc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]

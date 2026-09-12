@@ -10,10 +10,20 @@ use gpui_agent::mailbox::MailboxRequest;
 use gpui_agent::{ScrollMetrics, TileSpec};
 
 pub const METRICS_WAIT_FRAMES: u32 = 90;
+/// How long one WebView tile may take before the job fails closed. Wall clock,
+/// not frames: the poll runs once per paint, and paints are not 60 Hz while
+/// the window is idle.
+pub const SNAPSHOT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
+// The phases are named for what the job is waiting on; the shared prefix is
+// the point, not an accident.
+#[allow(clippy::enum_variant_names)]
 pub enum ScrolledPhase {
     WaitMetrics,
     WaitPaint,
+    /// A `WKWebView.takeSnapshot` is in flight for the current tile
+    /// (print preview only); its result lands in `ScrolledShotJob::snapshot`.
+    WaitSnapshot,
 }
 
 pub struct ScrolledShotJob {
@@ -32,6 +42,10 @@ pub struct ScrolledShotJob {
     /// Skip the first `WaitPaint` tick after `set_offset` so the previous
     /// frame (with the new offset) can paint before `screencapture`.
     pub awaiting_paint: bool,
+    /// The in-flight WebView tile (print preview) and how long it has been waited for.
+    #[cfg(all(feature = "agent", target_os = "macos"))]
+    pub snapshot: Option<crate::agent::macos_webview_snapshot::SnapshotSlot>,
+    pub snapshot_started: Option<std::time::Instant>,
 }
 
 pub fn known_scroll_target(target: &str) -> bool {

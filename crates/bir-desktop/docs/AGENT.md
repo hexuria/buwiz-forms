@@ -88,14 +88,30 @@ These are host constraints. They do not fork protocol v2.
   `.png` (not a hidden `.tmp`). Needs **Screen Recording for `bir`**.
   `mode=scrolled` requires `target` (`form-1601c-scroll` or
   `print-preview-scroll`): set offset → wait paint → tile capture → stitch →
-  restore (no OS HID). Unknown target → `scroll_unavailable`. Print preview
-  is a **secondary window**; the host captures whichever preview handle is
-  painted. Linux, Windows, and headless `spawn_host` stay
+  restore (no OS HID). Unknown target → `scroll_unavailable`. The tile crop
+  is computed against the window's **content** size (`viewport_size`), not
+  the frame: the macOS title bar (32 pt on current releases) is the
+  difference between the `screencapture` PNG and that size, and passing the
+  frame instead cropped every tile a title bar too high. `form-1601c-scroll`
+  tiles come from `screencapture`; the result says `backend: screencapture`.
+  `print-preview-scroll` is a **secondary window** whose content is a
+  WKWebView, and `screencapture` does not reliably include that layer, so
+  its tiles come from `WKWebView.takeSnapshot` on the painted preview
+  handle (`backend: wkwebview-snapshot`); the document height is the
+  WebView's own `scrollHeight`, so a 1601-C with a receipt page is three
+  sheets, not one viewport. Linux, Windows, and headless `spawn_host` stay
   `screenshot_unavailable` (including scrolled). The semantic host has no
   `Window` and does not invent a PNG. Missing TCC →
   `screenshot_unavailable` with **grant Screen Recording to bir** (a Terminal
-  grant does not cover the `bir` process). See
+  grant does not cover the `bir` process; the grant is per binary **path**,
+  so a build in another worktree needs its own). See
   [Mac: Screen Recording (TCC)](#mac-screen-recording-tcc).
+- Geometry. The tree's window, sidebar, page root and the two scroll nodes
+  carry painted bounds (logical px, window coordinates; the preview scroller
+  is relative to its own window). `assert --in-viewport` works on those;
+  everything else still answers `in_viewport_unavailable: bounds are zero`.
+  A collapsed sidebar (Cmd+B) is `visible: false`, children included;
+  overlays are absent from the tree when closed, not invisible.
 - Keybinding fire is **Action-only** (`Window::dispatch_action`). The
   intercept does not dual-write Action bodies. `App::on_action` handlers for
   `ToggleSidebar` / `MinimizeWindow` / `ToggleAppVisibility` / `QuitApplication`
@@ -108,7 +124,9 @@ These are host constraints. They do not fork protocol v2.
   `confirm=true`. Painted `app.quit` / Cmd+Q hides to the tray (same Action as
   the menu); process exit is `gpui-agent shutdown` or tray Quit.
   `scope=focused` does not auto-activate unless `--activate` (OS-activate plus
-  GPUI focus on the app handle). Global hide/show (`app.toggle_visibility`) is
+  GPUI focus on the app handle); without it, a bir that is not the frontmost
+  application answers `keybinding_unavailable: app not focused`, so scripts
+  driving the app from a background shell pass `--activate`. Global hide/show (`app.toggle_visibility`) is
   a GPUI Action (`ToggleAppVisibility`); the OS-level combo is `global_hotkey`
   (default Ctrl+Option+E on macOS; Settings may set Option+F12) and is not a
   keymap chord, but fire still dispatches the Action.
@@ -129,6 +147,16 @@ and daemon `bir-headless serve` (no GPU) both speak the **same**
 gpui-agent protocol on loopback **`127.0.0.1:17421`** (override with
 `GPUI_AGENT_ADDR`). Clients (CLI / MCP / Grok Bot) talk to whoever currently
 holds that bind. `hello.platform` is `desktop` vs `headless`.
+
+Before driving a host, check who owns the port: `lsof -nP -iTCP:17421
+-sTCP:LISTEN` must show `bir` (or `bir-headless`). Another process there —
+an editor forwarding a remote box, for instance — answers the protocol
+convincingly. `hello.os` names the host's operating system
+(`std::env::consts::OS`), and `gpui-agent keybindings` shows platform chords
+(`cmd-b` on macOS, `ctrl-b` on Linux); a mismatch means the wrong host. When
+the port is taken, start the painted app with another `GPUI_AGENT_ADDR` and
+point the CLI at it — the bridge logs `gpui-agent failed to bind` and keeps
+running without an agent otherwise.
 
 **One owner at a time** of the TCP bind **and** the live SQLCipher file.
 Painted `bir` and `bir-headless serve` both take an exclusive sidecar lock
