@@ -181,6 +181,8 @@ pub struct AppState {
     pub(crate) global_dashboard_notif_subscribed: bool,
     pub(crate) is_mini_sidebar: bool,
     pub(crate) is_sidebar_hidden: bool,
+    /// Painted bounds of the sidebar and the content column, for the agent tree.
+    pub(crate) layout_probe: crate::layout_probe::LayoutProbe,
     pub(crate) theme_preference: AppThemeMode,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) is_command_palette_open: bool,
@@ -907,6 +909,7 @@ impl AppState {
             global_dashboard_notif_subscribed: false,
             is_mini_sidebar: false,
             is_sidebar_hidden: false,
+            layout_probe: crate::layout_probe::LayoutProbe::default(),
             theme_preference,
             focus_handle: cx.focus_handle(),
             is_command_palette_open: false,
@@ -2430,10 +2433,20 @@ impl Render for AppState {
                     flex_1
                     min_h_0
                     when={(!self.is_sidebar_hidden, |this| {
-                        this.child(self.render_sidebar(window, cx))
+                        this.child(
+                            div()
+                                .relative()
+                                .flex_none()
+                                .h_full()
+                                .child(crate::layout_probe::bounds_probe(
+                                    self.layout_probe.sidebar.clone(),
+                                ))
+                                .child(self.render_sidebar(window, cx)),
+                        )
                     })}
                 >
-                    <div flex_1 flex flex_col h_full overflow_hidden>
+                    <div flex_1 flex flex_col h_full overflow_hidden relative>
+                        {crate::layout_probe::bounds_probe(self.layout_probe.page.clone())}
                         {self.render_active_view(cx)}
                     </div>
                 </div>

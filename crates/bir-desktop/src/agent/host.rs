@@ -128,8 +128,33 @@ struct Form2551QState {
     saved: bool,
 }
 
+/// Painted bounds (logical px, window coordinates) of the tree's landmarks.
+/// `None` = not painted this frame (collapsed sidebar, no such view open).
+/// The preview scroller lives in its own window; its bounds are relative to
+/// that window, which is what a `screenshot` of it uses too.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct TreeLayout {
+    pub window: Option<gpui_agent::Bounds>,
+    pub sidebar: Option<gpui_agent::Bounds>,
+    pub page: Option<gpui_agent::Bounds>,
+    pub form_scroll: Option<gpui_agent::Bounds>,
+    pub preview_scroll: Option<gpui_agent::Bounds>,
+}
+
+fn with_bounds_if(node: UiNode, bounds: Option<gpui_agent::Bounds>) -> UiNode {
+    match bounds {
+        Some(bounds) => node.with_bounds(bounds),
+        None => node,
+    }
+}
+
 pub struct BirAgentHost {
     platform: PlatformKind,
+    /// `true` while the sidebar is collapsed (Cmd+B); the tree then reports
+    /// the sidebar and everything in it as not visible.
+    sidebar_hidden: bool,
+    /// Painted geometry copied in by the drain each request, for `in_viewport`.
+    layout: TreeLayout,
     shutdown: bool,
     is_locked: bool,
     admin_lock_enabled: bool,
@@ -169,6 +194,8 @@ impl BirAgentHost {
     pub fn new(platform: PlatformKind) -> Self {
         Self {
             platform,
+            sidebar_hidden: false,
+            layout: TreeLayout::default(),
             shutdown: false,
             is_locked: false,
             admin_lock_enabled: false,
@@ -210,6 +237,14 @@ impl BirAgentHost {
 
     pub fn wants_shutdown(&self) -> bool {
         self.shutdown
+    }
+
+    pub fn set_sidebar_hidden(&mut self, hidden: bool) {
+        self.sidebar_hidden = hidden;
+    }
+
+    pub fn set_layout(&mut self, layout: TreeLayout) {
+        self.layout = layout;
     }
 
     pub fn set_app_focused(&mut self, focused: bool) {
@@ -2789,7 +2824,10 @@ impl BirAgentHost {
     }
 
     pub fn tree(&self) -> UiTree {
-        let mut window = UiNode::new(ids::WINDOW, "window", "eBIRForms");
+        let mut window = with_bounds_if(
+            UiNode::new(ids::WINDOW, "window", "eBIRForms"),
+            self.layout.window,
+        );
 
         if self.is_locked {
             window = window.with_child(UiNode::new(ids::PAGE_LOCK, "page", "Lock screen"));
@@ -2824,14 +2862,18 @@ impl BirAgentHost {
             );
         }
         sidebar = sidebar.with_child(list);
+        sidebar = with_bounds_if(sidebar, self.layout.sidebar);
+        if self.sidebar_hidden {
+            sidebar = sidebar.with_visible_deep(false);
+        }
         window = window.with_child(sidebar);
         window = window.with_child(
             UiNode::new(ids::CONTEXT_SELECTED_TIN, "status", "Selected taxpayer")
                 .with_value(self.selected_tin.clone().unwrap_or_default()),
         );
-        window = window.with_child(UiNode::scroll(
-            ids::PRINT_PREVIEW_SCROLL,
-            "Print preview scroll",
+        window = window.with_child(with_bounds_if(
+            UiNode::scroll(ids::PRINT_PREVIEW_SCROLL, "Print preview scroll"),
+            self.layout.preview_scroll,
         ));
 
         let mut page = UiNode::new(
@@ -2840,6 +2882,7 @@ impl BirAgentHost {
             view_title(self.active_view),
         )
         .with_value(ids::view_slug(self.active_view));
+        page = with_bounds_if(page, self.layout.page);
 
         if self.active_view == ActiveView::ProfileManager {
             let mut tabs = UiNode::new("profile-tabs", "tablist", "Profile tabs");
@@ -3006,7 +3049,10 @@ impl BirAgentHost {
                 .map(|form| (form.validated, form.validation_errors.clone()))
                 .unwrap_or((false, Vec::new()));
             page = page.with_child(UiNode::new(ids::FORM_1601C_VALIDATE, "button", "Validate"));
-            page = page.with_child(UiNode::scroll(ids::FORM_1601C_SCROLL, "1601-C form scroll"));
+            page = page.with_child(with_bounds_if(
+                UiNode::scroll(ids::FORM_1601C_SCROLL, "1601-C form scroll"),
+                self.layout.form_scroll,
+            ));
             page = page.with_child(
                 UiNode::new(
                     ids::FORM_1601C_STATUS,
@@ -4223,6 +4269,50 @@ mod tests {
         assert!(tree.find(ids::PAGE_LOCK).is_some());
         assert!(tree.find(ids::PAGE_SETTINGS).is_none());
         assert!(tree.find(ids::OVERLAY_COMMAND_PALETTE).is_none());
+    }
+
+    #[test]
+    fn tree_carries_painted_bounds_and_a_collapsed_sidebar_is_not_visible() {
+        let mut host = empty_host();
+        let b = |x: f32, y: f32, w: f32, h: f32| gpui_agent::Bounds { x, y, w, h };
+        host.set_layout(TreeLayout {
+            window: Some(b(0.0, 0.0, 1800.0, 1098.0)),
+            sidebar: Some(b(0.0, 0.0, 280.0, 1098.0)),
+            page: Some(b(280.0, 0.0, 1520.0, 1098.0)),
+            form_scroll: None,
+            preview_scroll: Some(b(0.0, 48.0, 1200.0, 853.0)),
+        });
+        let tree = host.tree();
+        assert_eq!(
+            tree.find(ids::WINDOW).unwrap().bounds,
+            b(0.0, 0.0, 1800.0, 1098.0)
+        );
+        let sidebar = tree.find(ids::SIDEBAR).unwrap();
+        assert_eq!(sidebar.bounds, b(0.0, 0.0, 280.0, 1098.0));
+        assert!(sidebar.visible, "shown by default");
+        assert!(
+            sidebar
+                .bounds
+                .intersects(tree.find(ids::WINDOW).unwrap().bounds),
+            "a painted sidebar is inside the window clip, so in_viewport can say yes"
+        );
+        assert_eq!(
+            tree.find(ids::PRINT_PREVIEW_SCROLL).unwrap().bounds,
+            b(0.0, 48.0, 1200.0, 853.0)
+        );
+
+        host.set_sidebar_hidden(true);
+        host.set_layout(TreeLayout {
+            sidebar: None,
+            ..host.layout
+        });
+        let tree = host.tree();
+        let sidebar = tree.find(ids::SIDEBAR).unwrap();
+        assert!(!sidebar.visible, "collapsed sidebar reports visible=false");
+        assert!(
+            sidebar.children.iter().all(|child| !child.visible),
+            "nothing inside a collapsed sidebar is visible"
+        );
     }
 
     #[test]

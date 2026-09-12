@@ -109,6 +109,8 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
         }
 
         let mut host = snapshot_host(app, cx);
+        host.set_sidebar_hidden(app.is_sidebar_hidden);
+        host.set_layout(tree_layout(app, window, cx));
         let response = handle_request(&mut host, posted.request.clone(), None, None);
         if mutating && response.ok {
             apply_host(host, app, window, cx);
@@ -454,6 +456,51 @@ fn apply_navigation(
             app.active_view = other;
             cx.notify();
         }
+    }
+}
+
+fn tree_bounds(bounds: gpui::Bounds<Pixels>) -> gpui_agent::Bounds {
+    gpui_agent::Bounds {
+        x: f32::from(bounds.origin.x),
+        y: f32::from(bounds.origin.y),
+        w: f32::from(bounds.size.width),
+        h: f32::from(bounds.size.height),
+    }
+}
+
+/// Real geometry for the tree: the window's content area, the probes the
+/// layout recorded last frame, and the two scrollers' painted bounds.
+fn tree_layout(app: &AppState, window: &Window, cx: &App) -> crate::agent::host::TreeLayout {
+    let viewport = window.viewport_size();
+    let painted = |b: Option<gpui::Bounds<Pixels>>| {
+        b.filter(|b| b.size.width > px(0.0) && b.size.height > px(0.0))
+            .map(tree_bounds)
+    };
+    crate::agent::host::TreeLayout {
+        window: Some(gpui_agent::Bounds {
+            x: 0.0,
+            y: 0.0,
+            w: f32::from(viewport.width),
+            h: f32::from(viewport.height),
+        }),
+        sidebar: if app.is_sidebar_hidden {
+            None
+        } else {
+            painted(app.layout_probe.sidebar.get())
+        },
+        page: painted(app.layout_probe.page.get()),
+        form_scroll: app
+            .form_1601c_view
+            .as_ref()
+            .and_then(|view| painted(Some(view.read(cx).agent_scroll_handle().bounds()))),
+        preview_scroll: crate::views::frozen_html_preview::live_preview_window()
+            .and_then(|handle| {
+                handle
+                    .read(cx)
+                    .ok()
+                    .map(|view| view.scroll_handle().bounds())
+            })
+            .and_then(|bounds| painted(Some(bounds))),
     }
 }
 
