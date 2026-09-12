@@ -1,0 +1,97 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>ELI5 · eBIRForms V1 — what changes</title>
+<style>
+:root{--bg:#0b0b0c;--card:#151517;--line:#2b2b30;--fg:#f3f3f3;--mut:#9a9aa3;--good:#4ade80;--bad:#ff6b6b;--warn:#fbbf24;--blue:#38bdf8;--purple:#a78bfa}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+header{padding:36px 40px 10px}h1{margin:0;font-size:36px}.sub{color:var(--mut);font-size:17px;margin-top:6px}
+main{display:grid;gap:22px;padding:14px 40px 60px}
+.pic{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+.pic h2{margin:0 0 14px;font-size:22px}.pic h2 span{color:var(--mut);font-weight:400;font-size:15px;margin-left:10px}
+.cap{margin-top:14px;color:#d8d8de;font-size:15px}.src{margin-top:8px;color:var(--mut);font-size:12.5px}.src code{color:#cfcfd6}
+.row{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap}
+.box{border:2px solid var(--line);border-radius:12px;padding:12px 14px;min-width:150px;background:#1b1b1f}
+.box b{display:block;font-size:17px}.box small{color:var(--mut);display:block;margin-top:4px;font-size:13px}
+.box.good{border-color:var(--good)}.box.bad{border-color:var(--bad)}.box.warn{border-color:var(--warn)}.box.blue{border-color:var(--blue)}.box.purple{border-color:var(--purple)}.box.ghost{border-style:dashed;color:var(--mut)}.box.gone{border-style:dashed;border-color:var(--bad);color:var(--mut);text-decoration:line-through}
+.arrow{align-self:center;font-size:30px;color:var(--mut)}.arrow.good{color:var(--good)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.chip{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:3px 9px;font-size:13px;background:#1d1d21;margin:2px 3px 2px 0}.chip.red{border-color:var(--bad);text-decoration:line-through;color:var(--mut)}.chip.green{border-color:var(--good)}.chip.blue{border-color:var(--blue)}
+.big{font-size:44px;font-weight:800;line-height:1}
+.pipe{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--mut)}.pipe i{display:inline-block;width:22px;height:22px;border-radius:50%;border:2px solid var(--mut);text-align:center;line-height:20px;font-style:normal;font-size:12px}.pipe i.on{background:var(--warn);border-color:var(--warn);color:#000}.pipe s{width:26px;height:0;border-top:2px dashed var(--mut)}
+.screen{border:1px solid var(--line);border-radius:10px;padding:10px;background:#0e0e10}.screen .bar{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}.btn{border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:12px}.btn.pri{background:#e9e9ee;color:#000}
+.band{border-radius:8px;padding:8px;margin-bottom:8px;text-align:center;font-size:13px;background:#0e0e10;border:1px solid var(--line)}
+.sec{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;margin-top:6px}.sec.open{border-color:var(--good)}
+.year{display:inline-flex;gap:4px}.year b{border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:13px;color:var(--mut)}.year b.on{background:#e9e9ee;color:#000}
+.tbl{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.tbl div{padding:6px 0;border-top:1px dashed var(--line);font-size:14px}.tbl .h{font-weight:700;border-top:0;color:var(--mut)}
+.q{border:1px dashed var(--warn);border-radius:12px;padding:12px 16px;color:var(--warn)}
+footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px solid var(--line)}
+</style></head><body>
+<header><h1>eBIRForms V1 — what changes</h1><div class="sub">The same six pictures as "today", redrawn. Plus one: what gets deleted. Decisions from the maintainer's review of 2026-09-13; open points in <code>PLAN-v1-forms-eli5-brief.md</code> §1.C.</div></header>
+<main>
+
+<section class="pic"><h2>1 · One profile, with a year <span>no ledger, no COR, no OCR</span></h2>
+<div class="row">
+  <div class="box blue"><b>Tax profile · <span class="year"><b>2024</b><b>2025</b><b class="on">2026</b><b>+</b></span></b><small>clone per year; the year picker reuses the form-library component and sits by the page title</small></div>
+  <div class="arrow good">⟶</div>
+  <div class="box good"><b>Every form</b><small>reads the profile-year for its period. Same road for 1601-C and 2551Q.</small></div>
+</div>
+<div class="row" style="margin-top:12px">
+  <div class="box"><b>Earliest year allowed</b><small>entity: incorporation / registration date<br>person, or no incorporation date: the day the TIN was obtained<br><b>Business Start Date</b> means exactly that date</small></div>
+  <div class="box gone"><b>Profile versions ledger</b><small>effective_from / effective_until, Confirmed / NeedsReview</small></div>
+  <div class="box gone"><b>COR tab · upload · Gemini OCR</b><small>cor_ocr.rs 1 768 lines · document viewer</small></div>
+</div>
+<div class="cap">"Which profile applies to 2026-Q1?" becomes "the 2026 profile" — a lookup, not a timeline query. The blocked 2551Q from picture 1 of "today" cannot happen: the form reads the year it is filed for.</div>
+<div class="src">Replaces: <code>profile.rs</code> TaxProfileVersion + resolve_for_period · <code>views/profile_manager/{mod.rs, tab_tax_profile.rs}</code> COR paths · <code>cor_ocr.rs</code>, <code>cor_evidence.rs</code>. Reuses: the tax-year selector in <code>tab_tax_profile.rs</code>.</div>
+</section>
+
+<section class="pic"><h2>2 · "Which forms do I file?" <span>the user says so</span></h2>
+<div class="row">
+  <div class="box blue"><b>Profile-year 2026</b></div><div class="arrow good">⟶</div>
+  <div class="box good"><b>Forms chosen for 2026</b><small><span class="chip green">2551Q</span><span class="chip green">1601C</span><span class="chip green">0619E</span> … picked from the form library</small></div><div class="arrow good">⟶</div>
+  <div class="box good"><b>Dashboard · deadlines · calendar</b><small>unchanged readers</small></div>
+</div>
+<div class="row" style="margin-top:12px"><div class="box"><b>Removed from the profile</b><small><span class="chip red">VAT-registered (as a router)</span><span class="chip red">withholds compensation / expanded / final</span><span class="chip red">top withholding agent</span><span class="chip red">government withholding entity</span><span class="chip red">GPP partner</span><span class="chip red">single employer</span><span class="chip red">dormant</span><span class="chip red">excise categories</span><span class="chip red">registration activity status</span></small></div><div class="box warn"><b>Kept, but moved</b><small>a flag that was really a form field becomes a <b>form default</b> — e.g. 1601-C item 11 Private / Government</small></div><div class="box gone"><b>FormDefinition filters · inference seeding</b><small>requires_vat, requires_employees, taxpayer_types</small></div></div>
+<div class="cap">One source: the user's choice per year. The rules engine, the flags that fed it, and the show/hide logic go. The per-year Forms Set table can stay as the storage of that choice (source = Manual only) — open point §1.C-4.</div>
+<div class="src">Touches: <code>forms/registry.rs</code> (filters), <code>forms/forms_set.rs</code> (sources collapse to Manual), <code>integration/validation.rs</code>, <code>profile.rs</code> flags, dashboard/deadline readers stay on <code>active_form_codes_for_year</code>.</div>
+</section>
+
+<section class="pic"><h2>3 · One form page for every form <span>every field, every section, collapsible</span></h2>
+<div class="two">
+  <div class="screen"><div class="bar"><span class="btn">← Back</span><span><span class="btn">Save</span> <span class="btn pri">Submit</span></span></div><div class="band"><span class="pipe" style="justify-content:center"><i class="on">1</i>Draft<s></s><i>2</i>Queued<s></s><i>3</i>Submitted<s></s><i>4</i>Confirmed<s></s><i>5</i>Paid</span></div><div class="sec">BIR Form No. 2551Q · Quarterly Percentage Tax Return · Jan 2018 (ENCS)</div><div class="sec open">▼ Part I — Background information · 13 items</div><div class="sec">▶ Part II — Total tax payable · items 14–24</div><div class="sec">▶ Part III — Details of payment · 25–28</div><div class="sec">▶ Schedule 1 — Computation of tax · 6 ATC lines + item 7</div></div>
+  <div class="tbl"><div class="h">from</div><div class="h">to</div><div>two layouts, ten hand-written views</div><div>one layout, driven by <code>fields.json</code> sections</div><div>a subset of fields per form</div><div>every field (2551Q: 99) with item numbers</div><div>three buttons / two buttons</div><div>Back · Save · Submit everywhere</div><div>title inside a grey band</div><div>pipeline band, same black as the page</div><div>cards that never collapse</div><div>Parts and Schedules collapse for review</div></div>
+</div>
+<div class="cap">The page is generated from the same inventory that already produces the XML. The paper form's Parts and Schedules are the sections. A reviewer opens one Part at a time; a filer sees everything the BIR form has.</div>
+<div class="src">Inputs: <code>rules/forms/&lt;form&gt;/fields.json</code> (item_number, control_kind, required_when, visible_when), <code>html-frozen/&lt;form&gt;/index.html</code> (section order). Per-form spec pages: <code>crates/bir-desktop/docs/eli5/forms/&lt;code&gt;.html</code>.</div>
+</section>
+
+<section class="pic"><h2>4 · Validation, gated <span>automatic, but only once it can be true</span></h2>
+<div class="row"><div class="box"><b>Pristine page</b><small>nothing red</small></div><div class="arrow">⟶</div><div class="box warn"><b>Field touched</b><small>that field validates on blur / change</small></div><div class="arrow">⟶</div><div class="box warn"><b>Saved once</b><small>all fields validate on every change</small></div><div class="arrow">⟶</div><div class="box good"><b>Submit</b><small>everything validates; first blocking error shown (as the BIR validator does)</small></div></div>
+<div class="cap">Two bits of state per draft — <em>touched fields</em> and <em>saved once</em> — and the same rules as today. The red boxes appear when they mean something.</div>
+<div class="src">Changes: <code>form_2551q_view.rs:557</code> stops validating in <code>new()</code>; a touched set + saved flag on the draft view; rules stay in <code>validations.json</code> / <code>FormValidator</code>.</div>
+</section>
+
+<section class="pic"><h2>5 · Tax due <span>only what the form itself defines</span></h2>
+<div class="row"><div class="box"><b>Typed amounts</b></div><div class="arrow">⟶</div><div class="box good"><b>calculations.json</b><small>2551Q: row tax → Schedule 1 total → 18 → 19 → 23 → 24 → 8% zeroing → overpayment state</small></div><div class="arrow">⟶</div><div class="box good"><b>Computed fields</b><small>never typed, always shown</small></div></div>
+<div class="row" style="margin-top:12px"><div class="box gone"><b>Profile-flag branches</b><small>VAT flag, withholding flags</small></div><div class="box warn"><b>Still a decision</b><small>EOPT tier and ATC rate tables are form-period facts, not profile inference — they stay, as inputs the user can see</small></div></div>
+<div class="cap">The same typed numbers give the same tax for everyone. Anything the paper form does not compute, the app does not compute.</div>
+<div class="src">Keep: <code>forms/form_*.rs::recompute()</code> arithmetic, <code>forms/atc.rs</code>. Remove: branches on <code>is_vat_registered</code> and withholding flags (form_2551q.rs:1956 and siblings).</div>
+</section>
+
+<section class="pic"><h2>6 · Templates <span>stop typing the same thing every quarter</span></h2>
+<div class="row"><div class="box"><b>Last submission</b><small>2551Q · 2026-Q1</small></div><div class="arrow">⟶ save as</div><div class="box good"><b>2551Q template</b><small>user ticks the fields to keep: ATC lines, tax-rate election, sheets attached…</small></div><div class="arrow">⟶ next filing</div><div class="box"><b>2551Q · 2026-Q2</b><small>pre-filled from the template + the profile-year; every field still editable</small></div></div>
+<div class="row" style="margin-top:12px"><div class="box ghost"><b>Never in a template</b><small>the taxpayer profile (name, TIN, RDO, address…) — it comes from the profile-year, once</small></div><div class="box ghost"><b>Default</b><small>no template until the user makes one</small></div></div>
+<div class="cap">A template is a saved answer to "what did I put last time?", per form, per profile. Overridable, optional, and never a second copy of the profile.</div>
+<div class="src">New: a per-form template store keyed by (profile, form); pre-fill order profile-year → template → typed. Open point §1.C-3: template on the form vs on the profile-year.</div>
+</section>
+
+<section class="pic"><h2>7 · What goes, what stays</h2>
+<div class="two">
+  <div><b style="color:var(--bad)">Deleted</b><div class="row" style="margin-top:8px"><span class="chip red">COR tab</span><span class="chip red">COR upload + evidence</span><span class="chip red">Gemini OCR + settings</span><span class="chip red">profile versions ledger</span><span class="chip red">effective-date review</span><span class="chip red">form inference engine</span><span class="chip red">excise / withholding / entity flags</span><span class="chip red">show/hide form logic</span><span class="chip red">profile-flag branches in tax due</span><span class="chip red">nine old-layout views</span></div></div>
+  <div><b style="color:var(--good)">Stays</b><div class="row" style="margin-top:8px"><span class="chip green">drafts · queue · claim tokens</span><span class="chip green">XML writers</span><span class="chip green">SFTP cron · receipts · Confirmed</span><span class="chip green">print preview (frozen HTML)</span><span class="chip green">deadline calendar</span><span class="chip green">agent control plane</span><span class="chip green">fields.json / calculations / validations</span><span class="chip blue">tax-year selector (reused)</span><span class="chip blue">per-year forms table (as storage)</span></div></div>
+</div>
+<div class="cap">Roughly 14 000 lines around the profile manager and OCR, and 16 644 lines of hand-written form views, are what V1 replaces with generated pages and a year-scoped profile.</div>
+<div class="src"><code>views/profile_manager/mod.rs</code> 5 459 · <code>tab_tax_profile.rs</code> 4 768 · <code>cor_ocr.rs</code> 1 768 · <code>cor_evidence.rs</code> 296 · <code>views/form_*_view.rs</code> 16 644</div>
+</section>
+
+<section class="q"><b>Decide before building</b> (from <code>PLAN-v1-forms-eli5-brief.md</code> §1.C): first-wave forms · what replaces "profile for period X" (proposal: the profile-year) · where templates live · keep per_year_forms as storage · anything in queue/XML/receipts reading the removed flags · sections follow the paper Parts exactly or regroup.</section>
+</main>
+<footer>ELI5 series · 01 of 3 · previous: <a href="00-how-it-works-today.html" style="color:#cfcfd6">00 — how it works today</a> · per form: <a href="forms/2551Q.html" style="color:#cfcfd6">forms/2551Q.html</a> (the format for the other nine)</footer>
+</body></html>

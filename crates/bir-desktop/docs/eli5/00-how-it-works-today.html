@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>ELI5 · eBIRForms today — how a return gets filed</title>
+<style>
+:root{--bg:#0b0b0c;--card:#151517;--line:#2b2b30;--fg:#f3f3f3;--mut:#9a9aa3;--good:#4ade80;--bad:#ff6b6b;--warn:#fbbf24;--blue:#38bdf8;--purple:#a78bfa;--grey:#3a3a40}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+header{padding:36px 40px 10px}h1{margin:0;font-size:36px}.sub{color:var(--mut);font-size:17px;margin-top:6px}
+main{display:grid;gap:22px;padding:14px 40px 60px}
+.pic{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+.pic h2{margin:0 0 14px;font-size:22px}.pic h2 span{color:var(--mut);font-weight:400;font-size:15px;margin-left:10px}
+.cap{margin-top:14px;color:#d8d8de;font-size:15px}.src{margin-top:8px;color:var(--mut);font-size:12.5px}.src code{color:#cfcfd6}
+.row{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap}
+.box{border:2px solid var(--line);border-radius:12px;padding:12px 14px;min-width:150px;background:#1b1b1f}
+.box b{display:block;font-size:17px}.box small{color:var(--mut);display:block;margin-top:4px;font-size:13px}
+.box.good{border-color:var(--good)}.box.bad{border-color:var(--bad)}.box.warn{border-color:var(--warn)}.box.blue{border-color:var(--blue)}.box.purple{border-color:var(--purple)}.box.ghost{border-style:dashed;color:var(--mut)}
+.arrow{align-self:center;font-size:30px;color:var(--mut)}.arrow.bad{color:var(--bad)}.arrow.good{color:var(--good)}
+.col{display:grid;gap:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.stack{display:grid;gap:6px}.chip{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:3px 9px;font-size:13px;background:#1d1d21;margin:2px 3px 2px 0}
+.chip.red{border-color:var(--bad)}.chip.green{border-color:var(--good)}.chip.blue{border-color:var(--blue)}.chip.grey{color:var(--mut)}
+.big{font-size:44px;font-weight:800;line-height:1}
+.pipe{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--mut)}.pipe i{display:inline-block;width:22px;height:22px;border-radius:50%;border:2px solid var(--mut);text-align:center;line-height:20px;font-style:normal;font-size:12px}.pipe i.on{background:var(--warn);border-color:var(--warn);color:#000}.pipe i.done{background:var(--good);border-color:var(--good);color:#000}.pipe s{width:26px;height:0;border-top:2px dashed var(--mut)}
+.screen{border:1px solid var(--line);border-radius:10px;padding:10px;background:#0e0e10}.screen .bar{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}.btn{border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:12px}.btn.pri{background:#e9e9ee;color:#000}
+.band{border-radius:8px;padding:8px;margin-bottom:8px;text-align:center;font-size:13px}.band.grey{background:#2a2a2f}.band.black{background:#0e0e10;border:1px solid var(--line)}
+.sec{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;margin-top:6px}.sec.red{border-color:var(--bad)}
+.q{border:1px dashed var(--warn);border-radius:12px;padding:12px 16px;color:var(--warn)}
+footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px solid var(--line)}
+</style></head><body>
+<header><h1>eBIRForms today — how a return gets filed</h1><div class="sub">Six pictures. What the code does on <code>main @ 130ebf75</code>, not what anyone intended.</div></header>
+<main>
+
+<section class="pic"><h2>1 · One taxpayer, two faces <span>why 1601-C works and 2551Q says "profile unresolved"</span></h2>
+<div class="two">
+  <div>
+    <div class="row"><div class="box blue"><b>Taxpayer profile</b><small>name, TIN, RDO, address, ZIP, phone, email…</small></div><div class="arrow good">⟶</div><div class="box good"><b>1601-C</b><small><code>Form1601CDraft::new_from_profile</code><br>copies the fields. Done.</small></div></div>
+  </div>
+  <div>
+    <div class="row"><div class="box blue"><b>Same profile</b></div><div class="arrow">⟶</div><div class="box purple"><b>Profile versions</b><small>effective-dated ledger, each one <em>Confirmed</em> from a reviewed COR</small></div><div class="arrow bad">⟶</div><div class="box bad"><b>2551Q</b><small><code>resolve_for_period(2026-01-01 … 03-31)</code><br>needs one confirmed version covering the whole quarter</small></div></div>
+    <div class="row" style="margin-top:10px"><div class="box bad"><span class="big">0</span><small>versions on the maintainer's test profile ("Loaded 0 COR versions")</small></div><div class="arrow bad">⟶</div><div class="box bad"><b>NoEffectiveVersionForPeriod</b><small>"Filing blocked — effective taxpayer profile is unresolved". Part I stays empty: Name, RDO, Address all "required".</small></div></div>
+  </div>
+</div>
+<div class="cap">The two forms take different roads to the same profile. 1601-C reads it directly. 2551Q reads it through a ledger of effective-dated versions that only the COR/OCR flow fills — an empty ledger blocks the return even though every field is right there.</div>
+<div class="src">Sources: <code>crates/bir-core/src/forms/form_1601c.rs:240</code> · <code>crates/bir-core/src/profile.rs:967-1060</code> (resolve_for_period, stored_confirmed_ids) · <code>forms/form_2551q.rs:554</code> · <code>views/form_2551q_view.rs:1823</code></div>
+</section>
+
+<section class="pic"><h2>2 · "Which forms do I file?" <span>a rules engine seeds a per-year list</span></h2>
+<div class="row">
+  <div class="box purple"><b>Profile flags</b><small><span class="chip">VAT-registered</span><span class="chip">withholds compensation</span><span class="chip">expanded</span><span class="chip">final</span><span class="chip">top withholding agent</span><span class="chip">government entity</span><span class="chip">GPP partner</span><span class="chip">single employer</span><span class="chip">dormant</span><span class="chip">excise categories</span><span class="chip">registration activity</span></small></div>
+  <div class="arrow">⟶</div>
+  <div class="box"><b>Registry filter</b><small><code>FormDefinition { taxpayer_types, requires_vat, requires_employees, is_deprecated }</code><br>51 entries</small></div>
+  <div class="arrow">⟶</div>
+  <div class="box warn"><b>Per-year Forms Set</b><small>one row per form per year<br>source: <span class="chip">Manual</span><span class="chip">ReviewedCor</span><span class="chip">CorAi</span><span class="chip">InferredTaxType</span><span class="chip">MigrationBackfill</span></small></div>
+  <div class="arrow">⟶</div>
+  <div class="box good"><b>Dashboard · deadlines · calendar</b><small><code>active_form_codes_for_year</code></small></div>
+</div>
+<div class="cap">The dashboard reads the per-year set. The set is <em>seeded</em> by rules that look at the profile flags and the confirmed version timeline ("No longer suggested by the confirmed profile timeline" deactivates entries). Two mechanisms, one list, and the flags exist only to feed the first one.</div>
+<div class="src">Sources: <code>crates/bir-core/src/forms/registry.rs:27</code> · <code>forms/forms_set.rs</code> (FormSetSource, PerYearFormsSet, SYSTEM_DEACTIVATED_REASON) · <code>integration/validation.rs:287-345</code> · <code>profile.rs:327-343, 735-745</code></div>
+</section>
+
+<section class="pic"><h2>3 · A form page today <span>two layouts, ten views, 16 644 lines</span></h2>
+<div class="two">
+  <div class="screen"><div class="bar"><span class="btn">← Back</span><span><span class="btn">Save Draft</span> <span class="btn">Validate</span> <span class="btn pri">Generate XML & Submit</span></span></div><div class="band black"><b>BIR Form No. 1601C</b><br><span class="pipe" style="justify-content:center;margin-top:6px"><i class="on">1</i>Draft<s></s><i>2</i>Queued<s></s><i>3</i>Submitted<s></s><i>4</i>Confirmed<s></s><i>5</i>Paid</span></div><div class="sec">Taxpayer profile card</div><div class="sec">Part IV — Schedule I</div><div class="sec">Part I — Background information (a dozen fields)</div><div class="sec">Part II — Computation (items 14–36)</div><div class="cap" style="margin-top:8px"><b>Old layout</b> — 1601C, 0605, 0619E, 0619F, 1701, 1701Q, 1702RT, 1702MX, 2550Q. Sections are cards, not collapsible. The title sits inside the band.</div></div>
+  <div class="screen"><div class="bar"><span class="btn">← Back</span><span><span class="btn">Save</span> <span class="btn pri">Submit</span></span></div><div class="band grey"><span class="pipe" style="justify-content:center"><i class="on">1</i>Draft<s></s><i>2</i>Queued<s></s><i>3</i>Submitted<s></s><i>4</i>Confirmed<s></s><i>5</i>Paid</span></div><div class="sec">BIR Form No. 2551Q · title</div><div class="sec red">Filing blocked — profile unresolved</div><div class="sec red">▲ Filing period (collapsible)</div><div class="sec red">▲ Part I — Background (pre-filled from profile)</div><div class="sec">▲ Schedule 1 — Computation of tax</div><div class="cap" style="margin-top:8px"><b>New layout</b> — 2551Q only. Three buttons became two, the pipeline is its own band, sections collapse. Still not every field of the paper form.</div></div>
+</div>
+<div class="src">Sources: <code>crates/bir-desktop/src/views/form_1601c_view.rs</code> (1 877 lines) · <code>form_2551q_view.rs</code> (3 109) · <code>form_2550q_view.rs</code> (3 458) · <code>components/form_engine.rs</code> · <code>wc -l views/form_*_view.rs</code> = 16 644</div>
+</section>
+
+<section class="pic"><h2>4 · Validation today <span>it runs before anyone has typed</span></h2>
+<div class="row"><div class="box"><b>Open the form</b><small><code>Form2551QView::new()</code></small></div><div class="arrow">⟶</div><div class="box bad"><b>validate_for_submit()</b><small>called on the last line of <code>new()</code></small></div><div class="arrow bad">⟶</div><div class="box bad"><b>Red boxes</b><small>"Taxpayer Name is required" on a page nobody has touched</small></div></div>
+<div class="row" style="margin-top:12px"><div class="box ghost"><b>no "touched" flag</b><small>per field</small></div><div class="box ghost"><b>no "saved once" flag</b><small>per draft</small></div><div class="box ghost"><b>no "dirty" gate</b><small>the profile editor has one; the forms don't</small></div></div>
+<div class="cap">Validation itself is right — the timing is wrong. There is nothing in the view that knows whether a field was ever edited or the draft ever saved, so the only choice was "always" or "never", and the code chose always.</div>
+<div class="src">Sources: <code>crates/bir-desktop/src/views/form_2551q_view.rs:557</code> (<code>view.validation_errors = view.validate_for_submit(cx)</code> inside <code>new</code>), <code>:1222</code> (validate_for_submit) · <code>components/form_validation/</code></div>
+</section>
+
+<section class="pic"><h2>5 · Tax due today <span>each form recomputes itself</span></h2>
+<div class="row">
+  <div class="box"><b>Schedule 1 row</b><small>ATC code + taxable amount</small></div><div class="arrow">⟶</div>
+  <div class="box purple"><b>resolve_2551q_atc_rate</b><small><code>forms/atc.rs</code> · rate depends on ATC, year, quarter, year-end month</small></div><div class="arrow">⟶</div>
+  <div class="box"><b>row tax due</b><small>amount × rate</small></div><div class="arrow">⟶</div>
+  <div class="box good"><b>14 Total tax due</b><small>Σ rows → 18 credits → 19 payable → 23 penalties → 24 total</small></div>
+</div>
+<div class="row" style="margin-top:12px"><div class="box warn"><b>Also consulted</b><small><span class="chip">EOPT tier (Micro/Small/Medium/Large)</span> from the profile <span class="chip">is_vat_registered</span> from the profile <span class="chip">8% election zeroes the schedule</span></small></div><div class="box"><b>Same shape elsewhere</b><small><code>recompute()</code> in 0605, 0619E, 0619F, 1701, 1701Q, 1702RT, 1702MX, 2550Q, 2307 · <code>compute()</code> in 1601C</small></div></div>
+<div class="cap">The arithmetic is per form and lives in core. What makes it hard to reason about is the side door: profile flags (EOPT tier, VAT) enter the computation, so the same typed numbers can produce different tax for different profiles.</div>
+<div class="src">Sources: <code>crates/bir-core/src/forms/form_2551q.rs:756-800, 822-840</code> · <code>forms/atc.rs</code> · <code>rules/forms/2551q-v2018/calculations.json</code> (8 calculations, evaluation order)</div>
+</section>
+
+<section class="pic"><h2>6 · The road to the BIR <span>and where the HTML bundle is used</span></h2>
+<div class="row"><div class="box"><b>Draft</b><small><code>form_drafts</code> row</small></div><div class="arrow">⟶</div><div class="box"><b>Queue</b><small>claim token · Queued</small></div><div class="arrow">⟶</div><div class="box purple"><b>XML writer</b><small><code>form_2551q_xml.rs</code> · from the draft, not the profile flags</small></div><div class="arrow">⟶</div><div class="box"><b>SFTP PUT</b><small><code>background_cron.rs</code> · Submitted</small></div><div class="arrow">⟶</div><div class="box"><b>Receipt e-mail</b><small>IMAP poll · Confirmed</small></div><div class="arrow">⟶</div><div class="box good"><b>Paid</b></div></div>
+<div class="row" style="margin-top:12px"><div class="box blue"><b>html-frozen/&lt;form&gt;/index.html</b><small>46 bundles · used for <b>print preview</b> and the receipt page only</small></div><div class="box blue"><b>rules/forms/&lt;form&gt;/fields.json</b><small>43 forms · the XML field inventory — <b>not</b> what the app page renders from</small></div><div class="box ghost"><b>App page</b><small>hand-written Rust view per form, its own subset of fields</small></div></div>
+<div class="cap">Filing already runs on the generated artefacts: the XML comes from the field inventory and the preview from the frozen HTML. Only the page the user types into is still hand-made — which is why it shows a subset.</div>
+<div class="src">Sources: <code>crates/bir-core/src/db/drafts.rs</code> · <code>background_cron.rs</code> · <code>forms/form_2551q_xml.rs</code> · <code>bir-print/src/frozen_html.rs</code> · <code>rules/forms/</code> (43) · <code>html-frozen/</code> (46)</div>
+</section>
+
+<section class="q"><b>Questions the code could not answer</b> — the maintainer decides: (1) does anything in queue/XML/receipts read the profile flags that are going away? The XML writers map from the draft; to be confirmed field by field. (2) Is the per-year Forms Set table kept as the store of "forms chosen this year", or folded into the profile-year?</section>
+</main>
+<footer>ELI5 series · 00 of 3 · next: <a href="01-what-v1-becomes.html" style="color:#cfcfd6">01 — what V1 becomes</a> · per form: <a href="forms/2551Q.html" style="color:#cfcfd6">forms/2551Q.html</a></footer>
+</body></html>
