@@ -148,6 +148,7 @@ pub struct BirAgentHost {
     form_loaded: bool,
     db: Option<Arc<Mutex<Database>>>,
     profile_tab: ids::ProfileManagerTab,
+    cron_tab: ids::CronTasksTab,
     hide_tax_profiles: bool,
     dues_filter: String,
     dues_scope: String,
@@ -181,6 +182,7 @@ impl BirAgentHost {
             form_loaded: false,
             db: None,
             profile_tab: ids::ProfileManagerTab::Tax,
+            cron_tab: ids::CronTasksTab::Jobs,
             hide_tax_profiles: false,
             dues_filter: "upcoming".into(),
             dues_scope: "profile".into(),
@@ -283,6 +285,14 @@ impl BirAgentHost {
 
     pub fn set_hide_tax_profiles(&mut self, hide: bool) {
         self.hide_tax_profiles = hide;
+    }
+
+    pub fn set_cron_tab(&mut self, tab: ids::CronTasksTab) {
+        self.cron_tab = tab;
+    }
+
+    pub fn cron_tab(&self) -> ids::CronTasksTab {
+        self.cron_tab
     }
 
     pub fn set_profile_tab(&mut self, tab: ids::ProfileManagerTab) {
@@ -2463,6 +2473,17 @@ impl BirAgentHost {
             ),
             ids::FORM_1601C_BACK => self.navigate(ActiveView::Dashboard),
             ids::FORM_2551Q_VALIDATE => self.validate_form(),
+            other if ids::CronTasksTab::from_id(other).is_some() => {
+                let tab = ids::CronTasksTab::from_id(other).expect("cron tab id");
+                if self.active_view != ActiveView::CronTasks {
+                    return Err("open Background Tasks first (nav.go page=cron-tasks)".into());
+                }
+                self.cron_tab = tab;
+                Ok(DispatchResult::json(json!({
+                    "tab": tab.slug(),
+                    "id": tab.id(),
+                })))
+            }
             other if ids::ProfileManagerTab::from_id(other).is_some() => {
                 let tab = ids::ProfileManagerTab::from_id(other).expect("tab id");
                 if tab == ids::ProfileManagerTab::Calendar && !self.calendar_available() {
@@ -2788,6 +2809,11 @@ impl BirAgentHost {
         }
 
         if self.active_view == ActiveView::CronTasks {
+            for tab in [ids::CronTasksTab::Jobs, ids::CronTasksTab::Logs] {
+                page = page.with_child(
+                    UiNode::new(tab.id(), "tab", tab.slug()).with_checked(self.cron_tab == tab),
+                );
+            }
             let mut jobs = UiNode::new(ids::JOBS_LIST, "list", "Background jobs");
             for job in &self.jobs {
                 jobs = jobs.with_child(
@@ -5150,6 +5176,54 @@ mod tests {
         );
         let _ = host.reload_jobs_and_submissions();
         assert!(host.tree().find("job-1").is_some() || host.tree().find(ids::JOBS_LIST).is_some());
+    }
+
+    /// The painted Background Tasks tabs are clickable through the host, and
+    /// only while that page is open.
+    #[test]
+    fn background_tasks_tabs_click_through_host() {
+        let mut host = fixture_host();
+        let off_page = handle_request(
+            &mut host,
+            req(Op::Click {
+                target: ids::CRON_TAB_LOGS.into(),
+                delivery: Default::default(),
+            }),
+            None,
+            None,
+        );
+        assert!(!off_page.ok, "logs tab must not be clickable off-page");
+
+        let nav = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "nav.go".into(),
+                args: json!({ "page": "cron-tasks" }),
+            }),
+            None,
+            None,
+        );
+        assert!(nav.ok, "{:?}", nav.error);
+        assert_eq!(host.cron_tab(), ids::CronTasksTab::Jobs);
+        let tree = host.tree();
+        let jobs_node = tree.find(ids::CRON_TAB_JOBS).expect("jobs tab in tree");
+        assert_eq!(jobs_node.checked, Some(true));
+
+        let clicked = handle_request(
+            &mut host,
+            req(Op::Click {
+                target: ids::CRON_TAB_LOGS.into(),
+                delivery: Default::default(),
+            }),
+            None,
+            None,
+        );
+        assert!(clicked.ok, "{:?}", clicked.error);
+        assert_eq!(host.cron_tab(), ids::CronTasksTab::Logs);
+        let tree = host.tree();
+        let logs_node = tree.find(ids::CRON_TAB_LOGS).expect("logs tab in tree");
+        assert_eq!(logs_node.checked, Some(true));
+        assert_eq!(tree.find(ids::CRON_TAB_JOBS).unwrap().checked, Some(false));
     }
 
     /// Re-applying an unchanged header patch must report "not dirty". The

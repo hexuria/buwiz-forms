@@ -14,6 +14,28 @@ use std::sync::{Arc, Mutex};
 
 // Daemon checking moved out of UI.
 
+/// The rolling `ebirforms.log` is never truncated by the app, so the Logs tab
+/// keeps only its tail. Every retained line becomes a text element when the
+/// tab is painted, and text shaping is per element per frame.
+const LOG_RETAINED_LINES: usize = 5_000;
+/// Lines actually painted after the level filter. A frame that lays out the
+/// whole file (7,000+ lines on a developer machine) takes several seconds and
+/// beach-balls the app; the full file stays reachable through Export / Email
+/// Support.
+const LOG_RENDERED_LINES: usize = 500;
+
+fn tail_lines(content: &str, keep: usize) -> String {
+    let total = content.lines().count();
+    if total <= keep {
+        return content.to_string();
+    }
+    content
+        .lines()
+        .skip(total - keep)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub enum CronTasksEvent {
     Reload,
 }
@@ -234,6 +256,32 @@ impl CronTasksView {
 
         view.load_settings(cx);
         view
+    }
+
+    pub(crate) fn agent_active_tab(&self) -> crate::agent::ids::CronTasksTab {
+        match self.active_tab {
+            BackgroundTaskTab::Jobs => crate::agent::ids::CronTasksTab::Jobs,
+            BackgroundTaskTab::Logs => crate::agent::ids::CronTasksTab::Logs,
+        }
+    }
+
+    /// Same as clicking the painted tab: switching to Logs re-reads the file.
+    pub(crate) fn agent_set_tab(
+        &mut self,
+        tab: crate::agent::ids::CronTasksTab,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if self.agent_active_tab() == tab {
+            return;
+        }
+        match tab {
+            crate::agent::ids::CronTasksTab::Jobs => self.active_tab = BackgroundTaskTab::Jobs,
+            crate::agent::ids::CronTasksTab::Logs => {
+                self.active_tab = BackgroundTaskTab::Logs;
+                self.refresh_logs(cx);
+            }
+        }
+        cx.notify();
     }
 
     pub fn load_settings(&mut self, cx: &mut Context<'_, Self>) {
@@ -472,7 +520,7 @@ impl CronTasksView {
     fn refresh_logs(&mut self, cx: &mut Context<'_, Self>) {
         let logs_path = bir_core::platform::data_dir().join("logs/ebirforms.log");
         if let Ok(content) = std::fs::read_to_string(&logs_path) {
-            self.log_content = content;
+            self.log_content = tail_lines(&content, LOG_RETAINED_LINES);
         } else {
             self.log_content = "Failed to load logs or logs are empty.".to_string();
         }
@@ -760,90 +808,10 @@ impl Render for CronTasksView {
             </div>
         };
 
-        let selected_log_filter = self.log_filter_combobox.read(cx).selected_value(cx);
-
-        let parsed_logs = self
-            .log_content
-            .lines()
-            .filter(|line| {
-                if selected_log_filter == "All Logs" {
-                    true
-                } else if selected_log_filter == "Error" {
-                    line.contains(" ERROR ") || line.contains(" FATAL ")
-                } else if selected_log_filter == "Warn" {
-                    line.contains(" WARN ")
-                } else if selected_log_filter == "Info" {
-                    line.contains(" INFO ")
-                } else {
-                    true
-                }
-            })
-            .map(|line| {
-                let color = if line.contains(" ERROR ") || line.contains(" FATAL ") {
-                    cx.theme().danger
-                } else if line.contains(" WARN ") {
-                    cx.theme().primary // Fallback for warning color
-                } else if line.contains(" INFO ") {
-                    cx.theme().info
-                } else {
-                    cx.theme().muted_foreground
-                };
-                rsx! {
-                    <div font_family={crate::platform::MONOSPACE_FONT} text_sm text_color={color}>
-                        {line.to_string()}
-                    </div>
-                }
-            });
-
-        let logs_view = rsx! {
-            <div flex flex_col w_full h_full gap_4>
-                <div flex flex_row justify_between items_center w_full mt_6 pb_4 border_b_1 border_color={border}>
-                    <div flex gap_4 items_center>
-                        {gpui_component::button::Button::new("refresh_logs")
-                            .label("Refresh Logs")
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.refresh_logs(cx);
-                            }))}
-                        {gpui_component::button::Button::new("clear_logs")
-                            .label("Clear Logs")
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.clear_logs(cx);
-                            }))}
-                        <div w_48>{Combobox::new(&self.log_filter_combobox)}</div>
-                    </div>
-                    <div flex gap_4>
-                        {gpui_component::button::Button::new("export_error_logs")
-                            .label("Export Error Logs")
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.export_error_logs(cx);
-                            }))}
-                        {gpui_component::button::Button::new("email_support_global")
-                            .label("Email Support")
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.email_support(cx);
-                            }))}
-                    </div>
-                </div>
-                <div
-                    id={"logs_view_content"}
-                    flex
-                    flex_col
-                    flex_1
-                    p_4
-                    bg={cx.theme().background}
-                    border_1
-                    border_color={border}
-                    rounded_md
-                    overflow_y_scroll
-                    track_scroll={&self.logs_scroll_handle}
-                >
-                    {...parsed_logs}
-                </div>
-            </div>
+        let content = if is_jobs {
+            jobs_view.into_any_element()
+        } else {
+            self.render_logs_pane(border, cx).into_any_element()
         };
 
         rsx! {
@@ -933,12 +901,130 @@ impl Render for CronTasksView {
                     .px_8()
                     .pb_8()
                     .overflow_y_scroll()
-                    .child(if is_jobs {
-                        jobs_view.into_any_element()
-                    } else {
-                        logs_view.into_any_element()
-                    })}
+                    .child(content)}
             </div>
         }
+    }
+}
+
+impl CronTasksView {
+    /// Logs pane. Built only while the Logs tab is active: this view lives for
+    /// the whole session, and building thousands of text elements on every
+    /// Jobs-tab frame was enough to stall the window on its own.
+    fn render_logs_pane(&mut self, border: Hsla, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let selected_log_filter = self.log_filter_combobox.read(cx).selected_value(cx);
+
+        let matching: Vec<&str> = self
+            .log_content
+            .lines()
+            .filter(|line| {
+                if selected_log_filter == "All Logs" {
+                    true
+                } else if selected_log_filter == "Error" {
+                    line.contains(" ERROR ") || line.contains(" FATAL ")
+                } else if selected_log_filter == "Warn" {
+                    line.contains(" WARN ")
+                } else if selected_log_filter == "Info" {
+                    line.contains(" INFO ")
+                } else {
+                    true
+                }
+            })
+            .collect();
+        let total = matching.len();
+        let shown = total.min(LOG_RENDERED_LINES);
+        let truncated_note = (total > shown).then(|| {
+            format!("Showing the last {shown} of {total} matching lines. Export Error Logs for the full file.")
+        });
+
+        let parsed_logs = matching.into_iter().skip(total - shown).map(|line| {
+            let color = if line.contains(" ERROR ") || line.contains(" FATAL ") {
+                cx.theme().danger
+            } else if line.contains(" WARN ") {
+                cx.theme().primary // Fallback for warning color
+            } else if line.contains(" INFO ") {
+                cx.theme().info
+            } else {
+                cx.theme().muted_foreground
+            };
+            rsx! {
+                <div font_family={crate::platform::MONOSPACE_FONT} text_sm text_color={color}>
+                    {line.to_string()}
+                </div>
+            }
+        });
+
+        rsx! {
+            <div flex flex_col w_full h_full gap_4>
+                <div flex flex_row justify_between items_center w_full mt_6 pb_4 border_b_1 border_color={border}>
+                    <div flex gap_4 items_center>
+                        {gpui_component::button::Button::new("refresh_logs")
+                            .label("Refresh Logs")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.refresh_logs(cx);
+                            }))}
+                        {gpui_component::button::Button::new("clear_logs")
+                            .label("Clear Logs")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.clear_logs(cx);
+                            }))}
+                        <div w_48>{Combobox::new(&self.log_filter_combobox)}</div>
+                    </div>
+                    <div flex gap_4>
+                        {gpui_component::button::Button::new("export_error_logs")
+                            .label("Export Error Logs")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.export_error_logs(cx);
+                            }))}
+                        {gpui_component::button::Button::new("email_support_global")
+                            .label("Email Support")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.email_support(cx);
+                            }))}
+                    </div>
+                </div>
+                <div text_sm text_color={cx.theme().muted_foreground} when={(truncated_note.is_some(), |this| {
+                    this.child(truncated_note.clone().unwrap_or_default())
+                })} />
+                <div
+                    id={"logs_view_content"}
+                    flex
+                    flex_col
+                    flex_1
+                    p_4
+                    bg={cx.theme().background}
+                    border_1
+                    border_color={border}
+                    rounded_md
+                    overflow_y_scroll
+                    track_scroll={&self.logs_scroll_handle}
+                >
+                    {...parsed_logs}
+                </div>
+            </div>
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Not `use super::*`: that would import gpui's `#[test]` attribute macro
+    // over std's.
+    use super::tail_lines;
+
+    #[test]
+    fn tail_lines_keeps_only_the_newest() {
+        let content = (1..=10)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(tail_lines(&content, 3), "line 8\nline 9\nline 10");
+        assert_eq!(tail_lines(&content, 10), content);
+        assert_eq!(tail_lines(&content, 50), content);
+        assert_eq!(tail_lines("", 5), "");
     }
 }

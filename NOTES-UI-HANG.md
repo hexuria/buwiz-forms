@@ -162,3 +162,76 @@ brand-new, never-before-saved period is reverted before the next `form.fields`
 reads it. Re-opening the form (so it loads the stored row with its id) makes the
 same fill round-trip correctly. This predates the toast fix, is unrelated to the
 freeze, and touches the save path, so it is left for its own change.
+
+---
+
+# Follow-up: Background Tasks page still beach-balled
+
+`d8a0ba92` fixed the agent-driven stalls but the Background Tasks page could
+still freeze the window (and the tray menu, which the same main thread
+serves) hard enough to need a force-quit.
+
+## Root cause
+
+Sampled live on the frozen process (100 % CPU, 51 min uptime): the main
+thread was entirely inside `Window::draw` → `compute_leaf_layout` →
+`shape_text`, with ~⅓ of that in `TextSystem::resolve_font` → `anyhow` →
+**`Backtrace::create`**. Not database work — text.
+
+1. **The Logs tab renders the whole log file as one text element per line,
+   every frame.** `ebirforms.log` is a `rolling::never` appender the app never
+   truncates; on this machine it was 7,322 lines / 1.7 MB. Reproduced on a
+   copy of the repro DB: switching to Logs made **every frame take 7–8 s**
+   (`hello` round trip 6.8–8.0 s, CPU 100 %). That is the beach ball.
+2. **The monospace font never resolved.** `platform::MONOSPACE_FONT` was
+   `".SF NS Mono"`, a hidden system family CoreText will not match by name.
+   gpui caches the failure, but `font_id()` re-wraps the cached error in a new
+   `anyhow::Error` on every lookup — and with `RUST_BACKTRACE=1` (set in this
+   shell) that captures a full unwind **per text element, per frame** (845 of
+   2,900 samples). The lines then fell back to the UI font anyway, so the
+   Logs tab was never actually monospaced.
+3. **The Logs pane was built even on the Jobs tab.** `render` constructed the
+   `logs_view` (all 7,322 divs) unconditionally and only *attached* one pane.
+   `CronTasksView` lives for the whole session, so once Logs had been opened,
+   every later visit to the page paid that per frame on the Jobs tab too —
+   which is why "just navigating to the page" kept the spinner up.
+
+`reload_jobs_and_submissions` (the earlier suspect) was not involved: with
+`d8a0ba92`, the Jobs tab idled at 4 % CPU with 3–29 ms round trips.
+
+## Fix
+
+| file | change |
+| --- | --- |
+| `views/cron_tasks.rs` | Logs pane is built only while the Logs tab is active. `refresh_logs` keeps the last 5,000 lines; the pane paints the last 500 matching lines and says so, with Export / Email Support for the full file. |
+| `platform/macos.rs` | `MONOSPACE_FONT` is `Menlo` (ships with macOS; resolves). Also fixes the debug-log and email-receipt viewers that share the constant. |
+| `agent/ids.rs`, `agent/host.rs`, `agent/drain.rs`, `views/cron_tasks.rs` | The painted `jobs_tab` / `logs_tab` are clickable through the agent (`click logs_tab`) and appear checked in the snapshot tree, so this can be measured and re-checked headlessly. |
+
+### Result (same machine, same repro DB copy)
+
+| measurement | before | after |
+| --- | --- | --- |
+| Logs tab, `hello` round trip | 6.8–8.0 s | **8–30 ms** |
+| Logs tab, CPU | 100 % | **~10 %** |
+| Logs tab, main thread idle (`mach_msg`) | 0 % | **94 %** |
+| Jobs tab, CPU / `hello` | 4 % / 16 ms | 4 % / 20 ms |
+| Jobs → Logs → Jobs → Logs switching | first Logs click never returns | each switch 16–22 ms |
+
+Regression checks from `d8a0ba92`, same session: Submitted 1601-C
+`form.fields` flood from 12 connections (14,424 requests in 20 s, probe
+`hello` p50 13 ms / max 21 ms, idle 3.6 % afterwards); Draft `form.fill` +
+`form.save_draft` round-trips; 60 s soak parked on the Logs tab with cron
+ticks and 12 `DatabaseChanged` broadcasts — `hello` 18 ms, CPU ~11 %.
+
+## Verifying by hand
+
+Same launch as above. Then:
+
+1. Sidebar → Background Tasks. Window stays draggable; tray menu opens.
+2. Click **Logs**. The pane fills within a frame and shows "Showing the last
+   500 of N matching lines" when the file is large. Scroll it. Switch the level
+   filter. Click **Jobs**, then **Logs** again — each switch is instant.
+3. Leave it on Logs for a minute while the 60 s cron tick fires. CPU stays in
+   the low tens of percent; the tray and window keep responding.
+4. Headless equivalent: `nav.go page=cron-tasks`, `click logs_tab`, then poll
+   `hello` — round trips stay in the tens of milliseconds.

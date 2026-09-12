@@ -94,6 +94,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.set_hide_tax_profiles(app.hide_tax_profiles);
     host.restore_view(app.active_view, app.active_profile_tin.clone());
     host.set_profile_tab(app.profile_manager.read(cx).agent_active_tab());
+    host.set_cron_tab(app.cron_tasks_view.read(cx).agent_active_tab());
     host.replace_profiles(
         app.profiles
             .iter()
@@ -204,6 +205,12 @@ fn apply_host(
             if host.editor_snapshot().save_message.is_none() {
                 view.agent_apply_editor(&host.editor_snapshot(), window, cx);
             }
+        });
+    }
+
+    if host.active_view() == ActiveView::CronTasks {
+        app.cron_tasks_view.update(cx, |view, cx| {
+            view.agent_set_tab(host.cron_tab(), cx);
         });
     }
 

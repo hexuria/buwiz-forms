@@ -111,6 +111,39 @@ pub const FORM_1702MX_SUBMIT: &str = "1702mx_submit";
 
 pub const DUES_LIST: &str = "dues-list";
 pub const JOBS_LIST: &str = "jobs-list";
+/// Background Tasks tabs. Same element ids the painted view uses.
+pub const CRON_TAB_JOBS: &str = "jobs_tab";
+pub const CRON_TAB_LOGS: &str = "logs_tab";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CronTasksTab {
+    Jobs,
+    Logs,
+}
+
+impl CronTasksTab {
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            CRON_TAB_JOBS => Some(Self::Jobs),
+            CRON_TAB_LOGS => Some(Self::Logs),
+            _ => None,
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Jobs => CRON_TAB_JOBS,
+            Self::Logs => CRON_TAB_LOGS,
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Jobs => "jobs",
+            Self::Logs => "logs",
+        }
+    }
+}
 pub const SUBMISSIONS_LIST: &str = "submissions-list";
 pub const CONTEXT_SELECTED_TIN: &str = "context.selected_tin";
 
