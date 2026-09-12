@@ -430,13 +430,18 @@ impl BirAgentHost {
 
     /// Same patch `drain::apply_host` writes into `Form1601CView`.
     pub(crate) fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
+        let editable = self
+            .form_1601c
+            .as_ref()
+            .is_some_and(|form| form.draft.is_editable());
         Agent1601CHostPatch {
             tax_14: self.form_1601c_tax_14(),
             tax_25: self.form_1601c_tax_25(),
             sheets: self.form_1601c_sheets(),
             any_taxes_withheld: self.form_1601c_any_taxes_withheld(),
             category_of_agent: self.form_1601c_category_of_agent(),
-            save: self.form_1601c_saved(),
+            // One-shot save only while the return is still a Draft.
+            save: editable && self.form_1601c_saved(),
             validate: self.form_1601c_validated(),
         }
     }

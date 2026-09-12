@@ -116,10 +116,14 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.replace_dues(dues);
     if let Some(view) = &app.form_1601c_view {
         let form = view.read(cx);
+        // `saved` is a one-shot host flag set by form.save_draft / queue in this
+        // request. Never derive it from draft.id — that made every mutating
+        // invoke (including form.fields) re-trigger UI Draft-save on
+        // Queued/Submitted returns and spam the toaster.
         host.replace_form_1601c_state(
             form.agent_draft().clone(),
             form.agent_validated(),
-            form.agent_draft().id.is_some(),
+            false,
             form.agent_validation_errors(),
         );
     }
@@ -128,7 +132,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
         host.replace_form_2551q_state(
             form.agent_draft().clone(),
             form.agent_validated(),
-            form.agent_draft().id.is_some(),
+            false,
             form.agent_validation_errors(),
         );
     }

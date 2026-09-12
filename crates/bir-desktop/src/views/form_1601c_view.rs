@@ -655,7 +655,11 @@ impl Form1601CView {
             self.is_validated = true;
         }
         if patch.save {
-            self.save_draft(window, cx);
+            // Queued/Submitted/Confirmed must never take the generic Draft save
+            // path (DB rejects it and the UI toaster spams on every agent drain).
+            if self.draft.is_editable() {
+                self.save_draft(window, cx);
+            }
         }
     }
 
@@ -802,6 +806,11 @@ impl FormViewTrait for Form1601CView {
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.is_editable() {
+            // Immutable snapshot — ignore Save Draft / agent save patches quietly.
+            cx.notify();
+            return;
+        }
         self.sync_from_inputs(cx);
         let save_result = match self.db.lock() {
             Ok(db) => db
