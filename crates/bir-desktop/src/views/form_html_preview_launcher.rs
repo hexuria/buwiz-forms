@@ -7,24 +7,45 @@ use bir_core::db::Database;
 use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_print::frozen_html::ReceiptPage;
 use gpui::Context;
+use gpui::WindowHandle;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use gpui::{AppContext, TitlebarOptions, WindowBounds, WindowOptions, px, size};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(crate) enum HtmlPreviewLaunchKind {
-    FrozenHtmlWindow,
+    /// An owned preview window; the handle lets the form view follow its
+    /// lifetime (the status line goes away when the window does).
+    FrozenHtmlWindow(WindowHandle<super::frozen_html_preview::FrozenHtmlPreviewView>),
+    /// Written to a temp file and handed to the system browser.
     FrozenHtmlDocument,
 }
 
 impl HtmlPreviewLaunchKind {
-    pub(crate) const fn status_message(self) -> &'static str {
+    pub(crate) const fn status_message(&self) -> &'static str {
         match self {
-            Self::FrozenHtmlWindow => "Print preview opened.",
+            Self::FrozenHtmlWindow(_) => "Print preview opened.",
             Self::FrozenHtmlDocument => "Print preview opened as a local document.",
         }
+    }
+
+    /// Run `on_close` on the launching view once the preview window has been
+    /// closed. A document opened externally cannot be followed; nothing runs.
+    pub(crate) fn observe_close<T: 'static>(
+        &self,
+        cx: &mut Context<T>,
+        on_close: impl FnOnce(&mut T, &mut Context<T>) + 'static,
+    ) {
+        let Self::FrozenHtmlWindow(handle) = self else {
+            return;
+        };
+        let Ok(view) = handle.update(cx, |_, _, cx| cx.entity()) else {
+            return;
+        };
+        cx.observe_release(&view, move |this, _, cx| on_close(this, cx))
+            .detach();
     }
 }
 
@@ -121,7 +142,7 @@ fn launch_frozen_html<T: 'static>(
             })
             .map_err(|error| format!("the frozen HTML window could not be opened: {error}"));
         match opened {
-            Ok(_) => Ok(HtmlPreviewLaunchKind::FrozenHtmlWindow),
+            Ok(handle) => Ok(HtmlPreviewLaunchKind::FrozenHtmlWindow(handle)),
             Err(error) => {
                 let path = write_frozen_html_document(&html)?;
                 open::that(&path).map_err(|open_error| {
@@ -168,14 +189,26 @@ mod tests {
 
     #[test]
     fn launch_kinds_report_the_owned_host_that_opened() {
-        assert_eq!(
-            HtmlPreviewLaunchKind::FrozenHtmlWindow.status_message(),
-            "Print preview opened."
-        );
         assert!(
             HtmlPreviewLaunchKind::FrozenHtmlDocument
                 .status_message()
                 .contains("local document")
+        );
+    }
+
+    #[gpui::test]
+    fn a_window_launch_reports_the_owned_host(cx: &mut gpui::TestAppContext) {
+        cx.update(gpui_component::theme::init);
+        let handle = cx.add_window(|window, cx| {
+            super::super::frozen_html_preview::FrozenHtmlPreviewView::new(
+                "<html><body><div class=\"page\"></div></body></html>".to_string(),
+                window,
+                cx,
+            )
+        });
+        assert_eq!(
+            HtmlPreviewLaunchKind::FrozenHtmlWindow(handle).status_message(),
+            "Print preview opened."
         );
     }
 }

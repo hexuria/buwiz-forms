@@ -2,7 +2,6 @@
 //!
 //! This is a thin WebView around `bir_print::frozen_html::filled_document`.
 
-use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px,
@@ -22,66 +21,16 @@ pub(crate) struct FrozenHtmlPreviewView {
     webview: Option<Entity<WebView>>,
     /// Only failures are worth a line in the toolbar.
     status: Option<String>,
-    /// The document's own sheet in points (`@page { size }`), e.g. 612×936.
-    native_sheet: (f32, f32),
-    paper: Entity<ComboboxState>,
 }
 
-/// Paper sizes the preview can fit the sheets to, in points.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Paper {
-    pub label: &'static str,
-    pub width: f32,
-    pub height: f32,
-}
-
-pub(crate) const PAPERS: [Paper; 4] = [
-    Paper {
-        label: "Long 8.5 × 13 in",
-        width: 612.0,
-        height: 936.0,
-    },
-    Paper {
-        label: "A4",
-        width: 595.28,
-        height: 841.89,
-    },
-    Paper {
-        label: "Letter 8.5 × 11 in",
-        width: 612.0,
-        height: 792.0,
-    },
-    Paper {
-        label: "Legal 8.5 × 14 in",
-        width: 612.0,
-        height: 1008.0,
-    },
-];
-
-fn paper_by_label(label: &str) -> Option<Paper> {
-    PAPERS.iter().copied().find(|paper| paper.label == label)
-}
-
-/// The paper whose size matches `(width, height)` within a couple of points.
-fn paper_matching(width: f32, height: f32) -> Option<Paper> {
-    PAPERS
-        .iter()
-        .copied()
-        .find(|paper| (paper.width - width).abs() < 3.0 && (paper.height - height).abs() < 3.0)
-}
-
-/// The system's default paper on macOS (`NSPrintInfo.sharedPrintInfo`),
-/// falling back to A4 where that is unavailable or unmatched.
-fn default_paper() -> Paper {
-    #[cfg(target_os = "macos")]
-    {
-        let size = objc2_app_kit_modern::NSPrintInfo::sharedPrintInfo().paperSize();
-        if let Some(paper) = paper_matching(size.width as f32, size.height as f32) {
-            return paper;
-        }
-    }
-    PAPERS[1]
-}
+/// The one paper the preview prints on, in points. The forms are drawn on
+/// 8.5 × 13 in long bond, which nobody keeps in a printer tray; every sheet
+/// is scaled to fit A4 instead, and what is on screen is what comes out.
+pub(crate) const PAPER_WIDTH_PT: f32 = 595.28;
+pub(crate) const PAPER_HEIGHT_PT: f32 = 841.89;
+/// Kept clear at the top and bottom of every sheet for the printer's
+/// unprintable edge.
+const SAFETY_PT: f32 = 10.0;
 
 /// `@page { size:612pt 936pt }` from the document's inlined form CSS.
 fn document_sheet_size(html: &str) -> Option<(f32, f32)> {
@@ -96,32 +45,46 @@ fn document_sheet_size(html: &str) -> Option<(f32, f32)> {
     Some((w, h))
 }
 
-/// Scale factor that fits a native sheet onto `paper` with a small safety
-/// margin for the printer's unprintable edge. Never enlarges.
-fn fit_scale(native: (f32, f32), paper: Paper) -> f32 {
-    const SAFETY_PT: f32 = 10.0;
-    let sx = (paper.width - 2.0 * SAFETY_PT) / native.0;
-    let sy = (paper.height - 2.0 * SAFETY_PT) / native.1;
+/// Scale factor that fits a native sheet onto the paper, inside the safety
+/// edge. Never enlarges.
+fn fit_scale(native: (f32, f32)) -> f32 {
+    let sx = (PAPER_WIDTH_PT - 2.0 * SAFETY_PT) / native.0;
+    let sy = (PAPER_HEIGHT_PT - 2.0 * SAFETY_PT) / native.1;
     sx.min(sy).min(1.0)
 }
 
-/// Stylesheet that fits every sheet to `paper`, on screen and in print, and
-/// hides anything outside the sheets (a bundle's "Guidelines and
-/// Instructions" link, in any form) — it would not print, so showing it
-/// only confuses. Chromium hosts honour the `@page` size in their print dialog;
-/// WebKit takes the paper from the print panel, so the scale is what matters.
-fn paper_css(native: (f32, f32), paper: Paper) -> String {
-    let scale = fit_scale(native, paper);
+/// Stylesheet that turns the document into paper-sized sheets, each holding
+/// one scaled form page, for screen and print alike.
+///
+/// Two WebKit facts shape this. Its print layout width follows the widest
+/// content unless `body` has an explicit width, and the whole document is
+/// then scaled to the paper width — so a 612pt page zoomed to 537pt was
+/// scaled back up, overflowed A4, and printed as two pages (the "6 of 6").
+/// Pinning `html,body` to the paper width stops that. And a block exactly
+/// as tall as the page still spills a fraction of a point onto a blank
+/// page, so the sheet is a point shorter than the paper.
+///
+/// Anything outside the sheets (a bundle's "Guidelines and Instructions"
+/// link, in any form) is hidden: it would not print, so showing it only
+/// confuses.
+fn fit_css(native: (f32, f32)) -> String {
+    let scale = fit_scale(native);
     format!(
         "@page{{size:{w:.2}pt {h:.2}pt;margin:0}}\
-body>:not(.page){{display:none !important}}@media print{{html,body{{background:#fff !important}}body{{padding:0 !important}}.page{{margin:0 !important;box-shadow:none !important}}}}\
-.page{{zoom:{scale:.4}}}",
-        w = paper.width,
-        h = paper.height,
+html,body{{width:{w:.2}pt;margin:0 auto;padding:0;background:#fff}}\
+body>:not(.sheet){{display:none !important}}\
+.sheet{{position:relative;width:{w:.2}pt;height:{sheet_h:.2}pt;overflow:hidden;background:#fff;padding-top:{safety:.0}pt;break-after:page;page-break-after:always}}\
+.sheet:last-of-type{{break-after:auto;page-break-after:auto}}\
+.sheet-flow{{height:auto;min-height:{sheet_h:.2}pt;overflow:visible}}\
+.sheet>.page{{zoom:{scale:.4};margin:0 auto;break-after:auto;page-break-after:auto}}",
+        w = PAPER_WIDTH_PT,
+        h = PAPER_HEIGHT_PT,
+        sheet_h = PAPER_HEIGHT_PT - 1.0,
+        safety = SAFETY_PT,
     )
 }
 
-fn with_paper_style(html: &str, css: &str) -> String {
+fn with_fit_style(html: &str, css: &str) -> String {
     let tag = format!("<style id=\"preview-paper\">{css}</style>");
     match html.rfind("</head>") {
         Some(at) => format!("{}{}{}", &html[..at], tag, &html[at..]),
@@ -129,27 +92,27 @@ fn with_paper_style(html: &str, css: &str) -> String {
     }
 }
 
+/// Wrap every top-level `.page` in a `.sheet` before first paint. The
+/// receipt page is the one page that may run long (a mail body), so its
+/// sheet is allowed to grow and paginate normally.
+fn with_sheets(html: &str) -> String {
+    const SCRIPT: &str = "<script>(function(){\
+var pages=document.querySelectorAll('body>.page');\
+for(var i=0;i<pages.length;i++){var p=pages[i];var s=document.createElement('div');\
+s.className='sheet'+(p.classList.contains('page-receipt')?' sheet-flow':'');\
+p.parentNode.insertBefore(s,p);s.appendChild(p);}})();</script>";
+    match html.rfind("</body>") {
+        Some(at) => format!("{}{}{}", &html[..at], SCRIPT, &html[at..]),
+        None => format!("{html}{SCRIPT}"),
+    }
+}
+
 impl FrozenHtmlPreviewView {
     pub(crate) fn new(html: String, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let native_sheet = document_sheet_size(&html).unwrap_or((612.0, 936.0));
-        let paper_default = default_paper();
         let html = with_screen_canvas(&html, cx.theme().secondary);
-        let html = with_paper_style(&html, &paper_css(native_sheet, paper_default));
-        let paper = cx.new(|cx| {
-            ComboboxState::new(
-                PAPERS.iter().map(|paper| paper.label.to_string()).collect(),
-                6,
-                window,
-                cx,
-            )
-        });
-        paper.update(cx, |state, cx| {
-            state.set_selected_value(paper_default.label, window, cx)
-        });
-        cx.subscribe(&paper, |this: &mut Self, _, _: &ComboboxEvent, cx| {
-            this.apply_paper(cx);
-        })
-        .detach();
+        let html = with_fit_style(&html, &fit_css(native_sheet));
+        let html = with_sheets(&html);
         let result = window
             .window_handle()
             .map_err(|error| error.to_string())
@@ -171,33 +134,7 @@ impl FrozenHtmlPreviewView {
             Err(error) => (None, Some(format!("Print preview failed: {error}"))),
         };
 
-        Self {
-            webview,
-            status,
-            native_sheet,
-            paper,
-        }
-    }
-
-    /// Re-fit the sheets to the paper picked in the toolbar, in place.
-    fn apply_paper(&mut self, cx: &mut Context<Self>) {
-        let label = self.paper.read(cx).selected_value(cx);
-        let Some(paper) = paper_by_label(&label) else {
-            return;
-        };
-        let Some(webview) = self.webview.clone() else {
-            return;
-        };
-        let css = paper_css(self.native_sheet, paper);
-        let script = format!(
-            "(function(){{var s=document.getElementById('preview-paper');if(s){{s.textContent={};}}}})();",
-            serde_json::to_string(&css).unwrap_or_else(|_| "\"\"".to_string())
-        );
-        let outcome = webview.update(cx, |webview, _| webview.raw().evaluate_script(&script));
-        if let Err(error) = outcome {
-            self.status = Some(format!("Could not change the paper size: {error}"));
-        }
-        cx.notify();
+        Self { webview, status }
     }
 
     /// The platform's print dialog through wry's native `print()`
@@ -212,6 +149,18 @@ impl FrozenHtmlPreviewView {
             return;
         };
         let outcome = webview.update(cx, |webview, _| {
+            // The sheets are laid out for A4; a different default paper in
+            // the shared print info would re-paginate them. wry prints from
+            // that same shared object, so set it first.
+            #[cfg(target_os = "macos")]
+            {
+                let info = objc2_app_kit_modern::NSPrintInfo::sharedPrintInfo();
+                info.setPaperSize(objc2_foundation_modern::NSSize::new(
+                    f64::from(PAPER_WIDTH_PT),
+                    f64::from(PAPER_HEIGHT_PT),
+                ));
+                info.setOrientation(objc2_app_kit_modern::NSPaperOrientation::Portrait);
+            }
             // Zero margins: the sheets already carry the form's own margins,
             // and the paper fit above leaves a safety edge.
             #[cfg(target_os = "macos")]
@@ -242,10 +191,10 @@ impl FrozenHtmlPreviewView {
 fn with_screen_canvas(html: &str, canvas: gpui::Hsla) -> String {
     let css = format!(
         "<style id=\"preview-canvas\">@media screen{{\
-html,body{{background:{canvas} !important}}\
+html,body{{background:{canvas} !important;width:auto}}\
 body{{padding:24pt 0}}\
-.page{{margin:0 auto 24pt auto;box-shadow:0 1pt 6pt rgba(0,0,0,.28)}}\
-.page:last-of-type{{margin-bottom:0}}\
+.sheet{{margin:0 auto 24pt auto;box-shadow:0 1pt 6pt rgba(0,0,0,.28)}}\
+.sheet:last-of-type{{margin-bottom:0}}\
 }}</style>",
         canvas = css_color(canvas)
     );
@@ -290,8 +239,7 @@ impl Render for FrozenHtmlPreviewView {
                 >
                     <div text_color={cx.theme().danger}>{self.status.clone().unwrap_or_default()}</div>
                     <div flex items_center gap_3>
-                        <div text_color={cx.theme().muted_foreground}>{"Paper"}</div>
-                        <div w_48>{Combobox::new(&self.paper)}</div>
+                        <div text_color={cx.theme().muted_foreground}>{"Fits A4"}</div>
                         {Button::new("frozen-html-print")
                             .label("Print")
                             .primary()
@@ -317,8 +265,8 @@ impl Render for FrozenHtmlPreviewView {
 #[cfg(test)]
 mod tests {
     use super::{
-        PAPERS, css_color, document_sheet_size, fit_scale, paper_css, paper_matching,
-        with_paper_style, with_screen_canvas,
+        PAPER_HEIGHT_PT, PAPER_WIDTH_PT, css_color, document_sheet_size, fit_css, fit_scale,
+        with_fit_style, with_screen_canvas, with_sheets,
     };
 
     #[test]
@@ -331,42 +279,57 @@ mod tests {
     }
 
     #[test]
-    fn long_sheet_fits_a4_and_letter_by_height_and_never_grows() {
-        let long = (612.0, 936.0);
-        let k_a4 = fit_scale(long, PAPERS[1]);
-        let k_letter = fit_scale(long, PAPERS[2]);
-        assert!((k_a4 - (841.89 - 20.0) / 936.0).abs() < 1e-4, "{k_a4}");
-        assert!(
-            (k_letter - (792.0 - 20.0) / 936.0).abs() < 1e-4,
-            "{k_letter}"
-        );
+    fn long_sheet_fits_a4_by_height_and_nothing_is_enlarged() {
+        let k = fit_scale((612.0, 936.0));
+        assert!((k - (PAPER_HEIGHT_PT - 20.0) / 936.0).abs() < 1e-4, "{k}");
         assert_eq!(
-            fit_scale(long, PAPERS[3]),
+            fit_scale((400.0, 500.0)),
             1.0,
-            "larger paper does not enlarge"
+            "small sheets keep their size"
         );
-        assert!(paper_matching(595.0, 842.0).is_some());
-        assert!(paper_matching(500.0, 700.0).is_none());
+        let k_wide = fit_scale((1000.0, 500.0));
+        assert!(
+            (k_wide - (PAPER_WIDTH_PT - 20.0) / 1000.0).abs() < 1e-4,
+            "{k_wide}"
+        );
     }
 
     #[test]
-    fn paper_stylesheet_scales_pages_and_hides_non_pages_in_print() {
-        let css = paper_css((612.0, 936.0), PAPERS[1]);
+    fn fit_stylesheet_pins_the_body_to_a4_and_scales_pages_inside_sheets() {
+        let css = fit_css((612.0, 936.0));
         assert!(
             css.contains("@page{size:595.28pt 841.89pt;margin:0}"),
             "{css}"
         );
+        assert!(css.contains("html,body{width:595.28pt;"), "{css}");
         assert!(
-            css.contains("body>:not(.page){display:none !important}"),
+            css.contains("body>:not(.sheet){display:none !important}"),
             "{css}"
         );
         assert!(
-            !css.contains("@media print{body>:not(.page)"),
-            "non-page content is hidden on screen as well as in print"
+            css.contains(".sheet{position:relative;width:595.28pt;height:840.89pt;"),
+            "a point shorter than the paper: {css}"
         );
-        assert!(css.contains(".page{zoom:0.8780}"), "{css}");
-        let doc = with_paper_style("<html><head></head><body></body></html>", &css);
+        assert!(
+            css.contains(".sheet-flow{height:auto;min-height:840.89pt;"),
+            "{css}"
+        );
+        let zoom = format!(
+            ".sheet>.page{{zoom:{:.4};margin:0 auto;",
+            fit_scale((612.0, 936.0))
+        );
+        assert!(css.contains(&zoom), "{css}");
+        let doc = with_fit_style("<html><head></head><body></body></html>", &css);
         assert!(doc.find("<style id=\"preview-paper\">").unwrap() < doc.find("</head>").unwrap());
+    }
+
+    #[test]
+    fn sheet_wrapper_script_runs_before_the_body_closes() {
+        let doc = with_sheets("<html><body><div class=\"page\"></div></body></html>");
+        let script = doc.find("<script>").expect("script");
+        assert!(script < doc.find("</body>").unwrap());
+        assert!(script > doc.find("class=\"page\"").unwrap());
+        assert!(doc.contains("'sheet'+(p.classList.contains('page-receipt')?' sheet-flow':'')"));
     }
 
     #[test]
@@ -386,7 +349,7 @@ mod tests {
         assert!(style < head_end, "injected inside <head>");
         assert!(doc.contains("@media screen{"));
         assert!(doc.contains("hsla(0.0deg,0.0%,92.0%,1.000)"));
-        assert!(doc.contains(".page{margin:0 auto 24pt auto"));
+        assert!(doc.contains(".sheet{margin:0 auto 24pt auto"));
         assert_eq!(css_color(grey), "hsla(0.0deg,0.0%,92.0%,1.000)");
     }
 }

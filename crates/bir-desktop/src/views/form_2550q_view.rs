@@ -1748,6 +1748,10 @@ impl FormViewTrait for Form2550QV2View {
                     "{} Preview is available for review; filing remains manual/external.",
                     launch_kind.status_message()
                 ));
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
             }
             Err(error) => {
                 let message = format!(

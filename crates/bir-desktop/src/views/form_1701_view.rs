@@ -1269,6 +1269,10 @@ impl FormViewTrait for Form1701View {
                     launch_kind.status_message()
                 );
                 self.status_message = Some(message);
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
             }
             Err(error) => {
                 let message = format!(

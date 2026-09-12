@@ -1402,6 +1402,10 @@ impl Form2551QView {
             Ok(launch_kind) => {
                 self.is_generating_pdf = false;
                 self.status_message = Some(launch_kind.status_message().to_string());
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
                 cx.notify();
             }
             Err(error) => {

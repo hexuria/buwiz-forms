@@ -563,6 +563,10 @@ impl FormViewTrait for Form0619EView {
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(launch_kind.status_message().to_string());
+                launch_kind.observe_close(cx, |this, cx| {
+                    this.status_message = None;
+                    cx.notify();
+                });
             }
             Err(error) => {
                 let message = format!(
