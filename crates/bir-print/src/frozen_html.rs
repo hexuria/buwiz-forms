@@ -667,14 +667,19 @@ fn receipt_page_html(receipt: &ReceiptPage, width: &str, height: &str) -> String
     html.push_str(&row("To", &receipt.to));
     html.push_str(&row("Subject", &receipt.subject));
     html.push_str("</table>");
-    html.push_str(&format!(
-        "<pre style=\"white-space:pre-wrap;word-break:break-word;margin:0;padding:10pt 12pt;border:1px solid #999;font-family:'eBIRForms Tinos',Tinos,'Times New Roman',Times,serif;font-size:9.5pt;line-height:1.4\">{}</pre>",
-        html_escape(&receipt.body_text)
-    ));
-    if let Some(body_html) = &receipt.body_html {
-        html.push_str("<div class=\"receipt-html\" style=\"margin-top:14pt;padding-top:10pt;border-top:1px solid #999\">");
-        html.push_str(body_html);
-        html.push_str("</div>");
+    // The email as BIR sent it when its HTML survived ingest; the plain text
+    // only as a fallback. Both said the same thing, and printing both read
+    // as a duplicate.
+    match &receipt.body_html {
+        Some(body_html) if !body_html.trim().is_empty() => {
+            html.push_str("<div class=\"receipt-html\" style=\"padding:10pt 12pt;border:1px solid #999\">");
+            html.push_str(body_html);
+            html.push_str("</div>");
+        }
+        _ => html.push_str(&format!(
+            "<pre class=\"receipt-text\" style=\"white-space:pre-wrap;word-break:break-word;margin:0;padding:10pt 12pt;border:1px solid #999;font-family:'eBIRForms Tinos',Tinos,'Times New Roman',Times,serif;font-size:9.5pt;line-height:1.4\">{}</pre>",
+            html_escape(&receipt.body_text)
+        )),
     }
     html.push_str("</section>");
     html
@@ -849,13 +854,26 @@ mod tests {
             "sheet matches @page"
         );
         assert!(
-            with.contains("receipt &lt;of&gt; your submission"),
-            "text is escaped"
-        );
-        assert!(
             with.contains("<p>This confirms <b>receipt</b></p>"),
             "html body embedded as given"
         );
+        assert!(
+            !with.contains("receipt &lt;of&gt;"),
+            "text is not printed beside the html"
+        );
+
+        let text_only = super::ReceiptPage {
+            body_html: None,
+            ..receipt.clone()
+        };
+        let with_text =
+            super::filled_document_with_receipt("1601c-2018", &fields, Some(&text_only))
+                .expect("form + text receipt");
+        assert!(
+            with_text.contains("receipt &lt;of&gt; your submission"),
+            "text fallback is escaped"
+        );
+        assert!(!with_text.contains("receipt-html"));
         assert!(with.contains(
             "Received by BIR</th><td style=\"padding:2pt 0\">12 September 2026, 02:52 PM"
         ));
