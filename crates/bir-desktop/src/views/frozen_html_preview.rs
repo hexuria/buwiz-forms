@@ -23,6 +23,7 @@ pub(crate) struct FrozenHtmlPreviewView {
 
 impl FrozenHtmlPreviewView {
     pub(crate) fn new(html: String, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let html = with_screen_canvas(&html, cx.theme().secondary);
         let result = window
             .window_handle()
             .map_err(|error| error.to_string())
@@ -71,6 +72,37 @@ impl FrozenHtmlPreviewView {
     }
 }
 
+/// On screen, show the sheets as sheets: centred white pages on the same
+/// grey as the toolbar, with a gap so page breaks are visible. The bundle's
+/// own CSS paints `html, body` white and stacks pages at the left edge,
+/// which reads as one endless white surface. Print is untouched — the
+/// `@media screen` block does not apply there.
+fn with_screen_canvas(html: &str, canvas: gpui::Hsla) -> String {
+    let css = format!(
+        "<style id=\"preview-canvas\">@media screen{{\
+html,body{{background:{canvas} !important}}\
+body{{padding:24pt 0}}\
+.page{{margin:0 auto 24pt auto;box-shadow:0 1pt 6pt rgba(0,0,0,.28)}}\
+.page:last-of-type{{margin-bottom:0}}\
+}}</style>",
+        canvas = css_color(canvas)
+    );
+    match html.rfind("</head>") {
+        Some(at) => format!("{}{}{}", &html[..at], css, &html[at..]),
+        None => format!("{css}{html}"),
+    }
+}
+
+fn css_color(color: gpui::Hsla) -> String {
+    format!(
+        "hsla({:.1}deg,{:.1}%,{:.1}%,{:.3})",
+        color.h * 360.0,
+        color.s * 100.0,
+        color.l * 100.0,
+        color.a
+    )
+}
+
 impl Render for FrozenHtmlPreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_print = self.webview.is_some();
@@ -115,5 +147,31 @@ impl Render for FrozenHtmlPreviewView {
                 />
             </div>
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{css_color, with_screen_canvas};
+
+    #[test]
+    fn screen_canvas_is_injected_into_head_and_scoped_to_screen() {
+        let grey = gpui::Hsla {
+            h: 0.0,
+            s: 0.0,
+            l: 0.92,
+            a: 1.0,
+        };
+        let doc = with_screen_canvas(
+            "<html><head><title>x</title></head><body><div class=\"page\"></div></body></html>",
+            grey,
+        );
+        let style = doc.find("<style id=\"preview-canvas\">").expect("style");
+        let head_end = doc.find("</head>").expect("head");
+        assert!(style < head_end, "injected inside <head>");
+        assert!(doc.contains("@media screen{"));
+        assert!(doc.contains("hsla(0.0deg,0.0%,92.0%,1.000)"));
+        assert!(doc.contains(".page{margin:0 auto 24pt auto"));
+        assert_eq!(css_color(grey), "hsla(0.0deg,0.0%,92.0%,1.000)");
     }
 }
