@@ -89,7 +89,7 @@ footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px sol
 <div class="src">Sources: <code>crates/bir-core/src/db/drafts.rs</code> · <code>background_cron.rs</code> · <code>forms/form_2551q_xml.rs</code> · <code>bir-print/src/frozen_html.rs</code> · <code>rules/forms/</code> (43) · <code>html-frozen/</code> (46)</div>
 </section>
 
-<section class="q"><b>Questions the code could not answer</b> — the maintainer decides: (1) does anything in queue/XML/receipts read the profile flags that are going away? The XML writers map from the draft; to be confirmed field by field. (2) Is the per-year Forms Set table kept as the store of "forms chosen this year", or folded into the profile-year?</section>
+<section class="q"><b>Phase 0 — decided</b> (see <code>PLAN-v1-forms-eli5-brief.md</code> §1.C): queue/XML/receipts may drop inference flags once grep shows they only read the draft. <code>per_year_forms</code> stays (Manual only) as the store the dashboard and calendar already read.</section>
 </main>
 <footer>ELI5 series · 00 of 3 · next: <a href="01-what-v1-becomes.html" style="color:#cfcfd6">01 — what V1 becomes</a> · per form: <a href="forms/2551Q.html" style="color:#cfcfd6">forms/2551Q.html</a></footer>
 </body></html>

@@ -45,6 +45,10 @@ building any `/eli5` artifact.
 7. **Hide** page-2 TIN/name repeats in the **editor**; show in print preview; still write XML.
 8. Prefer tooling extract of labels from frozen HTML / inventory; hand-write where extract fails. Note: `fields.json` entries already have a `label` key — use that as primary label source; extract section titles from frozen HTML Part/Schedule headings; hand-write only gaps.
 
+Phase 1 (ELI5 pages): 43 `crates/bir-desktop/docs/eli5/forms/<CODE>.html` pages; `python3 crates/bir-desktop/docs/eli5/tools/test_form_pages.py` prints `drawn N / field_count OK` for every pair. Index: `crates/bir-desktop/docs/eli5/forms/README.md`. BLOCKED: none.
+
+Phase 2 (build plan, no product code): `PLAN-v1-forms-build.md`.
+
 ---
 
 ## Part 2 — The ELI5 brief (the prompt to run first)

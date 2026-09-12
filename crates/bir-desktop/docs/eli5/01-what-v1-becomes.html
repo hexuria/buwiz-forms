@@ -49,7 +49,7 @@ footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px sol
   <div class="box good"><b>Dashboard · deadlines · calendar</b><small>unchanged readers</small></div>
 </div>
 <div class="row" style="margin-top:12px"><div class="box"><b>Removed from the profile</b><small><span class="chip red">VAT-registered (as a router)</span><span class="chip red">withholds compensation / expanded / final</span><span class="chip red">top withholding agent</span><span class="chip red">government withholding entity</span><span class="chip red">GPP partner</span><span class="chip red">single employer</span><span class="chip red">dormant</span><span class="chip red">excise categories</span><span class="chip red">registration activity status</span></small></div><div class="box warn"><b>Kept, but moved</b><small>a flag that was really a form field becomes a <b>form default</b> — e.g. 1601-C item 11 Private / Government</small></div><div class="box gone"><b>FormDefinition filters · inference seeding</b><small>requires_vat, requires_employees, taxpayer_types</small></div></div>
-<div class="cap">One source: the user's choice per year. The rules engine, the flags that fed it, and the show/hide logic go. The per-year Forms Set table can stay as the storage of that choice (source = Manual only) — open point §1.C-4.</div>
+<div class="cap">One source: the user's choice per year. The rules engine, the flags that fed it, and the show/hide logic go. The per-year Forms Set table stays as the storage of that choice (source = Manual only).</div>
 <div class="src">Touches: <code>forms/registry.rs</code> (filters), <code>forms/forms_set.rs</code> (sources collapse to Manual), <code>integration/validation.rs</code>, <code>profile.rs</code> flags, dashboard/deadline readers stay on <code>active_form_codes_for_year</code>.</div>
 </section>
 
@@ -58,7 +58,7 @@ footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px sol
   <div class="screen"><div class="bar"><span class="btn">← Back</span><span><span class="btn">Save</span> <span class="btn pri">Submit</span></span></div><div class="band"><span class="pipe" style="justify-content:center"><i class="on">1</i>Draft<s></s><i>2</i>Queued<s></s><i>3</i>Submitted<s></s><i>4</i>Confirmed<s></s><i>5</i>Paid</span></div><div class="sec">BIR Form No. 2551Q · Quarterly Percentage Tax Return · Jan 2018 (ENCS)</div><div class="sec open">▼ Part I — Background information · 13 items</div><div class="sec">▶ Part II — Total tax payable · items 14–24</div><div class="sec">▶ Part III — Details of payment · 25–28</div><div class="sec">▶ Schedule 1 — Computation of tax · 6 ATC lines + item 7</div></div>
   <div class="tbl"><div class="h">from</div><div class="h">to</div><div>two layouts, ten hand-written views</div><div>one layout, driven by <code>fields.json</code> sections</div><div>a subset of fields per form</div><div>every field (2551Q: 99) with item numbers</div><div>three buttons / two buttons</div><div>Back · Save · Submit everywhere</div><div>title inside a grey band</div><div>pipeline band, same black as the page</div><div>cards that never collapse</div><div>Parts and Schedules collapse for review</div></div>
 </div>
-<div class="cap">The page is generated from the same inventory that already produces the XML. The paper form's Parts and Schedules are the sections. A reviewer opens one Part at a time; a filer sees everything the BIR form has.</div>
+<div class="cap">The page is generated from the same inventory that already produces the XML. Screen sections follow the ELI5 UX buckets (period, identity, computation, totals, schedules, payment); paper Parts/Schedules stay as reference. Page-2 TIN/name repeats are hidden in the editor, shown in print preview, still written to XML.</div>
 <div class="src">Inputs: <code>rules/forms/&lt;form&gt;/fields.json</code> (item_number, control_kind, required_when, visible_when), <code>html-frozen/&lt;form&gt;/index.html</code> (section order). Per-form spec pages: <code>crates/bir-desktop/docs/eli5/forms/&lt;code&gt;.html</code>.</div>
 </section>
 
@@ -79,7 +79,7 @@ footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px sol
 <div class="row"><div class="box"><b>Last submission</b><small>2551Q · 2026-Q1</small></div><div class="arrow">⟶ save as</div><div class="box good"><b>2551Q template</b><small>user ticks the fields to keep: ATC lines, tax-rate election, sheets attached…</small></div><div class="arrow">⟶ next filing</div><div class="box"><b>2551Q · 2026-Q2</b><small>pre-filled from the template + the profile-year; every field still editable</small></div></div>
 <div class="row" style="margin-top:12px"><div class="box ghost"><b>Never in a template</b><small>the taxpayer profile (name, TIN, RDO, address…) — it comes from the profile-year, once</small></div><div class="box ghost"><b>Default</b><small>no template until the user makes one</small></div></div>
 <div class="cap">A template is a saved answer to "what did I put last time?", per form, per profile. Overridable, optional, and never a second copy of the profile.</div>
-<div class="src">New: a per-form template store keyed by (profile, form); pre-fill order profile-year → template → typed. Open point §1.C-3: template on the form vs on the profile-year.</div>
+<div class="src">New: a per-form template store keyed by (profile, form), shared across years, every field overridable. Pre-fill order: profile-year → template → typed. The taxpayer profile is never copied into the template.</div>
 </section>
 
 <section class="pic"><h2>7 · What goes, what stays</h2>
@@ -91,7 +91,7 @@ footer{padding:14px 40px 40px;color:var(--mut);font-size:13px;border-top:1px sol
 <div class="src"><code>views/profile_manager/mod.rs</code> 5 459 · <code>tab_tax_profile.rs</code> 4 768 · <code>cor_ocr.rs</code> 1 768 · <code>cor_evidence.rs</code> 296 · <code>views/form_*_view.rs</code> 16 644</div>
 </section>
 
-<section class="q"><b>Decide before building</b> (from <code>PLAN-v1-forms-eli5-brief.md</code> §1.C): first-wave forms · what replaces "profile for period X" (proposal: the profile-year) · where templates live · keep per_year_forms as storage · anything in queue/XML/receipts reading the removed flags · sections follow the paper Parts exactly or regroup.</section>
+<section class="q"><b>Phase 0 — decided</b> (see <code>PLAN-v1-forms-eli5-brief.md</code> §1.C). Build order is in <code>PLAN-v1-forms-build.md</code>. ELI5 field pages for all 43 rules bundles are in <code>forms/</code>. Product code waits for Phase 3.</section>
 </main>
 <footer>ELI5 series · 01 of 3 · previous: <a href="00-how-it-works-today.html" style="color:#cfcfd6">00 — how it works today</a> · per form: <a href="forms/2551Q.html" style="color:#cfcfd6">forms/2551Q.html</a> (the format for the other nine)</footer>
 </body></html>
