@@ -6,17 +6,29 @@ use gpui_rsx::rsx;
 pub struct DebugLogViewerView {
     job_name: String,
     log_text: String,
+    focus_handle: FocusHandle,
 }
 
 impl DebugLogViewerView {
-    pub fn new(job_name: String, log_text: String) -> Self {
-        Self { job_name, log_text }
+    pub fn new(
+        job_name: String,
+        log_text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let focus_handle = cx.focus_handle();
+        super::secondary_window::focus_on_open(&focus_handle, window, cx);
+        Self {
+            job_name,
+            log_text,
+            focus_handle,
+        }
     }
 }
 
 impl Render for DebugLogViewerView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        rsx! {
+        let body = rsx! {
             <div size_full flex flex_col bg={gpui::rgb(0x0b0b0b)}>
                 <div
                     flex
@@ -62,6 +74,7 @@ impl Render for DebugLogViewerView {
                     </div>
                 </div>
             </div>
-        }
+        };
+        super::secondary_window::with_window_actions(body, &self.focus_handle, "DebugLogViewer", cx)
     }
 }

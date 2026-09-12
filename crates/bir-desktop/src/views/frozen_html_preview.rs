@@ -4,7 +4,8 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px,
+    AppContext, Context, Entity, FocusHandle, IntoElement, ParentElement, Render, Styled, Window,
+    div, px,
 };
 use gpui_component::ActiveTheme;
 use gpui_component::Disableable;
@@ -21,6 +22,7 @@ pub(crate) struct FrozenHtmlPreviewView {
     webview: Option<Entity<WebView>>,
     /// Only failures are worth a line in the toolbar.
     status: Option<String>,
+    focus_handle: FocusHandle,
 }
 
 /// The one paper the preview prints on, in points. The forms are drawn on
@@ -134,7 +136,13 @@ impl FrozenHtmlPreviewView {
             Err(error) => (None, Some(format!("Print preview failed: {error}"))),
         };
 
-        Self { webview, status }
+        let focus_handle = cx.focus_handle();
+        super::secondary_window::focus_on_open(&focus_handle, window, cx);
+        Self {
+            webview,
+            status,
+            focus_handle,
+        }
     }
 
     /// The platform's print dialog through wry's native `print()`
@@ -217,7 +225,7 @@ fn css_color(color: gpui::Hsla) -> String {
 impl Render for FrozenHtmlPreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_print = self.webview.is_some();
-        rsx! {
+        let body = rsx! {
             <div
                 size_full
                 flex
@@ -258,7 +266,13 @@ impl Render for FrozenHtmlPreviewView {
                     })}
                 />
             </div>
-        }
+        };
+        super::secondary_window::with_window_actions(
+            body,
+            &self.focus_handle,
+            "FrozenHtmlPreview",
+            cx,
+        )
     }
 }
 

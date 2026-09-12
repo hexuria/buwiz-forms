@@ -200,13 +200,18 @@ impl AppState {
         cx.notify();
     }
 
+    /// Cmd+Q (Ctrl+Q / Alt+F4 elsewhere) and the menu's Quit put the app in
+    /// the tray, like the close button and Cmd+W. The background cron keeps
+    /// polling for BIR confirmations, which is the point of staying resident.
+    /// The only real quit is the tray menu's Quit (and the agent's `shutdown`),
+    /// both of which go through `request_application_quit`.
     pub(crate) fn handle_quit_application(
         &mut self,
         _action: &QuitApplication,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
     ) {
-        self.request_application_quit(window, cx, || {});
+        crate::platform::hide_from_dock();
     }
 
     pub(crate) fn handle_hide_application(
