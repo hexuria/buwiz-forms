@@ -33,7 +33,9 @@ mod host;
 #[cfg(feature = "agent")]
 mod html_demo;
 #[cfg(feature = "agent")]
-mod keybindings;
+pub(crate) mod keybindings;
+#[cfg(feature = "agent")]
+mod macos_capture;
 #[cfg(all(feature = "agent", target_os = "macos"))]
 mod macos_window;
 #[cfg(feature = "agent")]

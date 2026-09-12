@@ -27,6 +27,8 @@ to a v2 host.
 - [Security gates](#security-gates)
 - [AI agent playbook](#ai-agent-playbook) (capabilities / limits, including Forms Set)
 - [Mac: build and run beside Grok Bot](#mac-build-and-run-beside-grok-bot)
+- [Mac: Screen Recording (TCC)](#mac-screen-recording-tcc)
+- [Mac: `bir-headless`](#mac-bir-headless)
 - [Mac: `bir-headless`](#mac-bir-headless)
 - [Linux CLI smoke](#linux-cli-smoke-buwiz-box)
 - [Recipes](#recipes)
@@ -81,24 +83,34 @@ These are host constraints. They do not fork protocol v2.
   `screenshot_unavailable`. Clients send a **relative `.png` name**, not an
   absolute path. Host writes under `GPUI_AGENT_SCREENSHOT_DIR` (default
   `{temp_dir}/gpui-agent-screenshots/`). Default `mode=viewport`: macOS writes
-  **this** window via `capture_window_via_screencapture` (`screencapture -l`,
-  Screen Recording). `mode=scrolled` requires `target` (`form-1601c-scroll` or
+  **this** window via `/usr/sbin/screencapture -l <CGWindowID>` onto a visible
+  `.png` (not a hidden `.tmp`). Needs **Screen Recording for `bir`**.
+  `mode=scrolled` requires `target` (`form-1601c-scroll` or
   `print-preview-scroll`): set offset → wait paint → tile capture → stitch →
   restore (no OS HID). Unknown target → `scroll_unavailable`. Print preview
   is a **secondary window**; the host captures whichever preview handle is
   painted. Linux, Windows, and headless `spawn_host` stay
   `screenshot_unavailable` (including scrolled). The semantic host has no
-  `Window` and does not invent a PNG.
-- Keybinding fire is **Action-only** (`Window::dispatch_action` /
-  `App::dispatch_action`). The intercept does not dual-write Action bodies.
-  `gpui-agent keybindings` lists `{ id, chord, scope, dangerous }`. Destructive
-  ids (`app.quit`) need `confirm=true`. Painted `app.quit` / Cmd+Q hides to the
-  tray (same Action as the menu); process exit is `gpui-agent shutdown` or tray
-  Quit. `scope=focused` does not auto-activate unless `--activate`. Global
-  hide/show (`app.toggle_visibility`) is a GPUI Action (`ToggleAppVisibility`);
-  the OS-level combo is `global_hotkey` (default Ctrl+Option+E on macOS;
-  Settings may set Option+F12) and is not a keymap chord, but fire still
-  dispatches the Action.
+  `Window` and does not invent a PNG. Missing TCC →
+  `screenshot_unavailable` with **grant Screen Recording to bir** (a Terminal
+  grant does not cover the `bir` process). See
+  [Mac: Screen Recording (TCC)](#mac-screen-recording-tcc).
+- Keybinding fire is **Action-only** (`Window::dispatch_action`). The
+  intercept does not dual-write Action bodies. `App::on_action` handlers for
+  `ToggleSidebar` / `MinimizeWindow` / `ToggleAppVisibility` / `QuitApplication`
+  call the same bodies as the window `on_action` listeners (the window root is
+  gpui-component `Root`, so a focused-tree miss still reaches the Action).
+  Those bodies `note_keybinding_fired` → `complete_keybinding_action` (same
+  contract as gpui-agent todo). A deferred finish still fail-closes if the
+  handler never ran. `gpui-agent keybindings` lists
+  `{ id, chord, scope, dangerous }`. Destructive ids (`app.quit`) need
+  `confirm=true`. Painted `app.quit` / Cmd+Q hides to the tray (same Action as
+  the menu); process exit is `gpui-agent shutdown` or tray Quit.
+  `scope=focused` does not auto-activate unless `--activate` (OS-activate plus
+  GPUI focus on the app handle). Global hide/show (`app.toggle_visibility`) is
+  a GPUI Action (`ToggleAppVisibility`); the OS-level combo is `global_hotkey`
+  (default Ctrl+Option+E on macOS; Settings may set Option+F12) and is not a
+  keymap chord, but fire still dispatches the Action.
 - Filing status SoT is the `form_drafts` row for that TIN/year/month (the same
   queued id `submissions.list` shows). Snapshot / `form.fields` /
   `form-1601c-status` overlay that row; a stale local Draft cannot mask
@@ -510,6 +522,28 @@ git checkout c5e8856356f35a7d41bcf4b02f2592bb39bbe151
 cargo install --path crates/gpui-agent-cli --locked
 ```
 
+### Mac: Screen Recording (TCC)
+
+`gpui-agent screenshot` (viewport and `mode=scrolled`) is observe-only PNG of
+**this** `bir` window (`/usr/sbin/screencapture -l <CGWindowID> -o -x`). It is
+not a full-desktop capture.
+
+**Grant Screen Recording to `bir`**, not only to Terminal:
+
+1. System Settings → Privacy & Security → Screen Recording
+2. Enable **bir** (unsigned `cargo run` binary) or **e-BIRForms** (the `.app`
+   from `scripts/dev_bundle_macos.sh`)
+3. Quit and relaunch painted `bir` after toggling the grant
+
+A working shell `screencapture -l <CGWindowID> out.png` only proves Terminal
+has the grant. Spawned from the `bir` process, TCC is a different identity.
+Without it the host returns `screenshot_unavailable: … grant Screen Recording
+to bir …` (no fake PNG). Screen Recording is user TCC, not an entitlement
+the binary can self-grant.
+
+When TCC is granted, viewport and tiled scrolled capture (`form-1601c-scroll`
+/ `print-preview-scroll`) write under `GPUI_AGENT_SCREENSHOT_DIR`.
+
 Smoke:
 
 ```bash
@@ -753,9 +787,12 @@ gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
 gpui-agent snapshot
 ```
 
-macOS observe-only PNG of **this** window (Screen Recording), not Linux.
-Client path is a **relative `.png` name** (confined under
-`GPUI_AGENT_SCREENSHOT_DIR` or `{temp}/gpui-agent-screenshots/`):
+macOS observe-only PNG of **this** window (Screen Recording **for `bir`**),
+not Linux. Client path is a **relative `.png` name** (confined under
+`GPUI_AGENT_SCREENSHOT_DIR` or `{temp}/gpui-agent-screenshots/`).
+`screencapture produced no file` from a Terminal-granted shell is usually
+missing TCC on the `bir` process — see
+[Mac: Screen Recording (TCC)](#mac-screen-recording-tcc).
 
 ```bash
 gpui-agent screenshot --out bir-window.png
@@ -1125,13 +1162,16 @@ Remaining (not faked):
 - `form.mark_paid` on 1601-C is unsupported (UI message only)
 - `profile.calendar_sync` (Google push) needs a linked account
 - Virtual in-window delivery stays `virtual_unavailable`. Screenshot: hosts
-  confine a relative `.png` name first; macOS mailbox drain can then write this
-  window (`screencapture -l`); `mode=scrolled` stitches `form-1601c-scroll` or
-  `print-preview-scroll` (restore offset, no OS HID; unknown target →
-  `scroll_unavailable`). Linux / Windows / headless stay
-  `screenshot_unavailable`. Absolute client paths are refused.
-  Keybinding fire is Action-only (`app.toggle_sidebar`, `window.minimize`,
-  `app.toggle_visibility`, `app.quit` with `confirm=true`).
+  confine a relative `.png` name first; macOS mailbox drain then writes this
+  window (`/usr/sbin/screencapture -l` onto a visible `.png`); `mode=scrolled`
+  stitches `form-1601c-scroll` or `print-preview-scroll` (restore offset, no
+  OS HID; unknown target → `scroll_unavailable`). Missing Screen Recording →
+  `screenshot_unavailable` naming **grant Screen Recording to bir**. Linux /
+  Windows / headless stay `screenshot_unavailable`. Absolute client paths are
+  refused. Keybinding fire is Action-only (`app.toggle_sidebar`,
+  `window.minimize`, `app.toggle_visibility`, `app.quit` with `confirm=true`).
+  Handlers `note_keybinding_fired` and complete `complete_keybinding_action`
+  (no intercept dual-write).
 - GUI-as-client of `bir-headless` (full ADR-001). First ship is shared
   persistence only; two AgentHosts must not share `GPUI_AGENT_ADDR`; two
   processes must not open the live DB together. Matrix B is

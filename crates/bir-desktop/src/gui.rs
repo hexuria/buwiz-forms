@@ -367,6 +367,14 @@ pub fn run_gui() {
                         });
                     }
                 });
+                #[cfg(feature = "agent")]
+                if agent_session.is_some() {
+                    crate::agent::keybindings::register_global_actions(
+                        view.downgrade(),
+                        window.window_handle(),
+                        cx,
+                    );
+                }
                 let main_window = window.window_handle();
                 let tray_app_state = view.clone();
                 #[cfg(target_os = "macos")]

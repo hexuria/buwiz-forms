@@ -514,7 +514,7 @@ fn screenshot_this_window(
     #[cfg(target_os = "macos")]
     {
         let id = super::macos_window::cgwindow_id(window)?;
-        gpui_agent::capture_window_via_screencapture(id, Some(path))
+        super::macos_capture::capture_window_to_client_path(id, path)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -529,6 +529,10 @@ fn screenshot_this_window(
 }
 
 impl AppState {
+    /// Action body (`on_action` / global `App::on_action`). Records the
+    /// listener result and completes a pending fire immediately so a
+    /// deferred `finish_keybinding_fire` cannot miss it. The intercept still
+    /// only `dispatch_action`s — this is the handler, not a dual-write.
     pub(crate) fn note_keybinding_fired(&mut self, id: &str, scope: &str) {
         self.last_keybinding_result = Some((
             id.to_string(),
@@ -536,6 +540,7 @@ impl AppState {
                 keybindings::keybinding_result_json(id, scope),
             )),
         ));
+        self.finish_keybinding_fire(None);
     }
 
     fn start_keybinding_fire(
@@ -566,34 +571,27 @@ impl AppState {
         };
         if activate {
             window.activate_window();
+            self.focus_handle.focus(window, cx);
         }
 
+        // Record pending *before* dispatch so a sync global listener can see it.
+        // Window::dispatch_action always `cx.defer`s; finish is queued after that.
+        // Do not `App::dispatch_action` from `render` (this drain): the window is
+        // already taken, so that path no-ops. Window defer + App::on_action
+        // (see `register_global_actions`) is the same contract as gpui-agent todo.
         self.last_keybinding_result = None;
         self.pending_keybinding = Some(PendingKeybindingFire {
             posted,
             binding: entry.id.clone(),
         });
-        match entry.scope {
-            gpui_agent::KeybindingScope::Focused => {
-                window.dispatch_action(action, cx);
-            }
-            gpui_agent::KeybindingScope::Global => {
-                if entry.id == ids::KEY_TOGGLE_VISIBILITY {
-                    cx.dispatch_action(action.as_ref());
-                } else if focused {
-                    window.dispatch_action(action, cx);
-                } else {
-                    cx.dispatch_action(action.as_ref());
-                }
-            }
-        }
-        cx.defer_in(window, |this, window, cx| {
-            this.finish_keybinding_fire(window, cx);
+        window.dispatch_action(action, cx);
+        cx.defer_in(window, |this, _window, cx| {
+            this.finish_keybinding_fire(Some(cx));
         });
         true
     }
 
-    fn finish_keybinding_fire(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn finish_keybinding_fire(&mut self, cx: Option<&mut Context<Self>>) {
         let Some(pending) = self.pending_keybinding.take() else {
             return;
         };
@@ -611,7 +609,9 @@ impl AppState {
         };
         crate::agent::request_log::emit_request_log(&pending.posted.request, &response);
         pending.posted.reply(response);
-        cx.notify();
+        if let Some(cx) = cx {
+            cx.notify();
+        }
     }
 
     fn start_scrolled_job(
@@ -748,9 +748,8 @@ impl AppState {
     #[cfg(target_os = "macos")]
     fn advance_scrolled_job_macos(&mut self, window: &Window, cx: &mut Context<Self>) {
         use gpui_agent::{
-            MAX_SCROLLED_PNG_BYTES, capture_window_png_bytes, confine_screenshot_path,
-            crop_window_png, encode_png_rgba, plan_scroll_tiles, scrolled_dispatch_result,
-            stitch_tiles_vertically,
+            MAX_SCROLLED_PNG_BYTES, confine_screenshot_path, crop_window_png, encode_png_rgba,
+            plan_scroll_tiles, scrolled_dispatch_result, stitch_tiles_vertically,
         };
 
         let mut job = match self.scrolled_job.take() {
@@ -833,7 +832,7 @@ impl AppState {
                         return;
                     }
                 };
-                let png = match capture_window_png_bytes(job.window_id) {
+                let png = match super::macos_capture::capture_window_png_bytes(job.window_id) {
                     Ok(png) => png,
                     Err(err) => {
                         let id = job.reply.request.id.clone();
