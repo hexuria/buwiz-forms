@@ -24,6 +24,16 @@ impl Database {
         &self,
         receipt: &BirReceiptConfirmation,
     ) -> Result<(SubmissionReceipt, bool), DbError> {
+        self.save_submission_receipt_with_email_date(receipt, None)
+    }
+
+    /// `email_received_at` is the message's `Date` header as RFC 3339. A
+    /// re-save without it keeps the stored value.
+    pub fn save_submission_receipt_with_email_date(
+        &self,
+        receipt: &BirReceiptConfirmation,
+        email_received_at: Option<&str>,
+    ) -> Result<(SubmissionReceipt, bool), DbError> {
         let (tin, form_type, period) = split_bir_filename(&receipt.filename)
             .unwrap_or_else(|| ("".to_string(), "".to_string(), "".to_string()));
 
@@ -40,8 +50,8 @@ impl Database {
 
         self.conn.execute(
             "INSERT INTO submission_receipts
-                (filename, tin, form_type, period, received_date, received_time, source_from, raw_text, raw_html)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                (filename, tin, form_type, period, received_date, received_time, source_from, raw_text, raw_html, email_received_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(filename) DO UPDATE SET
                 tin = excluded.tin,
                 form_type = excluded.form_type,
@@ -50,7 +60,8 @@ impl Database {
                 received_time = excluded.received_time,
                 source_from = excluded.source_from,
                 raw_text = excluded.raw_text,
-                raw_html = excluded.raw_html",
+                raw_html = excluded.raw_html,
+                email_received_at = COALESCE(excluded.email_received_at, submission_receipts.email_received_at)",
             params![
                 receipt.filename,
                 tin,
@@ -61,6 +72,7 @@ impl Database {
                 receipt.source_from,
                 receipt.raw_text,
                 receipt.raw_html,
+                email_received_at,
             ],
         )?;
 
@@ -76,7 +88,7 @@ impl Database {
     ) -> Result<Option<SubmissionReceipt>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, filename, tin, form_type, period, received_date, received_time,
-                    source_from, raw_text, raw_html, created_at
+                    source_from, raw_text, raw_html, created_at, email_received_at
              FROM submission_receipts WHERE id = ?1",
         )?;
         let mut rows = stmt.query(params![id])?;
@@ -92,6 +104,7 @@ impl Database {
                 source_from: row.get(7)?,
                 raw_text: row.get(8)?,
                 raw_html: row.get(9)?,
+                email_received_at: row.get(11)?,
                 created_at: row.get(10)?,
             }))
         } else {
@@ -105,7 +118,7 @@ impl Database {
     ) -> Result<Option<SubmissionReceipt>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, filename, tin, form_type, period, received_date, received_time,
-                    source_from, raw_text, raw_html, created_at
+                    source_from, raw_text, raw_html, created_at, email_received_at
              FROM submission_receipts WHERE filename = ?1",
         )?;
         let mut rows = stmt.query(params![filename])?;
@@ -121,6 +134,7 @@ impl Database {
                 source_from: row.get(7)?,
                 raw_text: row.get(8)?,
                 raw_html: row.get(9)?,
+                email_received_at: row.get(11)?,
                 created_at: row.get(10)?,
             }))
         } else {
@@ -289,8 +303,42 @@ mod tests {
             source_from: None,
             raw_text: "test receipt".to_string(),
             raw_html: None,
+            email_received_at: None,
             created_at: None,
         }
+    }
+
+    #[test]
+    fn email_date_is_stored_and_kept_across_a_re_save_without_it() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let confirmation = BirReceiptConfirmation {
+            filename: "123456789000-1601Cv2018-092026.xml".to_string(),
+            date_received: chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap(),
+            time_received: chrono::NaiveTime::from_hms_opt(14, 52, 0).unwrap(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let (saved, is_new) = db
+            .save_submission_receipt_with_email_date(
+                &confirmation,
+                Some("2026-09-12T14:59:00+08:00"),
+            )
+            .unwrap();
+        assert!(is_new);
+        assert_eq!(
+            saved.email_received_at.as_deref(),
+            Some("2026-09-12T14:59:00+08:00")
+        );
+
+        let again = db
+            .get_submission_receipt_by_id(saved.id.unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            again.email_received_at.as_deref(),
+            Some("2026-09-12T14:59:00+08:00")
+        );
     }
 
     #[test]

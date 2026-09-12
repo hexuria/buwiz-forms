@@ -90,6 +90,10 @@ pub(crate) fn receipt_page_for(
             &receipt.received_date,
             &receipt.received_time,
         ),
+        email_received_at: receipt
+            .email_received_at
+            .as_deref()
+            .and_then(bir_core::receipt::display_email_received_at),
         body_text: receipt.raw_text.clone(),
         body_html: receipt
             .raw_html

@@ -1162,7 +1162,7 @@ impl Render for Form1601CView {
             })
             .when(!queue_supported, |view| {
                 view.child(rsx! {
-                    <div px_8 py_3
+                    <div px_8 py_3 text_center
                         bg={cx.theme().warning.opacity(0.12)}
                         border_b_1
                         border_color={cx.theme().warning.opacity(0.4)}
@@ -1182,7 +1182,7 @@ impl Render for Form1601CView {
                     .or_else(|| self.status_message.clone());
                 view.when_some(message, |view, message| {
                     view.child(rsx! {
-                        <div px_8 py_3
+                        <div px_8 py_3 text_center
                             bg={cx.theme().warning.opacity(0.12)}
                             border_b_1
                             border_color={cx.theme().warning.opacity(0.4)}

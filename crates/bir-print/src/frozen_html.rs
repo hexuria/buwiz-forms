@@ -596,6 +596,9 @@ pub struct ReceiptPage {
     pub from: String,
     pub to: String,
     pub received_at: String,
+    /// When the email arrived, already formatted for display; falls back to
+    /// `received_at` (BIR's stamp) when the row predates the column.
+    pub email_received_at: Option<String>,
     pub body_text: String,
     pub body_html: Option<String>,
 }
@@ -643,41 +646,61 @@ fn append_before_body_end(document: &str, fragment: &str) -> String {
     }
 }
 
-/// The receipt sheet. `.page` in base.css already breaks after each page
-/// and not after the last, so nothing else is needed for it to print on its
-/// own sheet(s); `height:auto;overflow:visible` let a long email flow.
+/// The receipt sheet, laid out like a mail client's print of the message:
+/// the mailbox top right, the subject as the title, sender and arrival time,
+/// the recipient, then BIR's email as sent. No labels of our own — the file
+/// name and BIR's stamp are in the email. `.page` in base.css already breaks
+/// after each page and not after the last; `height:auto;overflow:visible`
+/// let a long email flow onto a further sheet.
 fn receipt_page_html(receipt: &ReceiptPage, width: &str, height: &str) -> String {
-    let row = |label: &str, value: &str| {
-        format!(
-            "<tr><th style=\"text-align:left;padding:2pt 12pt 2pt 0;white-space:nowrap;font-weight:600\">{}</th><td style=\"padding:2pt 0\">{}</td></tr>",
-            html_escape(label),
-            html_escape(value)
-        )
-    };
+    let arrived = receipt
+        .email_received_at
+        .as_deref()
+        .unwrap_or(receipt.received_at.as_str());
     let mut html = String::new();
     html.push_str(&format!(
-        "<section class=\"page page-receipt\" id=\"page-receipt\" style=\"width:{width};min-height:{height};height:auto;overflow:visible;padding:40pt 48pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.45;color:#000;background:#fff\">"
+        "<section class=\"page page-receipt\" id=\"page-receipt\" style=\"width:{width};min-height:{height};height:auto;overflow:visible;padding:28pt 36pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff\">"
     ));
-    html.push_str("<h1 style=\"font-size:15pt;font-weight:700;margin:0 0 4pt 0\">BIR Tax Return Receipt Confirmation</h1>");
-    html.push_str("<p style=\"margin:0 0 14pt 0;color:#333\">Email received from the Bureau of Internal Revenue for the return on the preceding page(s).</p>");
-    html.push_str("<table style=\"border-collapse:collapse;margin:0 0 14pt 0\">");
-    html.push_str(&row("File name", &receipt.filename));
-    html.push_str(&row("Received by BIR", &receipt.received_at));
-    html.push_str(&row("From", &receipt.from));
-    html.push_str(&row("To", &receipt.to));
-    html.push_str(&row("Subject", &receipt.subject));
-    html.push_str("</table>");
+    html.push_str(
+        "<style>\
+#page-receipt .receipt-html p{margin:0 0 1em 0}\
+#page-receipt .receipt-html ul,#page-receipt .receipt-html ol{margin:0.5em 0 1em 0;padding-left:2.4em}\
+#page-receipt .receipt-html li{margin:0.15em 0}\
+#page-receipt .receipt-html b,#page-receipt .receipt-html strong{font-weight:700}\
+#page-receipt .receipt-html table{border-collapse:collapse}\
+#page-receipt .receipt-html img{max-width:100%}\
+</style>",
+    );
+    html.push_str(&format!(
+        "<div style=\"text-align:right;color:#666;font-weight:700;font-size:10pt;margin:0 0 10pt 0\">{}</div>",
+        html_escape(&receipt.to)
+    ));
+    html.push_str("<hr style=\"border:0;border-top:1px solid #999;margin:0 0 10pt 0\">");
+    html.push_str(&format!(
+        "<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">{}</h1>",
+        html_escape(&receipt.subject)
+    ));
+    html.push_str("<hr style=\"border:0;border-top:1px solid #999;margin:0 0 8pt 0\">");
+    html.push_str(&format!(
+        "<div style=\"display:flex;justify-content:space-between;gap:12pt\"><div><b>{from}</b> &lt;{from}&gt;</div><div style=\"white-space:nowrap\">{when}</div></div>",
+        from = html_escape(&receipt.from),
+        when = html_escape(arrived)
+    ));
+    html.push_str(&format!(
+        "<div style=\"margin:0 0 14pt 0\">To: {}</div>",
+        html_escape(&receipt.to)
+    ));
     // The email as BIR sent it when its HTML survived ingest; the plain text
     // only as a fallback. Both said the same thing, and printing both read
     // as a duplicate.
     match &receipt.body_html {
         Some(body_html) if !body_html.trim().is_empty() => {
-            html.push_str("<div class=\"receipt-html\">");
+            html.push_str("<div class=\"receipt-html\" style=\"padding:0 12pt\">");
             html.push_str(body_html);
             html.push_str("</div>");
         }
         _ => html.push_str(&format!(
-            "<pre class=\"receipt-text\" style=\"white-space:pre-wrap;word-break:break-word;margin:0;font-family:'eBIRForms Tinos',Tinos,'Times New Roman',Times,serif;font-size:9.5pt;line-height:1.4\">{}</pre>",
+            "<pre class=\"receipt-text\" style=\"white-space:pre-wrap;word-break:break-word;margin:0;padding:0 12pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35\">{}</pre>",
             html_escape(&receipt.body_text)
         )),
     }
@@ -836,6 +859,7 @@ mod tests {
             from: "ebirforms-noreply@bir.gov.ph".into(),
             to: "codeitlikemiley@gmail.com".into(),
             received_at: "12 September 2026, 02:52 PM".into(),
+            email_received_at: Some("12 September 2026, 02:59 PM".into()),
             body_text: "This confirms receipt <of> your submission".into(),
             body_html: Some("<p>This confirms <b>receipt</b></p>".into()),
         };
@@ -857,6 +881,15 @@ mod tests {
             with.contains("<p>This confirms <b>receipt</b></p>"),
             "html body embedded as given"
         );
+        assert!(with.contains("<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">Tax Return Receipt Confirmation</h1>"));
+        assert!(with
+            .contains("<b>ebirforms-noreply@bir.gov.ph</b> &lt;ebirforms-noreply@bir.gov.ph&gt;"));
+        assert!(
+            with.contains("12 September 2026, 02:59 PM"),
+            "email arrival time shown"
+        );
+        assert!(with.contains("To: codeitlikemiley@gmail.com"));
+        assert!(!with.contains("<th"), "no label table of our own");
         assert!(
             !with.contains("receipt &lt;of&gt;"),
             "text is not printed beside the html"
@@ -873,10 +906,8 @@ mod tests {
             with_text.contains("receipt &lt;of&gt; your submission"),
             "text fallback is escaped"
         );
-        assert!(!with_text.contains("receipt-html"));
-        assert!(with.contains(
-            "Received by BIR</th><td style=\"padding:2pt 0\">12 September 2026, 02:52 PM"
-        ));
+        assert!(!with_text.contains("class=\"receipt-html\""));
+        assert!(with_text.contains("class=\"receipt-text\""));
     }
 
     #[test]

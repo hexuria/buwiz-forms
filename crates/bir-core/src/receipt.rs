@@ -154,6 +154,18 @@ fn normalize_bir_receipt_meridiem(time: &str) -> String {
 /// handlers and remote-loading tags are stripped. Receipts are cleaned at
 /// ingest too; cleaning again here costs nothing and does not depend on
 /// when the row was written.
+/// `12 September 2026, 02:59 PM` in local time from a stored RFC 3339 email
+/// date; `None` if the value does not parse.
+pub fn display_email_received_at(rfc3339: &str) -> Option<String> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339.trim())
+        .ok()
+        .map(|at| {
+            at.with_timezone(&chrono::Local)
+                .format("%-d %B %Y, %I:%M %p")
+                .to_string()
+        })
+}
+
 pub fn sanitized_receipt_html(raw_html: &str) -> String {
     ammonia::Builder::default().clean(raw_html).to_string()
 }
@@ -173,6 +185,16 @@ pub fn split_bir_filename(filename: &str) -> Option<(String, String, String)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn email_date_displays_as_full_local_date() {
+        let shown = super::display_email_received_at("2026-09-12T14:59:00+08:00").unwrap();
+        // Local zone on the test machine decides the clock; the shape is fixed.
+        assert!(shown.contains("2026"), "{shown}");
+        assert!(shown.contains(", "), "{shown}");
+        assert!(shown.ends_with(" AM") || shown.ends_with(" PM"), "{shown}");
+        assert!(super::display_email_received_at("yesterday").is_none());
+    }
+
     #[test]
     fn sanitised_receipt_html_drops_scripts_and_handlers() {
         let dirty = r#"<p onclick="x()">Hi <script>alert(1)</script><b>there</b></p>"#;

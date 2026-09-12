@@ -93,6 +93,8 @@ pub struct SubmissionReceipt {
     pub source_from: Option<String>,
     pub raw_text: String,
     pub raw_html: Option<String>,
+    /// The confirmation email's own `Date` header (RFC 3339), when known.
+    pub email_received_at: Option<String>,
     pub created_at: Option<String>,
 }
 

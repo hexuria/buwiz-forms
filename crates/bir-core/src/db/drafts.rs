@@ -5150,6 +5150,7 @@ mod tests {
             source_from: None,
             raw_text: "unpersisted receipt".to_string(),
             raw_html: None,
+            email_received_at: None,
             created_at: None,
         };
 
