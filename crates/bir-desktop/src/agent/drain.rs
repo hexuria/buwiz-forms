@@ -202,7 +202,16 @@ fn apply_host(
     if host.active_view() == ActiveView::ProfileManager {
         app.profile_manager.update(cx, |view, cx| {
             view.agent_set_tab(host.profile_tab());
-            if host.editor_snapshot().save_message.is_none() {
+            // Only when this request edited a field. The snapshot is read out
+            // of this same view when the request starts, so writing it back
+            // unconditionally is a round trip that is a no-op *only* if
+            // nothing else touched the view in between — and a navigation in
+            // the same request does exactly that, loading the taxpayer into
+            // the editor. `form.open` followed by the profile manager pushed
+            // the pre-navigation copy, which was empty, over every field:
+            // the editor came up blank, the unsaved-changes banner appeared,
+            // and Save Changes would have written the blanks to the profile.
+            if host.editor_touched() && host.editor_snapshot().save_message.is_none() {
                 view.agent_apply_editor(&host.editor_snapshot(), window, cx);
             }
         });
