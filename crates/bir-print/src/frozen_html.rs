@@ -459,13 +459,45 @@ fn fill_xbox_joins(
         if tags[index].slot.is_some() {
             continue;
         }
+        // Char boxes carry `fc` (text-align:center); the catalog xbox inputs
+        // do not, so the X sat against the box's left wall.
         replacements.push((
             tags[index].start,
             tags[index].end,
-            set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
+            with_class(
+                &set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
+                "fc",
+            ),
         ));
     }
     apply_replacements(html, replacements)
+}
+
+/// The tag with `class` present in its class list (added if missing).
+fn with_class(tag: &str, class: &str) -> String {
+    let needle = "class=\"";
+    let Some(at) = tag.find(needle) else {
+        let insert_at = tag.rfind('>').unwrap_or(tag.len());
+        return format!(
+            "{} class=\"{class}\"{}",
+            &tag[..insert_at],
+            &tag[insert_at..]
+        );
+    };
+    let start = at + needle.len();
+    let Some(len) = tag[start..].find('"') else {
+        return tag.to_string();
+    };
+    let classes = &tag[start..start + len];
+    if classes.split_whitespace().any(|c| c == class) {
+        return tag.to_string();
+    }
+    let joined = if classes.trim().is_empty() {
+        class.to_string()
+    } else {
+        format!("{classes} {class}")
+    };
+    format!("{}{}{}", &tag[..start], joined, &tag[start + len..])
 }
 
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
@@ -854,6 +886,24 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn checked_xbox_is_centred_like_a_char_box() {
+        use std::collections::BTreeMap;
+        let mut fields = BTreeMap::new();
+        fields.insert("frm1601c:AmendedRtn_1".to_string(), "true".to_string());
+        let doc = super::filled_document("1601c-2018", &fields).expect("form");
+        let tag_at = doc.find("id=\"p1c21-i\"").expect("amended-yes xbox");
+        let tag =
+            &doc[doc[..tag_at].rfind('<').unwrap()..doc[tag_at..].find('>').unwrap() + tag_at + 1];
+        assert!(tag.contains("value=\"X\""), "{tag}");
+        assert!(tag.contains("class=\"fi fh3 fc\""), "{tag}");
+        assert_eq!(
+            super::with_class("<input class=\"fi fc\">", "fc"),
+            "<input class=\"fi fc\">"
+        );
+        assert_eq!(super::with_class("<input>", "fc"), "<input class=\"fc\">");
+    }
+
     #[test]
     fn receipt_page_follows_the_last_form_page() {
         use std::collections::BTreeMap;
