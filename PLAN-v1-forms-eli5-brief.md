@@ -34,14 +34,16 @@ building any `/eli5` artifact.
 7. **Form defaults as a template.** Per form (per profile), the user can save the last submission as a template; fields chosen from it pre-fill the next filing; every one stays overridable; the taxpayer profile is never duplicated into the template.
 8. **Give the user the power and flexibility; clean the logic.** Less inference, fewer hidden rules.
 
-### C. Open questions to settle before building (answer in the review)
+### C. Decided (Phase 0 answered 2026-09-12/13)
 
-1. Which forms are in V1's first wave? Suggested: the ten with typed models — 2551Q, 1601C, 0619E, 0619F, 0605, 1701Q, 2550Q, 1701, 1702RT, 1702MX — then the remaining 33 rules bundles.
-2. When the profile-version ledger goes, what replaces "which profile applies to period X"? Proposal: the per-year profile clone *is* the version — one per tax year, no effective-date arithmetic.
-3. Does a per-year profile hold the chosen forms and the per-form templates, or do templates live on the form? Proposal: profile-year → forms; template → form (shared across years unless overridden).
-4. Deadline calendar and dashboard currently read `PerYearFormsSet`; keep that table as the storage of "forms chosen for the year" (source `Manual` only) or fold it into the profile-year?
-5. Does the queue / SFTP / receipt pipeline need anything from the removed fields? (Believed no — the XML writer maps from the draft, not the profile flags — to be confirmed in the review.)
-6. Sections in the app page: follow the HTML page's Parts / Schedules exactly, or regroup where the paper form is awkward on screen?
+1. **First wave:** all rules bundles in one pass (not only the ten typed models). Still process in a sensible order starting with typed models: 2551Q (done), 1601C, 0619E, 0619F, 0605, 1701Q, 2550Q, 1701, 1702RT, 1702MX, then remaining rules/forms bundles.
+2. **Profile version:** the per-year profile clone *is* the version; lookup by tax year; no effective-date arithmetic.
+3. **Templates** live **on the form** (shared across years, overridable). Profile-year still chooses which forms are filed.
+4. Keep **`per_year_forms`** as the store (source Manual only); dashboard/calendar keep reading it.
+5. **May delete** removed inference profile flags once grep shows `background_cron.rs`, `db/drafts.rs`, and `*_xml.rs` only read the draft.
+6. **Regroup sections freely for screen UX**; paper Parts/Schedules are reference only.
+7. **Hide** page-2 TIN/name repeats in the **editor**; show in print preview; still write XML.
+8. Prefer tooling extract of labels from frozen HTML / inventory; hand-write where extract fails. Note: `fields.json` entries already have a `label` key — use that as primary label source; extract section titles from frozen HTML Part/Schedule headings; hand-write only gaps.
 
 ---
 
