@@ -4481,12 +4481,24 @@ impl ProfileManagerView {
             return div().into_any_element();
         }
 
+        // The message is one long sentence. The row used to be a single
+        // unwrapped line, so the text claimed its whole natural width, the row
+        // overflowed, and Discard / Save Changes were pushed outside the
+        // banner — the actions the message asks for became unreachable.
+        //
+        // The text column keeps its natural width as its flex basis, so while
+        // message and buttons both fit they share one line; when they do not,
+        // the line breaks, the message wraps in the full width of the banner
+        // and the buttons take a row of their own underneath. The buttons
+        // never shrink, and `ml_auto` keeps them at the right edge on whichever
+        // row they land.
         let root = rsx! {
             <div
                 flex
+                flex_wrap
+                w_full
                 items_center
-                justify_between
-                gap_4
+                gap_3
                 px_4
                 py_3
                 rounded_lg
@@ -4494,7 +4506,7 @@ impl ProfileManagerView {
                 border_color={cx.theme().warning.opacity(0.45)}
                 bg={cx.theme().warning.opacity(0.12)}
             >
-                <div flex flex_col gap_1>
+                <div flex flex_col gap_1 min_w_0>
                     <div
                         text_sm
                         font_weight={FontWeight::BOLD}
@@ -4509,7 +4521,7 @@ impl ProfileManagerView {
                         {dirty_state.navigation_message()}
                     </div>
                 </div>
-                <div flex items_center gap_2>
+                <div flex items_center gap_2 flex_none ml_auto>
                     {gpui_component::button::Button::new("discard_profile_changes")
                         .label("Discard")
                         .ghost()
