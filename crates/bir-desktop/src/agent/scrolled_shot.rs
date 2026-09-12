@@ -15,6 +15,9 @@ pub const METRICS_WAIT_FRAMES: u32 = 90;
 /// the window is idle.
 pub const SNAPSHOT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
+// The phases are named for what the job is waiting on; the shared prefix is
+// the point, not an accident.
+#[allow(clippy::enum_variant_names)]
 pub enum ScrolledPhase {
     WaitMetrics,
     WaitPaint,
