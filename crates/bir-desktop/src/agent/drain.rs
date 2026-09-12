@@ -172,12 +172,12 @@ fn apply_host(
         return;
     }
 
-    if host.active_view() != app.active_view {
-        apply_navigation(host.active_view(), &host, app, window, cx);
-    }
-
     if let Some(list) = app.db.lock().ok().and_then(|db| db.list_profiles().ok()) {
         app.profiles = list;
+    }
+
+    if host.active_view() != app.active_view {
+        apply_navigation(host.active_view(), &host, app, window, cx);
     }
 
     if let Some(tin) = host.selected_tin() {
@@ -268,6 +268,30 @@ fn apply_host(
     }
 }
 
+/// The taxpayer the app must adopt before `target` can be rendered.
+///
+/// A form view reads `AppState::active_profile_tin`, not the agent host's
+/// selection, and `handle_file_form` silently does nothing without it. The
+/// other views select their own taxpayer on the way in (`ProfileManager`
+/// edits it, `Dashboard` shows it), so only a form needs this.
+///
+/// `form.open`/`filing.start` with `tin=` selects the taxpayer and opens the
+/// form in one invoke; the drain used to apply the navigation before the
+/// selection, so the form found no profile and the app stayed where it was.
+/// A second, identical invoke worked, because by then the selection had
+/// landed — which is what made it look intermittent.
+fn profile_to_adopt(
+    target: ActiveView,
+    host_tin: Option<&str>,
+    app_tin: Option<&str>,
+) -> Option<String> {
+    if ids::form_chrome(target).is_none() {
+        return None;
+    }
+    let tin = host_tin?;
+    (app_tin != Some(tin)).then(|| tin.to_string())
+}
+
 fn apply_navigation(
     target: ActiveView,
     host: &BirAgentHost,
@@ -340,6 +364,16 @@ fn apply_navigation(
         }
         form if ids::form_chrome(form).is_some() => {
             let chrome = ids::form_chrome(form).expect("form chrome");
+            if let Some(tin) =
+                profile_to_adopt(form, host.selected_tin(), app.active_profile_tin.as_deref())
+                && let Some(profile) = app
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.tin.full() == tin)
+                    .cloned()
+            {
+                app.select_profile(profile, ProfileTargetAction::UnlockOnly, window, cx);
+            }
             if host.selected_tin().is_some() {
                 let year = host
                     .form_1601c_draft()
@@ -426,6 +460,54 @@ impl AppState {
     pub(crate) fn release_agent_listener(&self) {
         if let Some(flag) = &self.agent_shutdown {
             flag.store(true, Ordering::SeqCst);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ActiveView, profile_to_adopt};
+
+    const TIN: &str = "00000000000000";
+
+    #[test]
+    fn a_form_navigation_adopts_the_hosts_taxpayer_once() {
+        assert_eq!(
+            profile_to_adopt(ActiveView::Form1601C, Some(TIN), None),
+            Some(TIN.to_string()),
+            "form.open with tin= must select the taxpayer before the form opens"
+        );
+        assert_eq!(
+            profile_to_adopt(ActiveView::Form1601C, Some(TIN), Some(TIN)),
+            None,
+            "already the app's profile: nothing to adopt"
+        );
+        assert_eq!(
+            profile_to_adopt(ActiveView::Form1601C, Some(TIN), Some("99999999999999")),
+            Some(TIN.to_string()),
+            "a different taxpayer is adopted"
+        );
+        assert_eq!(
+            profile_to_adopt(ActiveView::Form1601C, None, None),
+            None,
+            "no host selection: the form view reports the missing profile itself"
+        );
+    }
+
+    #[test]
+    fn other_views_select_their_own_taxpayer() {
+        for view in [
+            ActiveView::Dashboard,
+            ActiveView::ProfileManager,
+            ActiveView::GlobalDashboard,
+            ActiveView::Settings,
+            ActiveView::Notifications,
+        ] {
+            assert_eq!(
+                profile_to_adopt(view, Some(TIN), None),
+                None,
+                "{view:?} handles its own selection"
+            );
         }
     }
 }
