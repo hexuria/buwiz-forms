@@ -105,9 +105,7 @@ fn op_extra(op: &Op) -> Option<String> {
         | Op::Type { target, .. }
         | Op::SetValue { target, .. }
         | Op::Key { target, .. } => Some(format!("target={target}")),
-        Op::Assert { spec } | Op::WaitUntil { spec, .. } => {
-            Some(format!("target={}", spec.target))
-        }
+        Op::Assert { spec } | Op::WaitUntil { spec, .. } => Some(format!("target={}", spec.target)),
         Op::Keybinding { binding, .. } => Some(format!("binding={binding}")),
         _ => None,
     }
