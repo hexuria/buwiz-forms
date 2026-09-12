@@ -135,6 +135,10 @@ pub struct BirAgentHost {
     admin_lock_enabled: bool,
     enable_profile_pins: bool,
     unsaved_compliance: bool,
+    /// Set by the invokes that edit the profile editor in this request, so the
+    /// drain writes the snapshot back only when the agent actually changed it.
+    /// One-shot like `Form1601CState::saved`: the host is rebuilt per request.
+    editor_touched: bool,
     active_view: ActiveView,
     pending_admin: Option<ActiveView>,
     pending_profile_auth: bool,
@@ -169,6 +173,7 @@ impl BirAgentHost {
             admin_lock_enabled: false,
             enable_profile_pins: false,
             unsaved_compliance: false,
+            editor_touched: false,
             active_view: ActiveView::GlobalDashboard,
             pending_admin: None,
             pending_profile_auth: false,
@@ -263,6 +268,15 @@ impl BirAgentHost {
 
     pub fn editor_snapshot(&self) -> ProfileEditor {
         self.editor.clone()
+    }
+
+    /// Whether this request edited the profile editor. The drain must not push
+    /// the snapshot back otherwise: it is read from the view at the start of a
+    /// request, and a navigation in the middle of the same request can load a
+    /// taxpayer into that view — writing the pre-navigation copy over it would
+    /// blank every field.
+    pub fn editor_touched(&self) -> bool {
+        self.editor_touched
     }
 
     pub fn replace_dues(&mut self, dues: Vec<(String, u16, u8, String, String)>) {
@@ -667,6 +681,7 @@ impl BirAgentHost {
             profile.selected = false;
         }
         self.editor = ProfileEditor::default();
+        self.editor_touched = true;
         self.active_view = ActiveView::ProfileManager;
         self.pending_admin = None;
         Ok(DispatchResult::json(
@@ -1407,6 +1422,19 @@ impl BirAgentHost {
 
     fn set_field(&mut self, target: &str, value: &str) -> Result<DispatchResult, String> {
         self.gate_locked()?;
+        if matches!(
+            target,
+            ids::PROFILE_TIN
+                | ids::PROFILE_NAME
+                | ids::PROFILE_RDO
+                | ids::PROFILE_LOB
+                | ids::PROFILE_ADDRESS
+                | ids::PROFILE_ZIP
+                | ids::PROFILE_PHONE
+                | ids::PROFILE_EMAIL
+        ) {
+            self.editor_touched = true;
+        }
         match target {
             ids::PROFILE_TIN => self.editor.tin = digits_only(value),
             ids::PROFILE_NAME => self.editor.full_name = value.to_string(),
@@ -4119,6 +4147,74 @@ mod tests {
         assert!(tree.find(ids::PAGE_LOCK).is_some());
         assert!(tree.find(ids::PAGE_SETTINGS).is_none());
         assert!(tree.find(ids::OVERLAY_COMMAND_PALETTE).is_none());
+    }
+
+    #[test]
+    fn the_editor_is_written_back_only_when_the_agent_edited_it() {
+        // The drain reads this snapshot out of the profile manager when the
+        // request starts and writes it back when the request ends. Writing it
+        // back after a navigation that loaded a taxpayer into the same view
+        // blanked every field, so the write-back is gated on this flag.
+        let mut host = empty_host();
+        assert!(!host.editor_touched(), "a fresh request has not edited it");
+
+        let navigated = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "nav.go".into(),
+                args: json!({ "page": "profile-manager" }),
+            }),
+            None,
+            None,
+        );
+        assert!(navigated.ok, "{:?}", navigated.error);
+        assert!(
+            !host.editor_touched(),
+            "navigating to the editor is not an edit"
+        );
+
+        let typed = handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::PROFILE_NAME.into(),
+                value: "Agent Typed This".into(),
+            }),
+            None,
+            None,
+        );
+        assert!(typed.ok, "{:?}", typed.error);
+        assert!(host.editor_touched(), "a field edit must reach the view");
+        assert_eq!(host.editor_snapshot().full_name, "Agent Typed This");
+    }
+
+    #[test]
+    fn opening_a_form_does_not_touch_the_profile_editor() {
+        let mut host = fixture_host();
+        let opened = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.open".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 11 }),
+            }),
+            None,
+            None,
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        assert!(
+            !host.editor_touched(),
+            "form.open loads the host's own copy of the taxpayer; the view keeps its editor"
+        );
+    }
+
+    #[test]
+    fn asking_for_a_new_profile_clears_the_editor_in_the_view() {
+        let mut host = empty_host();
+        let created = handle_request(&mut host, req(Op::click(ids::NAV_NEW_PROFILE)), None, None);
+        assert!(created.ok, "{:?}", created.error);
+        assert!(
+            host.editor_touched(),
+            "an empty editor is what the view must show"
+        );
     }
 
     #[test]
