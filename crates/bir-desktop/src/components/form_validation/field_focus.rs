@@ -153,7 +153,11 @@ mod tests {
         let targets =
             SemanticFieldTargets::try_new([(later_mapped.clone(), "later target")]).unwrap();
         let violations = vec![
-            violation(1, RuleSeverity::Advisory, &[later_mapped.clone()]),
+            violation(
+                1,
+                RuleSeverity::Advisory,
+                std::slice::from_ref(&later_mapped),
+            ),
             violation(2, RuleSeverity::Blocking, &[first_unmapped]),
             violation(3, RuleSeverity::Blocking, &[later_mapped]),
         ];
