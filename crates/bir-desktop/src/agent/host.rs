@@ -1296,7 +1296,7 @@ impl BirAgentHost {
             .collect();
         let mut submissions = Vec::new();
         for summary in guard
-            .list_all_queued_submissions()
+            .list_all_filed_submissions()
             .map_err(|err| err.to_string())?
         {
             submissions.push(SubmissionItem {

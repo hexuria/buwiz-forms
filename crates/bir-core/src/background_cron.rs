@@ -106,10 +106,20 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
 
     let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
     if test_enabled {
-        crate::notification::send_notification(
-            "BIR Vault Daemon",
-            "Hello! The background cron is active.",
-        );
+        const TITLE: &str = "BIR Vault Daemon";
+        const BODY: &str = "Hello! The background cron is active.";
+        // The painted app delivers alert rows itself; headless posts directly.
+        if let Ok(db_guard) = db.lock() {
+            let _ = db_guard.record_alert(
+                None,
+                crate::db::alert_kinds::CRON_HEARTBEAT,
+                crate::db::AlertSeverity::Info,
+                TITLE,
+                BODY,
+                crate::db::AlertAction::None,
+            );
+        }
+        crate::notification::send_notification(TITLE, BODY);
     }
 
     if global_cron_enabled {

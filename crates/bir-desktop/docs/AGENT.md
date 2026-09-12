@@ -893,7 +893,11 @@ Notifications page reads:
 4. `form_confirmed:1601C:08/26` appears when the IMAP poll matches BIR's
    receipt email (BIR's own received date/time and file name in `detail`).
    The poll runs on the cron's schedule, so this can take an hour.
-5. `form.fields` / `submissions.list` remain the status source of truth
+5. Painted `bir` shows the same rows as an in-app toast and, when run from a
+   `.app` (`scripts/dev_bundle_macos.sh` in development), a native macOS
+   notification with the app's icon; clicking either opens the Notifications
+   page. `bir-headless` posts through the OS directly (AppleScript on macOS).
+6. `form.fields` / `submissions.list` remain the status source of truth
    (`Queued` → `Submitted` → `Confirmed`); the alert rows are the event log.
    `alerts.dismiss` acknowledges an entry once handled.
 
@@ -919,7 +923,7 @@ table; do not use them in recipes.
 | `dues.html` | optional `tin`/`q`; `filter` or `scope`=`upcoming`\|`overdue`\|`all`; `scope`=`profile`\|`global` as in `dues.list`; optional `limit` | Same data path as `dues.list` (no second calendar engine). Returns `{path, kind:"html"}` demo bundle plus the (possibly limited) `dues` JSON |
 | `tax-dues.refresh` | — | Reload unfiltered dues for the selected profile |
 | `jobs.list` | optional `status` | Read-only `Database::list_jobs`. Poll `name` is the human title (`Waiting for {form} {period} confirmation for {TIN} (email?)`). `command` stays `bir_poll_email {email}`. Submit cards are UI-only and are not this list |
-| `submissions.list` | optional `tin`, `status` | Queued/submitted draft summaries plus `list_submissions_for_tin` |
+| `submissions.list` | optional `tin`, `status` | Queued / Submitted / Confirmed / Paid draft summaries (`list_all_filed_submissions`) plus `list_submissions_for_tin`. A return stays listed after BIR confirms it |
 | `alerts.list` | optional `since_id` (JSON number), `kind` prefix, `tin` | The Notifications-page rows (`Database::list_active_alerts`), ascending by `id`, only those with `id > since_id`. `{alerts, last_id}`. Filing events are `form_submitted:{form}:{MM/YY}` and `form_confirmed:{form}:{MM/YY}` (Info, `tin` set); pass `kind=form_` to see just those. Read-only |
 | `alerts.dismiss` | `id` (JSON number) | Same as the Dismiss button: `Database::dismiss_alert`. Dismissed rows leave `alerts.list` |
 | `search.open` | — | Open the Command Palette overlay (`overlay-command-palette`). Same as Cmd+K / Ctrl+K. Does **not** select, create, or run a query |

@@ -2825,12 +2825,31 @@ impl Database {
     }
 
     pub fn list_all_queued_submissions(&self) -> Result<Vec<FormDraftSummary>, DbError> {
-        let mut stmt = self.conn.prepare(
+        self.list_form_drafts_with_status(&["Queued", "Submitted"])
+    }
+
+    /// Every return that has left Draft: Queued, Submitted, Confirmed, Paid.
+    ///
+    /// `list_all_queued_submissions` stops at Submitted because the cron and
+    /// the Background Tasks cards only care about work still in flight. An
+    /// agent tracking a filing through `submissions.list` needs to keep seeing
+    /// it after BIR's receipt lands, so this one carries the settled states too.
+    pub fn list_all_filed_submissions(&self) -> Result<Vec<FormDraftSummary>, DbError> {
+        self.list_form_drafts_with_status(&["Queued", "Submitted", "Confirmed", "Paid"])
+    }
+
+    fn list_form_drafts_with_status(
+        &self,
+        statuses: &[&str],
+    ) -> Result<Vec<FormDraftSummary>, DbError> {
+        // Fixed literals from the two callers above, never caller input.
+        let placeholders = statuses.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
              FROM form_drafts
-             WHERE (status = 'Queued' OR status = 'Submitted')",
-        )?;
-        let rows = stmt.query_map([], |row| {
+             WHERE status IN ({placeholders})"
+        ))?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(statuses.iter()), |row| {
             let form_code: String = row.get(2)?;
             let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
             let legacy_slot = row.get::<_, Option<i64>>(4)?;
@@ -2999,6 +3018,31 @@ mod tests {
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct TestDraft {
         value: i32,
+    }
+
+    /// `submissions.list` must keep a return after BIR confirms it.
+    #[test]
+    fn filed_listing_keeps_confirmed_rows_that_the_queue_listing_drops() {
+        let db = test_db();
+        let profile = test_profile();
+        let draft = editable_1601c_draft(&profile);
+        db.save_1601c_draft(&draft).expect("draft");
+        let mut queued = draft.clone();
+        queued.transition_to_queued().expect("queue");
+        db.save_queued_1601c_draft(&queued).expect("queued");
+        assert_eq!(db.list_all_queued_submissions().unwrap().len(), 1);
+        assert_eq!(db.list_all_filed_submissions().unwrap().len(), 1);
+
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Confirmed' WHERE tin = ?1",
+                rusqlite::params![queued.tin],
+            )
+            .expect("settle the row");
+        assert!(db.list_all_queued_submissions().unwrap().is_empty());
+        let filed = db.list_all_filed_submissions().unwrap();
+        assert_eq!(filed.len(), 1);
+        assert_eq!(filed[0].status, FilingStatus::Confirmed);
     }
 
     fn test_db() -> Database {

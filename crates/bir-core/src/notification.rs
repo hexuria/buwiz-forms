@@ -1,25 +1,12 @@
-/// Send a native system notification.
+/// Post a desktop notification from a process that has no window of its own.
 ///
-/// On macOS, we first register our bundle identifier with the notification
-/// system so that macOS attributes the notification to eBIRForms and
-/// displays the correct app icon.
-use std::sync::atomic::{AtomicBool, Ordering};
-
-/// Off until a real binary turns it on. Test suites and one-off tools link
-/// this crate too, and their cron / alert tests reach `send_notification`
-/// with fixture data — which used to post straight into the developer's
-/// Notification Center as "1601C 05/99 submitted — Queue Guard Taxpayer".
-static DELIVERY_ENABLED: AtomicBool = AtomicBool::new(false);
-
-/// Called once at startup by `bir` and `bir-headless`.
-pub fn enable_desktop_delivery() {
-    DELIVERY_ENABLED.store(true, Ordering::SeqCst);
-}
-
-pub fn delivery_enabled() -> bool {
-    DELIVERY_ENABLED.load(Ordering::SeqCst)
-}
-
+/// This is the `bir-headless` (and Linux) path. Painted `bir` does **not**
+/// enable delivery here: it watches the same alert rows and posts through
+/// GPUI's `UNUserNotificationCenter` support, which gives the banner the
+/// app's identity, icon, permission prompt and click-to-open. A headless
+/// daemon can never be a `.app`, and the deprecated `NSUserNotificationCenter`
+/// silently drops posts from anything that is not one, so on macOS it goes
+/// through `osascript`, labelled eBIRForms in the subtitle.
 pub fn send_notification(title: &str, body: &str) {
     if !delivery_enabled() {
         tracing::debug!(
@@ -30,52 +17,38 @@ pub fn send_notification(title: &str, body: &str) {
     }
     #[cfg(target_os = "macos")]
     {
-        // `notify_rust` goes through the deprecated `NSUserNotificationCenter`
-        // under a borrowed bundle identity. From a bare executable (`cargo run`,
-        // `target/debug/bir`) macOS accepts the request — `show()` returns Ok —
-        // and never displays it. `osascript` posts from any process, so a dev
-        // run still gets its banner; a real `.app` keeps the native path.
-        if !running_from_app_bundle() && display_via_osascript(title, body) {
-            return;
-        }
-        use std::sync::Once;
-        static SET_APP: Once = Once::new();
-        SET_APP.call_once(|| {
-            let _ = mac_notification_sys::set_application("dev.goldcoders.bir");
-        });
+        display_via_osascript(title, body);
     }
-
-    let _ = notify_rust::Notification::new()
-        .summary(title)
-        .body(body)
-        .show();
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = notify_rust::Notification::new()
+            .summary(title)
+            .body(body)
+            .show();
+    }
 }
 
-#[cfg(target_os = "macos")]
-fn running_from_app_bundle() -> bool {
-    std::env::current_exe()
-        .map(|exe| exe_is_inside_app_bundle(&exe))
-        .unwrap_or(false)
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Off until `bir-headless` turns it on. Test suites and one-off tools link
+/// this crate too, and their cron / alert tests reach `send_notification`
+/// with fixture data — which used to post straight into the developer's
+/// Notification Center as "1601C 05/99 submitted — Queue Guard Taxpayer".
+static DELIVERY_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Called once at startup by `bir-headless`.
+pub fn enable_desktop_delivery() {
+    DELIVERY_ENABLED.store(true, Ordering::SeqCst);
 }
 
-/// `…/Something.app/Contents/MacOS/binary` is a bundled executable.
-#[cfg(target_os = "macos")]
-fn exe_is_inside_app_bundle(exe: &std::path::Path) -> bool {
-    let mut ancestors = exe.ancestors();
-    let _binary = ancestors.next();
-    matches!(
-        (ancestors.next(), ancestors.next(), ancestors.next()),
-        (Some(macos), Some(contents), Some(app))
-            if macos.file_name().is_some_and(|n| n == "MacOS")
-                && contents.file_name().is_some_and(|n| n == "Contents")
-                && app.extension().is_some_and(|e| e == "app")
-    )
+pub fn delivery_enabled() -> bool {
+    DELIVERY_ENABLED.load(Ordering::SeqCst)
 }
 
 #[cfg(target_os = "macos")]
 fn display_via_osascript(title: &str, body: &str) -> bool {
     let script = format!(
-        "display notification {} with title {}",
+        "display notification {} with title \"eBIRForms\" subtitle {}",
         applescript_string(body),
         applescript_string(title)
     );
@@ -172,19 +145,6 @@ mod tests {
     #[test]
     fn multibyte_detail_does_not_panic() {
         assert!(!truncate_for_banner(&"日本語テキスト".repeat(50), 140).is_empty());
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn bundled_executable_is_recognised_by_path_shape() {
-        use std::path::Path;
-        assert!(exe_is_inside_app_bundle(Path::new(
-            "/Applications/eBIRForms.app/Contents/MacOS/bir"
-        )));
-        assert!(!exe_is_inside_app_bundle(Path::new(
-            "/Volumes/goldcoders/x/target/debug/bir"
-        )));
-        assert!(!exe_is_inside_app_bundle(Path::new("/tmp/Fake.app/bir")));
     }
 
     #[cfg(target_os = "macos")]
