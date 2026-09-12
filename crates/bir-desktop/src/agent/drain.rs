@@ -347,9 +347,7 @@ fn profile_to_adopt(
     host_tin: Option<&str>,
     app_tin: Option<&str>,
 ) -> Option<String> {
-    if ids::form_chrome(target).is_none() {
-        return None;
-    }
+    ids::form_chrome(target)?;
     let tin = host_tin?;
     (app_tin != Some(tin)).then(|| tin.to_string())
 }

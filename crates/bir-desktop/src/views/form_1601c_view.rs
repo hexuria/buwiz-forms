@@ -1245,7 +1245,7 @@ impl Render for Form1601CView {
             .child(rsx! {
                 <div p_6 border_b_1
                     border_color={cx.theme().border}
-                    bg={cx.theme().accent}>
+                    bg={cx.theme().background}>
                     {self.render_header(cx)}
                     <div id={crate::agent::ids::FORM_1601C_STATUS} mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>
