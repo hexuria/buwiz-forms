@@ -6,6 +6,14 @@
 pub fn send_notification(title: &str, body: &str) {
     #[cfg(target_os = "macos")]
     {
+        // `notify_rust` goes through the deprecated `NSUserNotificationCenter`
+        // under a borrowed bundle identity. From a bare executable (`cargo run`,
+        // `target/debug/bir`) macOS accepts the request — `show()` returns Ok —
+        // and never displays it. `osascript` posts from any process, so a dev
+        // run still gets its banner; a real `.app` keeps the native path.
+        if !running_from_app_bundle() && display_via_osascript(title, body) {
+            return;
+        }
         use std::sync::Once;
         static SET_APP: Once = Once::new();
         SET_APP.call_once(|| {
@@ -17,6 +25,60 @@ pub fn send_notification(title: &str, body: &str) {
         .summary(title)
         .body(body)
         .show();
+}
+
+#[cfg(target_os = "macos")]
+fn running_from_app_bundle() -> bool {
+    std::env::current_exe()
+        .map(|exe| exe_is_inside_app_bundle(&exe))
+        .unwrap_or(false)
+}
+
+/// `…/Something.app/Contents/MacOS/binary` is a bundled executable.
+#[cfg(target_os = "macos")]
+fn exe_is_inside_app_bundle(exe: &std::path::Path) -> bool {
+    let mut ancestors = exe.ancestors();
+    let _binary = ancestors.next();
+    matches!(
+        (ancestors.next(), ancestors.next(), ancestors.next()),
+        (Some(macos), Some(contents), Some(app))
+            if macos.file_name().is_some_and(|n| n == "MacOS")
+                && contents.file_name().is_some_and(|n| n == "Contents")
+                && app.extension().is_some_and(|e| e == "app")
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn display_via_osascript(title: &str, body: &str) -> bool {
+    let script = format!(
+        "display notification {} with title {}",
+        applescript_string(body),
+        applescript_string(title)
+    );
+    std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+/// Quote arbitrary text as an AppleScript string literal.
+#[cfg(target_os = "macos")]
+fn applescript_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for ch in text.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Post a desktop notification for an alert, but only when it is *news*.
@@ -86,6 +148,28 @@ mod tests {
     #[test]
     fn multibyte_detail_does_not_panic() {
         assert!(!truncate_for_banner(&"日本語テキスト".repeat(50), 140).is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn bundled_executable_is_recognised_by_path_shape() {
+        use std::path::Path;
+        assert!(exe_is_inside_app_bundle(Path::new(
+            "/Applications/eBIRForms.app/Contents/MacOS/bir"
+        )));
+        assert!(!exe_is_inside_app_bundle(Path::new(
+            "/Volumes/goldcoders/x/target/debug/bir"
+        )));
+        assert!(!exe_is_inside_app_bundle(Path::new("/tmp/Fake.app/bir")));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn applescript_string_escapes_quotes_and_backslashes() {
+        assert_eq!(applescript_string("plain"), "\"plain\"");
+        assert_eq!(applescript_string("say \"hi\""), "\"say \\\"hi\\\"\"");
+        assert_eq!(applescript_string("a\\b"), "\"a\\\\b\"");
+        assert_eq!(applescript_string("line1\nline2"), "\"line1\nline2\"");
     }
 
     /// The cron re-reports every 60s. This must post nothing.
