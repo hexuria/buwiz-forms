@@ -1740,7 +1740,7 @@ impl FormViewTrait for Form2550QV2View {
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "2550q-2024",
             &render_draft.to_bir_field_map(),
-            "2550Q Frozen HTML",
+            "2550Q — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {

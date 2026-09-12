@@ -150,6 +150,14 @@ fn normalize_bir_receipt_meridiem(time: &str) -> String {
 ///
 /// The `#email#` suffix is stripped before the hyphen split so IAF copies and
 /// plaintext savefile stems yield the same TIN, form, and period.
+/// Email HTML safe to embed in a print document: scripts, styles, event
+/// handlers and remote-loading tags are stripped. Receipts are cleaned at
+/// ingest too; cleaning again here costs nothing and does not depend on
+/// when the row was written.
+pub fn sanitized_receipt_html(raw_html: &str) -> String {
+    ammonia::Builder::default().clean(raw_html).to_string()
+}
+
 pub fn split_bir_filename(filename: &str) -> Option<(String, String, String)> {
     let stem = filename.strip_suffix(".xml").unwrap_or(filename);
     let base = stem.split('#').next().unwrap_or(stem);
@@ -165,6 +173,15 @@ pub fn split_bir_filename(filename: &str) -> Option<(String, String, String)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sanitised_receipt_html_drops_scripts_and_handlers() {
+        let dirty = r#"<p onclick="x()">Hi <script>alert(1)</script><b>there</b></p>"#;
+        let clean = super::sanitized_receipt_html(dirty);
+        assert!(!clean.contains("script"), "{clean}");
+        assert!(!clean.contains("onclick"), "{clean}");
+        assert!(clean.contains("<b>there</b>"), "{clean}");
+    }
+
     use super::*;
 
     #[test]

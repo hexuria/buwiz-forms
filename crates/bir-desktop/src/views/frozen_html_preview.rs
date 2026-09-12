@@ -17,7 +17,8 @@ use wry::WebViewBuilderExtWindows;
 
 pub(crate) struct FrozenHtmlPreviewView {
     webview: Option<Entity<WebView>>,
-    status: String,
+    /// Only failures are worth a line in the toolbar.
+    status: Option<String>,
 }
 
 impl FrozenHtmlPreviewView {
@@ -39,33 +40,33 @@ impl FrozenHtmlPreviewView {
             });
 
         let (webview, status) = match result {
-            Ok(webview) => (
-                Some(cx.new(|cx| WebView::new(webview, window, cx))),
-                "Frozen HTML ready to fill/print.".to_string(),
-            ),
-            Err(error) => (None, format!("Frozen HTML preview failed: {error}")),
+            Ok(webview) => (Some(cx.new(|cx| WebView::new(webview, window, cx))), None),
+            Err(error) => (None, Some(format!("Print preview failed: {error}"))),
         };
 
         Self { webview, status }
     }
 
+    /// The platform's print dialog through wry's native `print()`
+    /// (`NSPrintOperation` on macOS, WebView2's print UI on Windows,
+    /// `WebKitPrintOperation` on Linux). `window.print()` from script was
+    /// the previous route; WKWebView ignores it, so the button did nothing on
+    /// macOS. Script stays as the fallback if the native call errors.
     fn print(&mut self, cx: &mut Context<Self>) {
         let Some(webview) = self.webview.clone() else {
-            self.status = "Frozen HTML preview is not available to print.".to_string();
+            self.status = Some("Nothing to print: the preview did not load.".to_string());
             cx.notify();
             return;
         };
         let outcome = webview.update(cx, |webview, _| {
-            webview.raw().evaluate_script("window.print();")
+            webview
+                .raw()
+                .print()
+                .or_else(|_| webview.raw().evaluate_script("window.print();"))
         });
-        match outcome {
-            Ok(()) => {
-                self.status = "Print dialog opened for the frozen HTML.".to_string();
-            }
-            Err(error) => {
-                self.status = format!("Frozen HTML could not print: {error}");
-            }
-        }
+        self.status = outcome
+            .err()
+            .map(|error| format!("Could not open the print dialog: {error}"));
         cx.notify();
     }
 }
@@ -93,7 +94,7 @@ impl Render for FrozenHtmlPreviewView {
                     border_b_1
                     border_color={cx.theme().border}
                 >
-                    {self.status.clone()}
+                    <div text_color={cx.theme().danger}>{self.status.clone().unwrap_or_default()}</div>
                     <div flex items_center gap_2>
                         {Button::new("frozen-html-print")
                             .label("Print")
@@ -109,7 +110,7 @@ impl Render for FrozenHtmlPreviewView {
                     min_h_0
                     whenSome={(self.webview.clone(), |this, webview| this.child(webview))}
                     when={(self.webview.is_none(), |this| {
-                        this.p_6().child(self.status.clone())
+                        this.p_6().child(self.status.clone().unwrap_or_default())
                     })}
                 />
             </div>

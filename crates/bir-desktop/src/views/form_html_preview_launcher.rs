@@ -3,9 +3,12 @@
 //! Form views own draft editing and writer maps. This module owns the
 //! platform-specific WebView host.
 
+use bir_core::db::Database;
 use bir_core::forms::form_2551q::Form2551QDraft;
+use bir_print::frozen_html::ReceiptPage;
 use gpui::Context;
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use gpui::{AppContext, TitlebarOptions, WindowBounds, WindowOptions, px, size};
@@ -19,8 +22,8 @@ pub(crate) enum HtmlPreviewLaunchKind {
 impl HtmlPreviewLaunchKind {
     pub(crate) const fn status_message(self) -> &'static str {
         match self {
-            Self::FrozenHtmlWindow => "Frozen HTML opened for fill/print.",
-            Self::FrozenHtmlDocument => "Frozen HTML opened as a local document for fill/print.",
+            Self::FrozenHtmlWindow => "Print preview opened.",
+            Self::FrozenHtmlDocument => "Print preview opened as a local document.",
         }
     }
 }
@@ -31,20 +34,68 @@ pub(crate) fn launch_frozen_form_preview<T: 'static>(
     title: &str,
     cx: &mut Context<T>,
 ) -> Result<HtmlPreviewLaunchKind, String> {
-    let html = bir_print::frozen_html::filled_document(slug, fields)?;
+    launch_frozen_form_preview_with_receipt(slug, fields, None, title, cx)
+}
+
+/// Form pages plus, for a confirmed return, BIR's receipt as the last page.
+pub(crate) fn launch_frozen_form_preview_with_receipt<T: 'static>(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+    receipt: Option<ReceiptPage>,
+    title: &str,
+    cx: &mut Context<T>,
+) -> Result<HtmlPreviewLaunchKind, String> {
+    let html =
+        bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt.as_ref())?;
     launch_frozen_html(html, title, cx)
 }
 
 pub(crate) fn launch_frozen_2551q_preview<T: 'static>(
     draft: &Form2551QDraft,
+    receipt: Option<ReceiptPage>,
     cx: &mut Context<T>,
 ) -> Result<HtmlPreviewLaunchKind, String> {
-    launch_frozen_form_preview(
+    launch_frozen_form_preview_with_receipt(
         "2551q-2018",
         &draft.to_bir_field_map(),
-        "2551Q Frozen HTML",
+        receipt,
+        "2551Q — Print Preview",
         cx,
     )
+}
+
+/// The receipt row a confirmed draft points at, shaped for the print page.
+/// `None` for anything not confirmed or whose row is gone.
+pub(crate) fn receipt_page_for(
+    db: &Arc<Mutex<Database>>,
+    receipt_id: Option<i64>,
+    mailbox: &str,
+) -> Option<ReceiptPage> {
+    let receipt_id = receipt_id?;
+    let receipt = db
+        .lock()
+        .ok()?
+        .get_submission_receipt_by_id(receipt_id)
+        .ok()
+        .flatten()?;
+    Some(ReceiptPage {
+        filename: receipt.filename.clone(),
+        subject: "Tax Return Receipt Confirmation".to_string(),
+        from: receipt
+            .source_from
+            .clone()
+            .unwrap_or_else(|| "ebirforms-noreply@bir.gov.ph".to_string()),
+        to: mailbox.to_string(),
+        received_at: bir_core::background_cron::display_received_at(
+            &receipt.received_date,
+            &receipt.received_time,
+        ),
+        body_text: receipt.raw_text.clone(),
+        body_html: receipt
+            .raw_html
+            .as_deref()
+            .map(bir_core::receipt::sanitized_receipt_html),
+    })
 }
 
 fn launch_frozen_html<T: 'static>(
@@ -115,7 +166,7 @@ mod tests {
     fn launch_kinds_report_the_owned_host_that_opened() {
         assert_eq!(
             HtmlPreviewLaunchKind::FrozenHtmlWindow.status_message(),
-            "Frozen HTML opened for fill/print."
+            "Print preview opened."
         );
         assert!(
             HtmlPreviewLaunchKind::FrozenHtmlDocument

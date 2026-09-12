@@ -571,7 +571,7 @@ impl FormViewTrait for Form0619FView {
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "0619f-2018",
             &render_draft.to_bir_field_map(),
-            "0619F Frozen HTML",
+            "0619-F — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {

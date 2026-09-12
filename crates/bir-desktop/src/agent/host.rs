@@ -2103,18 +2103,35 @@ impl BirAgentHost {
 
     fn form_pdf(&self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        let (slug, fields, form) = if let Some(form) = &self.form_1601c
+        let (slug, fields, form, receipt_id, mailbox) = if let Some(form) = &self.form_1601c
             && self.active_view == ActiveView::Form1601C
         {
-            ("1601c-2018", form.draft.to_bir_field_map(), "1601C")
+            (
+                "1601c-2018",
+                form.draft.to_bir_field_map(),
+                "1601C",
+                form.draft.receipt_id,
+                form.draft.email_address.clone(),
+            )
         } else if let Some(form) = &self.form_2551q
             && self.active_view == ActiveView::Form2551Q
         {
-            ("2551q-2018", form.draft.to_bir_field_map(), "2551Q")
+            (
+                "2551q-2018",
+                form.draft.to_bir_field_map(),
+                "2551Q",
+                form.draft.receipt_id,
+                form.draft.email.clone(),
+            )
         } else {
             return Err("open form 1601C or 2551Q first".into());
         };
-        let path = write_agent_frozen_html(slug, &fields)?;
+        // Same document the painted preview prints: a confirmed return
+        // carries BIR's receipt as the last page.
+        let receipt = self.db.as_ref().and_then(|db| {
+            crate::views::form_html_preview_launcher::receipt_page_for(db, receipt_id, &mailbox)
+        });
+        let path = write_agent_frozen_html(slug, &fields, receipt.as_ref())?;
         let path = path.canonicalize().unwrap_or(path);
         if !path.is_absolute() {
             return Err("form.pdf must return an absolute path, not file bytes".into());
@@ -2123,7 +2140,8 @@ impl BirAgentHost {
             "path": path.to_string_lossy(),
             "kind": "frozen-html",
             "form": form,
-            "note": "the app print pipeline is frozen HTML (bir_print::frozen_html::filled_document); invoke result is an absolute path, never file bytes"
+            "receipt_page": receipt.is_some(),
+            "note": "the app print pipeline is frozen HTML (bir_print::frozen_html::filled_document_with_receipt); invoke result is an absolute path, never file bytes"
         })))
     }
 
@@ -3470,8 +3488,9 @@ fn html_path_result(path: PathBuf, extra: Value) -> Result<DispatchResult, Strin
 fn write_agent_frozen_html(
     slug: &str,
     fields: &BTreeMap<String, String>,
+    receipt: Option<&bir_print::frozen_html::ReceiptPage>,
 ) -> Result<PathBuf, String> {
-    let html = bir_print::frozen_html::filled_document(slug, fields)?;
+    let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)?;
     let dir = std::env::temp_dir().join(format!("bir-agent-export-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir)
         .map_err(|err| format!("could not create agent export dir: {err}"))?;

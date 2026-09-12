@@ -1239,7 +1239,7 @@ impl FormViewTrait for Form1701QView {
         match crate::views::form_html_preview_launcher::launch_frozen_form_preview(
             "1701q-2018",
             &self.draft.to_bir_field_map(),
-            "1701Q Frozen HTML",
+            "1701Q — Print Preview",
             cx,
         ) {
             Ok(kind) => self.status_message = Some(kind.status_message().to_string()),

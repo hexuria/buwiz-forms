@@ -1008,10 +1008,16 @@ impl FormViewTrait for Form1601CView {
         // snapshot. Opening or retrying a preview never changes filing status.
         self.sync_from_inputs(cx);
         let render_draft = self.draft.clone();
-        match super::form_html_preview_launcher::launch_frozen_form_preview(
+        let receipt = super::form_html_preview_launcher::receipt_page_for(
+            &self.db,
+            render_draft.receipt_id,
+            &render_draft.email_address,
+        );
+        match super::form_html_preview_launcher::launch_frozen_form_preview_with_receipt(
             "1601c-2018",
             &render_draft.to_bir_field_map(),
-            "1601C Frozen HTML",
+            receipt,
+            "1601-C — Print Preview",
             cx,
         ) {
             Ok(launch_kind) => {
