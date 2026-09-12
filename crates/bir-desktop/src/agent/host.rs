@@ -1183,6 +1183,57 @@ impl BirAgentHost {
         Ok(())
     }
 
+    /// The Notifications-page rows, for an agent that cannot see a banner.
+    ///
+    /// `bir-headless` runs the same submission cron as painted `bir`, and the
+    /// cron records `form_submitted:{form}:{period}` and
+    /// `form_confirmed:{form}:{period}` entries when a PUT lands and when
+    /// BIR's receipt email is matched. The protocol is request/response only,
+    /// so an agent polls this with the `last_id` it saw.
+    fn alerts_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let since_id = args.get("since_id").and_then(Value::as_i64).unwrap_or(0);
+        let kind = args
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let tin = args
+            .get("tin")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        let mut alerts: Vec<bir_core::db::AppAlert> = guard
+            .list_active_alerts(None)
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .filter(|alert| alert.id > since_id)
+            .filter(|alert| kind.is_none_or(|want| alert.kind.starts_with(want)))
+            .filter(|alert| tin.is_none_or(|want| alert.tin.as_deref() == Some(want)))
+            .collect();
+        alerts.sort_by_key(|alert| alert.id);
+        let last_id = alerts.last().map(|alert| alert.id).unwrap_or(since_id);
+        Ok(DispatchResult::json(json!({
+            "alerts": alerts,
+            "last_id": last_id,
+        })))
+    }
+
+    /// Same as the Dismiss button on the Notifications page.
+    fn alerts_dismiss(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let id = args
+            .get("id")
+            .and_then(Value::as_i64)
+            .ok_or("alerts.dismiss requires args.id (JSON number)")?;
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        guard.dismiss_alert(id).map_err(|err| err.to_string())?;
+        Ok(DispatchResult::json(json!({ "dismissed": id })))
+    }
+
     fn jobs_list(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.reload_jobs_and_submissions()?;
         let status = args
@@ -2588,6 +2639,8 @@ impl BirAgentHost {
             "dues.html" | "calendar.html" => self.dues_html(args),
             "tax-dues.refresh" => self.refresh_dues(),
             "jobs.list" => self.jobs_list(args),
+            "alerts.list" | "notifications.list" => self.alerts_list(args),
+            "alerts.dismiss" | "notifications.dismiss" => self.alerts_dismiss(args),
             "submissions.list" => self.submissions_list(args),
             "search.open" | "palette.open" => self.open_command_palette(),
             "palette.search" => self.palette_search(args),
@@ -5176,6 +5229,95 @@ mod tests {
         );
         let _ = host.reload_jobs_and_submissions();
         assert!(host.tree().find("job-1").is_some() || host.tree().find(ids::JOBS_LIST).is_some());
+    }
+
+    /// An agent driving a headless host learns about a filing the same way the
+    /// Notifications page does: the cron's alert rows, polled by cursor.
+    #[test]
+    fn alerts_list_exposes_filing_events_by_cursor() {
+        let mut host = fixture_host();
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            for (kind, title) in [
+                ("form_submitted:1601C:08/26", "1601C 08/26 submitted"),
+                ("form_confirmed:1601C:08/26", "BIR received 1601C 08/26"),
+            ] {
+                guard
+                    .record_alert(
+                        Some(FIXTURE_TIN),
+                        kind,
+                        bir_core::db::AlertSeverity::Info,
+                        title,
+                        "detail",
+                        bir_core::db::AlertAction::None,
+                    )
+                    .expect("record");
+            }
+        }
+        let listed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.list".into(),
+                args: json!({ "kind": "form_" }),
+            }),
+            None,
+            None,
+        );
+        assert!(listed.ok, "{:?}", listed.error);
+        let body = listed.result.as_ref().unwrap();
+        let alerts = body["alerts"].as_array().unwrap();
+        assert_eq!(alerts.len(), 2, "{body}");
+        assert_eq!(alerts[0]["kind"], "form_submitted:1601C:08/26");
+        assert_eq!(alerts[1]["kind"], "form_confirmed:1601C:08/26");
+        let last_id = body["last_id"].as_i64().unwrap();
+        assert_eq!(last_id, alerts[1]["id"].as_i64().unwrap());
+
+        let nothing_new = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.list".into(),
+                args: json!({ "since_id": last_id }),
+            }),
+            None,
+            None,
+        );
+        assert!(nothing_new.ok);
+        assert_eq!(
+            nothing_new.result.as_ref().unwrap()["alerts"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(nothing_new.result.as_ref().unwrap()["last_id"], last_id);
+
+        let dismissed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.dismiss".into(),
+                args: json!({ "id": alerts[0]["id"] }),
+            }),
+            None,
+            None,
+        );
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        let remaining = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "alerts.list".into(),
+                args: json!({ "kind": "form_" }),
+            }),
+            None,
+            None,
+        );
+        assert_eq!(
+            remaining.result.as_ref().unwrap()["alerts"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     /// The painted Background Tasks tabs are clickable through the host, and
