@@ -21,4 +21,5 @@ pub mod import_export;
 pub mod lock_screen;
 pub mod notifications;
 pub mod profile_manager;
+pub(crate) mod secondary_window;
 pub mod settings;

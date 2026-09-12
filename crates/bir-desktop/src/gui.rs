@@ -340,7 +340,8 @@ pub fn run_gui() {
             let _ = cx.open_window(options, move |window, cx| {
                 window.on_window_should_close(cx, |_, _cx| {
                     // Hide is not quit: bind + live-DB owner lock stay held until
-                    // Cmd+Q / tray Quit / `gpui-agent shutdown` (request_application_quit).
+                    // tray Quit / `gpui-agent shutdown` (request_application_quit); Cmd+Q
+                    // and the menu's Quit also hide.
                     platform::hide_from_dock();
                     false // Prevent window destruction
                 });

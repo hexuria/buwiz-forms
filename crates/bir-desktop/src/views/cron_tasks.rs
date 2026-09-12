@@ -817,8 +817,8 @@ impl Render for CronTasksView {
                                                         })),
                                                         ..Default::default()
                                                     };
-                                                    let _ = cx.open_window(options, move |_window, cx| {
-                                                        cx.new(|_cx| crate::views::debug_log_viewer::DebugLogViewerView::new(jname.clone(), log.clone()))
+                                                    let _ = cx.open_window(options, move |window, cx| {
+                                                        cx.new(|cx| crate::views::debug_log_viewer::DebugLogViewerView::new(jname.clone(), log.clone(), window, cx))
                                                     });
                                                 }))
                                         )

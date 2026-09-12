@@ -91,6 +91,11 @@ These are host constraints. They do not fork protocol v2.
 
 ## Two hosts, one agent port
 
+> Cmd+Q (Ctrl+Q / Alt+F4 on Linux and Windows) and the app menu's Quit **hide
+> painted `bir` to the tray**; the cron keeps polling and the agent bind and
+> live-DB owner lock stay held. The only real quit is the tray menu's Quit or
+> `gpui-agent shutdown`.
+
 Painted GUI `bir` (`--features …,agent`, in-process mailbox on the GPUI window)
 and daemon `bir-headless serve` (no GPU) both speak the **same**
 gpui-agent protocol on loopback **`127.0.0.1:17421`** (override with
@@ -128,13 +133,13 @@ semantic yield.
   same rules, then backgrounds the child. A second `--detach` while a live
   pid or bind/lock is held **fails immediately** (exit 2). `--detach --wait`
   starts a background waiter that takes over after the owner releases both.
-- Clean GUI **Quit** (Cmd+Q / tray Quit / `gpui-agent shutdown`) releases bind
+- Clean GUI **Quit** (tray menu Quit / `gpui-agent shutdown`) releases bind
   + owner lock. Hiding or closing the window does **not**.
 
 ```bash
 # GUI already up on 17421 with the live app-group DB
 cargo run --locked --bin bir-headless --features agent -- serve --wait
-# quit painted bir (Cmd+Q) → headless owns 17421
+# quit painted bir (tray menu → Quit) → headless owns 17421
 # after headless work:
 cargo run --locked --bin bir-headless --features agent -- shutdown
 # then open painted bir
@@ -525,7 +530,7 @@ SHA `f273eec7` is `--wait` + `GPUI_AGENT_LOG_REQUESTS` on this branch.
 #### Smoke B (Mac) — GUI owns port → headless `--wait` → quit GUI → headless owns
 
 Painted `bir` must already be running with the same KEY=VALUE (agent on
-`127.0.0.1:17421`, live app-group DB). **Quit means Cmd+Q / tray Quit /
+`127.0.0.1:17421`, live app-group DB). **Quit means tray Quit /
 `gpui-agent shutdown`**, not hide or the red window-close button (those keep
 bind + owner lock). CLI always talks to whoever currently holds the port.
 
@@ -542,7 +547,7 @@ cargo run --locked --bin bir-headless --features agent -- serve --wait
 #         (or waiting for live DB owner lock …)
 ```
 
-Quit painted `bir` (Cmd+Q). Headless should print the usual listening lines
+Quit painted `bir` (tray menu → Quit). Headless should print the usual listening lines
 and become owner. Other terminal:
 
 ```bash

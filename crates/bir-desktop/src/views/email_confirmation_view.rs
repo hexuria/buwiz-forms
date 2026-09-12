@@ -116,16 +116,16 @@ impl Render for EmailConfirmationView {
             })
             .unwrap_or_else(|| div().into_any_element());
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .bg(cx.theme().background)
-            .key_context("EmailConfirmationView")
-            .track_focus(&self.focus_handle)
-            .on_action(cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
-                window.remove_window();
-            }))
+        super::secondary_window::with_window_actions(
+            div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .bg(cx.theme().background),
+            &self.focus_handle,
+            "EmailConfirmationView",
+            cx,
+        )
             .child(rsx! {
                 <div
                     flex

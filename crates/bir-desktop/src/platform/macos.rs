@@ -28,23 +28,20 @@ impl MacosQuitRouter {
             .replace(Some((main_window, app_state.downgrade())));
     }
 
+    /// Menu Quit / Cmd+Q from any window: hide to the menu bar. A real quit
+    /// is the tray menu's Quit or the agent's `shutdown`. Before the main
+    /// window exists there is nothing to keep resident, so quit outright.
     fn request_quit(&self, cx: &mut App) {
         let target = self.target.borrow().clone();
-        let Some((main_window, app_state)) = target else {
+        let Some((_main_window, app_state)) = target else {
             cx.quit();
             return;
         };
-        let Some(app_state) = app_state.upgrade() else {
+        if app_state.upgrade().is_none() {
             cx.quit();
             return;
-        };
-        if let Err(error) = main_window.update(cx, move |_, window, cx| {
-            app_state.update(cx, |state, cx| {
-                state.request_application_quit(window, cx, || {});
-            });
-        }) {
-            tracing::warn!(%error, "Could not route macOS Quit through the application state");
         }
+        hide_from_dock();
     }
 }
 
@@ -111,7 +108,7 @@ fn app_menus() -> Vec<Menu> {
             MenuItem::action("Hide Others", HideOthers),
             MenuItem::action("Show All", ShowAllApplications),
             MenuItem::separator(),
-            MenuItem::action("Quit eBIRForms", QuitApplication),
+            MenuItem::action("Close to Menu Bar", QuitApplication),
         ]),
         Menu::new("File").items([
             MenuItem::action("New Profile", CreateProfile),
