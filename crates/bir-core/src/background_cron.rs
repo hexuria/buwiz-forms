@@ -1217,6 +1217,20 @@ pub(crate) fn record_confirmation_alert(
     );
 }
 
+/// BIR's received stamp the way the confirmation email prints it. The
+/// receipt table stores it normalized (`2026-09-12` / `12:11:00`); a banner
+/// should read `12 September 2026, 12:11 PM`. Unrecognized shapes pass through.
+pub fn display_received_at(received_date: &str, received_time: &str) -> String {
+    let date = chrono::NaiveDate::parse_from_str(received_date.trim(), "%Y-%m-%d")
+        .map(|d| d.format("%-d %B %Y").to_string())
+        .unwrap_or_else(|_| received_date.trim().to_string());
+    let time = chrono::NaiveTime::parse_from_str(received_time.trim(), "%H:%M:%S")
+        .or_else(|_| chrono::NaiveTime::parse_from_str(received_time.trim(), "%H:%M"))
+        .map(|t| t.format("%I:%M %p").to_string())
+        .unwrap_or_else(|_| received_time.trim().to_string());
+    format!("{date}, {time}")
+}
+
 /// `1601Cv2018` → `1601C`: the form code without the BIR schema revision.
 pub fn form_code_from_form_type(form_type: &str) -> &str {
     form_type.split('v').next().unwrap_or(form_type)
@@ -1627,6 +1641,18 @@ mod tests {
         assert_eq!(
             body,
             "TIN 000-000-000-00000\nFile 00000000000000-1601Cv2018-102026.xml\nReceived by BIR 12 September 2026, 11:43 AM\nConfirmation in codeitlikemiley@gmail.com"
+        );
+        assert_eq!(
+            display_received_at("2026-09-12", "12:11:00"),
+            "12 September 2026, 12:11 PM"
+        );
+        assert_eq!(
+            display_received_at("2026-09-12", "11:43"),
+            "12 September 2026, 11:43 AM"
+        );
+        assert_eq!(
+            display_received_at("12 September 2026", "11:43 AM"),
+            "12 September 2026, 11:43 AM"
         );
         assert_eq!(form_code_from_form_type("1601Cv2018"), "1601C");
         assert_eq!(form_code_from_form_type("2551Qv2018"), "2551Q");

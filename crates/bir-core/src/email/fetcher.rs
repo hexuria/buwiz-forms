@@ -257,10 +257,9 @@ fn fetch_with_auth(
                                         &form_code,
                                         &period_label,
                                         &bir_filename,
-                                        &format!(
-                                            "{}, {}",
-                                            submission_receipt.received_date,
-                                            submission_receipt.received_time
+                                        &crate::background_cron::display_received_at(
+                                            &submission_receipt.received_date,
+                                            &submission_receipt.received_time,
                                         ),
                                         profile.inbox_email(),
                                     );
