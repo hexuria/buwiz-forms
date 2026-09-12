@@ -123,6 +123,7 @@ impl AssetSource for Assets {
 
 pub fn run_gui() {
     dotenvy::dotenv().ok();
+    bir_core::notification::enable_desktop_delivery();
 
     #[cfg(feature = "dev-tools")]
     if let Some(exit_code) = run_dev_command_if_requested() {

@@ -3,7 +3,31 @@
 /// On macOS, we first register our bundle identifier with the notification
 /// system so that macOS attributes the notification to eBIRForms and
 /// displays the correct app icon.
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Off until a real binary turns it on. Test suites and one-off tools link
+/// this crate too, and their cron / alert tests reach `send_notification`
+/// with fixture data — which used to post straight into the developer's
+/// Notification Center as "1601C 05/99 submitted — Queue Guard Taxpayer".
+static DELIVERY_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Called once at startup by `bir` and `bir-headless`.
+pub fn enable_desktop_delivery() {
+    DELIVERY_ENABLED.store(true, Ordering::SeqCst);
+}
+
+pub fn delivery_enabled() -> bool {
+    DELIVERY_ENABLED.load(Ordering::SeqCst)
+}
+
 pub fn send_notification(title: &str, body: &str) {
+    if !delivery_enabled() {
+        tracing::debug!(
+            title,
+            "desktop notification suppressed: delivery not enabled"
+        );
+        return;
+    }
     #[cfg(target_os = "macos")]
     {
         // `notify_rust` goes through the deprecated `NSUserNotificationCenter`
@@ -170,6 +194,13 @@ mod tests {
         assert_eq!(applescript_string("say \"hi\""), "\"say \\\"hi\\\"\"");
         assert_eq!(applescript_string("a\\b"), "\"a\\\\b\"");
         assert_eq!(applescript_string("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    /// Nothing links this crate with delivery on except the two binaries.
+    #[test]
+    fn delivery_is_off_unless_a_binary_enables_it() {
+        assert!(!delivery_enabled());
+        send_notification("must not appear", "test suite");
     }
 
     /// The cron re-reports every 60s. This must post nothing.

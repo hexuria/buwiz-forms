@@ -67,6 +67,7 @@ enum Command {
 }
 
 pub fn run() -> ExitCode {
+    bir_core::notification::enable_desktop_delivery();
     dotenvy::dotenv().ok();
     match run_cli() {
         Ok(()) => ExitCode::SUCCESS,
