@@ -176,6 +176,47 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 
 ---
 
+## 🤖 Driving the app with gpui-agent
+
+The agent is a build feature, off by default. Nothing in a product build can
+reach it, and even a feature-enabled binary stays silent until `GPUI_AGENT=1`.
+
+```bash
+# Build the painted app with the control plane. `dev-tools` is not required;
+# add it only for --dev-export-live-database or to open a form that is still
+# being certified from a *release* build.
+cargo build --locked --bin bir --features agent
+
+export GPUI_AGENT=1
+export GPUI_AGENT_TOKEN=dev-secret          # required to bind (protocol v2 HMAC)
+export GPUI_AGENT_ADDR=127.0.0.1:17421      # pick another port if it is taken
+export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
+./target/debug/bir
+```
+
+Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:
+
+```bash
+gpui-agent hello                 # protocol, app, platform, os, ready
+gpui-agent keybindings           # {id, chord, scope, dangerous}
+gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
+gpui-agent invoke profile.set --arg tin=00000000000000
+gpui-agent invoke filing.start --arg code=1601C --arg year=2026 --arg period=9
+gpui-agent screenshot --out form.png --mode scrolled --target form-1601c-scroll
+```
+
+Before driving a host, check who owns the port — `lsof -nP -iTCP:17421
+-sTCP:LISTEN` must show `bir` or `bir-headless`. Another process there (an
+editor forwarding a remote machine, say) answers the protocol convincingly;
+`hello.os` and the chord style (`cmd-b` on macOS, `ctrl-b` on Linux) tell the
+two apart. A `focused`-scope keybinding needs `--activate` when the app is not
+the frontmost application, and macOS screenshots need Screen Recording granted
+to that exact binary path.
+
+The full contract — authorization, the two-host port handoff, screenshot and
+scroll semantics, and the AI-agent playbook — is in
+[`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
+
 ## 🔢 Versioning & Build Numbers
 
 The project uses **two independent version identifiers** to satisfy both Apple App Store and Microsoft Store requirements:
@@ -333,6 +374,6 @@ so developers can run the workflow without an agent-specific command wrapper.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` (SQLCipher) and copied onto every profile that uses that mailbox. Never log raw tokens.
 - **Feature Flags:**
-  - `dev-tools` — Enables additional developer diagnostics. Automatically included in `just run`.
-  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features …,agent`) and the `bir-headless` daemon. Off in product/release builds. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
+  - `dev-tools` — Developer diagnostics: the `--dev-export-live-database` command, and (in a **release** build) permission to open a form whose HTML release certification is still in progress. A debug build already satisfies that gate through `debug_assertions`, so `dev-tools` changes nothing there. Automatically included in `just run`.
+  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features agent`) and the `bir-headless` daemon. It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the app can open. Off in product/release builds. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
 - **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).
