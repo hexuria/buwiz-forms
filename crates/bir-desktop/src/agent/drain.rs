@@ -487,9 +487,16 @@ fn set_gpui_scroll_offset(handle: &ScrollHandle, y: f32) {
     handle.set_offset(point(px(0.0), px(-y)));
 }
 
+/// The window's **content** size, in logical pixels. `crop_window_png` maps
+/// `ScrollHandle` bounds — which are content-relative — onto a `screencapture`
+/// of the whole window, and works out the title bar from the difference between
+/// the PNG height and this value. `window.bounds()` is the frame, title bar
+/// included (32 pt on current macOS), which zeroed that difference and cropped
+/// every tile 32 pt too high: a band of chrome at each seam and 32 pt of content
+/// lost per tile.
 fn window_size(window: &Window) -> (f32, f32) {
-    let bounds = window.bounds();
-    (f32::from(bounds.size.width), f32::from(bounds.size.height))
+    let size = window.viewport_size();
+    (f32::from(size.width), f32::from(size.height))
 }
 
 #[cfg(target_os = "macos")]
