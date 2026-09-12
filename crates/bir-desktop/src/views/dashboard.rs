@@ -49,6 +49,8 @@ const GRID_GAP: f32 = 20.0;
 const DESKTOP_3_COL_MIN_CONTENT: f32 = 1135.0; // 365 * 3 + 20 * 2
 const TABLET_2_COL_MIN_CONTENT: f32 = 750.0; // 365 * 2 + 20 * 1
 
+/// Shared by Tax Form Library cards and the Calendar tab's three columns so
+/// both tabs wrap at the same window widths.
 fn tax_form_grid_columns(window_width: f32, sidebar_width: f32) -> usize {
     let available_content_width = window_width - sidebar_width - CONTENT_PADDING_X;
     if available_content_width >= DESKTOP_3_COL_MIN_CONTENT {
@@ -68,6 +70,32 @@ fn tax_form_card_width(window_width: f32, sidebar_width: f32, columns: usize) ->
         let total_gap_width = GRID_GAP * (columns as f32 - 1.0);
         (available_content_width - total_gap_width) / columns as f32
     }
+}
+
+fn dashboard_grid_row_count(item_count: usize, columns: usize) -> usize {
+    item_count.div_ceil(columns.max(1))
+}
+
+/// Pack tiles into rows using the Tax Form Library gap and wrap. Each tile
+/// already has an explicit width from [`tax_form_card_width`].
+fn wrap_dashboard_grid(items: Vec<AnyElement>, columns: usize) -> Div {
+    let columns = columns.max(1);
+    let mut grid = div().flex().flex_col().gap(px(GRID_GAP)).w_full();
+    let mut row = div().flex().flex_row().gap(px(GRID_GAP)).w_full();
+    let mut in_row = 0usize;
+    for item in items {
+        row = row.child(item);
+        in_row += 1;
+        if in_row == columns {
+            grid = grid.child(row);
+            row = div().flex().flex_row().gap(px(GRID_GAP)).w_full();
+            in_row = 0;
+        }
+    }
+    if in_row > 0 {
+        grid = grid.child(row);
+    }
+    grid
 }
 
 pub enum ProfileTab {
@@ -1444,6 +1472,7 @@ impl Render for DashboardView {
 
                         let mut card = div()
                             .id(card_id)
+                            .w_full()
                             .flex()
                             .items_center()
                             .gap_4()
@@ -1534,7 +1563,7 @@ impl Render for DashboardView {
                 }
 
                 let overdue_col = rsx! {
-                    <div flex_1 flex flex_col gap_2>
+                    <div w={px(card_width)} flex flex_col gap_2>
                         <div
                             text_xl
                             font_weight={FontWeight::BOLD}
@@ -1656,6 +1685,7 @@ impl Render for DashboardView {
                         action_inner = action_inner.child(rsx! {
                             <div
                                 id={card_id}
+                                w_full
                                 flex
                                 items_center
                                 gap_4
@@ -1748,7 +1778,7 @@ impl Render for DashboardView {
                 }
 
                 let action_col = rsx! {
-                    <div flex_1 flex flex_col gap_2>
+                    <div w={px(card_width)} flex flex_col gap_2>
                         <div
                             text_xl
                             font_weight={FontWeight::BOLD}
@@ -1770,16 +1800,27 @@ impl Render for DashboardView {
                     </div>
                 };
 
-                // Wrap the upcoming deadlines list in a column matching action/overdue
+                // Same explicit-width wrap as Tax Form Library cards: fill the
+                // content area at 3 / 2 / 1 columns instead of a fixed row that
+                // leaves empty space when wide and cramps when narrow.
                 let upcoming_col = rsx! {
-                    <div flex_1 flex flex_col gap_4>
+                    <div w={px(card_width)} flex flex_col gap_4>
                         {self.upcoming_deadlines_list.clone()}
                     </div>
                 };
 
+                let calendar_grid = wrap_dashboard_grid(
+                    vec![
+                        upcoming_col.into_any_element(),
+                        action_col.into_any_element(),
+                        overdue_col.into_any_element(),
+                    ],
+                    cols,
+                )
+                .id("calendar-columns");
+
                 let calendar_tab = rsx! {
-                    <div flex flex_col gap_4>
-                        // Full-width header row
+                    <div flex flex_col gap_4 w_full>
                         <div
                             text_xl
                             font_weight={FontWeight::BOLD}
@@ -1787,12 +1828,7 @@ impl Render for DashboardView {
                         >
                             {deadline_header.clone()}
                         </div>
-                        // Three equal columns below
-                        <div flex flex_row items_start gap_6>
-                            {upcoming_col}
-                            {action_col}
-                            {overdue_col}
-                        </div>
+                        {calendar_grid}
                     </div>
                 };
                 calendar_tab.into_any_element()
@@ -2393,6 +2429,60 @@ mod tests {
                 &progress_by_code
             ));
         }
+    }
+
+    #[::core::prelude::v1::test]
+    fn dashboard_grid_uses_three_columns_when_content_is_wide() {
+        // 1135 content + 280 sidebar + 64 padding = 1479 window.
+        assert_eq!(
+            tax_form_grid_columns(1479.0, SIDEBAR_FULL_WIDTH),
+            3,
+            "Calendar Upcoming / Action / Overdue sit in one row, matching Tax Form Library"
+        );
+        assert_eq!(tax_form_grid_columns(1600.0, SIDEBAR_FULL_WIDTH), 3);
+    }
+
+    #[::core::prelude::v1::test]
+    fn dashboard_grid_uses_two_columns_at_tablet_width() {
+        assert_eq!(tax_form_grid_columns(1478.0, SIDEBAR_FULL_WIDTH), 2);
+        assert_eq!(tax_form_grid_columns(1440.0, SIDEBAR_FULL_WIDTH), 2);
+        // 750 content + 280 sidebar + 64 padding = 1094 window.
+        assert_eq!(tax_form_grid_columns(1094.0, SIDEBAR_FULL_WIDTH), 2);
+    }
+
+    #[::core::prelude::v1::test]
+    fn dashboard_grid_stacks_to_one_column_when_narrow() {
+        assert_eq!(tax_form_grid_columns(1093.0, SIDEBAR_FULL_WIDTH), 1);
+        assert_eq!(tax_form_grid_columns(800.0, SIDEBAR_MINI_WIDTH), 1);
+    }
+
+    #[::core::prelude::v1::test]
+    fn dashboard_card_width_fills_available_content() {
+        let wide = tax_form_card_width(1600.0, SIDEBAR_FULL_WIDTH, 3);
+        let available = 1600.0 - SIDEBAR_FULL_WIDTH - CONTENT_PADDING_X;
+        assert!((wide - (available - GRID_GAP * 2.0) / 3.0).abs() < f32::EPSILON);
+
+        let stacked = tax_form_card_width(800.0, SIDEBAR_MINI_WIDTH, 1);
+        assert!((stacked - (800.0 - SIDEBAR_MINI_WIDTH - CONTENT_PADDING_X)).abs() < f32::EPSILON);
+    }
+
+    #[::core::prelude::v1::test]
+    fn wrap_dashboard_grid_splits_three_calendar_columns_into_library_rows() {
+        assert_eq!(
+            dashboard_grid_row_count(3, 3),
+            1,
+            "wide: Upcoming, Action Required, Overdue share one row"
+        );
+        assert_eq!(
+            dashboard_grid_row_count(3, 2),
+            2,
+            "medium: third Calendar column wraps like a leftover library card"
+        );
+        assert_eq!(
+            dashboard_grid_row_count(3, 1),
+            3,
+            "narrow: Calendar columns stack full-width"
+        );
     }
 
     #[::core::prelude::v1::test]
