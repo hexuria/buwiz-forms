@@ -24,8 +24,13 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$binary" "$app/Contents/MacOS/bir"
 cp "$root/assets/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
-sed -e 's/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir/' \
-    -e 's/APP_NAME_PLACEHOLDER/eBIRForms/' \
+# Its own identifier, not the release one: LaunchServices resolves a bundle
+# id to whichever registered copy it prefers, so a notification posted under
+# dev.goldcoders.bir would activate an installed release / TestFlight build
+# instead of this process.
+sed -e 's/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir.dev/' \
+    -e 's/APP_NAME_PLACEHOLDER/eBIRForms Dev/' \
+    -e 's/<string>e-BIRForms<\/string>/<string>e-BIRForms (dev)<\/string>/' \
     -e "s/VERSION_PLACEHOLDER/$version/" \
     -e 's/BUILD_NUMBER_PLACEHOLDER/1/' \
     "$root/assets/macos/Info.plist" > "$app/Contents/Info.plist"
