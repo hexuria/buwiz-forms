@@ -4,7 +4,7 @@
 //! dispatches, then applies the result back on the UI thread. Headless tests
 //! use this host directly with an ephemeral SQLite database.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -1254,22 +1254,23 @@ impl BirAgentHost {
                 .map(|profile| profile.tin.clone())
                 .collect()
         };
+        // Linear dedupe, and summaries rather than full rows: this runs on the
+        // GPUI UI thread, so an O(n^2) scan plus a `form_data` JSON decode per
+        // row turned into frame time the moment a taxpayer had real history.
+        let mut seen: HashSet<(i64, String)> = submissions
+            .iter()
+            .map(|item| (item.id, item.tin.clone()))
+            .collect();
         for tin in tins {
             for sub in guard
-                .list_submissions_for_tin(&tin)
+                .list_submission_summaries_for_tin(&tin)
                 .map_err(|err| err.to_string())?
             {
-                let Some(id) = sub.id else {
-                    continue;
-                };
-                if submissions
-                    .iter()
-                    .any(|item| item.id == id && item.tin == sub.tin)
-                {
+                if !seen.insert((sub.id, sub.tin.clone())) {
                     continue;
                 }
                 submissions.push(SubmissionItem {
-                    id,
+                    id: sub.id,
                     tin: sub.tin,
                     form_code: sub.form_type,
                     status: sub.status,
@@ -5149,6 +5150,152 @@ mod tests {
         );
         let _ = host.reload_jobs_and_submissions();
         assert!(host.tree().find("job-1").is_some() || host.tree().find(ids::JOBS_LIST).is_some());
+    }
+
+    /// Re-applying an unchanged header patch must report "not dirty". The
+    /// painted view answers dirty with `sync_from_inputs`, and `apply_host`
+    /// runs for every `Op::Invoke` — including read-only `form.fields`.
+    #[test]
+    fn unchanged_header_patch_is_not_dirty() {
+        let mut host = fixture_host();
+        let started = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "filing.start".into(),
+                args: json!({ "code": "1601C", "year": 2026, "period": 9 }),
+            }),
+            None,
+            None,
+        );
+        assert!(started.ok, "{:?}", started.error);
+        let filled = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": false, "category_of_agent": "G" }),
+            }),
+            None,
+            None,
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+
+        let patch = host.form_1601c_host_patch();
+        let mut view_flag = true;
+        let mut view_category = "P".to_string();
+        let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
+        view_draft.any_taxes_withheld = true;
+        view_draft.category_of_agent = "P".to_string();
+
+        assert!(
+            apply_1601c_host_header_patch(
+                &patch,
+                &mut view_flag,
+                &mut view_category,
+                &mut view_draft
+            ),
+            "first apply changes the view"
+        );
+        assert!(!view_flag);
+        assert_eq!(view_category, "G");
+        assert!(
+            !apply_1601c_host_header_patch(
+                &patch,
+                &mut view_flag,
+                &mut view_category,
+                &mut view_draft
+            ),
+            "re-applying the same patch must not report dirty"
+        );
+    }
+
+    /// Queued / Submitted / Confirmed returns carry no one-shot save. A
+    /// read-only poll must never hand the painted view a Draft-save patch.
+    #[test]
+    fn immutable_return_patch_carries_no_save() {
+        let mut host = fixture_host();
+        let mut draft = {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            let profile = guard.get_profile(FIXTURE_TIN).unwrap().unwrap();
+            let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 9);
+            draft.any_taxes_withheld = false;
+            draft.compute();
+            guard.save_1601c_draft(&draft).expect("editable draft");
+            draft
+        };
+        draft.transition_to_queued().expect("queue reviewed draft");
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            guard
+                .save_queued_1601c_draft(&draft)
+                .expect("persist queued");
+        }
+        host.replace_form_1601c_state(draft, false, true, Vec::new());
+
+        let patch = host.form_1601c_host_patch();
+        assert!(
+            !patch.save,
+            "a non-editable return must not carry a Draft-save patch"
+        );
+    }
+
+    /// `submissions.list` merges the `submissions` table into the queued
+    /// `form_drafts` rows. The merge is a set, so a repeated call may not grow
+    /// the list, and the lean summary query must feed it the same identities.
+    #[test]
+    fn submissions_list_merges_history_rows_once() {
+        let mut host = fixture_host();
+        {
+            let db = host.db.as_ref().expect("db").clone();
+            let guard = db.lock().unwrap();
+            let mut form_data = std::collections::BTreeMap::new();
+            form_data.insert("tax_14".to_string(), "0.00".to_string());
+            guard
+                .save_submission(bir_core::db::Submission {
+                    id: None,
+                    tin: FIXTURE_TIN.to_string(),
+                    form_type: "1601Cv2018".to_string(),
+                    period: "092026".to_string(),
+                    status: "Submitted".to_string(),
+                    form_data,
+                    submitted_at: None,
+                    filename: None,
+                    created_at: None,
+                    updated_at: None,
+                })
+                .expect("history row");
+        }
+
+        let mut rows_each_call = Vec::new();
+        for _ in 0..3 {
+            let listed = handle_request(
+                &mut host,
+                req(Op::Invoke {
+                    name: "submissions.list".into(),
+                    args: json!({ "tin": FIXTURE_TIN }),
+                }),
+                None,
+                None,
+            );
+            assert!(listed.ok, "{:?}", listed.error);
+            let rows = listed.result.as_ref().unwrap()["submissions"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            rows_each_call.push(rows);
+        }
+        assert_eq!(rows_each_call[0].len(), rows_each_call[1].len());
+        assert_eq!(rows_each_call[1].len(), rows_each_call[2].len());
+        assert_eq!(
+            rows_each_call[0]
+                .iter()
+                .filter(|row| row["period"] == "092026")
+                .count(),
+            1,
+            "history row must appear exactly once: {:?}",
+            rows_each_call[0]
+        );
     }
 
     #[test]

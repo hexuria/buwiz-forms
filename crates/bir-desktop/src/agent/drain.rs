@@ -137,7 +137,14 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
         );
     }
     host.reconcile_open_forms_from_db();
-    let _ = host.reload_jobs_and_submissions();
+    // Jobs and submissions are only read back out of the host by `jobs.list` /
+    // `submissions.list` (which reload themselves) and by the Background Tasks
+    // snapshot tree. Loading them for every request put `list_jobs` plus a full
+    // submission history behind every `form.fields` poll, on the UI thread,
+    // inside `render` — roughly half of each frame once a taxpayer had history.
+    if app.active_view == ActiveView::CronTasks {
+        let _ = host.reload_jobs_and_submissions();
+    }
     host.mark_pending_admin(app.pending_admin_view);
     host.mark_pending_profile_auth(app.pending_profile.is_some());
     host.set_submit_confirmation_visible(app.agent_submit_confirmation_visible);
@@ -383,12 +390,26 @@ impl AppState {
         self.agent_mailbox = Some(mailbox);
         self.agent_token = token;
         self.agent_shutdown = Some(shutdown);
+        // Wake the UI thread only when the TCP thread actually posted work.
+        // `apply_agent` runs inside `AppState::render`, so an unconditional
+        // notify here re-laid out and repainted the whole window 60 times a
+        // second for as long as the agent was attached (~50% of a core at idle
+        // against ~1% without it), leaving no main-thread headroom for input.
         self.agent_refresh = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(16))
                     .await;
-                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                let alive = this.update(cx, |app, cx| {
+                    if app
+                        .agent_mailbox
+                        .as_ref()
+                        .is_some_and(|mailbox| !mailbox.is_empty())
+                    {
+                        cx.notify();
+                    }
+                });
+                if alive.is_err() {
                     break;
                 }
             }
