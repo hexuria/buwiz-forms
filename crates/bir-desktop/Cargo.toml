@@ -69,8 +69,11 @@ image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
 gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e", optional = true }
-# Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown).
+# Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown / logs).
 clap = { version = "4", features = ["derive"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
@@ -123,6 +126,10 @@ webkit2gtk = "2.0.1"
 gpui = { workspace = true, features = ["test-support"] }
 tempfile = "3"
 temp-env = "0.3"
+
+[[test]]
+name = "headless_detach"
+required-features = ["agent"]
 
 [package.metadata.deb]
 name = "ebirforms"

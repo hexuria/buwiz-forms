@@ -1,11 +1,13 @@
 //! Long-running headless AgentHost (`bir-headless serve`).
 //!
 //! Mirrors gpui-agent `apps/todo-headless`: clap `serve` (default) / `status` /
-//! `shutdown`, `from_env` + `spawn_host`, no GPU window. Opens
+//! `shutdown` / `logs`, `from_env` + `spawn_host`, no GPU window. Opens
 //! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
 //! `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as painted `bir`.
 //! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
 //! lock. `serve --wait` (also `bir-headless --wait`) polls until both are free.
+//! `serve --detach` backgrounds the daemon (Docker `-d`); `logs --follow`
+//! attaches to the logfile.
 
 use std::io::ErrorKind;
 use std::net::SocketAddr;
@@ -25,6 +27,7 @@ use gpui_agent::server::{spawn_host, spawn_mailbox};
 
 use super::host::BirAgentHost;
 use super::request_log;
+use crate::agent::headless_daemon;
 
 /// Headless BIR daemon: app domain logic, no GPUI / GPU window.
 ///
@@ -36,6 +39,10 @@ struct Cli {
     /// Without this flag, a busy bind or lock exits immediately.
     #[arg(long, global = true)]
     wait: bool,
+    /// Background `serve` (Docker `-d`). Print pid + log path and exit.
+    /// Only valid with `serve`. Follow later with `logs --follow`.
+    #[arg(long, global = true)]
+    detach: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -48,6 +55,15 @@ enum Command {
     Status,
     /// Ask a running daemon to exit.
     Shutdown,
+    /// Dump or follow the daemon logfile (`docker logs` / `tail -f`).
+    Logs {
+        /// Follow new lines (`docker logs -f` / `tail -f`). Ctrl-C exits.
+        #[arg(long, short = 'f')]
+        follow: bool,
+        /// Show only the last N lines (like `docker logs --tail N`).
+        #[arg(long, value_name = "N")]
+        tail: Option<usize>,
+    },
 }
 
 pub fn run() -> ExitCode {
@@ -60,10 +76,17 @@ pub fn run() -> ExitCode {
 
 fn run_cli() -> Result<(), ExitCode> {
     let cli = Cli::parse();
-    match cli.command.unwrap_or(Command::Serve) {
+    let command = cli.command.unwrap_or(Command::Serve);
+    if cli.detach && !matches!(command, Command::Serve) {
+        eprintln!("--detach is only valid with `serve` (example: bir-headless serve --detach)");
+        return Err(ExitCode::from(2));
+    }
+    match command {
+        Command::Serve if cli.detach => detach_serve(cli.wait),
         Command::Serve => serve(cli.wait),
         Command::Status => status(),
         Command::Shutdown => shutdown(),
+        Command::Logs { follow, tail } => logs(follow, tail),
     }
 }
 
@@ -178,7 +201,7 @@ pub fn live_database_token_required(token_set: bool, using_path_override: bool) 
     !using_path_override && !token_set
 }
 
-fn serve(wait: bool) -> Result<(), ExitCode> {
+fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
     let config = match from_env() {
         Ok(Some(config)) => config,
         Ok(None) => {
@@ -211,6 +234,72 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         );
         return Err(ExitCode::from(2));
     }
+    Ok(config)
+}
+
+fn detach_serve(wait: bool) -> Result<(), ExitCode> {
+    let config = load_serve_config()?;
+    if !wait {
+        if let Some(pid) = headless_daemon::live_pid(&headless_daemon::pid_path()) {
+            eprintln!("{}", headless_daemon::already_running_message(pid));
+            return Err(ExitCode::from(2));
+        }
+        if let Err(error) = wait_until_unblocked(config.addr, false) {
+            eprintln!("{error}");
+            return Err(ExitCode::from(if error.contains("already open") {
+                1
+            } else {
+                2
+            }));
+        }
+    }
+
+    let exe = std::env::current_exe().map_err(|error| {
+        eprintln!("failed to resolve bir-headless executable: {error}");
+        ExitCode::from(2)
+    })?;
+    match headless_daemon::spawn_detached_serve(&exe, wait) {
+        Ok(info) => {
+            print!("{}", headless_daemon::format_detach_report(&info));
+            eprintln!(
+                "detached. follow with: bir-headless logs --follow   (log {})",
+                info.log_path.display()
+            );
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            Err(ExitCode::from(2))
+        }
+    }
+}
+
+fn logs(follow: bool, tail: Option<usize>) -> Result<(), ExitCode> {
+    let path = headless_daemon::log_path();
+    if !path.exists() {
+        eprintln!("{}", headless_daemon::missing_log_message(&path));
+        return Err(ExitCode::from(1));
+    }
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    headless_daemon::dump_or_follow(&path, follow, tail, &stop, &mut std::io::stdout()).map_err(
+        |error| {
+            eprintln!("failed to read {}: {error}", path.display());
+            ExitCode::from(1)
+        },
+    )
+}
+
+struct ServePidGuard;
+
+impl Drop for ServePidGuard {
+    fn drop(&mut self) {
+        headless_daemon::remove_pid_file_if_current(&headless_daemon::pid_path());
+    }
+}
+
+fn serve(wait: bool) -> Result<(), ExitCode> {
+    let config = load_serve_config()?;
+    let token_set = config.token.is_some();
 
     loop {
         if let Err(error) = wait_until_unblocked(config.addr, wait) {
@@ -268,7 +357,17 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             }
         };
 
+        if let Err(error) = headless_daemon::write_current_pid() {
+            eprintln!("pid file: {error}");
+        }
+        let _pid_guard = ServePidGuard;
+
         eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
+        eprintln!(
+            "log file: {} (override with {})",
+            headless_daemon::log_path().display(),
+            headless_daemon::LOG_ENV
+        );
         eprintln!(
             "opt-in: GPUI_AGENT=1 · bind via from_env · protocol v2 HMAC · GPUI_AGENT_TOKEN required unless GPUI_AGENT_INSECURE_NO_TOKEN=1"
         );
@@ -429,18 +528,55 @@ mod tests {
         let cli = Cli::try_parse_from(["bir-headless"]).unwrap();
         assert_eq!(cli.command, None);
         assert!(!cli.wait);
+        assert!(!cli.detach);
         assert_eq!(cli.command.unwrap_or(Command::Serve), Command::Serve);
     }
 
     #[test]
-    fn parses_serve_status_shutdown() {
+    fn parses_serve_status_shutdown_logs_and_detach() {
         let serve = Cli::try_parse_from(["bir-headless", "serve"]).unwrap();
         assert_eq!(serve.command, Some(Command::Serve));
         assert!(!serve.wait);
+        assert!(!serve.detach);
         let status = Cli::try_parse_from(["bir-headless", "status"]).unwrap();
         assert_eq!(status.command, Some(Command::Status));
         let shutdown = Cli::try_parse_from(["bir-headless", "shutdown"]).unwrap();
         assert_eq!(shutdown.command, Some(Command::Shutdown));
+        let logs = Cli::try_parse_from(["bir-headless", "logs"]).unwrap();
+        assert_eq!(
+            logs.command,
+            Some(Command::Logs {
+                follow: false,
+                tail: None,
+            })
+        );
+        let follow =
+            Cli::try_parse_from(["bir-headless", "logs", "--follow", "--tail", "20"]).unwrap();
+        assert_eq!(
+            follow.command,
+            Some(Command::Logs {
+                follow: true,
+                tail: Some(20),
+            })
+        );
+        let short_f = Cli::try_parse_from(["bir-headless", "logs", "-f"]).unwrap();
+        assert_eq!(
+            short_f.command,
+            Some(Command::Logs {
+                follow: true,
+                tail: None,
+            })
+        );
+        let detach = Cli::try_parse_from(["bir-headless", "serve", "--detach"]).unwrap();
+        assert!(detach.detach);
+        assert_eq!(detach.command, Some(Command::Serve));
+        let detach_first = Cli::try_parse_from(["bir-headless", "--detach"]).unwrap();
+        assert!(detach_first.detach);
+        assert_eq!(detach_first.command, None);
+        let wait_detach =
+            Cli::try_parse_from(["bir-headless", "serve", "--detach", "--wait"]).unwrap();
+        assert!(wait_detach.detach);
+        assert!(wait_detach.wait);
         assert!(Cli::try_parse_from(["bir-headless", "nope"]).is_err());
     }
 
@@ -455,6 +591,14 @@ mod tests {
         let wait_before = Cli::try_parse_from(["bir-headless", "--wait", "serve"]).unwrap();
         assert!(wait_before.wait);
         assert_eq!(wait_before.command, Some(Command::Serve));
+        assert!(!wait_before.detach);
+    }
+
+    #[test]
+    fn detach_on_logs_is_parsed_but_rejected_by_run_cli_shape() {
+        let cli = Cli::try_parse_from(["bir-headless", "logs", "--detach"]).unwrap();
+        assert!(cli.detach);
+        assert!(matches!(cli.command, Some(Command::Logs { .. })));
     }
 
     #[test]

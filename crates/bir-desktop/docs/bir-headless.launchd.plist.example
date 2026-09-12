@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Example LaunchAgent for Mac production. This file is documentation only:
+  it is not installed by the build.
+
+  Happy path:
+    Lab / VM / no Terminal window → `bir-headless serve --detach` then
+    `bir-headless logs --follow`. No launchd required.
+    Mac production             → this plist. launchd is the supervisor.
+                                  Do NOT pass `--detach` here: KeepAlive would
+                                  treat the parent exit as a crash and restart
+                                  (fork loop).
+
+  Substitute:
+    - Program path (cargo/debug or installed binary)
+    - StandardOutPath / StandardErrorPath (must be absolute; launchd does
+      not expand ~). Same path `bir-headless logs` reads:
+      ~/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log
+    - GPUI_AGENT_TOKEN via a root-restricted extras plist or
+      `launchctl setenv`. Never commit the token.
+
+  Load:
+    launchctl bootout gui/$UID/dev.goldcoders.bir.headless 2>/dev/null || true
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/dev.goldcoders.bir.headless.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.goldcoders.bir.headless</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/path/to/bir-headless</string>
+    <string>serve</string>
+    <string>--wait</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GPUI_AGENT</key>
+    <string>1</string>
+    <key>GPUI_AGENT_ADDR</key>
+    <string>127.0.0.1:17421</string>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/YOU/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOU/Library/Group Containers/group.dev.goldcoders.bir/logs/bir-headless.log</string>
+</dict>
+</plist>
