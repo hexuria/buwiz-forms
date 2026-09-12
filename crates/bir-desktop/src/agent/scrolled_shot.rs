@@ -40,7 +40,7 @@ pub struct ScrolledShotJob {
     /// frame (with the new offset) can paint before `screencapture`.
     pub awaiting_paint: bool,
     /// The in-flight WebView tile (print preview) and how long it has been waited for.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(feature = "agent", target_os = "macos"))]
     pub snapshot: Option<crate::agent::macos_webview_snapshot::SnapshotSlot>,
     pub snapshot_started: Option<std::time::Instant>,
 }

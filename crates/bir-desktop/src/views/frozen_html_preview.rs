@@ -303,7 +303,7 @@ impl FrozenHtmlPreviewView {
     /// Ask the WebView to render its visible `viewport` (points) into `slot`.
     /// Used by the scrolled screenshot instead of `screencapture`, which does
     /// not reliably include the WebView layer.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(feature = "agent", target_os = "macos"))]
     pub(crate) fn snapshot_viewport(
         &self,
         viewport: (f32, f32),
