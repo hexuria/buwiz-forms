@@ -130,6 +130,62 @@ impl AssetSource for Assets {
     }
 }
 
+struct TrayUi {
+    tray: tray_icon::TrayIcon,
+    show_i: tray_icon::menu::MenuItem,
+    hide_tray_i: tray_icon::menu::MenuItem,
+    quit_i: tray_icon::menu::MenuItem,
+}
+
+fn try_create_tray() -> Option<TrayUi> {
+    let created = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let tray_menu = tray_icon::menu::Menu::new();
+        let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);
+        let hide_tray_i = tray_icon::menu::MenuItem::new("Hide eBIRForms", true, None);
+        let quit_i = tray_icon::menu::MenuItem::new("Quit", true, None);
+        tray_menu
+            .append_items(&[
+                &show_i,
+                &hide_tray_i,
+                &tray_icon::menu::PredefinedMenuItem::separator(),
+                &quit_i,
+            ])
+            .map_err(|error| error.to_string())?;
+
+        let icon_data = include_bytes!("../../../assets/images/e_logo.png");
+        let img = image::load_from_memory(icon_data)
+            .map_err(|error| error.to_string())?
+            .into_rgba8();
+        let (width, height) = img.dimensions();
+        let tray_icon = tray_icon::Icon::from_rgba(img.into_raw(), width, height)
+            .map_err(|error| error.to_string())?;
+
+        let tray = tray_icon::TrayIconBuilder::new()
+            .with_menu(Box::new(tray_menu))
+            .with_tooltip("eBIRForms")
+            .with_icon(tray_icon)
+            .build()
+            .map_err(|error| error.to_string())?;
+        Ok::<TrayUi, String>(TrayUi {
+            tray,
+            show_i,
+            hide_tray_i,
+            quit_i,
+        })
+    }));
+    match created {
+        Ok(Ok(ui)) => Some(ui),
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "system tray unavailable; continuing without it");
+            None
+        }
+        Err(_) => {
+            tracing::warn!("system tray panicked during create; continuing without it");
+            None
+        }
+    }
+}
+
 pub fn run_gui() {
     dotenvy::dotenv().ok();
 
@@ -190,6 +246,14 @@ pub fn run_gui() {
         "🔍 Tracing initialized (developer_mode: {})",
         developer_mode
     );
+
+    // tray-icon's muda `Menu` panics on Linux unless GTK is initialized first.
+    // Do this before GPUI opens the X11 client so GDK can attach a screen.
+    #[cfg(target_os = "linux")]
+    match gtk::init() {
+        Ok(()) => tracing::info!("GTK initialized for system tray / WebKitGTK"),
+        Err(error) => tracing::warn!(%error, "gtk::init failed; system tray may be unavailable"),
+    }
 
     let assets_dir = platform::find_resource_dir("assets");
     let app = gpui_kit::application().with_assets(Assets { base: assets_dir });
@@ -295,34 +359,20 @@ pub fn run_gui() {
             #[cfg(not(feature = "mas_build"))]
             let hotkey_db = db.clone();
 
+            #[cfg(feature = "agent")]
+            let agent_session = agent::maybe_start();
+
             // Phase 3: System Tray Integration
-            let tray_menu = tray_icon::menu::Menu::new();
-            let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);
-            let hide_tray_i = tray_icon::menu::MenuItem::new("Hide eBIRForms", true, None);
-            let quit_i = tray_icon::menu::MenuItem::new("Quit", true, None);
-            tray_menu
-                .append_items(&[
-                    &show_i,
-                    &hide_tray_i,
-                    &tray_icon::menu::PredefinedMenuItem::separator(),
-                    &quit_i,
-                ])
-                .expect("Failed to append tray menu items");
-
-            let icon_data = include_bytes!("../../../assets/images/e_logo.png");
-            let img = image::load_from_memory(icon_data)
-                .expect("Failed to load tray icon")
-                .into_rgba8();
-            let (width, height) = img.dimensions();
-            let tray_icon = tray_icon::Icon::from_rgba(img.into_raw(), width, height)
-                .expect("Failed to create tray icon");
-
-            let tray = tray_icon::TrayIconBuilder::new()
-                .with_menu(Box::new(tray_menu))
-                .with_tooltip("eBIRForms")
-                .with_icon(tray_icon)
-                .build()
-                .unwrap();
+            let tray_ui = try_create_tray();
+            let (tray, show_i, hide_tray_i, quit_i) = match tray_ui {
+                Some(ui) => (
+                    Some(ui.tray),
+                    Some(ui.show_i),
+                    Some(ui.hide_tray_i),
+                    Some(ui.quit_i),
+                ),
+                None => (None, None, None, None),
+            };
 
             let options = WindowOptions {
                 titlebar: Some(TitlebarOptions {
@@ -333,9 +383,6 @@ pub fn run_gui() {
                 window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
                 ..Default::default()
             };
-
-            #[cfg(feature = "agent")]
-            let agent_session = agent::maybe_start();
 
             let _ = cx.open_window(options, move |window, cx| {
                 window.on_window_should_close(cx, |_, _cx| {
@@ -391,7 +438,7 @@ pub fn run_gui() {
                 let tray_channel = tray_icon::TrayIconEvent::receiver();
 
                 cx.spawn(async move |cx| {
-                    let mut tray = Some(tray);
+                    let mut tray = tray;
 
                     // Own the global hotkey manager here so it stays alive for
                     // the app's lifetime (dropping it unregisters the hotkey).
@@ -412,16 +459,17 @@ pub fn run_gui() {
 
                     loop {
                         if let Ok(event) = menu_channel.try_recv() {
-                            if event.id == show_i.id() {
+                            if show_i.as_ref().is_some_and(|item| event.id == item.id()) {
                                 cx.update(|cx| {
                                     platform::show_in_dock();
                                     cx.activate(true);
                                 });
-                            } else if event.id == hide_tray_i.id() {
+                            } else if hide_tray_i.as_ref().is_some_and(|item| event.id == item.id())
+                            {
                                 cx.update(|_cx| {
                                     platform::hide_from_dock();
                                 });
-                            } else if event.id == quit_i.id() {
+                            } else if quit_i.as_ref().is_some_and(|item| event.id == item.id()) {
                                 let should_stop = cx.update(|cx| {
                                     match main_window.update(cx, |_, window, cx| {
                                         tray_app_state.update(cx, |state, cx| {
