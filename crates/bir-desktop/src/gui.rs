@@ -92,10 +92,19 @@ struct Assets {
     base: PathBuf,
 }
 
+/// One file per UTC day (`ebirforms.YYYY-MM-DD.log`). Older days are pruned
+/// by `bir_core::log_files::maintain` once the database — and with it the
+/// user's retention setting — is open; see `run_gui`.
 fn persistent_log_appender() -> Option<tracing_appender::rolling::RollingFileAppender> {
-    let logs_dir = bir_core::platform::data_dir().join("logs");
+    let logs_dir = bir_core::log_files::log_dir();
     let _ = std::fs::create_dir_all(&logs_dir);
-    Some(tracing_appender::rolling::never(&logs_dir, "ebirforms.log"))
+    tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix(bir_core::log_files::LOG_FILE_PREFIX)
+        .filename_suffix(bir_core::log_files::LOG_FILE_SUFFIX)
+        .build(&logs_dir)
+        .map_err(|error| eprintln!("log file appender unavailable: {error}"))
+        .ok()
 }
 
 impl AssetSource for Assets {
@@ -233,12 +242,38 @@ pub fn run_gui() {
                     bir_core::reference::get_all_tax_types();
                     bir_core::reference::get_all_regions();
 
+                    // Adopt the pre-rotation ebirforms.log and prune to the
+                    // user's retention. The appender only rotates; this bounds.
+                    let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), &db);
+
                     let profiles = db.list_profiles().unwrap_or_default();
                     let db_arc = std::sync::Arc::new(std::sync::Mutex::new(db));
 
                     (db_arc, profiles)
                 })
                 .await;
+
+            // Log retention: re-check every six hours so a long-running
+            // instance crosses midnight without growing past the setting.
+            {
+                let prune_db = db.clone();
+                let executor = cx.background_executor().clone();
+                cx.background_executor()
+                    .spawn(async move {
+                        loop {
+                            executor
+                                .timer(std::time::Duration::from_secs(6 * 60 * 60))
+                                .await;
+                            if let Ok(guard) = prune_db.lock() {
+                                let _ = bir_core::log_files::maintain(
+                                    &bir_core::log_files::log_dir(),
+                                    &guard,
+                                );
+                            }
+                        }
+                    })
+                    .detach();
+            }
 
             // Phase 2: In-App Background Orchestrator
             let cron_db = db.clone();
