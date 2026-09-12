@@ -359,6 +359,14 @@ pub fn run_gui() {
                     }
                     state
                 });
+                cx.on_action({
+                    let entity = view.downgrade();
+                    move |_: &ToggleAppVisibility, cx| {
+                        let _ = entity.update(cx, |this, cx| {
+                            this.perform_toggle_app_visibility(cx);
+                        });
+                    }
+                });
                 let main_window = window.window_handle();
                 let tray_app_state = view.clone();
                 #[cfg(target_os = "macos")]
@@ -439,8 +447,8 @@ pub fn run_gui() {
                         while let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv()
                         {
                             if event.state == global_hotkey::HotKeyState::Pressed {
-                                let _ = cx.update(|_cx| {
-                                    platform::toggle_app_visibility();
+                                let _ = cx.update(|cx| {
+                                    cx.dispatch_action(&ToggleAppVisibility);
                                 });
                             }
                         }

@@ -3656,9 +3656,10 @@ dependencies = [
 [[package]]
 name = "gpui-agent"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/gpui-agent?rev=926a0ed0fc256b1bfecf71d30937f6e0ba624344#926a0ed0fc256b1bfecf71d30937f6e0ba624344"
+source = "git+https://github.com/hexuria/gpui-agent?rev=c5e8856356f35a7d41bcf4b02f2592bb39bbe151#c5e8856356f35a7d41bcf4b02f2592bb39bbe151"
 dependencies = [
  "hmac 0.12.1",
+ "png 0.17.16",
  "serde",
  "serde_json",
  "sha2 0.10.9",

@@ -623,6 +623,10 @@ impl Form1601CView {
         self.validation_errors.clone()
     }
 
+    pub(crate) fn agent_scroll_handle(&self) -> ScrollHandle {
+        self.scroll_handle.clone()
+    }
+
     /// Write `value` into `input` only when it differs, and report whether it
     /// was written. `InputState::set_value` emits `InputEvent::Change` even for
     /// an identical value, and this view answers that with `sync_from_inputs`.
@@ -1270,7 +1274,7 @@ impl Render for Form1601CView {
                 })
             })
             .child(rsx! {
-                <div id="scroll_container" flex_1 w_full overflow_y_scroll
+                <div id={crate::agent::ids::FORM_1601C_SCROLL} flex_1 w_full overflow_y_scroll
                     track_scroll={&self.scroll_handle}
                     p_8>
                     <div max_w={px(800.)} mx_auto flex flex_col gap_6>

@@ -35,6 +35,7 @@ pub mod global_actions {
             SubmitCurrentForm,
             ToggleSidebar,
             ToggleSidebarMini,
+            ToggleAppVisibility,
             FocusSearch,
             CreateProfile,
             ToggleTheme,

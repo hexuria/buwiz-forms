@@ -9,11 +9,11 @@ verbs live in this host as `invoke` names. Start at the
 `bir-headless` from CLI / MCP / Grok Bot.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
-`45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e` (`main` tip, Merge PR #33 —
-protocol v2 HMAC + default-deny token). Host GPUI is **gpui-pre** through
-gpui-kit 0.6. Cookbook:
-[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e/docs/INTEGRATING.md)
-and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e/docs/SDK.md).
+`c5e8856356f35a7d41bcf4b02f2592bb39bbe151` (`main` tip, Merge PR #37/#38 —
+`Op::Keybinding` / `Keybindings`, `screenshot --mode scrolled`). Host GPUI is
+**gpui-pre** through gpui-kit 0.6. Cookbook:
+[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/c5e8856356f35a7d41bcf4b02f2592bb39bbe151/docs/INTEGRATING.md)
+and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/c5e8856356f35a7d41bcf4b02f2592bb39bbe151/docs/SDK.md).
 Do not fork the protocol. There is no crates.io release; git/path only.
 CLI and host **must** both be on this rev (or later). A v1 CLI cannot talk
 to a v2 host.
@@ -55,7 +55,7 @@ These are host constraints. They do not fork protocol v2.
   `bir` and `bir-headless serve` both default to `127.0.0.1:17421` and take
   `bir_data.db.owner.lock`. See [Two hosts, one agent port](#two-hosts-one-agent-port).
   There is **no** protocol `Op::Yield` / `Takeover`.
-- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e/docs/ADR-001-daemon-sot.md))
+- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/c5e8856356f35a7d41bcf4b02f2592bb39bbe151/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
   + the same SQLCipher key). Smoke C reopen of the GUI is offline
@@ -80,10 +80,25 @@ These are host constraints. They do not fork protocol v2.
   then `confine_screenshot_path`) **before** capture or
   `screenshot_unavailable`. Clients send a **relative `.png` name**, not an
   absolute path. Host writes under `GPUI_AGENT_SCREENSHOT_DIR` (default
-  `{temp_dir}/gpui-agent-screenshots/`). macOS then writes **this** window via
-  `capture_window_via_screencapture` (`screencapture -l`, Screen Recording).
-  Linux, Windows, and headless `spawn_host` stay `screenshot_unavailable`.
-  The semantic host has no `Window` and does not invent a PNG.
+  `{temp_dir}/gpui-agent-screenshots/`). Default `mode=viewport`: macOS writes
+  **this** window via `capture_window_via_screencapture` (`screencapture -l`,
+  Screen Recording). `mode=scrolled` requires `target` (`form-1601c-scroll` or
+  `print-preview-scroll`): set offset → wait paint → tile capture → stitch →
+  restore (no OS HID). Unknown target → `scroll_unavailable`. Print preview
+  is a **secondary window**; the host captures whichever preview handle is
+  painted. Linux, Windows, and headless `spawn_host` stay
+  `screenshot_unavailable` (including scrolled). The semantic host has no
+  `Window` and does not invent a PNG.
+- Keybinding fire is **Action-only** (`Window::dispatch_action` /
+  `App::dispatch_action`). The intercept does not dual-write Action bodies.
+  `gpui-agent keybindings` lists `{ id, chord, scope, dangerous }`. Destructive
+  ids (`app.quit`) need `confirm=true`. Painted `app.quit` / Cmd+Q hides to the
+  tray (same Action as the menu); process exit is `gpui-agent shutdown` or tray
+  Quit. `scope=focused` does not auto-activate unless `--activate`. Global
+  hide/show (`app.toggle_visibility`) is a GPUI Action (`ToggleAppVisibility`);
+  the OS-level combo is `global_hotkey` (default Ctrl+Option+E on macOS;
+  Settings may set Option+F12) and is not a keymap chord, but fire still
+  dispatches the Action.
 - Filing status SoT is the `form_drafts` row for that TIN/year/month (the same
   queued id `submissions.list` shows). Snapshot / `form.fields` /
   `form-1601c-status` overlay that row; a stale local Draft cannot mask
@@ -248,7 +263,7 @@ This is the token model AI agents must follow. Never print or log the token.
 | Path override | `BIR_DATABASE_PATH` is for CI / temp demos. A **non-empty** override may omit the *headless live-path* refuse (`live_database_token_required` is false), but **`from_env` still requires `GPUI_AGENT_TOKEN` unless `GPUI_AGENT_INSECURE_NO_TOKEN=1`**. Prefer still setting a token so recipe/MCP clients match. Do **not** set `BIR_DATABASE_PATH` for live Mac smokes. |
 | Painted `bir` | Bind is `from_env` alone (no extra live-path refuse). Without `GPUI_AGENT_TOKEN` (and without the insecure flag) the mailbox **does not start**. Recipes and MCP need the same token on host and client. |
 | `hello.auth` | `"required"` when a token is configured on the host, `"none"` only for the insecure/no-token demo. The TCP thread enforces HMAC and stamps `hello.auth` on the mailbox path. `BirAgentHost::hello()` does not set `auth` by hand. |
-| Protocol | **v2.** After accept the host writes a challenge nonce. Clients (`gpui-agent` CLI / `AgentClient::with_token`) send `auth` HMAC. Host and CLI must both be ≥ pin `45ccb94`. |
+| Protocol | **v2.** After accept the host writes a challenge nonce. Clients (`gpui-agent` CLI / `AgentClient::with_token`) send `auth` HMAC. Host and CLI must both be ≥ pin `c5e8856`. |
 | Logging | **Never log the token.** Opt-in `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`) emits one stderr line per request: `timestamp gpui-agent id=… op=hello\|invoke\|… name=profile.list ok=true`. Off by default. Not enabled by `RUST_LOG`. Invoke args, `set_value` values, typed text, screenshot paths, tokens, and HMAC hex are never included. Same helper on the painted mailbox drain. |
 
 ## Security gates
@@ -491,7 +506,7 @@ CLI cannot speak v2 HMAC** — install this rev, not an older `main`:
 ```bash
 git clone https://github.com/hexuria/gpui-agent
 cd gpui-agent
-git checkout 45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e
+git checkout c5e8856356f35a7d41bcf4b02f2592bb39bbe151
 cargo install --path crates/gpui-agent-cli --locked
 ```
 
@@ -505,12 +520,18 @@ gpui-agent snapshot
 gpui-agent click global_dashboard_btn
 gpui-agent assert --id page-global-dashboard
 gpui-agent invoke nav.go --arg page=profile-manager
+gpui-agent keybindings
+gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
+# 1601-C open, then:
+# gpui-agent screenshot --out form.png --mode scrolled --target form-1601c-scroll
+# form.print then:
+# gpui-agent screenshot --out print.png --mode scrolled --target print-preview-scroll
 ```
 
 ### Mac: bir-headless
 
 Clap: `serve` / `status` / `shutdown` / `logs`, global `--wait` and `--detach`.
-Shell matches gpui-agent `apps/todo-headless` on pin `45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e`:
+Shell matches gpui-agent `apps/todo-headless` on pin `c5e8856356f35a7d41bcf4b02f2592bb39bbe151`:
 `from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
 `GPUI_AGENT_TOKEN` is required to bind. `--detach` / `logs --follow` are the
 Docker-like lab path; Mac production uses the launchd example (no `--detach`).
@@ -613,7 +634,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
-Other terminal (CLI from pin `45ccb94bd554d7e5c2d778952de8a53f3d9e6d1e`):
+Other terminal (CLI from pin `c5e8856356f35a7d41bcf4b02f2592bb39bbe151`):
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
@@ -738,7 +759,22 @@ Client path is a **relative `.png` name** (confined under
 
 ```bash
 gpui-agent screenshot --out bir-window.png
+gpui-agent keybindings
+gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
+gpui-agent screenshot --out form.png --mode scrolled --target form-1601c-scroll
+gpui-agent screenshot --out print.png --mode scrolled --target print-preview-scroll
 ```
+
+Keybinding ids (Action-only; `confirm=true` for `app.quit`):
+
+| id | chord (macOS) | scope |
+| --- | --- | --- |
+| `app.toggle_sidebar` | `cmd-b` | focused |
+| `window.minimize` | `cmd-m` | focused |
+| `app.toggle_visibility` | `ctrl-alt-e` default (Settings / Option+F12 custom). Not a GPUI keymap; fire still dispatches `ToggleAppVisibility`. | global |
+| `app.quit` | `cmd-q` | global, dangerous (`confirm=true`). Hides to tray; process exit is `shutdown`. |
+
+Scroll targets: `form-1601c-scroll` (1601-C page), `print-preview-scroll` (frozen HTML preview window after `form.print`). Unknown target → `scroll_unavailable`.
 
 Claude Code / MCP (same token as the host):
 
@@ -998,7 +1034,10 @@ filter: `dashboard-form-filter`, `dashboard-filter-query`,
 `checked` means Private, `value` `P`/`G`; Draft-only),
 `form-1601c-submit-confirm`, `cancel_queue_btn` (unclaimed Queued),
 `form-1601c-return-draft` / `form-1601c-release-claim-confirm` (claimed Queued;
-confirm click is disabled for the agent). `form-1601c-status` `value` is the
+confirm click is disabled for the agent). **`form-1601c-scroll`** is the page
+scroller for `screenshot --mode scrolled`. **`print-preview-scroll`** is the
+frozen HTML preview window scroller (secondary window; open via `form.print`).
+`form-1601c-status` `value` is the
 real `form_drafts` `FilingStatus` (`Queued` while claimed; never `Draft` until the release
 CAS). Claimed queues add `claimed` and `outcome-pending` in `states`. 2551Q fillables: `form-2551q-creditable`,
 `form-2551q-other-credit`, `form-2551q-taxable-0`. Item 14/25 must be > 0
@@ -1087,8 +1126,12 @@ Remaining (not faked):
 - `profile.calendar_sync` (Google push) needs a linked account
 - Virtual in-window delivery stays `virtual_unavailable`. Screenshot: hosts
   confine a relative `.png` name first; macOS mailbox drain can then write this
-  window (`screencapture -l`); Linux / Windows / headless stay
+  window (`screencapture -l`); `mode=scrolled` stitches `form-1601c-scroll` or
+  `print-preview-scroll` (restore offset, no OS HID; unknown target →
+  `scroll_unavailable`). Linux / Windows / headless stay
   `screenshot_unavailable`. Absolute client paths are refused.
+  Keybinding fire is Action-only (`app.toggle_sidebar`, `window.minimize`,
+  `app.toggle_visibility`, `app.quit` with `confirm=true`).
 - GUI-as-client of `bir-headless` (full ADR-001). First ship is shared
   persistence only; two AgentHosts must not share `GPUI_AGENT_ADDR`; two
   processes must not open the live DB together. Matrix B is

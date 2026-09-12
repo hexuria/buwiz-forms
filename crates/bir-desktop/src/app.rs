@@ -236,6 +236,17 @@ pub struct AppState {
     /// Semantic submit reached the existing confirmation gate without queuing.
     #[cfg(feature = "agent")]
     pub(crate) agent_submit_confirmation_visible: bool,
+    #[cfg(feature = "agent")]
+    pub(crate) agent_request_backlog:
+        std::collections::VecDeque<gpui_agent::mailbox::MailboxRequest>,
+    #[cfg(feature = "agent")]
+    pub(crate) pending_keybinding: Option<crate::agent::drain::PendingKeybindingFire>,
+    #[cfg(feature = "agent")]
+    pub(crate) last_keybinding_result: Option<(String, Result<gpui_agent::DispatchResult, String>)>,
+    #[cfg(feature = "agent")]
+    pub(crate) scrolled_job: Option<crate::agent::scrolled_shot::ScrolledShotJob>,
+    #[cfg(feature = "agent")]
+    pub(crate) toggling_visibility: bool,
 }
 
 impl AppState {
@@ -935,6 +946,16 @@ impl AppState {
             agent_refresh: None,
             #[cfg(feature = "agent")]
             agent_submit_confirmation_visible: false,
+            #[cfg(feature = "agent")]
+            agent_request_backlog: std::collections::VecDeque::new(),
+            #[cfg(feature = "agent")]
+            pending_keybinding: None,
+            #[cfg(feature = "agent")]
+            last_keybinding_result: None,
+            #[cfg(feature = "agent")]
+            scrolled_job: None,
+            #[cfg(feature = "agent")]
+            toggling_visibility: false,
         }
     }
 
@@ -2387,6 +2408,7 @@ impl Render for AppState {
             .bg(cx.theme().background)
             .on_action(cx.listener(Self::handle_toggle_sidebar))
             .on_action(cx.listener(Self::handle_toggle_sidebar_mini))
+            .on_action(cx.listener(Self::handle_toggle_app_visibility))
             .on_action(cx.listener(Self::handle_focus_search))
             .on_action(cx.listener(Self::handle_create_profile))
             .on_action(cx.listener(Self::handle_toggle_theme))

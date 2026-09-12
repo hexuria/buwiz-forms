@@ -1,11 +1,13 @@
 //! Fill/print host for frozen HTML documents.
 //!
 //! This is a thin WebView around `bir_print::frozen_html::filled_document`.
+//! Print preview is a **secondary window**. Agents stitch it with
+//! `screenshot --mode scrolled --target print-preview-scroll`.
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, IntoElement, ParentElement, Render, Styled, Window,
-    div, px,
+    AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement, ParentElement,
+    Render, ScrollHandle, StatefulInteractiveElement, Styled, Window, WindowHandle, div, point, px,
 };
 use gpui_component::ActiveTheme;
 use gpui_component::Disableable;
@@ -13,16 +15,53 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_rsx::rsx;
 use gpui_wry::WebView;
 use raw_window_handle::HasWindowHandle;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows;
 #[cfg(target_os = "macos")]
 use wry::WebViewExtMacOS;
+
+struct LivePreview {
+    generation: u64,
+    handle: WindowHandle<FrozenHtmlPreviewView>,
+}
+
+static LIVE_PREVIEW: OnceLock<Mutex<Option<LivePreview>>> = OnceLock::new();
+static PREVIEW_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+fn live_preview_slot() -> &'static Mutex<Option<LivePreview>> {
+    LIVE_PREVIEW.get_or_init(|| Mutex::new(None))
+}
+
+pub(crate) fn register_live_preview(handle: WindowHandle<FrozenHtmlPreviewView>, generation: u64) {
+    if let Ok(mut slot) = live_preview_slot().lock() {
+        *slot = Some(LivePreview { generation, handle });
+    }
+}
+
+pub(crate) fn live_preview_window() -> Option<WindowHandle<FrozenHtmlPreviewView>> {
+    live_preview_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| slot.as_ref().map(|live| live.handle))
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct JsScrollMetrics {
+    pub content_height: f32,
+    pub viewport_height: f32,
+    pub offset_y: f32,
+}
 
 pub(crate) struct FrozenHtmlPreviewView {
     webview: Option<Entity<WebView>>,
     /// Only failures are worth a line in the toolbar.
     status: Option<String>,
     focus_handle: FocusHandle,
+    scroll_handle: ScrollHandle,
+    js_metrics: Arc<Mutex<Option<JsScrollMetrics>>>,
+    generation: u64,
 }
 
 /// The one paper the preview prints on, in points. The forms are drawn on
@@ -138,11 +177,29 @@ impl FrozenHtmlPreviewView {
 
         let focus_handle = cx.focus_handle();
         super::secondary_window::focus_on_open(&focus_handle, window, cx);
-        Self {
+        let generation = PREVIEW_GENERATION.fetch_add(1, Ordering::SeqCst);
+        let view = Self {
             webview,
             status,
             focus_handle,
-        }
+            scroll_handle: ScrollHandle::new(),
+            js_metrics: Arc::new(Mutex::new(None)),
+            generation,
+        };
+        view.request_js_metrics(cx);
+        view
+    }
+
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub(crate) fn scroll_handle(&self) -> &ScrollHandle {
+        &self.scroll_handle
+    }
+
+    pub(crate) fn js_scroll_metrics(&self) -> Option<JsScrollMetrics> {
+        self.js_metrics.lock().ok().and_then(|guard| *guard)
     }
 
     /// The platform's print dialog through wry's native `print()`
@@ -188,6 +245,69 @@ impl FrozenHtmlPreviewView {
             .err()
             .map(|error| format!("Could not open the print dialog: {error}"));
         cx.notify();
+    }
+
+    pub(crate) fn request_js_metrics(&self, cx: &mut Context<Self>) {
+        let Some(webview) = self.webview.clone() else {
+            return;
+        };
+        let slot = Arc::clone(&self.js_metrics);
+        let js = r#"
+            JSON.stringify({
+                content: Math.max(
+                    document.documentElement ? document.documentElement.scrollHeight : 0,
+                    document.body ? document.body.scrollHeight : 0
+                ),
+                viewport: window.innerHeight || 0,
+                offset: window.scrollY || (document.documentElement && document.documentElement.scrollTop) || 0
+            })
+        "#;
+        let _ = webview.update(cx, |webview, _| {
+            let _ = webview
+                .raw()
+                .evaluate_script_with_callback(js, move |result| {
+                    let Ok(value) = serde_json::from_str::<serde_json::Value>(&result) else {
+                        return;
+                    };
+                    let metrics = JsScrollMetrics {
+                        content_height: value.get("content").and_then(|v| v.as_f64()).unwrap_or(0.0)
+                            as f32,
+                        viewport_height: value
+                            .get("viewport")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0) as f32,
+                        offset_y: value.get("offset").and_then(|v| v.as_f64()).unwrap_or(0.0)
+                            as f32,
+                    };
+                    if let Ok(mut guard) = slot.lock() {
+                        *guard = Some(metrics);
+                    }
+                });
+        });
+    }
+
+    pub(crate) fn set_scroll_offset_y(&mut self, y: f32, cx: &mut Context<Self>) {
+        self.scroll_handle.set_offset(point(px(0.0), px(-y)));
+        if let Some(webview) = self.webview.clone() {
+            let js = format!("window.scrollTo(0, {y});");
+            let _ = webview.update(cx, |webview, _| {
+                let _ = webview.raw().evaluate_script(&js);
+            });
+        }
+        self.request_js_metrics(cx);
+        cx.notify();
+    }
+}
+
+impl Drop for FrozenHtmlPreviewView {
+    fn drop(&mut self) {
+        if let Ok(mut slot) = live_preview_slot().lock()
+            && slot
+                .as_ref()
+                .is_some_and(|live| live.generation == self.generation)
+        {
+            *slot = None;
+        }
     }
 }
 
@@ -258,8 +378,11 @@ impl Render for FrozenHtmlPreviewView {
                     </div>
                 </div>
                 <div
+                    id={crate::agent::ids::PRINT_PREVIEW_SCROLL}
                     flex_1
                     min_h_0
+                    overflow_y_scroll
+                    track_scroll={&self.scroll_handle}
                     whenSome={(self.webview.clone(), |this, webview| this.child(webview))}
                     when={(self.webview.is_none(), |this| {
                         this.p_6().child(self.status.clone().unwrap_or_default())

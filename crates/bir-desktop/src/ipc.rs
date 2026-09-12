@@ -74,7 +74,7 @@ pub fn start_ipc_listener(cx: &mut App) {
                     } else if &buf[..len] == b"TOGGLE" {
                         let _ = socket.send_to(b"ACK", src).await;
                         let _ = cx.update(|cx| {
-                            crate::platform::toggle_app_visibility();
+                            cx.dispatch_action(&crate::global_actions::ToggleAppVisibility);
                         });
                     }
                 }

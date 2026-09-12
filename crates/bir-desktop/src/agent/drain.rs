@@ -6,19 +6,35 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use gpui::*;
 use gpui_agent::authorize_request;
 use gpui_agent::handle_request;
+use gpui_agent::mailbox::MailboxRequest;
 use gpui_agent::protocol::{Op, PlatformKind, Response};
 
 use crate::agent::host::BirAgentHost;
 use crate::agent::ids;
+use crate::agent::keybindings;
+use crate::agent::scrolled_shot::{self, ScrolledShotJob};
 use crate::app::{ActiveView, AppState, ProfileTargetAction};
 use crate::global_actions::{CreateProfile, OpenCommandPalette};
 use chrono::Datelike;
+
+pub(crate) struct PendingKeybindingFire {
+    posted: MailboxRequest,
+    binding: String,
+}
 
 pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<AppState>) {
     let Some(mailbox) = app.agent_mailbox.clone() else {
         return;
     };
-    for posted in mailbox.take() {
+    app.agent_request_backlog.extend(mailbox.take());
+    if app.scrolled_job.is_some() {
+        app.advance_scrolled_job(window, cx);
+        return;
+    }
+    if app.pending_keybinding.is_some() {
+        return;
+    }
+    while let Some(posted) = app.agent_request_backlog.pop_front() {
         let shutdown = matches!(posted.request.op, Op::Shutdown);
         let mutating = matches!(
             posted.request.op,
@@ -34,34 +50,69 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
         // virtual intercepts that skip handle_request cannot skip v2. Pass
         // token=None into handle_request so HMAC does not fail without the
         // nonce; the TCP thread stamps hello.auth from the bind token.
-        let response = if let Err(resp) = authorize_request(&posted.request, None, None) {
-            *resp
-        } else if posted.request.op.is_virtual_input() {
-            Response::err(
+        if let Err(resp) = authorize_request(&posted.request, None, None) {
+            crate::agent::request_log::emit_request_log(&posted.request, resp.as_ref());
+            posted.reply(*resp);
+            cx.notify();
+            continue;
+        }
+        if posted.request.op.is_virtual_input() {
+            let response = Response::err(
                 &posted.request.id,
                 gpui_agent::virtual_unavailable(
                     "bir-desktop ships semantic delivery first; \
                      virtual in-window events are not wired (no per-widget painted bounds). \
                      Protocol is unchanged; this host does not synthesize OS HID",
                 ),
-            )
-        } else if let Op::Screenshot { path } = &posted.request.op {
-            match screenshot_this_window(window, path.as_deref()) {
+            );
+            crate::agent::request_log::emit_request_log(&posted.request, &response);
+            posted.reply(response);
+            cx.notify();
+            continue;
+        }
+        if matches!(posted.request.op, Op::Keybinding { .. }) {
+            if app.start_keybinding_fire(posted, window, cx) {
+                break;
+            }
+            continue;
+        }
+        if let Op::Screenshot { mode, .. } = &posted.request.op {
+            if mode.is_scrolled() {
+                let (path, target, max_height_px) = match &posted.request.op {
+                    Op::Screenshot {
+                        path,
+                        target,
+                        max_height_px,
+                        ..
+                    } => (path.clone(), target.clone(), *max_height_px),
+                    _ => unreachable!(),
+                };
+                app.start_scrolled_job(posted, path, target, max_height_px, window, cx);
+                return;
+            }
+            let path = match &posted.request.op {
+                Op::Screenshot { path, .. } => path.clone(),
+                _ => unreachable!(),
+            };
+            let response = match screenshot_this_window(window, path.as_deref()) {
                 Ok(result) => {
                     let mut resp = Response::ok(&posted.request.id);
                     resp.result = result.value;
                     resp
                 }
                 Err(error) => Response::err(&posted.request.id, error),
-            }
-        } else {
-            let mut host = snapshot_host(app, cx);
-            let response = handle_request(&mut host, posted.request.clone(), None, None);
-            if mutating && response.ok {
-                apply_host(host, app, window, cx);
-            }
-            response
-        };
+            };
+            crate::agent::request_log::emit_request_log(&posted.request, &response);
+            posted.reply(response);
+            cx.notify();
+            continue;
+        }
+
+        let mut host = snapshot_host(app, cx);
+        let response = handle_request(&mut host, posted.request.clone(), None, None);
+        if mutating && response.ok {
+            apply_host(host, app, window, cx);
+        }
         crate::agent::request_log::emit_request_log(&posted.request, &response);
         posted.reply(response);
         if shutdown {
@@ -406,6 +457,54 @@ fn apply_navigation(
     }
 }
 
+pub(crate) fn gpui_scroll_metrics(
+    handle: &ScrollHandle,
+    target: &str,
+) -> Result<gpui_agent::ScrollMetrics, String> {
+    let bounds = handle.bounds();
+    let w = f32::from(bounds.size.width);
+    let h = f32::from(bounds.size.height);
+    if h < 1.0 {
+        return Err(gpui_agent::scroll_unavailable(format!(
+            "{target} viewport is not painted yet"
+        )));
+    }
+    let max_y = f32::from(handle.max_offset().y);
+    let offset_y = (-f32::from(handle.offset().y)).max(0.0);
+    Ok(gpui_agent::ScrollMetrics {
+        viewport: gpui_agent::Bounds {
+            x: f32::from(bounds.origin.x),
+            y: f32::from(bounds.origin.y),
+            w,
+            h,
+        },
+        content_height: h + max_y.max(0.0),
+        offset_y,
+    })
+}
+
+fn set_gpui_scroll_offset(handle: &ScrollHandle, y: f32) {
+    handle.set_offset(point(px(0.0), px(-y)));
+}
+
+fn window_size(window: &Window) -> (f32, f32) {
+    let bounds = window.bounds();
+    (f32::from(bounds.size.width), f32::from(bounds.size.height))
+}
+
+#[cfg(target_os = "macos")]
+struct ScrolledCaptureWindow {
+    window_id: u32,
+    size: (f32, f32),
+}
+
+fn reply_mailbox_err(posted: MailboxRequest, err: impl Into<String>) {
+    let err = err.into();
+    let id = posted.request.id.clone();
+    crate::agent::request_log::emit_request_log(&posted.request, &Response::err(&id, err.clone()));
+    posted.reply(Response::err(id, err));
+}
+
 fn screenshot_this_window(
     window: &Window,
     path: Option<&str>,
@@ -430,6 +529,515 @@ fn screenshot_this_window(
 }
 
 impl AppState {
+    pub(crate) fn note_keybinding_fired(&mut self, id: &str, scope: &str) {
+        self.last_keybinding_result = Some((
+            id.to_string(),
+            Ok(gpui_agent::DispatchResult::json(
+                keybindings::keybinding_result_json(id, scope),
+            )),
+        ));
+    }
+
+    fn start_keybinding_fire(
+        &mut self,
+        posted: MailboxRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let catalog = keybindings::catalog();
+        let focused = window.is_window_active();
+        let entry = match gpui_agent::authorize_keybinding_op(&posted.request.op, &catalog, focused)
+        {
+            Ok(entry) => entry.clone(),
+            Err(error) => {
+                reply_mailbox_err(posted, error);
+                cx.notify();
+                return false;
+            }
+        };
+        let activate = match &posted.request.op {
+            Op::Keybinding { activate, .. } => *activate,
+            _ => false,
+        };
+        let Some(action) = keybindings::action_for_binding(&entry.id) else {
+            reply_mailbox_err(posted, format!("unknown binding `{}`", entry.id));
+            cx.notify();
+            return false;
+        };
+        if activate {
+            window.activate_window();
+        }
+
+        self.last_keybinding_result = None;
+        self.pending_keybinding = Some(PendingKeybindingFire {
+            posted,
+            binding: entry.id.clone(),
+        });
+        match entry.scope {
+            gpui_agent::KeybindingScope::Focused => {
+                window.dispatch_action(action, cx);
+            }
+            gpui_agent::KeybindingScope::Global => {
+                if entry.id == ids::KEY_TOGGLE_VISIBILITY {
+                    cx.dispatch_action(action.as_ref());
+                } else if focused {
+                    window.dispatch_action(action, cx);
+                } else {
+                    cx.dispatch_action(action.as_ref());
+                }
+            }
+        }
+        cx.defer_in(window, |this, window, cx| {
+            this.finish_keybinding_fire(window, cx);
+        });
+        true
+    }
+
+    fn finish_keybinding_fire(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let Some(pending) = self.pending_keybinding.take() else {
+            return;
+        };
+        let listener = match self.last_keybinding_result.take() {
+            Some((id, result)) if id == pending.binding => Some(result),
+            _ => None,
+        };
+        let response = match gpui_agent::complete_keybinding_action(listener) {
+            Ok(result) => {
+                let mut resp = Response::ok(&pending.posted.request.id);
+                resp.result = result.value;
+                resp
+            }
+            Err(error) => Response::err(&pending.posted.request.id, error),
+        };
+        crate::agent::request_log::emit_request_log(&pending.posted.request, &response);
+        pending.posted.reply(response);
+        cx.notify();
+    }
+
+    fn start_scrolled_job(
+        &mut self,
+        posted: MailboxRequest,
+        path: Option<String>,
+        target: Option<String>,
+        max_height_px: Option<u32>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let spec = gpui_agent::ScreenshotSpec {
+            path: path.as_deref(),
+            mode: gpui_agent::ScreenshotMode::Scrolled,
+            target: target.as_deref(),
+            max_height_px,
+        };
+        if let Err(err) = spec.validate_request() {
+            reply_mailbox_err(posted, err);
+            return;
+        }
+        let path = match gpui_agent::require_screenshot_path(spec.path) {
+            Ok(path) => path.to_string(),
+            Err(err) => {
+                reply_mailbox_err(posted, err);
+                return;
+            }
+        };
+        if let Err(err) = gpui_agent::confine_screenshot_path(&path) {
+            reply_mailbox_err(posted, err);
+            return;
+        }
+        let target = match spec.scrolled_target() {
+            Ok(t) => t.to_string(),
+            Err(err) => {
+                reply_mailbox_err(posted, err);
+                return;
+            }
+        };
+        if !scrolled_shot::known_scroll_target(&target) {
+            reply_mailbox_err(
+                posted,
+                gpui_agent::scroll_unavailable(format!(
+                    "unknown scroll target `{target}` (want {} or {})",
+                    ids::FORM_1601C_SCROLL,
+                    ids::PRINT_PREVIEW_SCROLL
+                )),
+            );
+            return;
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = window;
+            let _ = cx;
+            reply_mailbox_err(
+                posted,
+                gpui_agent::screenshot_unavailable(
+                    "scrolled screenshot is macOS-only (`screencapture -l` tiles). \
+                     This OS has no production GPUI framebuffer export (`Window::render_to_image` is \
+                     test-support only). Headless stays screenshot_unavailable.",
+                ),
+            );
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let capture = match self.scrolled_capture_window(&target, window, cx) {
+                Ok(capture) => capture,
+                Err(err) => {
+                    reply_mailbox_err(posted, err);
+                    return;
+                }
+            };
+            let original = self
+                .scroll_metrics_for_target(&target, cx)
+                .map(|m| m.offset_y)
+                .unwrap_or(0.0);
+            self.scrolled_job = Some(ScrolledShotJob {
+                reply: posted,
+                dest_client: path,
+                target,
+                original_offset: original,
+                tiles: Vec::new(),
+                next: 0,
+                captured: Vec::new(),
+                metrics: None,
+                window_size: capture.size,
+                window_id: capture.window_id,
+                phase: scrolled_shot::ScrolledPhase::WaitMetrics,
+                frames_waited: 0,
+                awaiting_paint: false,
+            });
+            cx.notify();
+        }
+    }
+
+    fn restore_scroll_offset(&mut self, target: &str, y: f32, cx: &mut Context<Self>) {
+        self.set_scroll_offset_y(target, y, cx);
+    }
+
+    fn finish_scrolled_job(
+        &mut self,
+        job: ScrolledShotJob,
+        response: Response,
+        cx: &mut Context<Self>,
+    ) {
+        self.restore_scroll_offset(&job.target, job.original_offset, cx);
+        crate::agent::request_log::emit_request_log(&job.reply.request, &response);
+        job.reply.reply(response);
+        cx.notify();
+    }
+
+    fn advance_scrolled_job(&mut self, window: &Window, cx: &mut Context<Self>) {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = window;
+            if let Some(job) = self.scrolled_job.take() {
+                let id = job.reply.request.id.clone();
+                self.finish_scrolled_job(
+                    job,
+                    Response::err(
+                        id,
+                        gpui_agent::screenshot_unavailable("scrolled screenshot is macOS-only"),
+                    ),
+                    cx,
+                );
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            self.advance_scrolled_job_macos(window, cx);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn advance_scrolled_job_macos(&mut self, window: &Window, cx: &mut Context<Self>) {
+        use gpui_agent::{
+            MAX_SCROLLED_PNG_BYTES, capture_window_png_bytes, confine_screenshot_path,
+            crop_window_png, encode_png_rgba, plan_scroll_tiles, scrolled_dispatch_result,
+            stitch_tiles_vertically,
+        };
+
+        let mut job = match self.scrolled_job.take() {
+            Some(job) => job,
+            None => return,
+        };
+        job.frames_waited += 1;
+        if let Ok(capture) = self.scrolled_capture_window(&job.target, window, cx) {
+            job.window_size = capture.size;
+            job.window_id = capture.window_id;
+        }
+
+        match job.phase {
+            scrolled_shot::ScrolledPhase::WaitMetrics => {
+                match self.scroll_metrics_for_target(&job.target, cx) {
+                    Ok(metrics) => {
+                        let cap = match &job.reply.request.op {
+                            Op::Screenshot { max_height_px, .. } => {
+                                max_height_px.unwrap_or(gpui_agent::DEFAULT_MAX_HEIGHT_PX)
+                            }
+                            _ => gpui_agent::DEFAULT_MAX_HEIGHT_PX,
+                        };
+                        let tiles = match plan_scroll_tiles(&metrics, cap) {
+                            Ok(tiles) => tiles,
+                            Err(err) => {
+                                let id = job.reply.request.id.clone();
+                                self.finish_scrolled_job(job, Response::err(id, err), cx);
+                                return;
+                            }
+                        };
+                        job.original_offset = metrics.offset_y;
+                        job.metrics = Some(metrics);
+                        job.tiles = tiles;
+                        job.next = 0;
+                        if job.tiles.is_empty() {
+                            let id = job.reply.request.id.clone();
+                            self.finish_scrolled_job(
+                                job,
+                                Response::err(id, "scrolled screenshot produced no tiles"),
+                                cx,
+                            );
+                            return;
+                        }
+                        self.set_scroll_offset_y(&job.target, job.tiles[0].offset_y, cx);
+                        job.phase = scrolled_shot::ScrolledPhase::WaitPaint;
+                        job.awaiting_paint = true;
+                        self.scrolled_job = Some(job);
+                        cx.notify();
+                    }
+                    Err(_) if job.frames_waited < scrolled_shot::METRICS_WAIT_FRAMES => {
+                        self.scrolled_job = Some(job);
+                        cx.notify();
+                    }
+                    Err(err) => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                    }
+                }
+            }
+            scrolled_shot::ScrolledPhase::WaitPaint => {
+                if job.awaiting_paint {
+                    job.awaiting_paint = false;
+                    self.scrolled_job = Some(job);
+                    cx.notify();
+                    return;
+                }
+                let spec = job.tiles[job.next];
+                let metrics = match job.metrics {
+                    Some(m) => m,
+                    None => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(
+                            job,
+                            Response::err(
+                                id,
+                                gpui_agent::scroll_unavailable("missing scroll metrics"),
+                            ),
+                            cx,
+                        );
+                        return;
+                    }
+                };
+                let png = match capture_window_png_bytes(job.window_id) {
+                    Ok(png) => png,
+                    Err(err) => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                };
+                let slice = match crop_window_png(
+                    &png,
+                    job.window_size.0,
+                    job.window_size.1,
+                    metrics.viewport,
+                    spec.skip_top_px,
+                    spec.take_height_px,
+                ) {
+                    Ok(slice) => slice,
+                    Err(err) => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                };
+                job.captured.push(slice);
+                job.next += 1;
+                if job.next >= job.tiles.len() {
+                    let dest_client = job.dest_client.clone();
+                    let target = job.target.clone();
+                    let content_h = metrics.content_height.max(metrics.viewport.h);
+                    let vh = metrics.viewport.h;
+                    let tile_count = job.tiles.len();
+                    let stitched = match stitch_tiles_vertically(&job.captured) {
+                        Ok(img) => img,
+                        Err(err) => {
+                            let id = job.reply.request.id.clone();
+                            self.finish_scrolled_job(job, Response::err(id, err), cx);
+                            return;
+                        }
+                    };
+                    let bytes = match encode_png_rgba(&stitched) {
+                        Ok(bytes) => bytes,
+                        Err(err) => {
+                            let id = job.reply.request.id.clone();
+                            self.finish_scrolled_job(job, Response::err(id, err), cx);
+                            return;
+                        }
+                    };
+                    if bytes.len() > MAX_SCROLLED_PNG_BYTES {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(
+                            job,
+                            Response::err(
+                                id,
+                                format!(
+                                    "stitched png exceeds {MAX_SCROLLED_PNG_BYTES} bytes ({})",
+                                    bytes.len()
+                                ),
+                            ),
+                            cx,
+                        );
+                        return;
+                    }
+                    let dest = match confine_screenshot_path(&dest_client) {
+                        Ok(dest) => dest,
+                        Err(err) => {
+                            let id = job.reply.request.id.clone();
+                            self.finish_scrolled_job(job, Response::err(id, err), cx);
+                            return;
+                        }
+                    };
+                    if let Err(err) = gpui_agent::atomic_write_png(&dest, &bytes) {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                    let dest_str = dest.to_string_lossy().into_owned();
+                    let result =
+                        scrolled_dispatch_result(&dest_str, &target, content_h, vh, tile_count);
+                    let id = job.reply.request.id.clone();
+                    let mut resp = Response::ok(id);
+                    resp.result = result.value;
+                    self.finish_scrolled_job(job, resp, cx);
+                    return;
+                }
+                self.set_scroll_offset_y(&job.target, job.tiles[job.next].offset_y, cx);
+                job.awaiting_paint = true;
+                self.scrolled_job = Some(job);
+                cx.notify();
+            }
+        }
+    }
+
+    fn scroll_metrics_for_target(
+        &mut self,
+        target: &str,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui_agent::ScrollMetrics, String> {
+        if target == ids::FORM_1601C_SCROLL {
+            let Some(view) = &self.form_1601c_view else {
+                return Err(gpui_agent::scroll_unavailable(
+                    "form-1601c-scroll is not painted (open 1601-C first)",
+                ));
+            };
+            return gpui_scroll_metrics(&view.read(cx).agent_scroll_handle(), target);
+        }
+        if target == ids::PRINT_PREVIEW_SCROLL {
+            return self.print_preview_metrics(cx);
+        }
+        Err(gpui_agent::scroll_unavailable(format!(
+            "unknown scroll target `{target}`"
+        )))
+    }
+
+    fn print_preview_metrics(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui_agent::ScrollMetrics, String> {
+        let handle = crate::views::frozen_html_preview::live_preview_window().ok_or_else(|| {
+            gpui_agent::scroll_unavailable(
+                "print-preview-scroll is not painted (open form.print first)",
+            )
+        })?;
+        handle
+            .update(cx, |view, _window, cx| {
+                view.request_js_metrics(cx);
+                let gpui = gpui_scroll_metrics(view.scroll_handle(), ids::PRINT_PREVIEW_SCROLL);
+                let js = view.js_scroll_metrics();
+                match (gpui, js) {
+                    (Ok(gpui), Some(js)) if js.content_height > gpui.content_height + 1.0 => {
+                        Ok(gpui_agent::ScrollMetrics {
+                            viewport: gpui.viewport,
+                            content_height: js.content_height.max(js.viewport_height).max(1.0),
+                            offset_y: js.offset_y.max(0.0),
+                        })
+                    }
+                    (Ok(metrics), _) => Ok(metrics),
+                    (Err(_), Some(js)) if js.viewport_height >= 1.0 => {
+                        let bounds = view.scroll_handle().bounds();
+                        Ok(gpui_agent::ScrollMetrics {
+                            viewport: gpui_agent::Bounds {
+                                x: f32::from(bounds.origin.x),
+                                y: f32::from(bounds.origin.y),
+                                w: f32::from(bounds.size.width).max(1.0),
+                                h: js.viewport_height,
+                            },
+                            content_height: js.content_height.max(js.viewport_height),
+                            offset_y: js.offset_y.max(0.0),
+                        })
+                    }
+                    (Err(err), _) => Err(err),
+                }
+            })
+            .map_err(|err| {
+                gpui_agent::scroll_unavailable(format!("print-preview-scroll window: {err}"))
+            })?
+    }
+
+    fn set_scroll_offset_y(&mut self, target: &str, y: f32, cx: &mut Context<Self>) {
+        if target == ids::FORM_1601C_SCROLL {
+            if let Some(view) = &self.form_1601c_view {
+                set_gpui_scroll_offset(&view.read(cx).agent_scroll_handle(), y);
+                view.update(cx, |_view, cx| cx.notify());
+            }
+            return;
+        }
+        if target == ids::PRINT_PREVIEW_SCROLL
+            && let Some(handle) = crate::views::frozen_html_preview::live_preview_window()
+        {
+            let _ = handle.update(cx, |view, _window, cx| {
+                view.set_scroll_offset_y(y, cx);
+            });
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn scrolled_capture_window(
+        &mut self,
+        target: &str,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Result<ScrolledCaptureWindow, String> {
+        if target == ids::PRINT_PREVIEW_SCROLL {
+            let handle =
+                crate::views::frozen_html_preview::live_preview_window().ok_or_else(|| {
+                    gpui_agent::scroll_unavailable(
+                        "print-preview-scroll is not painted (open form.print first)",
+                    )
+                })?;
+            return handle
+                .update(cx, |_view, preview_window, _cx| {
+                    Ok(ScrolledCaptureWindow {
+                        window_id: super::macos_window::cgwindow_id(preview_window)?,
+                        size: window_size(preview_window),
+                    })
+                })
+                .map_err(|err| {
+                    gpui_agent::scroll_unavailable(format!("print-preview-scroll window: {err}"))
+                })?;
+        }
+        Ok(ScrolledCaptureWindow {
+            window_id: super::macos_window::cgwindow_id(window)?,
+            size: window_size(window),
+        })
+    }
+
     pub(crate) fn attach_agent(
         &mut self,
         mailbox: gpui_agent::mailbox::AgentMailbox,
