@@ -1167,11 +1167,59 @@ where
         profile.full_name
     );
     let body = format!(
-        "TIN {}\nSent {}",
+        "TIN {}\nSent {}\nFiled under {}",
         profile.tin.formatted(),
-        sent_at.format("%I:%M %p, %-d %b %Y")
+        sent_at.format("%I:%M %p, %-d %b %Y"),
+        profile.inbox_email()
     );
     (title, body)
+}
+
+/// Banner for a BIR receipt confirmation. The date and time are **BIR's**
+/// (from the confirmation email), not when the poll found the mail.
+/// `received_at` is that date and time as one string, e.g.
+/// `12 September 2026, 11:43 AM`.
+pub fn confirmation_notice(
+    taxpayer_name: &str,
+    tin_formatted: &str,
+    form_code: &str,
+    period_label: &str,
+    bir_filename: &str,
+    received_at: &str,
+    mailbox: &str,
+) -> (String, String) {
+    let title = format!("BIR received {form_code} {period_label} \u{2014} {taxpayer_name}");
+    let body = format!(
+        "TIN {tin_formatted}\nFile {bir_filename}\nReceived by BIR {received_at}\nConfirmation in {mailbox}"
+    );
+    (title, body)
+}
+
+/// Same event on the Notifications page. One entry per return period.
+pub(crate) fn record_confirmation_alert(
+    db: &Database,
+    tin: &str,
+    form_code: &str,
+    period_label: &str,
+    title: &str,
+    body: &str,
+    taxpayer_name: &str,
+) {
+    let kind = format!("form_confirmed:{form_code}:{period_label}");
+    let detail = format!("{taxpayer_name}\n{body}");
+    let _ = db.record_alert(
+        Some(tin),
+        &kind,
+        crate::db::AlertSeverity::Info,
+        title,
+        &detail,
+        crate::db::AlertAction::None,
+    );
+}
+
+/// `1601Cv2018` → `1601C`: the form code without the BIR schema revision.
+pub fn form_code_from_form_type(form_type: &str) -> &str {
+    form_type.split('v').next().unwrap_or(form_type)
 }
 
 /// Same event on the in-app Notifications page, so it is still there after the
@@ -1558,7 +1606,30 @@ mod tests {
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at);
         assert_eq!(title, "1601C 09/26 submitted \u{2014} Juan Dela Cruz");
-        assert_eq!(body, "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026");
+        assert_eq!(
+            body,
+            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com"
+        );
+    }
+
+    #[test]
+    fn confirmation_notice_carries_bir_time_file_and_mailbox() {
+        let (title, body) = confirmation_notice(
+            "Juan Dela Cruz",
+            "000-000-000-00000",
+            "1601C",
+            "10/26",
+            "00000000000000-1601Cv2018-102026.xml",
+            "12 September 2026, 11:43 AM",
+            "codeitlikemiley@gmail.com",
+        );
+        assert_eq!(title, "BIR received 1601C 10/26 \u{2014} Juan Dela Cruz");
+        assert_eq!(
+            body,
+            "TIN 000-000-000-00000\nFile 00000000000000-1601Cv2018-102026.xml\nReceived by BIR 12 September 2026, 11:43 AM\nConfirmation in codeitlikemiley@gmail.com"
+        );
+        assert_eq!(form_code_from_form_type("1601Cv2018"), "1601C");
+        assert_eq!(form_code_from_form_type("2551Qv2018"), "2551Q");
     }
 
     #[test]

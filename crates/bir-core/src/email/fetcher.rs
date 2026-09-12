@@ -192,6 +192,7 @@ fn fetch_with_auth(
 
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
+                        let mut pending_notice: Option<(String, String)> = None;
                         if let Ok(db_guard) = db.lock()
                             && let Ok((submission_receipt, _is_new)) =
                                 db_guard.save_submission_receipt(&receipt)
@@ -215,38 +216,71 @@ fn fetch_with_auth(
                                     false
                                 }
                             };
-                            if confirmed {
-                                if let Some((_, form_type, period)) =
+                            if confirmed
+                                && let Some((tin, form_type, period)) =
                                     crate::receipt::split_bir_filename(&submission_receipt.filename)
-                                {
+                            {
+                                let form_code =
+                                    crate::background_cron::form_code_from_form_type(&form_type)
+                                        .to_string();
+                                let period_label =
                                     if crate::filing_queue::is_audited_1601c_receipt_form_type(
                                         &form_type,
                                     ) {
-                                        if let Some((year, month)) =
-                                            crate::filing_queue::parse_1601c_period(&period)
-                                        {
-                                            crate::notification::send_notification(
-                                                "BIR Confirmation Received",
-                                                &format!(
-                                                    "Form: 1601C\nYear: {}\nMonth: {}",
-                                                    year, month
-                                                ),
-                                            );
-                                        }
-                                    } else if let Some((year, quarter)) =
-                                        crate::db::parse_2551q_period(&period)
-                                    {
-                                        crate::notification::send_notification(
-                                            "BIR Confirmation Received",
-                                            &format!(
-                                                "Form: 2551Q\nYear: {}\nQuarter: {}",
-                                                year, quarter
-                                            ),
-                                        );
-                                    }
+                                        crate::filing_queue::parse_1601c_period(&period).map(
+                                            |(year, month)| {
+                                                crate::background_cron::monthly_period_label(
+                                                    year, month,
+                                                )
+                                            },
+                                        )
+                                    } else {
+                                        crate::db::parse_2551q_period(&period).map(
+                                            |(year, quarter)| {
+                                                crate::background_cron::quarterly_period_label(
+                                                    year, quarter,
+                                                )
+                                            },
+                                        )
+                                    };
+                                if let Some(period_label) = period_label {
+                                    let taxpayer_name = db_guard
+                                        .get_profile(&tin)
+                                        .ok()
+                                        .flatten()
+                                        .map(|profile| profile.full_name.clone())
+                                        .unwrap_or_else(|| tin.clone());
+                                    let bir_filename = format!("{tin}-{form_type}-{period}.xml");
+                                    let (title, body) = crate::background_cron::confirmation_notice(
+                                        &taxpayer_name,
+                                        &crate::naming::Tin::dashed_display(&tin),
+                                        &form_code,
+                                        &period_label,
+                                        &bir_filename,
+                                        &format!(
+                                            "{}, {}",
+                                            submission_receipt.received_date,
+                                            submission_receipt.received_time
+                                        ),
+                                        profile.inbox_email(),
+                                    );
+                                    crate::background_cron::record_confirmation_alert(
+                                        &db_guard,
+                                        &tin,
+                                        &form_code,
+                                        &period_label,
+                                        &title,
+                                        &body,
+                                        &taxpayer_name,
+                                    );
+                                    // Sent after the lock below: the banner spawns a process.
+                                    pending_notice = Some((title, body));
                                 }
                             }
                             processed.push(submission_receipt);
+                        }
+                        if let Some((title, body)) = pending_notice {
+                            crate::notification::send_notification(&title, &body);
                         }
                     }
                     Err(e) => {
