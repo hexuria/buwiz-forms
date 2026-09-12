@@ -68,7 +68,7 @@ tray-icon = "0.24.0"
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "c5e8856356f35a7d41bcf4b02f2592bb39bbe151", optional = true }
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "8b864fbbd9de08565f4a90cb9284446a44f85d7f", optional = true }
 # Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown / logs).
 clap = { version = "4", features = ["derive"], optional = true }
 

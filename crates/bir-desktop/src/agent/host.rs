@@ -3270,9 +3270,11 @@ impl AgentHost for BirAgentHost {
                 self.shutdown = true;
                 Ok(DispatchResult::empty())
             }
-            Op::Hello | Op::Snapshot | Op::Assert { .. } | Op::Wait { .. } => {
-                Ok(DispatchResult::empty())
-            }
+            Op::Hello
+            | Op::Snapshot
+            | Op::Assert { .. }
+            | Op::Wait { .. }
+            | Op::WaitUntil { .. } => Ok(DispatchResult::empty()),
         }
     }
 }

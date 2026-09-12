@@ -9,11 +9,12 @@ verbs live in this host as `invoke` names. Start at the
 `bir-headless` from CLI / MCP / Grok Bot.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
-`c5e8856356f35a7d41bcf4b02f2592bb39bbe151` (`main` tip, Merge PR #37/#38 —
-`Op::Keybinding` / `Keybindings`, `screenshot --mode scrolled`). Host GPUI is
+`8b864fbbd9de08565f4a90cb9284446a44f85d7f` (`main` after PR #40 —
+`Op::Keybinding` / `Keybindings`, `screenshot --mode scrolled`,
+`assert --visible` / `--in-viewport`, `wait_until`). Host GPUI is
 **gpui-pre** through gpui-kit 0.6. Cookbook:
-[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/c5e8856356f35a7d41bcf4b02f2592bb39bbe151/docs/INTEGRATING.md)
-and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/c5e8856356f35a7d41bcf4b02f2592bb39bbe151/docs/SDK.md).
+[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/8b864fbbd9de08565f4a90cb9284446a44f85d7f/docs/INTEGRATING.md)
+and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/8b864fbbd9de08565f4a90cb9284446a44f85d7f/docs/SDK.md).
 Do not fork the protocol. There is no crates.io release; git/path only.
 CLI and host **must** both be on this rev (or later). A v1 CLI cannot talk
 to a v2 host.
@@ -57,7 +58,7 @@ These are host constraints. They do not fork protocol v2.
   `bir` and `bir-headless serve` both default to `127.0.0.1:17421` and take
   `bir_data.db.owner.lock`. See [Two hosts, one agent port](#two-hosts-one-agent-port).
   There is **no** protocol `Op::Yield` / `Takeover`.
-- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/c5e8856356f35a7d41bcf4b02f2592bb39bbe151/docs/ADR-001-daemon-sot.md))
+- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8b864fbbd9de08565f4a90cb9284446a44f85d7f/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
   + the same SQLCipher key). Smoke C reopen of the GUI is offline
@@ -275,7 +276,7 @@ This is the token model AI agents must follow. Never print or log the token.
 | Path override | `BIR_DATABASE_PATH` is for CI / temp demos. A **non-empty** override may omit the *headless live-path* refuse (`live_database_token_required` is false), but **`from_env` still requires `GPUI_AGENT_TOKEN` unless `GPUI_AGENT_INSECURE_NO_TOKEN=1`**. Prefer still setting a token so recipe/MCP clients match. Do **not** set `BIR_DATABASE_PATH` for live Mac smokes. |
 | Painted `bir` | Bind is `from_env` alone (no extra live-path refuse). Without `GPUI_AGENT_TOKEN` (and without the insecure flag) the mailbox **does not start**. Recipes and MCP need the same token on host and client. |
 | `hello.auth` | `"required"` when a token is configured on the host, `"none"` only for the insecure/no-token demo. The TCP thread enforces HMAC and stamps `hello.auth` on the mailbox path. `BirAgentHost::hello()` does not set `auth` by hand. |
-| Protocol | **v2.** After accept the host writes a challenge nonce. Clients (`gpui-agent` CLI / `AgentClient::with_token`) send `auth` HMAC. Host and CLI must both be ≥ pin `c5e8856`. |
+| Protocol | **v2.** After accept the host writes a challenge nonce. Clients (`gpui-agent` CLI / `AgentClient::with_token`) send `auth` HMAC. Host and CLI must both be ≥ pin `8b864fb`. |
 | Logging | **Never log the token.** Opt-in `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`) emits one stderr line per request: `timestamp gpui-agent id=… op=hello\|invoke\|… name=profile.list ok=true`. Off by default. Not enabled by `RUST_LOG`. Invoke args, `set_value` values, typed text, screenshot paths, tokens, and HMAC hex are never included. Same helper on the painted mailbox drain. |
 
 ## Security gates
@@ -518,7 +519,7 @@ CLI cannot speak v2 HMAC** — install this rev, not an older `main`:
 ```bash
 git clone https://github.com/hexuria/gpui-agent
 cd gpui-agent
-git checkout c5e8856356f35a7d41bcf4b02f2592bb39bbe151
+git checkout 8b864fbbd9de08565f4a90cb9284446a44f85d7f
 cargo install --path crates/gpui-agent-cli --locked
 ```
 
@@ -565,7 +566,7 @@ gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
 ### Mac: bir-headless
 
 Clap: `serve` / `status` / `shutdown` / `logs`, global `--wait` and `--detach`.
-Shell matches gpui-agent `apps/todo-headless` on pin `c5e8856356f35a7d41bcf4b02f2592bb39bbe151`:
+Shell matches gpui-agent `apps/todo-headless` on pin `8b864fbbd9de08565f4a90cb9284446a44f85d7f`:
 `from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
 `GPUI_AGENT_TOKEN` is required to bind. `--detach` / `logs --follow` are the
 Docker-like lab path; Mac production uses the launchd example (no `--detach`).
@@ -668,7 +669,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
-Other terminal (CLI from pin `c5e8856356f35a7d41bcf4b02f2592bb39bbe151`):
+Other terminal (CLI from pin `8b864fbbd9de08565f4a90cb9284446a44f85d7f`):
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
