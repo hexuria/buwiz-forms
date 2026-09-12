@@ -13,7 +13,7 @@ python3 crates/bir-desktop/docs/eli5/tools/test_form_pages.py
 | 1601C | 2018-01-01 | 109/109 | 11 | 54 | — |
 | 0619E | 2018-01-01 | 59/59 | 4 | 37 | — |
 | 0619F | 2018-01-01 | 60/60 | 5 | 40 | — |
-| 0605 | 2003-09-01 | 235/235 | 2 | 56 | — |
+| 0605 | 2003-09-01 | 235/235 | 2 | 56 | Rules bundle 0605-v2003 is year 2003 but frozen HTML 0605-1999 is year 1999 — paired by form stem; the page does not decide which revision is authoritative. |
 | 1701Q | 2018-01-01 | 172/172 | 19 | 40 | — |
 | 2550Q | 2024-04-01 | 188/188 | 27 | 38 | — |
 | 1701 | 2018-01-01 | 953/953 | 32 | 69 | — |
@@ -22,15 +22,15 @@ python3 crates/bir-desktop/docs/eli5/tools/test_form_pages.py
 | 1600PT | 2018-01-01 | 262/262 | 9 | 44 | — |
 | 1600VT | 2018-01-01 | 174/174 | 9 | 44 | — |
 | 1600WP | 2010-01-01 | 119/119 | 8 | 37 | Filing frequency for 1600wp-v2010: workflow/fields did not clearly say monthly/quarterly/annual — marked ? |
-| 1601EQ | 2018-01-01 | 621/621 | 8 | 48 | — |
-| 1601FQ | 2018-01-01 | 309/309 | 11 | 38 | — |
-| 1602Q | 2018-01-01 | 110/110 | 13 | 36 | — |
+| 1601EQ | 2018-01-01 | 621/621 | 8 | 48 | Rules bundle 1601eq-v2018 is year 2018 but frozen HTML 1601eq-2019 is year 2019 — paired by form stem; the page does not decide which revision is authoritative. |
+| 1601FQ | 2018-01-01 | 309/309 | 11 | 38 | Rules bundle 1601fq-v2018 is year 2018 but frozen HTML 1601-fq-2020 is year 2020 — paired by form stem; the page does not decide which revision is authoritative. |
+| 1602Q | 2018-01-01 | 110/110 | 13 | 36 | Rules bundle 1602q-v2018 is year 2018 but frozen HTML 1602q-2019 is year 2019 — paired by form stem; the page does not decide which revision is authoritative. |
 | 1603Q | 2018-01-01 | 76/76 | 9 | 31 | — |
 | 1604C | 2018-01-01 | 119/119 | 5 | 33 | — |
 | 1604E | 2018-01-01 | 134/134 | 5 | 106 | — |
 | 1604F | 2018-01-01 | 105/105 | 5 | 82 | — |
 | 1606 | 2018-01-01 | 99/99 | 10 | 52 | — |
-| 1700 | 2013-06-01 | 370/370 | 25 | 88 | — |
+| 1700 | 2013-06-01 | 370/370 | 25 | 88 | Rules bundle 1700-v2013 is year 2013 but frozen HTML 1700-2018 is year 2018 — paired by form stem; the page does not decide which revision is authoritative. |
 | 1701A | 2018-01-01 | 201/201 | 22 | 41 | — |
 | 1701MS | 2024-08-01 | 222/222 | 30 | 56 | — |
 | 1702EX | 2018-01-01 | 197/197 | 15 | 34 | — |
@@ -48,7 +48,7 @@ python3 crates/bir-desktop/docs/eli5/tools/test_form_pages.py
 | 2200M | 2018-01-01 | 268/268 | 11 | 43 | Filing frequency for 2200m-v2018: workflow/fields did not clearly say monthly/quarterly/annual — marked ? |
 | 2200P | 2020-01-01 | 479/479 | 10 | 43 | Filing frequency for 2200p-v2020: workflow/fields did not clearly say monthly/quarterly/annual — marked ? |
 | 2200S | 2018-01-01 | 126/126 | 12 | 52 | — |
-| 2200T | 2020-01-01 | 278/278 | 9 | 39 | Filing frequency for 2200t-v2020: workflow/fields did not clearly say monthly/quarterly/annual — marked ? |
+| 2200T | 2020-01-01 | 278/278 | 9 | 39 | Filing frequency for 2200t-v2020: workflow/fields did not clearly say monthly/quarterly/annual — marked ? Rules bundle 2200t-v2020 is year 2020 but frozen HTML 2200t-2022 is year 2022 — paired by form stem; the page does not decide which revision is authoritative. |
 | 2550M | 2007-02-01 | 292/292 | 29 | 61 | — |
 | 2552 | 2018-01-01 | 262/262 | 10 | 32 | Filing frequency for 2552-v2018: workflow/fields did not clearly say monthly/quarterly/annual — marked ? |
 | 2553 | 1999-07-01 | 68/68 | 7 | 28 | — |

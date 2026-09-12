@@ -63,8 +63,9 @@ LABELS_OVERRIDE: dict[str, dict[str, str]] = {
 
 SRC = {
     "profile": re.compile(
-        r"TIN|BranchCode|registeredName|registeredAddress|zipCode|telNo|txtEmail|txtRDOCode|"
-        r"TaxpayerName|LineofBus|txtTaxpayerName|withholdingAgent|TradeName|Address",
+        r"TIN|BranchCode|registeredName|registeredAddress|zipCode|ZipCode|telNo|txtTel|"
+        r"txtEmail|txtRDOCode|RDOCode|TaxpayerName|LineofBus|txtTaxpayerName|withholdingAgent|"
+        r"TradeName|txtAddress|CatAgent",
         re.I,
     ),
     "period": re.compile(
@@ -72,6 +73,27 @@ SRC = {
         re.I,
     ),
 }
+WORKFLOW_KEY = re.compile(
+    r"CurrentPage|MaxPage|FinalFlag|Enroll|ebirOnline|driveSelect",
+    re.I,
+)
+ATC_SCHED_KEY = re.compile(r"ATC|Sched|txtTotalSched|drpATC|txtATC", re.I)
+FLAG_LABEL = re.compile(
+    r"amended|sheets attached|number of sheets|taxes withheld/remitted|any taxes withheld|"
+    r"for the|calendar / fiscal|year ended|return period|due date|\bquarter\b",
+    re.I,
+)
+COMP_LABEL = re.compile(
+    r"tax due|withheld amount|remittance|surcharge|atc code|taxable|gross sales|"
+    r"withholding tax|compensation|vat payable",
+    re.I,
+)
+TOTAL_LABEL = re.compile(
+    r"surcharge|interest|compromise|penalt|tax credit|still payable|overpayment|"
+    r"total amount payable|total tax credits|total penalties|amount payable|"
+    r"refund|creditable|amount still|previously filed",
+    re.I,
+)
 KIND = {"text": "text / money", "radio": "radio", "select-one": "select", "checkbox": "checkbox"}
 
 questions: list[str] = []
@@ -132,6 +154,9 @@ def clean_label(raw: str | None, fallback_key: str) -> str:
 
 
 def group_label(item: str, fields: list[dict], overrides: dict[str, str]) -> str:
+    keys = [key_of(x) for x in fields]
+    if item in ("None",) and keys and all(WORKFLOW_KEY.search(k) for k in keys):
+        return "eBIRForms workflow / page chrome (not on the paper form)"
     if item in overrides:
         return overrides[item]
     labels = []
@@ -168,17 +193,16 @@ def sub_group(x: dict) -> str:
     item_s = "None" if item is None else str(item)
     if item_s.startswith("Schedule"):
         return item_s
-    if k.startswith("txtPg2") or (page_of(x) == 2 and item_s == "None" and "Pg2" in k):
+    if k.startswith("txtPg2") or (page_of(x) >= 2 and item_s == "None" and "Pg2" in k):
         return "None:hdr"
+    # Print/XML workflow chrome is not a schedule line.
+    if WORKFLOW_KEY.search(k):
+        return "None"
     # 2551Q-style schedule rows on page 2 with item None and ATC keys
-    if page_of(x) >= 2 and item_s == "None" and re.search(
-        r"ATC|Sched|txtTotalSched|drpATC|txtATC", k, re.I
-    ):
+    if item_s == "None" and ATC_SCHED_KEY.search(k):
         return "None:sched"
     if page_of(x) >= 2 and item_s == "None" and not k.startswith("txtPg2"):
-        # page-2 non-header none: keep as schedule-ish bucket for forms like 2551Q extras
-        if re.search(r"CurrentPage|MaxPage|FinalFlag|Enroll|ebirOnline|driveSelect", k, re.I):
-            return "None:sched"
+        return "None:sched"
     return item_s
 
 
@@ -267,6 +291,7 @@ def ux_bucket(page: int, item: str, fields: list[dict]) -> str:
 
 def rebucket_by_order(
     groups: dict[tuple[int, str], list[dict]],
+    overrides: dict[str, str],
 ) -> list[tuple[str, str, list[tuple[int, str]]]]:
     """Return sections as (section_id, title, [(page, item), ...])."""
     # Partition specials first
@@ -286,25 +311,23 @@ def rebucket_by_order(
         else:
             numbered.append((page, item, xs))
 
-    numbered.sort(key=lambda t: (t[0], item_sort_key(t[1])))
+    # Item number, not paper page, drives UX order (page-2 RDO still sits with TIN).
+    numbered.sort(key=lambda t: (item_sort_key(t[1]), t[0]))
 
-    # Classify numbered into period / identity / computation / totals using
-    # sources + position among unique item numbers on the primary page.
-    by_item: list[tuple[str, list[tuple[int, str, list[dict]]]]] = []
-    # collapse same item across pages into one logical item list
     item_map: collections.OrderedDict[str, list[tuple[int, str, list[dict]]]] = collections.OrderedDict()
     for page, item, xs in numbered:
         item_map.setdefault(item, []).append((page, item, xs))
 
     items_ordered = list(item_map.keys())
     n = len(items_ordered)
-    # Pre-label each item
     prelim = {}
     for idx, item in enumerate(items_ordered):
         xs_all = [x for _p, _i, xs in item_map[item] for x in xs]
         keys = [key_of(x) for x in xs_all]
-        labels_l = " ".join(clean_label(x.get("label"), key_of(x)) for x in xs_all).lower()
+        keys_blob = " ".join(keys)
+        labels_l = group_label(item, xs_all, overrides)
         sources = {source_of(x) for x in xs_all}
+        profile_n = sum(1 for x in xs_all if source_of(x) == "profile")
         bucket = "computation"
         if sources <= {"period"} or (
             "period" in sources
@@ -312,51 +335,26 @@ def rebucket_by_order(
             and idx <= max(4, n // 5)
         ):
             bucket = "period"
-        if "profile" in sources and idx <= max(8, n // 3) and not re.search(
-            r"tax due|withheld amount|remittance|surcharge|atc code", labels_l
-        ):
-            # identity if mostly profile or classic identity keys
-            if sources <= {"profile", "typed", "computed", "period"} and (
-                sum(1 for x in xs_all if source_of(x) == "profile") >= 1
-                and not re.search(r"^txt(1[4-9]|[2-9]\d)$", " ".join(keys))
-            ):
-                # Don't steal computation money fields early
-                if not re.search(
-                    r"taxable|tax due|withholding tax|amount of|gross|income|sales|vat",
-                    labels_l,
-                ):
-                    bucket = "identity"
-        if re.search(
-            r"surcharge|interest|compromise|penalt|tax credit|still payable|overpayment|"
-            r"total amount payable|total tax credits|total penalties|amount payable|"
-            r"refund|creditable",
-            labels_l,
-        ):
+        if FLAG_LABEL.search(labels_l) and profile_n == 0 and not COMP_LABEL.search(labels_l):
+            bucket = "period"
+        # Identity stays identity even when an earlier flag/ATC item was "computation".
+        if profile_n >= 1 and not COMP_LABEL.search(labels_l):
+            bucket = "identity"
+        elif SRC["profile"].search(keys_blob) and not COMP_LABEL.search(labels_l):
+            bucket = "identity"
+        if TOTAL_LABEL.search(labels_l) and profile_n == 0:
             bucket = "totals"
-        # Late computed totals
         if bucket == "computation" and idx >= max(0, n - max(6, n // 4)):
             if all(source_of(x) in {"computed", "typed"} for x in xs_all) and re.search(
                 r"total|payable|penalty|credit", labels_l
             ):
                 bucket = "totals"
+        if re.search(r"\bpayment date\b|details of payment", labels_l, re.I) or (
+            sum(1 for k in keys if re.search(r"txtAgency\d+|txtAmount\d+|txtParticular\d+", k)) >= 2
+            and profile_n == 0
+        ):
+            bucket = "payment_num"
         prelim[item] = bucket
-
-    # Smooth: period should be a prefix, identity next, totals a suffix where possible
-    # Convert identity that appears after computation back to computation
-    seen_comp = False
-    for item in items_ordered:
-        if prelim[item] == "computation":
-            seen_comp = True
-        elif prelim[item] in {"period", "identity"} and seen_comp:
-            prelim[item] = "computation"
-
-    seen_totals = False
-    for item in reversed(items_ordered):
-        if prelim[item] == "totals":
-            seen_totals = True
-        elif seen_totals and prelim[item] == "computation":
-            # keep computation before totals; don't drag earlier back
-            pass
 
     titles = {
         "period": "Filing period & return flags",
@@ -366,6 +364,9 @@ def rebucket_by_order(
         "payment": "Payment / signature / agency / workflow",
         "print_xml": "Print / XML only (hidden in editor)",
     }
+
+    def sort_entries(entries: list[tuple[int, str]]) -> list[tuple[int, str]]:
+        return sorted(entries, key=lambda t: (item_sort_key(t[1]), t[0]))
 
     sections: list[tuple[str, str, list[tuple[int, str]]]] = []
     for bid, title in [
@@ -380,15 +381,33 @@ def rebucket_by_order(
                 for page, it, _xs in item_map[item]:
                     entries.append((page, it))
         if entries:
-            sections.append((bid, title, entries))
+            sections.append((bid, title, sort_entries(entries)))
+
+    payment_entries: list[tuple[int, str]] = []
+    for item in items_ordered:
+        if prelim[item] == "payment_num":
+            for page, it, _xs in item_map[item]:
+                payment_entries.append((page, it))
 
     for sid, entries in specials["schedules"].items():
-        sections.append((f"schedule:{sid}", sid if sid.startswith("Schedule") else f"Schedule — {sid}", entries))
+        sections.append(
+            (
+                f"schedule:{sid}",
+                sid if sid.startswith("Schedule") else f"Schedule — {sid}",
+                sort_entries(entries),
+            )
+        )
 
-    if specials["payment"]:
-        sections.append(("payment", titles["payment"], specials["payment"]))
+    if payment_entries or specials["payment"]:
+        sections.append(
+            (
+                "payment",
+                titles["payment"],
+                sort_entries(payment_entries + specials["payment"]),
+            )
+        )
     if specials["print_xml"]:
-        sections.append(("print_xml", titles["print_xml"], specials["print_xml"]))
+        sections.append(("print_xml", titles["print_xml"], sort_entries(specials["print_xml"])))
 
     return sections
 
@@ -417,7 +436,7 @@ if rules_id in SECTIONS_OVERRIDE:
         # entries already (page,item)
         section_defs.append((name, name, entries))
 else:
-    section_defs = rebucket_by_order(groups)
+    section_defs = rebucket_by_order(groups, overrides)
 
 # Verify partition: every group key appears exactly once
 assigned = []
@@ -481,6 +500,25 @@ for _sid, name, entries in section_defs:
         f"<em>{count_fields} fields</em></summary>{''.join(rows)}</details>"
     )
 
+def calc_outputs(c: dict) -> str:
+    outs = c.get("outputs") or c.get("targets") or []
+    if isinstance(outs, str):
+        outs = [outs]
+    if isinstance(outs, list) and outs:
+        return ", ".join(str(o).split(":")[-1] for o in outs)
+    return str(c.get("target") or c.get("target_field") or c.get("output") or "").split(":")[-1]
+
+
+def calc_note(c: dict) -> str:
+    return str(
+        c.get("official_formula")
+        or c.get("description")
+        or c.get("summary")
+        or c.get("notes")
+        or ""
+    )[:160]
+
+
 calcs = []
 for cid in C.get("evaluation_order") or []:
     if isinstance(C["calculations"], list):
@@ -488,11 +526,11 @@ for cid in C.get("evaluation_order") or []:
     else:
         c = C["calculations"].get(cid, {})
     ins = ", ".join(str(i).split(":")[-1] for i in (c.get("inputs") or c.get("sources") or []))
-    tgt = str(c.get("target") or c.get("target_field") or c.get("output") or "").split(":")[-1]
+    tgt = calc_outputs(c)
     calcs.append(
         f'<div class="calc"><b>{html.escape(str(cid))}</b>'
         f'<span class="arrow">{html.escape(ins)} ⟶ {html.escape(tgt or "(see rule)")}</span>'
-        f'<i>{html.escape(str(c.get("description") or c.get("summary") or c.get("notes") or "")[:140])}</i></div>'
+        f'<i>{html.escape(calc_note(c))}</i></div>'
     )
 
 rules = V["rules"] if isinstance(V.get("rules"), list) else list((V.get("rules") or {}).values())
@@ -504,6 +542,14 @@ vals = "".join(
 )
 
 freq = derive_frequency()
+rules_year = re.search(r"-v(\d{4})", rules_id)
+frozen_year = re.search(r"-(\d{4})[a-z]?$", bundle)
+if rules_year and frozen_year and rules_year.group(1) != frozen_year.group(1):
+    questions.append(
+        f"Rules bundle {rules_id} is year {rules_year.group(1)} but frozen HTML "
+        f"{bundle} is year {frozen_year.group(1)} — paired by form stem; the page does not "
+        f"decide which revision is authoritative."
+    )
 heads = paper_headings(H)
 heads_note = ", ".join(heads[:8]) if heads else "(no Part/Schedule headings found in frozen HTML)"
 
