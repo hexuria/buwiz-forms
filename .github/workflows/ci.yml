@@ -203,6 +203,16 @@ jobs:
       if: runner.os == 'macOS'
       run: cargo clippy --locked -p bir-desktop --features mas_build -- -D warnings
 
+    # The agent control plane is off by default, so the two steps above never
+    # compile `src/agent/**` (or the `agent`-gated parts of the views) and never
+    # lint the tests. Lints in that tree therefore only surfaced when someone
+    # ran clippy locally with the feature on. `--all-targets` is what pulls the
+    # unit tests in; the `check` job's `cargo test --locked --workspace` also
+    # builds without `agent`, so this is the only step that type-checks the
+    # control plane at all.
+    - name: Clippy (agent control plane)
+      run: cargo clippy --locked -p bir-desktop --all-targets --features dev-tools,agent -- -D warnings
+
     # One command per line: this job's default shell is pwsh on windows-latest,
     # and bash `\` continuations are a parse error there.
     - name: Frozen HTML inventory and TIN name stamps
