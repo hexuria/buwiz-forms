@@ -3237,6 +3237,7 @@ impl BirAgentHost {
 impl AgentHost for BirAgentHost {
     fn hello(&self) -> HelloInfo {
         HelloInfo {
+            os: gpui_agent::protocol::host_os(),
             protocol: PROTOCOL_VERSION,
             app: "bir-desktop".into(),
             platform: self.platform,
