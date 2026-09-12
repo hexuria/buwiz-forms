@@ -685,18 +685,24 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     {
         Ok(()) => {
             info!("Cron: Successfully submitted queued 1601C {}", filename);
-            crate::notification::send_notification(
-                "BIR Form Submitted",
-                &format!(
-                    "Filename: {}\nTimestamp: {}",
-                    filename,
-                    Utc::now().format("%I:%M %p")
-                ),
-            );
+            let period_label = monthly_period_label(draft.taxable_year, draft.month);
+            let (notice_title, notice_body) =
+                submission_notice(profile, "1601C", &period_label, &chrono::Local::now());
+            crate::notification::send_notification(&notice_title, &notice_body);
+            let submitted_file = filename.clone();
             draft.transition_to_submitted(filename);
             if let Ok(db_guard) = db.lock() {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
                     Ok(_) => {
+                        record_submission_alert(
+                            &db_guard,
+                            profile,
+                            "1601C",
+                            &period_label,
+                            &submitted_file,
+                            &notice_title,
+                            &notice_body,
+                        );
                         if skip_email_poll {
                             info!(
                                 "Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
@@ -1059,19 +1065,28 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 match session.store(&filename, &encrypted).await {
                     Ok(_) => {
                         info!("Cron: Successfully submitted queued form {}", filename);
-                        let now = Utc::now();
-                        crate::notification::send_notification(
-                            "BIR Form Submitted",
-                            &format!(
-                                "Filename: {}\nTimestamp: {}",
-                                filename,
-                                now.format("%I:%M %p")
-                            ),
+                        let period_label =
+                            quarterly_period_label(draft.taxable_year, draft.quarter);
+                        let (notice_title, notice_body) = submission_notice(
+                            &current_profile,
+                            "2551Q",
+                            &period_label,
+                            &chrono::Local::now(),
                         );
+                        crate::notification::send_notification(&notice_title, &notice_body);
                         draft.transition_to_submitted(filename.clone());
                         if let Ok(db_guard) = db_clone.lock() {
                             match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
                                 Ok(_) => {
+                                    record_submission_alert(
+                                        &db_guard,
+                                        &current_profile,
+                                        "2551Q",
+                                        &period_label,
+                                        &filename,
+                                        &notice_title,
+                                        &notice_body,
+                                    );
                                     if session_source.is_dry_run() {
                                         info!(
                                             "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
@@ -1124,6 +1139,63 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
             crate::ipc::post_db_changed();
         });
     }
+}
+
+/// `09/26` for a monthly return — the shape the maintainer reads at a glance.
+pub fn monthly_period_label(taxable_year: u16, month: u8) -> String {
+    format!("{month:02}/{:02}", taxable_year % 100)
+}
+
+/// `Q3/26` for a quarterly return.
+pub fn quarterly_period_label(taxable_year: u16, quarter: u8) -> String {
+    format!("Q{quarter}/{:02}", taxable_year % 100)
+}
+
+/// Desktop banner for a successful PUT: who, which return, when — not the
+/// IAF filename, which says none of that at a glance. Returns `(title, body)`.
+pub fn submission_notice<Tz: chrono::TimeZone>(
+    profile: &TaxpayerProfile,
+    form_code: &str,
+    period_label: &str,
+    sent_at: &chrono::DateTime<Tz>,
+) -> (String, String)
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let title = format!(
+        "{form_code} {period_label} submitted \u{2014} {}",
+        profile.full_name
+    );
+    let body = format!(
+        "TIN {}\nSent {}",
+        profile.tin.formatted(),
+        sent_at.format("%I:%M %p, %-d %b %Y")
+    );
+    (title, body)
+}
+
+/// Same event on the in-app Notifications page, so it is still there after the
+/// banner is gone. One entry per return period; a re-file of the same period
+/// bumps that entry rather than adding a second.
+fn record_submission_alert(
+    db: &Database,
+    profile: &TaxpayerProfile,
+    form_code: &str,
+    period_label: &str,
+    filename: &str,
+    title: &str,
+    body: &str,
+) {
+    let kind = format!("form_submitted:{form_code}:{period_label}");
+    let detail = format!("{}\n{body}\nFile {filename}", profile.full_name);
+    let _ = db.record_alert(
+        Some(&profile.tin.full()),
+        &kind,
+        crate::db::AlertSeverity::Info,
+        title,
+        &detail,
+        crate::db::AlertAction::None,
+    );
 }
 
 pub fn schedule_email_poll(
@@ -1470,6 +1542,58 @@ impl Drop for JobCleanup {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn period_labels_read_as_month_or_quarter_over_two_digit_year() {
+        assert_eq!(monthly_period_label(2026, 9), "09/26");
+        assert_eq!(monthly_period_label(2026, 12), "12/26");
+        assert_eq!(quarterly_period_label(2026, 3), "Q3/26");
+    }
+
+    #[test]
+    fn submission_notice_names_taxpayer_tin_form_period_and_time() {
+        let profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at);
+        assert_eq!(title, "1601C 09/26 submitted \u{2014} Juan Dela Cruz");
+        assert_eq!(body, "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026");
+    }
+
+    #[test]
+    fn submission_alert_lands_on_the_notifications_page_once_per_period() {
+        let db = Database::open_in_memory_for_tests().expect("db");
+        let profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        let profile = db.save_profile(profile).expect("profile");
+        for _ in 0..2 {
+            record_submission_alert(
+                &db,
+                &profile,
+                "1601C",
+                "09/26",
+                "00000000000000-1601Cv2018-092026#x#.xml",
+                "1601C 09/26 submitted \u{2014} Juan Dela Cruz",
+                "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026",
+            );
+        }
+        let alerts = db.list_active_alerts(None).expect("alerts");
+        let ours: Vec<_> = alerts
+            .iter()
+            .filter(|alert| alert.kind == "form_submitted:1601C:09/26")
+            .collect();
+        assert_eq!(ours.len(), 1, "{alerts:?}");
+        assert_eq!(ours[0].severity, crate::db::AlertSeverity::Info);
+        assert_eq!(ours[0].action, crate::db::AlertAction::None);
+        assert!(
+            ours[0].detail.contains("Juan Dela Cruz"),
+            "{}",
+            ours[0].detail
+        );
+        assert!(ours[0].detail.contains("TIN 000-000-000-00000"));
+        assert!(ours[0].detail.contains("092026"));
+    }
+
     use super::*;
     use crate::db::{Database, Job};
     use crate::forms::form_1601c::Form1601CDraft;
