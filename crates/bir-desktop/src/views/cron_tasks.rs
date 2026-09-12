@@ -24,6 +24,37 @@ const LOG_RETAINED_LINES: usize = 5_000;
 /// Support.
 const LOG_RENDERED_LINES: usize = 500;
 
+/// Which job cards a filter shows. "Completed" is the `Archived` status:
+/// an email-confirmation poll is archived the moment its receipt lands.
+fn job_matches_filter(filter: &str, status: &str) -> bool {
+    match filter {
+        "Queued" => status == "Queued",
+        "Failed" => status == "Failed",
+        "Completed" => status == "Archived",
+        _ => true,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Other,
+}
+
+fn log_line_level(line: &str) -> LogLevel {
+    if line.contains(" ERROR ") || line.contains(" FATAL ") {
+        LogLevel::Error
+    } else if line.contains(" WARN ") {
+        LogLevel::Warn
+    } else if line.contains(" INFO ") {
+        LogLevel::Info
+    } else {
+        LogLevel::Other
+    }
+}
+
 fn tail_lines(content: &str, keep: usize) -> String {
     let total = content.lines().count();
     if total <= keep {
@@ -131,6 +162,9 @@ pub struct CronTasksView {
     items_per_page: usize,
     active_tab: BackgroundTaskTab,
     log_content: String,
+    /// File the Logs tab is showing, and its full line count.
+    log_file_name: String,
+    log_file_lines: usize,
     logs_scroll_handle: ScrollHandle,
     log_filter_combobox: Entity<ComboboxState>,
 }
@@ -142,9 +176,8 @@ impl CronTasksView {
                 vec![
                     "All Jobs".into(),
                     "Queued".into(),
-                    "Done".into(),
                     "Failed".into(),
-                    "Archived".into(),
+                    "Completed".into(),
                 ],
                 6,
                 window,
@@ -181,6 +214,8 @@ impl CronTasksView {
             items_per_page: 5,
             active_tab: BackgroundTaskTab::Jobs,
             log_content: String::new(),
+            log_file_name: String::new(),
+            log_file_lines: 0,
             logs_scroll_handle: ScrollHandle::new(),
             log_filter_combobox: log_filter_combobox.clone(),
         };
@@ -517,20 +552,30 @@ impl CronTasksView {
         self.load_settings(cx);
     }
 
+    /// Today's rotated file (`ebirforms.YYYY-MM-DD.log`), newest at the
+    /// bottom, scrolled there on load. Older days: Export Error Logs.
     fn refresh_logs(&mut self, cx: &mut Context<'_, Self>) {
-        let logs_path = bir_core::platform::data_dir().join("logs/ebirforms.log");
+        let logs_path = bir_core::log_files::today_log_path(&bir_core::log_files::log_dir());
+        self.log_file_name = logs_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
         if let Ok(content) = std::fs::read_to_string(&logs_path) {
+            self.log_file_lines = content.lines().count();
             self.log_content = tail_lines(&content, LOG_RETAINED_LINES);
         } else {
-            self.log_content = "Failed to load logs or logs are empty.".to_string();
+            self.log_file_lines = 0;
+            self.log_content = "No log entries yet today.".to_string();
         }
+        self.logs_scroll_handle.scroll_to_bottom();
         cx.notify();
     }
 
     fn clear_logs(&mut self, cx: &mut Context<'_, Self>) {
-        let logs_path = bir_core::platform::data_dir().join("logs/ebirforms.log");
+        let logs_path = bir_core::log_files::today_log_path(&bir_core::log_files::log_dir());
         let _ = std::fs::write(&logs_path, "");
         self.log_content.clear();
+        self.log_file_lines = 0;
         cx.notify();
     }
 
@@ -543,15 +588,14 @@ impl CronTasksView {
         cx.notify();
     }
 
+    /// Every kept day, oldest first, filtered to WARN and above.
     fn export_error_logs(&mut self, cx: &mut Context<'_, Self>) {
-        let logs_path = bir_core::platform::data_dir().join("logs/ebirforms.log");
+        let content = bir_core::log_files::combined_log_text(&bir_core::log_files::log_dir());
         let mut error_logs = String::new();
-        if let Ok(content) = std::fs::read_to_string(&logs_path) {
-            for line in content.lines() {
-                if line.contains(" ERROR ") || line.contains(" WARN ") || line.contains(" FATAL ") {
-                    error_logs.push_str(line);
-                    error_logs.push('\n');
-                }
+        for line in content.lines() {
+            if matches!(log_line_level(line), LogLevel::Error | LogLevel::Warn) {
+                error_logs.push_str(line);
+                error_logs.push('\n');
             }
         }
 
@@ -591,19 +635,7 @@ impl Render for CronTasksView {
         let filtered_jobs: Vec<&JobViewModel> = self
             .jobs
             .iter()
-            .filter(|j| match selected_filter.as_str() {
-                "All Jobs" => true,
-                "Queued" => j.status == "Queued",
-                "Done" => {
-                    j.status == "Submitted"
-                        || j.status == "Confirmed"
-                        || j.status == "Paid"
-                        || j.status == "Done"
-                }
-                "Failed" => j.status == "Failed",
-                "Archived" => j.status == "Archived",
-                _ => true,
-            })
+            .filter(|j| job_matches_filter(&selected_filter, &j.status))
             .filter(|j| {
                 if search_query.is_empty() {
                     return true;
@@ -640,9 +672,8 @@ impl Render for CronTasksView {
                         <div flex_1 min_w={px(200.)}>{Input::new(&self.search_input)}</div>
                     </div>
                     <div flex flex_row flex_wrap gap_4 items_center>
-                        <div text_sm text_color={cx.theme().muted_foreground}>{"Archive Days: 30"}</div>
                         {gpui_component::button::Button::new("purge_archived")
-                            .label("Purge Archives")
+                            .label("Purge Completed")
                             .small()
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 this.purge_archived(window, cx);
@@ -919,35 +950,33 @@ impl CronTasksView {
         let matching: Vec<&str> = self
             .log_content
             .lines()
-            .filter(|line| {
-                if selected_log_filter == "All Logs" {
-                    true
-                } else if selected_log_filter == "Error" {
-                    line.contains(" ERROR ") || line.contains(" FATAL ")
-                } else if selected_log_filter == "Warn" {
-                    line.contains(" WARN ")
-                } else if selected_log_filter == "Info" {
-                    line.contains(" INFO ")
-                } else {
-                    true
-                }
+            .filter(|line| match selected_log_filter.as_str() {
+                "Error" => log_line_level(line) == LogLevel::Error,
+                "Warn" => log_line_level(line) == LogLevel::Warn,
+                "Info" => log_line_level(line) == LogLevel::Info,
+                _ => true,
             })
             .collect();
         let total = matching.len();
         let shown = total.min(LOG_RENDERED_LINES);
-        let truncated_note = (total > shown).then(|| {
-            format!("Showing the last {shown} of {total} matching lines. Export Error Logs for the full file.")
+        let truncated_note = Some(if total > shown {
+            format!(
+                "Showing the newest {shown} of {total} matching lines in {} ({} lines today); newest at the bottom. Export Error Logs covers every kept day.",
+                self.log_file_name, self.log_file_lines
+            )
+        } else {
+            format!(
+                "{} — {} lines today, newest at the bottom. Export Error Logs covers every kept day.",
+                self.log_file_name, self.log_file_lines
+            )
         });
 
         let parsed_logs = matching.into_iter().skip(total - shown).map(|line| {
-            let color = if line.contains(" ERROR ") || line.contains(" FATAL ") {
-                cx.theme().danger
-            } else if line.contains(" WARN ") {
-                cx.theme().primary // Fallback for warning color
-            } else if line.contains(" INFO ") {
-                cx.theme().info
-            } else {
-                cx.theme().muted_foreground
+            let color = match log_line_level(line) {
+                LogLevel::Error => cx.theme().danger,
+                LogLevel::Warn => cx.theme().warning,
+                LogLevel::Info => cx.theme().foreground,
+                LogLevel::Other => cx.theme().muted_foreground,
             };
             rsx! {
                 <div font_family={crate::platform::MONOSPACE_FONT} text_sm text_color={color}>
@@ -1016,7 +1045,44 @@ impl CronTasksView {
 mod tests {
     // Not `use super::*`: that would import gpui's `#[test]` attribute macro
     // over std's.
-    use super::tail_lines;
+    use super::{LogLevel, job_matches_filter, log_line_level, tail_lines};
+
+    #[test]
+    fn completed_filter_is_the_archived_status_and_done_is_gone() {
+        assert!(job_matches_filter("Completed", "Archived"));
+        assert!(!job_matches_filter("Completed", "Queued"));
+        assert!(job_matches_filter("Queued", "Queued"));
+        assert!(job_matches_filter("Failed", "Failed"));
+        assert!(job_matches_filter("All Jobs", "Archived"));
+        assert!(
+            job_matches_filter("Done", "Archived"),
+            "unknown filters show everything"
+        );
+    }
+
+    #[test]
+    fn log_lines_classify_by_level_token() {
+        assert_eq!(
+            log_line_level("2026-09-12T00:00:00Z  WARN x: y"),
+            LogLevel::Warn
+        );
+        assert_eq!(
+            log_line_level("2026-09-12T00:00:00Z ERROR x: y"),
+            LogLevel::Error
+        );
+        assert_eq!(
+            log_line_level("2026-09-12T00:00:00Z FATAL x: y"),
+            LogLevel::Error
+        );
+        assert_eq!(
+            log_line_level("2026-09-12T00:00:00Z  INFO x: y"),
+            LogLevel::Info
+        );
+        assert_eq!(
+            log_line_level("continuation of a wrapped message"),
+            LogLevel::Other
+        );
+    }
 
     #[test]
     fn tail_lines_keeps_only_the_newest() {

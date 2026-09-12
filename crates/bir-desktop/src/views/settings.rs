@@ -1,3 +1,4 @@
+use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use crate::components::hotkey_recorder::{HotkeyRecorder, HotkeyRecorderEvent};
 use crate::components::otp_paste::paste_otp_value;
 use bir_core::db::Database;
@@ -30,6 +31,8 @@ pub struct SettingsView {
     hide_tax_profiles: bool,
     enable_profile_pins: bool,
     hotkey_recorder: Entity<HotkeyRecorder>,
+    /// "7 days" etc.; the stored value is `log_retention_days`.
+    log_retention: Entity<ComboboxState>,
     google_calendar_configured: bool,
     google_calendar_email: Option<String>,
     google_calendar_message: Option<(bool, String)>,
@@ -92,6 +95,25 @@ impl SettingsView {
         });
 
         let hotkey_recorder = cx.new(|cx| HotkeyRecorder::new(global_hotkey, window, cx));
+        let retention_days = db
+            .lock()
+            .ok()
+            .map(|guard| bir_core::log_files::retention_days(&guard))
+            .unwrap_or(bir_core::log_files::DEFAULT_RETENTION_DAYS);
+        let log_retention = cx.new(|cx| {
+            ComboboxState::new(
+                bir_core::log_files::RETENTION_CHOICES
+                    .iter()
+                    .map(|days| retention_label(*days))
+                    .collect(),
+                6,
+                window,
+                cx,
+            )
+        });
+        log_retention.update(cx, |state, cx| {
+            state.set_selected_value(&retention_label(retention_days), window, cx)
+        });
         let calendar_connection = db
             .lock()
             .ok()
@@ -112,11 +134,31 @@ impl SettingsView {
             hide_tax_profiles,
             enable_profile_pins,
             hotkey_recorder: hotkey_recorder.clone(),
+            log_retention: log_retention.clone(),
             google_calendar_configured: calendar_connection.configured,
             google_calendar_email: calendar_connection.connected_email,
             google_calendar_message: None,
             show_google_calendar_setup_guide: false,
         };
+
+        cx.subscribe_in(
+            &log_retention,
+            window,
+            |this: &mut Self, _entity, _event: &ComboboxEvent, _window, cx| {
+                let label = this.log_retention.read(cx).selected_value(cx);
+                let Some(days) = retention_days_from_label(&label) else {
+                    return;
+                };
+                if let Ok(db) = this.db.lock() {
+                    let _ =
+                        db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string());
+                    // Apply now rather than at the next six-hour tick.
+                    let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), &db);
+                }
+                cx.notify();
+            },
+        )
+        .detach();
 
         cx.subscribe_in(
             &setup_otp,
@@ -542,6 +584,19 @@ impl Render for SettingsView {
 
                     .child(rsx! {
                         <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
+                            <div flex w_full justify_between items_center gap_4>
+                                <div flex flex_col gap_1>
+                                    <div font_weight={FontWeight::SEMIBOLD}>{"Keep application logs for"}</div>
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {"One log file per day under Background Tasks → Logs. Older days are deleted automatically."}
+                                    </div>
+                                </div>
+                                <div w_40>{Combobox::new(&self.log_retention)}</div>
+                            </div>
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
                             <div flex w_full justify_between items_center>
                                 <div flex flex_col gap_1>
                                     <div font_weight={FontWeight::SEMIBOLD}>{"Enable Profile PINs"}</div>
@@ -923,4 +978,16 @@ impl Render for SettingsView {
             })
             .into_any_element()
     }
+}
+
+fn retention_label(days: u32) -> String {
+    if days == 1 {
+        "1 day".to_string()
+    } else {
+        format!("{days} days")
+    }
+}
+
+fn retention_days_from_label(label: &str) -> Option<u32> {
+    label.split_whitespace().next()?.parse().ok()
 }
