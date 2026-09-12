@@ -646,6 +646,10 @@ fn append_before_body_end(document: &str, fragment: &str) -> String {
     }
 }
 
+/// A `div` like the form pages on purpose: `.page:last-of-type` in base.css
+/// is per element type, so a `<section>` here would leave page 2 counted as
+/// "last" — no page break before the receipt when printing, and no gap on
+/// screen.
 /// The receipt sheet, laid out like a mail client's print of the message:
 /// the mailbox top right, the subject as the title, sender and arrival time,
 /// the recipient, then BIR's email as sent. No labels of our own — the file
@@ -659,7 +663,7 @@ fn receipt_page_html(receipt: &ReceiptPage, width: &str, height: &str) -> String
         .unwrap_or(receipt.received_at.as_str());
     let mut html = String::new();
     html.push_str(&format!(
-        "<section class=\"page page-receipt\" id=\"page-receipt\" style=\"width:{width};min-height:{height};height:auto;overflow:visible;padding:28pt 36pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff\">"
+        "<div class=\"page page-receipt\" id=\"page-receipt\" style=\"width:{width};min-height:{height};height:auto;overflow:visible;padding:28pt 36pt;font-family:'eBIRForms Arimo',Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff\">"
     ));
     html.push_str(
         "<style>\
@@ -704,7 +708,7 @@ fn receipt_page_html(receipt: &ReceiptPage, width: &str, height: &str) -> String
             html_escape(&receipt.body_text)
         )),
     }
-    html.push_str("</section>");
+    html.push_str("</div>");
     html
 }
 
@@ -873,6 +877,10 @@ mod tests {
         let receipt_at = with.find("id=\"page-receipt\"").expect("receipt page");
         let body_end = with.rfind("</body>").expect("body end");
         assert!(page2 < receipt_at && receipt_at < body_end);
+        assert!(
+            with.contains("<div class=\"page page-receipt\""),
+            "same element type as the form pages so :last-of-type moves to the receipt"
+        );
         assert!(
             with.contains("style=\"width:612pt;min-height:936pt"),
             "sheet matches @page"
