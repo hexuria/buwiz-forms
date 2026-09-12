@@ -974,6 +974,13 @@ impl AppState {
                             offset_y: js.offset_y.max(0.0),
                         })
                     }
+                    // The GPUI scroller around the WebView is exactly as tall
+                    // as its child, so its metrics say "nothing to scroll".
+                    // The document height is only known to the WebView; keep
+                    // the job in `WaitMetrics` until that answer has arrived.
+                    (Ok(_), None) => Err(gpui_agent::scroll_unavailable(
+                        "print-preview-scroll: waiting for the WebView's scroll metrics",
+                    )),
                     (Ok(metrics), _) => Ok(metrics),
                     (Err(_), Some(js)) if js.viewport_height >= 1.0 => {
                         let bounds = view.scroll_handle().bounds();

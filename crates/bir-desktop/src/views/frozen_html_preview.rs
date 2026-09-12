@@ -54,6 +54,26 @@ pub(crate) struct JsScrollMetrics {
     pub offset_y: f32,
 }
 
+impl JsScrollMetrics {
+    /// Parse what wry hands the evaluation callback: the script's value as
+    /// JSON. If a host ever stringifies the object itself, the callback sees a
+    /// JSON *string* holding JSON — unwrap that once rather than reading every
+    /// field as 0 and reporting a one-tile document.
+    pub(crate) fn parse(result: &str) -> Option<Self> {
+        let mut value = serde_json::from_str::<serde_json::Value>(result).ok()?;
+        if let serde_json::Value::String(inner) = &value {
+            value = serde_json::from_str::<serde_json::Value>(inner).ok()?;
+        }
+        let object = value.as_object()?;
+        let number = |key: &str| object.get(key).and_then(|v| v.as_f64()).map(|v| v as f32);
+        Some(Self {
+            content_height: number("content")?,
+            viewport_height: number("viewport")?,
+            offset_y: number("offset").unwrap_or(0.0),
+        })
+    }
+}
+
 pub(crate) struct FrozenHtmlPreviewView {
     webview: Option<Entity<WebView>>,
     /// Only failures are worth a line in the toolbar.
@@ -252,8 +272,12 @@ impl FrozenHtmlPreviewView {
             return;
         };
         let slot = Arc::clone(&self.js_metrics);
+        // A bare object: wry serialises the evaluation result to JSON itself.
+        // Wrapping it in `JSON.stringify` handed back a JSON *string*, which
+        // parsed to `Value::String`, so every field read as 0 and the preview
+        // was always "one tile".
         let js = r#"
-            JSON.stringify({
+            ({
                 content: Math.max(
                     document.documentElement ? document.documentElement.scrollHeight : 0,
                     document.body ? document.body.scrollHeight : 0
@@ -266,18 +290,8 @@ impl FrozenHtmlPreviewView {
             let _ = webview
                 .raw()
                 .evaluate_script_with_callback(js, move |result| {
-                    let Ok(value) = serde_json::from_str::<serde_json::Value>(&result) else {
+                    let Some(metrics) = JsScrollMetrics::parse(&result) else {
                         return;
-                    };
-                    let metrics = JsScrollMetrics {
-                        content_height: value.get("content").and_then(|v| v.as_f64()).unwrap_or(0.0)
-                            as f32,
-                        viewport_height: value
-                            .get("viewport")
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(0.0) as f32,
-                        offset_y: value.get("offset").and_then(|v| v.as_f64()).unwrap_or(0.0)
-                            as f32,
                     };
                     if let Ok(mut guard) = slot.lock() {
                         *guard = Some(metrics);
@@ -405,6 +419,29 @@ mod tests {
         PAPER_HEIGHT_PT, PAPER_WIDTH_PT, css_color, document_sheet_size, fit_css, fit_scale,
         with_fit_style, with_screen_canvas, with_sheets,
     };
+
+    #[test]
+    fn webview_metrics_parse_wrys_json_and_a_double_encoded_string() {
+        let direct =
+            super::JsScrollMetrics::parse(r#"{"content":3428,"viewport":853,"offset":2575}"#)
+                .expect("object");
+        assert_eq!(direct.content_height, 3428.0);
+        assert_eq!(direct.viewport_height, 853.0);
+        assert_eq!(direct.offset_y, 2575.0);
+
+        let stringified =
+            super::JsScrollMetrics::parse(r#""{\"content\":3428,\"viewport\":853,\"offset\":0}""#)
+                .expect("string holding json");
+        assert_eq!(stringified.content_height, 3428.0);
+        assert_eq!(stringified.offset_y, 0.0);
+
+        assert!(super::JsScrollMetrics::parse("null").is_none());
+        assert!(
+            super::JsScrollMetrics::parse(r#"{"viewport":853}"#).is_none(),
+            "content is required"
+        );
+        assert!(super::JsScrollMetrics::parse("not json").is_none());
+    }
 
     #[test]
     fn sheet_size_is_read_from_the_inlined_form_css() {
