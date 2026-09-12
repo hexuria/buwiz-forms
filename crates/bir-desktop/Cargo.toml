@@ -90,9 +90,9 @@ objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSMenu", "NSR
 block2 = "0.6.2"
 objc2-modern = { package = "objc2", version = "0.6.4" }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
-objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString"] }
-objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow"] }
-objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "block2", "WKWebView", "WKPDFConfiguration"] }
+objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString", "NSValue"] }
+objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-app-kit", "block2", "WKWebView", "WKPDFConfiguration", "WKSnapshotConfiguration"] }
 objc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]

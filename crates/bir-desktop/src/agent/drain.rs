@@ -709,6 +709,8 @@ impl AppState {
                 phase: scrolled_shot::ScrolledPhase::WaitMetrics,
                 frames_waited: 0,
                 awaiting_paint: false,
+                snapshot: None,
+                snapshot_started: None,
             });
             cx.notify();
         }
@@ -754,10 +756,7 @@ impl AppState {
 
     #[cfg(target_os = "macos")]
     fn advance_scrolled_job_macos(&mut self, window: &Window, cx: &mut Context<Self>) {
-        use gpui_agent::{
-            MAX_SCROLLED_PNG_BYTES, confine_screenshot_path, crop_window_png, encode_png_rgba,
-            plan_scroll_tiles, scrolled_dispatch_result, stitch_tiles_vertically,
-        };
+        use gpui_agent::{crop_window_png, plan_scroll_tiles};
 
         let mut job = match self.scrolled_job.take() {
             Some(job) => job,
@@ -839,6 +838,46 @@ impl AppState {
                         return;
                     }
                 };
+                if job.target == ids::PRINT_PREVIEW_SCROLL {
+                    // The WebView renders its own tile; `screencapture` does
+                    // not reliably include its layer.
+                    let slot = super::macos_webview_snapshot::new_slot();
+                    let started = crate::views::frozen_html_preview::live_preview_window()
+                        .ok_or_else(|| {
+                            gpui_agent::scroll_unavailable(
+                                "print-preview-scroll is not painted (open form.print first)",
+                            )
+                        })
+                        .and_then(|handle| {
+                            handle
+                                .update(cx, |view, _window, cx| {
+                                    view.snapshot_viewport(
+                                        (metrics.viewport.w, metrics.viewport.h),
+                                        slot.clone(),
+                                        cx,
+                                    )
+                                })
+                                .map_err(|err| {
+                                    gpui_agent::scroll_unavailable(format!(
+                                        "print-preview-scroll window: {err}"
+                                    ))
+                                })?
+                        });
+                    if let Err(err) = started {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                    job.snapshot = Some(slot);
+                    job.snapshot_started = Some(std::time::Instant::now());
+                    job.phase = scrolled_shot::ScrolledPhase::WaitSnapshot;
+                    self.scrolled_job = Some(job);
+                    // The completion handler cannot reach `cx`; keep painting
+                    // so the next frame polls the slot.
+                    window.request_animation_frame();
+                    cx.notify();
+                    return;
+                }
                 let png = match super::macos_capture::capture_window_png_bytes(job.window_id) {
                     Ok(png) => png,
                     Err(err) => {
@@ -862,72 +901,162 @@ impl AppState {
                         return;
                     }
                 };
-                job.captured.push(slice);
-                job.next += 1;
-                if job.next >= job.tiles.len() {
-                    let dest_client = job.dest_client.clone();
-                    let target = job.target.clone();
-                    let content_h = metrics.content_height.max(metrics.viewport.h);
-                    let vh = metrics.viewport.h;
-                    let tile_count = job.tiles.len();
-                    let stitched = match stitch_tiles_vertically(&job.captured) {
-                        Ok(img) => img,
-                        Err(err) => {
-                            let id = job.reply.request.id.clone();
-                            self.finish_scrolled_job(job, Response::err(id, err), cx);
-                            return;
-                        }
-                    };
-                    let bytes = match encode_png_rgba(&stitched) {
-                        Ok(bytes) => bytes,
-                        Err(err) => {
-                            let id = job.reply.request.id.clone();
-                            self.finish_scrolled_job(job, Response::err(id, err), cx);
-                            return;
-                        }
-                    };
-                    if bytes.len() > MAX_SCROLLED_PNG_BYTES {
+                self.continue_scrolled_job(job, slice, cx);
+            }
+            scrolled_shot::ScrolledPhase::WaitSnapshot => {
+                let ready = job
+                    .snapshot
+                    .as_ref()
+                    .and_then(|slot| slot.lock().ok().and_then(|mut guard| guard.take()));
+                let Some(outcome) = ready else {
+                    let waited = job
+                        .snapshot_started
+                        .map(|t| t.elapsed())
+                        .unwrap_or_default();
+                    if waited > scrolled_shot::SNAPSHOT_WAIT {
                         let id = job.reply.request.id.clone();
                         self.finish_scrolled_job(
                             job,
                             Response::err(
                                 id,
-                                format!(
-                                    "stitched png exceeds {MAX_SCROLLED_PNG_BYTES} bytes ({})",
-                                    bytes.len()
+                                gpui_agent::screenshot_unavailable(
+                                    "WebView snapshot did not complete",
                                 ),
                             ),
                             cx,
                         );
                         return;
                     }
-                    let dest = match confine_screenshot_path(&dest_client) {
-                        Ok(dest) => dest,
-                        Err(err) => {
-                            let id = job.reply.request.id.clone();
-                            self.finish_scrolled_job(job, Response::err(id, err), cx);
-                            return;
-                        }
-                    };
-                    if let Err(err) = gpui_agent::atomic_write_png(&dest, &bytes) {
+                    self.scrolled_job = Some(job);
+                    window.request_animation_frame();
+                    cx.notify();
+                    return;
+                };
+                job.snapshot = None;
+                job.snapshot_started = None;
+                let spec = job.tiles[job.next];
+                let viewport_h = job.metrics.map(|m| m.viewport.h).unwrap_or(0.0);
+                let slice = outcome.and_then(|tile| {
+                    super::macos_webview_snapshot::crop_tile(
+                        &tile,
+                        viewport_h,
+                        spec.skip_top_px,
+                        spec.take_height_px,
+                    )
+                });
+                let slice = match slice {
+                    Ok(slice) => slice,
+                    Err(err) => {
                         let id = job.reply.request.id.clone();
                         self.finish_scrolled_job(job, Response::err(id, err), cx);
                         return;
                     }
-                    let dest_str = dest.to_string_lossy().into_owned();
-                    let result =
-                        scrolled_dispatch_result(&dest_str, &target, content_h, vh, tile_count);
+                };
+                self.continue_scrolled_job(job, slice, cx);
+            }
+        }
+    }
+
+    /// One tile is in hand: stitch and reply when it was the last, otherwise
+    /// scroll to the next one and wait for a paint.
+    #[cfg(target_os = "macos")]
+    fn continue_scrolled_job(
+        &mut self,
+        mut job: ScrolledShotJob,
+        slice: gpui_agent::RgbaImage,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_agent::{
+            MAX_SCROLLED_PNG_BYTES, confine_screenshot_path, encode_png_rgba,
+            scrolled_dispatch_result, stitch_tiles_vertically,
+        };
+        let metrics = match job.metrics {
+            Some(m) => m,
+            None => {
+                let id = job.reply.request.id.clone();
+                self.finish_scrolled_job(
+                    job,
+                    Response::err(id, gpui_agent::scroll_unavailable("missing scroll metrics")),
+                    cx,
+                );
+                return;
+            }
+        };
+        {
+            job.captured.push(slice);
+            job.next += 1;
+            if job.next >= job.tiles.len() {
+                let dest_client = job.dest_client.clone();
+                let target = job.target.clone();
+                let content_h = metrics.content_height.max(metrics.viewport.h);
+                let vh = metrics.viewport.h;
+                let tile_count = job.tiles.len();
+                let stitched = match stitch_tiles_vertically(&job.captured) {
+                    Ok(img) => img,
+                    Err(err) => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                };
+                let bytes = match encode_png_rgba(&stitched) {
+                    Ok(bytes) => bytes,
+                    Err(err) => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                };
+                if bytes.len() > MAX_SCROLLED_PNG_BYTES {
                     let id = job.reply.request.id.clone();
-                    let mut resp = Response::ok(id);
-                    resp.result = result.value;
-                    self.finish_scrolled_job(job, resp, cx);
+                    self.finish_scrolled_job(
+                        job,
+                        Response::err(
+                            id,
+                            format!(
+                                "stitched png exceeds {MAX_SCROLLED_PNG_BYTES} bytes ({})",
+                                bytes.len()
+                            ),
+                        ),
+                        cx,
+                    );
                     return;
                 }
-                self.set_scroll_offset_y(&job.target, job.tiles[job.next].offset_y, cx);
-                job.awaiting_paint = true;
-                self.scrolled_job = Some(job);
-                cx.notify();
+                let dest = match confine_screenshot_path(&dest_client) {
+                    Ok(dest) => dest,
+                    Err(err) => {
+                        let id = job.reply.request.id.clone();
+                        self.finish_scrolled_job(job, Response::err(id, err), cx);
+                        return;
+                    }
+                };
+                if let Err(err) = gpui_agent::atomic_write_png(&dest, &bytes) {
+                    let id = job.reply.request.id.clone();
+                    self.finish_scrolled_job(job, Response::err(id, err), cx);
+                    return;
+                }
+                let dest_str = dest.to_string_lossy().into_owned();
+                let mut result =
+                    scrolled_dispatch_result(&dest_str, &target, content_h, vh, tile_count);
+                if target == ids::PRINT_PREVIEW_SCROLL
+                    && let Some(object) = result.value.as_mut().and_then(|v| v.as_object_mut())
+                {
+                    // Tiles came from WebKit, not `screencapture`.
+                    object.insert("backend".into(), serde_json::json!("wkwebview-snapshot"));
+                }
+                let id = job.reply.request.id.clone();
+                let mut resp = Response::ok(id);
+                resp.result = result.value;
+                self.finish_scrolled_job(job, resp, cx);
+                return;
             }
+            self.set_scroll_offset_y(&job.target, job.tiles[job.next].offset_y, cx);
+            job.awaiting_paint = true;
+            // A WebView tile leaves the job in `WaitSnapshot`; the next
+            // tile starts from a paint, whichever way it is captured.
+            job.phase = scrolled_shot::ScrolledPhase::WaitPaint;
+            self.scrolled_job = Some(job);
+            cx.notify();
         }
     }
 

@@ -36,6 +36,8 @@ mod html_demo;
 pub(crate) mod keybindings;
 #[cfg(feature = "agent")]
 mod macos_capture;
+#[cfg(target_os = "macos")]
+pub(crate) mod macos_webview_snapshot;
 #[cfg(all(feature = "agent", target_os = "macos"))]
 mod macos_window;
 #[cfg(feature = "agent")]

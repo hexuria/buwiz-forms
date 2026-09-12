@@ -300,6 +300,28 @@ impl FrozenHtmlPreviewView {
         });
     }
 
+    /// Ask the WebView to render its visible `viewport` (points) into `slot`.
+    /// Used by the scrolled screenshot instead of `screencapture`, which does
+    /// not reliably include the WebView layer.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn snapshot_viewport(
+        &self,
+        viewport: (f32, f32),
+        slot: crate::agent::macos_webview_snapshot::SnapshotSlot,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let webview = self
+            .webview
+            .clone()
+            .ok_or_else(|| gpui_agent::screenshot_unavailable("the preview did not load"))?;
+        let raw = webview.read(cx);
+        crate::agent::macos_webview_snapshot::take_snapshot(
+            raw.raw(),
+            (0.0, 0.0, viewport.0, viewport.1),
+            slot,
+        )
+    }
+
     pub(crate) fn set_scroll_offset_y(&mut self, y: f32, cx: &mut Context<Self>) {
         self.scroll_handle.set_offset(point(px(0.0), px(-y)));
         if let Some(webview) = self.webview.clone() {
