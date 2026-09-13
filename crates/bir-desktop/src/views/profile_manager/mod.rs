@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use crate::components::date_input::{DateInput, DateInputEvent, DateInputState};
+use crate::components::form_multi_select;
 use crate::components::multi_select::{
     MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState,
 };
@@ -225,13 +226,7 @@ pub struct ProfileManagerView {
     stored_profile_years: std::collections::BTreeMap<u16, bir_core::profile::ProfileYearFacts>,
     pub forms_editor_year: u16,
     pub forms_editor_year_select: Entity<ComboboxState>,
-    pub forms_editor_new_code_input: Entity<InputState>,
-    pub forms_editor_registry_form_select: Entity<ComboboxState>,
-    pub forms_editor_custom_code_mode: bool,
-    pub forms_editor_new_reason_input: Entity<InputState>,
-    pub forms_editor_new_frequency_select: Entity<ComboboxState>,
-    pub forms_editor_selected_code: Option<String>,
-    pub forms_editor_active_note_input: Entity<InputState>,
+    pub forms_editor_forms_select: Entity<MultiSelectState>,
     calendar_name_input: Entity<InputState>,
     calendar_action_message: Option<(bool, String)>,
     calendar_form_selection: bir_core::google_calendar::CalendarFormSelection,
@@ -427,33 +422,11 @@ impl ProfileManagerView {
             state.set_selected_value(&current_year.to_string(), window, cx);
             state
         });
-        let forms_editor_new_code_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Custom form code"));
-        let forms_editor_registry_form_select = cx.new(|cx| {
-            let mut options: Vec<String> = bir_core::forms::registry::FORM_REGISTRY
-                .iter()
-                .map(|form| format!("{} - {}", form.code, form.title))
-                .collect();
-            options.sort();
-            ComboboxState::new(options, 8, window, cx)
+        let forms_editor_forms_select = cx.new(|cx| {
+            form_multi_select::registry_form_multi_select("Search form codes...", window, cx)
+                .drop_down(true)
+                .max_visible_items(10)
         });
-        let forms_editor_new_reason_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Reason / note"));
-        let forms_editor_new_frequency_select = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Monthly".to_string(),
-                    "Quarterly".to_string(),
-                    "Annual".to_string(),
-                    "Open Ended / Event".to_string(),
-                ],
-                4,
-                window,
-                cx,
-            )
-        });
-        let forms_editor_active_note_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Edit note / reason"));
 
         let subscriptions = vec![
             cx.subscribe(&tin_input, Self::on_tin_event),
@@ -527,35 +500,10 @@ impl ProfileManagerView {
         )
         .detach();
 
-        cx.subscribe_in(
-            &forms_editor_active_note_input,
-            window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
-                    let val = this
-                        .forms_editor_active_note_input
-                        .read(cx)
-                        .value()
-                        .to_string();
-                    if let Some(code) = &this.forms_editor_selected_code {
-                        let year = this.forms_editor_year;
-                        if let Some(set) = this.stored_per_year_forms.get_mut(&year) {
-                            if let Some(entry) =
-                                set.entries.iter_mut().find(|e| e.form_code == *code)
-                            {
-                                let next_reason = if val.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(val)
-                                };
-                                if entry.reason != next_reason {
-                                    entry.reason = next_reason;
-                                    this.mark_profile_changed();
-                                }
-                            }
-                        }
-                    }
-                }
+        cx.subscribe(
+            &forms_editor_forms_select,
+            |this: &mut Self, _, event: &MultiSelectEvent, cx| {
+                this.apply_forms_set_selection(event.selected.clone(), cx);
             },
         )
         .detach();
@@ -639,13 +587,7 @@ impl ProfileManagerView {
             stored_profile_years: std::collections::BTreeMap::new(),
             forms_editor_year,
             forms_editor_year_select,
-            forms_editor_new_code_input,
-            forms_editor_registry_form_select,
-            forms_editor_custom_code_mode: false,
-            forms_editor_new_reason_input,
-            forms_editor_new_frequency_select,
-            forms_editor_selected_code: None,
-            forms_editor_active_note_input,
+            forms_editor_forms_select,
             calendar_name_input,
             calendar_action_message: None,
             calendar_form_selection: Default::default(),
@@ -931,27 +873,12 @@ impl ProfileManagerView {
         self.totp_qr_path = None;
         self.stored_totp_secret = None;
         self.stored_per_year_forms.clear();
-        self.forms_editor_selected_code = None;
         let current_year = chrono::Local::now().date_naive().year();
         self.forms_editor_year = current_year as u16;
         self.forms_editor_year_select.update(cx, |select, cx| {
             select.set_selected_value(&current_year.to_string(), window, cx);
         });
-        self.forms_editor_new_code_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
-        self.forms_editor_registry_form_select
-            .update(cx, |select, cx| {
-                select.set_selected_value("", window, cx);
-            });
-        self.forms_editor_custom_code_mode = false;
-        self.forms_editor_new_reason_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
-        self.forms_editor_new_frequency_select
-            .update(cx, |select, cx| {
-                select.set_selected_value("", window, cx);
-            });
-        self.forms_editor_active_note_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.sync_forms_set_picker(cx);
         self.calendar_name_input
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.calendar_action_message = None;
@@ -1284,7 +1211,7 @@ impl ProfileManagerView {
             .lock()
             .map(|db| bir_core::google_calendar::calendar_form_selection(&db, &profile.tin.full()))
             .unwrap_or_default();
-        self.forms_editor_selected_code = None;
+        self.sync_forms_set_picker(cx);
 
         self.profile_change_revision = 0;
         self.profile_session_epoch = self.profile_session_epoch.wrapping_add(1);
@@ -1950,7 +1877,7 @@ impl ProfileManagerView {
         };
         self.stored_profile_years = snapshot.profile_years.clone();
         self.forms_editor_year = year;
-        self.forms_editor_selected_code = None;
+        self.sync_forms_set_picker(cx);
         let mut projected = snapshot;
         if let Some(facts) = self.stored_profile_years.get(&year).cloned() {
             facts.apply_to(&mut projected);

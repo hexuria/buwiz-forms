@@ -56,7 +56,7 @@ pub const PROFILE_SAVE: &str = "save_profile";
 pub const PROFILE_SAVE_MESSAGE: &str = "profile-save-message";
 pub const PROFILE_VALIDATION: &str = "profile-validation";
 pub const PROFILE_YEAR_SELECT: &str = "profile-year-select";
-/// Painted Forms Set checklist (all inventory codes for the selected year).
+/// Painted Forms Set picker (official registry multi-select for the selected year).
 pub const FORMS_YEAR_PICKER: &str = "forms-year-picker";
 
 pub fn form_pick_id(code: &str) -> String {
