@@ -69,7 +69,7 @@ fn create_test_profile(tin_str: &str) -> TaxpayerProfile {
         profile_versions: vec![],
         compliance_source_mode: ComplianceSourceMode::CorVersioned,
         per_year_forms: Default::default(),
-            profile_years: Default::default(),
+        profile_years: Default::default(),
     };
     profile.ensure_profile_version_ledger();
     profile
@@ -155,11 +155,7 @@ fn profile_save_preserves_manual_forms_and_does_not_infer_from_vat() {
         let year = current_local_reconciliation_year();
         profile.per_year_forms.insert(
             year,
-            PerYearFormsSet::from_codes(
-                year,
-                ["2551Q", "CUSTOM_FORM"],
-                FormSetSource::Manual,
-            ),
+            PerYearFormsSet::from_codes(year, ["2551Q", "CUSTOM_FORM"], FormSetSource::Manual),
         );
         let saved = save_initial_confirmed_profile(&db, profile);
 
@@ -190,10 +186,7 @@ fn profile_save_preserves_manual_forms_and_does_not_infer_from_vat() {
         let changed = db
             .save_profile_with_confirmation_plan(changed, &plan)
             .expect("reviewed VAT profile save");
-        let stored = changed
-            .per_year_forms
-            .get(&year)
-            .expect("stored Forms Set");
+        let stored = changed.per_year_forms.get(&year).expect("stored Forms Set");
 
         assert!(stored.contains_active("CUSTOM_FORM"));
         assert!(stored.contains_active("2551Q"));
@@ -524,9 +517,8 @@ fn manual_2551q_and_1601c_are_the_dashboard_even_when_vat_would_infer_otherwise(
             .get_profile(&saved.tin.full())
             .expect("lookup")
             .expect("stored");
-        let codes = bir_core::integration::recurring_obligation_forms_for_profile_and_year(
-            &loaded, 2026,
-        );
+        let codes =
+            bir_core::integration::recurring_obligation_forms_for_profile_and_year(&loaded, 2026);
         assert_eq!(codes, vec!["1601C", "2551Q"]);
     });
 }

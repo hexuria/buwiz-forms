@@ -67,7 +67,9 @@ fn test_full_form_lifecycle() {
             per_year_forms: Default::default(),
             profile_years: Default::default(),
         };
-        profile.capture_current_as_year(2026).expect("2026 profile-year clone");
+        profile
+            .capture_current_as_year(2026)
+            .expect("2026 profile-year clone");
         let saved_profile = db.save_profile(profile).expect("Failed to save profile");
 
         // 3. Initialize Draft

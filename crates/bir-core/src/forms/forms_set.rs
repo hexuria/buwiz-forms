@@ -593,8 +593,7 @@ mod tests {
         assert!(inferred.active_form_codes().is_empty());
         let reviewed = PerYearFormsSet::from_codes(2026, ["2551Q"], FormSetSource::ReviewedCor);
         assert!(reviewed.active_form_codes().is_empty());
-        let manual =
-            PerYearFormsSet::from_codes(2026, ["2551Q", "1601C"], FormSetSource::Manual);
+        let manual = PerYearFormsSet::from_codes(2026, ["2551Q", "1601C"], FormSetSource::Manual);
         assert_eq!(manual.active_form_codes(), vec!["2551Q", "1601C"]);
     }
 
@@ -635,8 +634,7 @@ mod tests {
 
     #[test]
     fn deactivate_redundant_annual_itrs_falls_back_to_group_order() {
-        let mut set =
-            PerYearFormsSet::from_codes(2026, ["1701A", "1701MS"], FormSetSource::Manual);
+        let mut set = PerYearFormsSet::from_codes(2026, ["1701A", "1701MS"], FormSetSource::Manual);
 
         // The implied primary (1701) is not among the active entries, so the
         // first active member in canonical group order (1701A) survives.
@@ -649,8 +647,7 @@ mod tests {
     fn deactivate_redundant_annual_itrs_ignores_single_and_cross_group() {
         // One active individual ITR + one active corporate ITR: no conflict
         // within either group, nothing changes.
-        let mut set =
-            PerYearFormsSet::from_codes(2026, ["1701", "1702RT"], FormSetSource::Manual);
+        let mut set = PerYearFormsSet::from_codes(2026, ["1701", "1702RT"], FormSetSource::Manual);
         assert!(!set.deactivate_redundant_annual_itrs(Some("1701"), Some("1702RT")));
         assert!(set.contains_active("1701"));
         assert!(set.contains_active("1702RT"));
@@ -915,11 +912,23 @@ mod tests {
             "registration_activity_status",
         ];
         let sources = [
-            ("background_cron.rs", production(include_str!("../background_cron.rs"))),
+            (
+                "background_cron.rs",
+                production(include_str!("../background_cron.rs")),
+            ),
             ("db/drafts.rs", production(include_str!("../db/drafts.rs"))),
-            ("form_2551q_xml.rs", production(include_str!("form_2551q_xml.rs"))),
-            ("form_1601c_xml.rs", production(include_str!("form_1601c_xml.rs"))),
-            ("form_2550q_xml.rs", production(include_str!("form_2550q_xml.rs"))),
+            (
+                "form_2551q_xml.rs",
+                production(include_str!("form_2551q_xml.rs")),
+            ),
+            (
+                "form_1601c_xml.rs",
+                production(include_str!("form_1601c_xml.rs")),
+            ),
+            (
+                "form_2550q_xml.rs",
+                production(include_str!("form_2550q_xml.rs")),
+            ),
         ];
         for (name, src) in sources {
             for flag in flags {

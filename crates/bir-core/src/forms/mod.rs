@@ -28,14 +28,14 @@ pub use forms_set::{
     FormSuggestion, FormSuggestionSource, FormsSetReconcileResult, PerYearFormsSet,
     reconcile_forms_set_for_year,
 };
+pub use inventory::{
+    FormInventorySpec, GenericFormDraft, has_inventory, inventory_codes, load_spec,
+};
 #[allow(deprecated)]
 // re-exporting deprecated forms_for_taxpayer / forms_for_profile for backward compat only
 pub use registry::{
     FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile,
     forms_for_taxpayer,
-};
-pub use inventory::{
-    FormInventorySpec, GenericFormDraft, has_inventory, inventory_codes, load_spec,
 };
 pub use support_level::{
     FORM_CAPABILITY_REGISTRY, FormCapabilities, FormCapabilityRecord, FormSupportLevel,

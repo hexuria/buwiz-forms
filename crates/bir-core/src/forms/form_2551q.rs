@@ -8,9 +8,7 @@ use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 use crate::penalties::{
     PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
 };
-use crate::profile::{
-    IncomeTaxElection, ProfileYearFacts, TaxpayerProfile, TaxpayerType,
-};
+use crate::profile::{IncomeTaxElection, ProfileYearFacts, TaxpayerProfile, TaxpayerType};
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -498,14 +496,14 @@ impl Form2551QDraft {
         } else if get(values, "frm2551Qv2018:forThe_2").is_some_and(truthy) {
             self.tax_period_basis = TaxPeriodBasis::Fiscal;
         }
-        if let Some(month) = get(values, "frm2551Qv2018:rtnMonth")
-            .and_then(|v| v.trim().parse::<u8>().ok())
+        if let Some(month) =
+            get(values, "frm2551Qv2018:rtnMonth").and_then(|v| v.trim().parse::<u8>().ok())
             && (1..=12).contains(&month)
         {
             self.year_end_month = month;
         }
-        if let Some(year) = get(values, "frm2551Qv2018:txtYear")
-            .and_then(|v| v.trim().parse::<u16>().ok())
+        if let Some(year) =
+            get(values, "frm2551Qv2018:txtYear").and_then(|v| v.trim().parse::<u16>().ok())
             && year >= 1990
         {
             self.taxable_year = year;
@@ -520,8 +518,8 @@ impl Form2551QDraft {
         } else if get(values, "frm2551Qv2018:amendedRtn_2").is_some_and(truthy) {
             self.is_amended = false;
         }
-        if let Some(sheets) = get(values, "frm2551Qv2018:txtSheets")
-            .and_then(|v| v.trim().parse::<u16>().ok())
+        if let Some(sheets) =
+            get(values, "frm2551Qv2018:txtSheets").and_then(|v| v.trim().parse::<u16>().ok())
         {
             self.number_of_attached_sheets = sheets;
         }
@@ -551,9 +549,7 @@ impl Form2551QDraft {
         if let Some(v) = get(values, "frm2551Qv2018:telNo") {
             self.contact_number = v.trim().to_string();
         }
-        if let Some(v) = get(values, "txtEmail")
-            .or_else(|| get(values, "txtEmail#occurrence-1"))
-        {
+        if let Some(v) = get(values, "txtEmail").or_else(|| get(values, "txtEmail#occurrence-1")) {
             self.email = v.trim().to_string();
         }
 
@@ -2196,7 +2192,10 @@ mod tests {
         let q1 = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
         let y2025 = Form2551QDraft::new_from_effective_profile(&profile, 2025, 3);
 
-        assert_eq!(q1.effective_profile_version_id.as_deref(), Some("year-2026"));
+        assert_eq!(
+            q1.effective_profile_version_id.as_deref(),
+            Some("year-2026")
+        );
         assert_eq!(q1.taxpayer_name, "2026 Name");
         assert_eq!(q1.rdo_code, "018");
         assert!(q1.profile_resolution_error.is_none());

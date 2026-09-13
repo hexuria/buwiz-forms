@@ -64,7 +64,7 @@ fn base_profile(
         birth_date: None,
         compliance_source_mode: ComplianceSourceMode::CorVersioned,
         per_year_forms: Default::default(),
-            profile_years: Default::default(),
+        profile_years: Default::default(),
     }
 }
 

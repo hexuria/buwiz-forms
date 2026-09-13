@@ -188,11 +188,15 @@ impl FormInventorySpec {
     }
 
     pub fn editor_sections(&self) -> impl Iterator<Item = &InventorySection> {
-        self.sections.iter().filter(|section| !section.editor_hidden)
+        self.sections
+            .iter()
+            .filter(|section| !section.editor_hidden)
     }
 
     pub fn print_xml_section(&self) -> Option<&InventorySection> {
-        self.sections.iter().find(|section| section.id == "print_xml")
+        self.sections
+            .iter()
+            .find(|section| section.id == "print_xml")
     }
 
     pub fn print_xml_keys(&self) -> Vec<&str> {
@@ -251,9 +255,8 @@ pub fn inventory_codes() -> impl Iterator<Item = &'static str> {
 }
 
 pub fn load_spec(form_code: &str) -> Result<FormInventorySpec, String> {
-    let bundle = inventory_bundle(form_code).ok_or_else(|| {
-        format!("no inventory sidecar for form `{form_code}`")
-    })?;
+    let bundle = inventory_bundle(form_code)
+        .ok_or_else(|| format!("no inventory sidecar for form `{form_code}`"))?;
     parse_spec(bundle)
 }
 
@@ -367,7 +370,8 @@ pub fn prefill_from_profile(
             let q_key = format!("qtr_{quarter}");
             if probe.contains(&q_key) || probe.contains(&format!("DateQuarter_{quarter}")) {
                 Some("true".to_string())
-            } else if looks_like(probe.as_str(), "qtr_") || looks_like(probe.as_str(), "DateQuarter_")
+            } else if looks_like(probe.as_str(), "qtr_")
+                || looks_like(probe.as_str(), "DateQuarter_")
             {
                 Some("false".to_string())
             } else {
@@ -481,11 +485,7 @@ fn enum_token(value: serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(s) => {
             let trimmed = s.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(s)
-            }
+            if trimmed.is_empty() { None } else { Some(s) }
         }
         serde_json::Value::Number(n) => Some(n.to_string()),
         serde_json::Value::Bool(b) => Some(b.to_string()),
@@ -513,7 +513,9 @@ fn enum_token(value: serde_json::Value) -> Option<String> {
 }
 
 fn looks_like(haystack: &str, needle: &str) -> bool {
-    haystack.to_ascii_lowercase().contains(&needle.to_ascii_lowercase())
+    haystack
+        .to_ascii_lowercase()
+        .contains(&needle.to_ascii_lowercase())
 }
 
 fn clean_label(raw: Option<&str>, fallback_key: &str) -> String {
@@ -527,12 +529,12 @@ fn clean_label(raw: Option<&str>, fallback_key: &str) -> String {
     let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
         return humanize(short);
     };
-    let stripped = if raw.contains(':') && raw.split(':').next().is_some_and(|p| p.starts_with("frm"))
-    {
-        raw.split_once(':').map(|(_, rest)| rest).unwrap_or(raw)
-    } else {
-        raw
-    };
+    let stripped =
+        if raw.contains(':') && raw.split(':').next().is_some_and(|p| p.starts_with("frm")) {
+            raw.split_once(':').map(|(_, rest)| rest).unwrap_or(raw)
+        } else {
+            raw
+        };
     if stripped == short || looks_key_like(stripped) {
         return humanize(short);
     }
@@ -673,12 +675,7 @@ mod tests {
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.tin = "26170801500000".into();
         let typed = draft.to_bir_field_map();
-        let values = prefill_from_profile(
-            &spec,
-            &profile,
-            2026,
-            &FilingPeriod::Quarterly(1),
-        );
+        let values = prefill_from_profile(&spec, &profile, 2026, &FilingPeriod::Quarterly(1));
         let merged = bir_field_map_with_inventory(&spec, &values, &typed);
         for key in print_xml {
             let xml_key = spec.field(key).map(|f| f.xml_key()).unwrap_or(key);

@@ -13,9 +13,9 @@ impl Database {
         form_code: &str,
     ) -> Result<Option<FormTemplate>, DbError> {
         let code = form_code.trim().to_ascii_uppercase();
-        let mut stmt = self.conn.prepare(
-            "SELECT data_json FROM form_templates WHERE tin = ?1 AND form_code = ?2",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT data_json FROM form_templates WHERE tin = ?1 AND form_code = ?2")?;
         let json: Option<String> = stmt
             .query_row(params![tin, code], |row| row.get(0))
             .optional()?;
@@ -98,7 +98,10 @@ mod tests {
 
         let loaded = db.get_form_template(&tin, "2551q").unwrap().unwrap();
         assert_eq!(loaded.form_code, "2551Q");
-        assert_eq!(loaded.values.get("drpATC1").map(String::as_str), Some("PT040"));
+        assert_eq!(
+            loaded.values.get("drpATC1").map(String::as_str),
+            Some("PT040")
+        );
         assert!(!loaded.values.keys().any(|k| k.contains("TIN")));
         assert_eq!(loaded.tin, tin);
     }
@@ -108,10 +111,11 @@ mod tests {
         let db = Database::open_in_memory_for_tests().unwrap();
         let profile = sample_profile();
         let tin = profile.tin.full();
-        db.save_form_template(&tin, "2551Q", &BTreeMap::from([(
-            "drpATC1".into(),
-            "PT010".into(),
-        )]))
+        db.save_form_template(
+            &tin,
+            "2551Q",
+            &BTreeMap::from([("drpATC1".into(), "PT010".into())]),
+        )
         .unwrap();
         let loaded = db.get_form_template(&tin, "2551Q").unwrap().unwrap();
         assert!(!loaded.values.keys().any(|k| k.contains("TaxpayerName")));

@@ -1818,15 +1818,9 @@ mod tests {
         let y2026 = profile.resolve_tax_profile_for_year(2026);
         let y2025 = profile.resolve_tax_profile_for_year(2025);
         assert!(!y2026.has_blocking_issues());
-        assert_eq!(
-            y2026.effective_segments[0].cor.registered_name,
-            "2026 Name"
-        );
+        assert_eq!(y2026.effective_segments[0].cor.registered_name, "2026 Name");
         assert_eq!(y2026.effective_segments[0].cor.rdo_code, "018");
-        assert_eq!(
-            y2025.effective_segments[0].cor.registered_name,
-            "2025 Name"
-        );
+        assert_eq!(y2025.effective_segments[0].cor.registered_name, "2025 Name");
         assert_eq!(y2025.effective_segments[0].id, "year-2025");
         assert_ne!(
             y2026.effective_segments[0].id,
@@ -1855,10 +1849,7 @@ mod tests {
 
     #[test]
     fn profile_year_selector_range_clamps_to_business_start() {
-        let with_start = profile_year_selector_range(
-            NaiveDate::from_ymd_opt(2024, 6, 1),
-            2026,
-        );
+        let with_start = profile_year_selector_range(NaiveDate::from_ymd_opt(2024, 6, 1), 2026);
         assert_eq!(*with_start.start(), 2024);
         assert_eq!(*with_start.end(), 2027);
 
@@ -1872,18 +1863,12 @@ mod tests {
         let profile = test_profile();
         let resolved = profile.resolve_tax_profile_for_year(2026);
         assert!(resolved.effective_segments.is_empty());
-        assert!(
-            resolved
-                .issues
-                .iter()
-                .any(|issue| issue.kind == TaxProfileResolutionIssueKind::NoProfileYear
-                    && issue.message == "no 2026 profile")
-        );
-        assert!(
-            !resolved.issues.iter().any(|issue| {
-                issue.kind == TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod
-            })
-        );
+        assert!(resolved.issues.iter().any(|issue| issue.kind
+            == TaxProfileResolutionIssueKind::NoProfileYear
+            && issue.message == "no 2026 profile"));
+        assert!(!resolved.issues.iter().any(|issue| {
+            issue.kind == TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod
+        }));
     }
 
     #[test]

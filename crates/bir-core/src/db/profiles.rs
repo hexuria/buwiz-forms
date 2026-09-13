@@ -764,9 +764,7 @@ mod tests {
         let db = Database::open_in_memory_for_tests().expect("in-memory db");
         let mut profile = listing_test_profile("333");
         profile.profile_versions.clear();
-        profile
-            .capture_current_as_year(2026)
-            .expect("2026 clone");
+        profile.capture_current_as_year(2026).expect("2026 clone");
 
         let saved = db.save_profile(profile).expect("save");
         assert!(

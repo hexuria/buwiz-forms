@@ -9,8 +9,9 @@ use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, ExciseTaxCategory, IncomeTaxElection, ManualObligationOverride,
     ManualObligationOverrideAction, ProfileDeadlineOverride, ProfileYearFacts, RegisteredTaxType,
-    RegistrationActivityStatus, TaxClassification, TaxElectionHistory, TaxProfileVersion,
-    TaxProfileResolutionIssueKind, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
+    RegistrationActivityStatus, TaxClassification, TaxElectionHistory,
+    TaxProfileResolutionIssueKind, TaxProfileVersion, TaxProfileVersionStatus, TaxpayerProfile,
+    TaxpayerType,
 };
 use bir_core::validation::validate_profile;
 use chrono::NaiveDate;
@@ -200,11 +201,7 @@ fn dashboard_profile_matrix_withholding_modifiers() {
         &[],
     );
 
-    let chosen = with_manual_forms(
-        withholding,
-        TAXABLE_YEAR,
-        &["2551Q", "1601C", "0619E"],
-    );
+    let chosen = with_manual_forms(withholding, TAXABLE_YEAR, &["2551Q", "1601C", "0619E"]);
     assert_forms(
         "manual set is the dashboard list",
         &chosen,
@@ -247,11 +244,7 @@ fn dashboard_profile_matrix_registration_status_modifiers() {
 fn dashboard_profile_matrix_excise_modifiers() {
     let mut profile = self_employed_profile(false, None, false);
     profile.excise_tax_categories = vec![ExciseTaxCategory::Alcohol];
-    assert_forms(
-        "excise flags do not infer a forms set",
-        &profile,
-        &[],
-    );
+    assert_forms("excise flags do not infer a forms set", &profile, &[]);
 
     let chosen = with_manual_forms(profile, TAXABLE_YEAR, &["2200A", "2551Q"]);
     assert_forms(
@@ -545,7 +538,8 @@ fn yearly_profile_resolution_excludes_undated_confirmed_version() {
         resolved
             .issues
             .iter()
-            .any(|issue| issue.kind == bir_core::profile::TaxProfileResolutionIssueKind::NoProfileYear)
+            .any(|issue| issue.kind
+                == bir_core::profile::TaxProfileResolutionIssueKind::NoProfileYear)
     );
 }
 

@@ -118,8 +118,8 @@ mod tests {
     }
 
     fn blank_2551q_submit_errors() -> Vec<(String, String)> {
-        use bir_core::forms::form_2551q::Form2551QDraft;
         use bir_core::forms::FormValidator;
+        use bir_core::forms::form_2551q::Form2551QDraft;
         use bir_core::profile::TaxpayerProfile;
 
         let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({

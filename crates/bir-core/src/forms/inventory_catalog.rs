@@ -313,4 +313,3 @@ pub const INVENTORY_BUNDLES: &[InventoryBundle] = &[
         sections_json: include_str!("../../../bir-desktop/docs/eli5/forms/2553.sections.json"),
     },
 ];
-

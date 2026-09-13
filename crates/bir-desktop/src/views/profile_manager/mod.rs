@@ -20,9 +20,8 @@ use crate::components::tin_input::TinInput;
 use bir_core::db::Database;
 use bir_core::naming::Tin;
 use bir_core::profile::{
-    ComplianceSourceMode, EoptTier, RegistrationActivityStatus,
-    TaxClassification, TaxpayerProfile, TaxpayerType,
-    profile_year_selector_range,
+    ComplianceSourceMode, EoptTier, RegistrationActivityStatus, TaxClassification, TaxpayerProfile,
+    TaxpayerType, profile_year_selector_range,
 };
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
@@ -49,7 +48,6 @@ pub enum ProfileEvent {
         action: crate::app::ProfileLifecycleAction,
     },
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProfileSaveRequest {
@@ -799,12 +797,6 @@ impl ProfileManagerView {
         })
     }
 
-
-
-
-
-
-
     fn forms_set_snapshot(
         forms: &std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
     ) -> std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet> {
@@ -872,8 +864,6 @@ impl ProfileManagerView {
         }
         cx.notify();
     }
-
-
 
     /// Whether this editor is currently open on `tin`.
     ///
@@ -1075,7 +1065,10 @@ impl ProfileManagerView {
             select.set_selected_value("", window, cx);
         });
         self.stored_profile_years = profile.profile_years.clone();
-        if let Some(facts) = self.stored_profile_years.get(&self.forms_editor_year).cloned()
+        if let Some(facts) = self
+            .stored_profile_years
+            .get(&self.forms_editor_year)
+            .cloned()
         {
             facts.apply_to(&mut profile);
         }
@@ -1503,7 +1496,6 @@ impl ProfileManagerView {
         }
     }
 
-
     fn on_tel_event(
         &mut self,
         _state: &Entity<InputState>,
@@ -1669,7 +1661,6 @@ impl ProfileManagerView {
         cx.notify();
         Ok(true)
     }
-
 
     fn current_profile(&self, cx: &Context<Self>) -> TaxpayerProfile {
         let tin_val = self.tin_input.read(cx).formatted_value(cx);
@@ -1911,12 +1902,7 @@ impl ProfileManagerView {
         profile
     }
 
-    fn switch_profile_year(
-        &mut self,
-        year: u16,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn switch_profile_year(&mut self, year: u16, window: &mut Window, cx: &mut Context<Self>) {
         if year == self.forms_editor_year {
             return;
         }
@@ -1946,11 +1932,7 @@ impl ProfileManagerView {
         cx.notify();
     }
 
-    fn clone_profile_year_from_previous(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn clone_profile_year_from_previous(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let year = self.forms_editor_year;
         let mut snapshot = self.current_profile(cx);
         let Some((from_year, _)) = snapshot.profile_years.range(..year).next_back() else {
@@ -2004,44 +1986,6 @@ impl ProfileManagerView {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     fn save_profile(&mut self, cx: &mut Context<Self>) {
         self.save_profile_inner(cx);
     }
@@ -2059,7 +2003,6 @@ impl ProfileManagerView {
 
         self.save_profile(cx);
     }
-
 
     fn save_profile_inner(&mut self, cx: &mut Context<Self>) {
         if !self
@@ -2350,7 +2293,6 @@ impl ProfileManagerView {
         })
         .detach();
     }
-
 
     fn field_label(text: &str, cx: &Context<Self>) -> Div {
         rsx! {

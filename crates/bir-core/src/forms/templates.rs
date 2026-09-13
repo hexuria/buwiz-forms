@@ -6,10 +6,8 @@
 //! keys (TIN, RDO, name, address, …). Period year/quarter/month come from
 //! the new filing slot, not the template.
 
-use super::inventory::{
-    FormInventorySpec, InventoryField, prefill_from_profile,
-};
 use super::FilingPeriod;
+use super::inventory::{FormInventorySpec, InventoryField, prefill_from_profile};
 use crate::profile::TaxpayerProfile;
 use regex::Regex;
 use serde::{Deserialize, Serialize};

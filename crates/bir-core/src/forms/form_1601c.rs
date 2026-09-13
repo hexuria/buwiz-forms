@@ -321,23 +321,25 @@ impl Form1601CDraft {
             get(values, key).and_then(crate::forms::inventory::parse_money)
         }
 
-        if let Some(month) = get(values, "frm1601c:txtMonth")
-            .and_then(|v| v.trim().parse::<u8>().ok())
+        if let Some(month) =
+            get(values, "frm1601c:txtMonth").and_then(|v| v.trim().parse::<u8>().ok())
             && (1..=12).contains(&month)
         {
             self.month = month;
         }
-        if let Some(year) = get(values, "frm1601c:txtYear")
-            .and_then(|v| v.trim().parse::<u16>().ok())
+        if let Some(year) =
+            get(values, "frm1601c:txtYear").and_then(|v| v.trim().parse::<u16>().ok())
             && year >= 1990
         {
             self.taxable_year = year;
         }
-        if let Some(v) = get(values, "frm1601c:AmendedRtn_1").or_else(|| get(values, "frm1601c:AmendedRtn"))
+        if let Some(v) =
+            get(values, "frm1601c:AmendedRtn_1").or_else(|| get(values, "frm1601c:AmendedRtn"))
         {
             self.is_amended = truthy(v);
         }
-        if let Some(v) = get(values, "frm1601c:TaxWithheld_1").or_else(|| get(values, "frm1601c:TaxWithheld"))
+        if let Some(v) =
+            get(values, "frm1601c:TaxWithheld_1").or_else(|| get(values, "frm1601c:TaxWithheld"))
         {
             self.any_taxes_withheld = truthy(v);
         }
@@ -347,7 +349,8 @@ impl Form1601CDraft {
         if get(values, "frm1601c:TaxWithheld_2").is_some_and(truthy) {
             self.any_taxes_withheld = false;
         }
-        if let Some(sheets) = get(values, "frm1601c:txtSheets").and_then(|v| v.trim().parse::<u32>().ok())
+        if let Some(sheets) =
+            get(values, "frm1601c:txtSheets").and_then(|v| v.trim().parse::<u32>().ok())
         {
             self.number_of_sheets = sheets;
         }
