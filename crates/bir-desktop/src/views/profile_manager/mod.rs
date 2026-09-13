@@ -1076,6 +1076,22 @@ impl ProfileManagerView {
             select.set_selected_value("", window, cx);
         });
         self.stored_profile_years = profile.profile_years.clone();
+        if !self
+            .stored_profile_years
+            .contains_key(&self.forms_editor_year)
+        {
+            let current_year = u16::try_from(chrono::Local::now().date_naive().year())
+                .unwrap_or(self.forms_editor_year);
+            self.forms_editor_year = if self.stored_profile_years.contains_key(&current_year) {
+                current_year
+            } else {
+                self.stored_profile_years
+                    .keys()
+                    .copied()
+                    .next_back()
+                    .unwrap_or(current_year)
+            };
+        }
         if let Some(facts) = self
             .stored_profile_years
             .get(&self.forms_editor_year)
