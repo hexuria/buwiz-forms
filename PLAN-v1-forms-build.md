@@ -24,13 +24,15 @@ python3 crates/bir-desktop/docs/eli5/tools/test_form_pages.py
 
 ## Open questions the plan does not invent
 
-These are still `?`. Phase 3 must not guess.
+These are still `?` unless marked **Decided**. Phase 3 must not guess.
 
-1. **Editor scope.** ELI5 pages exist for all 43 rules bundles. Typed models and
-   XML writers exist for ten forms; `support_level.rs` currently allows queue
-   only for `2551Q` and `1601C`. Does V1 ship the inventory-driven editor for
-   all 43, or only the ten with typed drafts? Queue/XML stay behind
-   `can_queue_for_submission` either way.
+1. **Editor scope.** **Decided** (Phase 3, maintainer): inventory-driven editor
+   for **all 43** rules bundles. Typed models remain for the ten that have them;
+   other codes use a JSON/map-backed draft. Queue, XML writers, and live BIR
+   submit stay behind `can_queue_for_submission` / `support_level` — do not
+   widen live BIR submit. ELI5 pages exist for all 43 rules bundles. Typed
+   models and XML writers exist for ten forms; `support_level.rs` currently
+   allows queue only for `2551Q` and `1601C`.
 2. **Frozen HTML year ≠ rules year** (stem-paired, not verified equal): 0605
    (`v2003` / `0605-1999`), 1601EQ (`v2018` / `2019`), 1601FQ (`v2018` /
    `1601-fq-2020`), 1602Q (`v2018` / `2019`), 1700 (`v2013` / `2018`), 2200T
@@ -63,9 +65,10 @@ fields validate on change. Submit still validates everything.
   `form_1702rt_view.rs`, `form_1702mx_view.rs`, `form_2550q_view.rs`). Gate
   them the same way until work item 7 deletes them.
 - `crates/bir-core/src/db/drafts.rs` — optional: persist `saved_once` if a
-  reload of an existing draft must keep showing errors. If the code cannot
-  say whether a row was ever saved vs newly constructed, draw a `?` and keep
-  `saved_once` in the view only.
+  reload of an existing draft must keep showing errors. **Phase 3:** newly
+  opened drafts are often persisted immediately (they already have a row
+  id), so a database id is not a reliable "the user saved" bit. `saved_once`
+  stays in the view session only (`?` until a dedicated flag exists).
 
 ### Tests that prove it
 
