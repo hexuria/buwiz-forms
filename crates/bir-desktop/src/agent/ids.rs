@@ -29,6 +29,7 @@ pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
 pub const PAGE_FORM_1701: &str = "page-form-1701";
 pub const PAGE_FORM_1702RT: &str = "page-form-1702rt";
 pub const PAGE_FORM_1702MX: &str = "page-form-1702mx";
+pub const PAGE_FORM_INVENTORY: &str = "page-form-inventory";
 
 pub const NAV_GLOBAL_DASHBOARD: &str = "global_dashboard_btn";
 pub const NAV_NEW_PROFILE: &str = "add_profile_mini_btn";
@@ -359,6 +360,7 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => PAGE_FORM_1701,
         ActiveView::Form1702RT => PAGE_FORM_1702RT,
         ActiveView::Form1702MX => PAGE_FORM_1702MX,
+        ActiveView::FormInventory => PAGE_FORM_INVENTORY,
     }
 }
 
@@ -382,6 +384,7 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => "form-1701",
         ActiveView::Form1702RT => "form-1702rt",
         ActiveView::Form1702MX => "form-1702mx",
+        ActiveView::FormInventory => "form-inventory",
     }
 }
 
@@ -405,7 +408,17 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "form-1701" | "1701" => Some(ActiveView::Form1701),
         "form-1702rt" | "1702rt" => Some(ActiveView::Form1702RT),
         "form-1702mx" | "1702mx" => Some(ActiveView::Form1702MX),
-        _ => None,
+        "form-inventory" | "inventory" => Some(ActiveView::FormInventory),
+        other => {
+            let code = other.strip_prefix("form-").unwrap_or(other);
+            if bir_core::forms::has_inventory(code)
+                || bir_core::forms::has_inventory(&code.to_ascii_uppercase())
+            {
+                Some(ActiveView::FormInventory)
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -429,6 +442,7 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Form1701,
     ActiveView::Form1702RT,
     ActiveView::Form1702MX,
+    ActiveView::FormInventory,
 ];
 
 pub struct FormChrome {
@@ -516,6 +530,20 @@ pub fn form_chrome(view: ActiveView) -> Option<&'static FormChrome> {
     FORM_CHROME.iter().find(|chrome| chrome.view == view)
 }
 
+pub fn active_view_for_form_code(code: &str) -> Option<ActiveView> {
+    if let Some(chrome) = FORM_CHROME
+        .iter()
+        .find(|chrome| chrome.code.eq_ignore_ascii_case(code))
+    {
+        return Some(chrome.view);
+    }
+    if bir_core::forms::has_inventory(code) {
+        Some(ActiveView::FormInventory)
+    } else {
+        None
+    }
+}
+
 /// Submit / confirm controls that would queue or file if the real widget ran.
 /// Semantic dispatch exposes confirmation only; virtual clicks must not hit these.
 pub fn is_filing_submit_control(id: &str) -> bool {
@@ -536,7 +564,7 @@ mod tests {
             assert!(seen.insert(id), "duplicate page root {id}");
             assert_eq!(view_from_slug(view_slug(*view)), Some(*view));
         }
-        assert_eq!(ALL_VIEWS.len(), 18);
+        assert_eq!(ALL_VIEWS.len(), 19);
     }
 
     #[test]

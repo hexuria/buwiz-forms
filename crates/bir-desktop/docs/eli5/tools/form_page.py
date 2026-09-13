@@ -553,6 +553,51 @@ if rules_year and frozen_year and rules_year.group(1) != frozen_year.group(1):
 heads = paper_headings(H)
 heads_note = ", ".join(heads[:8]) if heads else "(no Part/Schedule headings found in frozen HTML)"
 
+def code_from_rules_id(rid: str) -> str:
+    stem = rid.split("-v")[0]
+    m = re.match(r"^(\d+)([a-z]*)$", stem)
+    if not m:
+        return stem.upper()
+    digits, letters = m.group(1), m.group(2)
+    return digits + letters.upper()
+
+
+def emit_sections_sidecar() -> pathlib.Path:
+    """UX section lists for the desktop editor. Do not re-bucket in Rust."""
+    sidecar_sections = []
+    for sid, name, entries in section_defs:
+        seen = set()
+        keys: list[str] = []
+        for page, it in entries:
+            if (page, it) in seen:
+                continue
+            seen.add((page, it))
+            for x in groups.get((page, it), []):
+                key = x.get("field_key") or x.get("serialized_key")
+                if key:
+                    keys.append(str(key))
+        if not keys:
+            continue
+        sidecar_sections.append(
+            {
+                "id": sid,
+                "title": name,
+                "editor_hidden": sid == "print_xml",
+                "fields": keys,
+            }
+        )
+    sidecar = {
+        "form_code": code_from_rules_id(rules_id),
+        "rules_id": rules_id,
+        "frozen_bundle": bundle,
+        "field_count": F["field_count"],
+        "sections": sidecar_sections,
+    }
+    path = pathlib.Path(out).with_suffix(".sections.json")
+    path.write_text(json.dumps(sidecar, indent=2) + "\n")
+    return path
+
+
 count_ok = drawn == F["field_count"]
 q_html = ""
 if questions:
@@ -593,7 +638,9 @@ footer{{padding:16px 40px 40px;color:var(--mut);font-size:13px;border-top:1px so
 </body></html>"""
 pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
 pathlib.Path(out).write_text(page)
+sidecar_path = emit_sections_sidecar()
 print(f"{out}: drawn {drawn} / {F['field_count']} {'OK' if count_ok else 'MISMATCH'}")
+print(f"{sidecar_path}: sidecar {sum(len(s['fields']) for s in json.loads(sidecar_path.read_text())['sections'])} keys")
 if questions:
     for q in questions:
         print(f"  ? {q}")

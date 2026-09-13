@@ -10,6 +10,7 @@ use crate::views::form_1702mx_view::{Form1702MXEvent, Form1702MXView};
 use crate::views::form_1702rt_view::{Form1702RTEvent, Form1702RTView};
 use crate::views::form_2550q_view::{Form2550QV2Event, Form2550QV2View};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
+use crate::views::form_inventory_view::{FormInventoryEvent, FormInventoryView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
@@ -61,6 +62,7 @@ pub enum ActiveView {
     Form1701,
     Form1702RT,
     Form1702MX,
+    FormInventory,
     ProfileManager,
     CronTasks,
     Notifications,
@@ -170,6 +172,8 @@ pub struct AppState {
     pub(crate) pending_form_1702rt_draft: Option<bir_core::forms::form_1702rt::Form1702RTDraft>,
     pub(crate) form_1702mx_view: Option<Entity<Form1702MXView>>,
     pub(crate) pending_form_1702mx_draft: Option<bir_core::forms::form_1702mx::Form1702MXDraft>,
+    pub(crate) form_inventory_view: Option<Entity<FormInventoryView>>,
+    pub(crate) pending_inventory: Option<(String, TaxpayerProfile, u16, u8)>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -899,6 +903,8 @@ impl AppState {
             pending_form_1702rt_draft: None,
             form_1702mx_view: None,
             pending_form_1702mx_draft: None,
+            form_inventory_view: None,
+            pending_inventory: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -1502,6 +1508,16 @@ impl AppState {
 
     // NOTE: render_sidebar() is implemented in sidebar.rs
 
+    fn render_form_page(&self, fallback: Option<AnyElement>) -> AnyElement {
+        if let Some(view) = &self.form_inventory_view {
+            view.clone().into_any_element()
+        } else {
+            fallback.unwrap_or_else(|| {
+                rsx! { <div>{"No form loaded"}</div> }.into_any_element()
+            })
+        }
+    }
+
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         let page = match self.active_view {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
@@ -1515,86 +1531,57 @@ impl AppState {
                 .clone()
                 .into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
-            ActiveView::Form2551Q => {
-                if let Some(view) = &self.form_2551q_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1701Q => {
-                if let Some(view) = &self.form_1701q_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1601C => {
-                if let Some(view) = &self.form_1601c_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form0619E => {
-                if let Some(view) = &self.form_0619e_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form0619F => {
-                if let Some(view) = &self.form_0619f_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form0605 => {
-                if let Some(view) = &self.form_0605_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form2550Q => {
-                if let Some(view) = &self.form_2550q_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1701 => {
-                if let Some(view) = &self.form_1701_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1702RT => {
-                if let Some(view) = &self.form_1702rt_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1702MX => {
-                if let Some(view) = &self.form_1702mx_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
+            ActiveView::Form2551Q => self.render_form_page(
+                self.form_2551q_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form1701Q => self.render_form_page(
+                self.form_1701q_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form1601C => self.render_form_page(
+                self.form_1601c_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form0619E => self.render_form_page(
+                self.form_0619e_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form0619F => self.render_form_page(
+                self.form_0619f_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form0605 => self.render_form_page(
+                self.form_0605_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form2550Q => self.render_form_page(
+                self.form_2550q_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form1701 => self.render_form_page(
+                self.form_1701_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form1702RT => self.render_form_page(
+                self.form_1702rt_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::Form1702MX => self.render_form_page(
+                self.form_1702mx_view
+                    .as_ref()
+                    .map(|view| view.clone().into_any_element()),
+            ),
+            ActiveView::FormInventory => self.render_form_page(None),
         };
         div()
             .id(crate::agent::ids::page_root(self.active_view))
@@ -1683,12 +1670,24 @@ impl AppState {
         let support = bir_core::forms::form_support_level(form_code);
         let is_certification_build = cfg!(any(debug_assertions, feature = "dev-tools"));
         let can_open = support.is_fileable_in_app()
-            || (is_certification_build && bir_core::forms::can_open_certification_draft(form_code));
+            || (is_certification_build && bir_core::forms::can_open_certification_draft(form_code))
+            || bir_core::forms::can_open_inventory_editor(form_code);
         if !can_open {
             tracing::warn!(
                 form_code,
                 "Attempted to open an uncertified or unsupported form — manual filing required"
             );
+            return;
+        }
+
+        if bir_core::forms::has_inventory(form_code)
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            self.pending_inventory = Some((form_code.clone(), profile.clone(), year, quarter));
+            self.active_view = crate::agent::ids::active_view_for_form_code(form_code)
+                .unwrap_or(ActiveView::FormInventory);
+            cx.notify();
             return;
         }
 
@@ -2116,6 +2115,40 @@ impl Render for AppState {
         }
 
         // Materialize any pending form view now that we have `window`
+        if let Some((code, profile, year, slot)) = self.pending_inventory.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| {
+                FormInventoryView::new(&code, &profile, year, slot, db_for_view, window, cx)
+            });
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &FormInventoryEvent, window, cx| match event {
+                    FormInventoryEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        if let Some(tin) = &this.active_profile_tin
+                            && let Some(profile) =
+                                this.profiles.iter().find(|p| p.tin.full() == *tin)
+                        {
+                            let p = profile.clone();
+                            this.dashboard_view.update(cx, |view, cx| {
+                                view.set_profile(p, cx);
+                            });
+                        }
+                        cx.notify();
+                    }
+                    FormInventoryEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    FormInventoryEvent::Saved | FormInventoryEvent::Submitted => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+            self.form_inventory_view = Some(form_view);
+        }
+
         if let Some(draft) = self.pending_form_draft.take() {
             let db_for_view = Arc::clone(&self.db);
             let form_view = cx.new(|cx| Form2551QView::new(draft, db_for_view, window, cx));

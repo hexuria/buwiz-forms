@@ -13,6 +13,8 @@ pub mod form_2307;
 pub mod form_2550q;
 pub mod form_2551q;
 pub mod forms_set;
+pub mod inventory;
+pub mod inventory_catalog;
 pub mod registry;
 pub mod support_level;
 
@@ -31,10 +33,14 @@ pub use registry::{
     FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile,
     forms_for_taxpayer,
 };
+pub use inventory::{
+    FormInventorySpec, GenericFormDraft, has_inventory, inventory_codes, load_spec,
+};
 pub use support_level::{
     FORM_CAPABILITY_REGISTRY, FormCapabilities, FormCapabilityRecord, FormSupportLevel,
-    can_open_certification_draft, can_queue_for_submission, find_form_capability,
-    find_form_capability_by_id, form_support_level, queue_authorized_form_type_id,
+    can_open_certification_draft, can_open_inventory_editor, can_queue_for_submission,
+    find_form_capability, find_form_capability_by_id, form_support_level,
+    queue_authorized_form_type_id,
 };
 
 pub mod form_0605_xml;

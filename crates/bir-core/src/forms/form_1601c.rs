@@ -11,6 +11,7 @@ use crate::profile::TaxpayerProfile;
 use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 
 /// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
 pub const MAX_SCHEDULE_1_ROWS: usize = 3;
@@ -306,6 +307,145 @@ impl Form1601CDraft {
             submission_error: None,
             next_retry_at: None,
         }
+    }
+
+    /// Copy inventory editor values into the typed 1601-C fields used by XML / queue.
+    pub fn apply_inventory_values(&mut self, values: &BTreeMap<String, String>) {
+        fn get<'a>(values: &'a BTreeMap<String, String>, key: &str) -> Option<&'a str> {
+            values.get(key).map(String::as_str)
+        }
+        fn truthy(value: &str) -> bool {
+            crate::forms::inventory::truthy(value)
+        }
+        fn money(values: &BTreeMap<String, String>, key: &str) -> Option<f64> {
+            get(values, key).and_then(crate::forms::inventory::parse_money)
+        }
+
+        if let Some(month) = get(values, "frm1601c:txtMonth")
+            .and_then(|v| v.trim().parse::<u8>().ok())
+            && (1..=12).contains(&month)
+        {
+            self.month = month;
+        }
+        if let Some(year) = get(values, "frm1601c:txtYear")
+            .and_then(|v| v.trim().parse::<u16>().ok())
+            && year >= 1990
+        {
+            self.taxable_year = year;
+        }
+        if let Some(v) = get(values, "frm1601c:AmendedRtn_1").or_else(|| get(values, "frm1601c:AmendedRtn"))
+        {
+            self.is_amended = truthy(v);
+        }
+        if let Some(v) = get(values, "frm1601c:TaxWithheld_1").or_else(|| get(values, "frm1601c:TaxWithheld"))
+        {
+            self.any_taxes_withheld = truthy(v);
+        }
+        if get(values, "frm1601c:AmendedRtn_2").is_some_and(truthy) {
+            self.is_amended = false;
+        }
+        if get(values, "frm1601c:TaxWithheld_2").is_some_and(truthy) {
+            self.any_taxes_withheld = false;
+        }
+        if let Some(sheets) = get(values, "frm1601c:txtSheets").and_then(|v| v.trim().parse::<u32>().ok())
+        {
+            self.number_of_sheets = sheets;
+        }
+        if let Some(v) = get(values, "frm1601c:txtATC") {
+            self.atc = v.trim().to_string();
+        }
+
+        let tin1 = get(values, "frm1601c:txtTIN1").unwrap_or("");
+        let tin2 = get(values, "frm1601c:txtTIN2").unwrap_or("");
+        let tin3 = get(values, "frm1601c:txtTIN3").unwrap_or("");
+        let branch = get(values, "frm1601c:txtBranchCode").unwrap_or("");
+        if !tin1.is_empty() || !tin2.is_empty() || !tin3.is_empty() {
+            let tin = format!("{tin1}{tin2}{tin3}{branch}");
+            if tin.chars().all(|c| c.is_ascii_digit()) && tin.len() >= 9 {
+                self.tin = tin;
+            }
+        }
+        if let Some(v) = get(values, "frm1601c:txtRDOCode") {
+            self.rdo_code = v.trim().to_string();
+        }
+        if let Some(v) = get(values, "frm1601c:txtTaxpayerName") {
+            self.taxpayer_name = v.to_string();
+        }
+        if let Some(v) = get(values, "frm1601c:txtAddress") {
+            self.registered_address = v.to_string();
+        }
+        if let Some(v) = get(values, "frm1601c:txtZipCode") {
+            self.zip_code = v.trim().to_string();
+        }
+        if let Some(v) = get(values, "frm1601c:txtTelNum") {
+            self.contact_number = v.trim().to_string();
+        }
+        if let Some(v) = get(values, "txtEmail") {
+            self.email_address = v.trim().to_string();
+        }
+        if get(values, "frm1601c:CatAgent_P").is_some_and(truthy) {
+            self.category_of_agent = "P".to_string();
+        } else if get(values, "frm1601c:CatAgent_G").is_some_and(truthy) {
+            self.category_of_agent = "G".to_string();
+        }
+        if get(values, "frm1601c:SpecialTax_1").is_some_and(truthy) {
+            self.tax_relief = true;
+        } else if get(values, "frm1601c:SpecialTax_2").is_some_and(truthy) {
+            self.tax_relief = false;
+        }
+        if let Some(v) = get(values, "frm1601c:selTreaty") {
+            self.tax_relief_specification = v.to_string();
+        }
+
+        if let Some(v) = money(values, "frm1601c:txtTax14") {
+            self.tax_14_total_compensation = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax15") {
+            self.tax_15_statutory_minimum_wage = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax16") {
+            self.tax_16_holiday_pay = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax17") {
+            self.tax_17_13th_month_pay = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax18") {
+            self.tax_18_de_minimis = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax19") {
+            self.tax_19_sss_gsis = v;
+        }
+        if let Some(v) = get(values, "frm1601c:txt20Other") {
+            self.tax_20_other_name = v.to_string();
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax20") {
+            self.tax_20_other_amount = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax23") {
+            self.tax_23_not_subject = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax25") {
+            self.tax_25_total_taxes_withheld = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax28") {
+            self.tax_28_tax_remitted_previously = v;
+        }
+        if let Some(v) = get(values, "frm1601c:txt29Other") {
+            self.tax_29_other_remittances_name = v.to_string();
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax29") {
+            self.tax_29_other_remittances_amount = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax32") {
+            self.tax_32_surcharge = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax33") {
+            self.tax_33_interest = v;
+        }
+        if let Some(v) = money(values, "frm1601c:txtTax34") {
+            self.tax_34_compromise = v;
+        }
+        self.compute();
     }
 
     pub fn period_code(&self) -> String {

@@ -12,7 +12,7 @@ use crate::profile::{IncomeTaxElection, TaxProfileVersionStatus, TaxpayerProfile
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 fn default_true() -> bool {
     true
@@ -477,6 +477,155 @@ impl Form2551QDraft {
         self.carried_forward_from = Some((previous.taxable_year, previous.quarter));
         self.recompute(None);
         self
+    }
+
+    /// Copy inventory editor values into the typed fields used by XML / queue.
+    /// Unknown keys are ignored (`?`); print/XML page-2 repeats follow identity.
+    pub fn apply_inventory_values(&mut self, values: &BTreeMap<String, String>) {
+        fn get<'a>(values: &'a BTreeMap<String, String>, key: &str) -> Option<&'a str> {
+            values.get(key).map(String::as_str)
+        }
+        fn truthy(value: &str) -> bool {
+            crate::forms::inventory::truthy(value)
+        }
+        fn money(values: &BTreeMap<String, String>, key: &str) -> Option<f64> {
+            get(values, key).and_then(crate::forms::inventory::parse_money)
+        }
+
+        if get(values, "frm2551Qv2018:forThe_1").is_some_and(truthy) {
+            self.tax_period_basis = TaxPeriodBasis::Calendar;
+        } else if get(values, "frm2551Qv2018:forThe_2").is_some_and(truthy) {
+            self.tax_period_basis = TaxPeriodBasis::Fiscal;
+        }
+        if let Some(month) = get(values, "frm2551Qv2018:rtnMonth")
+            .and_then(|v| v.trim().parse::<u8>().ok())
+            && (1..=12).contains(&month)
+        {
+            self.year_end_month = month;
+        }
+        if let Some(year) = get(values, "frm2551Qv2018:txtYear")
+            .and_then(|v| v.trim().parse::<u16>().ok())
+            && year >= 1990
+        {
+            self.taxable_year = year;
+        }
+        for q in 1..=4 {
+            if get(values, &format!("frm2551Qv2018:qtr_{q}")).is_some_and(truthy) {
+                self.quarter = q;
+            }
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:amendedRtn_1") {
+            self.is_amended = truthy(v);
+        } else if get(values, "frm2551Qv2018:amendedRtn_2").is_some_and(truthy) {
+            self.is_amended = false;
+        }
+        if let Some(sheets) = get(values, "frm2551Qv2018:txtSheets")
+            .and_then(|v| v.trim().parse::<u16>().ok())
+        {
+            self.number_of_attached_sheets = sheets;
+        }
+
+        let tin1 = get(values, "frm2551Qv2018:txtTIN1").unwrap_or("");
+        let tin2 = get(values, "frm2551Qv2018:txtTIN2").unwrap_or("");
+        let tin3 = get(values, "frm2551Qv2018:txtTIN3").unwrap_or("");
+        let branch = get(values, "frm2551Qv2018:txtBranchCode").unwrap_or("");
+        if !tin1.is_empty() || !tin2.is_empty() || !tin3.is_empty() {
+            let tin = format!("{tin1}{tin2}{tin3}{branch}");
+            if tin.chars().all(|c| c.is_ascii_digit()) && tin.len() >= 9 {
+                self.tin = tin;
+            }
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:txtRDOCode") {
+            self.rdo_code = v.trim().to_string();
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:registeredName") {
+            self.taxpayer_name = v.to_string();
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:registeredAddress") {
+            self.registered_address = v.to_string();
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:zipCode") {
+            self.zip_code = v.trim().to_string();
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:telNo") {
+            self.contact_number = v.trim().to_string();
+        }
+        if let Some(v) = get(values, "txtEmail")
+            .or_else(|| get(values, "txtEmail#occurrence-1"))
+        {
+            self.email = v.trim().to_string();
+        }
+
+        if get(values, "frm2551Qv2018:taxTreaty_1").is_some_and(truthy) {
+            self.tax_relief = true;
+        } else if get(values, "frm2551Qv2018:taxTreaty_2").is_some_and(truthy) {
+            self.tax_relief = false;
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:txtTaxReliefSpecify") {
+            self.tax_relief_specification = v.to_string();
+        }
+        if get(values, "frm2551Qv2018:taxRate1").is_some_and(truthy) {
+            self.item_13_election = Item13Election::Graduated;
+        } else if get(values, "frm2551Qv2018:taxRate2").is_some_and(truthy) {
+            self.item_13_election = Item13Election::EightPercent;
+        }
+        if let Some(v) = money(values, "frm2551Qv2018:txt15") {
+            self.creditable_tax_withheld = v;
+        }
+        if let Some(v) = money(values, "frm2551Qv2018:txt16") {
+            self.tax_paid_previous = v;
+        }
+        if let Some(v) = get(values, "frm2551Qv2018:txt17Specify") {
+            self.other_tax_credit_description = v.to_string();
+        }
+        if let Some(v) = money(values, "frm2551Qv2018:txt17") {
+            self.other_tax_credit = v;
+        }
+        if get(values, "frm2551Qv2018:overPayment1").is_some_and(truthy) {
+            self.overpayment_disposition = OverpaymentDisposition::Refund;
+        } else if get(values, "frm2551Qv2018:overPayment2").is_some_and(truthy) {
+            self.overpayment_disposition = OverpaymentDisposition::TaxCreditCertificate;
+        }
+
+        if self.schedule_1.is_empty() {
+            self.schedule_1.push(Schedule1Row::default_pt010());
+        }
+        while self.schedule_1.len() < FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY {
+            self.schedule_1.push(Schedule1Row {
+                atc: String::new(),
+                atc_description: String::new(),
+                taxable_amount: 0.0,
+                tax_rate: 0.0,
+                tax_due: 0.0,
+            });
+        }
+        for i in 0..FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY {
+            let atc = get(values, &format!("drpATC{}", i + 1))
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if atc.is_empty() || atc == "0" {
+                continue;
+            }
+            if let Some(mut row) = Schedule1Row::new(&atc) {
+                if let Some(amount) = money(values, &format!("txtATCAmt{}", i + 1)) {
+                    row.taxable_amount = amount;
+                }
+                row.recompute();
+                if i < self.schedule_1.len() {
+                    self.schedule_1[i] = row;
+                } else {
+                    self.schedule_1.push(row);
+                }
+            } else if let Some(row) = self.schedule_1.get_mut(i) {
+                row.atc = atc;
+                if let Some(amount) = money(values, &format!("txtATCAmt{}", i + 1)) {
+                    row.taxable_amount = amount;
+                }
+                row.recompute();
+            }
+        }
+        self.recompute(None);
     }
 
     /// Compatibility sync for callers that already own a resolved projection.

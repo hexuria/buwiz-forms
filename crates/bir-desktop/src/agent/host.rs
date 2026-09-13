@@ -173,6 +173,7 @@ pub struct BirAgentHost {
     dues: Vec<DueItem>,
     form_1601c: Option<Form1601CState>,
     form_2551q: Option<Form2551QState>,
+    inventory_code: Option<String>,
     submit_confirmation_visible: bool,
     form_loaded: bool,
     db: Option<Arc<Mutex<Database>>>,
@@ -211,6 +212,7 @@ impl BirAgentHost {
             dues: Vec::new(),
             form_1601c: None,
             form_2551q: None,
+            inventory_code: None,
             submit_confirmation_visible: false,
             form_loaded: false,
             db: None,
@@ -558,6 +560,10 @@ impl BirAgentHost {
             .or_else(|| self.form_2551q.as_ref().map(|form| form.draft.quarter))
     }
 
+    pub fn inventory_form_code(&self) -> Option<&str> {
+        self.inventory_code.as_deref()
+    }
+
     pub fn form_1601c_status(&self) -> Option<FilingStatus> {
         self.form_1601c
             .as_ref()
@@ -710,6 +716,7 @@ impl BirAgentHost {
                 | ActiveView::Form1701
                 | ActiveView::Form1702RT
                 | ActiveView::Form1702MX
+                | ActiveView::FormInventory
         ) && self.selected_tin.is_none()
             && target == ActiveView::Dashboard
         {
@@ -722,7 +729,13 @@ impl BirAgentHost {
             } else {
                 self.form_loaded = false;
                 self.form_1601c = None;
+                self.form_2551q = None;
             }
+        } else if target == ActiveView::FormInventory
+            && let Some(code) = self.inventory_code.clone()
+            && self.selected_tin.is_some()
+        {
+            self.open_form_view(&code)?;
         }
 
         self.pending_admin = None;
@@ -1743,14 +1756,15 @@ impl BirAgentHost {
 
     fn open_form(&mut self, code: &str, year: u16, period: u8) -> Result<DispatchResult, String> {
         self.gate_locked()?;
-        let Some(chrome) = ids::FORM_CHROME
-            .iter()
-            .find(|item| item.code.eq_ignore_ascii_case(code))
-        else {
+        let Some(view) = ids::active_view_for_form_code(code) else {
             return Err(format!("unknown form `{code}`"));
         };
-        self.gate_dirty(chrome.view)?;
-        if chrome.code == "1601C" {
+        self.gate_dirty(view)?;
+        if let Some(chrome) = ids::FORM_CHROME
+            .iter()
+            .find(|item| item.code.eq_ignore_ascii_case(code))
+        {
+            if chrome.code == "1601C" {
             let tin = self
                 .selected_tin
                 .clone()
@@ -1777,12 +1791,26 @@ impl BirAgentHost {
             self.form_1601c = None;
             self.form_2551q = None;
         }
+            self.inventory_code = Some(chrome.code.to_string());
+            self.form_loaded = true;
+            self.submit_confirmation_visible = false;
+            self.active_view = chrome.view;
+            return Ok(DispatchResult::json(serde_json::json!({
+                "form": chrome.code,
+                "page": ids::page_root(chrome.view),
+                "year": year,
+                "period": period,
+            })));
+        }
+        self.form_1601c = None;
+        self.form_2551q = None;
+        self.inventory_code = Some(code.to_ascii_uppercase());
         self.form_loaded = true;
         self.submit_confirmation_visible = false;
-        self.active_view = chrome.view;
+        self.active_view = view;
         Ok(DispatchResult::json(serde_json::json!({
-            "form": chrome.code,
-            "page": ids::page_root(chrome.view),
+            "form": code.to_ascii_uppercase(),
+            "page": ids::page_root(view),
             "year": year,
             "period": period,
         })))
@@ -4161,6 +4189,7 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => "Form 1701",
         ActiveView::Form1702RT => "Form 1702RT",
         ActiveView::Form1702MX => "Form 1702MX",
+        ActiveView::FormInventory => "Form",
     }
 }
 
