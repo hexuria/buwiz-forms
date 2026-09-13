@@ -244,8 +244,7 @@ pub enum ProfileManagerTab {
 impl ProfileManagerTab {
     pub fn from_slug(slug: &str) -> Option<Self> {
         match slug.trim().to_ascii_lowercase().as_str() {
-            "tax" | "tax-profile" => Some(Self::Tax),
-            "cor" => Some(Self::Cor),
+            "tax" | "tax-profile" | "cor" | "forms" => Some(Self::Tax),
             "email" | "email-settings" => Some(Self::Email),
             "security" => Some(Self::Security),
             "export" => Some(Self::Export),

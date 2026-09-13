@@ -784,7 +784,7 @@ fn migrate_v14_stale_migration_backfills(conn: &Connection) -> Result<(), DbErro
                 let Some(profile) = profiles.get(&tin) else {
                     return (false, BTreeSet::new());
                 };
-                let resolved = profile.resolve_tax_profile_for_year(taxable_year);
+                let resolved = profile.resolve_tax_profile_for_year_from_ledger(taxable_year);
                 if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
                     return (false, BTreeSet::new());
                 }
@@ -1258,7 +1258,9 @@ fn migrate_v8_per_year_forms_backfill(conn: &Connection) -> Result<(), DbError> 
         }
 
         for year in years {
-            let active_versions = profile.active_profile_versions_for_year(year);
+            let active_versions = profile
+                .resolve_tax_profile_for_year_from_ledger(year)
+                .effective_segments;
             if let Some(version) = active_versions.last() {
                 let mut entries = Vec::new();
                 for def in FORM_REGISTRY {
@@ -1408,7 +1410,9 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
         }
 
         for year in years {
-            let active_versions = profile.active_profile_versions_for_year(year);
+            let active_versions = profile
+                .resolve_tax_profile_for_year_from_ledger(year)
+                .effective_segments;
             if let Some(version) = active_versions.last() {
                 let mut entries = Vec::new();
                 for def in FORM_REGISTRY {

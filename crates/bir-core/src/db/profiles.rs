@@ -42,6 +42,11 @@ fn validate_reviewed_confirmation_plan(
     submitted_profile: &TaxpayerProfile,
     reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
 ) -> Result<(), DbError> {
+    // V1: filing uses profile-year clones. An empty submitted ledger is allowed
+    // so Save Profile can drop historical COR versions without a review plan.
+    if submitted_profile.profile_versions.is_empty() && reviewed_plan.is_none() {
+        return Ok(());
+    }
     let Some(existing_profile) = existing_profile else {
         let confirmed = submitted_profile
             .profile_versions
@@ -362,7 +367,7 @@ impl Database {
         mut profile: TaxpayerProfile,
         reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
     ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
-        profile.ensure_profile_version_ledger();
+        // V1 filing reads profile-year clones. Do not recreate a COR ledger.
         let tin = profile.tin.full();
         let previous_tin = profile
             .id
@@ -390,9 +395,8 @@ impl Database {
         }
 
         validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, reviewed_plan)?;
-        // The COR ledger is stored until work item 5. Profile-year clones are
-        // the runtime version, so overlapping effective dates are not a save
-        // gate.
+        // Filing reads profile-year clones. Empty submitted `profile_versions`
+        // is allowed so Save can drop a historical COR ledger.
 
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
@@ -751,6 +755,29 @@ mod tests {
         let listed = db.list_profiles().unwrap();
         assert_eq!(listed.len(), 1);
         assert!(listed[0].profile_versions.is_empty());
+    }
+
+    #[test]
+    fn save_profile_does_not_recreate_a_cor_version_ledger() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        let mut profile = listing_test_profile("333");
+        profile.profile_versions.clear();
+        profile
+            .capture_current_as_year(2026)
+            .expect("2026 clone");
+
+        let saved = db.save_profile(profile).expect("save");
+        assert!(
+            saved.profile_versions.is_empty(),
+            "save must not synthesize a COR ledger"
+        );
+
+        let loaded = db
+            .get_profile(&saved.tin.full())
+            .unwrap()
+            .expect("reloaded");
+        assert!(loaded.profile_versions.is_empty());
+        assert!(loaded.profile_years.contains_key(&2026));
     }
 
     #[test]

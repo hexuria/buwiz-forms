@@ -417,7 +417,7 @@ pub fn form_suggestions_for_profile_year(
     profile: &TaxpayerProfile,
     year: u16,
 ) -> Vec<FormSuggestion> {
-    let resolved = profile.resolve_tax_profile_for_year(year);
+    let resolved = profile.resolve_tax_profile_for_year_from_ledger(year);
     if resolved.has_blocking_issues() {
         return Vec::new();
     }
@@ -582,7 +582,7 @@ pub fn resolve_profile_obligations_for_year(
     let mut code_version_ids: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut consistency_report = ProfileConsistencyReport::default();
 
-    let resolved_profile = profile.resolve_tax_profile_for_year(year);
+    let resolved_profile = profile.resolve_tax_profile_for_year_from_ledger(year);
     for issue in resolved_profile.issues {
         consistency_report.push_detailed(
             ProfileConsistencySeverity::NeedsReview,
@@ -1451,7 +1451,7 @@ pub fn primary_annual_itrs_for_profile_year(
     year: u16,
 ) -> (Option<&'static str>, Option<&'static str>) {
     let election = profile.income_tax_election_for_year(year);
-    let resolved = profile.resolve_tax_profile_for_year(year);
+    let resolved = profile.resolve_tax_profile_for_year_from_ledger(year);
     let primary = match resolved.effective_segments.first() {
         Some(version) => primary_annual_itr_for(
             &version.taxpayer_type,
@@ -1721,9 +1721,15 @@ mod tests {
         let mut profile =
             profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
         profile.business_start_date = NaiveDate::from_ymd_opt(2026, 7, 18);
-        profile.profile_years.clear();
-        profile.capture_current_as_year(2026).unwrap();
-        profile.capture_current_as_year(2027).unwrap();
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![RegisteredTaxType::RegistrationFee],
+            &[],
+            None,
+        );
+        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2026, 7, 18);
+        profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2026, 7, 18);
 
         let registration_year = form_suggestions_for_profile_year(&profile, 2026);
         assert!(registration_year.iter().any(|suggestion| {
@@ -1755,7 +1761,7 @@ mod tests {
         assert!(registration_year.iter().any(|suggestion| {
             suggestion.form_code == "0605"
                 && suggestion.active
-                && suggestion.source == FormSuggestionSource::InferredTaxType
+                && suggestion.source == FormSuggestionSource::MigrationBackfill
         }));
 
         let following_year = form_suggestions_for_profile_year(&profile, 2027);

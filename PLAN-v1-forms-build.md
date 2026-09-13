@@ -42,8 +42,10 @@ These are still `?` unless marked **Decided**. Phase 3 must not guess.
    annual for those codes.
 4. **Profile-year store.** **Decided** (Phase 3): clones live in
    `TaxpayerProfile.profile_years` (`BTreeMap<u16, ProfileYearFacts>`) inside
-   existing `profiles.data_json`. No dedicated table. The `TaxProfileVersion`
-   ledger is still stored until work item 5.
+   existing `profiles.data_json`. No dedicated table. Work item 5 dropped the
+   COR tab / OCR writers and stopped using the `TaxProfileVersion` ledger as a
+   filing lookup or save gate. The serde field remains so historical JSON still
+   loads (`?` whether a later migration deletes stored version arrays).
 5. **Forms Set source.** **Decided** (Phase 3, work item 4): filing
    obligations are user-chosen `FormSetSource::Manual` only. Dashboard and
    deadline APIs ignore CorAi / ReviewedCor / InferredTaxType /
@@ -52,9 +54,13 @@ These are still `?` unless marked **Decided**. Phase 3 must not guess.
 6. **Profile router flags.** **Decided** (Phase 3, work item 4): VAT /
    withholding / GPP / dormant / excise / registration-activity fields are
    **not** a show/hide router. Struct fields remain on `TaxpayerProfile` and
-   `TaxProfileVersion` so stored JSON still loads (`?` until work item 5
-   deletes COR/OCR writers). `FormDefinition::requires_vat` /
-   `requires_employees` stay as dead registry metadata (`?`).
+   `TaxProfileVersion` so stored JSON still loads. COR/OCR writers are gone
+   (work item 5). `FormDefinition::requires_vat` / `requires_employees` stay
+   as dead registry metadata (`?`).
+7. **Profile-scoped deadline overrides.** **Decided** (Phase 3, work item 5):
+   `TaxProfileVersion.deadline_overrides` are not a filing lookup. Global
+   admin calendar overrides stay. Whether a later store holds per-profile
+   deadline overrides on the profile-year clone is `?`.
 
 ---
 

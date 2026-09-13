@@ -1,4 +1,4 @@
-use bir_core::calendar_rules::{DeadlineKind, DeadlineOverride, DeadlinePeriod, DeadlineResolver};
+use bir_core::calendar_rules::{DeadlineOverride, DeadlinePeriod, DeadlineResolver};
 use bir_core::forms::{FormSetSource, PerYearFormsSet};
 use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
 use bir_core::integration::{
@@ -614,7 +614,7 @@ fn vat_percentage_withholding_tax_type_does_not_infer_form_1600() {
 }
 
 #[test]
-fn profile_scoped_deadline_override_applies_after_global_rules() {
+fn profile_scoped_deadline_override_on_cor_ledger_is_not_a_filing_lookup() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
         &profile,
@@ -642,32 +642,14 @@ fn profile_scoped_deadline_override_applies_after_global_rules() {
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let overrides = profile_deadline_overrides_for_year(&profile, 2026);
-    let deadlines = DeadlineResolver::resolve_taxable_year_with_overrides(2026, &overrides);
-    let q1_1701q = deadlines
-        .iter()
-        .find(|deadline| {
-            deadline.form_code == "1701Q"
-                && matches!(
-                    deadline.period,
-                    DeadlinePeriod::Quarterly {
-                        taxable_year: 2026,
-                        quarter: 1
-                    }
-                )
-        })
-        .unwrap();
-
-    assert!(matches!(
-        q1_1701q.deadline,
-        DeadlineKind::Dated {
-            final_deadline,
-            ..
-        } if final_deadline == NaiveDate::from_ymd_opt(2026, 5, 20).unwrap()
-    ));
+    assert!(
+        overrides.is_empty(),
+        "COR-ledger deadline overrides are not a V1 filing lookup"
+    );
 }
 
 #[test]
-fn profile_global_deadline_override_conflict_is_reported() {
+fn profile_global_deadline_override_conflict_is_not_reported_from_cor_ledger() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
         &profile,
@@ -712,25 +694,13 @@ fn profile_global_deadline_override_conflict_is_reported() {
         2026,
         &global_overrides,
     );
-    let issue = preview
-        .consistency_report
-        .issues
-        .iter()
-        .find(|issue| issue.code == "PROFILE_GLOBAL_DEADLINE_OVERRIDE_CONFLICT")
-        .expect("missing profile/global override conflict diagnostic");
-
-    assert_eq!(issue.version_id.as_deref(), Some("cor-2026"));
-    assert_eq!(issue.form_code.as_deref(), Some("1701Q"));
-    assert_eq!(
-        issue.source.as_deref(),
-        Some("Profile deadline override + global deadline override")
-    );
     assert!(
-        issue
-            .fix_hint
-            .as_deref()
-            .unwrap_or_default()
-            .contains("Profile-specific overrides win")
+        preview
+            .consistency_report
+            .issues
+            .iter()
+            .all(|issue| issue.code != "PROFILE_GLOBAL_DEADLINE_OVERRIDE_CONFLICT"),
+        "COR-ledger deadline overrides must not conflict with global calendar rules"
     );
 }
 

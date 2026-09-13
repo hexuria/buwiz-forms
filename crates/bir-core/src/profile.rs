@@ -1108,27 +1108,10 @@ impl TaxpayerProfile {
         self.resolve_tax_profile_for_year(year).effective_segments
     }
 
-    /// Return the clone for tax year `year`. No effective-date overlap scan.
-    ///
-    /// When `profile_years` is still empty (pre-V1 rows / migrations), fall
-    /// back to the stored COR ledger so historical backfills keep working.
-    /// Forms that fill Part I must call [`Self::projection_for_year`].
+    /// Return the clone for tax year `year`. No effective-date overlap scan
+    /// and no COR ledger fallback. Forms that fill Part I must call
+    /// [`Self::projection_for_year`].
     pub fn resolve_tax_profile_for_year(&self, year: u16) -> ResolvedTaxProfileForYear {
-        if self.profile_years.is_empty() {
-            let legacy = self.resolve_tax_profile_for_year_from_ledger(year);
-            if !legacy.effective_segments.is_empty() || !legacy.issues.is_empty() {
-                return legacy;
-            }
-            return ResolvedTaxProfileForYear {
-                taxable_year: year,
-                effective_segments: Vec::new(),
-                issues: vec![TaxProfileResolutionIssue {
-                    kind: TaxProfileResolutionIssueKind::NoProfileYear,
-                    version_ids: Vec::new(),
-                    message: format!("no {year} profile"),
-                }],
-            };
-        }
         let mut issues = Vec::new();
         let mut segments = Vec::new();
         match self.profile_year_facts(year) {
@@ -1154,7 +1137,12 @@ impl TaxpayerProfile {
         }
     }
 
-    fn resolve_tax_profile_for_year_from_ledger(&self, year: u16) -> ResolvedTaxProfileForYear {
+    /// Historical COR-ledger overlap scan. Filing no longer uses this.
+    /// v8/v14 healers and leftover suggestion tests still read stored versions.
+    pub(crate) fn resolve_tax_profile_for_year_from_ledger(
+        &self,
+        year: u16,
+    ) -> ResolvedTaxProfileForYear {
         let year_start = NaiveDate::from_ymd_opt(i32::from(year), 1, 1)
             .expect("u16 taxable year is representable by chrono");
         let year_end = NaiveDate::from_ymd_opt(i32::from(year), 12, 31)
@@ -1969,6 +1957,13 @@ mod tests {
         assert!(
             profile
                 .resolve_tax_profile_for_year(2026)
+                .effective_segments
+                .is_empty(),
+            "filing lookup must not use the COR ledger"
+        );
+        assert!(
+            profile
+                .resolve_tax_profile_for_year_from_ledger(2026)
                 .effective_segments
                 .iter()
                 .any(|version| version.id == "legacy-current-profile")

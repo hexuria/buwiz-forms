@@ -1109,7 +1109,7 @@ impl BirAgentHost {
             .ok_or_else(|| "profile.tab requires args.tab".to_string())?;
         let tab = ids::ProfileManagerTab::from_slug(slug).ok_or_else(|| {
             format!(
-                "unknown profile tab `{slug}` (expected tax, cor, email, export, calendar, or security)"
+                "unknown profile tab `{slug}` (expected tax, email, export, calendar, or security; `cor` aliases tax)"
             )
         })?;
         if tab == ids::ProfileManagerTab::Calendar && !self.calendar_available() {
@@ -2916,7 +2916,6 @@ impl BirAgentHost {
             let mut tabs = UiNode::new("profile-tabs", "tablist", "Profile tabs");
             for tab in [
                 ids::ProfileManagerTab::Tax,
-                ids::ProfileManagerTab::Cor,
                 ids::ProfileManagerTab::Email,
                 ids::ProfileManagerTab::Security,
                 ids::ProfileManagerTab::Export,
