@@ -800,6 +800,40 @@ impl TaxpayerProfile {
         Ok(())
     }
 
+    /// Load `to_year` if it already exists. Otherwise copy `from_year` into it.
+    /// Returns `true` when a new year row was created.
+    pub fn ensure_profile_year_from(
+        &mut self,
+        from_year: u16,
+        to_year: u16,
+    ) -> Result<bool, String> {
+        self.profile_year_allowed(to_year)?;
+        if self.profile_years.contains_key(&to_year) {
+            return Ok(false);
+        }
+        if to_year == from_year || !self.profile_years.contains_key(&from_year) {
+            self.capture_current_as_year(to_year)?;
+            return Ok(true);
+        }
+        self.clone_profile_year(from_year, to_year)?;
+        Ok(true)
+    }
+
+    /// Current calendar year always has a row: copy the latest stored year,
+    /// or capture the flat fields when this is the first year.
+    pub fn ensure_calendar_year_profile(&mut self, current_year: u16) -> Result<bool, String> {
+        self.profile_year_allowed(current_year)?;
+        if self.profile_years.contains_key(&current_year) {
+            return Ok(false);
+        }
+        if let Some((_, facts)) = self.profile_years.iter().next_back() {
+            self.profile_years.insert(current_year, facts.clone());
+            return Ok(true);
+        }
+        self.capture_current_as_year(current_year)?;
+        Ok(true)
+    }
+
     pub fn profile_year_facts(&self, year: u16) -> Result<&ProfileYearFacts, String> {
         self.profile_year_allowed(year)?;
         self.profile_years
@@ -1880,6 +1914,55 @@ mod tests {
 
         let none_left = unused_profile_years(NaiveDate::from_ymd_opt(2026, 1, 1), 2026, [2026]);
         assert!(none_left.is_empty());
+    }
+
+    #[test]
+    fn ensure_profile_year_from_copies_active_and_skips_existing() {
+        let mut profile = test_profile();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.full_name = "2026 Name".into();
+        profile.rdo_code = "018".into();
+        profile.capture_current_as_year(2026).unwrap();
+
+        assert!(profile.ensure_profile_year_from(2026, 2025).unwrap());
+        assert_eq!(profile.profile_years[&2025].full_name, "2026 Name");
+        assert_eq!(profile.profile_years[&2025].rdo_code, "018");
+        assert!(!profile.ensure_profile_year_from(2026, 2025).unwrap());
+
+        profile.full_name = "Changed".into();
+        profile.capture_current_as_year(2026).unwrap();
+        assert!(!profile.ensure_profile_year_from(2026, 2025).unwrap());
+        assert_eq!(profile.profile_years[&2025].full_name, "2026 Name");
+    }
+
+    #[test]
+    fn ensure_calendar_year_profile_copies_latest_or_captures() {
+        let mut profile = test_profile();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.full_name = "First".into();
+        assert!(profile.ensure_calendar_year_profile(2026).unwrap());
+        assert_eq!(profile.profile_years[&2026].full_name, "First");
+        assert!(!profile.ensure_calendar_year_profile(2026).unwrap());
+
+        let mut older = test_profile();
+        older.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+        older.full_name = "2024".into();
+        older.capture_current_as_year(2024).unwrap();
+        assert!(older.ensure_calendar_year_profile(2026).unwrap());
+        assert_eq!(older.profile_years[&2026].full_name, "2024");
+    }
+
+    #[test]
+    fn ensure_profile_year_rejects_year_before_business_start() {
+        let mut profile = test_profile();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2024, 6, 1);
+        profile.capture_current_as_year(2026).unwrap();
+        assert!(
+            profile
+                .ensure_profile_year_from(2026, 2023)
+                .unwrap_err()
+                .contains("before Business Start Date")
+        );
     }
 
     #[test]
