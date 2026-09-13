@@ -17,6 +17,7 @@ pub mod inventory;
 pub mod inventory_catalog;
 pub mod registry;
 pub mod support_level;
+pub mod templates;
 
 pub use atc::{ATC_TABLE_2551Q, AtcEntry, AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 pub use form_1601c::Form1601CDraft;

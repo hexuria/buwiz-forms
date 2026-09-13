@@ -12,8 +12,11 @@ use bir_core::forms::form_1601c::Form1601CDraft;
 use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::forms::inventory::{
     FormInventorySpec, GenericFormDraft, InventoryField, bir_field_map_with_inventory,
-    filing_period_for_form, has_inventory, load_spec, prefill_from_profile, required_blank_errors,
-    truthy, values_from_bir_map,
+    filing_period_for_form, has_inventory, load_spec, required_blank_errors, truthy,
+    values_from_bir_map,
+};
+use bir_core::forms::templates::{
+    compose_editor_values, filter_template_values, is_template_eligible_field,
 };
 use bir_core::forms::{
     FilingPeriod, FilingStatus, FormValidator, can_queue_for_submission, find_form,
@@ -59,6 +62,8 @@ pub struct FormInventoryView {
     submit_id: SharedString,
     scroll_id: SharedString,
     page_id: SharedString,
+    show_template_picker: bool,
+    template_picked: BTreeSet<String>,
 }
 
 impl FormInventoryView {
@@ -87,21 +92,28 @@ impl FormInventoryView {
         let year_profile = profile
             .projection_for_year(year)
             .unwrap_or_else(|_| profile.tin_only_projection());
-        let (backing, mut values) = load_backing(&spec, &year_profile, year, slot, period.clone(), &db)
-            .unwrap_or_else(|err| {
-                tracing::error!(%err, "inventory draft load failed");
-                let draft = GenericFormDraft::new(code, &profile.tin.full(), year, period);
-                (InventoryBacking::Generic(draft.clone()), draft.values)
-            });
-        let prefill = prefill_from_profile(
+        let (backing, loaded, is_existing) =
+            load_backing(&spec, &year_profile, year, slot, period.clone(), &db).unwrap_or_else(
+                |err| {
+                    tracing::error!(%err, "inventory draft load failed");
+                    let draft = GenericFormDraft::new(code, &profile.tin.full(), year, period.clone());
+                    (InventoryBacking::Generic(draft.clone()), draft.values, false)
+                },
+            );
+        let template = db.lock().ok().and_then(|db| {
+            db.get_form_template(&profile.tin.full(), code)
+                .ok()
+                .flatten()
+        });
+        let values = compose_editor_values(
             &spec,
+            loaded,
+            template.as_ref().map(|row| &row.values),
             &year_profile,
             year,
-            &filing_period_for_form(code, slot),
+            &period,
+            is_existing,
         );
-        for (key, value) in prefill {
-            values.entry(key).or_insert(value);
-        }
 
         let (back_id, save_id, submit_id, scroll_id, page_id) = chrome_ids(&spec.form_code);
         let expand_all = spec.field_count < 150;
@@ -134,7 +146,10 @@ impl FormInventoryView {
             submit_id: submit_id.into(),
             scroll_id: scroll_id.into(),
             page_id: page_id.into(),
+            show_template_picker: false,
+            template_picked: BTreeSet::new(),
         };
+        view.apply_backing();
         let expanded_ids: Vec<String> = view.expanded.iter().cloned().collect();
         for section_id in expanded_ids {
             view.ensure_inputs_for_section(&section_id, window, cx);
@@ -311,6 +326,134 @@ impl FormInventoryView {
             }
             InventoryBacking::Generic(d) => (d.tin.clone(), d.taxable_year, d.period.clone()),
         }
+    }
+
+    fn open_template_picker(&mut self, cx: &mut Context<Self>) {
+        let mut picked = BTreeSet::new();
+        for field in &self.spec.fields {
+            if !is_template_eligible_field(&self.spec, field) {
+                continue;
+            }
+            let value = self
+                .values
+                .get(&field.field_key)
+                .map(String::as_str)
+                .unwrap_or("");
+            if !value.trim().is_empty() {
+                picked.insert(field.field_key.clone());
+            }
+        }
+        self.template_picked = picked;
+        self.show_template_picker = true;
+        cx.notify();
+    }
+
+    fn confirm_template(&mut self, cx: &mut Context<Self>) {
+        let mut selected = BTreeMap::new();
+        for key in &self.template_picked {
+            if let Some(value) = self.values.get(key) {
+                selected.insert(key.clone(), value.clone());
+            }
+        }
+        let filtered = filter_template_values(&self.spec, &selected);
+        let (tin, _, _) = self.tin_year_period();
+        let code = self.spec.form_code.clone();
+        match self.db.lock() {
+            Ok(db) => match db.save_form_template(&tin, &code, &filtered) {
+                Ok(()) => {
+                    self.status_message = Some(format!(
+                        "Saved {code} template ({} fields). New drafts reuse it across years.",
+                        filtered.len()
+                    ));
+                    self.show_template_picker = false;
+                }
+                Err(err) => {
+                    self.status_message = Some(format!("Could not save template: {err}"));
+                }
+            },
+            Err(_) => {
+                self.status_message = Some("Could not save template (database busy).".into());
+            }
+        }
+        cx.notify();
+    }
+
+    fn render_template_picker(&self, cx: &Context<Self>) -> AnyElement {
+        let mut list = div().flex().flex_col().gap_1();
+        for field in &self.spec.fields {
+            if !is_template_eligible_field(&self.spec, field) {
+                continue;
+            }
+            let value = self
+                .values
+                .get(&field.field_key)
+                .cloned()
+                .unwrap_or_default();
+            if value.trim().is_empty() {
+                continue;
+            }
+            let checked = self.template_picked.contains(&field.field_key);
+            let key = field.field_key.clone();
+            let label = format!("{} = {}", field.display_label(), value);
+            list = list.child(
+                div()
+                    .id(format!("template-pick-{key}"))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if this.template_picked.contains(&key) {
+                            this.template_picked.remove(&key);
+                        } else {
+                            this.template_picked.insert(key.clone());
+                        }
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child(format!("{} {label}", if checked { "[x]" } else { "[ ]" })),
+                    ),
+            );
+        }
+        rsx! {
+            <div
+                id="form-template-picker"
+                mt_3
+                p_3
+                rounded_md
+                border_1
+                border_color={cx.theme().border}
+                bg={cx.theme().secondary}
+                flex
+                flex_col
+                gap_2
+            >
+                <div text_sm font_weight={FontWeight::SEMIBOLD}>
+                    {"Keep these fields for later years. TIN, name, address, and the filing period stay off the template."}
+                </div>
+                {list}
+                <div flex gap_2>
+                    {gpui_component::button::Button::new("form-template-confirm")
+                        .label("Save template")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.confirm_template(cx);
+                        }))
+                        .into_any_element()}
+                    {gpui_component::button::Button::new("form-template-cancel")
+                        .label("Cancel")
+                        .outline()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.show_template_picker = false;
+                            cx.notify();
+                        }))
+                        .into_any_element()}
+                </div>
+            </div>
+        }
+        .into_any_element()
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -810,48 +953,45 @@ fn load_backing(
     slot: u8,
     period: FilingPeriod,
     db: &Arc<Mutex<Database>>,
-) -> Result<(InventoryBacking, BTreeMap<String, String>), String> {
+) -> Result<(InventoryBacking, BTreeMap<String, String>, bool), String> {
     let tin = profile.tin.full();
     let guard = db.lock().ok();
     match spec.form_code.as_str() {
         "2551Q" => {
             let quarter = slot.clamp(1, 4);
-            let mut draft = if let Some(db) = guard.as_ref() {
+            let existing = guard.as_ref().and_then(|db| {
                 db.get_2551q_draft(&tin, year, quarter)
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| {
-                        let fresh =
-                            Form2551QDraft::new_from_effective_profile(profile, year, quarter);
-                        if quarter > 1 {
-                            if let Some(prev) = db.get_2551q_draft(&tin, year, quarter - 1).ok().flatten()
-                            {
-                                return fresh.with_carried_forward(&prev);
-                            }
-                        }
-                        fresh
-                    })
-            } else {
-                Form2551QDraft::new_from_effective_profile(profile, year, quarter)
-            };
+            });
+            let is_existing = existing.is_some();
+            let mut draft = existing.unwrap_or_else(|| {
+                let fresh = Form2551QDraft::new_from_effective_profile(profile, year, quarter);
+                if quarter > 1 {
+                    if let Some(prev) = guard
+                        .as_ref()
+                        .and_then(|db| db.get_2551q_draft(&tin, year, quarter - 1).ok().flatten())
+                    {
+                        return fresh.with_carried_forward(&prev);
+                    }
+                }
+                fresh
+            });
             if matches!(draft.status, FilingStatus::Draft) {
                 let _ = draft.reconcile_with_effective_profile(profile);
             }
             let values = values_from_bir_map(spec, &draft.to_bir_field_map());
-            Ok((InventoryBacking::Form2551Q(draft), values))
+            Ok((InventoryBacking::Form2551Q(draft), values, is_existing))
         }
         "1601C" => {
             let month = slot.clamp(1, 12);
-            let draft = if let Some(db) = guard.as_ref() {
-                db.get_1601c_draft(&tin, year, month)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_else(|| Form1601CDraft::new_from_profile(profile, year, month))
-            } else {
-                Form1601CDraft::new_from_profile(profile, year, month)
-            };
+            let existing = guard.as_ref().and_then(|db| {
+                db.get_1601c_draft(&tin, year, month).ok().flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| Form1601CDraft::new_from_profile(profile, year, month));
             let values = values_from_bir_map(spec, &draft.to_bir_field_map());
-            Ok((InventoryBacking::Form1601C(draft), values))
+            Ok((InventoryBacking::Form1601C(draft), values, is_existing))
         }
         other => {
             if let Some(db) = guard.as_ref()
@@ -859,13 +999,18 @@ fn load_backing(
                     db.get_form_draft_v2::<GenericFormDraft>(&tin, other, year, &period)
                 && existing.inventory_editor
             {
-                return Ok((InventoryBacking::Generic(existing.clone()), existing.values));
+                return Ok((
+                    InventoryBacking::Generic(existing.clone()),
+                    existing.values,
+                    true,
+                ));
             }
             let mut draft = GenericFormDraft::new(other, &tin, year, period);
-            if let Some(typed) = seed_typed_map(other, profile, year, slot, guard.as_ref()) {
+            let (typed, is_existing) = seed_typed_map(other, profile, year, slot, guard.as_ref());
+            if let Some(typed) = typed {
                 draft.values = values_from_bir_map(spec, &typed);
             }
-            Ok((InventoryBacking::Generic(draft.clone()), draft.values))
+            Ok((InventoryBacking::Generic(draft.clone()), draft.values, is_existing))
         }
     }
 }
@@ -876,148 +1021,138 @@ fn seed_typed_map(
     year: u16,
     slot: u8,
     db: Option<&std::sync::MutexGuard<'_, Database>>,
-) -> Option<BTreeMap<String, String>> {
+) -> (Option<BTreeMap<String, String>>, bool) {
     let tin = profile.tin.full();
     match code {
         "1701Q" => {
             let quarter = slot.clamp(1, 4);
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_1701q::Form1701QDraft>(
-                        &tin,
-                        "1701Q",
-                        year,
-                        Some(quarter),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
-                        profile, year, quarter,
-                    )
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_1701q::Form1701QDraft>(
+                    &tin,
+                    "1701Q",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(profile, year, quarter)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "0619E" => {
             let month = slot.clamp(1, 12);
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_0619e::Form0619EDraft>(
-                        &tin,
-                        "0619E",
-                        year,
-                        Some(month),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(
-                        profile, year, month,
-                    )
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_0619e::Form0619EDraft>(
+                    &tin,
+                    "0619E",
+                    year,
+                    Some(month),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(profile, year, month)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "0619F" => {
             let month = slot.clamp(1, 12);
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_0619f::Form0619FDraft>(
-                        &tin,
-                        "0619F",
-                        year,
-                        Some(month),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0619f::Form0619FDraft::new_from_profile(
-                        profile, year, month,
-                    )
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_0619f::Form0619FDraft>(
+                    &tin,
+                    "0619F",
+                    year,
+                    Some(month),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_0619f::Form0619FDraft::new_from_profile(profile, year, month)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "0605" => {
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_0605::Form0605Draft>(
-                        &tin, "0605", year, Some(slot),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0605::Form0605Draft::new_from_profile(profile, year, slot)
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_0605::Form0605Draft>(
+                    &tin, "0605", year, Some(slot),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_0605::Form0605Draft::new_from_profile(profile, year, slot)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "2550Q" => {
             let quarter = slot.clamp(1, 4);
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_2550q::Form2550QDraft>(
-                        &tin,
-                        "2550Q",
-                        year,
-                        Some(quarter),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
-                        profile, year, quarter,
-                    )
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_2550q::Form2550QDraft>(
+                    &tin,
+                    "2550Q",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(profile, year, quarter)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "1701" => {
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_1701::Form1701Draft>(
-                        &tin, "1701", year, Some(slot),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, slot)
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_1701::Form1701Draft>(
+                    &tin, "1701", year, Some(slot),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, slot)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "1702RT" => {
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
-                        &tin, "1702RT", year, Some(slot),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
-                        profile, year, slot,
-                    )
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
+                    &tin, "1702RT", year, Some(slot),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(profile, year, slot)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
         "1702MX" => {
-            let draft = db
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_1702mx::Form1702MXDraft>(
-                        &tin, "1702MX", year, Some(slot),
-                    )
-                    .ok()
-                    .flatten()
-                })
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1702mx::Form1702MXDraft::new_from_profile(profile, year)
-                });
-            Some(draft.to_bir_field_map())
+            let existing = db.and_then(|db| {
+                db.get_form_draft::<bir_core::forms::form_1702mx::Form1702MXDraft>(
+                    &tin, "1702MX", year, Some(slot),
+                )
+                .ok()
+                .flatten()
+            });
+            let is_existing = existing.is_some();
+            let draft = existing.unwrap_or_else(|| {
+                bir_core::forms::form_1702mx::Form1702MXDraft::new_from_profile(profile, year)
+            });
+            (Some(draft.to_bir_field_map()), is_existing)
         }
-        _ => None,
+        _ => (None, false),
     }
 }
 
@@ -1171,6 +1306,17 @@ impl Render for FormInventoryView {
                         }))}
                     <div flex items_center gap_3>
                         {if editable {
+                            gpui_component::button::Button::new("save_template_btn")
+                                .label("Save as template")
+                                .outline()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.open_template_picker(cx);
+                                }))
+                                .into_any_element()
+                        } else {
+                            div().into_any_element()
+                        }}
+                        {if editable {
                             gpui_component::button::Button::new(self.save_id.clone())
                                 .label("Save")
                                 .outline()
@@ -1217,6 +1363,11 @@ impl Render for FormInventoryView {
                             </div>
                         }
                         .into_any_element()
+                    } else {
+                        div().into_any_element()
+                    }}
+                    {if self.show_template_picker {
+                        self.render_template_picker(cx)
                     } else {
                         div().into_any_element()
                     }}

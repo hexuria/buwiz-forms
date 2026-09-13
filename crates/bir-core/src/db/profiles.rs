@@ -320,6 +320,7 @@ impl Database {
             ("per_year_forms", "tin"),
             ("profile_calendar_events", "profile_tin"),
             ("profile_calendar_links", "profile_tin"),
+            ("form_templates", "tin"),
         ] {
             conn.execute(
                 &format!("UPDATE {table} SET {column} = ?1 WHERE {column} = ?2"),
@@ -551,6 +552,7 @@ impl Database {
             ("data_providers", "profile_tin"),
             ("per_year_forms", "tin"),
             ("profile_calendar_events", "profile_tin"),
+            ("form_templates", "tin"),
         ] {
             tx.execute(
                 &format!("DELETE FROM {table} WHERE {column} = ?1"),

@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 18;
+const CURRENT_MIGRATION_VERSION: i32 = 19;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -323,6 +323,16 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             updated_at TEXT NOT NULL
         );
         ",
+        // v19: Per-form templates shared across tax years (tin, form_code).
+        "
+        CREATE TABLE IF NOT EXISTS form_templates (
+            tin TEXT NOT NULL,
+            form_code TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (tin, form_code)
+        );
+        ",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -380,6 +390,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 18 {
                 ensure_inbox_oauth_tokens_table(conn)?;
             }
+
+            if version == 19 {
+                ensure_form_templates_table(conn)?;
+            }
         } else {
             break;
         }
@@ -410,6 +424,7 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // idempotent; the poller must never keep using a sibling profile's dead
     // refresh token after reconnect wrote a shared inbox row.
     ensure_inbox_oauth_tokens_table(conn)?;
+    ensure_form_templates_table(conn)?;
 
     Ok(())
 }
@@ -511,6 +526,19 @@ fn ensure_inbox_oauth_tokens_table(conn: &Connection) -> Result<(), DbError> {
             access_token TEXT,
             refresh_token TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        );",
+    )?;
+    Ok(())
+}
+
+fn ensure_form_templates_table(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS form_templates (
+            tin TEXT NOT NULL,
+            form_code TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (tin, form_code)
         );",
     )?;
     Ok(())

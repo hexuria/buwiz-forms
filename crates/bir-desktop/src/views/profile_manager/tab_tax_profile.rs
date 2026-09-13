@@ -225,7 +225,7 @@ impl ProfileManagerView {
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(cx.theme().foreground)
-                    .child("Annual Income Tax Election (not extracted from COR)"),
+                    .child("Annual Income Tax Election"),
             )
             .child(
                 div()

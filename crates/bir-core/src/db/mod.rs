@@ -32,6 +32,7 @@ mod providers;
 mod receipts;
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
+mod templates;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
 pub use submissions::SubmissionSummary;
 
