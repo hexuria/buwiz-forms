@@ -1132,7 +1132,7 @@ impl AppState {
                     "form-1601c-scroll is not painted (open 1601-C first)",
                 ));
             };
-            return gpui_scroll_metrics(&view.read(cx).agent_scroll_handle(), target);
+            return gpui_scroll_metrics(view.read(cx).agent_scroll_handle(), target);
         }
         if target == ids::PRINT_PREVIEW_SCROLL {
             return self.print_preview_metrics(cx);
@@ -1196,7 +1196,7 @@ impl AppState {
     fn set_scroll_offset_y(&mut self, target: &str, y: f32, cx: &mut Context<Self>) {
         if target == ids::FORM_1601C_SCROLL {
             if let Some(view) = &self.form_inventory_view {
-                set_gpui_scroll_offset(&view.read(cx).agent_scroll_handle(), y);
+                set_gpui_scroll_offset(view.read(cx).agent_scroll_handle(), y);
                 view.update(cx, |_view, cx| cx.notify());
             }
             return;

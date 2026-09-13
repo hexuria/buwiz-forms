@@ -786,7 +786,7 @@ impl TaxpayerProfile {
     }
 
     pub fn profile_year_facts(&self, year: u16) -> Result<&ProfileYearFacts, String> {
-        self.profile_year_allowed(year).map_err(|error| error)?;
+        self.profile_year_allowed(year)?;
         self.profile_years
             .get(&year)
             .ok_or_else(|| format!("no {year} profile"))
