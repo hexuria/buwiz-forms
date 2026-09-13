@@ -93,6 +93,7 @@ impl ComboboxState {
                     }
                 } else if let InputEvent::Focus = event {
                     this.open = true;
+                    this.scroll_to_selected();
                     cx.notify();
                 }
             },

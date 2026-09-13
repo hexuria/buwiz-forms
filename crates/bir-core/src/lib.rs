@@ -99,8 +99,8 @@ pub use profile::{
     ProfileYearFacts, RegisteredTaxType, ResolvedTaxProfileForYear, TaxClassification,
     TaxProfileResolutionIssue, TaxProfileResolutionIssueKind, TaxProfileVersion,
     TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
-    VatRegistrationTextClassification, classify_vat_registration_text, profile_year_selector_range,
-    unused_profile_years,
+    VatRegistrationTextClassification, classify_vat_registration_text,
+    profile_year_selector_options, profile_year_selector_range, unused_profile_years,
 };
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use time_utils::format_next_run;

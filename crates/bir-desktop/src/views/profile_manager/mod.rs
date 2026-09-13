@@ -21,7 +21,7 @@ use bir_core::db::Database;
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, RegistrationActivityStatus, TaxClassification, TaxpayerProfile,
-    TaxpayerType, profile_year_selector_range,
+    TaxpayerType, profile_year_selector_options, profile_year_selector_range,
 };
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
@@ -422,10 +422,8 @@ impl ProfileManagerView {
 
         let forms_editor_year = current_year as u16;
         let forms_editor_year_select = cx.new(|cx| {
-            let years = profile_year_selector_range(None, current_year)
-                .map(|year| year.to_string())
-                .collect::<Vec<_>>();
-            let mut state = ComboboxState::new(years, 5, window, cx);
+            let years = profile_year_selector_options(None, current_year);
+            let mut state = ComboboxState::new(years, 8, window, cx);
             state.set_selected_value(&current_year.to_string(), window, cx);
             state
         });
@@ -1977,7 +1975,7 @@ impl ProfileManagerView {
         } else {
             *range.end()
         };
-        let years: Vec<String> = range.clone().map(|year| year.to_string()).collect();
+        let years = profile_year_selector_options(business_start, current_year);
         self.forms_editor_year_select.update(cx, |select, cx| {
             select.set_options(years, cx);
             select.set_selected_value(&selected.to_string(), window, cx);

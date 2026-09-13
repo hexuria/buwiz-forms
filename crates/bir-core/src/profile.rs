@@ -591,9 +591,22 @@ pub fn profile_year_selector_range(
     lower..=upper
 }
 
+/// Selector labels for [`profile_year_selector_range`], newest year first
+/// so the current calendar year and the previous year are on screen without
+/// scrolling or typing.
+pub fn profile_year_selector_options(
+    business_start: Option<NaiveDate>,
+    current_year: i32,
+) -> Vec<String> {
+    profile_year_selector_range(business_start, current_year)
+        .rev()
+        .map(|year| year.to_string())
+        .collect()
+}
+
 /// Years in [`profile_year_selector_range`] that do not already have a
-/// tax-profile row. Used by Add year; the existing-year selector lists
-/// `existing` only.
+/// tax-profile row. Kept for range tests; the desktop selector lists every
+/// allowed year and creates a missing row on demand.
 pub fn unused_profile_years(
     business_start: Option<NaiveDate>,
     current_year: i32,
@@ -1905,6 +1918,25 @@ mod tests {
         let missing = profile_year_selector_range(None, 2026);
         assert_eq!(*missing.start(), 2018);
         assert_eq!(*missing.end(), 2026);
+    }
+
+    #[test]
+    fn profile_year_selector_options_newest_first() {
+        assert_eq!(
+            profile_year_selector_options(NaiveDate::from_ymd_opt(2024, 6, 1), 2026),
+            vec!["2026", "2025", "2024"]
+        );
+        assert_eq!(
+            profile_year_selector_options(None, 2026)
+                .first()
+                .map(String::as_str),
+            Some("2026")
+        );
+        assert!(
+            !profile_year_selector_options(None, 2026)
+                .iter()
+                .any(|year| year == "2027")
+        );
     }
 
     #[test]
