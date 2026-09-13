@@ -575,19 +575,34 @@ impl ProfileYearFacts {
     }
 }
 
-/// Calendar years offered by the reused year selector: from Business Start
-/// Date (when known) through next year. Missing start date does not invent a
-/// TIN-obtained date; the historical 2018 lower bound stays.
+/// Calendar years that can be created: Business Start Date (when known)
+/// through the current calendar year. Future years are not offered. Missing
+/// start date does not invent a TIN-obtained date; the historical 2018
+/// lower bound stays.
 pub fn profile_year_selector_range(
     business_start: Option<NaiveDate>,
     current_year: i32,
 ) -> std::ops::RangeInclusive<u16> {
-    let upper = u16::try_from(current_year + 1).unwrap_or(u16::MAX);
+    let upper = u16::try_from(current_year).unwrap_or(u16::MAX);
     let lower = business_start
         .map(|date| u16::try_from(date.year()).unwrap_or(2018))
         .unwrap_or(2018)
         .min(upper);
     lower..=upper
+}
+
+/// Years in [`profile_year_selector_range`] that do not already have a
+/// tax-profile row. Used by Add year; the existing-year selector lists
+/// `existing` only.
+pub fn unused_profile_years(
+    business_start: Option<NaiveDate>,
+    current_year: i32,
+    existing: impl IntoIterator<Item = u16>,
+) -> Vec<u16> {
+    let existing: BTreeSet<u16> = existing.into_iter().collect();
+    profile_year_selector_range(business_start, current_year)
+        .filter(|year| !existing.contains(year))
+        .collect()
 }
 
 /// Taxpayer profile stored in encrypted SQLite.
@@ -1851,11 +1866,20 @@ mod tests {
     fn profile_year_selector_range_clamps_to_business_start() {
         let with_start = profile_year_selector_range(NaiveDate::from_ymd_opt(2024, 6, 1), 2026);
         assert_eq!(*with_start.start(), 2024);
-        assert_eq!(*with_start.end(), 2027);
+        assert_eq!(*with_start.end(), 2026);
 
         let missing = profile_year_selector_range(None, 2026);
         assert_eq!(*missing.start(), 2018);
-        assert_eq!(*missing.end(), 2027);
+        assert_eq!(*missing.end(), 2026);
+    }
+
+    #[test]
+    fn unused_profile_years_skips_existing_and_future() {
+        let unused = unused_profile_years(NaiveDate::from_ymd_opt(2024, 6, 1), 2026, [2026]);
+        assert_eq!(unused, vec![2024, 2025]);
+
+        let none_left = unused_profile_years(NaiveDate::from_ymd_opt(2026, 1, 1), 2026, [2026]);
+        assert!(none_left.is_empty());
     }
 
     #[test]

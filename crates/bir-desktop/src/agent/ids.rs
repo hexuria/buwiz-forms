@@ -56,7 +56,8 @@ pub const PROFILE_SAVE: &str = "save_profile";
 pub const PROFILE_SAVE_MESSAGE: &str = "profile-save-message";
 pub const PROFILE_VALIDATION: &str = "profile-validation";
 pub const PROFILE_YEAR_SELECT: &str = "profile-year-select";
-pub const PROFILE_YEAR_CLONE: &str = "profile-year-clone";
+pub const PROFILE_YEAR_ADD_SELECT: &str = "profile-year-add-select";
+pub const PROFILE_YEAR_ADD: &str = "profile-year-add";
 /// Painted Forms Set checklist (all inventory codes for the selected year).
 pub const FORMS_YEAR_PICKER: &str = "forms-year-picker";
 

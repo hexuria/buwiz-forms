@@ -16,9 +16,7 @@ use bir_core::forms::inventory::{
     filing_period_for_form, has_inventory, load_spec, required_blank_errors, truthy,
     values_from_bir_map,
 };
-use bir_core::forms::templates::{
-    compose_editor_values, filter_template_values, is_template_eligible_field,
-};
+use bir_core::forms::templates::{compose_editor_values, filter_template_values};
 use bir_core::forms::{
     FilingPeriod, FilingStatus, FormValidator, can_queue_for_submission, find_form,
 };
@@ -63,8 +61,6 @@ pub struct FormInventoryView {
     submit_id: SharedString,
     scroll_id: SharedString,
     page_id: SharedString,
-    show_template_picker: bool,
-    template_picked: BTreeSet<String>,
 }
 
 impl FormInventoryView {
@@ -152,8 +148,6 @@ impl FormInventoryView {
             submit_id: submit_id.into(),
             scroll_id: scroll_id.into(),
             page_id: page_id.into(),
-            show_template_picker: false,
-            template_picked: BTreeSet::new(),
         };
         view.apply_backing();
         let expanded_ids: Vec<String> = view.expanded.iter().cloned().collect();
@@ -339,44 +333,18 @@ impl FormInventoryView {
         }
     }
 
-    fn open_template_picker(&mut self, cx: &mut Context<Self>) {
-        let mut picked = BTreeSet::new();
-        for field in &self.spec.fields {
-            if !is_template_eligible_field(&self.spec, field) {
-                continue;
-            }
-            let value = self
-                .values
-                .get(&field.field_key)
-                .map(String::as_str)
-                .unwrap_or("");
-            if !value.trim().is_empty() {
-                picked.insert(field.field_key.clone());
-            }
-        }
-        self.template_picked = picked;
-        self.show_template_picker = true;
-        cx.notify();
-    }
-
-    fn confirm_template(&mut self, cx: &mut Context<Self>) {
-        let mut selected = BTreeMap::new();
-        for key in &self.template_picked {
-            if let Some(value) = self.values.get(key) {
-                selected.insert(key.clone(), value.clone());
-            }
-        }
-        let filtered = filter_template_values(&self.spec, &selected);
+    fn save_as_template(&mut self, cx: &mut Context<Self>) {
+        self.apply_backing();
+        let filtered = filter_template_values(&self.spec, &self.values);
         let (tin, _, _) = self.tin_year_period();
         let code = self.spec.form_code.clone();
         match self.db.lock() {
             Ok(db) => match db.save_form_template(&tin, &code, &filtered) {
                 Ok(()) => {
                     self.status_message = Some(format!(
-                        "Saved {code} template ({} fields). New drafts reuse it across years.",
+                        "Saved {code} template ({} fields).",
                         filtered.len()
                     ));
-                    self.show_template_picker = false;
                 }
                 Err(err) => {
                     self.status_message = Some(format!("Could not save template: {err}"));
@@ -387,84 +355,6 @@ impl FormInventoryView {
             }
         }
         cx.notify();
-    }
-
-    fn render_template_picker(&self, cx: &Context<Self>) -> AnyElement {
-        let mut list = div().flex().flex_col().gap_1();
-        for field in &self.spec.fields {
-            if !is_template_eligible_field(&self.spec, field) {
-                continue;
-            }
-            let value = self
-                .values
-                .get(&field.field_key)
-                .cloned()
-                .unwrap_or_default();
-            if value.trim().is_empty() {
-                continue;
-            }
-            let checked = self.template_picked.contains(&field.field_key);
-            let key = field.field_key.clone();
-            let label = format!("{} = {}", field.display_label(), value);
-            list = list.child(
-                div()
-                    .id(format!("template-pick-{key}"))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if this.template_picked.contains(&key) {
-                            this.template_picked.remove(&key);
-                        } else {
-                            this.template_picked.insert(key.clone());
-                        }
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child(format!("{} {label}", if checked { "[x]" } else { "[ ]" })),
-                    ),
-            );
-        }
-        rsx! {
-            <div
-                id="form-template-picker"
-                mt_3
-                p_3
-                rounded_md
-                border_1
-                border_color={cx.theme().border}
-                bg={cx.theme().secondary}
-                flex
-                flex_col
-                gap_2
-            >
-                <div text_sm font_weight={FontWeight::SEMIBOLD}>
-                    {"Keep these fields for later years. TIN, name, address, and the filing period stay off the template."}
-                </div>
-                {list}
-                <div flex gap_2>
-                    {gpui_component::button::Button::new("form-template-confirm")
-                        .label("Save template")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.confirm_template(cx);
-                        }))
-                        .into_any_element()}
-                    {gpui_component::button::Button::new("form-template-cancel")
-                        .label("Cancel")
-                        .outline()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.show_template_picker = false;
-                            cx.notify();
-                        }))
-                        .into_any_element()}
-                </div>
-            </div>
-        }
-        .into_any_element()
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1335,7 +1225,7 @@ impl Render for FormInventoryView {
                                 .label("Save as template")
                                 .outline()
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.open_template_picker(cx);
+                                    this.save_as_template(cx);
                                 }))
                                 .into_any_element()
                         } else {
@@ -1388,11 +1278,6 @@ impl Render for FormInventoryView {
                             </div>
                         }
                         .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    }}
-                    {if self.show_template_picker {
-                        self.render_template_picker(cx)
                     } else {
                         div().into_any_element()
                     }}

@@ -14,7 +14,7 @@ impl ProfileManagerView {
         &self,
         is_individual: bool,
         is_cooperative: bool,
-        date_label: &'static str,
+        _date_label: &'static str,
         cx: &Context<Self>,
     ) -> gpui::AnyElement {
         if self.active_tab != 0 {
@@ -24,10 +24,15 @@ impl ProfileManagerView {
         let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
         let is_purely_compensation = is_individual && tax_class_val == "Purely Compensation";
 
-        div()
+        let identity = div()
             .flex()
             .flex_col()
             .gap_4()
+            .p_4()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().background)
             .child(
                 div()
                     .id(crate::agent::ids::PROFILE_TIN)
@@ -184,17 +189,13 @@ impl ProfileManagerView {
                         {self.field_error("business_start_date", cx)}
                     </div>
                 })
-            })
-            .child(rsx! {
-                <div flex flex_col gap_1 pt_4>
-                    <div text_lg font_weight={FontWeight::BOLD}>
-                        {"Forms Set"}
-                    </div>
-                    <div text_xs text_color={cx.theme().muted_foreground}>
-                        {"Check the forms this taxpayer files for the selected year. Only checked Manual entries appear on the dashboard. Queue and live BIR submit stay limited to forms that already support them."}
-                    </div>
-                </div>
-            })
+            });
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(identity)
             .child(self.render_active_forms_tab(cx))
             .child({
                 let profile = self.current_profile(cx);
@@ -775,26 +776,6 @@ impl ProfileManagerView {
                     .w_full()
                     .gap_3()
                     .child(self.render_forms_editor_header(cx))
-                    .child(rsx! {
-                        <div
-                            flex
-                            flex_col
-                            gap_1
-                            px_3
-                            py_2
-                            rounded_md
-                            border_1
-                            border_color={cx.theme().border}
-                            bg={cx.theme().secondary}
-                        >
-                            <div text_xs font_weight={FontWeight::SEMIBOLD}>
-                                {"One filing authority"}
-                            </div>
-                            <div text_xs text_color={cx.theme().muted_foreground}>
-                                {"Check the forms this taxpayer files for the selected year. Only checked Manual entries appear on the dashboard. Queue and live BIR submit stay limited to forms that already support them."}
-                            </div>
-                        </div>
-                    })
                     .child(self.render_inventory_forms_checklist(&forms_set, cx))
                     .when(!resolution_issues.is_empty(), |this| {
                         this.child(rsx! {
@@ -893,13 +874,6 @@ impl ProfileManagerView {
             >
                 <div text_xs font_weight={FontWeight::SEMIBOLD}>
                     {"Forms for this year"}
-                </div>
-                <div text_xs text_color={cx.theme().muted_foreground}>
-                    {format!(
-                        "All {} inventory pages. Checking a code adds a Manual include for {}.",
-                        codes.len(),
-                        self.forms_editor_year
-                    )}
                 </div>
                 <div flex flex_wrap gap_x={px(16.)} gap_y={px(8.)}>
                     {...codes.into_iter().map(|code| {
@@ -1062,8 +1036,6 @@ impl ProfileManagerView {
                         )
                     })}
                 >
-                    <div text_sm text_color={cx.theme().muted_foreground}>{"Year:"}</div>
-                    <div w={px(100.)}>{Combobox::new(&self.forms_editor_year_select)}</div>
                 </div>
             </div>
         };

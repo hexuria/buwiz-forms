@@ -21,7 +21,7 @@ use bir_core::db::Database;
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, RegistrationActivityStatus, TaxClassification, TaxpayerProfile,
-    TaxpayerType, profile_year_selector_range,
+    TaxpayerType, unused_profile_years,
 };
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
@@ -225,6 +225,7 @@ pub struct ProfileManagerView {
     stored_profile_years: std::collections::BTreeMap<u16, bir_core::profile::ProfileYearFacts>,
     pub forms_editor_year: u16,
     pub forms_editor_year_select: Entity<ComboboxState>,
+    pub forms_editor_year_add_select: Entity<ComboboxState>,
     pub forms_editor_new_code_input: Entity<InputState>,
     pub forms_editor_registry_form_select: Entity<ComboboxState>,
     pub forms_editor_custom_code_mode: bool,
@@ -422,11 +423,20 @@ impl ProfileManagerView {
 
         let forms_editor_year = current_year as u16;
         let forms_editor_year_select = cx.new(|cx| {
-            let years = profile_year_selector_range(None, current_year)
-                .map(|y| y.to_string())
-                .collect::<Vec<_>>();
-            let mut state = ComboboxState::new(years, 5, window, cx);
+            let mut state = ComboboxState::new(vec![current_year.to_string()], 5, window, cx);
             state.set_selected_value(&current_year.to_string(), window, cx);
+            state
+        });
+        let forms_editor_year_add_select = cx.new(|cx| {
+            let unused = unused_profile_years(None, current_year, [forms_editor_year])
+                .into_iter()
+                .map(|year| year.to_string())
+                .collect::<Vec<_>>();
+            let default = unused.last().cloned().unwrap_or_default();
+            let mut state = ComboboxState::new(unused, 5, window, cx);
+            if !default.is_empty() {
+                state.set_selected_value(&default, window, cx);
+            }
             state
         });
         let forms_editor_new_code_input =
@@ -641,6 +651,7 @@ impl ProfileManagerView {
             stored_profile_years: std::collections::BTreeMap::new(),
             forms_editor_year,
             forms_editor_year_select,
+            forms_editor_year_add_select,
             forms_editor_new_code_input,
             forms_editor_registry_form_select,
             forms_editor_custom_code_mode: false,
@@ -1932,19 +1943,44 @@ impl ProfileManagerView {
         cx.notify();
     }
 
-    fn clone_profile_year_from_previous(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let year = self.forms_editor_year;
-        let mut snapshot = self.current_profile(cx);
-        let Some((from_year, _)) = snapshot.profile_years.range(..year).next_back() else {
+    fn existing_profile_years(&self) -> Vec<u16> {
+        let mut years: std::collections::BTreeSet<u16> =
+            self.stored_profile_years.keys().copied().collect();
+        years.insert(self.forms_editor_year);
+        years.into_iter().collect()
+    }
+
+    fn unused_add_years(&self, cx: &App) -> Vec<u16> {
+        let current_year = chrono::Local::now().date_naive().year();
+        let business_start = self.business_start_input.read(cx).date;
+        unused_profile_years(business_start, current_year, self.existing_profile_years())
+    }
+
+    fn add_profile_year(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let selected = self
+            .forms_editor_year_add_select
+            .read(cx)
+            .selected_value(cx);
+        let Ok(year) = selected.parse::<u16>() else {
             self.pending_notification = Some((
                 gpui_component::notification::NotificationType::Warning,
-                format!("no earlier profile to clone into {year}"),
+                "Pick a year to add.".to_string(),
             ));
             cx.notify();
             return;
         };
-        let from_year = *from_year;
-        if let Err(message) = snapshot.clone_profile_year(from_year, year) {
+        let current_year =
+            u16::try_from(chrono::Local::now().date_naive().year()).unwrap_or(u16::MAX);
+        if year > current_year {
+            self.pending_notification = Some((
+                gpui_component::notification::NotificationType::Error,
+                format!("year {year} is after the current year ({current_year})"),
+            ));
+            cx.notify();
+            return;
+        }
+        let mut snapshot = self.current_profile(cx);
+        if let Err(message) = snapshot.profile_year_allowed(year) {
             self.pending_notification = Some((
                 gpui_component::notification::NotificationType::Error,
                 message,
@@ -1952,34 +1988,43 @@ impl ProfileManagerView {
             cx.notify();
             return;
         }
+        snapshot.profile_years.entry(year).or_default();
         self.stored_profile_years = snapshot.profile_years.clone();
-        if let Some(facts) = self.stored_profile_years.get(&year).cloned() {
-            facts.apply_to(&mut snapshot);
-            self.sync_projection_to_ui(&snapshot, window, cx);
+        if year != self.forms_editor_year {
+            self.switch_profile_year(year, window, cx);
+        } else {
+            self.mark_profile_changed();
         }
-        self.mark_profile_changed();
+        self.refresh_profile_year_selector(window, cx);
         self.pending_notification = Some((
             gpui_component::notification::NotificationType::Success,
-            format!("Cloned the {from_year} profile into {year}"),
+            format!("Added {year}."),
         ));
         cx.notify();
     }
 
     fn refresh_profile_year_selector(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let current_year = chrono::Local::now().date_naive().year();
-        let business_start = self.business_start_input.read(cx).date;
-        let range = profile_year_selector_range(business_start, current_year);
-        let years: Vec<String> = range.clone().map(|year| year.to_string()).collect();
-        let selected = if range.contains(&self.forms_editor_year) {
+        let existing = self.existing_profile_years();
+        let unused = self.unused_add_years(cx);
+        let selected = if existing.contains(&self.forms_editor_year) {
             self.forms_editor_year
-        } else if self.forms_editor_year < *range.start() {
-            *range.start()
         } else {
-            *range.end()
+            *existing.last().unwrap_or(&self.forms_editor_year)
         };
+        let existing_labels: Vec<String> = existing.iter().map(u16::to_string).collect();
         self.forms_editor_year_select.update(cx, |select, cx| {
-            select.set_options(years, cx);
+            select.set_options(existing_labels, cx);
             select.set_selected_value(&selected.to_string(), window, cx);
+        });
+        let add_default = unused.last().copied();
+        let unused_labels: Vec<String> = unused.iter().map(u16::to_string).collect();
+        self.forms_editor_year_add_select.update(cx, |select, cx| {
+            select.set_options(unused_labels, cx);
+            if let Some(year) = add_default {
+                select.set_selected_value(&year.to_string(), window, cx);
+            } else {
+                select.set_selected_value("", window, cx);
+            }
         });
         if selected != self.forms_editor_year {
             self.switch_profile_year(selected, window, cx);
@@ -2295,11 +2340,7 @@ impl ProfileManagerView {
     }
 
     fn field_label(text: &str, cx: &Context<Self>) -> Div {
-        rsx! {
-            <div text_sm text_color={cx.theme().muted_foreground} mb_1>
-                {text.to_string()}
-            </div>
-        }
+        crate::components::form_parts::field_label(text, cx)
     }
 
     fn render_unsaved_profile_banner(&self, cx: &Context<Self>) -> gpui::AnyElement {
@@ -2523,19 +2564,32 @@ impl Render for ProfileManagerView {
                                         >
                                             {title}
                                         </div>
-                                        <div flex items_center gap_2 id={crate::agent::ids::PROFILE_YEAR_SELECT}>
-                                            <div text_sm text_color={cx.theme().muted_foreground}>{"Year:"}</div>
-                                            <div w={px(100.)}>{Combobox::new(&self.forms_editor_year_select)}</div>
-                                            {gpui_component::button::Button::new(crate::agent::ids::PROFILE_YEAR_CLONE)
-                                                .label("Clone from previous year")
-                                                .small()
-                                                .on_click(cx.listener(|this, _, window, cx| {
-                                                    this.clone_profile_year_from_previous(window, cx);
-                                                }))}
+                                        <div flex items_center gap_2 flex_wrap>
+                                            <div flex items_center gap_2 id={crate::agent::ids::PROFILE_YEAR_SELECT}>
+                                                <div text_xs font_weight={FontWeight::BOLD} text_color={cx.theme().muted_foreground}>{"Year"}</div>
+                                                <div w={px(100.)}>{Combobox::new(&self.forms_editor_year_select)}</div>
+                                            </div>
+                                            {if !self.unused_add_years(cx).is_empty() {
+                                                rsx! {
+                                                    <div flex items_center gap_2 id={crate::agent::ids::PROFILE_YEAR_ADD_SELECT}>
+                                                        <div text_xs font_weight={FontWeight::BOLD} text_color={cx.theme().muted_foreground}>{"Add"}</div>
+                                                        <div w={px(100.)}>{Combobox::new(&self.forms_editor_year_add_select)}</div>
+                                                        {gpui_component::button::Button::new(crate::agent::ids::PROFILE_YEAR_ADD)
+                                                            .label("Add year")
+                                                            .small()
+                                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                                this.add_profile_year(window, cx);
+                                                            }))}
+                                                    </div>
+                                                }
+                                                .into_any_element()
+                                            } else {
+                                                div().into_any_element()
+                                            }}
                                         </div>
                                     </div>
-                                    <div text_base text_color={cx.theme().muted_foreground}>
-                                        {"Each year has its own tax-profile clone. Forms read the year they are filed for."}
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {"Forms use this year's tax profile."}
                                     </div>
                                 </div>
                             })
