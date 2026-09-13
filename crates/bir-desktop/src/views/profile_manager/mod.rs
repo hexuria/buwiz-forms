@@ -1362,14 +1362,24 @@ impl ProfileManagerView {
             input.set_value(profile.registered_address.clone(), window, cx)
         });
 
-        let zip_val = self
-            .zip_options
-            .iter()
-            .find(|o| o.starts_with(&profile.zip_code))
-            .cloned()
-            .unwrap_or(profile.zip_code.clone());
+        let zip_val = if profile.zip_code.trim().is_empty() {
+            String::new()
+        } else {
+            self.zip_options
+                .iter()
+                .find(|o| o.starts_with(&profile.zip_code))
+                .cloned()
+                .unwrap_or_else(|| profile.zip_code.clone())
+        };
         self.zip_select.update(cx, |select, cx| {
             select.set_selected_value(&zip_val, window, cx)
+        });
+
+        self.tel_input.update(cx, |input, cx| {
+            input.set_value(profile.phone.clone(), window, cx)
+        });
+        self.email_input.update(cx, |input, cx| {
+            input.set_value(profile.email.clone(), window, cx)
         });
 
         self.line_of_business.update(cx, |input, cx| {
@@ -1382,12 +1392,15 @@ impl ProfileManagerView {
             input.set_date(profile.birth_date, window, cx)
         });
 
-        let rdo_value = self
-            .rdo_options
-            .iter()
-            .find(|o| o.starts_with(&profile.rdo_code))
-            .cloned()
-            .unwrap_or(profile.rdo_code.clone());
+        let rdo_value = if profile.rdo_code.trim().is_empty() {
+            String::new()
+        } else {
+            self.rdo_options
+                .iter()
+                .find(|o| o.starts_with(&profile.rdo_code))
+                .cloned()
+                .unwrap_or_else(|| profile.rdo_code.clone())
+        };
         self.rdo_select.update(cx, |select, cx| {
             select.set_selected_value(&rdo_value, window, cx)
         });
