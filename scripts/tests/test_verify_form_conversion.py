@@ -53,7 +53,7 @@ class VerifyFormConversionTests(unittest.TestCase):
             for relative in (
                 "crates/bir-core/src/forms/form_1601c.rs",
                 "crates/bir-core/src/forms/form_1601c_xml.rs",
-                "crates/bir-desktop/src/views/form_1601c_view.rs",
+                "crates/bir-desktop/src/views/form_inventory_view.rs",
             ):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,7 +87,7 @@ class VerifyFormConversionTests(unittest.TestCase):
             for relative in (
                 "crates/bir-core/src/forms/form_1601c.rs",
                 "crates/bir-core/src/forms/form_1601c_xml.rs",
-                "crates/bir-desktop/src/views/form_1601c_view.rs",
+                "crates/bir-desktop/src/views/form_inventory_view.rs",
             ):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)

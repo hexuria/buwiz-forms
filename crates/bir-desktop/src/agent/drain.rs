@@ -168,27 +168,28 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
         _ => Vec::new(),
     };
     host.replace_dues(dues);
-    if let Some(view) = &app.form_1601c_view {
+    if let Some(view) = &app.form_inventory_view {
         let form = view.read(cx);
         // `saved` is a one-shot host flag set by form.save_draft / queue in this
         // request. Never derive it from draft.id — that made every mutating
         // invoke (including form.fields) re-trigger UI Draft-save on
         // Queued/Submitted returns and spam the toaster.
-        host.replace_form_1601c_state(
-            form.agent_draft().clone(),
-            form.agent_validated(),
-            false,
-            form.agent_validation_errors(),
-        );
-    }
-    if let Some(view) = &app.form_2551q_view {
-        let form = view.read(cx);
-        host.replace_form_2551q_state(
-            form.agent_draft().clone(),
-            form.agent_validated(),
-            false,
-            form.agent_validation_errors(),
-        );
+        if let Some(draft) = form.agent_2551q_draft() {
+            host.replace_form_2551q_state(
+                draft.clone(),
+                form.agent_validated(),
+                false,
+                form.agent_validation_errors(),
+            );
+        }
+        if let Some(draft) = form.agent_1601c_draft() {
+            host.replace_form_1601c_state(
+                draft.clone(),
+                form.agent_validated(),
+                false,
+                form.agent_validation_errors(),
+            );
+        }
     }
     host.reconcile_open_forms_from_db();
     // Jobs and submissions are only read back out of the host by `jobs.list` /
@@ -284,38 +285,29 @@ fn apply_host(
 
     let print_requested = host.take_print_request();
 
-    if host.active_view() == ActiveView::Form1601C
-        && let Some(view) = &app.form_1601c_view
-    {
+    if let Some(view) = &app.form_inventory_view {
         view.update(cx, |form, cx| {
-            form.agent_apply_from_host(host.form_1601c_host_patch(), window, cx);
-            if let Some(draft) = host.form_1601c_draft() {
-                form.agent_sync_filing_snapshot(draft, cx);
+            if form.form_code() == "2551Q" {
+                form.agent_apply_2551q_patch(
+                    crate::views::form_agent_patches::Agent2551QHostPatch {
+                        creditable_tax_withheld: host.form_2551q_creditable(),
+                        other_tax_credit: host.form_2551q_other_credit(),
+                        taxable_amount_0: host.form_2551q_taxable_0(),
+                        save: host.form_2551q_saved(),
+                        validate: host.form_2551q_validated(),
+                    },
+                    window,
+                    cx,
+                );
+                if let Some(draft) = host.form_2551q_draft() {
+                    form.agent_sync_2551q(draft, cx);
+                }
             }
-            form.agent_reload_filing_from_db(cx);
-            if print_requested {
-                form.agent_preview_pdf(window, cx);
-            }
-        });
-    }
-
-    if host.active_view() == ActiveView::Form2551Q
-        && let Some(view) = &app.form_2551q_view
-    {
-        view.update(cx, |form, cx| {
-            form.agent_apply_from_host(
-                crate::views::form_2551q_view::Agent2551QHostPatch {
-                    creditable_tax_withheld: host.form_2551q_creditable(),
-                    other_tax_credit: host.form_2551q_other_credit(),
-                    taxable_amount_0: host.form_2551q_taxable_0(),
-                    save: host.form_2551q_saved(),
-                    validate: host.form_2551q_validated(),
-                },
-                window,
-                cx,
-            );
-            if let Some(draft) = host.form_2551q_draft() {
-                form.agent_sync_filing_snapshot(draft, cx);
+            if form.form_code() == "1601C" {
+                form.agent_apply_1601c_patch(host.form_1601c_host_patch(), window, cx);
+                if let Some(draft) = host.form_1601c_draft() {
+                    form.agent_sync_1601c(draft, cx);
+                }
             }
             if print_requested {
                 form.agent_preview_pdf(window, cx);
@@ -447,6 +439,30 @@ fn apply_navigation(
                 cx.notify();
             }
         }
+        ActiveView::FormInventory => {
+            if let Some(tin) = host.selected_tin()
+                && app.active_profile_tin.as_deref() != Some(tin)
+                && let Some(profile) = app
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.tin.full() == tin)
+                    .cloned()
+            {
+                app.select_profile(profile, ProfileTargetAction::UnlockOnly, window, cx);
+            }
+            if let Some(code) = host.inventory_form_code() {
+                let year = host
+                    .form_1601c_draft()
+                    .map(|draft| draft.taxable_year)
+                    .or_else(|| host.form_2551q_draft().map(|draft| draft.taxable_year))
+                    .unwrap_or_else(|| chrono::Local::now().year() as u16);
+                let period = host.form_period().unwrap_or(1);
+                app.open_named_form(code, year, period, window, cx);
+            } else {
+                app.active_view = ActiveView::FormInventory;
+                cx.notify();
+            }
+        }
         other => {
             if app.block_unsaved_compliance_navigation(window, cx) {
                 return;
@@ -488,7 +504,7 @@ fn tree_layout(app: &AppState, window: &Window, cx: &App) -> crate::agent::host:
         },
         page: painted(app.layout_probe.page.get()),
         form_scroll: app
-            .form_1601c_view
+            .form_inventory_view
             .as_ref()
             .and_then(|view| painted(Some(view.read(cx).agent_scroll_handle().bounds()))),
         preview_scroll: crate::views::frozen_html_preview::live_preview_window()
@@ -1111,12 +1127,12 @@ impl AppState {
         cx: &mut Context<Self>,
     ) -> Result<gpui_agent::ScrollMetrics, String> {
         if target == ids::FORM_1601C_SCROLL {
-            let Some(view) = &self.form_1601c_view else {
+            let Some(view) = &self.form_inventory_view else {
                 return Err(gpui_agent::scroll_unavailable(
                     "form-1601c-scroll is not painted (open 1601-C first)",
                 ));
             };
-            return gpui_scroll_metrics(&view.read(cx).agent_scroll_handle(), target);
+            return gpui_scroll_metrics(view.read(cx).agent_scroll_handle(), target);
         }
         if target == ids::PRINT_PREVIEW_SCROLL {
             return self.print_preview_metrics(cx);
@@ -1179,8 +1195,8 @@ impl AppState {
 
     fn set_scroll_offset_y(&mut self, target: &str, y: f32, cx: &mut Context<Self>) {
         if target == ids::FORM_1601C_SCROLL {
-            if let Some(view) = &self.form_1601c_view {
-                set_gpui_scroll_offset(&view.read(cx).agent_scroll_handle(), y);
+            if let Some(view) = &self.form_inventory_view {
+                set_gpui_scroll_offset(view.read(cx).agent_scroll_handle(), y);
                 view.update(cx, |_view, cx| cx.notify());
             }
             return;

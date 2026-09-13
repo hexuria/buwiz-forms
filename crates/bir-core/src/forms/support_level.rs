@@ -349,6 +349,14 @@ pub fn can_queue_for_submission(form_code: &str) -> bool {
     find_form_capability(form_code).is_some_and(|record| record.can_queue())
 }
 
+/// Whether the inventory-driven editor may open a draft for this code.
+///
+/// This does **not** grant queue, XML, or live BIR submit. Those stay behind
+/// [`can_queue_for_submission`].
+pub fn can_open_inventory_editor(form_code: &str) -> bool {
+    crate::forms::inventory::has_inventory(form_code)
+}
+
 /// Whether a non-production desktop build may open this form for HTML release
 /// certification. Production callers must continue to use
 /// [`FormSupportLevel::is_fileable_in_app`].

@@ -644,51 +644,6 @@ impl Database {
         }
 
         if profile_changed {
-            let resolved = profile.resolve_tax_profile_for_year(draft.taxable_year);
-            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
-                let details = resolved
-                    .issues
-                    .iter()
-                    .map(|issue| issue.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                return Err(DbError::Other(format!(
-                    "Cannot reconcile the {} Forms Set after recording Item 13 because the confirmed profile timeline is unresolved{}",
-                    draft.taxable_year,
-                    if details.is_empty() {
-                        String::new()
-                    } else {
-                        format!(": {details}")
-                    }
-                )));
-            }
-
-            let stored_set =
-                super::forms_set::query_per_year_forms(&tx, &draft.tin, draft.taxable_year)?;
-            let existing_set = (!stored_set.is_empty()).then_some(&stored_set);
-            let suggestions = crate::integration::validation::form_suggestions_for_profile_year(
-                &profile,
-                draft.taxable_year,
-            );
-            let reconciled = crate::forms::reconcile_forms_set_for_year(
-                draft.taxable_year,
-                existing_set,
-                &suggestions,
-            );
-            if !reconciled.conflicts.is_empty() {
-                tracing::warn!(
-                    tin = %draft.tin,
-                    taxable_year = draft.taxable_year,
-                    conflicts = reconciled.conflicts.len(),
-                    "Item 13 election reconciled a Forms Set that needs review"
-                );
-            }
-            super::forms_set::execute_replace_per_year_forms(
-                &tx,
-                &draft.tin,
-                draft.taxable_year,
-                &reconciled.forms_set,
-            )?;
             let updated_profile_json = serde_json::to_string(&profile)?;
             let updated = tx.execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
@@ -3080,6 +3035,7 @@ mod tests {
     fn insert_test_profile(db: &Database, profile: &TaxpayerProfile) {
         let mut persisted = profile.clone();
         persisted.ensure_profile_version_ledger();
+        let _ = persisted.capture_current_as_year(2026);
         insert_raw_test_profile(db, &persisted);
     }
 
@@ -3095,6 +3051,7 @@ mod tests {
     fn queued_eight_percent_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
         let mut effective_profile = profile.clone();
         effective_profile.ensure_profile_version_ledger();
+        let _ = effective_profile.capture_current_as_year(2026);
         let mut draft = Form2551QDraft::new_from_effective_profile(&effective_profile, 2026, 1);
         draft.item_13_election = Item13Election::EightPercent;
         draft
@@ -3106,6 +3063,7 @@ mod tests {
     fn queued_graduated_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
         let mut effective_profile = profile.clone();
         effective_profile.ensure_profile_version_ledger();
+        let _ = effective_profile.capture_current_as_year(2026);
         let mut draft = Form2551QDraft::new_from_effective_profile(&effective_profile, 2026, 1);
         draft.item_13_election = Item13Election::Graduated;
         draft
@@ -4070,10 +4028,11 @@ mod tests {
         assert_eq!(elections[0].source_form, "2551Qv2018");
         assert_eq!(saved_draft.status, FilingStatus::Queued);
         let saved_set = db.get_per_year_forms(&draft.tin, 2026).unwrap();
-        assert!(saved_set.contains_active("1701Q"));
-        assert!(saved_set.contains_active("1701"));
-        assert!(!saved_set.contains_active("2551Q"));
-        assert_eq!(saved_profile.per_year_forms.get(&2026), Some(&saved_set));
+        assert!(
+            saved_set.is_empty(),
+            "Item 13 must record the election without inventing a Forms Set"
+        );
+        assert_eq!(saved_profile.per_year_forms.get(&2026), None);
     }
 
     #[test]
@@ -4174,7 +4133,7 @@ mod tests {
     }
 
     #[test]
-    fn forms_set_write_failure_rolls_back_queued_election_and_draft() {
+    fn queued_election_does_not_require_a_forms_set_rewrite() {
         let db = test_db();
         let profile = test_profile();
         insert_test_profile(&db, &profile);
@@ -4189,19 +4148,17 @@ mod tests {
             .unwrap();
         let draft = queued_eight_percent_draft(&profile);
 
-        let error = db
-            .save_queued_2551q_draft_and_election(&draft)
-            .expect_err("a Forms Set write failure must abort the transaction");
+        db.save_queued_2551q_draft_and_election(&draft)
+            .expect("Item 13 must commit without rewriting the Forms Set");
 
-        assert!(error.to_string().contains("forced Forms Set failure"));
         let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
         assert!(
             saved_profile
                 .tax_elections
                 .iter()
-                .all(|entry| entry.taxable_year != 2026)
+                .any(|entry| entry.taxable_year == 2026)
         );
-        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_some());
         assert!(db.get_per_year_forms(&draft.tin, 2026).unwrap().is_empty());
     }
 
@@ -4211,6 +4168,7 @@ mod tests {
         let mut profile = test_profile();
         profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2026, 8, 15);
         profile.ensure_profile_version_ledger();
+        let _ = profile.capture_current_as_year(2026);
         insert_test_profile(&db, &profile);
 
         let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 3);
@@ -4287,32 +4245,15 @@ mod tests {
         let cases = [
             {
                 let mut profile = reviewed_profile.clone();
+                profile.profile_years.clear();
                 profile.profile_versions.clear();
-                ("missing ledger", profile)
+                ("missing profile-year", profile)
             },
             {
                 let mut profile = reviewed_profile.clone();
-                profile.ensure_profile_version_ledger();
-                let mut overlapping = profile.profile_versions[0].clone();
-                overlapping.id = "overlapping-confirmed-version".to_string();
-                overlapping.label = "Overlapping confirmed version".to_string();
-                overlapping.effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
-                profile.profile_versions.push(overlapping);
-                ("overlapping ledger", profile)
-            },
-            {
-                let mut profile = reviewed_profile.clone();
-                profile.business_start_date = None;
-                profile.profile_versions.clear();
-                profile.ensure_profile_version_ledger();
-                ("undated ledger", profile)
-            },
-            {
-                let mut profile = reviewed_profile.clone();
-                profile.ensure_profile_version_ledger();
-                profile.profile_versions[0].effective_from =
-                    chrono::NaiveDate::from_ymd_opt(2027, 1, 1);
-                ("out-of-period ledger", profile)
+                profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2027, 1, 1);
+                profile.profile_years.clear();
+                ("year before Business Start Date", profile)
             },
         ];
 
@@ -4326,7 +4267,8 @@ mod tests {
                 .expect_err(case);
 
             assert!(
-                error.to_string().contains("exact filing period"),
+                error.to_string().contains("no 2026 profile")
+                    || error.to_string().contains("before Business Start Date"),
                 "{case} returned an unexpected error: {error}"
             );
             assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
@@ -5653,6 +5595,7 @@ mod tests {
 
         profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
         profile.profile_versions[0].eopt_tier = Some(crate::profile::EoptTier::Micro);
+        let _ = profile.capture_current_as_year(2026);
         db.conn
             .execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
@@ -5695,6 +5638,7 @@ mod tests {
             .expect("queued draft should persist before claiming");
 
         let mut unresolved_profile = db.get_profile(&queued.tin).unwrap().unwrap();
+        unresolved_profile.profile_years.clear();
         unresolved_profile.profile_versions.clear();
         db.conn
             .execute(
@@ -5726,7 +5670,7 @@ mod tests {
                         .is_some_and(|message| message.contains("effective taxpayer profile"))
                 );
                 assert!(errors.iter().any(|(field, message)| {
-                    field == "profile_resolution" && message.contains("No confirmed")
+                    field == "profile_resolution" && message.contains("no 2026 profile")
                 }));
             }
             _ => panic!("an unresolved profile must reject a network claim"),
