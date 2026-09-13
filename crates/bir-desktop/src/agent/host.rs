@@ -33,7 +33,7 @@ use crate::agent::html_demo::{self, DueRow, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
 use crate::app::ActiveView;
-use crate::views::form_1601c_view::{Agent1601CCategory, Agent1601CHostPatch};
+use crate::views::form_agent_patches::{Agent1601CCategory, Agent1601CHostPatch};
 
 const FIXTURE_TIN: &str = "12345678900000";
 const FIXTURE_NAME: &str = "Agent Fixture Taxpayer";
@@ -527,7 +527,7 @@ impl BirAgentHost {
             .and_then(|form| Agent1601CCategory::from_code(&form.draft.category_of_agent))
     }
 
-    /// Same patch `drain::apply_host` writes into `Form1601CView`.
+    /// Same patch `drain::apply_host` writes into the inventory 1601-C page.
     pub(crate) fn form_1601c_host_patch(&self) -> Agent1601CHostPatch {
         let editable = self
             .form_1601c
@@ -1765,32 +1765,32 @@ impl BirAgentHost {
             .find(|item| item.code.eq_ignore_ascii_case(code))
         {
             if chrome.code == "1601C" {
-            let tin = self
-                .selected_tin
-                .clone()
-                .ok_or("select a taxpayer profile before opening a form")?;
-            let profile = self.load_profile(&tin)?;
-            let month = period.clamp(1, 12);
-            let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
-            if let Some(db) = &self.db
-                && let Ok(guard) = db.lock()
-                && let Ok(Some(existing)) = guard.get_1601c_draft(&tin, year, month)
-            {
-                draft = existing;
+                let tin = self
+                    .selected_tin
+                    .clone()
+                    .ok_or("select a taxpayer profile before opening a form")?;
+                let profile = self.load_profile(&tin)?;
+                let month = period.clamp(1, 12);
+                let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
+                if let Some(db) = &self.db
+                    && let Ok(guard) = db.lock()
+                    && let Ok(Some(existing)) = guard.get_1601c_draft(&tin, year, month)
+                {
+                    draft = existing;
+                }
+                self.form_1601c = Some(Form1601CState {
+                    draft,
+                    validation_errors: Vec::new(),
+                    validated: false,
+                    saved: false,
+                });
+                self.form_2551q = None;
+            } else if chrome.code == "2551Q" {
+                self.open_2551q_draft(Some(year), Some(period.clamp(1, 4)))?;
+            } else {
+                self.form_1601c = None;
+                self.form_2551q = None;
             }
-            self.form_1601c = Some(Form1601CState {
-                draft,
-                validation_errors: Vec::new(),
-                validated: false,
-                saved: false,
-            });
-            self.form_2551q = None;
-        } else if chrome.code == "2551Q" {
-            self.open_2551q_draft(Some(year), Some(period.clamp(1, 4)))?;
-        } else {
-            self.form_1601c = None;
-            self.form_2551q = None;
-        }
             self.inventory_code = Some(chrome.code.to_string());
             self.form_loaded = true;
             self.submit_confirmation_visible = false;
@@ -4220,7 +4220,7 @@ impl WithEnabled for UiNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::views::form_1601c_view::apply_1601c_host_header_patch;
+    use crate::views::form_agent_patches::apply_1601c_host_header_patch;
     use bir_core::db::Claim1601CSubmissionResult;
     use gpui_agent::dispatch::handle_request;
     use gpui_agent::protocol::{AssertSpec, Request};
@@ -4399,6 +4399,31 @@ mod tests {
             !host.editor_touched(),
             "form.open loads the host's own copy of the taxpayer; the view keeps its editor"
         );
+    }
+
+    #[test]
+    fn open_form_returns_dispatch_for_typed_and_inventory_only_codes() {
+        let mut host = fixture_host();
+        for (code, period, page) in [
+            ("1601C", 11, ids::PAGE_FORM_1601C),
+            ("2551Q", 1, ids::PAGE_FORM_2551Q),
+            ("2550Q", 1, ids::PAGE_FORM_2550Q),
+            ("2553", 1, ids::PAGE_FORM_INVENTORY),
+        ] {
+            let opened = handle_request(
+                &mut host,
+                req(Op::Invoke {
+                    name: "form.open".into(),
+                    args: json!({ "code": code, "year": 2026, "period": period }),
+                }),
+                None,
+                None,
+            );
+            assert!(opened.ok, "{code}: {:?}", opened.error);
+            let result = opened.result.as_ref().expect("form.open result");
+            assert_eq!(result["form"], code, "{code}");
+            assert_eq!(result["page"], page, "{code}");
+        }
     }
 
     #[test]

@@ -7,6 +7,7 @@
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_parts::form_accordion;
 use crate::components::form_validation::ValidationPaintGate;
+use crate::views::form_agent_patches::{Agent1601CHostPatch, Agent2551QHostPatch};
 use bir_core::db::Database;
 use bir_core::forms::form_1601c::Form1601CDraft;
 use bir_core::forms::form_2551q::Form2551QDraft;
@@ -96,8 +97,13 @@ impl FormInventoryView {
             load_backing(&spec, &year_profile, year, slot, period.clone(), &db).unwrap_or_else(
                 |err| {
                     tracing::error!(%err, "inventory draft load failed");
-                    let draft = GenericFormDraft::new(code, &profile.tin.full(), year, period.clone());
-                    (InventoryBacking::Generic(draft.clone()), draft.values, false)
+                    let draft =
+                        GenericFormDraft::new(code, &profile.tin.full(), year, period.clone());
+                    (
+                        InventoryBacking::Generic(draft.clone()),
+                        draft.values,
+                        false,
+                    )
                 },
             );
         let template = db.lock().ok().and_then(|db| {
@@ -295,7 +301,10 @@ impl FormInventoryView {
         let Some(section) = self.spec.sections.iter().find(|s| s.id == section_id) else {
             return false;
         };
-        section.fields.iter().any(|key| self.get_error(key).is_some())
+        section
+            .fields
+            .iter()
+            .any(|key| self.get_error(key).is_some())
     }
 
     fn status(&self) -> FilingStatus {
@@ -321,9 +330,11 @@ impl FormInventoryView {
                 d.taxable_year,
                 FilingPeriod::Quarterly(d.quarter),
             ),
-            InventoryBacking::Form1601C(d) => {
-                (d.tin.clone(), d.taxable_year, FilingPeriod::Monthly(d.month))
-            }
+            InventoryBacking::Form1601C(d) => (
+                d.tin.clone(),
+                d.taxable_year,
+                FilingPeriod::Monthly(d.month),
+            ),
             InventoryBacking::Generic(d) => (d.tin.clone(), d.taxable_year, d.period.clone()),
         }
     }
@@ -587,9 +598,8 @@ impl FormInventoryView {
                 }
             }
             InventoryBacking::Generic(_) => {
-                self.status_message = Some(
-                    "This form cannot be queued for live BIR submit.".to_string(),
-                );
+                self.status_message =
+                    Some("This form cannot be queued for live BIR submit.".to_string());
                 cx.notify();
                 return;
             }
@@ -632,7 +642,7 @@ impl FormInventoryView {
 
     pub(crate) fn agent_apply_2551q_patch(
         &mut self,
-        patch: crate::views::form_2551q_view::Agent2551QHostPatch,
+        patch: Agent2551QHostPatch,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -664,7 +674,7 @@ impl FormInventoryView {
 
     pub(crate) fn agent_apply_1601c_patch(
         &mut self,
-        patch: crate::views::form_1601c_view::Agent1601CHostPatch,
+        patch: Agent1601CHostPatch,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -794,7 +804,10 @@ impl FormInventoryView {
             for option in options {
                 let selected = value.eq_ignore_ascii_case(&option)
                     || (option == "true" && truthy(&value))
-                    || (option == "false" && !value.is_empty() && !truthy(&value) && value == "false");
+                    || (option == "false"
+                        && !value.is_empty()
+                        && !truthy(&value)
+                        && value == "false");
                 let key = field.field_key.clone();
                 let option_clone = option.clone();
                 let mut chip = div()
@@ -803,11 +816,7 @@ impl FormInventoryView {
                     .py_1()
                     .rounded_md()
                     .border_1()
-                    .border_color(if selected {
-                        cx.theme().primary
-                    } else {
-                        border
-                    })
+                    .border_color(if selected { cx.theme().primary } else { border })
                     .bg(if selected {
                         cx.theme().primary.opacity(0.2)
                     } else {
@@ -820,21 +829,17 @@ impl FormInventoryView {
                             .child(option.clone()),
                     );
                 if editable {
-                    chip = chip.cursor_pointer().on_click(cx.listener(
-                        move |this, _, _, cx| {
+                    chip = chip
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _, _, cx| {
                             this.set_radio_value(&key, &option_clone, cx);
-                        },
-                    ));
+                        }));
                 }
                 row = row.child(chip);
             }
             block = block.child(row);
         } else if let Some(input) = self.inputs.get(&field.field_key) {
-            block = block.child(
-                Input::new(input)
-                    .disabled(!editable)
-                    .appearance(false),
-            );
+            block = block.child(Input::new(input).disabled(!editable).appearance(false));
         } else {
             block = block.child(rsx! {
                 <div text_sm text_color={cx.theme().foreground}>{value}</div>
@@ -959,11 +964,9 @@ fn load_backing(
     match spec.form_code.as_str() {
         "2551Q" => {
             let quarter = slot.clamp(1, 4);
-            let existing = guard.as_ref().and_then(|db| {
-                db.get_2551q_draft(&tin, year, quarter)
-                    .ok()
-                    .flatten()
-            });
+            let existing = guard
+                .as_ref()
+                .and_then(|db| db.get_2551q_draft(&tin, year, quarter).ok().flatten());
             let is_existing = existing.is_some();
             let mut draft = existing.unwrap_or_else(|| {
                 let fresh = Form2551QDraft::new_from_effective_profile(profile, year, quarter);
@@ -985,11 +988,12 @@ fn load_backing(
         }
         "1601C" => {
             let month = slot.clamp(1, 12);
-            let existing = guard.as_ref().and_then(|db| {
-                db.get_1601c_draft(&tin, year, month).ok().flatten()
-            });
+            let existing = guard
+                .as_ref()
+                .and_then(|db| db.get_1601c_draft(&tin, year, month).ok().flatten());
             let is_existing = existing.is_some();
-            let draft = existing.unwrap_or_else(|| Form1601CDraft::new_from_profile(profile, year, month));
+            let draft =
+                existing.unwrap_or_else(|| Form1601CDraft::new_from_profile(profile, year, month));
             let values = values_from_bir_map(spec, &draft.to_bir_field_map());
             Ok((InventoryBacking::Form1601C(draft), values, is_existing))
         }
@@ -1010,7 +1014,11 @@ fn load_backing(
             if let Some(typed) = typed {
                 draft.values = values_from_bir_map(spec, &typed);
             }
-            Ok((InventoryBacking::Generic(draft.clone()), draft.values, is_existing))
+            Ok((
+                InventoryBacking::Generic(draft.clone()),
+                draft.values,
+                is_existing,
+            ))
         }
     }
 }
@@ -1038,7 +1046,9 @@ fn seed_typed_map(
             });
             let is_existing = existing.is_some();
             let draft = existing.unwrap_or_else(|| {
-                bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(profile, year, quarter)
+                bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
+                    profile, year, quarter,
+                )
             });
             (Some(draft.to_bir_field_map()), is_existing)
         }
@@ -1081,7 +1091,10 @@ fn seed_typed_map(
         "0605" => {
             let existing = db.and_then(|db| {
                 db.get_form_draft::<bir_core::forms::form_0605::Form0605Draft>(
-                    &tin, "0605", year, Some(slot),
+                    &tin,
+                    "0605",
+                    year,
+                    Some(slot),
                 )
                 .ok()
                 .flatten()
@@ -1106,14 +1119,19 @@ fn seed_typed_map(
             });
             let is_existing = existing.is_some();
             let draft = existing.unwrap_or_else(|| {
-                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(profile, year, quarter)
+                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
+                    profile, year, quarter,
+                )
             });
             (Some(draft.to_bir_field_map()), is_existing)
         }
         "1701" => {
             let existing = db.and_then(|db| {
                 db.get_form_draft::<bir_core::forms::form_1701::Form1701Draft>(
-                    &tin, "1701", year, Some(slot),
+                    &tin,
+                    "1701",
+                    year,
+                    Some(slot),
                 )
                 .ok()
                 .flatten()
@@ -1127,7 +1145,10 @@ fn seed_typed_map(
         "1702RT" => {
             let existing = db.and_then(|db| {
                 db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
-                    &tin, "1702RT", year, Some(slot),
+                    &tin,
+                    "1702RT",
+                    year,
+                    Some(slot),
                 )
                 .ok()
                 .flatten()
@@ -1141,7 +1162,10 @@ fn seed_typed_map(
         "1702MX" => {
             let existing = db.and_then(|db| {
                 db.get_form_draft::<bir_core::forms::form_1702mx::Form1702MXDraft>(
-                    &tin, "1702MX", year, Some(slot),
+                    &tin,
+                    "1702MX",
+                    year,
+                    Some(slot),
                 )
                 .ok()
                 .flatten()
@@ -1222,7 +1246,8 @@ impl FormViewTrait for FormInventoryView {
                 self.status_message = Some("Print preview opened.".into());
             }
             Err(error) => {
-                self.status_message = Some(format!("HTML print preview could not be opened: {error}"));
+                self.status_message =
+                    Some(format!("HTML print preview could not be opened: {error}"));
             }
         }
         cx.notify();
@@ -1445,5 +1470,21 @@ mod tests {
         let year = spec.field("frm2551Qv2018:txtYear").expect("year");
         assert!(super::error_applies_to("taxable_year", year));
         assert!(!super::error_applies_to("tin", year));
+    }
+
+    #[test]
+    fn every_inventory_code_has_navbar_chrome_and_1601c_keeps_scroll_id() {
+        for code in bir_core::forms::inventory_codes() {
+            let (back, save, submit, scroll, page) = super::chrome_ids(code);
+            assert!(!back.is_empty(), "{code}");
+            assert!(!save.is_empty(), "{code}");
+            assert!(!submit.is_empty(), "{code}");
+            assert!(scroll.contains("scroll"), "{code}");
+            assert!(page.starts_with("form-inventory-"), "{code} page id {page}");
+        }
+        let (_, _, _, scroll, _) = super::chrome_ids("1601C");
+        assert_eq!(scroll, "form-1601c-scroll");
+        let (_, _, _, scroll, _) = super::chrome_ids("2551Q");
+        assert_eq!(scroll, "form-2551q-scroll-area");
     }
 }

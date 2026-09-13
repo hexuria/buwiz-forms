@@ -409,6 +409,12 @@ already replaced it; otherwise it is the last deletion.
   inventory-view tests, do not drop coverage of period parsing / category
   codes (1601-C item 11).
 
+**Phase 3:** the inventory view is the only painted editor. The ten
+`form_*_view.rs` files are gone. Agent 1601-C / 2551Q patches live in
+`form_agent_patches.rs`. The 2550Q application freeze inspects
+`form_2550q_diagnostics.rs` (inert diagnostic / queue-closed surface), not a
+painted per-form view.
+
 ---
 
 ## Suggested Phase 3 sequencing (implementation, not this run)

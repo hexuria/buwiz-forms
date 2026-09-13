@@ -718,4 +718,11 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn parse_money_accepts_grouped_digits_and_rejects_junk() {
+        assert_eq!(parse_money(""), Some(0.0));
+        assert_eq!(parse_money("1,234.56"), Some(1_234.56));
+        assert_eq!(parse_money("not-a-number"), None);
+    }
 }
