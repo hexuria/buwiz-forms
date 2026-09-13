@@ -3,7 +3,7 @@
 use crate::naming::Tin;
 use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum TaxpayerType {
@@ -374,8 +374,15 @@ pub enum TaxProfileResolutionIssueKind {
     UndatedConfirmedVersion,
     InvalidEffectiveRange,
     OverlappingConfirmedVersions,
+    /// Kept for stored JSON. Runtime filing no longer uses effective-range
+    /// coverage as a blocker (V1 looks up the profile-year clone instead).
     NoEffectiveVersionForPeriod,
     AmbiguousEffectiveVersionsForPeriod,
+    /// No clone exists for the requested tax year.
+    NoProfileYear,
+    /// Requested year is before Business Start Date (incorporation /
+    /// registration, or the date the TIN was obtained).
+    ProfileYearBeforeBusinessStart,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -420,6 +427,167 @@ impl ResolvedTaxProfileForPeriod {
     pub fn has_blocking_issues(&self) -> bool {
         self.effective_segment.is_none() || !self.issues.is_empty()
     }
+}
+
+/// Filing-facing fields cloned per tax year. Credentials, TIN, PIN, inbox
+/// tokens, and the per-year forms table stay on [`TaxpayerProfile`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ProfileYearFacts {
+    #[serde(default)]
+    pub full_name: String,
+    #[serde(default)]
+    pub rdo_code: String,
+    #[serde(default)]
+    pub line_of_business: String,
+    #[serde(default)]
+    pub registered_address: String,
+    #[serde(default)]
+    pub zip_code: String,
+    #[serde(default)]
+    pub phone: String,
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub taxpayer_type: TaxpayerType,
+    #[serde(default)]
+    pub tax_classification: Option<TaxClassification>,
+    #[serde(default)]
+    pub eopt_tier: Option<EoptTier>,
+    #[serde(default)]
+    pub business_start_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub is_vat_registered: bool,
+    #[serde(default)]
+    pub is_bmbe: bool,
+    #[serde(default)]
+    pub is_gpp_partner: bool,
+    #[serde(default)]
+    pub is_create_msme: bool,
+    #[serde(default)]
+    pub is_expanded_withholding_agent: bool,
+    #[serde(default)]
+    pub atc_codes: Vec<String>,
+    #[serde(default)]
+    pub excise_tax_categories: Vec<ExciseTaxCategory>,
+    #[serde(default)]
+    pub has_employees: bool,
+    #[serde(default)]
+    pub is_dormant: bool,
+    #[serde(default)]
+    pub has_single_employer: bool,
+    #[serde(default)]
+    pub withholds_compensation: bool,
+    #[serde(default)]
+    pub withholds_expanded: bool,
+    #[serde(default)]
+    pub withholds_final: bool,
+    #[serde(default)]
+    pub is_top_withholding_agent: bool,
+    #[serde(default)]
+    pub is_government_withholding_entity: bool,
+    #[serde(default)]
+    pub registration_activity_status: RegistrationActivityStatus,
+}
+
+impl ProfileYearFacts {
+    pub fn year_id(year: u16) -> String {
+        format!("year-{year}")
+    }
+
+    pub fn from_profile(profile: &TaxpayerProfile) -> Self {
+        Self {
+            full_name: profile.full_name.clone(),
+            rdo_code: profile.rdo_code.clone(),
+            line_of_business: profile.line_of_business.clone(),
+            registered_address: profile.registered_address.clone(),
+            zip_code: profile.zip_code.clone(),
+            phone: profile.phone.clone(),
+            email: profile.email.clone(),
+            taxpayer_type: profile.taxpayer_type.clone(),
+            tax_classification: profile.tax_classification.clone(),
+            eopt_tier: profile.eopt_tier.clone(),
+            business_start_date: profile.business_start_date,
+            is_vat_registered: profile.is_vat_registered,
+            is_bmbe: profile.is_bmbe,
+            is_gpp_partner: profile.is_gpp_partner,
+            is_create_msme: profile.is_create_msme,
+            is_expanded_withholding_agent: profile.is_expanded_withholding_agent,
+            atc_codes: profile.atc_codes.clone(),
+            excise_tax_categories: profile.excise_tax_categories.clone(),
+            has_employees: profile.has_employees,
+            is_dormant: profile.is_dormant,
+            has_single_employer: profile.has_single_employer,
+            withholds_compensation: profile.withholds_compensation,
+            withholds_expanded: profile.withholds_expanded,
+            withholds_final: profile.withholds_final,
+            is_top_withholding_agent: profile.is_top_withholding_agent,
+            is_government_withholding_entity: profile.is_government_withholding_entity,
+            registration_activity_status: profile.registration_activity_status.clone(),
+        }
+    }
+
+    pub fn apply_to(&self, profile: &mut TaxpayerProfile) {
+        profile.full_name = self.full_name.clone();
+        profile.rdo_code = self.rdo_code.clone();
+        profile.line_of_business = self.line_of_business.clone();
+        profile.registered_address = self.registered_address.clone();
+        profile.zip_code = self.zip_code.clone();
+        profile.phone = self.phone.clone();
+        profile.email = self.email.clone();
+        profile.taxpayer_type = self.taxpayer_type.clone();
+        profile.tax_classification = self.tax_classification.clone();
+        profile.eopt_tier = self.eopt_tier.clone();
+        profile.business_start_date = self.business_start_date;
+        profile.is_vat_registered = self.is_vat_registered;
+        profile.is_bmbe = self.is_bmbe;
+        profile.is_gpp_partner = self.is_gpp_partner;
+        profile.is_create_msme = self.is_create_msme;
+        profile.is_expanded_withholding_agent = self.is_expanded_withholding_agent;
+        profile.atc_codes = self.atc_codes.clone();
+        profile.excise_tax_categories = self.excise_tax_categories.clone();
+        profile.has_employees = self.has_employees;
+        profile.is_dormant = self.is_dormant;
+        profile.has_single_employer = self.has_single_employer;
+        profile.withholds_compensation = self.withholds_compensation;
+        profile.withholds_expanded = self.withholds_expanded;
+        profile.withholds_final = self.withholds_final;
+        profile.is_top_withholding_agent = self.is_top_withholding_agent;
+        profile.is_government_withholding_entity = self.is_government_withholding_entity;
+        profile.registration_activity_status = self.registration_activity_status.clone();
+    }
+
+    pub fn as_version(&self, year: u16, profile: &TaxpayerProfile) -> TaxProfileVersion {
+        let mut projected = profile.clone();
+        self.apply_to(&mut projected);
+        let mut version = TaxProfileVersion::from_profile_backfill(&projected);
+        let year_start = NaiveDate::from_ymd_opt(i32::from(year), 1, 1)
+            .expect("u16 taxable year is representable by chrono");
+        let year_end = NaiveDate::from_ymd_opt(i32::from(year), 12, 31)
+            .expect("u16 taxable year is representable by chrono");
+        version.id = Self::year_id(year);
+        version.label = format!("{year} profile");
+        version.status = TaxProfileVersionStatus::Confirmed;
+        version.source = TaxProfileVersionSource::UserOverride;
+        version.effective_from = Some(year_start);
+        version.effective_until = Some(year_end);
+        version.needs_effective_date_review = false;
+        version
+    }
+}
+
+/// Calendar years offered by the reused year selector: from Business Start
+/// Date (when known) through next year. Missing start date does not invent a
+/// TIN-obtained date; the historical 2018 lower bound stays.
+pub fn profile_year_selector_range(
+    business_start: Option<NaiveDate>,
+    current_year: i32,
+) -> std::ops::RangeInclusive<u16> {
+    let upper = u16::try_from(current_year + 1).unwrap_or(u16::MAX);
+    let lower = business_start
+        .map(|date| u16::try_from(date.year()).unwrap_or(2018))
+        .unwrap_or(2018)
+        .min(upper);
+    lower..=upper
 }
 
 /// Taxpayer profile stored in encrypted SQLite.
@@ -568,11 +736,87 @@ pub struct TaxpayerProfile {
     /// Per-year Forms Set. SKIP serialization since it is stored in a separate DB table.
     #[serde(skip, default)]
     pub per_year_forms: std::collections::BTreeMap<u16, crate::forms::PerYearFormsSet>,
+
+    /// Per-tax-year clones. The clone for year Y is what forms read.
+    /// Stored inside `profiles.data_json` (no dedicated table).
+    #[serde(default)]
+    pub profile_years: BTreeMap<u16, ProfileYearFacts>,
 }
 
 impl TaxpayerProfile {
     pub fn forms_set_for_year(&self, year: u16) -> Option<&crate::forms::PerYearFormsSet> {
         self.per_year_forms.get(&year)
+    }
+
+    /// Business Start Date year: incorporation/registration, or the date the
+    /// TIN was obtained when that is the stored date. Missing date does not
+    /// invent a substitute.
+    pub fn earliest_allowed_profile_year(&self) -> Option<u16> {
+        self.business_start_date
+            .map(|date| u16::try_from(date.year()).unwrap_or(2018))
+    }
+
+    pub fn profile_year_allowed(&self, year: u16) -> Result<(), String> {
+        if let Some(earliest) = self.earliest_allowed_profile_year()
+            && year < earliest
+        {
+            return Err(format!(
+                "year {year} is before Business Start Date ({earliest})"
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn capture_current_as_year(&mut self, year: u16) -> Result<(), String> {
+        self.profile_year_allowed(year)?;
+        self.profile_years
+            .insert(year, ProfileYearFacts::from_profile(self));
+        Ok(())
+    }
+
+    pub fn clone_profile_year(&mut self, from_year: u16, to_year: u16) -> Result<(), String> {
+        self.profile_year_allowed(to_year)?;
+        let facts = self
+            .profile_years
+            .get(&from_year)
+            .cloned()
+            .ok_or_else(|| format!("no {from_year} profile"))?;
+        self.profile_years.insert(to_year, facts);
+        Ok(())
+    }
+
+    pub fn profile_year_facts(&self, year: u16) -> Result<&ProfileYearFacts, String> {
+        self.profile_year_allowed(year).map_err(|error| error)?;
+        self.profile_years
+            .get(&year)
+            .ok_or_else(|| format!("no {year} profile"))
+    }
+
+    /// Project this taxpayer as the clone for `year`, leaving TIN and
+    /// credentials on the parent. Missing year is an error, not a flat-field
+    /// fallback.
+    pub fn projection_for_year(&self, year: u16) -> Result<TaxpayerProfile, String> {
+        let facts = self.profile_year_facts(year)?;
+        let mut projected = self.clone();
+        facts.apply_to(&mut projected);
+        projected.profile_versions = Vec::new();
+        Ok(projected)
+    }
+
+    /// Identity-cleared projection that keeps the TIN (the profile key) when
+    /// the requested year has no clone.
+    pub fn tin_only_projection(&self) -> TaxpayerProfile {
+        let mut projected = self.clone();
+        ProfileYearFacts::default().apply_to(&mut projected);
+        projected.full_name.clear();
+        projected.rdo_code.clear();
+        projected.line_of_business.clear();
+        projected.registered_address.clear();
+        projected.zip_code.clear();
+        projected.phone.clear();
+        projected.email.clear();
+        projected.profile_versions = Vec::new();
+        projected
     }
 
     /// Returns the closest earlier year with at least one active form, but only
@@ -664,25 +908,17 @@ impl TaxpayerProfile {
     /// Whether the taxpayer may manage an annual income-tax election
     /// (8% flat rate, graduated + OSD, …) for the given taxable year.
     ///
-    /// Eligibility is a per-year fact: it derives from the confirmed profile
-    /// segments effective in that year, not from the current flat profile.
-    /// A segment qualifies when it is an Individual registered as
-    /// Self-Employed or Mixed Income; a mid-year classification change keeps
-    /// the year eligible as long as one qualifying segment exists. Fails
-    /// closed when the year resolves to zero segments or the confirmed
-    /// timeline has unresolved issues.
+    /// Eligibility is a per-year fact from the profile-year clone
+    /// (Individual registered as Self-Employed or Mixed Income).
     pub fn eligible_for_income_tax_election_in_year(&self, year: u16) -> bool {
-        let resolved = self.resolve_tax_profile_for_year(year);
-        if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
+        let Ok(facts) = self.profile_year_facts(year) else {
             return false;
-        }
-        resolved.effective_segments.iter().any(|segment| {
-            segment.taxpayer_type == TaxpayerType::Individual
-                && matches!(
-                    segment.tax_classification,
-                    Some(TaxClassification::SelfEmployed) | Some(TaxClassification::MixedIncome)
-                )
-        })
+        };
+        facts.taxpayer_type == TaxpayerType::Individual
+            && matches!(
+                facts.tax_classification,
+                Some(TaxClassification::SelfEmployed) | Some(TaxClassification::MixedIncome)
+            )
     }
 
     /// Returns true if email tracking is active.
@@ -776,6 +1012,7 @@ impl TaxpayerProfile {
         changed
     }
 
+    #[allow(dead_code)]
     pub(crate) fn validate_confirmed_profile_timeline(&mut self) -> Result<(), String> {
         self.normalize_profile_version_review_statuses();
 
@@ -871,7 +1108,53 @@ impl TaxpayerProfile {
         self.resolve_tax_profile_for_year(year).effective_segments
     }
 
+    /// Return the clone for tax year `year`. No effective-date overlap scan.
+    ///
+    /// When `profile_years` is still empty (pre-V1 rows / migrations), fall
+    /// back to the stored COR ledger so historical backfills keep working.
+    /// Forms that fill Part I must call [`Self::projection_for_year`].
     pub fn resolve_tax_profile_for_year(&self, year: u16) -> ResolvedTaxProfileForYear {
+        if self.profile_years.is_empty() {
+            let legacy = self.resolve_tax_profile_for_year_from_ledger(year);
+            if !legacy.effective_segments.is_empty() || !legacy.issues.is_empty() {
+                return legacy;
+            }
+            return ResolvedTaxProfileForYear {
+                taxable_year: year,
+                effective_segments: Vec::new(),
+                issues: vec![TaxProfileResolutionIssue {
+                    kind: TaxProfileResolutionIssueKind::NoProfileYear,
+                    version_ids: Vec::new(),
+                    message: format!("no {year} profile"),
+                }],
+            };
+        }
+        let mut issues = Vec::new();
+        let mut segments = Vec::new();
+        match self.profile_year_facts(year) {
+            Ok(facts) => segments.push(facts.as_version(year, self)),
+            Err(message) => {
+                let kind = if self.profile_year_allowed(year).is_err() {
+                    TaxProfileResolutionIssueKind::ProfileYearBeforeBusinessStart
+                } else {
+                    TaxProfileResolutionIssueKind::NoProfileYear
+                };
+                issues.push(TaxProfileResolutionIssue {
+                    kind,
+                    version_ids: Vec::new(),
+                    message,
+                });
+            }
+        }
+
+        ResolvedTaxProfileForYear {
+            taxable_year: year,
+            effective_segments: segments,
+            issues,
+        }
+    }
+
+    fn resolve_tax_profile_for_year_from_ledger(&self, year: u16) -> ResolvedTaxProfileForYear {
         let year_start = NaiveDate::from_ymd_opt(i32::from(year), 1, 1)
             .expect("u16 taxable year is representable by chrono");
         let year_end = NaiveDate::from_ymd_opt(i32::from(year), 12, 31)
@@ -951,111 +1234,38 @@ impl TaxpayerProfile {
         }
     }
 
-    /// Resolve exactly one confirmed profile version for a filing period.
+    /// Resolve the profile-year clone for the filing period's tax year.
     ///
-    /// The yearly resolver remains the timeline authority. This narrower
-    /// resolver combines every calendar year touched by a fiscal period and
-    /// then requires one stored, confirmed version to cover the entire period.
-    /// Synthetic flat-profile fallbacks are intentionally excluded.
+    /// Periods that stay inside one calendar year use that year. A period that
+    /// spans two calendar years (fiscal `?`) uses `period_end`'s year rather
+    /// than scanning `effective_from` / `effective_until`. Forms that know
+    /// their taxable year should call [`Self::projection_for_year`] instead.
     pub fn resolve_tax_profile_for_period(
         &self,
         period_start: NaiveDate,
         period_end: NaiveDate,
     ) -> ResolvedTaxProfileForPeriod {
-        let mut issues = Vec::new();
-        let mut segments = Vec::new();
-        let stored_confirmed_ids = self
-            .profile_versions
-            .iter()
-            .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
-            .map(|version| version.id.as_str())
-            .collect::<BTreeSet<_>>();
-
-        if period_start <= period_end {
-            for calendar_year in period_start.year()..=period_end.year() {
-                let Ok(year) = u16::try_from(calendar_year) else {
-                    continue;
-                };
-                let resolved = self.resolve_tax_profile_for_year(year);
-                for issue in resolved.issues {
-                    let applies_to_period = match issue.kind {
-                        TaxProfileResolutionIssueKind::OverlappingConfirmedVersions => {
-                            issue.version_ids.iter().all(|version_id| {
-                                self.profile_versions
-                                    .iter()
-                                    .find(|version| version.id == *version_id)
-                                    .is_some_and(|version| {
-                                        version.overlaps_period(period_start, period_end)
-                                    })
-                            })
-                        }
-                        _ => true,
-                    };
-                    if applies_to_period && !issues.contains(&issue) {
-                        issues.push(issue);
-                    }
-                }
-            }
+        if period_start > period_end {
+            return ResolvedTaxProfileForPeriod {
+                period_start,
+                period_end,
+                effective_segment: None,
+                issues: vec![TaxProfileResolutionIssue {
+                    kind: TaxProfileResolutionIssueKind::NoProfileYear,
+                    version_ids: Vec::new(),
+                    message: format!(
+                        "The filing period {period_start} through {period_end} is invalid"
+                    ),
+                }],
+            };
         }
-
-        for segment in self.profile_versions.iter().filter(|version| {
-            stored_confirmed_ids.contains(version.id.as_str())
-                && version.overlaps_period(period_start, period_end)
-        }) {
-            if !segments
-                .iter()
-                .any(|existing: &TaxProfileVersion| existing.id == segment.id)
-            {
-                segments.push(segment.clone());
-            }
-        }
-
-        segments.sort_by(|left, right| {
-            left.effective_from
-                .cmp(&right.effective_from)
-                .then(left.id.cmp(&right.id))
-        });
-
-        let covering_segments = segments
-            .iter()
-            .filter(|version| {
-                version
-                    .effective_from
-                    .is_some_and(|start| start <= period_start)
-                    && version.effective_until.is_none_or(|end| end >= period_end)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        if segments.len() > 1 || covering_segments.len() > 1 {
-            issues.push(TaxProfileResolutionIssue {
-                kind: TaxProfileResolutionIssueKind::AmbiguousEffectiveVersionsForPeriod,
-                version_ids: segments.iter().map(|version| version.id.clone()).collect(),
-                message: format!(
-                    "Multiple confirmed taxpayer-profile versions touch the filing period {period_start} through {period_end}"
-                ),
-            });
-        } else if covering_segments.is_empty() {
-            issues.push(TaxProfileResolutionIssue {
-                kind: TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod,
-                version_ids: segments.iter().map(|version| version.id.clone()).collect(),
-                message: format!(
-                    "No confirmed taxpayer-profile version covers the complete filing period {period_start} through {period_end}"
-                ),
-            });
-        }
-
-        let effective_segment = if issues.is_empty() && covering_segments.len() == 1 {
-            covering_segments.into_iter().next()
-        } else {
-            None
-        };
-
+        let year = u16::try_from(period_end.year()).unwrap_or(0);
+        let resolved = self.resolve_tax_profile_for_year(year);
         ResolvedTaxProfileForPeriod {
             period_start,
             period_end,
-            effective_segment,
-            issues,
+            effective_segment: resolved.effective_segments.first().cloned(),
+            issues: resolved.issues,
         }
     }
 
@@ -1432,107 +1642,26 @@ mod tests {
     }
 
     #[test]
-    fn election_eligibility_follows_the_selected_years_confirmed_segments() {
+    fn election_eligibility_follows_the_selected_years_clone() {
         let mut profile = test_profile();
-        let mut self_employed_years = confirmed_version(
-            &profile,
-            "self-employed",
-            "Self-Employed COR",
-            NaiveDate::from_ymd_opt(2020, 1, 1),
-            NaiveDate::from_ymd_opt(2024, 12, 31),
-        );
-        self_employed_years.taxpayer_type = TaxpayerType::Individual;
-        self_employed_years.tax_classification = Some(TaxClassification::SelfEmployed);
-        let mut compensation_years = confirmed_version(
-            &profile,
-            "compensation",
-            "Compensation COR",
-            NaiveDate::from_ymd_opt(2025, 1, 1),
-            None,
-        );
-        compensation_years.taxpayer_type = TaxpayerType::Individual;
-        compensation_years.tax_classification = Some(TaxClassification::PurelyCompensation);
-        profile.profile_versions = vec![self_employed_years, compensation_years];
+        profile.taxpayer_type = TaxpayerType::Individual;
+        profile.tax_classification = Some(TaxClassification::SelfEmployed);
+        profile.capture_current_as_year(2024).unwrap();
+        profile.tax_classification = Some(TaxClassification::PurelyCompensation);
+        profile.capture_current_as_year(2026).unwrap();
 
-        // Historical years resolve to the segment that was effective then,
-        // even though the current registration is compensation-only.
         assert!(profile.eligible_for_income_tax_election_in_year(2024));
         assert!(!profile.eligible_for_income_tax_election_in_year(2026));
-        // Years before any confirmed segment fail closed.
         assert!(!profile.eligible_for_income_tax_election_in_year(2019));
     }
 
     #[test]
-    fn mid_year_classification_change_keeps_the_year_election_eligible() {
-        let mut profile = test_profile();
-        let mut compensation_half = confirmed_version(
-            &profile,
-            "compensation-half",
-            "Compensation Jan-Jun",
-            NaiveDate::from_ymd_opt(2025, 1, 1),
-            NaiveDate::from_ymd_opt(2026, 6, 30),
-        );
-        compensation_half.taxpayer_type = TaxpayerType::Individual;
-        compensation_half.tax_classification = Some(TaxClassification::PurelyCompensation);
-        let mut mixed_income_half = confirmed_version(
-            &profile,
-            "mixed-half",
-            "Mixed Income Jul-Dec",
-            NaiveDate::from_ymd_opt(2026, 7, 1),
-            None,
-        );
-        mixed_income_half.taxpayer_type = TaxpayerType::Individual;
-        mixed_income_half.tax_classification = Some(TaxClassification::MixedIncome);
-        profile.profile_versions = vec![compensation_half, mixed_income_half];
-
-        // One qualifying segment in the year is enough.
-        assert!(profile.eligible_for_income_tax_election_in_year(2026));
-        // The purely-compensation-only year stays ineligible.
-        assert!(!profile.eligible_for_income_tax_election_in_year(2025));
-    }
-
-    #[test]
-    fn election_eligibility_fails_closed_without_confirmed_segments() {
+    fn election_eligibility_fails_closed_without_a_profile_year() {
         let mut profile = test_profile();
         profile.taxpayer_type = TaxpayerType::Individual;
         profile.tax_classification = Some(TaxClassification::SelfEmployed);
-        profile.profile_versions.clear();
+        profile.profile_years.clear();
 
-        // The flat profile alone is not evidence for a taxable year.
-        assert!(!profile.eligible_for_income_tax_election_in_year(2026));
-
-        // A draft version is not a confirmed segment either.
-        let mut draft = draft_version(&profile, "draft", "Draft COR");
-        draft.tax_classification = Some(TaxClassification::SelfEmployed);
-        profile.profile_versions = vec![draft];
-        assert!(!profile.eligible_for_income_tax_election_in_year(2026));
-    }
-
-    #[test]
-    fn election_eligibility_fails_closed_on_conflicting_segments() {
-        let mut profile = test_profile();
-        let mut first = confirmed_version(
-            &profile,
-            "first",
-            "First COR",
-            NaiveDate::from_ymd_opt(2025, 1, 1),
-            None,
-        );
-        first.taxpayer_type = TaxpayerType::Individual;
-        first.tax_classification = Some(TaxClassification::SelfEmployed);
-        let mut overlapping = confirmed_version(
-            &profile,
-            "overlapping",
-            "Overlapping COR",
-            NaiveDate::from_ymd_opt(2026, 1, 1),
-            None,
-        );
-        overlapping.taxpayer_type = TaxpayerType::Individual;
-        overlapping.tax_classification = Some(TaxClassification::SelfEmployed);
-        profile.profile_versions = vec![first, overlapping];
-
-        // Overlapping confirmed versions are a timeline conflict; the year
-        // must not claim eligibility until the conflict is resolved.
         assert!(!profile.eligible_for_income_tax_election_in_year(2026));
     }
 
@@ -1688,24 +1817,92 @@ mod tests {
     }
 
     #[test]
-    fn exact_period_resolution_selects_sequential_mid_year_versions() {
+    fn profile_year_lookup_returns_the_clone_for_that_year() {
         let mut profile = test_profile();
-        profile.profile_versions = vec![
-            confirmed_version(
-                &profile,
-                "first-half",
-                "First Half Taxpayer",
-                NaiveDate::from_ymd_opt(2026, 1, 1),
-                NaiveDate::from_ymd_opt(2026, 6, 30),
-            ),
-            confirmed_version(
-                &profile,
-                "second-half",
-                "Second Half Taxpayer",
-                NaiveDate::from_ymd_opt(2026, 7, 1),
-                None,
-            ),
-        ];
+        profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.full_name = "2026 Name".into();
+        profile.rdo_code = "018".into();
+        profile.capture_current_as_year(2026).unwrap();
+        profile.full_name = "2025 Name".into();
+        profile.rdo_code = "019".into();
+        profile.capture_current_as_year(2025).unwrap();
+
+        let y2026 = profile.resolve_tax_profile_for_year(2026);
+        let y2025 = profile.resolve_tax_profile_for_year(2025);
+        assert!(!y2026.has_blocking_issues());
+        assert_eq!(
+            y2026.effective_segments[0].cor.registered_name,
+            "2026 Name"
+        );
+        assert_eq!(y2026.effective_segments[0].cor.rdo_code, "018");
+        assert_eq!(
+            y2025.effective_segments[0].cor.registered_name,
+            "2025 Name"
+        );
+        assert_eq!(y2025.effective_segments[0].id, "year-2025");
+        assert_ne!(
+            y2026.effective_segments[0].id,
+            y2025.effective_segments[0].id
+        );
+    }
+
+    #[test]
+    fn profile_year_before_business_start_date_is_rejected() {
+        let mut profile = test_profile();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2024, 6, 1);
+        profile.capture_current_as_year(2024).unwrap();
+
+        let resolved = profile.resolve_tax_profile_for_year(2023);
+        assert!(resolved.effective_segments.is_empty());
+        assert!(resolved.issues.iter().any(|issue| {
+            issue.kind == TaxProfileResolutionIssueKind::ProfileYearBeforeBusinessStart
+        }));
+        assert!(
+            profile
+                .capture_current_as_year(2019)
+                .unwrap_err()
+                .contains("before Business Start Date")
+        );
+    }
+
+    #[test]
+    fn profile_year_selector_range_clamps_to_business_start() {
+        let with_start = profile_year_selector_range(
+            NaiveDate::from_ymd_opt(2024, 6, 1),
+            2026,
+        );
+        assert_eq!(*with_start.start(), 2024);
+        assert_eq!(*with_start.end(), 2027);
+
+        let missing = profile_year_selector_range(None, 2026);
+        assert_eq!(*missing.start(), 2018);
+        assert_eq!(*missing.end(), 2027);
+    }
+
+    #[test]
+    fn missing_profile_year_is_not_an_effective_range_gap() {
+        let profile = test_profile();
+        let resolved = profile.resolve_tax_profile_for_year(2026);
+        assert!(resolved.effective_segments.is_empty());
+        assert!(
+            resolved
+                .issues
+                .iter()
+                .any(|issue| issue.kind == TaxProfileResolutionIssueKind::NoProfileYear
+                    && issue.message == "no 2026 profile")
+        );
+        assert!(
+            !resolved.issues.iter().any(|issue| {
+                issue.kind == TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod
+            })
+        );
+    }
+
+    #[test]
+    fn period_resolution_looks_up_the_calendar_year_clone() {
+        let mut profile = test_profile();
+        profile.full_name = "Year 2026".into();
+        profile.capture_current_as_year(2026).unwrap();
 
         let q1 = profile.resolve_tax_profile_for_period(
             NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
@@ -1721,50 +1918,18 @@ mod tests {
             q1.effective_segment
                 .as_ref()
                 .map(|version| version.id.as_str()),
-            Some("first-half")
+            Some("year-2026")
         );
-        assert!(!q3.has_blocking_issues());
         assert_eq!(
             q3.effective_segment
                 .as_ref()
                 .map(|version| version.id.as_str()),
-            Some("second-half")
+            Some("year-2026")
         );
     }
 
     #[test]
-    fn exact_period_resolution_rejects_a_version_change_inside_the_quarter() {
-        let mut profile = test_profile();
-        profile.profile_versions = vec![
-            confirmed_version(
-                &profile,
-                "before-change",
-                "Before Change",
-                NaiveDate::from_ymd_opt(2026, 1, 1),
-                NaiveDate::from_ymd_opt(2026, 5, 14),
-            ),
-            confirmed_version(
-                &profile,
-                "after-change",
-                "After Change",
-                NaiveDate::from_ymd_opt(2026, 5, 15),
-                None,
-            ),
-        ];
-
-        let resolved = profile.resolve_tax_profile_for_period(
-            NaiveDate::from_ymd_opt(2026, 4, 1).unwrap(),
-            NaiveDate::from_ymd_opt(2026, 6, 30).unwrap(),
-        );
-
-        assert!(resolved.effective_segment.is_none());
-        assert!(resolved.issues.iter().any(|issue| {
-            issue.kind == TaxProfileResolutionIssueKind::AmbiguousEffectiveVersionsForPeriod
-        }));
-    }
-
-    #[test]
-    fn exact_period_resolution_never_uses_a_synthetic_flat_profile() {
+    fn period_resolution_never_uses_the_flat_profile_when_the_year_is_missing() {
         let mut profile = test_profile();
         profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
         profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
@@ -1775,9 +1940,12 @@ mod tests {
         );
 
         assert!(resolved.effective_segment.is_none());
-        assert!(resolved.issues.iter().any(|issue| {
-            issue.kind == TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod
-        }));
+        assert!(
+            resolved
+                .issues
+                .iter()
+                .any(|issue| issue.kind == TaxProfileResolutionIssueKind::NoProfileYear)
+        );
     }
 
     #[test]
@@ -1796,70 +1964,14 @@ mod tests {
             "legacy-current-profile"
         );
 
-        // Backfill is an explicit, idempotent migration boundary rather than
-        // a hidden projection performed by every resolver call.
         profile.ensure_profile_version_ledger();
         assert_eq!(profile.profile_versions.len(), 1);
-    }
-
-    #[test]
-    fn exact_period_resolution_propagates_undated_and_overlapping_timeline_issues() {
-        let mut undated_profile = test_profile();
-        undated_profile.profile_versions = vec![confirmed_version(
-            &undated_profile,
-            "undated",
-            "Undated COR",
-            None,
-            None,
-        )];
-        let undated = undated_profile.resolve_tax_profile_for_period(
-            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
-            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
-        );
-        assert!(undated.effective_segment.is_none());
         assert!(
-            undated.issues.iter().any(|issue| {
-                issue.kind == TaxProfileResolutionIssueKind::UndatedConfirmedVersion
-            })
-        );
-
-        let mut overlapping_profile = test_profile();
-        overlapping_profile.profile_versions = vec![
-            confirmed_version(
-                &overlapping_profile,
-                "one",
-                "One",
-                NaiveDate::from_ymd_opt(2025, 1, 1),
-                NaiveDate::from_ymd_opt(2026, 2, 15),
-            ),
-            confirmed_version(
-                &overlapping_profile,
-                "two",
-                "Two",
-                NaiveDate::from_ymd_opt(2026, 2, 1),
-                None,
-            ),
-        ];
-        let overlapping = overlapping_profile.resolve_tax_profile_for_period(
-            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
-            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
-        );
-        assert!(overlapping.effective_segment.is_none());
-        assert!(overlapping.issues.iter().any(|issue| {
-            issue.kind == TaxProfileResolutionIssueKind::OverlappingConfirmedVersions
-        }));
-
-        let after_overlap = overlapping_profile.resolve_tax_profile_for_period(
-            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
-            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
-        );
-        assert!(!after_overlap.has_blocking_issues());
-        assert_eq!(
-            after_overlap
-                .effective_segment
-                .as_ref()
-                .map(|version| version.id.as_str()),
-            Some("two")
+            profile
+                .resolve_tax_profile_for_year(2026)
+                .effective_segments
+                .iter()
+                .any(|version| version.id == "legacy-current-profile")
         );
     }
 

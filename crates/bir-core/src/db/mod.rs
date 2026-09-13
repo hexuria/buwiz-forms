@@ -1070,6 +1070,7 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
             zip_code: "1103".into(),
             phone: "0999".into(),
             email: "miley@example.com".into(),

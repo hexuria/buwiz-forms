@@ -40,6 +40,10 @@ These are still `?` unless marked **Decided**. Phase 3 must not guess.
 3. **Filing frequency `?`** on 1600WP, 1706, 1707, 1801, 2200A, 2200C, 2200M,
    2200P, 2200T, 2552. Deadline calendar must not invent monthly/quarterly/
    annual for those codes.
+4. **Profile-year store.** **Decided** (Phase 3): clones live in
+   `TaxpayerProfile.profile_years` (`BTreeMap<u16, ProfileYearFacts>`) inside
+   existing `profiles.data_json`. No dedicated table. The `TaxProfileVersion`
+   ledger is still stored until work item 5.
 
 ---
 

@@ -22,6 +22,7 @@ use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, RegisteredTaxType, RegistrationActivityStatus,
     TaxClassification, TaxProfileVersionConfirmationPlan, TaxpayerProfile, TaxpayerType,
+    profile_year_selector_range,
 };
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
@@ -273,6 +274,7 @@ pub struct ProfileManagerView {
     is_uploading_cor: bool,
 
     pub stored_per_year_forms: std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
+    stored_profile_years: std::collections::BTreeMap<u16, bir_core::profile::ProfileYearFacts>,
     pub forms_editor_year: u16,
     pub forms_editor_year_select: Entity<ComboboxState>,
     pub forms_editor_new_code_input: Entity<InputState>,
@@ -639,9 +641,7 @@ impl ProfileManagerView {
 
         let forms_editor_year = current_year as u16;
         let forms_editor_year_select = cx.new(|cx| {
-            // Offer one year past the current one so next-year planning works
-            // without a hard-coded upper bound going stale.
-            let years = (2018..=current_year + 1)
+            let years = profile_year_selector_range(None, current_year)
                 .map(|y| y.to_string())
                 .collect::<Vec<_>>();
             let mut state = ComboboxState::new(years, 5, window, cx);
@@ -696,7 +696,11 @@ impl ProfileManagerView {
                 Self::on_tax_election_year_event,
             ),
             cx.subscribe(&excise_select, Self::on_multi_select_event),
-            cx.subscribe(&business_start_input, Self::on_date_event),
+            cx.subscribe_in(
+                &business_start_input,
+                window,
+                Self::on_business_start_date_event,
+            ),
             cx.subscribe(&birth_date_input, Self::on_date_event),
             cx.subscribe(&cor_effective_from_input, Self::on_date_event),
             cx.subscribe(&cor_effective_until_input, Self::on_date_event),
@@ -786,15 +790,14 @@ impl ProfileManagerView {
         )
         .detach();
 
-        cx.subscribe(
+        cx.subscribe_in(
             &forms_editor_year_select,
-            |this: &mut Self, _, event: &ComboboxEvent, cx| {
-                if let Some(val) = event.selected.as_ref() {
-                    if let Ok(year) = val.parse::<u16>() {
-                        this.forms_editor_year = year;
-                        this.forms_editor_selected_code = None; // Reset detail view
-                        cx.notify();
-                    }
+            window,
+            |this: &mut Self, _, event: &ComboboxEvent, window, cx| {
+                if let Some(val) = event.selected.as_ref()
+                    && let Ok(year) = val.parse::<u16>()
+                {
+                    this.switch_profile_year(year, window, cx);
                 }
             },
         )
@@ -951,6 +954,7 @@ impl ProfileManagerView {
             queued_profile_save: None,
             persisted_profile_tin: None,
             stored_per_year_forms: std::collections::BTreeMap::new(),
+            stored_profile_years: std::collections::BTreeMap::new(),
             forms_editor_year,
             forms_editor_year_select,
             forms_editor_new_code_input,
@@ -1440,6 +1444,7 @@ impl ProfileManagerView {
             select.set_selected_value("", window, cx);
         });
         self.stored_profile_versions = vec![];
+        self.stored_profile_years.clear();
         self.pending_cor_evidence_cleanup.clear();
         self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
         self.ocr_selected_version_id = None;
@@ -1527,6 +1532,7 @@ impl ProfileManagerView {
             .update(cx, |input, cx| input.set_date(None, window, cx));
         self.birth_date_input
             .update(cx, |input, cx| input.set_date(None, window, cx));
+        self.refresh_profile_year_selector(window, cx);
         self.rdo_select.update(cx, |select, cx| {
             select.set_selected_value("", window, cx);
         });
@@ -1571,7 +1577,7 @@ impl ProfileManagerView {
 
     pub fn edit_profile(
         &mut self,
-        profile: TaxpayerProfile,
+        mut profile: TaxpayerProfile,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1592,6 +1598,11 @@ impl ProfileManagerView {
             select.set_selected_value("", window, cx);
         });
         self.stored_profile_versions = profile.profile_versions.clone();
+        self.stored_profile_years = profile.profile_years.clone();
+        if let Some(facts) = self.stored_profile_years.get(&self.forms_editor_year).cloned()
+        {
+            facts.apply_to(&mut profile);
+        }
         self.pending_cor_evidence_cleanup.clear();
         self.compliance_source_mode =
             Self::derive_compliance_source_mode(&self.stored_profile_versions);
@@ -1747,6 +1758,7 @@ impl ProfileManagerView {
         self.birth_date_input.update(cx, |input, cx| {
             input.set_date(profile.birth_date, window, cx)
         });
+        self.refresh_profile_year_selector(window, cx);
 
         let rdo_value = self
             .rdo_options
@@ -2104,11 +2116,8 @@ impl ProfileManagerView {
                 field_to_validate = Some("zip_code");
                 value = val.split(" - ").next().unwrap_or("").trim().to_string();
             } else if state == self.forms_editor_year_select {
-                if let Ok(year) = val.parse::<u16>() {
-                    self.forms_editor_year = year;
-                    self.forms_editor_selected_code = None; // Reset detail view
-                    cx.notify();
-                }
+                // Year switching is handled by subscribe_in so the editor
+                // can load that year's clone with a Window.
             }
 
             if let Some(field) = field_to_validate {
@@ -2119,6 +2128,18 @@ impl ProfileManagerView {
                 cx.notify();
             }
         }
+    }
+
+    fn on_business_start_date_event(
+        &mut self,
+        _state: &Entity<DateInputState>,
+        _event: &DateInputEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_profile_year_selector(window, cx);
+        self.mark_profile_changed();
+        cx.notify();
     }
 
     fn on_date_event(
@@ -2343,7 +2364,7 @@ impl ProfileManagerView {
             None
         };
 
-        TaxpayerProfile {
+        let mut profile = TaxpayerProfile {
             id: self.editing_id,
             full_name: self.name_input.read(cx).value().trim().to_string(),
             tin,
@@ -2472,6 +2493,102 @@ impl ProfileManagerView {
                 &self.stored_profile_versions,
             ),
             per_year_forms: self.stored_per_year_forms.clone(),
+            profile_years: self.stored_profile_years.clone(),
+        };
+        let _ = profile.capture_current_as_year(self.forms_editor_year);
+        profile
+    }
+
+    fn switch_profile_year(
+        &mut self,
+        year: u16,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if year == self.forms_editor_year {
+            return;
+        }
+        if let Err(message) = self.current_profile(cx).profile_year_allowed(year) {
+            self.pending_notification = Some((
+                gpui_component::notification::NotificationType::Error,
+                message,
+            ));
+            self.forms_editor_year_select.update(cx, |select, cx| {
+                select.set_selected_value(&self.forms_editor_year.to_string(), window, cx);
+            });
+            cx.notify();
+            return;
+        }
+        let snapshot = self.current_profile(cx);
+        self.stored_profile_years = snapshot.profile_years.clone();
+        self.forms_editor_year = year;
+        self.forms_editor_selected_code = None;
+        let mut projected = snapshot;
+        if let Some(facts) = self.stored_profile_years.get(&year).cloned() {
+            facts.apply_to(&mut projected);
+        } else {
+            projected = projected.tin_only_projection();
+        }
+        self.sync_projection_to_ui(&projected, window, cx);
+        self.mark_profile_changed();
+        cx.notify();
+    }
+
+    fn clone_profile_year_from_previous(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let year = self.forms_editor_year;
+        let mut snapshot = self.current_profile(cx);
+        let Some((from_year, _)) = snapshot.profile_years.range(..year).next_back() else {
+            self.pending_notification = Some((
+                gpui_component::notification::NotificationType::Warning,
+                format!("no earlier profile to clone into {year}"),
+            ));
+            cx.notify();
+            return;
+        };
+        let from_year = *from_year;
+        if let Err(message) = snapshot.clone_profile_year(from_year, year) {
+            self.pending_notification = Some((
+                gpui_component::notification::NotificationType::Error,
+                message,
+            ));
+            cx.notify();
+            return;
+        }
+        self.stored_profile_years = snapshot.profile_years.clone();
+        if let Some(facts) = self.stored_profile_years.get(&year).cloned() {
+            facts.apply_to(&mut snapshot);
+            self.sync_projection_to_ui(&snapshot, window, cx);
+        }
+        self.mark_profile_changed();
+        self.pending_notification = Some((
+            gpui_component::notification::NotificationType::Success,
+            format!("Cloned the {from_year} profile into {year}"),
+        ));
+        cx.notify();
+    }
+
+    fn refresh_profile_year_selector(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current_year = chrono::Local::now().date_naive().year();
+        let business_start = self.business_start_input.read(cx).date;
+        let range = profile_year_selector_range(business_start, current_year);
+        let years: Vec<String> = range.clone().map(|year| year.to_string()).collect();
+        let selected = if range.contains(&self.forms_editor_year) {
+            self.forms_editor_year
+        } else if self.forms_editor_year < *range.start() {
+            *range.start()
+        } else {
+            *range.end()
+        };
+        self.forms_editor_year_select.update(cx, |select, cx| {
+            select.set_options(years, cx);
+            select.set_selected_value(&selected.to_string(), window, cx);
+        });
+        if selected != self.forms_editor_year {
+            self.switch_profile_year(selected, window, cx);
         }
     }
 
@@ -4710,15 +4827,27 @@ impl Render for ProfileManagerView {
                             .gap_6()
                             .child(rsx! {
                                 <div flex flex_col gap_2>
-                                    <div
-                                        text_3xl
-                                        font_weight={FontWeight::BLACK}
-                                        text_color={cx.theme().foreground}
-                                    >
-                                        {title}
+                                    <div flex items_center justify_between gap_3>
+                                        <div
+                                            text_3xl
+                                            font_weight={FontWeight::BLACK}
+                                            text_color={cx.theme().foreground}
+                                        >
+                                            {title}
+                                        </div>
+                                        <div flex items_center gap_2 id={crate::agent::ids::PROFILE_YEAR_SELECT}>
+                                            <div text_sm text_color={cx.theme().muted_foreground}>{"Year:"}</div>
+                                            <div w={px(100.)}>{Combobox::new(&self.forms_editor_year_select)}</div>
+                                            {gpui_component::button::Button::new(crate::agent::ids::PROFILE_YEAR_CLONE)
+                                                .label("Clone from previous year")
+                                                .small()
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.clone_profile_year_from_previous(window, cx);
+                                                }))}
+                                        </div>
                                     </div>
                                     <div text_base text_color={cx.theme().muted_foreground}>
-                                        {"Required information is used to pre-fill 2551Q."}
+                                        {"Each year has its own tax-profile clone. Forms read the year they are filed for."}
                                     </div>
                                 </div>
                             })

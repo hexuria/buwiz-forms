@@ -7,9 +7,9 @@ use bir_core::integration::{
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, ExciseTaxCategory, IncomeTaxElection, ManualObligationOverride,
-    ManualObligationOverrideAction, ProfileDeadlineOverride, RegisteredTaxType,
+    ManualObligationOverrideAction, ProfileDeadlineOverride, ProfileYearFacts, RegisteredTaxType,
     RegistrationActivityStatus, TaxClassification, TaxElectionHistory, TaxProfileVersion,
-    TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
+    TaxProfileResolutionIssueKind, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
 };
 use bir_core::validation::validate_profile;
 use chrono::NaiveDate;
@@ -91,6 +91,7 @@ fn base_profile(
         birth_date: None,
         compliance_source_mode: Default::default(),
         per_year_forms: Default::default(),
+        profile_years: Default::default(),
     }
 }
 
@@ -603,16 +604,22 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
 }
 
 #[test]
-fn cor_versioned_mode_requires_confirmed_versions() {
+fn missing_profile_year_is_not_a_profile_versions_blocker() {
     let mut profile = self_employed_profile(false, None, false);
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    assert!(recurring_obligation_forms_for_profile_and_year(&profile, TAXABLE_YEAR).is_empty());
     assert!(
         validate_profile(&profile)
             .iter()
-            .any(|error| error.field == "profile_versions")
+            .all(|error| error.field != "profile_versions"),
+        "COR confirmed versions are not a V1 save gate"
     );
+    let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
+    assert!(resolved.effective_segments.is_empty());
+    assert!(resolved.issues.iter().any(|issue| {
+        issue.kind == TaxProfileResolutionIssueKind::NoProfileYear
+            && issue.message == "no 2026 profile"
+    }));
 }
 
 #[test]
@@ -814,59 +821,40 @@ fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
     assert!(
         validate_profile(&profile)
             .iter()
-            .any(|error| error.field == "profile_versions")
+            .all(|error| error.field != "profile_versions"),
+        "overlapping COR ledger dates are not a V1 filing blocker"
     );
 }
 
 #[test]
 fn yearly_profile_resolution_excludes_undated_confirmed_version() {
-    let mut profile = self_employed_profile(false, None, false);
-    let version = confirmed_version(
-        &profile,
-        "undated",
-        "Undated migrated profile",
-        None,
-        None,
-        vec![RegisteredTaxType::PercentageTax],
-        false,
-    );
-    profile.profile_versions = vec![version];
-    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-
+    let profile = self_employed_profile(false, None, false);
     let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
-
     assert!(resolved.effective_segments.is_empty());
-    assert_eq!(resolved.issues.len(), 1);
+    assert!(
+        resolved
+            .issues
+            .iter()
+            .any(|issue| issue.kind == bir_core::profile::TaxProfileResolutionIssueKind::NoProfileYear)
+    );
 }
 
 #[test]
-fn yearly_profile_resolution_accepts_sequential_midyear_versions() {
+fn yearly_profile_resolution_returns_the_year_clone() {
     let mut profile = self_employed_profile(false, None, false);
-    let first = confirmed_version(
-        &profile,
-        "first",
-        "First half",
-        Some((2026, 1, 1)),
-        Some((2026, 6, 30)),
-        vec![RegisteredTaxType::PercentageTax],
-        false,
-    );
-    let second = confirmed_version(
-        &profile,
-        "second",
-        "Second half",
-        Some((2026, 7, 1)),
-        None,
-        vec![RegisteredTaxType::ValueAddedTax],
-        true,
-    );
-    profile.profile_versions = vec![second, first];
-    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    profile.full_name = "2026 clone".into();
+    profile.capture_current_as_year(TAXABLE_YEAR).unwrap();
+    profile.full_name = "2025 clone".into();
+    profile.capture_current_as_year(TAXABLE_YEAR - 1).unwrap();
 
     let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
 
-    assert_eq!(resolved.effective_segments.len(), 2);
+    assert_eq!(resolved.effective_segments.len(), 1);
     assert!(resolved.issues.is_empty());
+    assert_eq!(
+        resolved.effective_segments[0].cor.registered_name,
+        "2026 clone"
+    );
 }
 
 #[test]
@@ -1032,7 +1020,7 @@ fn profile_global_deadline_override_conflict_is_reported() {
 }
 
 #[test]
-fn profile_override_validation_requires_reason_and_source() {
+fn ledger_override_hygiene_is_not_a_save_gate() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
         &profile,
@@ -1064,20 +1052,11 @@ fn profile_override_validation_requires_reason_and_source() {
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    let messages = validate_profile(&profile)
-        .into_iter()
-        .map(|error| error.message)
-        .collect::<Vec<_>>();
-
     assert!(
-        messages
+        validate_profile(&profile)
             .iter()
-            .any(|message| message.contains("requires a reason and source"))
-    );
-    assert!(
-        messages
-            .iter()
-            .any(|message| { message.contains("requires a title, source, and form code") })
+            .all(|error| error.field != "profile_versions"),
+        "ledger override hygiene is not a V1 save gate"
     );
 }
 
@@ -1322,7 +1301,7 @@ fn manual_include_still_reports_missing_calendar_rule_for_1704() {
 }
 
 #[test]
-fn profile_version_validation_rejects_invalid_effective_date_range() {
+fn profile_version_ledger_date_range_is_not_a_save_gate() {
     let mut profile = self_employed_profile(false, None, false);
     let version = confirmed_version(
         &profile,
@@ -1336,9 +1315,28 @@ fn profile_version_validation_rejects_invalid_effective_date_range() {
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    assert!(validate_profile(&profile).iter().any(|error| {
-        error
-            .message
-            .contains("effective end date before its start date")
-    }));
+    assert!(
+        validate_profile(&profile).iter().all(|error| {
+            !error
+                .message
+                .contains("effective end date before its start date")
+        }),
+        "COR ledger date ranges are not a V1 save gate"
+    );
+}
+
+#[test]
+fn validate_profile_rejects_year_before_business_start() {
+    let mut profile = self_employed_profile(false, None, false);
+    profile.business_start_date = Some(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    profile
+        .profile_years
+        .insert(2023, ProfileYearFacts::from_profile(&profile));
+
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .any(|error| error.field == "profile_years"
+                && error.message.contains("before Business Start Date"))
+    );
 }

@@ -108,6 +108,13 @@ impl ComboboxState {
         }
     }
 
+    pub fn set_options(&mut self, options: Vec<String>, cx: &mut Context<Self>) {
+        self.options = options.clone();
+        self.filtered_options = options;
+        self.selected_index = None;
+        cx.notify();
+    }
+
     pub fn set_selected_value(&mut self, value: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.input.update(cx, |input, cx| {
             input.set_value(value.to_string(), window, cx);

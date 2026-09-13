@@ -63,6 +63,7 @@ fn profile_for_dashboard(
         profile_versions: vec![],
         compliance_source_mode: Default::default(),
         per_year_forms: Default::default(),
+            profile_years: Default::default(),
     };
     profile.ensure_profile_version_ledger();
     profile

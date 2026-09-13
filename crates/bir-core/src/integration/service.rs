@@ -234,7 +234,7 @@ mod tests {
             }
         };
 
-        let profile = TaxpayerProfile {
+        let mut profile = TaxpayerProfile {
             id: None,
             full_name: "JUAN DELA CRUZ".to_string(),
             tin: Tin {
@@ -286,7 +286,9 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
+        let _ = profile.capture_current_as_year(2026);
 
         db.save_profile(profile).unwrap();
         Some(db)

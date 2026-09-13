@@ -1661,6 +1661,7 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
         profile
@@ -1717,19 +1718,12 @@ mod tests {
 
     #[test]
     fn registration_fee_infers_0605_only_for_the_cor_registration_year() {
-        use crate::profile::RegisteredTaxType;
-
         let mut profile =
             profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
-        configure_confirmed_cor_evidence(
-            &mut profile,
-            false,
-            vec![RegisteredTaxType::RegistrationFee],
-            &[],
-            None,
-        );
-        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2020, 1, 1);
-        profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2026, 7, 18);
+        profile.business_start_date = NaiveDate::from_ymd_opt(2026, 7, 18);
+        profile.profile_years.clear();
+        profile.capture_current_as_year(2026).unwrap();
+        profile.capture_current_as_year(2027).unwrap();
 
         let registration_year = form_suggestions_for_profile_year(&profile, 2026);
         assert!(registration_year.iter().any(|suggestion| {
@@ -1753,12 +1747,15 @@ mod tests {
         profile.profile_versions.clear();
         profile.business_start_date = NaiveDate::from_ymd_opt(2026, 7, 18);
         profile.ensure_profile_version_ledger();
+        profile.profile_years.clear();
+        profile.capture_current_as_year(2026).unwrap();
+        profile.capture_current_as_year(2027).unwrap();
 
         let registration_year = form_suggestions_for_profile_year(&profile, 2026);
         assert!(registration_year.iter().any(|suggestion| {
             suggestion.form_code == "0605"
                 && suggestion.active
-                && suggestion.source == FormSuggestionSource::MigrationBackfill
+                && suggestion.source == FormSuggestionSource::InferredTaxType
         }));
 
         let following_year = form_suggestions_for_profile_year(&profile, 2027);
@@ -2056,11 +2053,11 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
-
-        // PurelyCompensation should NOT be allowed to file 2551Q
         let current_year = chrono::Local::now().year() as u16;
+        let _ = profile.capture_current_as_year(current_year);
         configure_forms_set_from_suggestions(&mut profile, current_year);
         let err = validate_form_applicability("2551Q", &profile, current_year);
         assert!(err.is_some());
@@ -2127,9 +2124,12 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
         let current_year = chrono::Local::now().year() as u16;
+        let _ = profile.capture_current_as_year(current_year);
+        let _ = profile.capture_current_as_year(2026);
         configure_forms_set_from_suggestions(&mut profile, current_year);
 
         let forms = applicable_forms_for_profile(&profile);

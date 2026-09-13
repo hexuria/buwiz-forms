@@ -396,9 +396,9 @@ impl Database {
         }
 
         validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, reviewed_plan)?;
-        profile
-            .validate_confirmed_profile_timeline()
-            .map_err(DbError::Other)?;
+        // The COR ledger is stored until work item 5. Profile-year clones are
+        // the runtime version, so overlapping effective dates are not a save
+        // gate.
 
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;

@@ -3080,6 +3080,7 @@ mod tests {
     fn insert_test_profile(db: &Database, profile: &TaxpayerProfile) {
         let mut persisted = profile.clone();
         persisted.ensure_profile_version_ledger();
+        let _ = persisted.capture_current_as_year(2026);
         insert_raw_test_profile(db, &persisted);
     }
 
@@ -3095,6 +3096,7 @@ mod tests {
     fn queued_eight_percent_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
         let mut effective_profile = profile.clone();
         effective_profile.ensure_profile_version_ledger();
+        let _ = effective_profile.capture_current_as_year(2026);
         let mut draft = Form2551QDraft::new_from_effective_profile(&effective_profile, 2026, 1);
         draft.item_13_election = Item13Election::EightPercent;
         draft
@@ -3106,6 +3108,7 @@ mod tests {
     fn queued_graduated_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
         let mut effective_profile = profile.clone();
         effective_profile.ensure_profile_version_ledger();
+        let _ = effective_profile.capture_current_as_year(2026);
         let mut draft = Form2551QDraft::new_from_effective_profile(&effective_profile, 2026, 1);
         draft.item_13_election = Item13Election::Graduated;
         draft
@@ -4211,6 +4214,7 @@ mod tests {
         let mut profile = test_profile();
         profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2026, 8, 15);
         profile.ensure_profile_version_ledger();
+        let _ = profile.capture_current_as_year(2026);
         insert_test_profile(&db, &profile);
 
         let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 3);
@@ -4287,32 +4291,15 @@ mod tests {
         let cases = [
             {
                 let mut profile = reviewed_profile.clone();
+                profile.profile_years.clear();
                 profile.profile_versions.clear();
-                ("missing ledger", profile)
+                ("missing profile-year", profile)
             },
             {
                 let mut profile = reviewed_profile.clone();
-                profile.ensure_profile_version_ledger();
-                let mut overlapping = profile.profile_versions[0].clone();
-                overlapping.id = "overlapping-confirmed-version".to_string();
-                overlapping.label = "Overlapping confirmed version".to_string();
-                overlapping.effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
-                profile.profile_versions.push(overlapping);
-                ("overlapping ledger", profile)
-            },
-            {
-                let mut profile = reviewed_profile.clone();
-                profile.business_start_date = None;
-                profile.profile_versions.clear();
-                profile.ensure_profile_version_ledger();
-                ("undated ledger", profile)
-            },
-            {
-                let mut profile = reviewed_profile.clone();
-                profile.ensure_profile_version_ledger();
-                profile.profile_versions[0].effective_from =
-                    chrono::NaiveDate::from_ymd_opt(2027, 1, 1);
-                ("out-of-period ledger", profile)
+                profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2027, 1, 1);
+                profile.profile_years.clear();
+                ("year before Business Start Date", profile)
             },
         ];
 
@@ -4326,7 +4313,8 @@ mod tests {
                 .expect_err(case);
 
             assert!(
-                error.to_string().contains("exact filing period"),
+                error.to_string().contains("no 2026 profile")
+                    || error.to_string().contains("before Business Start Date"),
                 "{case} returned an unexpected error: {error}"
             );
             assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
@@ -5653,6 +5641,7 @@ mod tests {
 
         profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
         profile.profile_versions[0].eopt_tier = Some(crate::profile::EoptTier::Micro);
+        let _ = profile.capture_current_as_year(2026);
         db.conn
             .execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
@@ -5695,6 +5684,7 @@ mod tests {
             .expect("queued draft should persist before claiming");
 
         let mut unresolved_profile = db.get_profile(&queued.tin).unwrap().unwrap();
+        unresolved_profile.profile_years.clear();
         unresolved_profile.profile_versions.clear();
         db.conn
             .execute(
@@ -5726,7 +5716,7 @@ mod tests {
                         .is_some_and(|message| message.contains("effective taxpayer profile"))
                 );
                 assert!(errors.iter().any(|(field, message)| {
-                    field == "profile_resolution" && message.contains("No confirmed")
+                    field == "profile_resolution" && message.contains("no 2026 profile")
                 }));
             }
             _ => panic!("an unresolved profile must reject a network claim"),

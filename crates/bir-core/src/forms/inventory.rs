@@ -598,6 +598,7 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,

@@ -69,6 +69,7 @@ fn create_test_profile(tin_str: &str) -> TaxpayerProfile {
         profile_versions: vec![],
         compliance_source_mode: ComplianceSourceMode::CorVersioned,
         per_year_forms: Default::default(),
+            profile_years: Default::default(),
     };
     profile.ensure_profile_version_ledger();
     profile
@@ -464,7 +465,7 @@ fn undated_migration_backfill_preserves_existing_forms_set() {
 }
 
 #[test]
-fn profile_save_rejects_overlapping_confirmed_versions() {
+fn profile_save_allows_overlapping_confirmed_versions() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -489,14 +490,10 @@ fn profile_save_rejects_overlapping_confirmed_versions() {
             .expect("confirmation plan should be available");
         assert!(changed.apply_profile_version_confirmation_plan(&plan));
 
-        let error = db
+        let stored = db
             .save_profile_with_confirmation_plan(changed, &plan)
-            .expect_err("overlap must be rejected");
-
-        assert!(
-            error.to_string().contains("overlap"),
-            "unexpected rejection: {error}"
-        );
+            .expect("overlapping COR dates are not a V1 save gate");
+        assert_eq!(stored.profile_versions.len(), 2);
     });
 }
 

@@ -55,6 +55,8 @@ pub const PROFILE_EMAIL: &str = "profile-email";
 pub const PROFILE_SAVE: &str = "save_profile";
 pub const PROFILE_SAVE_MESSAGE: &str = "profile-save-message";
 pub const PROFILE_VALIDATION: &str = "profile-validation";
+pub const PROFILE_YEAR_SELECT: &str = "profile-year-select";
+pub const PROFILE_YEAR_CLONE: &str = "profile-year-clone";
 
 pub const FORM_1601C_BACK: &str = "back_btn";
 pub const FORM_1601C_SAVE: &str = "save_draft_btn";

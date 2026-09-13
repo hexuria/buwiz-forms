@@ -1845,6 +1845,7 @@ impl ProfileManagerView {
             profile_versions: self.stored_profile_versions.clone(),
             compliance_source_mode: bir_core::profile::ComplianceSourceMode::CorVersioned,
             per_year_forms: std::collections::BTreeMap::new(),
+            profile_years: Default::default(),
         };
 
         let draft_preview_label = draft_version_id.and_then(|version_id| {
@@ -2109,6 +2110,7 @@ impl ProfileManagerView {
             profile_versions: self.stored_profile_versions.clone(),
             compliance_source_mode: bir_core::profile::ComplianceSourceMode::CorVersioned,
             per_year_forms: std::collections::BTreeMap::new(),
+            profile_years: Default::default(),
         };
         preview_profile.profile_versions = self.stored_profile_versions.clone();
         let draft_preview = self

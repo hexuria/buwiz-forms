@@ -1213,6 +1213,7 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         }
     }
 

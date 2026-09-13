@@ -84,13 +84,21 @@ impl FormInventoryView {
             load_spec("2551Q").expect("2551Q inventory is packaged")
         });
         let period = filing_period_for_form(code, slot);
-        let (backing, mut values) = load_backing(&spec, profile, year, slot, period.clone(), &db)
+        let year_profile = profile
+            .projection_for_year(year)
+            .unwrap_or_else(|_| profile.tin_only_projection());
+        let (backing, mut values) = load_backing(&spec, &year_profile, year, slot, period.clone(), &db)
             .unwrap_or_else(|err| {
                 tracing::error!(%err, "inventory draft load failed");
                 let draft = GenericFormDraft::new(code, &profile.tin.full(), year, period);
                 (InventoryBacking::Generic(draft.clone()), draft.values)
             });
-        let prefill = prefill_from_profile(&spec, profile, year, &filing_period_for_form(code, slot));
+        let prefill = prefill_from_profile(
+            &spec,
+            &year_profile,
+            year,
+            &filing_period_for_form(code, slot),
+        );
         for (key, value) in prefill {
             values.entry(key).or_insert(value);
         }
@@ -101,6 +109,11 @@ impl FormInventoryView {
         for section in spec.editor_sections() {
             if expand_all || matches!(section.id.as_str(), "period" | "identity") {
                 expanded.insert(section.id.clone());
+            }
+        }
+        if !expand_all && expanded.is_empty() {
+            if let Some(first) = spec.editor_sections().next() {
+                expanded.insert(first.id.clone());
             }
         }
 

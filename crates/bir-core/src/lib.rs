@@ -96,10 +96,10 @@ pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_pe
 pub use profile::{
     ComplianceSourceMode, CorDocumentRef, CorRegistrationFacts, EmailAuthMethod,
     ManualObligationOverride, ManualObligationOverrideAction, ProfileDeadlineOverride,
-    RegisteredTaxType, ResolvedTaxProfileForYear, TaxClassification, TaxProfileResolutionIssue,
-    TaxProfileResolutionIssueKind, TaxProfileVersion, TaxProfileVersionSource,
-    TaxProfileVersionStatus, TaxpayerProfile, VatRegistrationTextClassification,
-    classify_vat_registration_text,
+    ProfileYearFacts, RegisteredTaxType, ResolvedTaxProfileForYear, TaxClassification,
+    TaxProfileResolutionIssue, TaxProfileResolutionIssueKind, TaxProfileVersion,
+    TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
+    VatRegistrationTextClassification, classify_vat_registration_text, profile_year_selector_range,
 };
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use time_utils::format_next_run;

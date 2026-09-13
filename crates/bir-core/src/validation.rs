@@ -1,5 +1,5 @@
 use crate::naming::Tin;
-use crate::profile::{ComplianceSourceMode, TaxProfileVersionStatus, TaxpayerProfile};
+use crate::profile::TaxpayerProfile;
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -129,111 +129,14 @@ pub fn validate_profile(profile: &TaxpayerProfile) -> Vec<ValidationError> {
         errors.push(ValidationError::new("email", "Email address is invalid"));
     }
 
-    let mut confirmed_versions: Vec<_> = profile
-        .profile_versions
-        .iter()
-        .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
-        .collect();
-
-    if profile.compliance_source_mode == ComplianceSourceMode::CorVersioned
-        && confirmed_versions.is_empty()
-    {
-        errors.push(ValidationError::new(
-            "profile_versions",
-            "COR-managed compliance requires at least one confirmed profile version",
-        ));
-    }
-
-    for version in &confirmed_versions {
-        if version.effective_from.is_none() {
-            errors.push(ValidationError::new(
-                "profile_versions",
-                format!(
-                    "Confirmed profile version '{}' must have an effective start date",
-                    version.label
-                ),
-            ));
-        }
-        if let (Some(effective_from), Some(effective_until)) =
-            (version.effective_from, version.effective_until)
-            && effective_until < effective_from
-        {
-            errors.push(ValidationError::new(
-                "profile_versions",
-                format!(
-                    "Confirmed profile version '{}' has an effective end date before its start date",
-                    version.label
-                ),
-            ));
-        }
-    }
-
-    for version in &profile.profile_versions {
-        for override_rule in &version.obligation_overrides {
-            if override_rule.form_code.trim().is_empty() {
+    if let Some(earliest) = profile.earliest_allowed_profile_year() {
+        for year in profile.profile_years.keys() {
+            if *year < earliest {
                 errors.push(ValidationError::new(
-                    "profile_versions",
-                    format!(
-                        "Profile version '{}' has an obligation override without a form code",
-                        version.label
-                    ),
+                    "profile_years",
+                    format!("year {year} is before Business Start Date ({earliest})"),
                 ));
             }
-            if override_rule.reason.trim().is_empty()
-                || override_rule
-                    .source_reference
-                    .as_deref()
-                    .unwrap_or_default()
-                    .trim()
-                    .is_empty()
-            {
-                errors.push(ValidationError::new(
-                    "profile_versions",
-                    format!(
-                        "Profile obligation override '{}' on '{}' requires a reason and source",
-                        override_rule.form_code, version.label
-                    ),
-                ));
-            }
-        }
-
-        for override_rule in &version.deadline_overrides {
-            if override_rule.title.trim().is_empty()
-                || override_rule.source_reference.trim().is_empty()
-                || override_rule.affected_form_codes.is_empty()
-            {
-                errors.push(ValidationError::new(
-                    "profile_versions",
-                    format!(
-                        "Profile deadline override on '{}' requires a title, source, and form code",
-                        version.label
-                    ),
-                ));
-            }
-        }
-    }
-
-    confirmed_versions.sort_by(|a, b| {
-        a.effective_from
-            .cmp(&b.effective_from)
-            .then(a.id.cmp(&b.id))
-    });
-    for pair in confirmed_versions.windows(2) {
-        let previous = pair[0];
-        let next = pair[1];
-        let overlaps = match (previous.effective_until, next.effective_from) {
-            (Some(previous_end), Some(next_start)) => previous_end >= next_start,
-            _ => true,
-        };
-
-        if overlaps {
-            errors.push(ValidationError::new(
-                "profile_versions",
-                format!(
-                    "Confirmed profile versions '{}' and '{}' overlap",
-                    previous.label, next.label
-                ),
-            ));
         }
     }
 
