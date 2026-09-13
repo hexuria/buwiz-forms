@@ -250,9 +250,16 @@ impl FormInventoryView {
     }
 
     fn get_error(&self, key: &str) -> Option<&String> {
+        let Some(field) = self.spec.field(key) else {
+            return self
+                .validation_errors
+                .iter()
+                .find(|(candidate, _)| candidate == key)
+                .map(|(_, message)| message);
+        };
         self.validation_errors
             .iter()
-            .find(|(field, _)| field == key || field.rsplit(':').next() == Some(key))
+            .find(|(candidate, _)| error_applies_to(candidate, field))
             .map(|(_, message)| message)
     }
 
@@ -490,6 +497,7 @@ impl FormInventoryView {
         }
         self.apply_backing();
         if patch.validate {
+            self.paint_gate.mark_saved();
             self.validation_errors = self.blocking_errors();
         }
         if patch.save {
@@ -540,6 +548,7 @@ impl FormInventoryView {
         }
         self.apply_backing();
         if patch.validate {
+            self.paint_gate.mark_saved();
             self.validation_errors = self.blocking_errors();
         }
         if patch.save {
@@ -695,6 +704,43 @@ fn merge_typed_values(
 ) {
     for (key, value) in values_from_bir_map(spec, typed) {
         values.insert(key, value);
+    }
+}
+
+fn error_applies_to(error_key: &str, field: &InventoryField) -> bool {
+    if error_key == field.field_key || error_key == field.xml_key() {
+        return true;
+    }
+    let short = field
+        .field_key
+        .rsplit(':')
+        .next()
+        .unwrap_or(field.field_key.as_str());
+    if error_key.eq_ignore_ascii_case(short) {
+        return true;
+    }
+    typed_error_aliases(error_key)
+        .iter()
+        .any(|alias| short.eq_ignore_ascii_case(alias) || field.field_key.contains(alias))
+}
+
+fn typed_error_aliases(error_key: &str) -> &'static [&'static str] {
+    match error_key {
+        "tin" => &["txtTIN1", "txtTIN2", "txtTIN3", "txtBranchCode"],
+        "taxable_year" => &["txtYear"],
+        "quarter" => &["qtr_"],
+        "year_end_month" | "month" => &["rtnMonth", "txtMonth"],
+        "taxpayer_name" => &["registeredName", "txtTaxpayerName"],
+        "rdo_code" => &["txtRDOCode", "RDOCode"],
+        "registered_address" => &["registeredAddress", "txtAddress"],
+        "zip_code" => &["zipCode", "txtZipCode"],
+        "contact_number" => &["telNo", "txtTel"],
+        "email" => &["txtEmail"],
+        "number_of_attached_sheets" => &["txtSheets"],
+        "creditable_tax_withheld" => &["txt15"],
+        "other_tax_credit" => &["txt17"],
+        "item_13_election" => &["taxRate1", "taxRate2"],
+        _ => &[],
     }
 }
 
@@ -1161,6 +1207,28 @@ impl Render for FormInventoryView {
                     } else {
                         div().into_any_element()
                     }}
+                    {if !self.validation_errors.is_empty() {
+                        let list = self
+                            .validation_errors
+                            .iter()
+                            .take(8)
+                            .map(|(_, message)| message.clone())
+                            .collect::<Vec<_>>()
+                            .join(" · ");
+                        rsx! {
+                            <div
+                                id="form-inventory-validation"
+                                text_sm
+                                text_color={cx.theme().danger}
+                                mt_2
+                            >
+                                {list}
+                            </div>
+                        }
+                        .into_any_element()
+                    } else {
+                        div().into_any_element()
+                    }}
                 </div>
                 <div
                     id={self.scroll_id.clone()}
@@ -1203,5 +1271,15 @@ mod tests {
             radio_prefix("frm2551Qv2018:forThe_2").as_deref(),
             Some("frm2551Qv2018:forThe")
         );
+    }
+
+    #[test]
+    fn typed_validation_keys_match_inventory_fields() {
+        let spec = load_spec("2551Q").expect("2551Q");
+        let tin = spec.field("frm2551Qv2018:txtTIN1").expect("tin1");
+        assert!(super::error_applies_to("tin", tin));
+        let year = spec.field("frm2551Qv2018:txtYear").expect("year");
+        assert!(super::error_applies_to("taxable_year", year));
+        assert!(!super::error_applies_to("tin", year));
     }
 }
