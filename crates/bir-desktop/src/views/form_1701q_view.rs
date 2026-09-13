@@ -23,6 +23,7 @@ use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_parts::readonly_field;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form1701QEvent {
     BackToDashboard,
@@ -70,6 +71,7 @@ pub struct Form1701QView {
     scroll_handle: ScrollHandle,
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     status_message: Option<String>,
 
     number_of_sheets: Entity<InputState>,
@@ -241,13 +243,14 @@ impl Form1701QView {
             ));
         }
 
-        let validation_errors = draft.validate();
+        let validation_errors = Vec::new();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             input_errors: Vec::new(),
             validation_errors,
+            paint_gate: ValidationPaintGate::new(),
             status_message: None,
             number_of_sheets,
             taxpayer_last_name,
@@ -620,11 +623,12 @@ impl Form1701QView {
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
+        let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+        if visible.is_empty() {
             return div().into_any_element();
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
+        for (field, message) in &visible {
             list = list.child(div().text_xs().child(format!("{field}: {message}")));
         }
         let root = rsx! {
@@ -1157,6 +1161,7 @@ impl FormViewTrait for Form1701QView {
         self.draft.updated_at = Some(chrono::Utc::now().to_rfc3339());
         match self.persist_draft(&self.draft) {
             Ok(()) => {
+                self.paint_gate.mark_saved();
                 self.status_message = Some(if self.validation_errors.is_empty() {
                     "Draft saved locally.".to_string()
                 } else {

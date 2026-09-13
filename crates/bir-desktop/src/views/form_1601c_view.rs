@@ -14,6 +14,7 @@ use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCH
 use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form1601CEvent {
     BackToDashboard,
@@ -123,6 +124,7 @@ pub struct Form1601CView {
 
     is_validated: bool,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     status_message: Option<String>,
     /// A submission error the user closed; it stays hidden until it changes.
     dismissed_submission_error: Option<String>,
@@ -376,6 +378,7 @@ impl Form1601CView {
             scroll_handle: ScrollHandle::new(),
             is_validated: false,
             validation_errors: Vec::new(),
+            paint_gate: ValidationPaintGate::new(),
             status_message: None,
             dismissed_submission_error: None,
             release_claim_confirm_open: false,
@@ -869,6 +872,7 @@ impl FormViewTrait for Form1601CView {
         use gpui_component::WindowExt;
         match save_result {
             Ok(_) => {
+                self.paint_gate.mark_saved();
                 window.push_notification(
                     gpui_component::notification::Notification::new()
                         .message("Form saved.".to_string())
@@ -1220,6 +1224,7 @@ impl Render for Form1601CView {
                                 this.sync_from_inputs(cx);
                                 this.draft.compute();
                                 this.validation_errors = this.draft.validate();
+                                this.paint_gate.mark_saved();
                                 this.is_validated = true;
                                 cx.notify();
                             }))}

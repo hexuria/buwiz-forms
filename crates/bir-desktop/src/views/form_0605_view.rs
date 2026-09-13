@@ -22,6 +22,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form0605Event {
     BackToDashboard,
@@ -72,6 +73,7 @@ pub struct Form0605View {
 
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     status_message: Option<String>,
 
     filing_basis: Form0605FilingBasis,
@@ -321,7 +323,7 @@ impl Form0605View {
             ));
         }
 
-        let validation_errors = draft.validate();
+        let validation_errors = Vec::new();
         Self {
             filing_basis: draft.filing_basis,
             quarter: draft.quarter,
@@ -335,6 +337,7 @@ impl Form0605View {
             scroll_handle: ScrollHandle::new(),
             input_errors: Vec::new(),
             validation_errors,
+            paint_gate: ValidationPaintGate::new(),
             status_message: None,
             year_end_month,
             year_ended,
@@ -534,11 +537,12 @@ impl Form0605View {
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
+        let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+        if visible.is_empty() {
             return div().into_any_element();
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
+        for (field, message) in &visible {
             list = list.child(div().text_xs().child(format!("{field}: {message}")));
         }
         let root = rsx! {
@@ -735,6 +739,7 @@ impl FormViewTrait for Form0605View {
 
         match save_result {
             Ok(()) => {
+                self.paint_gate.mark_saved();
                 self.status_message = Some(if self.validation_errors.is_empty() {
                     "Draft saved.".to_string()
                 } else {

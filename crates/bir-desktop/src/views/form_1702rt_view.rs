@@ -21,6 +21,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form1702RTEvent {
     BackToDashboard,
@@ -109,6 +110,7 @@ pub struct Form1702RTView {
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<&'static str, Entity<InputState>>,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     parse_errors: Vec<(String, String)>,
     _subscriptions: Vec<Subscription>,
 }
@@ -139,13 +141,14 @@ impl Form1702RTView {
             ));
             inputs.insert(*key, input);
         }
-        let validation_errors = draft.validate();
+        let validation_errors = Vec::new();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
             validation_errors,
+            paint_gate: ValidationPaintGate::new(),
             parse_errors: Vec::new(),
             _subscriptions: subscriptions,
         }
@@ -283,6 +286,7 @@ impl FormViewTrait for Form1702RTView {
                 &self.draft,
             ) {
                 Ok(_) => {
+                    self.paint_gate.mark_saved();
                     window.push_notification(
                         gpui_component::notification::Notification::new()
                             .message("1702-RT draft saved.".to_string())
@@ -492,8 +496,12 @@ impl Render for Form1702RTView {
                                     </div>
                                 </div>
                             })
-                            .when(!self.parse_errors.is_empty() || !self.validation_errors.is_empty(), |container| {
-                                let errors = self.parse_errors.iter().chain(self.validation_errors.iter()).take(12).map(|(field, message)| {
+                            .when({
+                                let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+                                !self.parse_errors.is_empty() || !visible.is_empty()
+                            }, |container| {
+                                let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+                                let errors = self.parse_errors.iter().chain(visible.iter()).take(12).map(|(field, message)| {
                                     rsx! { <div text_sm text_color={cx.theme().danger}>{format!("{field}: {message}")}</div> }
                                 }).collect::<Vec<_>>();
                                 container.child(self.render_section("Needs Review", errors.into_iter().map(IntoElement::into_any_element).collect(), cx))

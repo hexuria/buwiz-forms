@@ -29,6 +29,7 @@ use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
 use super::email_confirmation_view::EmailConfirmationView;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form2551QEvent {
     BackToDashboard,
@@ -140,6 +141,7 @@ pub struct Form2551QView {
     receipt_input: Entity<InputState>,
 
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     suppressed_sections: HashSet<&'static str>,
     status_message: Option<String>,
     show_filing_period: bool,
@@ -171,6 +173,7 @@ impl Form2551QView {
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("schedule_1");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -282,12 +285,12 @@ impl Form2551QView {
             },
         ));
 
-        // Subscribe to creditable withheld changes
         let sub1 = cx.subscribe_in(
             &creditable_withheld_input,
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("creditable_withheld");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -303,6 +306,7 @@ impl Form2551QView {
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("tax_paid_previous");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -318,6 +322,7 @@ impl Form2551QView {
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("other_tax_credit");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -328,12 +333,12 @@ impl Form2551QView {
                 _ => {}
             },
         );
-
         let sub4 = cx.subscribe_in(
             &year_end_month_input,
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("year_end_month");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -349,6 +354,7 @@ impl Form2551QView {
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("number_of_attached_sheets");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -364,6 +370,7 @@ impl Form2551QView {
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("tax_relief_specification");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -379,6 +386,7 @@ impl Form2551QView {
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
+                    this.paint_gate.touch("other_tax_credit_description");
                     this.is_validated = false;
                     this.sync_from_inputs(cx);
                 }
@@ -542,6 +550,7 @@ impl Form2551QView {
             other_tax_credit_description_input,
             receipt_input,
             validation_errors: Vec::new(),
+            paint_gate: ValidationPaintGate::new(),
             suppressed_sections: HashSet::new(),
             status_message: initial_status_message,
             show_filing_period: true,
@@ -554,7 +563,6 @@ impl Form2551QView {
             release_claim_confirm_open: false,
             _subscriptions: subscriptions,
         };
-        view.validation_errors = view.validate_for_submit(cx);
         view
     }
 
@@ -838,6 +846,7 @@ impl Form2551QView {
         use gpui_component::WindowExt;
         match save_result {
             Ok(_) => {
+                self.paint_gate.mark_saved();
                 tracing::info!(
                     draft_id = ?self.draft.id,
                     status = ?self.draft.status,
@@ -1591,10 +1600,8 @@ impl Form2551QView {
     }
 
     fn get_error(&self, field_id: &str) -> Option<&String> {
-        self.validation_errors
-            .iter()
-            .find(|(f, _)| f == field_id)
-            .map(|(_, msg)| msg)
+        self.paint_gate
+            .visible_error(&self.validation_errors, field_id)
     }
 
     fn error_icon(_message: &str, cx: &Context<Self>) -> gpui::Div {
@@ -1609,7 +1616,8 @@ impl Form2551QView {
         if self.suppressed_sections.contains(section_id) {
             return false;
         }
-        self.validation_errors
+        self.paint_gate
+            .visible_field_errors(&self.validation_errors)
             .iter()
             .any(|(f, _)| match section_id {
                 "filing_period" => {
@@ -1886,6 +1894,7 @@ impl Render for Form2551QView {
                             this.year_end_month_input.update(cx, |input, cx| {
                                 input.set_value("12", window, cx);
                             });
+                            this.paint_gate.touch("tax_period_basis");
                             this.is_validated = false;
                             this.sync_from_inputs(cx);
                         })}
@@ -1915,6 +1924,7 @@ impl Render for Form2551QView {
                                 return;
                             }
                             this.draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+                            this.paint_gate.touch("tax_period_basis");
                             this.is_validated = false;
                             this.sync_from_inputs(cx);
                         })}

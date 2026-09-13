@@ -29,7 +29,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
-use crate::components::form_validation::SemanticFieldTargets;
+use crate::components::form_validation::{SemanticFieldTargets, ValidationPaintGate};
 
 const YEAR_END_MONTH: &str = "year_end_month";
 const RAW_TAXABLE_YEAR: &str = "raw_taxable_year";
@@ -310,6 +310,7 @@ pub struct Form2550QV2View {
     scroll_handle: ScrollHandle,
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     editor_state_error: Option<String>,
     status_message: Option<String>,
     fields: BTreeMap<&'static str, Entity<InputState>>,
@@ -690,7 +691,7 @@ impl Form2550QV2View {
 
         let validation_setup = Form2550QLiveValidationFacade::setup_repo_default_diagnostic();
         let validation_state = diagnostic_state_from_setup(&validation_setup);
-        let validation_errors = draft.validate();
+        let validation_errors = Vec::new();
         let status_message = editor_state_error.as_ref().map(|error| {
             format!(
                 "2550Q editor is locked because persisted control identity could not be validated. No positional fallback was used. {error}"
@@ -705,6 +706,7 @@ impl Form2550QV2View {
             scroll_handle: ScrollHandle::new(),
             input_errors: Vec::new(),
             validation_errors,
+            paint_gate: ValidationPaintGate::new(),
             editor_state_error,
             status_message,
             fields,
@@ -1401,11 +1403,12 @@ impl Form2550QV2View {
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
+        let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+        if visible.is_empty() {
             return div().into_any_element();
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
+        for (field, message) in &visible {
             list = list.child(rsx! { <div text_xs>{format!("{field}: {message}")}</div> });
         }
         let root = rsx! {
@@ -1616,6 +1619,7 @@ impl FormViewTrait for Form2550QV2View {
         match save_result {
             Ok(id) => {
                 self.draft.id = Some(id);
+                self.paint_gate.mark_saved();
                 self.status_message = Some(if !has_unresolved_issues {
                     "Draft saved locally for preservation. Filing and submission remain manual/external."
                         .to_string()

@@ -21,6 +21,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form1702MXEvent {
     BackToDashboard,
@@ -138,6 +139,7 @@ pub struct Form1702MXView {
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<&'static str, Entity<InputState>>,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     parse_errors: Vec<(String, String)>,
     _subscriptions: Vec<Subscription>,
 }
@@ -172,13 +174,14 @@ impl Form1702MXView {
             ));
             inputs.insert(*key, input);
         }
-        let validation_errors = draft.validate();
+        let validation_errors = Vec::new();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
             validation_errors,
+            paint_gate: ValidationPaintGate::new(),
             parse_errors: Vec::new(),
             _subscriptions: subscriptions,
         }
@@ -358,6 +361,7 @@ impl FormViewTrait for Form1702MXView {
                 &self.draft,
             ) {
                 Ok(_) => {
+                    self.paint_gate.mark_saved();
                     window.push_notification(
                         gpui_component::notification::Notification::new()
                             .message("1702-MX local draft saved.".to_string())
@@ -769,13 +773,18 @@ impl Render for Form1702MXView {
                                 cx,
                             ))
                             .when(
-                                !self.parse_errors.is_empty()
-                                    || !self.validation_errors.is_empty(),
+                                {
+                                    let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+                                    !self.parse_errors.is_empty() || !visible.is_empty()
+                                },
                                 |container| {
+                                    let visible = self
+                                        .paint_gate
+                                        .visible_field_errors(&self.validation_errors);
                                     let errors = self
                                         .parse_errors
                                         .iter()
-                                        .chain(self.validation_errors.iter())
+                                        .chain(visible.iter())
                                         .take(16)
                                         .map(|(field, message)| {
                                             div()

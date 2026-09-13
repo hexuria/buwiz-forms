@@ -19,6 +19,7 @@ use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::form_validation::ValidationPaintGate;
 
 pub enum Form0619EEvent {
     BackToDashboard,
@@ -56,6 +57,7 @@ pub struct Form0619EView {
 
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
+    paint_gate: ValidationPaintGate,
     status_message: Option<String>,
 
     is_amended: bool,
@@ -171,7 +173,7 @@ impl Form0619EView {
             ));
         }
 
-        let validation_errors = draft.validate();
+        let validation_errors = Vec::new();
         Self {
             is_amended: draft.is_amended,
             any_taxes_withheld: draft.any_taxes_withheld,
@@ -184,6 +186,7 @@ impl Form0619EView {
             scroll_handle: ScrollHandle::new(),
             input_errors: Vec::new(),
             validation_errors,
+            paint_gate: ValidationPaintGate::new(),
             status_message: None,
             due_day,
             line_of_business,
@@ -315,11 +318,12 @@ impl Form0619EView {
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
+        let visible = self.paint_gate.visible_field_errors(&self.validation_errors);
+        if visible.is_empty() {
             return div().into_any_element();
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
+        for (field, message) in &visible {
             list = list.child(div().text_xs().child(format!("{field}: {message}")));
         }
         let root = rsx! {
@@ -486,6 +490,7 @@ impl FormViewTrait for Form0619EView {
 
         match save_result {
             Ok(()) => {
+                self.paint_gate.mark_saved();
                 self.status_message = Some(if self.validation_errors.is_empty() {
                     "Draft saved.".to_string()
                 } else {
