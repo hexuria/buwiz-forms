@@ -1,6 +1,5 @@
-use bir_core::integration::{
-    form_suggestions_for_profile_year, recurring_obligation_forms_for_profile_and_year,
-};
+use bir_core::forms::{FormSetSource, PerYearFormsSet};
+use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, RegisteredTaxType, TaxClassification, TaxProfileVersion,
@@ -89,16 +88,11 @@ fn confirmed_version(
     version
 }
 
-fn reconcile_forms_set(profile: &mut TaxpayerProfile, year: u16) {
-    let suggestions = form_suggestions_for_profile_year(profile, year);
-    let existing = profile.per_year_forms.get(&year);
-    let reconciled = bir_core::forms::reconcile_forms_set_for_year(year, existing, &suggestions);
-    assert!(
-        reconciled.conflicts.is_empty(),
-        "stress fixture unexpectedly produced Forms Set conflicts: {:?}",
-        reconciled.conflicts
+fn with_manual_forms(profile: &mut TaxpayerProfile, year: u16, codes: &[&str]) {
+    profile.per_year_forms.insert(
+        year,
+        PerYearFormsSet::from_codes(year, codes.iter().copied(), FormSetSource::Manual),
     );
-    profile.per_year_forms.insert(year, reconciled.forms_set);
 }
 
 #[test]
@@ -120,7 +114,7 @@ fn test_adversarial_individual_vs_corporate_leakage() {
         false,
     );
     profile.profile_versions = vec![version];
-    reconcile_forms_set(&mut profile, 2026);
+    with_manual_forms(&mut profile, 2026, &["1701", "1701Q", "2551Q"]);
 
     let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -151,7 +145,7 @@ fn test_adversarial_individual_vs_corporate_leakage() {
         false,
     );
     corp_profile.profile_versions = vec![corp_version];
-    reconcile_forms_set(&mut corp_profile, 2026);
+    with_manual_forms(&mut corp_profile, 2026, &["1702RT", "1702Q"]);
 
     let corp_forms = recurring_obligation_forms_for_profile_and_year(&corp_profile, 2026);
     assert!(
@@ -192,7 +186,7 @@ fn test_adversarial_vat_vs_non_vat_leakage() {
         false,
     );
     non_vat_profile.profile_versions = vec![non_vat_version];
-    reconcile_forms_set(&mut non_vat_profile, 2026);
+    with_manual_forms(&mut non_vat_profile, 2026, &["2551Q"]);
 
     let non_vat_forms = recurring_obligation_forms_for_profile_and_year(&non_vat_profile, 2026);
     assert!(
@@ -227,7 +221,7 @@ fn test_adversarial_vat_vs_non_vat_leakage() {
     );
     vat_profile.profile_versions = vec![vat_version];
     vat_profile.is_vat_registered = true;
-    reconcile_forms_set(&mut vat_profile, 2026);
+    with_manual_forms(&mut vat_profile, 2026, &["2550Q"]);
 
     let vat_forms = recurring_obligation_forms_for_profile_and_year(&vat_profile, 2026);
     assert!(
@@ -280,7 +274,7 @@ fn test_adversarial_mid_year_transition_union() {
     );
 
     profile.profile_versions = vec![v1, v2];
-    reconcile_forms_set(&mut profile, 2026);
+    with_manual_forms(&mut profile, 2026, &["2551Q", "2550Q"]);
 
     let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -322,9 +316,9 @@ fn test_adversarial_year_aware_deprecations() {
     profile.profile_versions = vec![version_2017];
     profile.withholds_expanded = true;
     profile.is_expanded_withholding_agent = true;
-    reconcile_forms_set(&mut profile, 2017);
-    reconcile_forms_set(&mut profile, 2018);
-    reconcile_forms_set(&mut profile, 2021);
+    with_manual_forms(&mut profile, 2017, &["1601E", "2551M", "1704"]);
+    with_manual_forms(&mut profile, 2018, &["1704"]);
+    with_manual_forms(&mut profile, 2021, &["1702RT"]);
 
     // 1. Year 2017 (before deprecations of 1601E and 2551M, and 1704)
     let forms_2017 = recurring_obligation_forms_for_profile_and_year(&profile, 2017);

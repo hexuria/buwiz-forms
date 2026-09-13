@@ -1276,6 +1276,14 @@ mod tests {
                 .all(|(field, _)| field != "category_of_agent")
         );
 
+        let mut government = test_profile();
+        government.is_government_withholding_entity = true;
+        let from_flag = Form1601CDraft::new_from_profile(&government, 2026, 6);
+        assert_eq!(
+            from_flag.category_of_agent, "P",
+            "Item 11 is a form field, not a profile router"
+        );
+
         draft.atc = "WC010".to_string();
         draft.category_of_agent.clear();
         let errors = draft.validate();

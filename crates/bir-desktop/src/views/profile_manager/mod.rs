@@ -3476,17 +3476,6 @@ impl ProfileManagerView {
             let projected = profile.projection_for_version(&version_clone);
             self.sync_projection_to_ui(&projected, window, cx);
 
-            use chrono::Datelike as _;
-            let year = plan.effective_from.year() as u16;
-            let suggestions =
-                bir_core::integration::form_suggestions_for_profile_year(&profile, year);
-            let reconciliation = bir_core::forms::reconcile_forms_set_for_year(
-                year,
-                self.stored_per_year_forms.get(&year),
-                &suggestions,
-            );
-            self.stored_per_year_forms
-                .insert(year, reconciliation.forms_set);
             profile.per_year_forms = self.stored_per_year_forms.clone();
 
             self.mark_profile_changed();

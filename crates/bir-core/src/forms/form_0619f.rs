@@ -264,11 +264,7 @@ impl Form0619FDraft {
             month,
             is_amended: false,
             any_taxes_withheld: false,
-            withholding_agent_category: if profile.is_government_withholding_entity {
-                WithholdingAgentCategory::Government
-            } else {
-                WithholdingAgentCategory::Private
-            },
+            withholding_agent_category: WithholdingAgentCategory::Private,
             due_day: None,
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
@@ -785,6 +781,18 @@ mod tests {
         assert_eq!(draft.item_13_atc_code(), "WMF10");
         assert_eq!(draft.item_14_atc_code(), "WMF20");
         assert_eq!(draft.tax_type_code(), "WB");
+    }
+
+    #[test]
+    fn withholding_agent_category_defaults_to_private_not_profile_flag() {
+        let mut government = test_profile();
+        government.is_government_withholding_entity = true;
+        let draft = Form0619FDraft::new_from_profile(&government, 2026, 4);
+        assert_eq!(
+            draft.withholding_agent_category,
+            WithholdingAgentCategory::Private,
+            "Item category is a form field, not a profile router"
+        );
     }
 
     #[test]

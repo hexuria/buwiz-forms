@@ -6,9 +6,10 @@ use gpui_rsx::rsx;
 impl ProfileManagerView {
     /// Render the "Tax Profile" tab (tab index 0).
     ///
-    /// Contains: TIN input, duplicate TIN error, RDO/type row, classification/EOPT row,
-    /// line-of-business, name, address, zip/phone row, email, date, VAT toggle,
-    /// granular withholding obligation switches and excise tax multi-select.
+    /// Contains: TIN input, duplicate TIN error, RDO/type row, classification/EOPT
+    /// row, line-of-business, name, address, zip/phone row, email, and dates.
+    /// Filing-form routing lives on the yearly Forms Set checklist, not on
+    /// VAT/withholding toggles.
     pub(super) fn render_tax_profile_tab(
         &self,
         is_individual: bool,
@@ -22,18 +23,6 @@ impl ProfileManagerView {
 
         let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
         let is_purely_compensation = is_individual && tax_class_val == "Purely Compensation";
-        // VAT is only relevant for entities with business/professional activity
-        let has_business_activity = !is_purely_compensation
-            && !matches!(
-                self.type_select.read(cx).selected_value(cx).as_str(),
-                "Estate" | "Trust"
-            );
-        // GPP partner only relevant for individual with business/professional or mixed income
-        let is_individual_with_business = is_individual
-            && matches!(
-                tax_class_val.as_str(),
-                "Self-Employed / Professional" | "Mixed Income"
-            );
 
         div()
             .flex()
@@ -196,136 +185,6 @@ impl ProfileManagerView {
                     </div>
                 })
             })
-            // ── Registration & Status ──
-            .child(rsx! {
-                <div flex gap_4 w_full>
-                    <div flex_1 min_w_0>
-                        {Self::field_label("Registration Activity Status", cx)}
-                        {Combobox::new(&self.registration_activity_status_select)}
-                    </div>
-                    <div flex_1 min_w_0 flex items_end>
-                        {Self::render_checkbox(
-                            "dormant_toggle",
-                            "Dormant Entity",
-                            self.is_dormant,
-                            cx,
-                        )}
-                    </div>
-                </div>
-            })
-            // ── VAT Registration (only for entities with business activity) ──
-            .when(has_business_activity, |this| {
-                this.child(rsx! {
-                    <div
-                        id={"vat_toggle"}
-                        flex
-                        items_center
-                        gap_2
-                        cursor_pointer
-                        on_click={cx.listener(|this, _, _, cx| {
-                            this.is_vat_registered = !this.is_vat_registered;
-                            this.mark_profile_changed();
-                            cx.notify();
-                        })}
-                    >
-                        <div
-                            w_4
-                            h_4
-                            rounded_sm
-                            border_1
-                            border_color={cx.theme().border}
-                            bg={if self.is_vat_registered {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            }}
-                            flex
-                            items_center
-                            justify_center
-                        >
-                            {if self.is_vat_registered {
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().primary_foreground)
-                                    .child("✓")
-                            } else {
-                                div()
-                            }}
-                        </div>
-                        <div text_sm text_color={cx.theme().foreground}>
-                            {"VAT registered taxpayer"}
-                        </div>
-                    </div>
-                })
-            })
-            // ── Granular Withholding Obligations ──
-            .child(rsx! {
-                <div flex flex_col gap_2>
-                    <div
-                        text_sm
-                        font_weight={FontWeight::SEMIBOLD}
-                        text_color={cx.theme().foreground}
-                    >
-                        {"Withholding Obligations"}
-                    </div>
-                    <div flex flex_wrap gap_x={px(24.)} gap_y={px(8.)}>
-                        {Self::render_checkbox(
-                            "wh_compensation_toggle",
-                            "Compensation",
-                            self.withholds_compensation,
-                            cx,
-                        )}
-                        {Self::render_checkbox(
-                            "wh_expanded_toggle",
-                            "Expanded",
-                            self.withholds_expanded,
-                            cx,
-                        )}
-                        {Self::render_checkbox(
-                            "wh_final_toggle",
-                            "Final",
-                            self.withholds_final,
-                            cx,
-                        )}
-                        {Self::render_checkbox(
-                            "wh_top_agent_toggle",
-                            "Top Withholding Agent",
-                            self.is_top_withholding_agent,
-                            cx,
-                        )}
-                        {Self::render_checkbox(
-                            "wh_govt_toggle",
-                            "Government Entity",
-                            self.is_government_withholding_entity,
-                            cx,
-                        )}
-                    </div>
-                </div>
-            })
-            // ── GPP Partner (individual business/professional or mixed income only) ──
-            .when(is_individual_with_business, |this| {
-                this.child(Self::render_checkbox(
-                    "gpp_partner_toggle",
-                    "GPP Partner",
-                    self.is_gpp_partner,
-                    cx,
-                ))
-            })
-            // ── Substituted filing (purely compensation only) ──
-            .when(is_purely_compensation, |this| {
-                this.child(Self::render_checkbox(
-                    "single_employer_toggle",
-                    "Single employer (eligible for substituted filing)",
-                    self.has_single_employer,
-                    cx,
-                ))
-            })
-            .child(rsx! {
-                <div base={v_flex()} w_full mt_4>
-                    {Self::field_label("Excise Tax Liabilities", cx)}
-                    {MultiSelect::new(&self.excise_select)}
-                </div>
-            })
             .into_any_element()
     }
 
@@ -473,7 +332,7 @@ impl ProfileManagerView {
                         font_weight={FontWeight::BOLD}
                         text_color={cx.theme().foreground}
                     >
-                        {"COR — Forms Set & Annual Elections"}
+                        {"Forms Set & Annual Elections"}
                     </div>
                 })
                 .child(sub_tab_bar)
@@ -487,7 +346,7 @@ impl ProfileManagerView {
                         text_xs
                         text_color={cx.theme().muted_foreground}
                     >
-                        {"Reviewed COR codes and confirmed registration facts suggest forms. The saved yearly Forms Set is what the app files. Annual income-tax elections are user-confirmed choices for that year; they are shown here with the COR workflow but are not claimed as text extracted from the COR."}
+                        {"The user picks which forms this profile files for the selected year. The saved yearly Forms Set is what the dashboard and deadline calendar read. Annual income-tax elections are user-confirmed choices for that year."}
                     </div>
                 })
                 .when(
@@ -3642,17 +3501,10 @@ impl ProfileManagerView {
     fn seed_default_forms(
         &self,
         year: u16,
-        cx: &Context<Self>,
+        _cx: &Context<Self>,
     ) -> bir_core::forms::PerYearFormsSet {
-        let taxpayer_profile = self.current_profile(cx);
-        let suggestions =
-            bir_core::integration::form_suggestions_for_profile_year(&taxpayer_profile, year);
-        bir_core::forms::reconcile_forms_set_for_year(
-            year,
-            taxpayer_profile.forms_set_for_year(year),
-            &suggestions,
-        )
-        .forms_set
+        // V1: the user picks forms. Do not seed from COR / tax-type inference.
+        bir_core::forms::PerYearFormsSet::new(year)
     }
 
     fn form_set_source_label(source: bir_core::forms::FormSetSource) -> &'static str {
@@ -4010,10 +3862,11 @@ impl ProfileManagerView {
                                 {"One filing authority"}
                             </div>
                             <div text_xs text_color={cx.theme().muted_foreground}>
-                                {"Reviewed COR codes and registered tax types create suggestions here. Your include/exclude decisions become manual overrides and always win during reconciliation."}
+                                {"Check the forms this taxpayer files for the selected year. Only checked Manual entries appear on the dashboard. Queue and live BIR submit stay limited to forms that already support them."}
                             </div>
                         </div>
                     })
+                    .child(self.render_inventory_forms_checklist(&forms_set, cx))
                     .when(!resolution_issues.is_empty(), |this| {
                         this.child(rsx! {
                             <div
@@ -4032,7 +3885,7 @@ impl ProfileManagerView {
                                     font_weight={FontWeight::BOLD}
                                     text_color={cx.theme().danger}
                                 >
-                                    {"Needs review before suggestions can refresh"}
+                                    {"Needs review before this year's profile can be used"}
                                 </div>
                                 {...resolution_issues.into_iter().map(|message| {
                                     rsx! {
@@ -4092,6 +3945,87 @@ impl ProfileManagerView {
             .into_any_element()
     }
 
+    fn render_inventory_forms_checklist(
+        &self,
+        forms_set: &bir_core::forms::PerYearFormsSet,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let codes: Vec<&'static str> = bir_core::forms::inventory_codes().collect();
+        let checklist = rsx! {
+            <div
+                id={crate::agent::ids::FORMS_YEAR_PICKER}
+                flex
+                flex_col
+                gap_2
+                p_3
+                rounded_lg
+                border_1
+                border_color={cx.theme().border}
+            >
+                <div text_xs font_weight={FontWeight::SEMIBOLD}>
+                    {"Forms for this year"}
+                </div>
+                <div text_xs text_color={cx.theme().muted_foreground}>
+                    {format!(
+                        "All {} inventory pages. Checking a code adds a Manual include for {}.",
+                        codes.len(),
+                        self.forms_editor_year
+                    )}
+                </div>
+                <div flex flex_wrap gap_x={px(16.)} gap_y={px(8.)}>
+                    {...codes.into_iter().map(|code| {
+                        let active = forms_set.contains_active(code);
+                        let pick_id = crate::agent::ids::form_pick_id(code);
+                        rsx! {
+                            <div
+                                id={pick_id}
+                                flex
+                                items_center
+                                gap_2
+                                cursor_pointer
+                                on_click={cx.listener({
+                                    let code = code.to_string();
+                                    move |this, _, _, cx| {
+                                        this.toggle_form_obligation(code.clone(), cx);
+                                    }
+                                })}
+                            >
+                                <div
+                                    w_4
+                                    h_4
+                                    rounded_sm
+                                    border_1
+                                    border_color={cx.theme().border}
+                                    bg={if active {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    }}
+                                    flex
+                                    items_center
+                                    justify_center
+                                >
+                                    {if active {
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().primary_foreground)
+                                            .child("✓")
+                                    } else {
+                                        div()
+                                    }}
+                                </div>
+                                <div text_xs text_color={cx.theme().foreground}>
+                                    {code.to_string()}
+                                </div>
+                            </div>
+                        }
+                    })}
+                </div>
+            </div>
+        };
+        checklist.into_any()
+    }
+
     fn render_forms_editor_header(&self, cx: &Context<Self>) -> gpui::AnyElement {
         let selected_year = self.forms_editor_year;
         let prior_year = self
@@ -4105,7 +4039,7 @@ impl ProfileManagerView {
                         {format!("{} Forms Set", selected_year)}
                     </div>
                     <div text_xs text_color={cx.theme().muted_foreground}>
-                        {"This saved per-year set—not the raw COR extraction—is the authoritative filing list."}
+                        {"Check the forms to file this year. This saved set—not inferred tax types—is the dashboard list."}
                     </div>
                 </div>
                 <div

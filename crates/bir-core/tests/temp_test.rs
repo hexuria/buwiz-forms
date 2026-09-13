@@ -1,6 +1,5 @@
-use bir_core::integration::{
-    form_suggestions_for_profile_year, recurring_obligation_forms_for_profile_and_year,
-};
+use bir_core::forms::{FormSetSource, PerYearFormsSet};
+use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
 use bir_core::profile::{TaxClassification, TaxpayerProfile};
 use chrono::NaiveDate;
 
@@ -63,7 +62,7 @@ fn profile_for_dashboard(
         profile_versions: vec![],
         compliance_source_mode: Default::default(),
         per_year_forms: Default::default(),
-            profile_years: Default::default(),
+        profile_years: Default::default(),
     };
     profile.ensure_profile_version_ledger();
     profile
@@ -72,10 +71,10 @@ fn profile_for_dashboard(
 #[test]
 fn compensation_profile_resolves_only_the_annual_return() {
     let mut profile = profile_for_dashboard(TaxClassification::PurelyCompensation, false);
-    let suggestions = form_suggestions_for_profile_year(&profile, 2026);
-    let reconciled = bir_core::forms::reconcile_forms_set_for_year(2026, None, &suggestions);
-    assert!(reconciled.conflicts.is_empty());
-    profile.per_year_forms.insert(2026, reconciled.forms_set);
+    profile.per_year_forms.insert(
+        2026,
+        PerYearFormsSet::from_codes(2026, ["1700"].iter().copied(), FormSetSource::Manual),
+    );
     let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
     assert_eq!(forms, vec!["1700".to_string()]);

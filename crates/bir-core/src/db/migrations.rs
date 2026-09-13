@@ -798,7 +798,9 @@ fn migrate_v14_stale_migration_backfills(conn: &Connection) -> Result<(), DbErro
                     .forms_set
                     .entries
                     .into_iter()
-                    .filter(|entry| entry.is_filing_active())
+                    .filter(|entry| {
+                        entry.active && entry.review_status == crate::forms::FormSetReviewStatus::Resolved
+                    })
                     .map(|entry| canonical_form_code(&entry.form_code))
                     .collect();
                 (true, active_codes)

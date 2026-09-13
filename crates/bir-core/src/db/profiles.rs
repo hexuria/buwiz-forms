@@ -8,12 +8,6 @@ use crate::profile::{
     TaxProfileVersionStatus, TaxpayerProfile,
 };
 
-fn reconciliation_calendar_year(local_date: chrono::NaiveDate) -> u16 {
-    use chrono::Datelike as _;
-
-    local_date.year() as u16
-}
-
 fn same_persisted_version_except_label(
     stored: &TaxProfileVersion,
     submitted: &TaxProfileVersion,
@@ -437,48 +431,6 @@ impl Database {
             super::forms_set::execute_replace_per_year_forms(&tx, &tin, *year, set)?;
         }
 
-        // Refresh the current year and every already stored year in the same
-        // transaction as the profile update. Ambiguous or undated timelines
-        // preserve existing Forms Sets instead of guessing.
-        let mut years_to_update = std::collections::BTreeSet::new();
-        // Filing obligations follow the desktop user's local calendar year.
-        // Using UTC here can reconcile the previous year during the first
-        // local hours of January 1 in time zones east of UTC, while the UI and
-        // emitted compliance event already identify the new local year.
-        let current_year = reconciliation_calendar_year(chrono::Local::now().date_naive());
-        years_to_update.insert(current_year);
-        years_to_update.extend(profile.per_year_forms.keys().copied());
-        if let Some(stored) = &existing_profile {
-            years_to_update.extend(stored.per_year_forms.keys().copied());
-        }
-
-        for year in years_to_update {
-            let resolved = profile.resolve_tax_profile_for_year(year);
-            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
-                continue;
-            }
-
-            let suggestions =
-                crate::integration::validation::form_suggestions_for_profile_year(&profile, year);
-            let existing_set = profile.per_year_forms.get(&year).or_else(|| {
-                existing_profile
-                    .as_ref()
-                    .and_then(|stored| stored.per_year_forms.get(&year))
-            });
-            let result =
-                crate::forms::reconcile_forms_set_for_year(year, existing_set, &suggestions);
-            if !result.conflicts.is_empty() {
-                tracing::warn!(
-                    tin = %tin,
-                    taxable_year = year,
-                    conflicts = result.conflicts.len(),
-                    "Forms Set reconciliation requires review"
-                );
-            }
-            super::forms_set::execute_replace_per_year_forms(&tx, &tin, year, &result.forms_set)?;
-            profile.per_year_forms.insert(year, result.forms_set);
-        }
-
         tx.commit()?;
         Ok(self.finish_post_commit_write(profile, "Taxpayer profile save"))
     }
@@ -630,7 +582,6 @@ impl Database {
 mod tests {
     use super::*;
     use crate::db::ProfileCalendarLink;
-    use chrono::{FixedOffset, TimeZone, Utc};
     use tempfile::NamedTempFile;
 
     fn listing_test_profile(seg1: &str) -> TaxpayerProfile {
@@ -753,21 +704,6 @@ mod tests {
         assert!(
             db.list_profiles().expect("still must not error").is_empty(),
             "unreadable rows are skipped, so the list is empty rather than failed"
-        );
-    }
-
-    #[test]
-    fn reconciliation_calendar_year_uses_local_date_at_utc_positive_year_boundary() {
-        let utc = Utc
-            .with_ymd_and_hms(2026, 12, 31, 10, 30, 0)
-            .single()
-            .expect("valid UTC instant");
-        let utc_plus_14 = FixedOffset::east_opt(14 * 60 * 60).expect("valid UTC+14 offset");
-        let local_date = utc.with_timezone(&utc_plus_14).date_naive();
-
-        assert_eq!(
-            (utc.date_naive(), reconciliation_calendar_year(local_date)),
-            (chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), 2027)
         );
     }
 

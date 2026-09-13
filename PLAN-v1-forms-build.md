@@ -44,6 +44,17 @@ These are still `?` unless marked **Decided**. Phase 3 must not guess.
    `TaxpayerProfile.profile_years` (`BTreeMap<u16, ProfileYearFacts>`) inside
    existing `profiles.data_json`. No dedicated table. The `TaxProfileVersion`
    ledger is still stored until work item 5.
+5. **Forms Set source.** **Decided** (Phase 3, work item 4): filing
+   obligations are user-chosen `FormSetSource::Manual` only. Dashboard and
+   deadline APIs ignore CorAi / ReviewedCor / InferredTaxType /
+   MigrationBackfill rows. The enum stays so existing `per_year_forms` rows
+   still deserialize.
+6. **Profile router flags.** **Decided** (Phase 3, work item 4): VAT /
+   withholding / GPP / dormant / excise / registration-activity fields are
+   **not** a show/hide router. Struct fields remain on `TaxpayerProfile` and
+   `TaxProfileVersion` so stored JSON still loads (`?` until work item 5
+   deletes COR/OCR writers). `FormDefinition::requires_vat` /
+   `requires_employees` stay as dead registry metadata (`?`).
 
 ---
 

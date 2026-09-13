@@ -289,6 +289,14 @@ mod tests {
             profile_years: Default::default(),
         };
         let _ = profile.capture_current_as_year(2026);
+        profile.per_year_forms.insert(
+            2026,
+            crate::forms::PerYearFormsSet::from_codes(
+                2026,
+                ["2551Q"],
+                crate::forms::FormSetSource::Manual,
+            ),
+        );
 
         db.save_profile(profile).unwrap();
         Some(db)

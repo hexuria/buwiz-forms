@@ -1917,15 +1917,10 @@ impl Render for DashboardView {
                             </div>
                             <div text_base text_color={cx.theme().muted_foreground}>
                                 {format!(
-                                    "TIN: {} • Type: {:?} • {} • {}",
+                                    "TIN: {} • Type: {:?} • {}",
                                     profile.tin.full(),
                                     profile.taxpayer_type,
-                                    period_desc,
-                                    if profile.is_vat_registered {
-                                        "VAT"
-                                    } else {
-                                        "Non-VAT"
-                                    }
+                                    period_desc
                                 )}
                             </div>
                         </div>

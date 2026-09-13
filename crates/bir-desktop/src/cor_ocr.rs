@@ -1744,26 +1744,21 @@ PERCENTAGE TAX
 
         let mut confirmed_profile = draft_profile;
         confirmed_profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
-        let suggestions =
-            bir_core::integration::form_suggestions_for_profile_year(&confirmed_profile, 2026);
-        let reconciliation =
-            bir_core::forms::reconcile_forms_set_for_year(2026, None, &suggestions);
-        confirmed_profile
-            .per_year_forms
-            .insert(2026, reconciliation.forms_set);
         let confirmed_preview = confirmed_profile.preview_obligations_for_year(2026);
         assert!(
-            confirmed_preview
-                .form_codes
-                .iter()
-                .any(|code| code == "1701Q")
+            confirmed_preview.form_codes.is_empty(),
+            "COR confirmation does not invent a Forms Set"
         );
-        assert!(
-            confirmed_preview
-                .form_codes
-                .iter()
-                .any(|code| code == "2551Q")
+        confirmed_profile.per_year_forms.insert(
+            2026,
+            bir_core::forms::PerYearFormsSet::from_codes(
+                2026,
+                ["1701Q"].iter().copied(),
+                bir_core::forms::FormSetSource::Manual,
+            ),
         );
+        let with_manual = confirmed_profile.preview_obligations_for_year(2026);
+        assert!(with_manual.form_codes.iter().any(|code| code == "1701Q"));
         assert_eq!(confirmed_preview.active_version_ids, vec![draft.id]);
     }
 }

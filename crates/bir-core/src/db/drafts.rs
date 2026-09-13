@@ -644,51 +644,6 @@ impl Database {
         }
 
         if profile_changed {
-            let resolved = profile.resolve_tax_profile_for_year(draft.taxable_year);
-            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
-                let details = resolved
-                    .issues
-                    .iter()
-                    .map(|issue| issue.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                return Err(DbError::Other(format!(
-                    "Cannot reconcile the {} Forms Set after recording Item 13 because the confirmed profile timeline is unresolved{}",
-                    draft.taxable_year,
-                    if details.is_empty() {
-                        String::new()
-                    } else {
-                        format!(": {details}")
-                    }
-                )));
-            }
-
-            let stored_set =
-                super::forms_set::query_per_year_forms(&tx, &draft.tin, draft.taxable_year)?;
-            let existing_set = (!stored_set.is_empty()).then_some(&stored_set);
-            let suggestions = crate::integration::validation::form_suggestions_for_profile_year(
-                &profile,
-                draft.taxable_year,
-            );
-            let reconciled = crate::forms::reconcile_forms_set_for_year(
-                draft.taxable_year,
-                existing_set,
-                &suggestions,
-            );
-            if !reconciled.conflicts.is_empty() {
-                tracing::warn!(
-                    tin = %draft.tin,
-                    taxable_year = draft.taxable_year,
-                    conflicts = reconciled.conflicts.len(),
-                    "Item 13 election reconciled a Forms Set that needs review"
-                );
-            }
-            super::forms_set::execute_replace_per_year_forms(
-                &tx,
-                &draft.tin,
-                draft.taxable_year,
-                &reconciled.forms_set,
-            )?;
             let updated_profile_json = serde_json::to_string(&profile)?;
             let updated = tx.execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
@@ -4073,10 +4028,11 @@ mod tests {
         assert_eq!(elections[0].source_form, "2551Qv2018");
         assert_eq!(saved_draft.status, FilingStatus::Queued);
         let saved_set = db.get_per_year_forms(&draft.tin, 2026).unwrap();
-        assert!(saved_set.contains_active("1701Q"));
-        assert!(saved_set.contains_active("1701"));
-        assert!(!saved_set.contains_active("2551Q"));
-        assert_eq!(saved_profile.per_year_forms.get(&2026), Some(&saved_set));
+        assert!(
+            saved_set.is_empty(),
+            "Item 13 must record the election without inventing a Forms Set"
+        );
+        assert_eq!(saved_profile.per_year_forms.get(&2026), None);
     }
 
     #[test]
@@ -4177,7 +4133,7 @@ mod tests {
     }
 
     #[test]
-    fn forms_set_write_failure_rolls_back_queued_election_and_draft() {
+    fn queued_election_does_not_require_a_forms_set_rewrite() {
         let db = test_db();
         let profile = test_profile();
         insert_test_profile(&db, &profile);
@@ -4192,19 +4148,17 @@ mod tests {
             .unwrap();
         let draft = queued_eight_percent_draft(&profile);
 
-        let error = db
-            .save_queued_2551q_draft_and_election(&draft)
-            .expect_err("a Forms Set write failure must abort the transaction");
+        db.save_queued_2551q_draft_and_election(&draft)
+            .expect("Item 13 must commit without rewriting the Forms Set");
 
-        assert!(error.to_string().contains("forced Forms Set failure"));
         let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
         assert!(
             saved_profile
                 .tax_elections
                 .iter()
-                .all(|entry| entry.taxable_year != 2026)
+                .any(|entry| entry.taxable_year == 2026)
         );
-        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_some());
         assert!(db.get_per_year_forms(&draft.tin, 2026).unwrap().is_empty());
     }
 
