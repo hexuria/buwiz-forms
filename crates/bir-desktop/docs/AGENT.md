@@ -8,6 +8,14 @@ verbs live in this host as `invoke` names. Start at the
 [Authorization](#authorization) if you are driving painted `bir` or
 `bir-headless` from CLI / MCP / Grok Bot.
 
+Launch is env only. There is no `scripts/bir-agent` wrapper. Set
+`GPUI_AGENT=1`, `GPUI_AGENT_TOKEN`, and `GPUI_AGENT_ADDR` on the host, then
+point `gpui-agent` at the same token and address. Default bind is
+`127.0.0.1:17421`. When NativeChat already owns 17421, use
+`GPUI_AGENT_ADDR=127.0.0.1:17423`. Release binaries also need
+`GPUI_AGENT_ALLOW_RELEASE=1`. Lock screen, profile PIN/TOTP, and the filing
+queue stay host-side; the client must not skip them.
+
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
 `8b864fbbd9de08565f4a90cb9284446a44f85d7f` (`main` after PR #40 —
 `Op::Keybinding` / `Keybindings`, `screenshot --mode scrolled`,
@@ -145,8 +153,10 @@ These are host constraints. They do not fork protocol v2.
 Painted GUI `bir` (`--features …,agent`, in-process mailbox on the GPUI window)
 and daemon `bir-headless serve` (no GPU) both speak the **same**
 gpui-agent protocol on loopback **`127.0.0.1:17421`** (override with
-`GPUI_AGENT_ADDR`). Clients (CLI / MCP / Grok Bot) talk to whoever currently
-holds that bind. `hello.platform` is `desktop` vs `headless`.
+`GPUI_AGENT_ADDR`). When NativeChat already owns 17421, bind BIR on
+`127.0.0.1:17423`. Clients (CLI / MCP / Grok Bot) talk to whoever currently
+holds that bind. `hello.platform` is `desktop` vs `headless`. There is no
+wrapper script in `scripts/`.
 
 Before driving a host, check who owns the port: `lsof -nP -iTCP:17421
 -sTCP:LISTEN` must show `bir` (or `bir-headless`). Another process there —
@@ -357,6 +367,8 @@ Use this section as the day-to-day recipe. Invoke names must match the
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
+# when NativeChat owns 17421:
+# export GPUI_AGENT_ADDR=127.0.0.1:17423
 export GPUI_AGENT_TOKEN=dev-secret   # required; must match the host
 ```
 
@@ -366,6 +378,8 @@ Host (whichever owns the port):
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret   # required to bind (default-deny)
 export GPUI_AGENT_ADDR=127.0.0.1:17421
+# when NativeChat owns 17421: export GPUI_AGENT_ADDR=127.0.0.1:17423
+# release binary: export GPUI_AGENT_ALLOW_RELEASE=1
 # optional: export GPUI_AGENT_LOG_REQUESTS=1
 # demo-only (never live DB): export GPUI_AGENT_INSECURE_NO_TOKEN=1
 # painted:
@@ -529,15 +543,19 @@ From the repo root, debug (the usual developer loop):
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN='dev-secret'   # required to bind
 export GPUI_AGENT_ADDR='127.0.0.1:17421'
+# NativeChat on 17421: export GPUI_AGENT_ADDR='127.0.0.1:17423'
 cargo run --locked --bin bir --features dev-tools,agent
 ```
 
-Release (only if you intentionally want the control plane in a release binary):
+Release (only if you intentionally want the control plane in a release binary).
+`just _package-mac --agent` is the same feature flag on the Mac bundle.
+There is no `scripts/bir-agent` wrapper; still launch with env:
 
 ```bash
 export GPUI_AGENT=1
 export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_TOKEN='dev-secret'
+export GPUI_AGENT_ADDR='127.0.0.1:17421'
 cargo run --release --locked --bin bir --features agent
 ```
 
