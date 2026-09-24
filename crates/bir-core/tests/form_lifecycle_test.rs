@@ -65,8 +65,11 @@ fn test_full_form_lifecycle() {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
-        profile.ensure_profile_version_ledger();
+        profile
+            .capture_current_as_year(2026)
+            .expect("2026 profile-year clone");
         let saved_profile = db.save_profile(profile).expect("Failed to save profile");
 
         // 3. Initialize Draft

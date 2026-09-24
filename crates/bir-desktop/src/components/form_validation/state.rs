@@ -5,6 +5,8 @@ use bir_core::{
 };
 use std::{error::Error, fmt};
 
+use super::ValidationPaintGate;
+
 /// Exact token for one in-flight evaluation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingEvaluation {
@@ -145,6 +147,7 @@ pub struct FormValidationState {
     workflow_transition: Option<WorkflowTransitionResult>,
     evaluator_unavailable: Option<EvaluatorUnavailable>,
     incomplete: Option<IncompleteEvaluationSnapshot>,
+    paint_gate: ValidationPaintGate,
 }
 
 impl FormValidationState {
@@ -161,6 +164,7 @@ impl FormValidationState {
             workflow_transition: None,
             evaluator_unavailable: None,
             incomplete: None,
+            paint_gate: ValidationPaintGate::new(),
         }
     }
 
@@ -408,6 +412,55 @@ impl FormValidationState {
         self.advisory_issues().len()
     }
 
+    /// Record that the user edited this inventory / semantic field.
+    pub fn touch(&mut self, field: impl Into<String>) {
+        self.paint_gate.touch(field);
+    }
+
+    /// Record a successful Save in this view session. All blocking issues become
+    /// paintable.
+    pub fn mark_saved(&mut self) {
+        self.paint_gate.mark_saved();
+    }
+
+    pub fn paint_gate(&self) -> &ValidationPaintGate {
+        &self.paint_gate
+    }
+
+    pub fn paint_gate_mut(&mut self) -> &mut ValidationPaintGate {
+        &mut self.paint_gate
+    }
+
+    /// Blocking issues that should be painted for `field`.
+    ///
+    /// Submit / `blocking_issues` still return the full evaluator list. Issues
+    /// with no field refs stay hidden until `mark_saved`.
+    pub fn visible_errors(&self, field: &str) -> Vec<&RuleViolation> {
+        if !self.paint_gate.should_paint(field) {
+            return Vec::new();
+        }
+        self.blocking_issues()
+            .into_iter()
+            .filter(|issue| violation_matches_field(issue, field))
+            .collect()
+    }
+
+    /// Blocking issues currently painted (touched fields, or all after save).
+    pub fn visible_blocking_issues(&self) -> Vec<&RuleViolation> {
+        self.blocking_issues()
+            .into_iter()
+            .filter(|issue| {
+                if self.paint_gate.saved_once() {
+                    return true;
+                }
+                issue
+                    .fields()
+                    .iter()
+                    .any(|field_ref| self.paint_gate.should_paint(&field_key(field_ref)))
+            })
+            .collect()
+    }
+
     fn issues_with_severity(&self, severity: RuleSeverity) -> Vec<&RuleViolation> {
         self.result
             .iter()
@@ -465,6 +518,29 @@ impl FormValidationState {
         // since been altered.
         self.workflow_transition = None;
     }
+}
+
+fn field_key(field_ref: &bir_core::RuleFieldRef) -> String {
+    if let Some(xml_key) = field_ref.xml_key() {
+        return xml_key.as_str().to_string();
+    }
+    field_ref.field().field_id().as_str().to_string()
+}
+
+fn violation_matches_field(issue: &RuleViolation, field: &str) -> bool {
+    issue.fields().iter().any(|field_ref| {
+        let id = field_ref.field().field_id().as_str();
+        if id == field {
+            return true;
+        }
+        if field_ref
+            .xml_key()
+            .is_some_and(|xml_key| xml_key.as_str() == field)
+        {
+            return true;
+        }
+        id.rsplit(':').next() == Some(field)
+    })
 }
 
 #[cfg(test)]
@@ -908,5 +984,104 @@ mod tests {
             pending.context_fingerprint(),
             context_snapshot("p-1").fingerprint()
         );
+    }
+
+    fn gating_result(
+        input_revision: u64,
+        context_values: &ContextValueSnapshot,
+    ) -> EvaluationResult {
+        let context_fingerprint = context_values.fingerprint();
+        serde_json::from_value(json!({
+            "report": {
+                "rule_set": {
+                    "rule_set_id": RULE_SET_ID,
+                    "form_code": "TEST",
+                    "form_revision": "v1",
+                    "official_package_version": "p1",
+                    "source_set_sha256": SOURCE_DIGEST,
+                },
+                "context": {
+                    "phase": "validate",
+                        "profile": "filing_safe",
+                },
+                "input_revision": input_revision,
+                "context_fingerprint": context_fingerprint,
+                "expected_rules": [
+                    {"execution": {"rule_id": "year-required", "instance": null}, "order": 10},
+                    {"execution": {"rule_id": "tin-required", "instance": null}, "order": 20}
+                ],
+                "evaluated_rules": [
+                    {"rule_id": "year-required", "instance": null},
+                    {"rule_id": "tin-required", "instance": null}
+                ],
+                "violations": [
+                    {
+                        "execution": {"rule_id": "year-required", "instance": null},
+                        "phase": "validate",
+                        "order": {"rule_order": 10, "occurrence": 0},
+                        "fields": [{
+                            "field": {"field_id": "txtYear", "group_path": []},
+                            "xml_key": null,
+                            "serialized_occurrence": null
+                        }],
+                        "official_message": null,
+                        "message": "Year is required",
+                        "assessment": "verified-correct",
+                        "severity": "blocking",
+                        "profile": "filing_safe"
+                    },
+                    {
+                        "execution": {"rule_id": "tin-required", "instance": null},
+                        "phase": "validate",
+                        "order": {"rule_order": 20, "occurrence": 0},
+                        "fields": [{
+                            "field": {"field_id": "txtTIN1", "group_path": []},
+                            "xml_key": null,
+                            "serialized_occurrence": null
+                        }],
+                        "official_message": null,
+                        "message": "TIN is required",
+                        "assessment": "verified-correct",
+                        "severity": "blocking",
+                        "profile": "filing_safe"
+                    }
+                ]
+            },
+            "canonical_inputs": [],
+            "expected_outputs": [],
+            "derived_outputs": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn paint_gate_hides_blocking_issues_until_touch_or_save() {
+        let mut state = state();
+        let context_values = context_snapshot("p-1");
+        state.begin_filing_safe_evaluation(ValidationPhase::Validate);
+        assert_eq!(
+            state.accept_result(gating_result(0, &context_values)),
+            EvaluationAcceptance::AcceptedReport
+        );
+
+        assert_eq!(state.blocking_count(), 2);
+        assert!(
+            state.visible_blocking_issues().is_empty(),
+            "pristine snapshot paints nothing"
+        );
+        assert!(state.visible_errors("txtYear").is_empty());
+        assert!(state.visible_errors("txtTIN1").is_empty());
+
+        state.touch("txtYear");
+        let year_only = state.visible_errors("txtYear");
+        assert_eq!(year_only.len(), 1);
+        assert_eq!(year_only[0].message(), "Year is required");
+        assert!(state.visible_errors("txtTIN1").is_empty());
+        assert_eq!(state.visible_blocking_issues().len(), 1);
+
+        state.mark_saved();
+        assert_eq!(state.visible_blocking_issues().len(), 2);
+        assert_eq!(state.visible_errors("txtTIN1").len(), 1);
+        assert_eq!(state.visible_errors("txtYear").len(), 1);
     }
 }

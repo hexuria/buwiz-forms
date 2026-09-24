@@ -261,11 +261,7 @@ impl Form0619EDraft {
             month,
             is_amended: false,
             any_taxes_withheld: false,
-            withholding_agent_category: if profile.is_government_withholding_entity {
-                WithholdingAgentCategory::Government
-            } else {
-                WithholdingAgentCategory::Private
-            },
+            withholding_agent_category: WithholdingAgentCategory::Private,
             // Deliberately manual/fail-closed: the sample's day 10 is not a
             // sufficient legal deadline rule.
             due_day: None,
@@ -766,6 +762,18 @@ mod tests {
         assert_eq!(draft.form_type_id(), "0619Ev2018");
         assert_eq!(draft.atc_code(), "WME10");
         assert_eq!(draft.tax_type_code(), "WE");
+    }
+
+    #[test]
+    fn withholding_agent_category_defaults_to_private_not_profile_flag() {
+        let mut government = test_profile();
+        government.is_government_withholding_entity = true;
+        let draft = Form0619EDraft::new_from_profile(&government, 2026, 4);
+        assert_eq!(
+            draft.withholding_agent_category,
+            WithholdingAgentCategory::Private,
+            "Item category is a form field, not a profile router"
+        );
     }
 
     #[test]

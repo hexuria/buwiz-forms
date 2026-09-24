@@ -25,6 +25,9 @@ pub struct ComboboxState {
     pub selected_index: Option<usize>,
     pub focus_handle: FocusHandle,
     pub max_visible_items: usize,
+    /// Last committed option. Filter typing updates the input without this,
+    /// so confirming a typed match still emits a change.
+    committed: Option<String>,
     scroll_handle: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -90,6 +93,7 @@ impl ComboboxState {
                     }
                 } else if let InputEvent::Focus = event {
                     this.open = true;
+                    this.scroll_to_selected();
                     cx.notify();
                 }
             },
@@ -103,9 +107,17 @@ impl ComboboxState {
             selected_index: None,
             focus_handle,
             max_visible_items,
+            committed: None,
             scroll_handle: UniformListScrollHandle::new(),
             _subscriptions,
         }
+    }
+
+    pub fn set_options(&mut self, options: Vec<String>, cx: &mut Context<Self>) {
+        self.options = options.clone();
+        self.filtered_options = options;
+        self.selected_index = None;
+        cx.notify();
     }
 
     pub fn set_selected_value(&mut self, value: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -117,6 +129,7 @@ impl ComboboxState {
         // subset. A committed value is a selection, not a filter: offer the
         // full list again, cursor on the selection.
         self.reset_filter_to_all(value);
+        self.committed = Some(value.to_string());
         self.open = false;
         cx.notify();
     }
@@ -144,11 +157,12 @@ impl ComboboxState {
         // Enter on the highlighted current selection) is not a change;
         // emitting would mark the profile dirty and strand in-flight save
         // completions as stale.
-        let unchanged = self.input.read(cx).value() == item;
+        let unchanged = self.committed.as_deref() == Some(item);
         self.input.update(cx, |input, cx| {
             input.set_value(item.to_string(), window, cx);
         });
         self.reset_filter_to_all(item);
+        self.committed = Some(item.to_string());
         self.open = false;
         window.blur(cx);
         if !unchanged {

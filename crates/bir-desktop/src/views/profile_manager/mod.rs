@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use crate::components::date_input::{DateInput, DateInputEvent, DateInputState};
+use crate::components::form_multi_select;
 use crate::components::multi_select::{
     MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState,
 };
@@ -20,8 +21,8 @@ use crate::components::tin_input::TinInput;
 use bir_core::db::Database;
 use bir_core::naming::Tin;
 use bir_core::profile::{
-    ComplianceSourceMode, EoptTier, RegisteredTaxType, RegistrationActivityStatus,
-    TaxClassification, TaxProfileVersionConfirmationPlan, TaxpayerProfile, TaxpayerType,
+    ComplianceSourceMode, EoptTier, RegistrationActivityStatus, TaxClassification, TaxpayerProfile,
+    TaxpayerType, profile_year_selector_options, profile_year_selector_range,
 };
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
@@ -49,18 +50,10 @@ pub enum ProfileEvent {
     },
 }
 
-#[derive(Clone, Copy)]
-enum CorProfilePreset {
-    CurrentTaxProfile,
-    NonVatBusiness,
-    VatBusiness,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProfileSaveRequest {
     profile_session_epoch: u64,
     profile_change_revision: u64,
-    reviewed_plan: Option<TaxProfileVersionConfirmationPlan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -217,43 +210,6 @@ pub struct ProfileManagerView {
     stored_profile_pin_hash: Option<String>,
     stored_atc_codes: Vec<String>,
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
-    stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
-    pending_cor_evidence_cleanup: Vec<(u64, bir_core::profile::CorDocumentRef)>,
-    compliance_source_mode: ComplianceSourceMode,
-    cor_sub_tab: usize,
-    ocr_selected_version_id: Option<String>,
-    cor_editing_version_id: Option<String>,
-    cor_preview_year_input: Entity<InputState>,
-    cor_version_label_input: Entity<InputState>,
-    cor_effective_from_input: Entity<DateInputState>,
-    cor_effective_until_input: Entity<DateInputState>,
-    cor_tin_input: Entity<TinInput>,
-    cor_registration_date_input: Entity<DateInputState>,
-    cor_registered_name_input: Entity<InputState>,
-    cor_trade_name_input: Entity<InputState>,
-    cor_rdo_code_input: Entity<InputState>,
-    cor_rdo_select: Entity<ComboboxState>,
-    cor_registered_address_input: Entity<InputState>,
-    cor_lob_code_input: Entity<InputState>,
-    cor_lob_description_input: Entity<InputState>,
-    cor_taxpayer_type_select: Entity<ComboboxState>,
-    cor_tax_classification_select: Entity<ComboboxState>,
-    cor_eopt_tier_select: Entity<ComboboxState>,
-    cor_registration_status_select: Entity<ComboboxState>,
-    cor_extracted_forms: Vec<String>,
-    cor_extracted_forms_select: Entity<MultiSelectState>,
-    cor_deadline_title_input: Entity<InputState>,
-    cor_deadline_source_input: Entity<InputState>,
-    cor_deadline_forms_input: Entity<InputState>,
-    cor_deadline_original_input: Entity<InputState>,
-    cor_deadline_adjusted_input: Entity<InputState>,
-    cor_deadline_reason_input: Entity<InputState>,
-    gemini_ocr_enabled: bool,
-    gemini_ocr_cloud_consent: bool,
-    gemini_ocr_api_key_input: Entity<InputState>,
-    gemini_ocr_model_select: Entity<ComboboxState>,
-    gemini_ocr_custom_model_input: Entity<InputState>,
-    gemini_ocr_status: Option<String>,
 
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
@@ -265,23 +221,12 @@ pub struct ProfileManagerView {
     totp_qr_path: Option<std::path::PathBuf>,
     show_totp_secret_text: bool,
     stored_totp_secret: Option<String>,
-    interactive_document_viewer:
-        Option<Entity<crate::components::document_viewer::InteractiveDocumentViewer>>,
-    focused_ocr_field: Option<String>,
-    pending_cor_editor_load: Option<String>,
-    pending_profile_version_confirmation: Option<TaxProfileVersionConfirmationPlan>,
-    is_uploading_cor: bool,
 
     pub stored_per_year_forms: std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
+    stored_profile_years: std::collections::BTreeMap<u16, bir_core::profile::ProfileYearFacts>,
     pub forms_editor_year: u16,
     pub forms_editor_year_select: Entity<ComboboxState>,
-    pub forms_editor_new_code_input: Entity<InputState>,
-    pub forms_editor_registry_form_select: Entity<ComboboxState>,
-    pub forms_editor_custom_code_mode: bool,
-    pub forms_editor_new_reason_input: Entity<InputState>,
-    pub forms_editor_new_frequency_select: Entity<ComboboxState>,
-    pub forms_editor_selected_code: Option<String>,
-    pub forms_editor_active_note_input: Entity<InputState>,
+    pub forms_editor_forms_select: Entity<MultiSelectState>,
     calendar_name_input: Entity<InputState>,
     calendar_action_message: Option<(bool, String)>,
     calendar_form_selection: bir_core::google_calendar::CalendarFormSelection,
@@ -301,19 +246,7 @@ fn compliance_affected_years(profile: &TaxpayerProfile) -> Vec<u16> {
             .iter()
             .map(|election| election.taxable_year),
     );
-
-    for version in &profile.profile_versions {
-        let Some(start) = version.effective_from else {
-            continue;
-        };
-        let start_year = start.year().clamp(0, i32::from(u16::MAX)) as u16;
-        let raw_end_year = version
-            .effective_until
-            .map(|date| date.year())
-            .unwrap_or_else(|| i32::from(current_year).max(start.year()));
-        let end_year = raw_end_year.clamp(i32::from(start_year), i32::from(u16::MAX)) as u16;
-        years.extend(start_year..=end_year);
-    }
+    years.extend(profile.profile_years.keys().copied());
 
     years.into_iter().collect()
 }
@@ -457,161 +390,6 @@ impl ProfileManagerView {
         let email_input = cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));
         let business_start_input = cx.new(|cx| DateInputState::new(window, cx));
         let birth_date_input = cx.new(|cx| DateInputState::new(window, cx));
-        let cor_preview_year_input = cx.new(|cx| {
-            let mut input = InputState::new(window, cx).placeholder("Preview year");
-            input.set_value(current_year.to_string(), window, cx);
-            input
-        });
-        let cor_version_label_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Version label"));
-        let cor_effective_from_input = cx.new(|cx| DateInputState::new(window, cx));
-        let cor_effective_until_input = cx.new(|cx| DateInputState::new(window, cx));
-        let cor_tin_input = cx.new(|cx| TinInput::new(window, cx));
-        let cor_rdo_select = cx.new(|cx| ComboboxState::new(rdo_options.clone(), 5, window, cx));
-        let cor_registration_date_input = cx.new(|cx| DateInputState::new(window, cx));
-        let cor_registered_name_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Registered name"));
-        let cor_trade_name_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Trade name"));
-        let cor_rdo_code_input = cx.new(|cx| InputState::new(window, cx).placeholder("RDO code"));
-        let cor_registered_address_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Registered address"));
-        let cor_lob_code_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Line of business code"));
-        let cor_lob_description_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Line of business description"));
-        let cor_taxpayer_type_select = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Individual".to_string(),
-                    "Corporation".to_string(),
-                    "Partnership".to_string(),
-                    "Cooperative".to_string(),
-                    "Estate".to_string(),
-                    "Trust".to_string(),
-                ],
-                6,
-                window,
-                cx,
-            )
-        });
-        let cor_tax_classification_select = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Purely Compensation".to_string(),
-                    "Self-Employed / Professional".to_string(),
-                    "Mixed Income".to_string(),
-                    "Corporation".to_string(),
-                    "Cooperative Exempt".to_string(),
-                    "Cooperative Taxable".to_string(),
-                    "Cooperative Mixed".to_string(),
-                    "Estate or Trust".to_string(),
-                    "None".to_string(),
-                ],
-                4,
-                window,
-                cx,
-            )
-        });
-        let cor_eopt_tier_select = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Micro".to_string(),
-                    "Small".to_string(),
-                    "Medium".to_string(),
-                    "Large".to_string(),
-                    "None".to_string(),
-                ],
-                5,
-                window,
-                cx,
-            )
-        });
-        let cor_registration_status_select = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Active".to_string(),
-                    "Dormant Operational".to_string(),
-                    "Temporarily Inactive".to_string(),
-                    "Officially Closed".to_string(),
-                ],
-                4,
-                window,
-                cx,
-            )
-        });
-        let cor_extracted_forms_select = cx.new(|cx| {
-            crate::components::form_multi_select::registry_form_multi_select(
-                "Add form code...",
-                window,
-                cx,
-            )
-        });
-        let cor_deadline_title_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Title"));
-        let cor_deadline_source_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Source required"));
-        let cor_deadline_forms_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Form codes (e.g. 1702Q,2551Q)"));
-        let cor_deadline_original_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Original deadline YYYY-MM-DD"));
-        let cor_deadline_adjusted_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Adjusted deadline YYYY-MM-DD"));
-        let cor_deadline_reason_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Reason / note"));
-        let (gemini_ocr_enabled, gemini_ocr_model) = if let Ok(db_guard) = db.lock() {
-            let enabled = db_guard
-                .get_setting(crate::cor_ocr::COR_OCR_GEMINI_ENABLED_SETTING)
-                .ok()
-                .flatten()
-                .as_deref()
-                == Some("true");
-            let model = db_guard
-                .get_setting(crate::cor_ocr::COR_OCR_GEMINI_MODEL_SETTING)
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| crate::cor_ocr::DEFAULT_GEMINI_MODEL.to_string());
-            (enabled, model)
-        } else {
-            (false, crate::cor_ocr::DEFAULT_GEMINI_MODEL.to_string())
-        };
-        let gemini_key_placeholder = "Paste Gemini API key (stored in OS keychain)";
-        let gemini_ocr_api_key_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .masked(true)
-                .placeholder(gemini_key_placeholder)
-        });
-        let gemini_model_is_supported =
-            crate::cor_ocr::SUPPORTED_GEMINI_MODELS.contains(&gemini_ocr_model.as_str());
-        let gemini_ocr_model_select = cx.new(|cx| {
-            let mut state = ComboboxState::new(
-                crate::cor_ocr::SUPPORTED_GEMINI_MODELS
-                    .iter()
-                    .map(|model| (*model).to_string())
-                    .collect(),
-                6,
-                window,
-                cx,
-            );
-            state.set_selected_value(
-                if gemini_model_is_supported {
-                    &gemini_ocr_model
-                } else {
-                    crate::cor_ocr::DEFAULT_GEMINI_MODEL
-                },
-                window,
-                cx,
-            );
-            state
-        });
-        let gemini_ocr_custom_model_input = cx.new(|cx| {
-            let mut input = InputState::new(window, cx).placeholder("Custom Gemini model id");
-            if !gemini_model_is_supported {
-                input.set_value(gemini_ocr_model.clone(), window, cx);
-            }
-            input
-        });
-
         let imap_email_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));
         let imap_password_input = cx.new(|cx| {
@@ -639,42 +417,16 @@ impl ProfileManagerView {
 
         let forms_editor_year = current_year as u16;
         let forms_editor_year_select = cx.new(|cx| {
-            // Offer one year past the current one so next-year planning works
-            // without a hard-coded upper bound going stale.
-            let years = (2018..=current_year + 1)
-                .map(|y| y.to_string())
-                .collect::<Vec<_>>();
-            let mut state = ComboboxState::new(years, 5, window, cx);
+            let years = profile_year_selector_options(None, current_year);
+            let mut state = ComboboxState::new(years, 8, window, cx);
             state.set_selected_value(&current_year.to_string(), window, cx);
             state
         });
-        let forms_editor_new_code_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Custom form code"));
-        let forms_editor_registry_form_select = cx.new(|cx| {
-            let mut options: Vec<String> = bir_core::forms::registry::FORM_REGISTRY
-                .iter()
-                .map(|form| format!("{} - {}", form.code, form.title))
-                .collect();
-            options.sort();
-            ComboboxState::new(options, 8, window, cx)
+        let forms_editor_forms_select = cx.new(|cx| {
+            form_multi_select::registry_form_multi_select("Search form codes...", window, cx)
+                .drop_down(true)
+                .max_visible_items(10)
         });
-        let forms_editor_new_reason_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Reason / note"));
-        let forms_editor_new_frequency_select = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Monthly".to_string(),
-                    "Quarterly".to_string(),
-                    "Annual".to_string(),
-                    "Open Ended / Event".to_string(),
-                ],
-                4,
-                window,
-                cx,
-            )
-        });
-        let forms_editor_active_note_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Edit note / reason"));
 
         let subscriptions = vec![
             cx.subscribe(&tin_input, Self::on_tin_event),
@@ -696,57 +448,16 @@ impl ProfileManagerView {
                 Self::on_tax_election_year_event,
             ),
             cx.subscribe(&excise_select, Self::on_multi_select_event),
-            cx.subscribe(&business_start_input, Self::on_date_event),
+            cx.subscribe_in(
+                &business_start_input,
+                window,
+                Self::on_business_start_date_event,
+            ),
             cx.subscribe(&birth_date_input, Self::on_date_event),
-            cx.subscribe(&cor_effective_from_input, Self::on_date_event),
-            cx.subscribe(&cor_effective_until_input, Self::on_date_event),
-            cx.subscribe(&cor_registration_date_input, Self::on_date_event),
-            cx.subscribe_in(&cor_version_label_input, window, Self::on_input_event),
-            cx.subscribe_in(&cor_registered_name_input, window, Self::on_input_event),
-            cx.subscribe_in(&cor_trade_name_input, window, Self::on_input_event),
-            cx.subscribe_in(&cor_rdo_code_input, window, Self::on_input_event),
-            cx.subscribe_in(&cor_registered_address_input, window, Self::on_input_event),
-            cx.subscribe_in(&cor_lob_code_input, window, Self::on_input_event),
-            cx.subscribe_in(&cor_lob_description_input, window, Self::on_input_event),
-            cx.subscribe(
-                &cor_tin_input,
-                |this: &mut Self, _, event: &InputEvent, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.mark_profile_changed();
-                        cx.notify();
-                    }
-                },
-            ),
-            // Deadline draft fields feed the dirty snapshot, so typing in
-            // them (without pressing Add) must arm the navigation guard.
-            cx.subscribe(&cor_deadline_title_input, Self::on_cor_deadline_draft_event),
-            cx.subscribe(
-                &cor_deadline_source_input,
-                Self::on_cor_deadline_draft_event,
-            ),
-            cx.subscribe(&cor_deadline_forms_input, Self::on_cor_deadline_draft_event),
-            cx.subscribe(
-                &cor_deadline_original_input,
-                Self::on_cor_deadline_draft_event,
-            ),
-            cx.subscribe(
-                &cor_deadline_adjusted_input,
-                Self::on_cor_deadline_draft_event,
-            ),
-            cx.subscribe(
-                &cor_deadline_reason_input,
-                Self::on_cor_deadline_draft_event,
-            ),
-            cx.subscribe(&cor_rdo_select, Self::on_combobox_event),
-            cx.subscribe(&cor_taxpayer_type_select, Self::on_combobox_event),
-            cx.subscribe(&cor_tax_classification_select, Self::on_combobox_event),
-            cx.subscribe(&cor_eopt_tier_select, Self::on_combobox_event),
-            cx.subscribe(&cor_registration_status_select, Self::on_combobox_event),
             cx.subscribe(
                 &registration_activity_status_select,
                 Self::on_combobox_event,
             ),
-            cx.subscribe_in(&cor_preview_year_input, window, Self::on_input_event),
             cx.subscribe_in(
                 &setup_totp_state,
                 window,
@@ -776,59 +487,23 @@ impl ProfileManagerView {
             ),
         ];
 
-        cx.subscribe(
-            &cor_extracted_forms_select,
-            |this: &mut Self, _, event: &MultiSelectEvent, cx| {
-                this.cor_extracted_forms = event.selected.clone();
-                this.mark_profile_changed();
-                cx.notify();
-            },
-        )
-        .detach();
-
-        cx.subscribe(
-            &forms_editor_year_select,
-            |this: &mut Self, _, event: &ComboboxEvent, cx| {
-                if let Some(val) = event.selected.as_ref() {
-                    if let Ok(year) = val.parse::<u16>() {
-                        this.forms_editor_year = year;
-                        this.forms_editor_selected_code = None; // Reset detail view
-                        cx.notify();
-                    }
-                }
-            },
-        )
-        .detach();
-
         cx.subscribe_in(
-            &forms_editor_active_note_input,
+            &forms_editor_year_select,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
-                    let val = this
-                        .forms_editor_active_note_input
-                        .read(cx)
-                        .value()
-                        .to_string();
-                    if let Some(code) = &this.forms_editor_selected_code {
-                        let year = this.forms_editor_year;
-                        if let Some(set) = this.stored_per_year_forms.get_mut(&year) {
-                            if let Some(entry) =
-                                set.entries.iter_mut().find(|e| e.form_code == *code)
-                            {
-                                let next_reason = if val.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(val)
-                                };
-                                if entry.reason != next_reason {
-                                    entry.reason = next_reason;
-                                    this.mark_profile_changed();
-                                }
-                            }
-                        }
-                    }
+            |this: &mut Self, _, event: &ComboboxEvent, window, cx| {
+                if let Some(val) = event.selected.as_ref()
+                    && let Ok(year) = val.parse::<u16>()
+                {
+                    this.switch_profile_year(year, window, cx);
                 }
+            },
+        )
+        .detach();
+
+        cx.subscribe(
+            &forms_editor_forms_select,
+            |this: &mut Self, _, event: &MultiSelectEvent, cx| {
+                this.apply_forms_set_selection(event.selected.clone(), cx);
             },
         )
         .detach();
@@ -887,43 +562,6 @@ impl ProfileManagerView {
             stored_profile_pin_hash: None,
             stored_atc_codes: vec![],
             stored_tax_elections: vec![],
-            stored_profile_versions: vec![],
-            pending_cor_evidence_cleanup: vec![],
-            compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
-            cor_sub_tab: 0,
-            ocr_selected_version_id: None,
-            cor_editing_version_id: None,
-            cor_preview_year_input,
-            cor_version_label_input,
-            cor_effective_from_input,
-            cor_effective_until_input,
-            cor_tin_input,
-            cor_registration_date_input,
-            cor_registered_name_input,
-            cor_trade_name_input,
-            cor_rdo_code_input,
-            cor_rdo_select,
-            cor_registered_address_input,
-            cor_lob_code_input,
-            cor_lob_description_input,
-            cor_taxpayer_type_select,
-            cor_tax_classification_select,
-            cor_eopt_tier_select,
-            cor_registration_status_select,
-            cor_extracted_forms: Vec::new(),
-            cor_extracted_forms_select,
-            cor_deadline_title_input,
-            cor_deadline_source_input,
-            cor_deadline_forms_input,
-            cor_deadline_original_input,
-            cor_deadline_adjusted_input,
-            cor_deadline_reason_input,
-            gemini_ocr_enabled,
-            gemini_ocr_cloud_consent: false,
-            gemini_ocr_api_key_input,
-            gemini_ocr_model_select,
-            gemini_ocr_custom_model_input,
-            gemini_ocr_status: None,
             enable_profile_pin: false,
             profile_pin_input,
             is_totp_enabled: false,
@@ -933,11 +571,6 @@ impl ProfileManagerView {
             totp_qr_path: None,
             show_totp_secret_text: false,
             stored_totp_secret: None,
-            interactive_document_viewer: None,
-            focused_ocr_field: None,
-            pending_cor_editor_load: None,
-            pending_profile_version_confirmation: None,
-            is_uploading_cor: false,
             pending_notification: None,
             has_unsaved_profile_changes: false,
             has_unsaved_forms_set_changes: false,
@@ -951,15 +584,10 @@ impl ProfileManagerView {
             queued_profile_save: None,
             persisted_profile_tin: None,
             stored_per_year_forms: std::collections::BTreeMap::new(),
+            stored_profile_years: std::collections::BTreeMap::new(),
             forms_editor_year,
             forms_editor_year_select,
-            forms_editor_new_code_input,
-            forms_editor_registry_form_select,
-            forms_editor_custom_code_mode: false,
-            forms_editor_new_reason_input,
-            forms_editor_new_frequency_select,
-            forms_editor_selected_code: None,
-            forms_editor_active_note_input,
+            forms_editor_forms_select,
             calendar_name_input,
             calendar_action_message: None,
             calendar_form_selection: Default::default(),
@@ -1036,10 +664,11 @@ impl ProfileManagerView {
     }
 
     pub(crate) fn agent_set_tab(&mut self, tab: crate::agent::ids::ProfileManagerTab) {
-        if tab == crate::agent::ids::ProfileManagerTab::Cor {
-            self.ocr_selected_version_id = None;
-            self.interactive_document_viewer = None;
-        }
+        let tab = if tab == crate::agent::ids::ProfileManagerTab::Cor {
+            crate::agent::ids::ProfileManagerTab::Tax
+        } else {
+            tab
+        };
         self.active_tab = tab.index();
     }
 
@@ -1084,19 +713,7 @@ impl ProfileManagerView {
         if let Some(fields) = snapshot.as_object_mut() {
             // Forms Sets have their own dirty state and user-facing copy.
             fields.remove("per_year_forms");
-            // COR editor controls are applied to the stored version only when
-            // the user presses Apply. Keep those in-progress values in the
-            // dirty snapshot so render-time reconciliation cannot erase the
-            // navigation guard before they are applied or discarded.
-            fields.insert("_cor_editor".to_string(), self.cor_editor_snapshot(cx));
-            // The deadline-override draft is tracked separately from the
-            // editor snapshot: its panel also renders when no version is open
-            // in the editor, and the clean baseline always records it as
-            // empty so a typed draft stays dirty until Added or cleared.
-            fields.insert(
-                "_cor_deadline_draft".to_string(),
-                self.cor_deadline_draft_snapshot(cx),
-            );
+            fields.remove("profile_versions");
             // The election row is a pending editor value until Apply or Save
             // Profile consumes it. Tracking it prevents a selected election
             // from looking saved while the persisted ledger is still empty.
@@ -1120,108 +737,6 @@ impl ProfileManagerView {
         })
     }
 
-    fn cor_deadline_draft_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
-        serde_json::json!({
-            "title": self.cor_deadline_title_input.read(cx).value().to_string(),
-            "source": self.cor_deadline_source_input.read(cx).value().to_string(),
-            "forms": self.cor_deadline_forms_input.read(cx).value().to_string(),
-            "original": self.cor_deadline_original_input.read(cx).value().to_string(),
-            "adjusted": self.cor_deadline_adjusted_input.read(cx).value().to_string(),
-            "reason": self.cor_deadline_reason_input.read(cx).value().to_string(),
-        })
-    }
-
-    fn empty_cor_deadline_draft_snapshot() -> serde_json::Value {
-        serde_json::json!({
-            "title": "",
-            "source": "",
-            "forms": "",
-            "original": "",
-            "adjusted": "",
-            "reason": "",
-        })
-    }
-
-    fn cor_editor_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
-        let Some(version_id) = self.cor_editing_version_id.as_ref() else {
-            return serde_json::Value::Null;
-        };
-
-        let mut exact_form_codes = self.cor_extracted_forms.clone();
-        exact_form_codes.sort();
-        exact_form_codes.dedup();
-
-        serde_json::json!({
-            "version_id": version_id,
-            "label": self.cor_version_label_input.read(cx).value().to_string(),
-            "effective_from": self.cor_effective_from_input.read(cx).date,
-            "effective_from_text": self.cor_effective_from_input.read(cx).value(cx),
-            "effective_until": self.cor_effective_until_input.read(cx).date,
-            "effective_until_text": self.cor_effective_until_input.read(cx).value(cx),
-            "tin": self.cor_tin_input.read(cx).value(cx).to_string(),
-            "registration_date": self.cor_registration_date_input.read(cx).date,
-            "registration_date_text": self.cor_registration_date_input.read(cx).value(cx),
-            "registered_name": self.cor_registered_name_input.read(cx).value().to_string(),
-            "trade_name": self.cor_trade_name_input.read(cx).value().to_string(),
-            "rdo_code_input": self.cor_rdo_code_input.read(cx).value().to_string(),
-            "rdo": self.cor_rdo_select.read(cx).selected_value(cx),
-            "registered_address": self.cor_registered_address_input.read(cx).value().to_string(),
-            "line_of_business_code": self.cor_lob_code_input.read(cx).value().to_string(),
-            "line_of_business": self.cor_lob_description_input.read(cx).value().to_string(),
-            "taxpayer_type": self.cor_taxpayer_type_select.read(cx).selected_value(cx),
-            "tax_classification": self.cor_tax_classification_select.read(cx).selected_value(cx),
-            "eopt_tier": self.cor_eopt_tier_select.read(cx).selected_value(cx),
-            "registration_status": self.cor_registration_status_select.read(cx).selected_value(cx),
-            "exact_form_codes": exact_form_codes,
-        })
-    }
-
-    fn capture_clean_cor_editor_baseline(&mut self, cx: &Context<Self>) {
-        let editor_snapshot = self.cor_editor_snapshot(cx);
-        if let Some(clean_profile) = self.clean_profile_snapshot.as_mut()
-            && let Some(fields) = clean_profile.as_object_mut()
-        {
-            fields.insert("_cor_editor".to_string(), editor_snapshot);
-        }
-    }
-
-    fn cor_editor_has_unapplied_changes(&self, cx: &Context<Self>) -> bool {
-        let Some(clean_editor) = self
-            .clean_profile_snapshot
-            .as_ref()
-            .and_then(serde_json::Value::as_object)
-            .and_then(|fields| fields.get("_cor_editor"))
-        else {
-            return false;
-        };
-
-        clean_editor != &self.cor_editor_snapshot(cx)
-    }
-
-    /// Saving while the COR editor holds unapplied values would persist a
-    /// profile without them and then baseline those values as clean, silently
-    /// erasing the navigation guard. Actions that save must call this first
-    /// and bail out when it returns true.
-    fn block_if_cor_editor_dirty(
-        &mut self,
-        action_clause: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if !self.cor_editor_has_unapplied_changes(cx) {
-            return false;
-        }
-        let message =
-            format!("Apply the COR editor changes or use Discard before {action_clause}.");
-        self.save_message = Some(message.clone());
-        window.push_notification(
-            Notification::error(message).title("Unapplied COR changes"),
-            cx,
-        );
-        cx.notify();
-        true
-    }
-
     fn forms_set_snapshot(
         forms: &std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
     ) -> std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet> {
@@ -1236,17 +751,7 @@ impl ProfileManagerView {
     }
 
     fn capture_clean_baseline(&mut self, cx: &Context<Self>) {
-        let mut snapshot = self.profile_snapshot(cx);
-        if let Some(fields) = snapshot.as_object_mut() {
-            // A typed deadline-override draft is never persisted by a save;
-            // baselining it as "no draft" keeps the navigation guard armed
-            // until the user presses Add or clears the fields, even when a
-            // save completes while the draft is sitting in the inputs.
-            fields.insert(
-                "_cor_deadline_draft".to_string(),
-                Self::empty_cor_deadline_draft_snapshot(),
-            );
-        }
+        let snapshot = self.profile_snapshot(cx);
         self.clean_profile_snapshot = Some(snapshot);
         self.clean_forms_set_snapshot = Self::forms_set_snapshot(&self.stored_per_year_forms);
         self.clear_profile_changed();
@@ -1278,52 +783,14 @@ impl ProfileManagerView {
                 .and_then(|db| db.get_profile(tin).ok().flatten())
         });
 
-        // Evidence files uploaded since the last save are referenced only by
-        // the in-memory versions being discarded; reloading without removing
-        // them would leave orphaned documents in evidence storage. Skip the
-        // cleanup entirely while a save is in flight: its write may be about
-        // to persist references to these files, and an orphaned file is
-        // recoverable while a dangling database reference is not.
-        let cleanup_is_safe = self.saves_in_flight == 0;
-        let persisted_evidence_paths = persisted_profile
-            .as_ref()
-            .map(|profile| {
-                profile
-                    .profile_versions
-                    .iter()
-                    .flat_map(|version| version.evidence.iter())
-                    .map(|evidence| evidence.stored_path.clone())
-                    .collect::<std::collections::HashSet<_>>()
-            })
-            .unwrap_or_default();
-        let discarded_evidence = if cleanup_is_safe {
-            self.stored_profile_versions
-                .iter()
-                .flat_map(|version| version.evidence.iter())
-                .filter(|evidence| {
-                    evidence.stored_path != "manual_entry"
-                        && !persisted_evidence_paths.contains(&evidence.stored_path)
-                })
-                .cloned()
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
-
         if let Some(profile) = persisted_profile {
             self.edit_profile(profile, window, cx);
-            for evidence in &discarded_evidence {
-                crate::cor_evidence::remove_stored_cor_document(evidence);
-            }
             self.pending_notification = Some((
                 NotificationType::Success,
                 discarded_state.discarded_message().to_string(),
             ));
         } else if self.editing_id.is_none() {
             self.reset_for_new(window, cx);
-            for evidence in &discarded_evidence {
-                crate::cor_evidence::remove_stored_cor_document(evidence);
-            }
             self.pending_notification = Some((
                 NotificationType::Success,
                 "Unsaved new profile was cleared.".to_string(),
@@ -1336,47 +803,6 @@ impl ProfileManagerView {
             ));
         }
         cx.notify();
-    }
-
-    pub fn sync_document_viewer(&mut self, cx: &mut Context<Self>) {
-        if let Some(version_id) = &self.ocr_selected_version_id {
-            tracing::info!("[COR Viewer] Syncing viewer for version_id={version_id}");
-            if let Some(version) = self
-                .stored_profile_versions
-                .iter()
-                .find(|v| v.id == *version_id)
-            {
-                if let Some(evidence) = version.evidence.first() {
-                    let path = evidence.stored_path.clone();
-                    tracing::info!("[COR Viewer] Creating viewer for path={path}");
-                    let bboxes = evidence.field_bboxes.clone();
-                    self.interactive_document_viewer = Some(cx.new(|cx| {
-                        crate::components::document_viewer::InteractiveDocumentViewer::new(
-                            path, bboxes, cx,
-                        )
-                    }));
-                    return;
-                } else {
-                    tracing::info!("[COR Viewer] Version has no evidence documents");
-                }
-            } else {
-                tracing::info!(
-                    "[COR Viewer] Version {version_id} not found in stored_profile_versions (count={})",
-                    self.stored_profile_versions.len()
-                );
-            }
-        } else {
-            tracing::info!("[COR Viewer] No ocr_selected_version_id set");
-        }
-        self.interactive_document_viewer = None;
-    }
-
-    pub fn focus_ocr_field(&mut self, field_id: &str, cx: &mut Context<Self>) {
-        if let Some(viewer) = &self.interactive_document_viewer {
-            viewer.update(cx, |viewer, cx| {
-                viewer.set_active_field(Some(field_id.to_string()), cx);
-            });
-        }
     }
 
     /// Whether this editor is currently open on `tin`.
@@ -1439,49 +865,20 @@ impl ProfileManagerView {
         self.tax_election_select.update(cx, |select, cx| {
             select.set_selected_value("", window, cx);
         });
-        self.stored_profile_versions = vec![];
-        self.pending_cor_evidence_cleanup.clear();
-        self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
-        self.ocr_selected_version_id = None;
-        self.cor_editing_version_id = None;
-        self.gemini_ocr_cloud_consent = false;
-        self.gemini_ocr_status = None;
-        let current_year = chrono::Local::now().date_naive().year();
-        self.cor_preview_year_input.update(cx, |input, cx| {
-            input.set_value(current_year.to_string(), window, cx)
-        });
-        self.clear_cor_version_editor(window, cx);
-        self.clear_cor_override_inputs(window, cx);
+        self.stored_profile_years.clear();
         self.is_totp_enabled = false;
         self.show_totp_setup = false;
         self.show_totp_secret_text = false;
         self.totp_secret_temp = None;
         self.totp_qr_path = None;
         self.stored_totp_secret = None;
-        self.interactive_document_viewer = None;
-        self.focused_ocr_field = None;
         self.stored_per_year_forms.clear();
-        self.forms_editor_selected_code = None;
         let current_year = chrono::Local::now().date_naive().year();
         self.forms_editor_year = current_year as u16;
         self.forms_editor_year_select.update(cx, |select, cx| {
             select.set_selected_value(&current_year.to_string(), window, cx);
         });
-        self.forms_editor_new_code_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
-        self.forms_editor_registry_form_select
-            .update(cx, |select, cx| {
-                select.set_selected_value("", window, cx);
-            });
-        self.forms_editor_custom_code_mode = false;
-        self.forms_editor_new_reason_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
-        self.forms_editor_new_frequency_select
-            .update(cx, |select, cx| {
-                select.set_selected_value("", window, cx);
-            });
-        self.forms_editor_active_note_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.sync_forms_set_picker(cx);
         self.calendar_name_input
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.calendar_action_message = None;
@@ -1527,6 +924,7 @@ impl ProfileManagerView {
             .update(cx, |input, cx| input.set_date(None, window, cx));
         self.birth_date_input
             .update(cx, |input, cx| input.set_date(None, window, cx));
+        self.refresh_profile_year_selector(window, cx);
         self.rdo_select.update(cx, |select, cx| {
             select.set_selected_value("", window, cx);
         });
@@ -1571,7 +969,7 @@ impl ProfileManagerView {
 
     pub fn edit_profile(
         &mut self,
-        profile: TaxpayerProfile,
+        mut profile: TaxpayerProfile,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1591,16 +989,18 @@ impl ProfileManagerView {
         self.tax_election_select.update(cx, |select, cx| {
             select.set_selected_value("", window, cx);
         });
-        self.stored_profile_versions = profile.profile_versions.clone();
-        self.pending_cor_evidence_cleanup.clear();
-        self.compliance_source_mode =
-            Self::derive_compliance_source_mode(&self.stored_profile_versions);
-        tracing::info!(
-            "[Profile Load] Loaded {} COR versions for profile",
-            self.stored_profile_versions.len()
-        );
-        self.gemini_ocr_cloud_consent = false;
-        self.gemini_ocr_status = None;
+        let current_year = u16::try_from(chrono::Local::now().date_naive().year())
+            .unwrap_or(self.forms_editor_year);
+        let _ = profile.ensure_calendar_year_profile(current_year);
+        self.stored_profile_years = profile.profile_years.clone();
+        self.forms_editor_year = current_year;
+        if let Some(facts) = self
+            .stored_profile_years
+            .get(&self.forms_editor_year)
+            .cloned()
+        {
+            facts.apply_to(&mut profile);
+        }
         // Populate excise tax multi-select from profile categories
         let mut excise_ids = Vec::new();
         for cat in &profile.excise_tax_categories {
@@ -1648,16 +1048,6 @@ impl ProfileManagerView {
                 cx,
             )
         });
-        self.focused_ocr_field = None;
-        // Reset OCR selection — user must click Review from timeline.
-        // Don't auto-select a version_id here because the viewer needs
-        // to be created AFTER all other state is set.
-        self.ocr_selected_version_id = None;
-        self.interactive_document_viewer = None;
-        tracing::info!(
-            "[Profile Load] OCR viewer reset. User must click Review to enter detail view."
-        );
-
         self.stored_imap_app_password = profile.imap_app_password.clone();
         self.stored_oauth_access_token = profile.oauth_access_token.clone();
         self.stored_oauth_refresh_token = profile.oauth_refresh_token.clone();
@@ -1747,6 +1137,7 @@ impl ProfileManagerView {
         self.birth_date_input.update(cx, |input, cx| {
             input.set_date(profile.birth_date, window, cx)
         });
+        self.refresh_profile_year_selector(window, cx);
 
         let rdo_value = self
             .rdo_options
@@ -1820,16 +1211,7 @@ impl ProfileManagerView {
             .lock()
             .map(|db| bir_core::google_calendar::calendar_form_selection(&db, &profile.tin.full()))
             .unwrap_or_default();
-        let select_val = self.forms_editor_year_select.read(cx).selected_value(cx);
-        if let Ok(y) = select_val.parse::<u16>() {
-            self.forms_editor_year = y;
-        }
-        self.forms_editor_selected_code = None;
-
-        // Deadline-override drafts are per-profile transient state; a draft
-        // typed on the previous profile must not carry over (or read as
-        // dirty) on the one being loaded.
-        self.clear_cor_override_inputs(window, cx);
+        self.sync_forms_set_picker(cx);
 
         self.profile_change_revision = 0;
         self.profile_session_epoch = self.profile_session_epoch.wrapping_add(1);
@@ -1894,14 +1276,24 @@ impl ProfileManagerView {
             input.set_value(profile.registered_address.clone(), window, cx)
         });
 
-        let zip_val = self
-            .zip_options
-            .iter()
-            .find(|o| o.starts_with(&profile.zip_code))
-            .cloned()
-            .unwrap_or(profile.zip_code.clone());
+        let zip_val = if profile.zip_code.trim().is_empty() {
+            String::new()
+        } else {
+            self.zip_options
+                .iter()
+                .find(|o| o.starts_with(&profile.zip_code))
+                .cloned()
+                .unwrap_or_else(|| profile.zip_code.clone())
+        };
         self.zip_select.update(cx, |select, cx| {
             select.set_selected_value(&zip_val, window, cx)
+        });
+
+        self.tel_input.update(cx, |input, cx| {
+            input.set_value(profile.phone.clone(), window, cx)
+        });
+        self.email_input.update(cx, |input, cx| {
+            input.set_value(profile.email.clone(), window, cx)
         });
 
         self.line_of_business.update(cx, |input, cx| {
@@ -1914,12 +1306,15 @@ impl ProfileManagerView {
             input.set_date(profile.birth_date, window, cx)
         });
 
-        let rdo_value = self
-            .rdo_options
-            .iter()
-            .find(|o| o.starts_with(&profile.rdo_code))
-            .cloned()
-            .unwrap_or(profile.rdo_code.clone());
+        let rdo_value = if profile.rdo_code.trim().is_empty() {
+            String::new()
+        } else {
+            self.rdo_options
+                .iter()
+                .find(|o| o.starts_with(&profile.rdo_code))
+                .cloned()
+                .unwrap_or_else(|| profile.rdo_code.clone())
+        };
         self.rdo_select.update(cx, |select, cx| {
             select.set_selected_value(&rdo_value, window, cx)
         });
@@ -2014,13 +1409,6 @@ impl ProfileManagerView {
         if matches!(event, InputEvent::Change) {
             let mut field_to_validate = None;
             let mut value = String::new();
-            let changes_cor_editor = state == &self.cor_version_label_input
-                || state == &self.cor_registered_name_input
-                || state == &self.cor_trade_name_input
-                || state == &self.cor_rdo_code_input
-                || state == &self.cor_registered_address_input
-                || state == &self.cor_lob_code_input
-                || state == &self.cor_lob_description_input;
 
             if state == &self.line_of_business {
                 field_to_validate = Some("line_of_business");
@@ -2034,30 +1422,15 @@ impl ProfileManagerView {
             } else if state == &self.email_input {
                 field_to_validate = Some("email");
                 value = self.email_input.read(cx).value().to_string();
-            } else if state == &self.cor_preview_year_input {
-                cx.notify();
-                return;
             }
 
             if let Some(field) = field_to_validate {
                 self.validate_field(field, &value);
             }
-            if field_to_validate.is_some() || changes_cor_editor {
+            if field_to_validate.is_some() {
                 self.mark_profile_changed();
                 cx.notify();
             }
-        }
-    }
-
-    fn on_cor_deadline_draft_event(
-        &mut self,
-        _state: Entity<InputState>,
-        event: &InputEvent,
-        cx: &mut Context<Self>,
-    ) {
-        if matches!(event, InputEvent::Change) {
-            self.mark_profile_changed();
-            cx.notify();
         }
     }
 
@@ -2091,12 +1464,7 @@ impl ProfileManagerView {
                 || state == self.tax_classification_select
                 || state == self.eopt_tier_select
                 || state == self.cooperative_treatment_select
-                || state == self.registration_activity_status_select
-                || state == self.cor_rdo_select
-                || state == self.cor_taxpayer_type_select
-                || state == self.cor_tax_classification_select
-                || state == self.cor_eopt_tier_select
-                || state == self.cor_registration_status_select;
+                || state == self.registration_activity_status_select;
 
             if state == self.rdo_select {
                 field_to_validate = Some("rdo_code");
@@ -2104,11 +1472,8 @@ impl ProfileManagerView {
                 field_to_validate = Some("zip_code");
                 value = val.split(" - ").next().unwrap_or("").trim().to_string();
             } else if state == self.forms_editor_year_select {
-                if let Ok(year) = val.parse::<u16>() {
-                    self.forms_editor_year = year;
-                    self.forms_editor_selected_code = None; // Reset detail view
-                    cx.notify();
-                }
+                // Year switching is handled by subscribe_in so the editor
+                // can load that year's clone with a Window.
             }
 
             if let Some(field) = field_to_validate {
@@ -2119,6 +1484,18 @@ impl ProfileManagerView {
                 cx.notify();
             }
         }
+    }
+
+    fn on_business_start_date_event(
+        &mut self,
+        _state: &Entity<DateInputState>,
+        _event: &DateInputEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_profile_year_selector(window, cx);
+        self.mark_profile_changed();
+        cx.notify();
     }
 
     fn on_date_event(
@@ -2202,7 +1579,7 @@ impl ProfileManagerView {
             .eligible_for_income_tax_election_in_year(year)
         {
             return Err(format!(
-                "No confirmed Individual segment registered as Self-Employed or Mixed Income covers {year}, so an income-tax election cannot be recorded for it. Review the COR timeline first."
+                "No {year} profile-year clone is Individual Self-Employed or Mixed Income, so an income-tax election cannot be recorded for it. Create or edit that year on the Tax Profile tab first."
             ));
         }
 
@@ -2221,19 +1598,6 @@ impl ProfileManagerView {
         self.mark_profile_changed();
         cx.notify();
         Ok(true)
-    }
-
-    fn derive_compliance_source_mode(
-        versions: &[bir_core::profile::TaxProfileVersion],
-    ) -> ComplianceSourceMode {
-        if versions
-            .iter()
-            .any(|version| version.status == bir_core::profile::TaxProfileVersionStatus::Confirmed)
-        {
-            ComplianceSourceMode::CorVersioned
-        } else {
-            ComplianceSourceMode::TemporalSuggestion
-        }
     }
 
     fn current_profile(&self, cx: &Context<Self>) -> TaxpayerProfile {
@@ -2343,7 +1707,7 @@ impl ProfileManagerView {
             None
         };
 
-        TaxpayerProfile {
+        let mut profile = TaxpayerProfile {
             id: self.editing_id,
             full_name: self.name_input.read(cx).value().trim().to_string(),
             tin,
@@ -2467,1656 +1831,92 @@ impl ProfileManagerView {
                     _ => bir_core::profile::RegistrationActivityStatus::Active,
                 }
             },
-            profile_versions: self.stored_profile_versions.clone(),
-            compliance_source_mode: Self::derive_compliance_source_mode(
-                &self.stored_profile_versions,
-            ),
+            profile_versions: Vec::new(),
+            compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
             per_year_forms: self.stored_per_year_forms.clone(),
-        }
-    }
-
-    fn selected_gemini_ocr_model(&self, cx: &mut Context<Self>) -> String {
-        let custom_model = self
-            .gemini_ocr_custom_model_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let selected_model = self
-            .gemini_ocr_model_select
-            .read(cx)
-            .selected_value(cx)
-            .trim()
-            .to_string();
-        crate::cor_ocr::resolve_gemini_model_id(&selected_model, &custom_model)
-    }
-
-    fn cor_ocr_options(&self, cx: &mut Context<Self>) -> crate::cor_ocr::CorOcrOptions {
-        let model = self.selected_gemini_ocr_model(cx);
-        // If Gemini OCR is enabled, consent is implied — the user already
-        // opted in by enabling Gemini OCR and saving their API key.
-        let cloud_consent = self.gemini_ocr_enabled || self.gemini_ocr_cloud_consent;
-        tracing::info!(
-            "[COR OCR] Building options: provider={}, model={model}, cloud_consent={cloud_consent} (enabled={}, checkbox={})",
-            if self.gemini_ocr_enabled {
-                "GeminiByok"
-            } else {
-                "SidecarText"
-            },
-            self.gemini_ocr_enabled,
-            self.gemini_ocr_cloud_consent
-        );
-        crate::cor_ocr::CorOcrOptions {
-            provider: if self.gemini_ocr_enabled {
-                crate::cor_ocr::CorOcrProviderKind::GeminiByok
-            } else {
-                crate::cor_ocr::CorOcrProviderKind::SidecarText
-            },
-            gemini_model: model,
-            allow_cloud_upload: cloud_consent,
-        }
-    }
-
-    fn save_cor_ocr_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let typed_key = self
-            .gemini_ocr_api_key_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        tracing::info!(
-            "[OCR Settings] Saving settings. enabled={}, key_len={}, consent={}",
-            self.gemini_ocr_enabled,
-            typed_key.len(),
-            self.gemini_ocr_cloud_consent
-        );
-        if let Ok(db_guard) = self.db.lock() {
-            let _ = db_guard.set_setting(
-                crate::cor_ocr::COR_OCR_GEMINI_ENABLED_SETTING,
-                if self.gemini_ocr_enabled {
-                    "true"
-                } else {
-                    "false"
-                },
-            );
-            let model = self.selected_gemini_ocr_model(cx);
-            let _ = db_guard.set_setting(crate::cor_ocr::COR_OCR_GEMINI_MODEL_SETTING, &model);
-            tracing::info!("[OCR Settings] DB settings saved. model={model}");
-        }
-
-        if !typed_key.is_empty() {
-            tracing::info!(
-                "[OCR Settings] Storing API key to keychain ({} chars)…",
-                typed_key.len()
-            );
-            self.gemini_ocr_api_key_input
-                .update(cx, |input, cx| input.set_value("", window, cx));
-            self.gemini_ocr_status = Some(
-                "Gemini OCR key accepted for model ".to_string()
-                    + &self.selected_gemini_ocr_model(cx)
-                    + ".",
-            );
-            cx.spawn(async move |this, cx| {
-                let result = cx
-                    .background_executor()
-                    .spawn(async move { crate::cor_ocr::save_gemini_api_key(&typed_key) })
-                    .await;
-                let _ = this.update(cx, |this, cx| {
-                    match &result {
-                        Ok(()) => {
-                            tracing::info!("[OCR Settings] API key stored in keychain successfully")
-                        }
-                        Err(e) => tracing::info!("[OCR Settings] Keychain store FAILED: {e}"),
-                    }
-                    this.gemini_ocr_status = Some(match result {
-                        Ok(()) => "Gemini OCR key stored in OS keychain.".to_string(),
-                        Err(error) => error,
-                    });
-                    cx.notify();
-                });
-            })
-            .detach();
-            window.push_notification(
-                Notification::success("Gemini API key saved to OS keychain.").title("OCR Settings"),
-                cx,
-            );
-        } else {
-            tracing::info!("[OCR Settings] No key typed, saving settings only");
-            self.gemini_ocr_status = Some(
-                "Gemini OCR settings saved. API keys are stored outside profile JSON.".to_string(),
-            );
-            window.push_notification(
-                Notification::success("Gemini OCR settings saved.").title("OCR Settings"),
-                cx,
-            );
-        }
-        cx.notify();
-    }
-
-    fn remove_gemini_ocr_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        tracing::info!("[OCR Settings] Removing Gemini API key from keychain…");
-        self.gemini_ocr_cloud_consent = false;
-        self.gemini_ocr_status =
-            Some("Removing Gemini API key from OS secure storage...".to_string());
-        cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move { crate::cor_ocr::delete_gemini_api_key() })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                match &result {
-                    Ok(()) => tracing::info!("[OCR Settings] API key removed from keychain"),
-                    Err(e) => tracing::info!("[OCR Settings] Keychain removal FAILED: {e}"),
-                }
-                this.gemini_ocr_status = Some(match result {
-                    Ok(()) => "Gemini API key removed from OS keychain.".to_string(),
-                    Err(error) => error,
-                });
-                cx.notify();
-            });
-        })
-        .detach();
-        window.push_notification(
-            Notification::info("Gemini API key removed from OS keychain.").title("OCR Settings"),
-            cx,
-        );
-        cx.notify();
-    }
-
-    fn test_cor_ocr_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let typed_key = self
-            .gemini_ocr_api_key_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let typed_key = if typed_key.is_empty() {
-            None
-        } else {
-            Some(typed_key)
+            profile_years: self.stored_profile_years.clone(),
         };
-        let model = self.selected_gemini_ocr_model(cx);
-        self.gemini_ocr_status =
-            Some("Testing Gemini OCR key. This sends a tiny test request to Google.".to_string());
-        window.push_notification(
-            Notification::info("Testing Gemini API key...").title("OCR Settings"),
-            cx,
-        );
-        cx.spawn(async move |this, cx| {
-            let result =
-                cx.background_executor()
-                    .spawn(async move {
-                        crate::cor_ocr::test_gemini_api_key(&model, typed_key.as_deref())
-                    })
-                    .await;
-            let _ = this.update(cx, |this, cx| {
-                match &result {
-                    Ok(msg) => tracing::info!("[OCR Settings] API key verified: {msg}"),
-                    Err(e) => tracing::info!("[OCR Settings] API key verification FAILED: {e}"),
-                }
-                this.gemini_ocr_status = Some(match result {
-                    Ok(message) => {
-                        this.pending_notification = Some((
-                            NotificationType::Success,
-                            message.clone().replace('\n', " "),
-                        ));
-                        message
-                    }
-                    Err(error) => {
-                        this.pending_notification =
-                            Some((NotificationType::Error, error.clone().replace('\n', " ")));
-                        error
-                    }
-                });
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
-    fn sync_current_profile_to_cor_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            self.save_message = Some(
-                "Apply the current COR editor changes or use Discard before creating another draft."
-                    .to_string(),
-            );
-            cx.notify();
-            return;
-        }
-
-        let mut profile = self.current_profile(cx);
-        profile.profile_versions.clear();
-        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
-
-        let mut version = bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
-        version.id = format!("manual-cor-{}", chrono::Local::now().timestamp_millis());
-        version.label = format!("Manual COR {}", chrono::Local::now().format("%Y-%m-%d"));
-        version.status = bir_core::profile::TaxProfileVersionStatus::Draft;
-        version.source = bir_core::profile::TaxProfileVersionSource::ManualCor;
-        version.needs_effective_date_review = version.effective_from.is_none();
-
-        self.stored_profile_versions.push(version.clone());
-        self.compliance_source_mode =
-            Self::derive_compliance_source_mode(&self.stored_profile_versions);
-        self.mark_profile_changed();
-        self.active_tab = 1;
-        if let Err(e) = self.load_cor_version_editor(&version.id, window, cx) {
-            self.save_message = Some(e);
-        }
-    }
-
-    fn create_cor_correction_draft(
-        &mut self,
-        source_version_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            return Err(
-                "Apply the current COR editor changes or use Discard before creating a correction draft."
-                    .to_string(),
-            );
-        }
-
-        let Some(source) = self
-            .stored_profile_versions
-            .iter()
-            .find(|version| version.id == source_version_id)
-            .cloned()
-        else {
-            return Err("The COR version to correct was not found.".to_string());
-        };
-
-        if Self::profile_version_facts_are_editable(&source.status) {
-            self.load_cor_version_editor(&source.id, window, cx)?;
-            return Ok(());
-        }
-
-        let mut correction = source;
-        correction.id = format!("cor-correction-{}", chrono::Local::now().timestamp_micros());
-        correction.label = format!("Correction draft — {}", correction.label);
-        correction.status = bir_core::profile::TaxProfileVersionStatus::Draft;
-        correction.source = bir_core::profile::TaxProfileVersionSource::UserOverride;
-        correction.effective_from = None;
-        correction.effective_until = None;
-        correction.needs_effective_date_review = true;
-
-        let correction_id = correction.id.clone();
-        self.stored_profile_versions.push(correction);
-        self.active_tab = 1;
-        self.cor_sub_tab = 0;
-        self.load_cor_version_editor(&correction_id, window, cx)?;
-        self.mark_profile_changed();
-        self.save_message = Some(
-            "Correction draft created. The confirmed record remains unchanged for audit history. Set an effective start date, review the facts and forms, then confirm the draft."
-                .to_string(),
-        );
-        Ok(())
-    }
-
-    fn apply_cor_profile_preset(
-        &mut self,
-        version_id: &str,
-        preset: CorProfilePreset,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let current_profile_seed = if matches!(preset, CorProfilePreset::CurrentTaxProfile) {
-            Some(bir_core::profile::TaxProfileVersion::from_profile_backfill(
-                &self.current_profile(cx),
-            ))
-        } else {
-            None
-        };
-
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-        if !Self::profile_version_facts_are_editable(&version.status) {
-            return Err(Self::immutable_cor_version_message().to_string());
-        }
-
-        match preset {
-            CorProfilePreset::CurrentTaxProfile => {
-                let seed = current_profile_seed.ok_or_else(|| {
-                    "Current Tax Profile preset could not be prepared.".to_string()
-                })?;
-                version.cor = seed.cor;
-                version.registered_tax_types = seed.registered_tax_types;
-                version.taxpayer_type = seed.taxpayer_type;
-                version.tax_classification = seed.tax_classification;
-                version.eopt_tier = seed.eopt_tier;
-                version.is_gpp_partner = seed.is_gpp_partner;
-                version.excise_tax_categories = seed.excise_tax_categories;
-                version.registration_activity_status = seed.registration_activity_status;
-            }
-            CorProfilePreset::NonVatBusiness => {
-                version.registered_tax_types = vec![
-                    RegisteredTaxType::IncomeTax,
-                    RegisteredTaxType::PercentageTax,
-                    RegisteredTaxType::RegistrationFee,
-                ];
-            }
-            CorProfilePreset::VatBusiness => {
-                version.registered_tax_types = vec![
-                    RegisteredTaxType::IncomeTax,
-                    RegisteredTaxType::ValueAddedTax,
-                    RegisteredTaxType::RegistrationFee,
-                ];
-            }
-        }
-        version.registered_tax_types.sort();
-        version.registered_tax_types.dedup();
-        Self::sync_version_flags_from_registered_tax_types(version);
-
-        self.load_cor_version_editor(version_id, window, cx)?;
-        self.mark_profile_changed();
-        self.save_message = Some(
-            "Starting preset applied. Review every tax type and exact form code against the COR before confirming."
-                .to_string(),
-        );
-        Ok(())
-    }
-
-    fn upload_cor_document(
-        &mut self,
-        target_version_id: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            let message =
-                "Apply the COR editor changes or use Discard before uploading new evidence.";
-            self.save_message = Some(message.to_string());
-            window.push_notification(
-                Notification::error(message).title("Unapplied COR changes"),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
-
-        if let Some(message) = self.cor_upload_target_error(target_version_id.as_deref()) {
-            let message = message.to_string();
-            self.save_message = Some(message.clone());
-            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
-            return;
-        }
-
-        let mut profile = self.current_profile(cx);
-        profile.profile_versions.clear();
-        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
-        let tin = profile.tin.full().replace(['-', ' '], "");
-        let ocr_options = self.cor_ocr_options(cx);
-        let provider_label =
-            if ocr_options.provider == crate::cor_ocr::CorOcrProviderKind::GeminiByok {
-                "Gemini BYOK"
-            } else {
-                "Local/manual"
-            }
-            .to_string();
-        let model_label = if ocr_options.provider == crate::cor_ocr::CorOcrProviderKind::GeminiByok
-        {
-            Some(ocr_options.gemini_model.clone())
-        } else {
-            None
-        };
-
-        tracing::info!(
-            "[COR Upload] Starting upload flow. Provider={provider_label}, consent={}, target_version_id={:?}",
-            ocr_options.allow_cloud_upload,
-            target_version_id
-        );
-        self.save_message = Some("Processing document… please wait.".to_string());
-        self.is_uploading_cor = true;
-        cx.notify();
-
-        let target_ver_id = target_version_id.clone();
-        cx.spawn(async move |this, cx| {
-            tracing::info!("[COR Upload] Waiting for file picker…");
-            let Some(file_handle) = rfd::AsyncFileDialog::new()
-                .add_filter("COR document", &["png", "jpg", "jpeg", "pdf"])
-                .pick_file()
-                .await
-            else {
-                tracing::info!("[COR Upload] File picker cancelled.");
-                let _ = this.update(cx, |this, cx| {
-                    this.save_message = None;
-                    this.is_uploading_cor = false;
-                    cx.notify();
-                });
-                return;
-            };
-            let source_path = file_handle.path().to_path_buf();
-            tracing::info!("[COR Upload] File selected: {}", source_path.display());
-
-            // Update status
-            let _ = this.update(cx, |this, cx| {
-                this.save_message = Some("Extracting data from document…".to_string());
-                cx.notify();
-            });
-
-            // Run OCR extraction on background thread (it uses blocking reqwest)
-            let ocr_options_clone = ocr_options.clone();
-            let source_clone = source_path.clone();
-            tracing::info!("[COR Upload] Starting OCR extraction on background executor…");
-            let ocr = cx
-                .background_executor()
-                .spawn(async move {
-                    crate::cor_ocr::extract_cor_document_with_options(
-                        &source_clone,
-                        &ocr_options_clone,
-                    )
-                })
-                .await;
-            tracing::info!(
-                "[COR Upload] OCR extraction done. Status: {}",
-                ocr.status_message
-            );
-            if let Some(ref text) = ocr.text {
-                tracing::info!("[COR Upload] OCR text length: {} chars", text.len());
-            } else {
-                tracing::info!("[COR Upload] OCR returned no text.");
-            }
-            tracing::info!(
-                "[COR Upload] OCR fields — TIN: {:?}, Name: {:?}, Type: {:?}, Forms: {:?}",
-                ocr.fields.tin,
-                ocr.fields.registered_name,
-                ocr.fields.taxpayer_type,
-                ocr.fields.extracted_form_codes
-            );
-
-            // The target may have been confirmed or archived while OCR was running.
-            // Re-check before copying evidence into managed storage, then check once
-            // more before mutating the in-memory profile below.
-            let target_still_editable = this.update(cx, |this, cx| {
-                if let Some(message) =
-                    this.cor_upload_target_error(target_ver_id.as_deref())
-                {
-                    let message = message.to_string();
-                    this.save_message = Some(message.clone());
-                    this.pending_notification = Some((NotificationType::Error, message));
-                    this.is_uploading_cor = false;
-                    cx.notify();
-                    false
-                } else {
-                    true
-                }
-            });
-            if !matches!(target_still_editable, Ok(true)) {
-                tracing::info!(
-                    "[COR Upload] Target became read-only or disappeared before evidence storage."
-                );
-                return;
-            }
-
-            // Store evidence file
-            tracing::info!("[COR Upload] Storing evidence file for TIN={tin}…");
-            match crate::cor_evidence::store_cor_document(&source_path, &tin) {
-                Ok(mut evidence) => {
-                    tracing::info!("[COR Upload] Evidence stored at: {}", evidence.stored_path);
-                    evidence.provider = Some(provider_label);
-                    evidence.model = model_label;
-                    let _ = this.update(cx, move |this, cx| {
-                        if let Some(message) =
-                            this.cor_upload_target_error(target_ver_id.as_deref())
-                        {
-                            crate::cor_evidence::remove_stored_cor_document(&evidence);
-                            let message = message.to_string();
-                            this.save_message = Some(message.clone());
-                            this.pending_notification = Some((NotificationType::Error, message));
-                            this.gemini_ocr_cloud_consent = false;
-                            this.is_uploading_cor = false;
-                            cx.notify();
-                            tracing::info!(
-                                "[COR Upload] Refused replacement because target became read-only or disappeared."
-                            );
-                            return;
-                        }
-
-                        let version = crate::cor_ocr::create_draft_cor_version_from_ocr(
-                            &profile,
-                            evidence,
-                            ocr.clone(),
-                            chrono::Local::now().naive_local(),
-                        );
-
-                        // Uploads start only when the editor is clean, but the
-                        // user may have typed into it while OCR was running.
-                        // Keep the extracted draft either way, but never close
-                        // the editor, reload its fields, or save over
-                        // unapplied edits.
-                        let editor_has_unapplied_changes =
-                            this.cor_editor_has_unapplied_changes(cx);
-                        // Replacing the version that is open in a dirty editor
-                        // would leave the user choosing between destroying
-                        // their edits (Apply) and destroying the extraction
-                        // (Discard). Store the extraction as its own draft
-                        // version instead, so Apply keeps both.
-                        let extraction_becomes_new_version = editor_has_unapplied_changes
-                            && target_ver_id.is_some()
-                            && target_ver_id.as_deref() == this.cor_editing_version_id.as_deref();
-
-                        let final_ver_id = match &target_ver_id {
-                            Some(ver_id) if !extraction_becomes_new_version => {
-                                let mut new_ver = version;
-                                new_ver.id = ver_id.clone();
-                                if let Some(existing) = this
-                                    .stored_profile_versions
-                                    .iter_mut()
-                                    .find(|v| &v.id == ver_id)
-                                {
-                                    new_ver.label = existing.label.clone();
-                                    *existing = new_ver;
-                                } else {
-                                    this.stored_profile_versions.push(new_ver);
-                                }
-                                ver_id.clone()
-                            }
-                            _ => {
-                                let version_id = version.id.clone();
-                                this.stored_profile_versions.push(version);
-                                version_id
-                            }
-                        };
-
-                        if !editor_has_unapplied_changes {
-                            this.cor_editing_version_id = None;
-                        }
-                        // The detail page renders the shared editor inputs for
-                        // Draft versions, so selecting the new draft while a
-                        // different version's unapplied values sit in those
-                        // inputs would show a mismatched header/fields pair.
-                        if !extraction_becomes_new_version {
-                            this.ocr_selected_version_id = Some(final_ver_id.clone());
-                        }
-                        this.sync_document_viewer(cx);
-                        this.compliance_source_mode =
-                            Self::derive_compliance_source_mode(&this.stored_profile_versions);
-                        this.mark_profile_changed();
-                        if editor_has_unapplied_changes {
-                            let message = if extraction_becomes_new_version {
-                                format!(
-                                    "{} The extraction was stored as a separate draft version so your open COR editor changes stay intact. Apply the editor changes and save to keep both — Discard drops the editor changes and the uploaded extraction.",
-                                    ocr.status_message
-                                )
-                            } else {
-                                format!(
-                                    "{} Apply or discard the open COR editor changes, then save the profile.",
-                                    ocr.status_message
-                                )
-                            };
-                            this.save_message = Some(message.clone());
-                            this.pending_notification = Some((
-                                NotificationType::Warning,
-                                message.replace('\n', " "),
-                            ));
-                        } else {
-                            this.save_profile(cx);
-                            this.save_message = Some(ocr.status_message.clone());
-                            this.pending_notification = Some((
-                                NotificationType::Success,
-                                ocr.status_message.replace('\n', " "),
-                            ));
-                            // Defer editor field load to next render frame (needs Window)
-                            this.pending_cor_editor_load = Some(final_ver_id);
-                        }
-                        // Reset consent AFTER we've used the options
-                        this.gemini_ocr_cloud_consent = false;
-                        this.is_uploading_cor = false;
-                        cx.notify();
-                        tracing::info!("[COR Upload] UI updated. pending_cor_editor_load set.");
-                    });
-                }
-                Err(error) => {
-                    tracing::error!("[COR Upload] Evidence storage failed: {error}");
-                    let _ = this.update(cx, |this, cx| {
-                        this.save_message = Some(error.clone());
-                        this.pending_notification =
-                            Some((NotificationType::Error, error.replace('\n', " ")));
-                        this.is_uploading_cor = false;
-                        cx.notify();
-                    });
-                }
-            }
-        })
-        .detach();
-    }
-
-    fn open_cor_document(&self, version_id: &str, document_id: &str) {
-        let Some(path) = self
-            .stored_profile_versions
-            .iter()
-            .find(|version| version.id == version_id)
-            .and_then(|version| {
-                version
-                    .evidence
-                    .iter()
-                    .find(|doc| doc.id == document_id)
-                    .map(|doc| doc.stored_path.clone())
-            })
-        else {
-            return;
-        };
-        crate::platform::open_in_system(std::path::Path::new(&path));
-    }
-
-    fn remove_cor_document(
-        &mut self,
-        version_id: &str,
-        document_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.block_if_cor_editor_dirty("removing COR evidence", window, cx) {
-            return;
-        }
-
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            self.save_message = Some("COR version was not found.".to_string());
-            window.push_notification(
-                Notification::error("COR version was not found.").title("OCR"),
-                cx,
-            );
-            return;
-        };
-
-        if !Self::profile_version_facts_are_editable(&version.status) {
-            let message = Self::immutable_cor_version_message().to_string();
-            self.save_message = Some(message.clone());
-            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
-            return;
-        }
-
-        let removed_document = version
-            .evidence
-            .iter()
-            .find(|document| document.id == document_id)
-            .cloned();
-        let before = version.evidence.len();
-        version
-            .evidence
-            .retain(|document| document.id != document_id);
-
-        if version.evidence.len() == before {
-            self.save_message = Some("COR evidence file was not found.".to_string());
-            window.push_notification(
-                Notification::error("COR evidence file was not found.").title("OCR"),
-                cx,
-            );
-            return;
-        }
-
-        self.mark_profile_changed();
-        if let Some(document) = removed_document {
-            self.pending_cor_evidence_cleanup
-                .push((self.profile_change_revision, document));
-        }
-        self.save_profile(cx);
-    }
-
-    fn delete_cor_version(
-        &mut self,
-        version_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            let message =
-                "Apply the COR editor changes or use Discard before deleting a COR version.";
-            self.save_message = Some(message.to_string());
-            window.push_notification(
-                Notification::error(message).title("Unapplied COR changes"),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
-
-        let Some(version_index) = self
-            .stored_profile_versions
-            .iter()
-            .position(|version| version.id == version_id)
-        else {
-            self.save_message = Some("COR version was not found.".to_string());
-            return;
-        };
-        if !Self::profile_version_facts_are_editable(
-            &self.stored_profile_versions[version_index].status,
-        ) {
-            let message = Self::immutable_cor_version_message().to_string();
-            self.save_message = Some(message.clone());
-            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
-            return;
-        }
-
-        let version = self.stored_profile_versions.remove(version_index);
-        if self.ocr_selected_version_id.as_deref() == Some(version_id) {
-            self.ocr_selected_version_id = None;
-            self.interactive_document_viewer = None;
-        }
-        if self.cor_editing_version_id.as_deref() == Some(version_id) {
-            self.cor_editing_version_id = None;
-        }
-        self.mark_profile_changed();
-        let cleanup_revision = self.profile_change_revision;
-        self.pending_cor_evidence_cleanup.extend(
-            version
-                .evidence
-                .into_iter()
-                .map(|evidence| (cleanup_revision, evidence)),
-        );
-        self.save_profile(cx);
-    }
-
-    fn archive_cor_version(
-        &mut self,
-        version_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.block_if_cor_editor_dirty("archiving a COR version", window, cx) {
-            return;
-        }
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            self.save_message = Some("COR version was not found.".to_string());
-            return;
-        };
-        if !Self::profile_version_facts_are_editable(&version.status) {
-            self.save_message = Some(Self::immutable_cor_version_message().to_string());
-            return;
-        }
-        version.status = bir_core::profile::TaxProfileVersionStatus::Archived;
-        // Bump the revision so an in-flight save completion cannot baseline
-        // (or re-adopt) the pre-archive state over this mutation.
-        self.mark_profile_changed();
-        self.save_message =
-            Some("COR version archived. Save the profile to persist it.".to_string());
-    }
-
-    fn cor_version_confirmation_plan(
-        &self,
-        version_id: &str,
-        cx: &Context<Self>,
-    ) -> Result<TaxProfileVersionConfirmationPlan, String> {
-        let Some(version) = self
-            .stored_profile_versions
-            .iter()
-            .find(|version| version.id == version_id)
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-        let Some(effective_from) = version.effective_from else {
-            return Err(
-                "Set the COR version's Effective From date before confirming it.".to_string(),
-            );
-        };
-
-        // Confirming reconciles reviewed evidence codes into the yearly Forms
-        // Set; two members of the same annual-ITR group would activate a
-        // conflict, so require the version to be corrected first.
-        let evidence_codes: Vec<String> = version
-            .evidence
-            .iter()
-            .flat_map(|document| document.extracted_form_codes.iter().cloned())
-            .collect();
-        if let Some(group) =
-            bir_core::integration::conflicting_annual_itr_code_groups(&evidence_codes).first()
-        {
-            return Err(format!(
-                "This COR version's reviewed form codes include more than one annual income tax return ({}). Edit the version and keep only one before confirming.",
-                group.join(", ")
-            ));
-        }
-
-        let mut profile = self.current_profile(cx);
-        profile.profile_versions = self.stored_profile_versions.clone();
-        profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+        let _ = profile.capture_current_as_year(self.forms_editor_year);
         profile
-            .profile_version_confirmation_plan(version_id, effective_from)
-            .ok_or_else(|| "COR version confirmation could not be prepared.".to_string())
     }
 
-    fn request_cor_version_confirmation(
-        &mut self,
-        version_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.block_if_cor_editor_dirty("confirming a COR version", window, cx) {
+    fn switch_profile_year(&mut self, year: u16, window: &mut Window, cx: &mut Context<Self>) {
+        if year == self.forms_editor_year {
             return;
         }
-        match self.cor_version_confirmation_plan(version_id, cx) {
-            Ok(plan) if plan.auto_close_consequences.is_empty() => {
-                self.apply_cor_version_confirmation(plan, window, cx);
-            }
-            Ok(plan) => {
-                self.pending_profile_version_confirmation = Some(plan);
-                cx.notify();
-            }
-            Err(message) => {
-                self.save_message = Some(message);
-                cx.notify();
-            }
-        }
-    }
-
-    fn apply_cor_version_confirmation(
-        &mut self,
-        plan: TaxProfileVersionConfirmationPlan,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.pending_profile_version_confirmation = None;
-        match self.confirm_cor_version(&plan, window, cx) {
-            Ok(()) => {
-                self.compliance_source_mode =
-                    Self::derive_compliance_source_mode(&self.stored_profile_versions);
-            }
-            Err(message) => self.save_message = Some(message),
-        }
-        cx.notify();
-    }
-
-    fn confirm_cor_version(
-        &mut self,
-        plan: &TaxProfileVersionConfirmationPlan,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let Some(version_clone) = self
-            .stored_profile_versions
-            .iter()
-            .find(|version| version.id == plan.version_id)
-            .cloned()
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-
-        let mut profile = self.current_profile(cx);
-        profile.profile_versions = self.stored_profile_versions.clone();
-        profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-
-        if profile.apply_profile_version_confirmation_plan(plan) {
-            self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-            self.stored_profile_versions = profile.profile_versions.clone();
-
-            // Sync the projected profile to the UI inputs so that when the user clicks "Save Profile",
-            // the OCR-derived classifications and fields are persisted.
-            let projected = profile.projection_for_version(&version_clone);
-            self.sync_projection_to_ui(&projected, window, cx);
-
-            use chrono::Datelike as _;
-            let year = plan.effective_from.year() as u16;
-            let suggestions =
-                bir_core::integration::form_suggestions_for_profile_year(&profile, year);
-            let reconciliation = bir_core::forms::reconcile_forms_set_for_year(
-                year,
-                self.stored_per_year_forms.get(&year),
-                &suggestions,
-            );
-            self.stored_per_year_forms
-                .insert(year, reconciliation.forms_set);
-            profile.per_year_forms = self.stored_per_year_forms.clone();
-
-            self.mark_profile_changed();
-            self.save_profile_with_reviewed_confirmation(plan.clone(), cx);
-
-            Ok(())
-        } else {
-            Err(
-                "The profile timeline changed while confirmation was open. Review the dates and confirm again; no profile or Forms Set data was changed."
-                    .to_string(),
-            )
-        }
-    }
-
-    fn clear_cor_override_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        for input in [
-            &self.cor_deadline_title_input,
-            &self.cor_deadline_source_input,
-            &self.cor_deadline_forms_input,
-            &self.cor_deadline_original_input,
-            &self.cor_deadline_adjusted_input,
-            &self.cor_deadline_reason_input,
-        ] {
-            input.update(cx, |input, cx| input.set_value("", window, cx));
-        }
-    }
-
-    fn profile_version_facts_are_editable(
-        status: &bir_core::profile::TaxProfileVersionStatus,
-    ) -> bool {
-        matches!(
-            status,
-            bir_core::profile::TaxProfileVersionStatus::Draft
-                | bir_core::profile::TaxProfileVersionStatus::NeedsReview
-        )
-    }
-
-    fn immutable_cor_version_message() -> &'static str {
-        "Confirmed and archived COR facts are read-only. Create a replacement version to correct dates, tax facts, evidence, or overrides, then confirm it through the reviewed workflow."
-    }
-
-    fn cor_upload_target_error(&self, target_version_id: Option<&str>) -> Option<&'static str> {
-        let target_version_id = target_version_id?;
-        match self
-            .stored_profile_versions
-            .iter()
-            .find(|version| version.id == target_version_id)
-        {
-            Some(version) if Self::profile_version_facts_are_editable(&version.status) => None,
-            Some(_) => Some(Self::immutable_cor_version_message()),
-            None => Some(
-                "COR version was not found. Create a replacement draft and upload the document there.",
-            ),
-        }
-    }
-
-    fn cor_override_target_version_id(&self) -> Option<String> {
-        if let Some(editing_id) = self.cor_editing_version_id.as_ref() {
-            return self
-                .stored_profile_versions
-                .iter()
-                .find(|version| {
-                    version.id == *editing_id
-                        && Self::profile_version_facts_are_editable(&version.status)
-                })
-                .map(|version| version.id.clone());
-        }
-
-        self.stored_profile_versions
-            .iter()
-            .rev()
-            .find(|version| Self::profile_version_facts_are_editable(&version.status))
-            .map(|version| version.id.clone())
-    }
-
-    fn clear_cor_version_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        for input in [
-            &self.cor_version_label_input,
-            &self.cor_registered_name_input,
-            &self.cor_trade_name_input,
-            &self.cor_rdo_code_input,
-            &self.cor_registered_address_input,
-            &self.cor_lob_code_input,
-            &self.cor_lob_description_input,
-        ] {
-            input.update(cx, |input, cx| input.set_value("", window, cx));
-        }
-        for input in [
-            &self.cor_effective_from_input,
-            &self.cor_effective_until_input,
-            &self.cor_registration_date_input,
-        ] {
-            input.update(cx, |input, cx| input.set_date(None, window, cx));
-        }
-        self.cor_tin_input
-            .update(cx, |input, cx| input.clear(window, cx));
-        self.cor_rdo_select.update(cx, |select, cx| {
-            select.set_selected_value("", window, cx);
-        });
-        self.cor_extracted_forms.clear();
-        self.cor_extracted_forms_select.update(cx, |select, cx| {
-            select.set_selected_ids(vec![], cx);
-        });
-        self.cor_taxpayer_type_select.update(cx, |state, cx| {
-            state.set_selected_value("Individual", window, cx)
-        });
-        self.cor_tax_classification_select.update(cx, |state, cx| {
-            state.set_selected_value("Self-Employed / Professional", window, cx)
-        });
-        self.cor_eopt_tier_select
-            .update(cx, |state, cx| state.set_selected_value("None", window, cx));
-        self.cor_registration_status_select.update(cx, |state, cx| {
-            state.set_selected_value("Active", window, cx)
-        });
-        self.capture_clean_cor_editor_baseline(cx);
-    }
-
-    fn close_cor_version_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            let message = "Apply the COR editor changes or use Discard before closing this editor.";
-            self.save_message = Some(message.to_string());
-            window.push_notification(
-                Notification::error(message).title("Unapplied COR changes"),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
-
-        self.cor_editing_version_id = None;
-        self.clear_cor_version_editor(window, cx);
-        cx.notify();
-    }
-
-    fn load_cor_version_editor(
-        &mut self,
-        version_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        if self
-            .cor_editing_version_id
-            .as_deref()
-            .is_some_and(|current_id| current_id != version_id)
-            && self.cor_editor_has_unapplied_changes(cx)
-        {
-            return Err(
-                "Apply the current COR editor changes or use Discard before opening another COR version."
-                    .to_string(),
-            );
-        }
-
-        let Some(version) = self
-            .stored_profile_versions
-            .iter()
-            .find(|version| version.id == version_id)
-            .cloned()
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-
-        let loaded_version_id = version.id.clone();
-        self.cor_editing_version_id = Some(loaded_version_id.clone());
-        self.cor_version_label_input
-            .update(cx, |input, cx| input.set_value(version.label, window, cx));
-        self.cor_effective_from_input.update(cx, |input, cx| {
-            input.set_date(version.effective_from, window, cx)
-        });
-        self.cor_effective_until_input.update(cx, |input, cx| {
-            input.set_date(version.effective_until, window, cx)
-        });
-        self.cor_tin_input.update(cx, |input, cx| {
-            input.set_text_value(&version.cor.tin.clone().unwrap_or_default(), window, cx);
-        });
-        self.cor_registration_date_input.update(cx, |input, cx| {
-            input.set_date(version.cor.registration_date, window, cx)
-        });
-        self.cor_registered_name_input.update(cx, |input, cx| {
-            input.set_value(version.cor.registered_name, window, cx)
-        });
-        self.cor_trade_name_input.update(cx, |input, cx| {
-            input.set_value(version.cor.trade_name.unwrap_or_default(), window, cx)
-        });
-        self.cor_rdo_code_input.update(cx, |input, cx| {
-            input.set_value(version.cor.rdo_code.clone(), window, cx)
-        });
-        let rdo_value = self
-            .rdo_options
-            .iter()
-            .find(|option| option.starts_with(&version.cor.rdo_code))
-            .cloned()
-            .unwrap_or(version.cor.rdo_code.clone());
-        self.cor_rdo_select.update(cx, |select, cx| {
-            select.set_selected_value(&rdo_value, window, cx);
-        });
-        self.cor_registered_address_input.update(cx, |input, cx| {
-            input.set_value(version.cor.registered_address, window, cx)
-        });
-        self.cor_lob_code_input.update(cx, |input, cx| {
-            input.set_value(
-                version.cor.line_of_business_code.unwrap_or_default(),
-                window,
-                cx,
-            )
-        });
-        self.cor_lob_description_input.update(cx, |input, cx| {
-            input.set_value(version.cor.line_of_business_description, window, cx)
-        });
-
-        self.cor_extracted_forms = version
-            .evidence
-            .first()
-            .map(|e| e.extracted_form_codes.clone())
-            .unwrap_or_default();
-        let forms = self.cor_extracted_forms.clone();
-        self.cor_extracted_forms_select.update(cx, |select, cx| {
-            select.set_selected_ids(forms, cx);
-        });
-
-        self.cor_taxpayer_type_select.update(cx, |state, cx| {
-            state.set_selected_value(
-                Self::taxpayer_type_label(&version.taxpayer_type),
-                window,
-                cx,
-            )
-        });
-        self.cor_tax_classification_select.update(cx, |state, cx| {
-            state.set_selected_value(
-                version
-                    .tax_classification
-                    .as_ref()
-                    .map(Self::tax_classification_label)
-                    .unwrap_or("None"),
-                window,
-                cx,
-            )
-        });
-        self.cor_eopt_tier_select.update(cx, |state, cx| {
-            state.set_selected_value(
-                version
-                    .eopt_tier
-                    .as_ref()
-                    .map(Self::eopt_tier_label)
-                    .unwrap_or("None"),
-                window,
-                cx,
-            )
-        });
-        self.cor_registration_status_select.update(cx, |state, cx| {
-            state.set_selected_value(
-                Self::registration_status_label(&version.registration_activity_status),
-                window,
-                cx,
-            )
-        });
-        self.ocr_selected_version_id = Some(loaded_version_id);
-        self.sync_document_viewer(cx);
-        self.capture_clean_cor_editor_baseline(cx);
-        self.refresh_dirty_state(cx);
-        Ok(())
-    }
-
-    fn apply_cor_version_editor(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let Some(version_id) = self.cor_editing_version_id.clone() else {
-            return Err("Select a COR version to edit first.".to_string());
-        };
-        let label = self
-            .cor_version_label_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        if label.is_empty() {
-            return Err("COR version label is required.".to_string());
-        }
-        let Some(version_index) = self
-            .stored_profile_versions
-            .iter()
-            .position(|version| version.id == version_id)
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-        if !Self::profile_version_facts_are_editable(
-            &self.stored_profile_versions[version_index].status,
-        ) {
-            self.stored_profile_versions[version_index].label = label;
-            self.mark_profile_changed();
-            self.save_profile(cx);
-            self.save_message = Some(
-                "COR version label updated. Confirmed and archived facts remain read-only; create a replacement version for corrections."
-                    .to_string(),
-            );
-            self.load_cor_version_editor(&version_id, window, cx)?;
-            return Ok(());
-        }
-
-        if self.cor_effective_from_input.read(cx).has_invalid_value(cx) {
-            return Err("Effective from must use MM/DD/YYYY.".to_string());
-        }
-        if self
-            .cor_effective_until_input
-            .read(cx)
-            .has_invalid_value(cx)
-        {
-            return Err("Effective until must use MM/DD/YYYY.".to_string());
-        }
-        if self
-            .cor_registration_date_input
-            .read(cx)
-            .has_invalid_value(cx)
-        {
-            return Err("Registration date must use MM/DD/YYYY.".to_string());
-        }
-
-        // A COR registers exactly one annual income tax return; two members
-        // of the same annual-ITR group would later reconcile into a
-        // conflicting Forms Set, so refuse the selection here.
-        if let Some(group) =
-            bir_core::integration::conflicting_annual_itr_code_groups(&self.cor_extracted_forms)
-                .first()
-        {
-            return Err(format!(
-                "The exact COR form codes list more than one annual income tax return ({}). A taxpayer files only one annual ITR per year — keep only the code this COR actually registers.",
-                group.join(", ")
+        let current_year =
+            u16::try_from(chrono::Local::now().date_naive().year()).unwrap_or(u16::MAX);
+        if year > current_year {
+            self.pending_notification = Some((
+                gpui_component::notification::NotificationType::Error,
+                format!("year {year} is after the current year ({current_year})"),
             ));
-        }
-
-        let effective_from = self.cor_effective_from_input.read(cx).date;
-        let effective_until = self.cor_effective_until_input.read(cx).date;
-        if let (Some(from), Some(until)) = (effective_from, effective_until)
-            && until < from
-        {
-            return Err("Effective until cannot be before effective from.".to_string());
-        }
-        let registration_date = self.cor_registration_date_input.read(cx).date;
-
-        let version = &mut self.stored_profile_versions[version_index];
-
-        version.label = label;
-        version.effective_from = effective_from;
-        version.effective_until = effective_until;
-        version.needs_effective_date_review = version.effective_from.is_none();
-        version.cor.tin = {
-            let value = self.cor_tin_input.read(cx).value(cx).trim().to_string();
-            if value.is_empty() { None } else { Some(value) }
-        };
-        version.cor.registration_date = registration_date;
-        version.cor.registered_name = self
-            .cor_registered_name_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        version.cor.trade_name = {
-            let value = self
-                .cor_trade_name_input
-                .read(cx)
-                .value()
-                .trim()
-                .to_string();
-            if value.is_empty() { None } else { Some(value) }
-        };
-        version.cor.rdo_code = {
-            let val = self.cor_rdo_select.read(cx).selected_value(cx);
-            val.split(" - ").next().unwrap_or("").trim().to_string()
-        };
-        version.cor.registered_address = self
-            .cor_registered_address_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        version.cor.line_of_business_code = {
-            let value = self.cor_lob_code_input.read(cx).value().trim().to_string();
-            if value.is_empty() { None } else { Some(value) }
-        };
-        version.cor.line_of_business_description = self
-            .cor_lob_description_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        version.taxpayer_type = Self::taxpayer_type_from_label(
-            &self.cor_taxpayer_type_select.read(cx).selected_value(cx),
-        );
-        version.tax_classification = Self::tax_classification_from_label(
-            &self
-                .cor_tax_classification_select
-                .read(cx)
-                .selected_value(cx),
-        );
-        version.eopt_tier =
-            Self::eopt_tier_from_label(&self.cor_eopt_tier_select.read(cx).selected_value(cx));
-        version.registration_activity_status = Self::registration_status_from_label(
-            &self
-                .cor_registration_status_select
-                .read(cx)
-                .selected_value(cx),
-        );
-
-        let extracted_forms = self.cor_extracted_forms.clone();
-        if version.evidence.is_empty() {
-            version.evidence.push(bir_core::profile::CorDocumentRef {
-                id: format!(
-                    "manual-evidence-{}",
-                    chrono::Local::now().timestamp_millis()
-                ),
-                file_name: "manual_entry".to_string(),
-                stored_path: "manual_entry".to_string(),
-                uploaded_at: Some(chrono::Local::now().naive_local()),
-                provider: Some("Manual".to_string()),
-                model: None,
-                document_type: Some("COR Form 2303".to_string()),
-                extracted_form_codes: extracted_forms,
-                ocr_text: None,
-                ocr_confidence: None,
-                field_bboxes: std::collections::HashMap::new(),
+            self.forms_editor_year_select.update(cx, |select, cx| {
+                select.set_selected_value(&self.forms_editor_year.to_string(), window, cx);
             });
-        } else if let Some(evidence) = version.evidence.first_mut() {
-            evidence.extracted_form_codes = extracted_forms;
-        }
-
-        let version_clone = version.clone();
-        let mut profile = self.current_profile(cx);
-        profile.profile_versions = self.stored_profile_versions.clone();
-
-        if version_clone.status == bir_core::profile::TaxProfileVersionStatus::Confirmed {
-            let projected = profile.projection_for_version(&version_clone);
-            self.sync_projection_to_ui(&projected, window, cx);
-        }
-
-        self.mark_profile_changed();
-        self.save_profile(cx);
-
-        self.save_message = Some("COR version details updated and saved.".to_string());
-        self.load_cor_version_editor(&version_id, window, cx)?;
-        Ok(())
-    }
-
-    fn toggle_cor_registered_tax_type(
-        &mut self,
-        version_id: &str,
-        tax_type: RegisteredTaxType,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.block_if_cor_editor_dirty("changing registered tax types", window, cx) {
-            return;
-        }
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            self.save_message = Some("COR version was not found.".to_string());
-            return;
-        };
-
-        if !Self::profile_version_facts_are_editable(&version.status) {
-            let message = Self::immutable_cor_version_message().to_string();
-            self.save_message = Some(message.clone());
-            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
-            return;
-        }
-
-        if let Some(index) = version
-            .registered_tax_types
-            .iter()
-            .position(|existing| existing == &tax_type)
-        {
-            version.registered_tax_types.remove(index);
-        } else {
-            version.registered_tax_types.push(tax_type);
-            version.registered_tax_types.sort();
-        }
-        Self::sync_version_flags_from_registered_tax_types(version);
-
-        let version_clone = version.clone();
-        if version_clone.status == bir_core::profile::TaxProfileVersionStatus::Confirmed {
-            let mut profile = self.current_profile(cx);
-            profile.profile_versions = self.stored_profile_versions.clone();
-            let projected = profile.projection_for_version(&version_clone);
-            self.sync_projection_to_ui(&projected, window, cx);
-        }
-
-        self.mark_profile_changed();
-        self.save_profile(cx);
-        self.save_message = Some("Registered tax type updated and saved.".to_string());
-    }
-
-    fn sync_version_flags_from_registered_tax_types(
-        version: &mut bir_core::profile::TaxProfileVersion,
-    ) {
-        version.is_vat_registered = version
-            .registered_tax_types
-            .contains(&RegisteredTaxType::ValueAddedTax);
-        version.withholds_compensation = version
-            .registered_tax_types
-            .contains(&RegisteredTaxType::WithholdingCompensation);
-        version.withholds_expanded = version
-            .registered_tax_types
-            .contains(&RegisteredTaxType::WithholdingExpanded);
-        version.withholds_final = version
-            .registered_tax_types
-            .contains(&RegisteredTaxType::WithholdingFinal);
-    }
-
-    fn taxpayer_type_label(taxpayer_type: &TaxpayerType) -> &'static str {
-        match taxpayer_type {
-            TaxpayerType::Individual => "Individual",
-            TaxpayerType::Corporation => "Corporation",
-            TaxpayerType::Partnership => "Partnership",
-            TaxpayerType::Cooperative => "Cooperative",
-            TaxpayerType::Estate => "Estate",
-            TaxpayerType::Trust => "Trust",
-        }
-    }
-
-    fn taxpayer_type_from_label(label: &str) -> TaxpayerType {
-        match label {
-            "Corporation" => TaxpayerType::Corporation,
-            "Partnership" => TaxpayerType::Partnership,
-            "Cooperative" => TaxpayerType::Cooperative,
-            "Estate" => TaxpayerType::Estate,
-            "Trust" => TaxpayerType::Trust,
-            _ => TaxpayerType::Individual,
-        }
-    }
-
-    fn tax_classification_label(classification: &TaxClassification) -> &'static str {
-        match classification {
-            TaxClassification::PurelyCompensation => "Purely Compensation",
-            TaxClassification::SelfEmployed => "Self-Employed / Professional",
-            TaxClassification::Corporation => "Corporation",
-            TaxClassification::CooperativeExempt => "Cooperative Exempt",
-            TaxClassification::CooperativeTaxable => "Cooperative Taxable",
-            TaxClassification::CooperativeMixed => "Cooperative Mixed",
-            TaxClassification::EstateOrTrust => "Estate or Trust",
-            TaxClassification::MixedIncome => "Mixed Income",
-        }
-    }
-
-    fn tax_classification_from_label(label: &str) -> Option<TaxClassification> {
-        match label {
-            "Purely Compensation" => Some(TaxClassification::PurelyCompensation),
-            "Self-Employed / Professional" => Some(TaxClassification::SelfEmployed),
-            "Corporation" => Some(TaxClassification::Corporation),
-            "Cooperative Exempt" => Some(TaxClassification::CooperativeExempt),
-            "Cooperative Taxable" => Some(TaxClassification::CooperativeTaxable),
-            "Cooperative Mixed" => Some(TaxClassification::CooperativeMixed),
-            "Estate or Trust" => Some(TaxClassification::EstateOrTrust),
-            "Mixed Income" => Some(TaxClassification::MixedIncome),
-            _ => None,
-        }
-    }
-
-    fn eopt_tier_label(tier: &EoptTier) -> &'static str {
-        match tier {
-            EoptTier::Micro => "Micro",
-            EoptTier::Small => "Small",
-            EoptTier::Medium => "Medium",
-            EoptTier::Large => "Large",
-        }
-    }
-
-    fn eopt_tier_from_label(label: &str) -> Option<EoptTier> {
-        match label {
-            "Micro" => Some(EoptTier::Micro),
-            "Small" => Some(EoptTier::Small),
-            "Medium" => Some(EoptTier::Medium),
-            "Large" => Some(EoptTier::Large),
-            _ => None,
-        }
-    }
-
-    fn registration_status_label(status: &RegistrationActivityStatus) -> &'static str {
-        match status {
-            RegistrationActivityStatus::Active => "Active",
-            RegistrationActivityStatus::DormantOperational => "Dormant Operational",
-            RegistrationActivityStatus::TemporarilyInactive => "Temporarily Inactive",
-            RegistrationActivityStatus::OfficiallyClosed => "Officially Closed",
-        }
-    }
-
-    fn registration_status_from_label(label: &str) -> RegistrationActivityStatus {
-        match label {
-            "Dormant Operational" => RegistrationActivityStatus::DormantOperational,
-            "Temporarily Inactive" => RegistrationActivityStatus::TemporarilyInactive,
-            "Officially Closed" => RegistrationActivityStatus::OfficiallyClosed,
-            _ => RegistrationActivityStatus::Active,
-        }
-    }
-
-    fn add_cor_deadline_override(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            return Err(
-                "Apply the COR editor changes or use Discard before adding a deadline override."
-                    .to_string(),
-            );
-        }
-        let title = self
-            .cor_deadline_title_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let source_reference = self
-            .cor_deadline_source_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let form_codes = self
-            .cor_deadline_forms_input
-            .read(cx)
-            .value()
-            .split(',')
-            .map(|code| code.trim().to_ascii_uppercase().replace(' ', ""))
-            .filter(|code| !code.is_empty())
-            .collect::<Vec<_>>();
-        let original_deadline = chrono::NaiveDate::parse_from_str(
-            self.cor_deadline_original_input.read(cx).value().trim(),
-            "%Y-%m-%d",
-        )
-        .map_err(|_| "Original deadline must use YYYY-MM-DD.".to_string())?;
-        let adjusted_deadline = chrono::NaiveDate::parse_from_str(
-            self.cor_deadline_adjusted_input.read(cx).value().trim(),
-            "%Y-%m-%d",
-        )
-        .map_err(|_| "Adjusted deadline must use YYYY-MM-DD.".to_string())?;
-        let reason = self
-            .cor_deadline_reason_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-
-        if title.is_empty() || source_reference.is_empty() || form_codes.is_empty() {
-            return Err(
-                "Deadline overrides require a title, source, and at least one form code."
-                    .to_string(),
-            );
-        }
-
-        let Some(target_version_id) = self.cor_override_target_version_id() else {
-            return Err("Create a COR/manual version before adding profile overrides.".to_string());
-        };
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == target_version_id)
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-
-        version
-            .deadline_overrides
-            .push(bir_core::profile::ProfileDeadlineOverride {
-                id: format!(
-                    "profile-deadline-{}",
-                    chrono::Local::now().timestamp_millis()
-                ),
-                title: title.clone(),
-                source_reference,
-                affected_form_codes: form_codes,
-                original_deadline,
-                adjusted_deadline,
-                reason: if reason.is_empty() {
-                    None
-                } else {
-                    Some(reason)
-                },
-            });
-        self.clear_cor_override_inputs(window, cx);
-        self.mark_profile_changed();
-        self.save_profile(cx);
-        self.save_message = Some(format!(
-            "Profile deadline override '{title}' added and saved."
-        ));
-        Ok(())
-    }
-
-    fn remove_cor_deadline_override(
-        &mut self,
-        version_id: &str,
-        index: usize,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            let message =
-                "Apply the COR editor changes or use Discard before removing a deadline override.";
-            self.save_message = Some(message.to_string());
-            window.push_notification(
-                Notification::error(message).title("Unapplied COR changes"),
-                cx,
-            );
             cx.notify();
             return;
         }
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            self.save_message = Some("COR version was not found.".to_string());
-            return;
+        self.refresh_dirty_state(cx);
+        let already_dirty = self.has_unsaved_profile_changes;
+        let from_year = self.forms_editor_year;
+        let mut snapshot = self.current_profile(cx);
+        let created = match snapshot.ensure_profile_year_from(from_year, year) {
+            Ok(created) => created,
+            Err(message) => {
+                self.pending_notification = Some((
+                    gpui_component::notification::NotificationType::Error,
+                    message,
+                ));
+                self.forms_editor_year_select.update(cx, |select, cx| {
+                    select.set_selected_value(&self.forms_editor_year.to_string(), window, cx);
+                });
+                cx.notify();
+                return;
+            }
         };
-        if !Self::profile_version_facts_are_editable(&version.status) {
-            self.save_message = Some(Self::immutable_cor_version_message().to_string());
-            return;
+        self.stored_profile_years = snapshot.profile_years.clone();
+        self.forms_editor_year = year;
+        self.sync_forms_set_picker(cx);
+        let mut projected = snapshot;
+        if let Some(facts) = self.stored_profile_years.get(&year).cloned() {
+            facts.apply_to(&mut projected);
         }
-        if index >= version.deadline_overrides.len() {
-            self.save_message = Some("Profile deadline override was not found.".to_string());
-            return;
+        self.sync_projection_to_ui(&projected, window, cx);
+        if created || already_dirty {
+            self.mark_profile_changed();
+        } else {
+            self.capture_clean_baseline(cx);
         }
-        version.deadline_overrides.remove(index);
-        self.mark_profile_changed();
-        self.save_profile(cx);
-        self.save_message = Some("Profile deadline override removed.".to_string());
+        cx.notify();
+    }
+
+    fn refresh_profile_year_selector(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current_year = chrono::Local::now().date_naive().year();
+        let business_start = self.business_start_input.read(cx).date;
+        let range = profile_year_selector_range(business_start, current_year);
+        let selected = if range.contains(&self.forms_editor_year) {
+            self.forms_editor_year
+        } else if self.forms_editor_year < *range.start() {
+            *range.start()
+        } else {
+            *range.end()
+        };
+        let years = profile_year_selector_options(business_start, current_year);
+        self.forms_editor_year_select.update(cx, |select, cx| {
+            select.set_options(years, cx);
+            select.set_selected_value(&selected.to_string(), window, cx);
+        });
+        if selected != self.forms_editor_year {
+            self.switch_profile_year(selected, window, cx);
+        }
     }
 
     fn save_profile(&mut self, cx: &mut Context<Self>) {
-        self.save_profile_inner(None, cx);
+        self.save_profile_inner(cx);
     }
 
     fn save_all_profile_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.cor_editor_has_unapplied_changes(cx) {
-            if let Err(message) = self.apply_cor_version_editor(window, cx) {
-                self.save_message = Some(message.clone());
-                window.push_notification(
-                    Notification::error(message).title("COR details need review"),
-                    cx,
-                );
-                cx.notify();
-            }
-            return;
-        }
-
         if let Err(message) = self.apply_pending_tax_election(window, cx) {
             self.save_message = Some(message.clone());
             window.push_notification(
@@ -4130,19 +1930,7 @@ impl ProfileManagerView {
         self.save_profile(cx);
     }
 
-    fn save_profile_with_reviewed_confirmation(
-        &mut self,
-        reviewed_plan: TaxProfileVersionConfirmationPlan,
-        cx: &mut Context<Self>,
-    ) {
-        self.save_profile_inner(Some(reviewed_plan), cx);
-    }
-
-    fn save_profile_inner(
-        &mut self,
-        reviewed_plan: Option<TaxProfileVersionConfirmationPlan>,
-        cx: &mut Context<Self>,
-    ) {
+    fn save_profile_inner(&mut self, cx: &mut Context<Self>) {
         if !self
             .tax_election_select
             .read(cx)
@@ -4246,7 +2034,6 @@ impl ProfileManagerView {
         let save_request = ProfileSaveRequest {
             profile_session_epoch: self.profile_session_epoch,
             profile_change_revision: self.profile_change_revision,
-            reviewed_plan: reviewed_plan.clone(),
         };
         match profile_save_dispatch_action(self.active_profile_save.as_ref(), &save_request) {
             ProfileSaveDispatchAction::DuplicateInFlight => {
@@ -4291,18 +2078,9 @@ impl ProfileManagerView {
                 .background_executor()
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
-                        if let Some(reviewed_plan) = reviewed_plan.as_ref() {
-                            db.save_profile_with_confirmation_plan_and_post_commit_status(
-                                profile,
-                                reviewed_plan,
-                            )
+                        db.save_profile_with_post_commit_status(profile)
                             .map(bir_core::db::PostCommitWrite::into_parts)
                             .map_err(|e| e.to_string())
-                        } else {
-                            db.save_profile_with_post_commit_status(profile)
-                                .map(bir_core::db::PostCommitWrite::into_parts)
-                                .map_err(|e| e.to_string())
-                        }
                     } else {
                         Err("Database lock is poisoned".to_string())
                     }
@@ -4339,7 +2117,6 @@ impl ProfileManagerView {
                             save_epoch,
                             this.profile_session_epoch,
                         ) {
-                            this.cleanup_saved_cor_evidence(&saved, save_revision);
                             this.editing_id = Some(saved_id);
                             this.persisted_profile_tin = Some(tin_val.clone());
                             // A completion is stale when the profile changed
@@ -4353,8 +2130,6 @@ impl ProfileManagerView {
                             ) {
                                 this.stored_atc_codes.clone_from(&saved.atc_codes);
                                 this.stored_tax_elections.clone_from(&saved.tax_elections);
-                                this.stored_profile_versions
-                                    .clone_from(&saved.profile_versions);
                                 this.stored_per_year_forms.clone_from(&saved.per_year_forms);
                                 this.capture_clean_baseline(cx);
                             }
@@ -4436,7 +2211,7 @@ impl ProfileManagerView {
                     request.profile_session_epoch == this.profile_session_epoch
                 });
                 if let Some(queued_save) = queued_save {
-                    this.save_profile_inner(queued_save.reviewed_plan, cx);
+                    this.save_profile_inner(cx);
                 } else {
                     cx.notify();
                 }
@@ -4445,34 +2220,8 @@ impl ProfileManagerView {
         .detach();
     }
 
-    fn cleanup_saved_cor_evidence(&mut self, saved: &TaxpayerProfile, save_revision: u64) {
-        let referenced_paths = saved
-            .profile_versions
-            .iter()
-            .flat_map(|version| version.evidence.iter())
-            .map(|evidence| evidence.stored_path.clone())
-            .collect::<std::collections::HashSet<_>>();
-        let mut ready = Vec::new();
-        self.pending_cor_evidence_cleanup
-            .retain(|(revision, evidence)| {
-                let should_remove =
-                    *revision <= save_revision && !referenced_paths.contains(&evidence.stored_path);
-                if should_remove {
-                    ready.push(evidence.clone());
-                }
-                !should_remove
-            });
-        for evidence in ready {
-            crate::cor_evidence::remove_stored_cor_document(&evidence);
-        }
-    }
-
     fn field_label(text: &str, cx: &Context<Self>) -> Div {
-        rsx! {
-            <div text_sm text_color={cx.theme().muted_foreground} mb_1>
-                {text.to_string()}
-            </div>
-        }
+        crate::components::form_parts::field_label(text, cx)
     }
 
     fn render_unsaved_profile_banner(&self, cx: &Context<Self>) -> gpui::AnyElement {
@@ -4600,23 +2349,6 @@ impl Render for ProfileManagerView {
             _window.push_notification(notification, cx);
         }
 
-        // Deferred editor field load after upload (needs Window access)
-        if let Some(version_id) = self.pending_cor_editor_load.take() {
-            if self.active_tab == 1 {
-                tracing::info!("[COR Editor] Deferred load firing for version_id={version_id}");
-                match self.load_cor_version_editor(&version_id, _window, cx) {
-                    Ok(()) => tracing::info!("[COR Editor] Fields populated successfully"),
-                    Err(e) => tracing::info!("[COR Editor] Failed to load: {e}"),
-                }
-            } else {
-                tracing::info!(
-                    "[COR Editor] Deferred load skipped — not on OCR tab (tab={}), re-queuing",
-                    self.active_tab
-                );
-                self.pending_cor_editor_load = Some(version_id);
-            }
-        }
-
         let title = if self.editing_id.is_some() {
             "Edit Taxpayer Profile"
         } else {
@@ -4651,6 +2383,9 @@ impl Render for ProfileManagerView {
                     .profile_calendar_available()
             })
             .unwrap_or(false);
+        if self.active_tab == 1 {
+            self.active_tab = 0;
+        }
         if self.active_tab == 6 && !profile_calendar_available {
             self.active_tab = 0;
         }
@@ -4692,33 +2427,31 @@ impl Render for ProfileManagerView {
                     .flex_col()
                     .items_center()
                     .w_full()
-                    // Bug 4+7: Reduce padding and remove max-width on OCR detail view
-                    .when(self.active_tab == 1 && self.ocr_selected_version_id.is_some(), |this| {
-                        this.px_4().py_6()
-                    })
-                    .when(!(self.active_tab == 1 && self.ocr_selected_version_id.is_some()), |this| {
-                        this.p_12()
-                    })
+                    .p_12()
                     .child(
                         div()
                             .flex()
                             .flex_col()
                             .w_full()
-                            .when(!(self.active_tab == 1 && self.ocr_selected_version_id.is_some()), |this| {
-                                this.max_w(px(960.))
-                            })
+                            .max_w(px(960.))
                             .gap_6()
                             .child(rsx! {
                                 <div flex flex_col gap_2>
-                                    <div
-                                        text_3xl
-                                        font_weight={FontWeight::BLACK}
-                                        text_color={cx.theme().foreground}
-                                    >
-                                        {title}
+                                    <div flex items_center justify_between gap_3>
+                                        <div
+                                            text_3xl
+                                            font_weight={FontWeight::BLACK}
+                                            text_color={cx.theme().foreground}
+                                        >
+                                            {title}
+                                        </div>
+                                        <div flex items_center gap_2 id={crate::agent::ids::PROFILE_YEAR_SELECT}>
+                                            <div text_xs font_weight={FontWeight::BOLD} text_color={cx.theme().muted_foreground}>{"Year"}</div>
+                                            <div w={px(100.)}>{Combobox::new(&self.forms_editor_year_select)}</div>
+                                        </div>
                                     </div>
-                                    <div text_base text_color={cx.theme().muted_foreground}>
-                                        {"Required information is used to pre-fill 2551Q."}
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {"Forms use this year's tax profile."}
                                     </div>
                                 </div>
                             })
@@ -4759,34 +2492,6 @@ impl Render for ProfileManagerView {
                                                     })}
                                                 >
                                                     <div text_sm>{"Tax Profile"}</div>
-                                                </div>
-                                            })
-                                            .child(rsx! {
-                                                <div
-                                                    id={crate::agent::ids::PROFILE_TAB_COR}
-                                                    px_4
-                                                    py_1p5
-                                                    rounded_md
-                                                    cursor_pointer
-                                                    when={(self.active_tab == 1, |s| {
-                                                        s.bg(cx.theme().background)
-                                                            .shadow_sm()
-                                                            .text_color(cx.theme().foreground)
-                                                            .font_weight(FontWeight::SEMIBOLD)
-                                                    })}
-                                                    when={(self.active_tab != 1, |s| {
-                                                        s.hover(|s| s.bg(cx.theme().muted))
-                                                            .text_color(cx.theme().muted_foreground)
-                                                            .font_weight(FontWeight::MEDIUM)
-                                                    })}
-                                                    on_click={cx.listener(|this, _, _, cx| {
-                                                        this.active_tab = 1;
-                                                        this.ocr_selected_version_id = None;
-                                                        this.interactive_document_viewer = None;
-                                                        cx.notify();
-                                                    })}
-                                                >
-                                                    <div text_sm>{"COR"}</div>
                                                 </div>
                                             })
                                             .child(rsx! {
@@ -4919,11 +2624,6 @@ impl Render for ProfileManagerView {
                                     )
                                     .child(
                                         div()
-                                            .id(crate::agent::ids::PROFILE_SECTION_COR)
-                                            .child(self.render_ocr_tab(cx)),
-                                    )
-                                    .child(
-                                        div()
                                             .id(crate::agent::ids::PROFILE_SECTION_EMAIL)
                                             .child(self.render_email_settings_tab(cx)),
                                     )
@@ -4945,7 +2645,7 @@ impl Render for ProfileManagerView {
                                         )
                                     })
                             )
-                            .when(self.active_tab != 1 && self.active_tab != 6, |this| {
+                            .when(self.active_tab != 6, |this| {
                                 this.child(rsx! {
                                     <div mt_4 pb={px(80.)} flex items_center gap_4>
                                         {gpui_component::button::Button::new("save_profile")
@@ -5095,141 +2795,6 @@ impl Render for ProfileManagerView {
                         )
                 )
             })
-            .when_some(
-                self.pending_profile_version_confirmation.clone(),
-                |this, plan| {
-                    let plan_for_confirm = plan.clone();
-                    let closes_multiple_versions = plan.auto_close_consequences.len() > 1;
-                    let consequences = plan.auto_close_consequences.iter().enumerate().fold(
-                        rsx! { <div flex flex_col gap_2 /> },
-                        |list, (index, consequence)| {
-                            let prior_effective_from = consequence
-                                .effective_from
-                                .map(|date| date.format("%Y-%m-%d").to_string())
-                                .unwrap_or_else(|| "Needs review (no effective date)".to_string());
-                            list.child(rsx! {
-                                <div
-                                    id={format!("profile-version-auto-close-{index}")}
-                                    p_3
-                                    rounded_md
-                                    border_1
-                                    border_color={cx.theme().danger.opacity(0.5)}
-                                    bg={cx.theme().danger.opacity(0.08)}
-                                    flex
-                                    flex_col
-                                    gap_1
-                                >
-                                    <div text_sm font_weight={FontWeight::SEMIBOLD}>
-                                        {format!(
-                                            "Prior version: {}",
-                                            consequence.version_label
-                                        )}
-                                    </div>
-                                    <div text_xs text_color={cx.theme().muted_foreground}>
-                                        {format!(
-                                            "Version ID: {}",
-                                            consequence.version_id
-                                        )}
-                                    </div>
-                                    <div text_sm>
-                                        {format!(
-                                            "Effective From: {prior_effective_from}"
-                                        )}
-                                    </div>
-                                    <div
-                                        text_sm
-                                        font_weight={FontWeight::SEMIBOLD}
-                                        text_color={cx.theme().danger}
-                                    >
-                                        {format!(
-                                            "Effective Until: Open (no end date) → {}",
-                                            consequence.effective_until.format("%Y-%m-%d")
-                                        )}
-                                    </div>
-                                </div>
-                            })
-                        },
-                    );
-
-                    this.child(rsx! {
-                        <div
-                            absolute
-                            inset_0
-                            occlude
-                            bg={gpui::rgba(0x000000b2)}
-                            flex
-                            items_center
-                            justify_center
-                        >
-                            <div
-                                w_full
-                                max_w={px(560.)}
-                                bg={cx.theme().background}
-                                border_1
-                                border_color={cx.theme().border}
-                                rounded_xl
-                                p_6
-                                flex
-                                flex_col
-                                gap_4
-                                shadow_lg
-                            >
-                                <div text_lg font_weight={FontWeight::BOLD}>
-                                    {"Confirm profile timeline change"}
-                                </div>
-                                <div text_sm>
-                                    {format!(
-                                        "Confirm “{}” with Effective From {}?",
-                                        plan.version_label,
-                                        plan.effective_from.format("%Y-%m-%d")
-                                    )}
-                                </div>
-                                <div text_xs text_color={cx.theme().muted_foreground}>
-                                    {format!("Version ID: {}", plan.version_id)}
-                                </div>
-                                <div text_sm text_color={cx.theme().muted_foreground}>
-                                    {if closes_multiple_versions {
-                                        "This will close the currently open confirmed profile versions shown below. Profile data and the yearly Forms Set will not change unless you confirm."
-                                    } else {
-                                        "This will close the currently open confirmed profile version shown below. Profile data and the yearly Forms Set will not change unless you confirm."
-                                    }}
-                                </div>
-                                {consequences}
-                                <div flex justify_end gap_2>
-                                    {gpui_component::button::Button::new(
-                                        "cancel-profile-version-confirmation",
-                                    )
-                                    .label("Cancel")
-                                    .ghost()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.pending_profile_version_confirmation =
-                                            None;
-                                        cx.notify();
-                                    }))}
-                                    {gpui_component::button::Button::new(
-                                        "confirm-profile-version-timeline-change",
-                                    )
-                                    .label(if closes_multiple_versions {
-                                        "Confirm and Close Prior Versions"
-                                    } else {
-                                        "Confirm and Close Prior Version"
-                                    })
-                                    .danger()
-                                    .on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.apply_cor_version_confirmation(
-                                                plan_for_confirm.clone(),
-                                                window,
-                                                cx,
-                                            );
-                                        },
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    })
-                },
-            )
             .into_any_element()
     }
 }
@@ -5315,7 +2880,6 @@ mod save_revision_tests {
         ProfileSaveRequest {
             profile_session_epoch: epoch,
             profile_change_revision: revision,
-            reviewed_plan: None,
         }
     }
 

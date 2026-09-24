@@ -1773,6 +1773,7 @@ mod tests {
             source_form: "2551Qv2018".to_string(),
         });
         profile.ensure_profile_version_ledger();
+        let _ = profile.capture_current_as_year(2099);
         profile
     }
 
@@ -1963,11 +1964,13 @@ mod tests {
         let mut reviewed_profile = reviewed_profile();
         reviewed_profile.eopt_tier = Some(EoptTier::Medium);
         reviewed_profile.profile_versions[0].eopt_tier = Some(EoptTier::Medium);
+        let _ = reviewed_profile.capture_current_as_year(2099);
         let draft = queued_draft(&reviewed_profile);
 
         let mut current_profile = reviewed_profile;
         current_profile.eopt_tier = Some(EoptTier::Micro);
         current_profile.profile_versions[0].eopt_tier = Some(EoptTier::Micro);
+        let _ = current_profile.capture_current_as_year(2099);
         let prepared = prepare_queued_2551q(draft, &current_profile, None);
 
         match prepared {
@@ -1984,6 +1987,7 @@ mod tests {
         let reviewed_profile = reviewed_profile();
         let draft = queued_draft(&reviewed_profile);
         let mut current_profile = reviewed_profile;
+        current_profile.profile_years.clear();
         current_profile.profile_versions.clear();
 
         match prepare_queued_2551q(draft, &current_profile, None) {
@@ -1996,7 +2000,7 @@ mod tests {
                         .is_some_and(|message| message.contains("effective taxpayer profile"))
                 );
                 assert!(errors.iter().any(|(field, message)| {
-                    field == "profile_resolution" && message.contains("No confirmed")
+                    field == "profile_resolution" && message.contains("no 2099 profile")
                 }));
             }
             _ => panic!("an unresolved effective profile must reject the queued return"),
@@ -2008,6 +2012,7 @@ mod tests {
         let mut reviewed_profile = reviewed_profile();
         reviewed_profile.eopt_tier = Some(EoptTier::Medium);
         reviewed_profile.profile_versions[0].eopt_tier = Some(EoptTier::Medium);
+        let _ = reviewed_profile.capture_current_as_year(2099);
         let mut draft = queued_draft(&reviewed_profile);
         draft.submission_attempts = 3;
         draft.next_retry_at = Some("2099-01-01T00:00:00Z".to_string());
@@ -2017,6 +2022,7 @@ mod tests {
         let mut current_profile = reviewed_profile;
         current_profile.eopt_tier = Some(EoptTier::Micro);
         current_profile.profile_versions[0].eopt_tier = Some(EoptTier::Micro);
+        let _ = current_profile.capture_current_as_year(2099);
 
         match prepare_queued_2551q(draft, &current_profile, None) {
             Queued2551QPreparation::Rejected {

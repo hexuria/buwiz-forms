@@ -1227,6 +1227,7 @@ mod tests {
             profile_versions: Vec::new(),
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
         profile.per_year_forms.insert(

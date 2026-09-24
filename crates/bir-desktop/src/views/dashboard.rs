@@ -741,9 +741,13 @@ impl Render for DashboardView {
                 let is_release_fileable = support.is_fileable_in_app();
                 let is_certification_draft = cfg!(any(debug_assertions, feature = "dev-tools"))
                     && can_open_certification_draft(&code);
-                let is_fileable = is_release_fileable || is_certification_draft;
+                let is_fileable = is_release_fileable
+                    || is_certification_draft
+                    || bir_core::forms::can_open_inventory_editor(&code);
                 let support_label = if is_certification_draft {
                     "Certification preview"
+                } else if !is_release_fileable && bir_core::forms::has_inventory(&code) {
+                    "Edit draft"
                 } else {
                     support.action_label()
                 };
@@ -1913,15 +1917,10 @@ impl Render for DashboardView {
                             </div>
                             <div text_base text_color={cx.theme().muted_foreground}>
                                 {format!(
-                                    "TIN: {} • Type: {:?} • {} • {}",
+                                    "TIN: {} • Type: {:?} • {}",
                                     profile.tin.full(),
                                     profile.taxpayer_type,
-                                    period_desc,
-                                    if profile.is_vat_registered {
-                                        "VAT"
-                                    } else {
-                                        "Non-VAT"
-                                    }
+                                    period_desc
                                 )}
                             </div>
                         </div>
