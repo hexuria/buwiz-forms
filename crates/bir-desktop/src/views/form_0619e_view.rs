@@ -613,7 +613,7 @@ impl Render for Form0619EView {
                                     .disabled(true)}
                     </div>
                 </div>
-                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().accent}>
+                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
                     {self.render_header(cx)}
                     <div mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>

@@ -582,6 +582,7 @@ _package-mac args="": build-frozen-html-identity
         case "$arg" in
             --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
             --native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools" ;;
+            --agent)         FEATURES="${FEATURES:+$FEATURES,}agent" ; AGENT=1 ;;
         esac
     done
     FEATURES_FLAG=""
