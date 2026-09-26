@@ -6206,7 +6206,7 @@ class _TreeClosure:
             self.entries, separators=(",", ":"), ensure_ascii=True)
         return {
             "logical_root": logical_root,
-            "algorithm": "sha256(canonical-json(path,type,bytes,digest))",
+            "algorithm": TREE_CLOSURE_ALGORITHM,
             "files": sum(1 for item in self.entries if item[1] == "file"),
             "symlinks": sum(
                 1 for item in self.entries if item[1] == "symlink"),
@@ -6218,11 +6218,39 @@ class _TreeClosure:
         }
 
 
+TREE_CLOSURE_ALGORITHM = "sha256(canonical-json(path,type,bytes,digest))"
+# Bytecode caches are excluded from every runtime tree closure, and the
+# exclusion is published rather than assumed.  The gate materialises each
+# approved runtime dependency into a private byte-verified view whose
+# inventory deliberately omits `__pycache__` and `*.pyc`
+# (gate.ISOLATED_PYTHON_BOOTSTRAP's `tree_records`), and it runs this audit
+# with `-B`, `PYTHONDONTWRITEBYTECODE=1` and a redirected `pycache_prefix`,
+# so inside that view no in-tree cache exists and none could be loaded if it
+# did.  Hashing the same set on both sides is what lets an independent
+# verifier re-derive this closure from the installed package rather than from
+# the gate's temporary copy of it, which is the whole point of publishing it.
+BYTECODE_CACHE_EXCLUSION_REASON = (
+    "__pycache__ directories and .pyc files are excluded so the closure is "
+    "re-derivable from the installed package; the gate's approved-dependency "
+    "view omits them and its audit runs with bytecode writing disabled and a "
+    "redirected pycache prefix, so no in-tree cache is loadable"
+)
+
+
+def _is_bytecode_cache(logical: str) -> bool:
+    return (
+        "__pycache__" in pathlib.PurePosixPath(logical).parts
+        or logical.endswith(".pyc")
+    )
+
+
 def _snapshot_tree(root: pathlib.Path) -> _TreeClosure:
     root = root.resolve(strict=True)
     entries: list[tuple[str, str, int | None, str]] = []
     for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
         logical = path.relative_to(root).as_posix()
+        if _is_bytecode_cache(logical):
+            continue
         if path.is_symlink():
             target = os.readlink(path)
             try:
@@ -6412,6 +6440,107 @@ def roundtrip_runtime_provenance() -> dict[str, Any]:
         return copy.deepcopy(runtime.provenance)
 
 
+APPLICATION_PACKAGE_NAMES = ("fitz", "pymupdf")
+NATIVE_LIBRARY_SUFFIXES = (".dylib", ".so", ".dll", ".pyd")
+APPLICATION_CLOSURE_SCOPE = (
+    "interpreter-binaries-and-application-package-trees-v1")
+
+
+def _resolve_package_root(
+        name: str, search_path: Sequence[str]) -> pathlib.Path:
+    """The single directory ``name`` would be imported from, or an error.
+
+    Resolution runs over `sys.path`, so the closure covers the tree this
+    process ACTUALLY imports from -- under the gate that is its private
+    byte-verified dependency view, not the installed package.  comb_referee.py
+    resolves the installed package instead, from the interpreter's own
+    configuration, and the two answers have to agree byte for byte.
+    """
+    spec = importlib.machinery.PathFinder.find_spec(name, list(search_path))
+    locations = list(getattr(spec, "submodule_search_locations", None) or ())
+    if spec is None or len(locations) != 1:
+        raise RuntimeError(
+            f"application package has no single resolved root: {name}")
+    return pathlib.Path(locations[0]).resolve(strict=True)
+
+
+@functools.lru_cache(maxsize=1)
+def _application_closure_snapshot(
+        ) -> tuple[tuple[str, _TreeClosure], ...]:
+    """Snapshot every file in the package trees this process imports from.
+
+    Enumerating the tree rather than the loaded module list is what makes the
+    closure complete AND independently re-derivable: a verifier cannot know
+    which submodules this process happened to import, but it can resolve the
+    same package root and hash the same files.  The bundled native libraries
+    PyMuPDF loads through the dynamic linker rather than through an import --
+    `libmupdf.dylib` and `libmupdfcpp.so` -- live in that tree and are bound
+    here for the first time; the loaded-module inventory never saw them.
+    """
+    return tuple(
+        (name, _snapshot_tree(_resolve_package_root(name, sys.path)))
+        for name in APPLICATION_PACKAGE_NAMES
+    )
+
+
+def validate_application_closure() -> None:
+    for name, closure in _application_closure_snapshot():
+        if _resolve_package_root(name, sys.path) != closure.root:
+            raise RuntimeError(
+                f"application package root was substituted: {name}")
+        _validate_tree_closure(closure, f"in the {name} application closure")
+
+
+def _application_closure_manifest() -> dict[str, Any]:
+    """Publish the application closure, and whether it is complete.
+
+    `complete` is a measured relation, not a declaration: every loaded
+    application module must fall inside a package root that was resolved from
+    the interpreter's own configuration.  A module imported from anywhere else
+    -- an injected path entry, a zip importer, an editable checkout -- leaves
+    the tree unable to account for it, and says so instead of claiming a
+    completeness it cannot support.
+    """
+    closures = _application_closure_snapshot()
+    modules: list[dict[str, Any]] = []
+    unbound: list[str] = []
+    for logical, path, size, digest in _base_runtime_snapshot():
+        if not logical.startswith("module/"):
+            continue
+        for name, closure in closures:
+            try:
+                relative = path.relative_to(closure.root).as_posix()
+            except ValueError:
+                continue
+            modules.append({
+                "module": logical[len("module/"):],
+                "file": f"{name}/{relative}",
+                "bytes": size,
+                "sha256": digest,
+            })
+            break
+        else:
+            unbound.append(logical)
+    native = [
+        {"file": f"{name}/{logical}", "bytes": size, "sha256": digest}
+        for name, closure in closures
+        for logical, kind, size, digest in closure.entries
+        if kind == "file" and logical.endswith(NATIVE_LIBRARY_SUFFIXES)
+    ]
+    return {
+        "scope": APPLICATION_CLOSURE_SCOPE,
+        "algorithm": TREE_CLOSURE_ALGORITHM,
+        "bytecode_caches_excluded": True,
+        "exclusion_reason": BYTECODE_CACHE_EXCLUSION_REASON,
+        "packages": [closure.manifest(name) for name, closure in closures],
+        "modules": sorted(modules, key=lambda item: item["file"]),
+        "native_libraries": sorted(native, key=lambda item: item["file"]),
+        "unbound_modules": sorted(unbound),
+        "validated_before_after": True,
+        "complete": not unbound,
+    }
+
+
 def _runtime_bound_paths() -> dict[str, pathlib.Path]:
     paths = {"python/executable": pathlib.Path(sys.executable).resolve()}
     library = sysconfig.get_config_var("LDLIBRARY")
@@ -6451,6 +6580,7 @@ def validate_base_runtime() -> None:
         if size != expected_size or digest != expected_sha:
             raise RuntimeError(
                 f"bound Python/PyMuPDF runtime changed: {logical}")
+    validate_application_closure()
 
 
 @functools.lru_cache(maxsize=1)
@@ -6490,12 +6620,16 @@ def _runtime_provenance_snapshot() -> dict[str, Any]:
             ],
             "validated_before_after": True,
         },
+        "application_closure": _application_closure_manifest(),
         "stdlib_and_system_shared_libraries_bound": False,
         "scope_complete": False,
         "incomplete_reason": (
-            "standalone audit binds the interpreter executable, runtime "
-            "library, and loaded PyMuPDF application modules, not every "
-            "standard-library or operating-system shared library"
+            "the application closure binds the interpreter executable, "
+            "runtime library, every loaded PyMuPDF application module and "
+            "every file in the fitz/pymupdf package trees including their "
+            "bundled native libraries; the Python standard library and the "
+            "operating system's own shared libraries stay in the host trusted "
+            "computing base and are not bound by any scope here"
         ),
     }
 
@@ -6621,18 +6755,27 @@ def snapshot_inputs(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
     if render_errors:
         missing.append("render_dependencies")
     producer = producer_fingerprint()
+    runtime = runtime_provenance()
+    # What this manifest claims, and what it deliberately does not.  The claim
+    # is about the PUBLISHED evidence: every input and every member of the
+    # application runtime closure is named with a logical identity, a byte
+    # count and a digest that an independent verifier can resolve and rehash
+    # from scratch.  `producer["standalone_attestation_complete"]` stays False
+    # forever and is not part of this relation -- standalone self-attestation
+    # is what this audit cannot do, which is precisely why the closure is
+    # published for somebody else to check.  comb_referee.py rehashes every
+    # member and rejects this claim outright when its own derivation
+    # disagrees, so claiming it here without earning it fails the referee.
+    closure_complete = bool(runtime["application_closure"]["complete"])
     manifest = {
         "schema": INPUT_MANIFEST_SCHEMA,
         "algorithm": "sha256",
         "producer": producer,
-        "runtime": runtime_provenance(),
+        "runtime": runtime,
         "inputs_complete": not missing,
-        "attestation_complete": bool(
-            not missing and producer["standalone_attestation_complete"]),
-        "enforceable": bool(
-            not missing and producer["standalone_attestation_complete"]),
-        "complete": bool(
-            not missing and producer["standalone_attestation_complete"]),
+        "attestation_complete": bool(not missing and closure_complete),
+        "enforceable": bool(not missing and closure_complete),
+        "complete": bool(not missing and closure_complete),
         "missing_required": missing,
         "inputs": entries,
         "render": {
@@ -9339,18 +9482,47 @@ def score(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
             record["error"] = reason
             record["provenance_validation"]["error"] = reason
     input_manifest = record.get("input_manifest") or {}
-    reasons = []
     producer = input_manifest.get("producer") or {}
     base_runtime = input_manifest.get("runtime") or {}
+    application_closure = base_runtime.get("application_closure") or {}
     roundtrip_runtime = record.get("roundtrip_runtime") or {}
-    if not producer.get("standalone_attestation_complete"):
-        reasons.append(producer.get(
-            "incomplete_reason", "producer execution is not fully bound"))
-    if not base_runtime.get("scope_complete"):
-        reasons.append(base_runtime.get(
-            "incomplete_reason", "base runtime scope is incomplete"))
-    if roundtrip and not roundtrip_runtime.get("scope_complete"):
-        reasons.append(roundtrip_runtime.get(
+    validated_before_after = bool(
+        record["provenance_validation"]["validated_before"]
+        and record["provenance_validation"]["validated_after"])
+    roundtrip_closure_published = bool(
+        roundtrip_runtime.get("dependency_closure")
+        and roundtrip_runtime.get("chromium"))
+    # Two lists, because they answer two different questions.  `reasons` is
+    # why this attestation is not complete and must be empty when it is;
+    # `boundaries` is what the attestation deliberately never covered, is
+    # never empty, and is republished on every record no matter how green it
+    # is.  Collapsing them is how a permanent scope boundary would come to
+    # read as a temporary defect, or a temporary defect as a boundary.
+    reasons: list[str] = []
+    if not input_manifest.get("inputs_complete"):
+        reasons.append("one or more required inputs are missing")
+    if not application_closure.get("complete"):
+        reasons.append(
+            "application runtime closure does not account for every loaded "
+            "module: "
+            + ", ".join(application_closure.get("unbound_modules") or ())
+        )
+    if not validated_before_after:
+        reasons.append(
+            "producer and runtime provenance were not revalidated before and "
+            "after this record")
+    if roundtrip and not roundtrip_closure_published:
+        reasons.append(
+            "round trip ran without publishing its Playwright/Chromium "
+            "closure")
+    boundaries = [
+        producer.get(
+            "incomplete_reason", "producer execution is not fully bound"),
+        base_runtime.get(
+            "incomplete_reason", "base runtime scope is incomplete"),
+    ]
+    if roundtrip:
+        boundaries.append(roundtrip_runtime.get(
             "incomplete_reason", "roundtrip runtime scope is incomplete"))
     record["attestation"] = {
         "inputs_complete": bool(input_manifest.get("inputs_complete")),
@@ -9362,12 +9534,13 @@ def score(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
             bool(roundtrip_runtime.get("scope_complete"))
             if roundtrip else None
         ),
-        "validated_before_after": bool(
-            record["provenance_validation"]["validated_before"]
-            and record["provenance_validation"]["validated_after"]),
-        "complete": False,
-        "enforceable": False,
+        "application_closure_complete": bool(
+            application_closure.get("complete")),
+        "validated_before_after": validated_before_after,
+        "complete": not reasons,
+        "enforceable": not reasons,
         "incomplete_reasons": reasons,
+        "declared_out_of_scope": boundaries,
         "future_gate_required": (
             "clean audit.py git-blob/bootstrap and native host/runtime binding"),
     }
@@ -9714,11 +9887,13 @@ def self_test() -> int:
 
         first = snapshot_inputs(
             slug, ir_dir, html_dir, layout_dir, guide_dir, str(source_dir))
+        first_closure = first.manifest["runtime"]["application_closure"]
         check("input manifest binds every required byte source",
               first.manifest["inputs_complete"] is True
-              and first.manifest["complete"] is False
-              and first.manifest["attestation_complete"] is False
-              and first.manifest["enforceable"] is False
+              and first_closure["complete"] is True
+              and first.manifest["complete"] is True
+              and first.manifest["attestation_complete"] is True
+              and first.manifest["enforceable"] is True
               and first.manifest["missing_required"] == []
               and set(first.manifest["inputs"]) == {
                   "ir", "layout", "html", "guide", "guide_html",
@@ -9776,6 +9951,48 @@ def self_test() -> int:
               and first.manifest["runtime"]["python"]["version"]
               and first.manifest["runtime"]["pymupdf"]["package_version"]
               and first.manifest["runtime"]["pymupdf"]["version_bind"])
+        check("application closure names each package tree independently",
+              [item["logical_root"] for item in first_closure["packages"]]
+              == list(APPLICATION_PACKAGE_NAMES)
+              and all(re.fullmatch(r"[0-9a-f]{64}", item["tree_sha256"])
+                      and item["files"] > 0 and item["bytes"] > 0
+                      and item["algorithm"] == TREE_CLOSURE_ALGORITHM
+                      for item in first_closure["packages"])
+              and first_closure["bytecode_caches_excluded"] is True
+              and first_closure["unbound_modules"] == [])
+        check("application closure hashes the bundled native libraries",
+              first_closure["native_libraries"] != []
+              and all(
+                  item["file"].endswith(NATIVE_LIBRARY_SUFFIXES)
+                  and item["bytes"] > 0
+                  and re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                  for item in first_closure["native_libraries"]))
+        check("every loaded application module is bound inside a package tree",
+              {item["module"] for item in first_closure["modules"]}
+              == {logical[len("module/"):]
+                  for logical, _path, _size, _sha in _base_runtime_snapshot()
+                  if logical.startswith("module/")}
+              and all(
+                  item["file"].split("/", 1)[0] in APPLICATION_PACKAGE_NAMES
+                  for item in first_closure["modules"]))
+        # The completeness claim has to be able to collapse, or publishing it
+        # would be decoration. A module loaded from outside every resolved
+        # package tree is exactly the case the tree cannot account for.
+        real_base_runtime_snapshot = _base_runtime_snapshot
+        globals()["_base_runtime_snapshot"] = lambda: (
+            *real_base_runtime_snapshot(),
+            ("module/pymupdf.injected",
+             pathlib.Path("/nonexistent/injected/pymupdf.py"), 7, "0" * 64),
+        )
+        try:
+            injected_closure = _application_closure_manifest()
+        finally:
+            globals()["_base_runtime_snapshot"] = real_base_runtime_snapshot
+        check("an out-of-tree application module withdraws the closure claim",
+              injected_closure["complete"] is False
+              and injected_closure["unbound_modules"]
+              == ["module/pymupdf.injected"]
+              and _application_closure_manifest()["complete"] is True)
 
         snapshotted_bundle = load_bundle(
             slug, ir_dir, html_dir, layout_dir, guide_dir, str(source_dir),
