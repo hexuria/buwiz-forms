@@ -5620,6 +5620,13 @@ def _emission_geometry_from_layout(
     # error here, never a silently tolerated pass.
     band_top = float(comb["writing_y0"])
     band_bottom = float(comb["writing_y1"])
+    # The same distinction horizontally, and subscripted for the same reason.
+    # comb["slot_x"]'s outer values are the RAIL CENTRES -- half a printed
+    # stroke outside the paper -- and comb["writing_x0"]/["writing_x1"] are
+    # those rails' ink edges, which is what emit lays the first and last
+    # compartments on.  Everything between them stays the measured dividers.
+    edges = [float(comb["writing_x0"]), *slot_x[1:-1],
+             float(comb["writing_x1"])]
     return {
         "page_index": page_index,
         "left": left,
@@ -5635,7 +5642,7 @@ def _emission_geometry_from_layout(
                 "height": band_bottom - band_top,
             }
             for index, (slot_left, slot_right) in enumerate(
-                zip(slot_x, slot_x[1:]))
+                zip(edges, edges[1:]))
         ],
     }
 
@@ -13506,11 +13513,18 @@ def self_test() -> int:
     # producers agreed with each other, and neither self-test named the field.
     # The geometry below is 0605-1999 p1c3 verbatim, where the two bands are
     # 15.34pt apart, so reading the wrong one cannot round to the right one.
+    #
+    # The same holds on the OTHER axis and is the same trap: `slot_x`'s outer
+    # values are the rails' CENTRES (82.31 / 109.08) and the compartments are
+    # laid on those rails' ink edges (82.69 / 108.71), 0.38pt and 0.37pt
+    # further in -- half the printed wall, which is where this sheet prints the
+    # `)` of "(  MM / YYYY )".  Every internal edge stays the measured divider.
     band_cell = {
         "comb": {
             "slot_x": [82.31, 95.64, 109.08],
             "y0": 165.6, "y1": 168.48,
             "writing_y0": 150.26, "writing_y1": 167.72,
+            "writing_x0": 82.69, "writing_x1": 108.71,
         },
     }
     band_box = {"x0": 82.31, "y0": 149.51, "x1": 109.08, "y1": 168.47}
@@ -13525,7 +13539,17 @@ def self_test() -> int:
            or abs(slot["height"] - 2.88) <= 1e-6 for slot in band_slots):
         failures.append(
             "expected comb emission geometry must not follow the guide tick")
-    for absent in ("writing_y0", "writing_y1"):
+    if (len(band_slots) != 2
+            or abs(band_slots[0]["left"] - 0.38) > 1e-9
+            or abs(band_slots[0]["width"] - 12.95) > 1e-9
+            or abs(band_slots[1]["left"] - 13.33) > 1e-9
+            or abs(band_slots[1]["width"] - 13.07) > 1e-9):
+        failures.append(
+            "expected comb emission geometry must follow the writing edges")
+    if any(abs(slot["left"]) <= 1e-6 for slot in band_slots):
+        failures.append(
+            "expected comb emission geometry must not follow the rail centres")
+    for absent in ("writing_y0", "writing_y1", "writing_x0", "writing_x1"):
         starved = {"comb": {
             name: value for name, value in band_cell["comb"].items()
             if name != absent}}

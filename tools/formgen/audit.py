@@ -1748,19 +1748,70 @@ def _outer_position_evidence(
     return evidence
 
 
+def _comb_input_insets(
+        cell: Cell) -> dict[int, tuple[float, float, float, float] | None]:
+    """Per slot number, the inset the input inside it declares for ITSELF.
+
+    A comb input carries `inset:0` today, so the slot div and the box a
+    taxpayer types in are the same rectangle -- but nothing enforced that, and
+    the difference is not cosmetic: an input inset inside its slot is exactly
+    the shape a producer-side fix takes, and a judge that scores the SLOT can
+    neither see such a fix nor catch a producer that widened the input back out
+    over printed ink.
+
+    `None` means "read this slot's own rectangle", and it is returned for every
+    case this cannot resolve unambiguously -- no inset declared, or more than
+    one editable input attributed to one slot number. That is the fail-closed
+    direction on purpose: the slot is the larger rectangle, so an unresolvable
+    inset can only make an overlap MORE visible, never less.
+    """
+    insets: dict[int, list[tuple[float, float, float, float] | None]] = {}
+    if cell.dom_record is not None:
+        positions = {
+            position: slot.index
+            for position, slot in enumerate(cell.dom_record.slots)
+        }
+        for input_record in cell.dom_record.inputs:
+            if input_record.owning_slot is None or not input_record.editable:
+                continue
+            number = positions.get(input_record.owning_slot[1])
+            if number is None:
+                continue
+            insets.setdefault(number, []).append(input_record.inset)
+    else:
+        for match in SLOT_RE.finditer(cell.inner):
+            number = int(match.group(1))
+            for input_match in INPUT_RE.finditer(match.group(6)):
+                found = INSET_RE.search(input_match.group(1))
+                insets.setdefault(number, []).append(
+                    tuple(float(found.group(index)) for index in (1, 2, 3, 4))
+                    if found is not None else None)
+    return {
+        number: values[0] if len(values) == 1 else None
+        for number, values in insets.items()
+    }
+
+
 def input_boxes(cell: Cell) -> list[Rect]:
     """Every editable box this cell renders, in page coordinates.
 
-    Comb inputs live inside their slot div and fill it; a plain text input fills
-    the cell minus its declared inset. Both are absolute numbers in the markup,
-    so no layout pass is needed to know where a taxpayer can type. A comb slot
-    is clipped to its parent cell because `.f` uses `overflow:hidden`; geometry
-    outside that box cannot paint typed text over the page.
+    Comb inputs live inside their slot div, inset by whatever they declare for
+    themselves; a plain text input fills the cell minus its declared inset.
+    Both are absolute numbers in the markup, so no layout pass is needed to know
+    where a taxpayer can type. A comb slot is clipped to its parent cell because
+    `.f` uses `overflow:hidden`; geometry outside that box cannot paint typed
+    text over the page.
     """
     left, top, right, bottom = cell.rect
     out: list[Rect] = []
-    for _, box, has_input in slot_boxes(cell):
+    slot_insets = _comb_input_insets(cell)
+    for number, box, has_input in slot_boxes(cell):
         if has_input:
+            inset = slot_insets.get(number)
+            if inset is not None:
+                inset_top, inset_right, inset_bottom, inset_left = inset
+                box = (box[0] + inset_left, box[1] + inset_top,
+                       box[2] - inset_right, box[3] - inset_bottom)
             clipped = (max(left, box[0]), max(top, box[1]),
                        min(right, box[2]), min(bottom, box[3]))
             if clipped[2] > clipped[0] and clipped[3] > clipped[1]:
@@ -7532,21 +7583,38 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             actual_slot_edges[1:-1]
             if actual_slot_edges is not None else None)
         layout_slot_x = cell["comb"].get("slot_x")
-        layout_all_edges: list[float] | None = None
         layout_internal_edges: list[float] | None = None
         layout_position_reason: str | None = None
         if (isinstance(layout_slot_x, list)
                 and len(layout_slot_x) == int(cell["comb"]["cells"]) + 1):
             try:
-                layout_all_edges = [
-                    float(value) for value in layout_slot_x]
-                layout_internal_edges = layout_all_edges[1:-1]
+                layout_internal_edges = [
+                    float(value) for value in layout_slot_x][1:-1]
             except (TypeError, ValueError):
                 layout_position_reason = (
                     "layout comb slot_x contains a non-numeric coordinate")
         else:
             layout_position_reason = (
                 "layout comb lacks the complete cells-plus-one slot_x vector")
+        # The OUTER edges are a different published quantity from `slot_x`'s
+        # own outer values, and the difference is half a printed wall.  `slot_x`
+        # runs rail CENTRE to rail centre; `writing_x0`/`writing_x1` are those
+        # rails' ink edges, which is where the sheet leaves paper to write on
+        # and therefore what the emitted outer compartments are laid on.  A
+        # layout that publishes no writing edges is not excused here -- the
+        # comparison stays comparable and fails with this reason, because a
+        # comb whose typing surface cannot be located is not a comb that passes.
+        layout_outer_edges: list[float] | None = None
+        layout_outer_reason: str | None = None
+        try:
+            layout_outer_edges = [
+                float(cell["comb"]["writing_x0"]),
+                float(cell["comb"]["writing_x1"]),
+            ]
+        except (KeyError, TypeError, ValueError):
+            layout_outer_reason = (
+                "layout comb publishes no numeric writing_x0/writing_x1 "
+                "horizontal writing surface")
         layout_position = _position_evidence(
             actual_internal_edges,
             layout_internal_edges,
@@ -7563,14 +7631,11 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 [actual_slot_edges[0], actual_slot_edges[-1]]
                 if actual_slot_edges is not None else None
             ),
-            (
-                [layout_all_edges[0], layout_all_edges[-1]]
-                if layout_all_edges is not None else None
-            ),
+            layout_outer_edges,
             comparable=bool(
                 emission["valid"] and slots == cell["comb"]["cells"]),
             unavailable_reason=(
-                layout_position_reason
+                layout_outer_reason
                 or ("emitted/layout slot counts differ"
                     if slots != cell["comb"]["cells"]
                     else "emitted slot geometry is invalid")),
@@ -7680,10 +7745,21 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             tolerance_pt=POSITION_TOL_PT,
         )
         evidence["emission_source_position"] = source_position
+        # The rails' INK edges, not their centres.  A rail is a painted stroke
+        # and its centre runs down the middle of that stroke, so an outer
+        # compartment placed on the centre is placed across half the printed
+        # rule -- with the label the sheet tucks under that rule beneath it
+        # (F208).  The two quantities differ by 0.36-0.48pt here, and against
+        # the centre 38.7% of this corpus's 8,306 flush outer edges exceed
+        # POSITION_TOL_PT, so comparing a writing edge to a centre is comparing
+        # unlike things rather than measuring a defect.  Nothing else moves:
+        # the tolerance, the internal-divider comparison and the compartment
+        # count are untouched, and `ink_x0`/`ink_x1` are already published here
+        # from the source's own paint stream.
         source_outer_edges = (
             [
-                float(source_frame["left_rail"]["center_x"]),
-                float(source_frame["right_rail"]["center_x"]),
+                float(source_frame["left_rail"]["ink_x1"]),
+                float(source_frame["right_rail"]["ink_x0"]),
             ]
             if source_frame is not None else None
         )
@@ -7709,10 +7785,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             tolerance_pt=POSITION_TOL_PT,
         )
         layout_source_outer_position = _outer_position_evidence(
-            (
-                [layout_all_edges[0], layout_all_edges[-1]]
-                if layout_all_edges is not None else None
-            ),
+            layout_outer_edges,
             source_outer_edges,
             comparable=bool(
                 printed is not None
@@ -7724,7 +7797,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if source_frame is None else
                 "layout/source slot counts differ"
                 if latticed != printed else
-                layout_position_reason
+                layout_outer_reason
             ),
             tolerance_pt=POSITION_TOL_PT,
         )
@@ -7762,7 +7835,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             failure_kinds.append("emission-layout-outer-position-mismatch")
             reasons.append(
                 "emitted physical outer slot edges do not match layout "
-                f"comb.slot_x within {EMITTED_GEOMETRY_EPS_PT}pt")
+                "comb.writing_x0/writing_x1 within "
+                f"{EMITTED_GEOMETRY_EPS_PT}pt")
         if (source_position["comparable"]
                 and not source_position["matches"]):
             binding_invalid = True
@@ -7776,15 +7850,15 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             binding_invalid = True
             failure_kinds.append("emission-source-outer-position-mismatch")
             reasons.append(
-                "emitted physical outer slot edges do not match source "
-                f"U-frame rails within {POSITION_TOL_PT}pt")
+                "emitted physical outer slot edges do not match the source "
+                f"U-frame rails' own ink edges within {POSITION_TOL_PT}pt")
         if (layout_source_outer_position["comparable"]
                 and not layout_source_outer_position["matches"]):
             binding_invalid = True
             failure_kinds.append("layout-source-outer-position-mismatch")
             reasons.append(
-                "layout comb.slot_x outer edges do not match source U-frame "
-                f"rails within {POSITION_TOL_PT}pt")
+                "layout comb writing edges do not match the source U-frame "
+                f"rails' own ink edges within {POSITION_TOL_PT}pt")
         evidence["effective_emission_state"] = (
             "container-binding-invalid"
             if any(kind.startswith("emission-container-")
@@ -11232,6 +11306,16 @@ def self_test() -> int:
                     cell["subject_key"] = subject_key
                     if not isinstance(cell.get("comb"), dict):
                         continue
+                    # Every real layout publishes the horizontal writing
+                    # surface beside `slot_x`. A fixture that omitted it would
+                    # be testing the absence branch by accident in every other
+                    # assertion, so the fail-closed value -- the rails' own
+                    # centres, which is what a comb whose rail ink could not be
+                    # measured publishes -- is filled in here unless the fixture
+                    # states one deliberately.
+                    comb = cell["comb"]
+                    comb.setdefault("writing_x0", float(comb["slot_x"][0]))
+                    comb.setdefault("writing_x1", float(comb["slot_x"][-1]))
                     subjects.append({
                         "subject_key": subject_key,
                         "legacy_cell_id": cell["id"],
@@ -11553,6 +11637,183 @@ def self_test() -> int:
             and "layout-source-outer-position-mismatch"
             in frame_offender["failure_kinds"],
         )
+
+    # ---- the outer edges are the rails' INK, never their centres (F208) ----
+    #
+    # A rail is a painted stroke, so "where the rail is" and "where the paper
+    # a taxpayer may write on starts" are half a stroke apart. The rails above
+    # are 0.24pt wide, where the two answers are 0.12pt apart and the referee
+    # bound cannot tell them apart; these are 1.2pt, where they are 0.6pt apart
+    # and it must. On this sheet the outer compartments run 5.60..14.40 and
+    # 25.60..34.40 between rails CENTRED on 5.0 and 35.0.
+    THICK = 0.6
+
+    def writing_edge_fixture(
+            *,
+            emitted_outer: tuple[float, float] = (5.6, 34.4),
+            layout_writing: tuple[float, float] | None = (5.6, 34.4),
+            ) -> CombEmissionFixture:
+        dividers = (15.0, 25.0)
+        edges = (emitted_outer[0], *dividers, emitted_outer[1])
+        geometry = [
+            (float(left), 0.0, float(right - left), 10.0)
+            for left, right in zip(edges, edges[1:])
+        ]
+        emitted = dataclasses.replace(
+            emitted_comb_cell(
+                slot_indexes=tuple(range(len(geometry))),
+                geometry=geometry,
+            ),
+            attrs=(
+                f' data-comb-slots="{len(geometry)}" '
+                'style="left:0pt;top:0pt;width:40pt;height:10pt"'
+            ),
+            rect=(0.0, 0.0, 40.0, 10.0),
+        )
+        fixture = CombEmissionFixture([emitted], count=len(geometry))
+        comb: dict[str, Any] = {
+            "cells": len(geometry),
+            "divider_x": [float(value) for value in dividers],
+            # `slot_x` stays the RAILS' own centres, which is what it means.
+            "slot_x": [5.0, *(float(value) for value in dividers), 35.0],
+        }
+        if layout_writing is not None:
+            comb["writing_x0"] = float(layout_writing[0])
+            comb["writing_x1"] = float(layout_writing[1])
+        fixture.layout_pages = {1: {"cells": [{
+            "id": "p1c0",
+            "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+            "comb": comb,
+        }]}}
+        fixture._bind_owner_registry()
+        if layout_writing is None:
+            # `_bind_owner_registry` fills the fail-closed value in for every
+            # other fixture; this one is testing that its ABSENCE is a failure,
+            # so the keys are removed after binding.
+            for page in fixture.layout["pages"]:
+                for cell in page["cells"]:
+                    cell["comb"].pop("writing_x0", None)
+                    cell["comb"].pop("writing_x1", None)
+            fixture._snapshot_layout()
+        paints = [
+            VectorPaint(
+                value - THICK, 2.0, value + THICK, 8.0,
+                0.0, 1.0, index, "writing-edge-frame",
+            )
+            for index, value in enumerate((5.0, 35.0))
+        ]
+        paints.extend(
+            VectorPaint(
+                value - 0.12, 2.0, value + 0.12, 8.0,
+                0.0, 1.0, 10 + index, "writing-edge-divider",
+            )
+            for index, value in enumerate(dividers)
+        )
+        paints.append(VectorPaint(
+            5.0, 7.88, 35.0, 8.12,
+            0.0, 1.0, 20, "writing-edge-baseline",
+        ))
+        fixture.vector_pages = {1: VectorPage(tuple(paints), ())}
+        return fixture
+
+    on_the_ink = check_comb_slots_match_printed(writing_edge_fixture())
+    check(
+        "outer compartments laid on the rails' ink edges are accepted",
+        on_the_ink["holds"] is True,
+    )
+    # The discriminating mutation: the SAME comb laid on the rails' centres,
+    # which is exactly what every comb in this corpus used to be laid on. Both
+    # outer relations must reject it -- the emitted document against the layout
+    # it claims to render, and the emitted document against the sheet itself.
+    on_the_centres = check_comb_slots_match_printed(
+        writing_edge_fixture(emitted_outer=(5.0, 35.0)))
+    centres_offender = (
+        on_the_centres["offenders"][0] if on_the_centres["offenders"] else {})
+    check(
+        "an outer compartment laid on the rail's centre sits on printed ink",
+        on_the_centres["holds"] is False
+        and centres_offender.get(
+            "emission_layout_outer_position", {}).get("deltas_pt")
+        == [-0.6, 0.6]
+        and centres_offender.get(
+            "emission_source_outer_position", {}).get("deltas_pt")
+        == [-0.6, 0.6]
+        and "emission-layout-outer-position-mismatch"
+        in centres_offender.get("failure_kinds", ())
+        and "emission-source-outer-position-mismatch"
+        in centres_offender.get("failure_kinds", ()),
+    )
+    # A layout that states no horizontal writing surface cannot be scored on
+    # one, and an unscoreable comb is an offender rather than a pass.
+    no_writing_surface = check_comb_slots_match_printed(
+        writing_edge_fixture(layout_writing=None))
+    absent_offender = (
+        no_writing_surface["offenders"][0]
+        if no_writing_surface["offenders"] else {})
+    check(
+        "a comb with no published writing surface fails closed, by name",
+        no_writing_surface["holds"] is False
+        and absent_offender.get(
+            "emission_layout_outer_position", {}).get("matches") is False
+        and absent_offender.get(
+            "layout_source_outer_position", {}).get("matches") is False
+        and "writing_x0/writing_x1" in (absent_offender.get(
+            "emission_layout_outer_position", {}).get("unavailable_reason")
+            or "")
+        and "emission-layout-outer-position-mismatch"
+        in absent_offender.get("failure_kinds", ())
+        and "layout-source-outer-position-mismatch"
+        in absent_offender.get("failure_kinds", ()),
+    )
+    # ...and a layout whose writing surface is not on the sheet's own rail ink
+    # is caught even when the emitter renders it faithfully.
+    displaced_writing = check_comb_slots_match_printed(
+        writing_edge_fixture(emitted_outer=(5.9, 34.4),
+                             layout_writing=(5.9, 34.4)))
+    displaced_writing_offender = (
+        displaced_writing["offenders"][0]
+        if displaced_writing["offenders"] else {})
+    check(
+        "a writing surface off the sheet's own rail ink is caught in the layout",
+        displaced_writing["holds"] is False
+        and displaced_writing_offender.get(
+            "emission_layout_outer_position", {}).get("matches") is True
+        and displaced_writing_offender.get(
+            "layout_source_outer_position", {}).get("deltas_pt")
+        == [0.3, 0.0]
+        and "layout-source-outer-position-mismatch"
+        in displaced_writing_offender.get("failure_kinds", ()),
+    )
+
+    # ---- the judge reads the INPUT's own inset, not only its slot (F208) ----
+    #
+    # Every comb input in this corpus fills its slot exactly, and nothing said
+    # so. Scoring the slot div made any producer-side move inside a slot
+    # invisible: an input inset off printed ink would score as though it were
+    # still on it, and an input widened back out over that ink would score as
+    # though it were not.
+    inset_slot_cell = parse_cells(
+        '<div class="page page-1">'
+        '<div id="p1c0" class="c f" data-cell-kind="field" '
+        'data-comb-slots="1" style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<input type="text" class="fi fc" data-slot-index="0" '
+        'style="inset:1pt 2pt 3pt 4pt"></div></div>'
+        "</div>")[0]
+    flush_slot_cell = parse_cells(
+        '<div class="page page-1">'
+        '<div id="p1c0" class="c f" data-cell-kind="field" '
+        'data-comb-slots="1" style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:0pt;width:20pt;height:10pt">'
+        '<input type="text" class="fi fc" data-slot-index="0"></div></div>'
+        "</div>")[0]
+    check(
+        "a comb input's own inset moves the box the judge scores",
+        input_boxes(inset_slot_cell) == [(4.0, 1.0, 18.0, 7.0)]
+        and input_boxes(flush_slot_cell) == [(0.0, 0.0, 20.0, 10.0)],
+    )
 
     def emitted_cell_markup(cell: Cell) -> str:
         return (

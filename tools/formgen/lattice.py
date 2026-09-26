@@ -105,7 +105,7 @@ import json
 import math
 import pathlib
 import sys
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, NamedTuple, Sequence
 
 SCHEMA_VERSION = 1
 
@@ -2515,6 +2515,53 @@ def ink_runs(candidates: Sequence[dict[str, Any]],
     return [(lo, hi, weight) for lo, hi, weight, _ink in runs]
 
 
+def edge_rail_bars(edge_ink: Sequence[dict[str, Any]], edge: InkSpan,
+                   band_y0: float, band_y1: float) -> list[dict[str, Any]]:
+    """The owner's own edge bars that rule this comb band, in drawn order.
+
+    Split out from `edge_rail` because two different questions are asked of
+    exactly the same bars and neither may be answered from a different
+    membership: WHERE the rail is (their mean centre, `edge_rail`) and HOW WIDE
+    IT IS PAINTED (their ink envelope, `comb_rails`). A rail whose position came
+    from one set of bars and whose ink came from another would inset a comb off
+    a stroke that is not the one bounding it.
+    """
+    return [
+        ink for ink in edge_ink
+        if float(ink["y0"]) <= band_y0 + JOIN_EPSILON_PT
+        and float(ink["y1"]) >= band_y1 - JOIN_EPSILON_PT
+        and not distinct_boundary(
+            (float(ink["x0"]), float(ink["x1"]),
+             float(ink["thickness_pt"])), edge)
+    ]
+
+
+def boundary_stack(boundaries: Sequence[dict[str, Any]],
+                   position: float) -> list[dict[str, Any]]:
+    """Every bar of one boundary, selected by the position it was reduced to.
+
+    A boundary's published position is `q(centre(ink))`, and several bars can
+    reduce to the same one -- which is precisely when the ink envelope differs
+    from any single bar's rect. Selecting by the published value rather than by
+    identity keeps the stack and the position two readings of one boundary.
+    """
+    return [ink for ink in boundaries if q(centre(ink)) == position]
+
+
+def ink_envelope(inks: Sequence[dict[str, Any]]) -> Interval | None:
+    """The x extent one boundary's drawn bars actually cover, or None.
+
+    The envelope, not one bar's own rect: a boundary regularly arrives as a
+    stack (2550M draws its date-box columns as two 0.72pt bars) and the paper a
+    comb may be written on begins after ALL of that stack's ink, not after the
+    first bar of it.
+    """
+    if not inks:
+        return None
+    return (q(min(float(ink["x0"]) for ink in inks)),
+            q(max(float(ink["x1"]) for ink in inks)))
+
+
 def edge_rail(edge_ink: Sequence[dict[str, Any]], edge: InkSpan,
               band_y0: float, band_y1: float) -> float | None:
     """Where the owner's own edge actually rules the comb band, or None.
@@ -2544,14 +2591,7 @@ def edge_rail(edge_ink: Sequence[dict[str, Any]], edge: InkSpan,
     the same question. 2550M draws its date-box columns as two 0.72pt bars and
     covers the second one's shaft; the boundary is still the pair.
     """
-    hits = [
-        ink for ink in edge_ink
-        if float(ink["y0"]) <= band_y0 + JOIN_EPSILON_PT
-        and float(ink["y1"]) >= band_y1 - JOIN_EPSILON_PT
-        and not distinct_boundary(
-            (float(ink["x0"]), float(ink["x1"]),
-             float(ink["thickness_pt"])), edge)
-    ]
+    hits = edge_rail_bars(edge_ink, edge, band_y0, band_y1)
     if not hits:
         return None
     return q(sum(centre(ink) for ink in hits) / len(hits))
@@ -2579,6 +2619,26 @@ def divides_owner_paper(x: float, candidates: Sequence[dict[str, Any]],
             final_paint))
 
 
+class CombRails(NamedTuple):
+    """One comb's measured outer rails: where each is, and where its ink is.
+
+    `left_x`/`right_x` are the rails' POSITIONS -- their centres -- and they are
+    what `slot_x` publishes, because a boundary has always been positioned here
+    at the centre of the bars drawing it.  `left_ink`/`right_ink` are the x
+    extent those same bars actually paint, and they are what the compartments
+    may be WRITTEN on: a rail's position runs down the middle of its own stroke,
+    so a compartment laid from it is laid across half the printed rule.  `None`
+    on either side means no bar of that rail was measurable over this band, and
+    a caller may not invent one.
+    """
+
+    left_x: float
+    right_x: float
+    enclosed: list[dict[str, Any]]
+    left_ink: Interval | None
+    right_ink: Interval | None
+
+
 def comb_rails(boundaries: Sequence[dict[str, Any]],
                extra: Sequence[dict[str, Any]],
                x0: float, x1: float,
@@ -2586,7 +2646,7 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
                edge_thickness: tuple[float, float],
                paper: CombOwnerPaper | None,
                final_paint: FinalPaint | None,
-               ) -> tuple[float, float, list[dict[str, Any]]]:
+               ) -> CombRails:
     """One comb's own outer rails, and the boundaries they still enclose.
 
     A comb's outer edges are printed rails, not the lattice cell box, and the
@@ -2614,12 +2674,21 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
     Nothing is trimmed without a wall to trim at, and a comb drawn entirely
     from walls -- a row of full-height boxes -- keeps every one of them: there
     is no tick run to sit outside of, so the cell's own edges stay the rails.
+
+    Each rail's own INK is reported beside its position, measured from exactly
+    the bars that established that position and from nothing else. Where no bar
+    established it -- an unowned band, or an edge no bar rules across -- the ink
+    is `None` and stays `None`: the fused lattice edge times its nominal
+    thickness is not a measurement of this rail, and inventing one there is how
+    a comb would be inset off a stroke the sheet does not draw at that band.
     """
     left, right = edge_thickness
     left_edge = (x0 - left / 2.0, x0 + left / 2.0, left)
     right_edge = (x1 - right / 2.0, x1 + right / 2.0, right)
     left_rail = x0
     right_rail = x1
+    left_ink: Interval | None = None
+    right_ink: Interval | None = None
     if paper is not None:
         # The rail has to rule the band's PAPER, not the rule the band ends
         # inside. 2550M's raw date-box ticks run 0.72pt down into the row's
@@ -2629,8 +2698,17 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
         # correctly refuses to bridge them).
         rail_y0 = max(band_y0, paper.y0)
         rail_y1 = min(band_y1, paper.y1)
+        left_bars = edge_rail_bars(paper.left, left_edge, rail_y0, rail_y1)
+        right_bars = edge_rail_bars(paper.right, right_edge, rail_y0, rail_y1)
         measured_left = edge_rail(paper.left, left_edge, rail_y0, rail_y1)
         measured_right = edge_rail(paper.right, right_edge, rail_y0, rail_y1)
+        # The rail's ink is the drawn stack's, whether or not its centre won the
+        # comparison below. Where the centre falls outside the rectangle the
+        # rectangle keeps the POSITION -- half the bar is the neighbour's -- but
+        # the bar is still the stroke this comb's outer compartment is drawn
+        # against, and the paper it may be written on still starts after it.
+        left_ink = ink_envelope(left_bars)
+        right_ink = ink_envelope(right_bars)
         # A measured rail moves the comb's edge INWARD off the fused mean, and
         # only inward. The rectangle is the paper this comb is emitted on and
         # nothing may be typed off it, so where the drawn bar's own centre
@@ -2655,13 +2733,19 @@ def comb_rails(boundaries: Sequence[dict[str, Any]],
             walls_right = [q(centre(ink))
                            for ink, wall in zip(boundaries, kinds)
                            if wall and q(centre(ink)) > ticks[-1]]
+            # A rail trimmed to an interior wall is a DIFFERENT stroke from the
+            # owner's edge, so its ink is that wall's and never the edge's.
             if walls_left:
                 left_rail = max(walls_left)
+                left_ink = ink_envelope(boundary_stack(boundaries, left_rail))
             if walls_right:
                 right_rail = min(walls_right)
+                right_ink = ink_envelope(
+                    boundary_stack(boundaries, right_rail))
     enclosed = [ink for ink in boundaries
                 if left_rail < q(centre(ink)) < right_rail]
-    return q(left_rail), q(right_rail), enclosed
+    return CombRails(q(left_rail), q(right_rail), enclosed, left_ink,
+                     right_ink)
 
 
 def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]],
@@ -2714,9 +2798,10 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
         (band, band_y0, band_y1, topology_evidence,
          horizontal_rail_only) = selected
         band = sorted(band, key=lambda ink: q(centre(ink)))
-        left_rail, right_rail, band = comb_rails(
+        rails = comb_rails(
             band, extra, x0, x1, band_y0, band_y1, edge_thickness,
             paper, final_paint)
+        left_rail, right_rail, band = rails.left_x, rails.right_x, rails.enclosed
         if not band:
             # Every measured boundary belongs to a neighbouring compartment of
             # the same rectangle. There is no comb here to publish.
@@ -2782,6 +2867,14 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             # Measured boundaries. Never synthesise slot x from index * pitch:
             # the real lattice carries 14.04-14.28 where 14.16 is nominal.
             "slot_x": boundaries,
+            # Where each outer rail's own ink is painted, or None where no bar
+            # of it could be measured over this band. `comb_on_writing_surface`
+            # turns these into the horizontal writing surface; nothing else may
+            # invent one from `slot_x`, which runs down the rails' centres.
+            "left_rail_ink": (
+                list(rails.left_ink) if rails.left_ink is not None else None),
+            "right_rail_ink": (
+                list(rails.right_ink) if rails.right_ink is not None else None),
             "divider_x": xs,
             "divider_thickness_pt": min(thicknesses.most_common(),
                                         key=lambda kv: (-kv[1], kv[0]))[0],
@@ -2907,9 +3000,11 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
         ordered = sorted(ink, key=lambda divider: (
             q(centre(divider)), -paint_ordinal(divider),
             -float(divider["thickness_pt"])))
-        left_rail, right_rail, ordered = comb_rails(
+        rails = comb_rails(
             ordered, extra, x0, x1, band_y0, band_y1, edge_thickness,
             paper, None)
+        left_rail, right_rail, ordered = (
+            rails.left_x, rails.right_x, rails.enclosed)
         if not ordered:
             continue
         xs = [q(centre(divider)) for divider in ordered]
@@ -2925,6 +3020,10 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
             "pitch_min_pt": min(deltas),
             "pitch_max_pt": max(deltas),
             "slot_x": boundaries,
+            "left_rail_ink": (
+                list(rails.left_ink) if rails.left_ink is not None else None),
+            "right_rail_ink": (
+                list(rails.right_ink) if rails.right_ink is not None else None),
             "divider_x": xs,
             "divider_thickness_pt": min(
                 thicknesses.most_common(),
@@ -4360,6 +4459,62 @@ def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
     return surface_y0, surface_y1
 
 
+# What the horizontal writing surface was derived from, per side, published so
+# that a comb which could not be inset is COUNTED rather than indistinguishable
+# from one that needed no inset.
+RAIL_INK_WRITING_EDGE = "rail-ink"
+RAIL_INK_UNMEASURED = "no-measured-rail-ink"
+RAIL_INK_SURRENDERED = "surrendered-degenerate-writing-width"
+
+
+def comb_writing_edges(comb: dict[str, Any],
+                       ) -> tuple[float, float, str, str]:
+    """The horizontal paper a comb's compartments are written on.
+
+    The exact twin of `comb_writing_surface`, on the other axis and from a
+    different measurement, because the two axes are bounded by different
+    things: the top and bottom of a comb are the OWNING CELL's borders, while
+    its left and right are the comb's own printed RAILS, which `comb_rails`
+    has already measured and which need not be the cell's edges at all.
+
+    `slot_x` runs rail CENTRE to rail CENTRE, exactly as every boundary in this
+    module is positioned. That is the right answer to "where is this rail" and
+    the wrong answer to "where may a character be written", and the sheet says
+    so at the same place the vertical twin does: 2551M paints the wall left of
+    item 28C over x 238.92-239.64 and prints the caption's own `C` up to
+    239.5176, so a compartment starting at the rail's centre of 239.28 starts
+    0.36pt INSIDE the printed rule, on top of the label, with no blank paper
+    anywhere between the two. The writing surface begins at 239.64.
+
+    Returns the two edges and, per side, what derived it. Nothing is guessed:
+    where `comb_rails` measured no ink for a rail that side keeps `slot_x`'s
+    own value -- today's behaviour, reported as `no-measured-rail-ink` -- and
+    where insetting would leave no compartment to write in, BOTH insets are
+    surrendered whole, the same concession `comb_writing_surface` makes when a
+    cell is no taller than its own two borders.
+    """
+    slot_x = [float(value) for value in comb["slot_x"]]
+    left_ink = comb.get("left_rail_ink")
+    right_ink = comb.get("right_rail_ink")
+    writing_x0, left_source = slot_x[0], RAIL_INK_UNMEASURED
+    writing_x1, right_source = slot_x[-1], RAIL_INK_UNMEASURED
+    if left_ink is not None:
+        # The rail's INNER edge, and never further in than the rail's own
+        # position: where the drawn bar lies entirely outside the rectangle the
+        # comb is emitted on, the rectangle still bounds what may be typed.
+        writing_x0 = q(max(slot_x[0], float(left_ink[1])))
+        left_source = RAIL_INK_WRITING_EDGE
+    if right_ink is not None:
+        writing_x1 = q(min(slot_x[-1], float(right_ink[0])))
+        right_source = RAIL_INK_WRITING_EDGE
+    if (writing_x1 - writing_x0 <= 0.0
+            or writing_x0 >= slot_x[1]
+            or writing_x1 <= slot_x[-2]):
+        return (slot_x[0], slot_x[-1],
+                RAIL_INK_SURRENDERED, RAIL_INK_SURRENDERED)
+    return writing_x0, writing_x1, left_source, right_source
+
+
 def comb_on_writing_surface(comb: dict[str, Any],
                             surface: tuple[float, float]) -> dict[str, Any]:
     """Attach the writing surface to a comb contract, beside the measured band.
@@ -4383,12 +4538,26 @@ def comb_on_writing_surface(comb: dict[str, Any],
     `writing_height_pt`, computed by `comb_writing_surface` from the cell's
     own walls with `emit.field_box`'s inset.  Two questions, two sets of keys;
     neither reading overwrites the other.
+
+    The same distinction, and the same two sets of keys, on the horizontal:
+    `slot_x` stays the measured boundary POSITIONS, every one of them, and
+    `writing_x0`/`writing_x1` are where the outer compartments may be written
+    -- `slot_x`'s outer values inset off the rails' own ink by
+    `comb_writing_edges`. The INTERNAL boundaries are untouched by this, on
+    both axes and for the same reason: a divider is one stroke between two
+    compartments and both of them are drawn against its centre.
     """
     surface_y0, surface_y1 = surface
     resolved = dict(comb)
     resolved["writing_y0"] = surface_y0
     resolved["writing_y1"] = surface_y1
     resolved["writing_height_pt"] = q(surface_y1 - surface_y0)
+    writing_x0, writing_x1, left_source, right_source = comb_writing_edges(
+        resolved)
+    resolved["writing_x0"] = writing_x0
+    resolved["writing_x1"] = writing_x1
+    resolved["writing_width_pt"] = q(writing_x1 - writing_x0)
+    resolved["writing_x_rails"] = {"left": left_source, "right": right_source}
     return resolved
 
 
@@ -8197,6 +8366,138 @@ def self_test(ir_path: pathlib.Path) -> int:
         not divides_owner_paper(
             15.0, [wall_lower], 0.1, 9.9, FinalPaint([wall_lower])),
         "a tick hanging inside the paper was read as a wall",
+    )
+    #
+    # (3) HOW WIDE the rail is painted, which is a different question from
+    # where it is and is answered from exactly the same bars. The rail's ink is
+    # the drawn stack's envelope -- the bar that does not cross the band is not
+    # part of this rail and contributes none of its ink -- and the compartments
+    # may be written only on the paper after all of it.
+    check(
+        ink_envelope(edge_rail_bars(
+            [rail_edge_near, rail_edge_far], (30.0, 30.2, 0.2), *rail_band))
+        == (29.9, 30.1)
+        and ink_envelope(edge_rail_bars(
+            [rail_edge_far], (30.0, 30.2, 0.2), *rail_band)) is None,
+        "a comb rail's ink was measured on bars that do not rule its band",
+    )
+    # ...and `comb_rails` has to WIRE that measurement to the same bars its
+    # position came from. The right edge below is the composite from (1): the
+    # bar at 30.0 rules the band and the one at 30.2 does not, so the rail is
+    # at 30.0 and its ink is 29.9..30.1, not the line's whole 29.9..30.3.
+    rail_ink_left_edge = synthetic_vertical(0.0, 0, 10, 0.2, 67)
+    rail_ink_left_far = synthetic_vertical(-0.2, -5, 3, 0.2, 70)
+    rail_ink_tick = synthetic_vertical(15.0, 6, 10, 0.2, 68)
+    rail_ink_paper = CombOwnerPaper(
+        0.0, 10.0, [rail_ink_left_edge, rail_ink_left_far],
+        [rail_edge_near, rail_edge_far])
+    measured_rails = comb_rails(
+        [rail_ink_tick], [rail_ink_left_edge, rail_ink_left_far,
+                          rail_ink_tick, rail_edge_near, rail_edge_far],
+        0.0, 30.0, *rail_band, (0.2, 0.2), rail_ink_paper,
+        FinalPaint([rail_ink_left_edge, rail_ink_left_far, rail_ink_tick,
+                    rail_edge_near, rail_edge_far]))
+    check(
+        (measured_rails.left_x, measured_rails.right_x) == (0.0, 30.0)
+        and measured_rails.left_ink == (-0.1, 0.1)
+        and measured_rails.right_ink == (29.9, 30.1),
+        f"comb_rails reported ink from bars that do not rule the band: "
+        f"{measured_rails.left_ink} {measured_rails.right_ink}",
+    )
+    # A rail trimmed inward to an interior WALL is a different stroke, and its
+    # ink is that wall's. Reporting the owner's edge ink there would inset the
+    # comb off a rule 10pt away from the one bounding it.
+    rail_ink_wall = synthetic_vertical(10.0, 0, 10, 0.4, 69)
+    walled_rails = comb_rails(
+        [rail_ink_wall, rail_ink_tick],
+        [rail_ink_left_edge, rail_ink_left_far, rail_ink_wall, rail_ink_tick,
+         rail_edge_near, rail_edge_far],
+        0.0, 30.0, *rail_band, (0.2, 0.2), rail_ink_paper,
+        FinalPaint([rail_ink_left_edge, rail_ink_left_far, rail_ink_wall,
+                    rail_ink_tick, rail_edge_near, rail_edge_far]))
+    check(
+        walled_rails.left_x == 10.0
+        and walled_rails.left_ink == (9.8, 10.2)
+        and walled_rails.right_ink == (29.9, 30.1),
+        f"a rail trimmed to a wall kept the owner edge's ink: "
+        f"{walled_rails.left_x} {walled_rails.left_ink}",
+    )
+    # No owning paper is no measurement, on both sides, and never the fused
+    # lattice edge times a nominal thickness.
+    unowned_rails = comb_rails(
+        [rail_ink_tick], [rail_ink_tick], 0.0, 30.0, *rail_band,
+        (0.2, 0.2), None, None)
+    check(
+        unowned_rails.left_ink is None and unowned_rails.right_ink is None,
+        "an unowned band invented rail ink from its nominal edges",
+    )
+    #
+    # (4) The horizontal writing surface itself: `slot_x` runs rail CENTRE to
+    # rail centre, so the outer compartments are inset to those rails' ink.
+    # 2551M is the sheet that forces it -- the wall left of item 28C is painted
+    # 238.92-239.64 and the caption's `C` inks to 239.5176, under the rule --
+    # and the numbers below are that cell's.
+    written_comb = {
+        "slot_x": [239.28, 246.0, 253.0, 260.76],
+        "left_rail_ink": [238.92, 239.64],
+        "right_rail_ink": [260.28, 261.24],
+    }
+    check(
+        comb_writing_edges(written_comb)
+        == (239.64, 260.28, RAIL_INK_WRITING_EDGE, RAIL_INK_WRITING_EDGE),
+        "the outer writing edges were not taken from the rails' own ink",
+    )
+    # Per side, and never invented: a rail whose ink could not be measured
+    # keeps `slot_x`'s own value and SAYS SO, so that a comb which could not be
+    # inset is counted rather than mistaken for one that needed no inset.
+    check(
+        comb_writing_edges({**written_comb, "left_rail_ink": None})
+        == (239.28, 260.28, RAIL_INK_UNMEASURED, RAIL_INK_WRITING_EDGE)
+        and comb_writing_edges({**written_comb, "right_rail_ink": None})
+        == (239.64, 260.76, RAIL_INK_WRITING_EDGE, RAIL_INK_UNMEASURED)
+        and comb_writing_edges({
+            "slot_x": [239.28, 246.0, 253.0, 260.76]})
+        == (239.28, 260.76, RAIL_INK_UNMEASURED, RAIL_INK_UNMEASURED),
+        "an unmeasurable rail did not fail closed to its published position",
+    )
+    # A rail drawn entirely OUTSIDE the rectangle the comb is emitted on moves
+    # nothing: the rectangle still bounds what may be typed, and half that bar
+    # is the neighbour's.
+    check(
+        comb_writing_edges({
+            **written_comb, "left_rail_ink": [238.0, 239.0],
+            "right_rail_ink": [261.0, 262.0]})
+        == (239.28, 260.76, RAIL_INK_WRITING_EDGE, RAIL_INK_WRITING_EDGE),
+        "a rail painted off the comb's own rectangle moved the writing edge",
+    )
+    # The concession, and it is `comb_writing_surface`'s: where insetting would
+    # leave no outer compartment to write in, BOTH insets are surrendered whole
+    # rather than one side quietly eating a compartment.
+    check(
+        comb_writing_edges({
+            **written_comb, "left_rail_ink": [238.92, 247.0]})
+        == (239.28, 260.76, RAIL_INK_SURRENDERED, RAIL_INK_SURRENDERED)
+        and comb_writing_edges({
+            **written_comb, "right_rail_ink": [252.0, 261.24]})
+        == (239.28, 260.76, RAIL_INK_SURRENDERED, RAIL_INK_SURRENDERED),
+        "an inset that swallows its own compartment was published anyway",
+    )
+    # Published beside the vertical band, never over `slot_x`: the compartment
+    # BOUNDARIES stay what the source drew and only the writing surface is
+    # inset. Both are needed and neither may overwrite the other.
+    written_surface = comb_on_writing_surface(
+        {**written_comb, "y0": 8.0, "y1": 10.0}, (1.0, 9.0))
+    check(
+        written_surface["slot_x"] == [239.28, 246.0, 253.0, 260.76]
+        and written_surface["writing_x0"] == 239.64
+        and written_surface["writing_x1"] == 260.28
+        and written_surface["writing_width_pt"] == q(260.28 - 239.64)
+        and written_surface["writing_x_rails"] == {
+            "left": RAIL_INK_WRITING_EDGE, "right": RAIL_INK_WRITING_EDGE}
+        and written_surface["writing_y0"] == 1.0
+        and written_surface["writing_y1"] == 9.0
+        and (written_surface["y0"], written_surface["y1"]) == (8.0, 10.0),
+        "the writing surface overwrote the boundaries the source drew",
     )
 
     off_baseline_middle = synthetic_vertical(15, 5, 9, 0.2, 24)

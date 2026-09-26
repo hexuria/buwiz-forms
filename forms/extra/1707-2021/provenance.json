@@ -66,7 +66,7 @@
       "1707 April 2021 ENCS Guidelines and Instructions.pdf"
     ]
   },
-  "html_bytes": 644827,
+  "html_bytes": 645294,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
