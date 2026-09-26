@@ -346,8 +346,27 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # new cell is now inserted at its own sorted position instead. Both forms
 # re-pin below with a second byte change; 2551m-2002's cell already landed
 # in its correct sorted position and its own bytes are unchanged.
+#
+# Re-pinned 2026-08-13 (Z2, F229): `comb_rails` gains a SECOND inward trim,
+# `outer_paper_unguided`, for the case the wall trim cannot reach -- where the
+# sheet closes the caption off with nothing at all, the rail used to fall back
+# to the lattice cell's nominal edge and publish the caption as a compartment.
+# The rail now moves to the outermost guide tick when the paper between them
+# holds more than two of the comb's own compartments AND carries none of its
+# guide ink. Four combs move, all of them caption cells the sheet leaves open:
+# 2200A `p1c111`, 2200C `p1c107`, 2200P `p1c110` (29 -> 28 compartments, the
+# 173.66pt "box" over "27 Tax Debit Memo" retires and every remaining
+# compartment gains a live `<input>`) and 1801 `p1c13` (4 -> 3, the 183.05pt
+# box over "5 Taxpayer Identification Number (TIN)"). Nothing else moves:
+# 4,557 comb subjects before and after, 39,475 -> 39,471 compartments, and the
+# two reviewed table-column combs the census also flags (1604CF `p2c73`,
+# 2551M `p2c13`) are refused by the pitch clause because a single boundary
+# measures no pitch. Every comb also now publishes `outer_rail_trim`, naming
+# per side the clause that placed that rail -- including the wall trim, which
+# published nothing before. `EXPECTED_HTML_STRUCTURE_SHA256` moves on the four
+# slugs above, below.
 LATTICE_PRODUCER_SHA256 = (
-    "a335f43015de1eca5cfa375b6b4d17baf5303b8663f45e5caba154624738c0c5"
+    "fe8355dcb05439cbac3ecf8597a6a81c6bb1b65aa2247ea3e5aef38c864b6bea"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -2496,6 +2515,26 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2551q-2018": "253855b666a12da46e0df14e49a485976904ee0649ceadda5aaf151e4405c12c",
     "2552-2018": "589c11d4c819e77f2f21ecd63093e476ec616cca67f40eb75fcdba4f90eade5b",
     "2553-1999": "883d86c1ab9c6ede78300b415c91f1a4d6b0ca8ec95079315597990e557d7d3c",
+    # Re-pinned 2026-08-13 (Z2, F229) for `lattice.outer_paper_unguided` -- see
+    # LATTICE_PRODUCER_SHA256 above. FOUR documents move and no other:
+    # 2200A/2200C/2200P item 27 (29 -> 28 slot rectangles, and the 28 that
+    # remain all gain a live `<input>`, so the caption box that carried none
+    # is gone) and 1801 item 5 (4 -> 3). A direct byte comparison of the two
+    # regenerated trees -- HEAD's producers against these -- confirms the
+    # other 85 documents in `build/html` are byte-identical.
+    #
+    # ONLY TWO of the four are re-pinned here, and the reason is a condition
+    # of this branch rather than of this change: 2200C, 2200P and twelve other
+    # slugs (0605-1999, 1601C, 1602Q, 1603Q, 1604E, 1604F, 1606, 1621, 2200AN,
+    # 2200T, 2316, 2550M, 2551M, 2553) ALREADY fail this pin at HEAD, measured
+    # by regenerating `build/html` from HEAD's own producer bytes and hashing
+    # it -- the referee measured 37 of 53 forms before this change was made.
+    # Re-pinning those to what the producer now emits would bless bytes nobody
+    # reviewed, in the name of a change that did not move fourteen of them at
+    # all; they are left failing, and 2200C/2200P with them, for the operator
+    # to re-derive against a reviewed revision.
+    "1801-2018": "392bd8cca242071af0ef4df9c8b8210228b528e46e4b6ab58487b813a26a1cf9",
+    "2200a-2020": "edf9ab2debf1836b91d41aaf45f866d09e87f7c3fa2230bdcf53f5529a864226",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")

@@ -12,6 +12,120 @@ superseded by the r43 section.
 
 
 
+## Z2 — F229 closes in the producer: an outer rail is measured from the ink where the sheet drew no wall
+
+**Measured 2026-08-13, worktree `wt/z2-slot0`, base `a0692762`.** Two files
+move: `lattice.py` (the fix) and `comb_referee.py` (two pins and their
+reasons). `audit.py`, the locked judge, is untouched.
+
+`comb_rails` gains a SECOND inward trim beside the wall trim,
+`outer_paper_unguided`. The wall trim already handles the caption case where
+the sheet CLOSES the caption off (1801 item 24 rules 366pt of caption and the
+comb starts at that rule); where the sheet closes it off with nothing at all,
+the rail fell back to the lattice cell's nominal edge and published the
+caption as a compartment. The rail now moves to the outermost guide TICK when
+both clauses agree: the paper between them holds **more than two** of the
+comb's own compartments (`width > 2 * pitch`, measured on the guide run's own
+modal gap and needing at least two gaps to have a pitch at all), and none of
+the comb's guide ink reaches into that paper. Every comb also now publishes
+`outer_rail_trim`, naming per side the clause that placed that rail --
+including the wall trim, which published nothing before.
+
+**Four combs move, and nothing else does:** 2200A `p1c111`, 2200C `p1c107`,
+2200P `p1c110` **29 -> 28** compartments (173.66pt of "27 Tax Debit Memo"
+against a 14.52pt pitch) and 1801 `p1c13` **4 -> 3** (183.05pt of "5 Taxpayer
+Identification Number (TIN)" against 14.16pt). Comb subjects **4,557 ->
+4,557**; compartments **39,475 -> 39,471**; `<input>` elements **45,549 ->
+45,549** (the four retired compartments carried no input, and 2200A/C/P's
+first real money box gains one); emitted HTML **byte-identical on 85 of the 89
+documents**, the four movers being the only change.
+
+**The emission defect F229 named is closed.** 2200A/C/P `slot-input-index-
+mismatch` with `input_slot_indexes[0] == []` is gone: `emission_state` is
+`physical-slots`, `invalid-emission` is no longer among their failure kinds,
+and every one of the 28 compartments carries a live `<input>` except the one
+the sheet itself fills with the money decimal bullet (index 25), which the
+source oracle already excused before this change (it was index 26).
+
+**`comb_slots_match_printed` 3 forms / 3 -> 4 forms / 4, and the extra one is
+a disagreement with a human review that must be adjudicated, not absorbed.**
+2200A/C/P stay offenders on `source-topology-unevaluable` alone (unchanged --
+the audit's competing [5, 8, 29] readings are a source question this does not
+touch). 1801-2018 `p1c13` is NEW: `REVIEWED_COMB_TOPOLOGY` pins it at **4**
+compartments (panel 03, reviewer uriah, 2026-08-13) and the producer now
+measures **3**, so it fails `layout-printed-mismatch` /
+`emission-printed-mismatch` exactly as W8's guard intends -- "a reviewed count
+that disagrees with what we emit is still an offender". The registry entry was
+NOT edited. The ink under it is the same ink as 2200A's, to the point that no
+geometric or tonal test separates them, so the choice was between applying the
+rule uniformly and keying it on a form code; it is applied uniformly and the
+disagreement is published. **Whether 1801 item 5 prints 3 writing boxes plus a
+caption or 4 compartments is now an open review question.**
+
+**`inputs_over_printed_text` 0 forms / 0, unmoved**, and measured rather than
+assumed: in a live Chromium the p1c111 row's printed runs are "27" (x
+24.5-38.5px) and " Tax Debit Memo " (38.5-138.4px), the first input starts at
+253.6px, and no input box intersects any printed run in that row.
+
+**The comb referee DISAGREES with two of the four, and it is left
+disagreeing.** `referee_layout_mismatches` **0 -> 2** (1801 `p1c13` referee 4
+vs layout 3; 2200A `p1c111` referee 29 vs layout 28; 2200C/2200P are not
+measurable, see below). The referee models a comb's outer rail as a WALL only
+-- it correctly ignores the nine existing wall trims, including 1801
+`p1c112`'s 366pt inset, whose trimmed-to wall it treats as a rail -- and has
+no concept of a rail at a guide tick, so on this shape it counts the caption
+region as a compartment for the same reason the old `comb_rails` did. It was
+not taught otherwise: an adjudicator is never changed to agree with the
+producer. Every other referee count is unmoved: 3,639 combs found, 3,611
+measured, 28 source-unevaluable, 3,629 active / 3,562 active-resolved / 67
+active-unresolved, **`subjects_retained_unresolved` 10 -> 10**, ledger_blocking
+77, emission_layout_mismatches 10, 0 position mismatches.
+
+**Two conditions of this branch, both PRE-EXISTING and neither fixed here:**
+
+- `batch.py` refuses to package `forms/` on this branch -- `forms/fonts/
+  tinos-latin-{400,700}-normal.woff2` are tracked but no font plan resolves
+  them any more, so `package()` would orphan them. It refuses identically at
+  base. `build/` is written; `forms/` is therefore stale relative to
+  `build/html`, and every measurement above is taken on `build/`.
+- **16 of the 53 `EXPECTED_HTML_STRUCTURE_SHA256` pins were already stale at
+  base**, proven by regenerating `build/html` from base's own producer bytes
+  and hashing it: 0605-1999, 1601C, 1602Q, 1603Q, 1604E, 1604F, 1606, 1621,
+  2200AN, 2200C, 2200P, 2200T, 2316, 2550M, 2551M, 2553. The referee measured
+  **37 of 53 forms before this change and 37 after**. Only the two pins this
+  change invalidated (1801-2018, 2200a-2020) are re-pinned; the sixteen are
+  left failing for an operator to re-derive against a reviewed revision, and
+  2200C/2200P with them even though this change also moves their bytes.
+
+**Self-tests, all pass:** `extract.py`, `lattice.py --ir
+build/ir/2551q-2018.ir.json` (489/264 slots, unchanged), `fonts.py`,
+`guides.py`, `emit.py`, `verify.py`, `index_page.py`, `tab_check.py`,
+`validate_tree.py`, `audit.py --self-test` (0 failures), `comb_referee.py
+--self-test`, `gate.py --self-test` (0 failures),
+`fixtures/prove_fixtures_fail.py` (exit 0).
+
+**Four real-data mutations, each one measured over all 53 forms, each
+changing a count > 0** -- every clause of the new condition is load-bearing on
+the corpus and not merely on a fixture:
+
+| mutation | combs it changes |
+| --- | --- |
+| `width > 2 * pitch` weakened to `> 1 * pitch` | **2,050** |
+| a two-mark pair may measure a pitch (`len(xs) < 3` -> `< 2`) | **3** (2550M `p1c89`/`p1c94`/`p1c95` lose their comb outright: their raw legacy reading is a genuine divider at 260.40 beside a stale mark at 263.52, and that 3.12pt "pitch" condemns the 13.44pt beside it) |
+| a wall counts as a tick (pitch measured over every boundary) | **4** (1707-2021 `p1c217` and 1707A `p1c207`, both 25-compartment combs, lose their comb outright) |
+| the guide-ink clause asks about the page instead of the outer paper | **4** (all four trims are refused) |
+
+`lattice.py --self-test` also scores the whole published layout tree beside
+the IR it is given: every rail must name the clause that placed it, every
+trimmed rail's evidence must land on the coordinate the comb publishes, no
+rail may contradict its own measurement, and the trim must fire somewhere. It
+currently fires on 4 rails of 9,114.
+
+**Pins re-pinned in `comb_referee.py`, with the cause recorded inline at
+each:** `LATTICE_PRODUCER_SHA256` (lattice.py changed), and
+`EXPECTED_HTML_STRUCTURE_SHA256` for `1801-2018` and `2200a-2020` only.
+
+
 ## Z1 — ten reviewed topology facts land; three are withdrawn on measurement
 
 **`comb_slots_match_printed` 9 forms / 13 offenders -> 3 forms / 3**, verified on
