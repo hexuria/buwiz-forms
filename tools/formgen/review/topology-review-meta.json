@@ -1,0 +1,262 @@
+[
+ {
+  "slug": "1604cf-2008",
+  "page": 2,
+  "cell": "p2c73",
+  "bbox": [
+   174.48,
+   220.32,
+   269.76,
+   237.12
+  ],
+  "emitted_slots": 2,
+  "why": "unevaluable final-paint topology: plausible source-derived bands have no strict-majority topology",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/1604cf-2008-p2c73-official.png",
+  "clip": [
+   146.48,
+   192.32,
+   297.76,
+   265.12
+  ]
+ },
+ {
+  "slug": "1604f-2018",
+  "page": 1,
+  "cell": "p1c25",
+  "bbox": [
+   14.64,
+   223.58,
+   591.46,
+   241.82
+  ],
+  "emitted_slots": 36,
+  "why": "unevaluable final-paint topology: claimed comb owner absorbs unframed source corridors outside its complete source U-frame",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/1604f-2018-p1c25-official.png",
+  "clip": [
+   0.0,
+   195.58,
+   612.0,
+   269.82
+  ]
+ },
+ {
+  "slug": "1801-2018",
+  "page": 1,
+  "cell": "p1c13",
+  "bbox": [
+   21.6,
+   136.7,
+   247.97,
+   155.54
+  ],
+  "emitted_slots": 4,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [2, 4]; U-frames [])",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/1801-2018-p1c13-official.png",
+  "clip": [
+   0.0,
+   108.69999999999999,
+   275.97,
+   183.54
+  ]
+ },
+ {
+  "slug": "1801-2018",
+  "page": 1,
+  "cell": "p1c31",
+  "bbox": [
+   21.6,
+   259.58,
+   291.65,
+   277.85
+  ],
+  "emitted_slots": 11,
+  "why": "unevaluable final-paint topology: maximal same-tone source U-frames yield different interiors",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/1801-2018-p1c31-official.png",
+  "clip": [
+   0.0,
+   231.57999999999998,
+   319.65,
+   305.85
+  ]
+ },
+ {
+  "slug": "2000-dst-2018",
+  "page": 1,
+  "cell": "p1c109",
+  "bbox": [
+   389.05,
+   804.58,
+   585.79,
+   823.32
+  ],
+  "emitted_slots": 14,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [3, 14]; U-frames [])",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2000-dst-2018-p1c109-official.png",
+  "clip": [
+   361.05,
+   776.58,
+   612.0,
+   851.32
+  ]
+ },
+ {
+  "slug": "2200a-2020",
+  "page": 1,
+  "cell": "p1c62",
+  "bbox": [
+   392.74,
+   432.89,
+   595.32,
+   448.02
+  ],
+  "emitted_slots": 14,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [3, 14]; U-frames [])",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2200a-2020-p1c62-official.png",
+  "clip": [
+   364.74,
+   404.89,
+   612.0,
+   476.02
+  ]
+ },
+ {
+  "slug": "2200a-2020",
+  "page": 1,
+  "cell": "p1c86",
+  "bbox": [
+   392.74,
+   614.71,
+   595.32,
+   629.97
+  ],
+  "emitted_slots": 14,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [3, 14]; U-frames [])",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2200a-2020-p1c86-official.png",
+  "clip": [
+   364.74,
+   586.71,
+   612.0,
+   657.97
+  ]
+ },
+ {
+  "slug": "2200a-2020",
+  "page": 1,
+  "cell": "p1c111",
+  "bbox": [
+   16.32,
+   807.7,
+   595.32,
+   821.64
+  ],
+  "emitted_slots": 29,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [5, 8, 29]; U-frames []); one or more comb inputs do not identify their owning slot: [{'slot': 0, 'input_slot_index': None, 'reason': 'editable comb slot has no live input element and the source prints no glyph or shading in that compartment'}]",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2200a-2020-p1c111-official.png",
+  "clip": [
+   0.0,
+   779.7,
+   612.0,
+   849.64
+  ]
+ },
+ {
+  "slug": "2200c-2018",
+  "page": 1,
+  "cell": "p1c107",
+  "bbox": [
+   16.32,
+   805.54,
+   595.32,
+   821.88
+  ],
+  "emitted_slots": 29,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [5, 8, 29]; U-frames []); one or more comb inputs do not identify their owning slot: [{'slot': 0, 'input_slot_index': None, 'reason': 'editable comb slot has no live input element and the source prints no glyph or shading in that compartment'}]",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2200c-2018-p1c107-official.png",
+  "clip": [
+   0.0,
+   777.54,
+   612.0,
+   849.88
+  ]
+ },
+ {
+  "slug": "2200p-2020",
+  "page": 1,
+  "cell": "p1c110",
+  "bbox": [
+   16.32,
+   807.94,
+   595.32,
+   821.88
+  ],
+  "emitted_slots": 29,
+  "why": "unevaluable final-paint topology: reviewed comb owner has competing source-derived band/tone topologies (compartment counts [5, 8, 29]; U-frames []); one or more comb inputs do not identify their owning slot: [{'slot': 0, 'input_slot_index': None, 'reason': 'editable comb slot has no live input element and the source prints no glyph or shading in that compartment'}]",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2200p-2020-p1c110-official.png",
+  "clip": [
+   0.0,
+   779.94,
+   612.0,
+   849.88
+  ]
+ },
+ {
+  "slug": "2551m-2002",
+  "page": 1,
+  "cell": "p1c82",
+  "bbox": [
+   286.08,
+   785.07,
+   326.16,
+   804.45
+  ],
+  "emitted_slots": 4,
+  "why": "unevaluable final-paint topology: claimed comb owner crops a wider source U-frame",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2551m-2002-p1c82-official.png",
+  "clip": [
+   258.08,
+   757.07,
+   354.16,
+   832.45
+  ]
+ },
+ {
+  "slug": "2551m-2002",
+  "page": 2,
+  "cell": "p2c13",
+  "bbox": [
+   22.56,
+   92.64,
+   250.08,
+   104.4
+  ],
+  "emitted_slots": 2,
+  "why": "unevaluable final-paint topology: plausible source-derived bands have no strict-majority topology",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2551m-2002-p2c13-official.png",
+  "clip": [
+   0.0,
+   64.64,
+   278.08000000000004,
+   132.4
+  ]
+ },
+ {
+  "slug": "2553-1999",
+  "page": 1,
+  "cell": "p1c87",
+  "bbox": [
+   284.16,
+   797.79,
+   324.24,
+   817.17
+  ],
+  "emitted_slots": 4,
+  "why": "unevaluable final-paint topology: claimed comb owner crops a wider source U-frame",
+  "official": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/topology-review/2553-1999-p1c87-official.png",
+  "clip": [
+   256.16,
+   769.79,
+   352.24,
+   845.17
+  ]
+ }
+]
