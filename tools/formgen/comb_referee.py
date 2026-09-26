@@ -395,8 +395,22 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # `ASSERTION_KEYS` is unchanged at 10 and no tolerance moved -- POSITION_TOL_PT
 # is still 0.25. Unevaluable fell 182 -> 19 and decided-and-failing rose 3 ->
 # 33: the assertion now names producer defects it used to be unable to see.
+# Re-pinned 2026-08-10: `glyph_boxes` now scores an emitted input against the
+# glyph's OWN OUTLINE on all four edges wherever extract.py publishes one
+# (`glyph_ink_em`), instead of against the advance box. It is the horizontal
+# half of the over-reach the comment at audit.py's `GLYPH_BASELINE_OVERSHOOT_EM`
+# recorded as not removable from the IR as it stood -- MuPDF's per-character box
+# is the ADVANCE box, bearings included -- and the answer came from the source
+# rather than from this file: the outline of the face the page drew with,
+# identified by the glyph id `get_texttrace()` reports. 279,101 of the corpus's
+# 356,092 inked glyphs are measured that way; the other 76,991 fall back to the
+# advance box, which is what they always had, each counted by reason.
+# `ASSERTION_KEYS` is unchanged at 10, no assertion's published count fields
+# move, no tolerance moves, and `comb_slots_match_printed` -- the only
+# derivation this referee adjudicates -- is untouched, as are every layout,
+# HTML and guide document in the corpus.
 AUDIT_PRODUCER_SHA256 = (
-    "2ea5b8a163e14eeb42e1e63147c4d5889fc8846ca9c6fd538f6ee64b150834f2"
+    "c39fbc23e5849c9202680e8a91b4a6c1fb2c76d4bc1040a6e699131990662492"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -446,8 +460,35 @@ AUDIT_DEPENDENCY_SHA256 = {
     # self-test check (`baseline-split`), with its own written-here probe page
     # and a mutation that re-reads that page with the split disabled, takes
     # extract.py from 17 checks to 18 and 17+24 probes to 18+24.
+    # Re-pinned 2026-08-10: every text run now publishes `glyph_ink_em`, the
+    # em-relative outline box of each character it sets, measured through the
+    # SAME three functions P3 built for ruled blanks -- `glyph_provenance`,
+    # `substitutable_faces`, `glyph_ink_box` -- and admitted only when the drawn
+    # glyph id, the file's own stated advance and MuPDF's independent bound on
+    # that text op's ink all agree with one candidate face. 279,101 of the
+    # corpus's 356,092 inked glyphs resolve; the other 76,991 are counted by
+    # reason in the new `glyph_ink_*` page stats and keep the advance box.
+    # `glyph_ink_box` additionally drops a face that answers a glyph query with
+    # its own FONT box (an embedded Identity-H program MuPDF loads but will not
+    # bound: 9,217 glyphs on 48 forms), which the ruled-blank path was never
+    # exposed to because a font box is thicker than MAX_RULE_THICKNESS_PT -- the
+    # blank census is unmoved at 118 published of 119.
+    # Every one of the 67 IR files is byte-identical once the new key and the
+    # four new stats are removed, and NO layout, HTML or guide document moves,
+    # so no comb constant, no `EXPECTED_HTML_STRUCTURE_SHA256`, no
+    # `HTML_RUNTIME_SCRIPT_SHA256` and no guide expectation moves with it. Two
+    # new self-test checks (`glyph-ink`, `glyph-ink-fail-closed`) and a fifth
+    # written-here probe page take extract.py from 18 checks to 20; the page
+    # sets one string five times, once from a font program it EMBEDS, so that
+    # the unboundable-embedded-face refusal is proven from source rather than
+    # excused as unreachable, and prove_fixtures_fail goes from 13 source-level
+    # mutations to 15 with one check added to CONTRACT_ONLY (5 -> 6) for the
+    # residue: two faces disagreeing about one glyph, which no PDF can state
+    # because every buffer-loaded face answers `glyph_bbox` with its own
+    # `Font.bbox` and two unembedded resources naming one BaseFont resolve to
+    # the same base-14 face.
     "tools/formgen/extract.py": (
-        "315334021018e6714ca17119affd8302f929f97ae6d707b5adeffca234890946"
+        "31885ffea76d6253cb40a008b9778cf4a7ecf3e21bbd2b54735afb735b86c3e2"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
