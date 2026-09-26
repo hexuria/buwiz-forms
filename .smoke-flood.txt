@@ -1,0 +1,41 @@
+=== filing.start Sep 2026 ===
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "form": "1601C",
+    "page": "page-form-1601c",
+    "period": 9,
+    "year": 2026
+  }
+}
+=== single form.fields timing ===
+real 0.03
+user 0.00
+sys 0.00
+ok True status Submitted id 2 keys ['claimed', 'fields', 'form', 'id', 'status']
+=== flood 40x form.fields + concurrent hello mid-way ===
+--- mid hello concurrent ---
+real 0.02
+user 0.00
+sys 0.00
+ 11.5 227856
+flood ok=40 fail=0 max_ms=62 avg_ms=46
+=== CPU after flood ===
+ 12.9 227856
+ 11.4 227856
+  2.9 227856
+=== jobs.list ===
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "jobs": []
+  }
+}
+=== log errors/toasts ===
+=== still listening ===
+COMMAND   PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+bir     49080 uriah   18u  IPv4 0x46b948307a450c3d      0t0  TCP 127.0.0.1:17421 (LISTEN)

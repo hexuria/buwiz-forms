@@ -1,0 +1,83 @@
+=== idle CPU (3s) ===
+  0.9 223632
+  1.6 223680
+  1.5 223696
+=== hello ===
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "hello": {
+    "protocol": 2,
+    "app": "bir-desktop",
+    "platform": "desktop",
+    "ready": true,
+    "deliveries": [
+      "semantic"
+    ],
+    "auth": "required"
+  }
+}
+=== profile.list ===
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": [
+    {
+      "archived": false,
+      "last4": "0000",
+      "name": "Juan Dela Cruz",
+      "selected": false,
+      "tin": "00000000000000"
+    }
+  ]
+}
+=== profile.set ===
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "candidates": [
+      {
+        "archived": false,
+        "last4": "0000",
+        "name": "Juan Dela Cruz",
+        "selected": false,
+        "tin": "00000000000000"
+      }
+    ],
+    "selected": {
+      "name": "Juan Dela Cruz",
+      "selected": "0000",
+      "tin": "00000000000000",
+      "view": "dashboard"
+    },
+    "status": "ok"
+  }
+}
+=== submissions.list ===
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "submissions": [
+      {
+        "form_code": "1601C",
+        "id": 1,
+        "period": "2026-12",
+        "status": "Submitted",
+        "tin": "00000000000000"
+      },
+      {
+        "form_code": "1601C",
+        "id": 2,
+        "period": "2026-09",
+        "status": "Submitted",
+        "tin": "00000000000000"
+      }
+    ]
+  }
+}

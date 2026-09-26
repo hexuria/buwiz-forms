@@ -1,0 +1,12 @@
+=== ps 47612 ===
+GONE
+=== lsof 17421 ===
+PORTFREE
+=== bir procs ===
+=== log size ===
+    1049 /tmp/bir-gui-launch.log
+=== log ===
+2026-09-12T02:08:21.121637Z  INFO bir_desktop::gui: crates/bir-desktop/src/gui.rs:180: 🔍 Tracing initialized (developer_mode: true)
+2026-09-12T02:08:21.277191Z  INFO bir_desktop::platform::macos: crates/bir-desktop/src/platform/macos.rs:194: Native macOS application menu installed top_level_menu_count=6
+2026-09-12T02:08:21.319975Z  INFO bir_desktop::agent::bridge: crates/bir-desktop/src/agent/bridge.rs:55: auth: required (GPUI_AGENT_TOKEN set; CLI/MCP send protocol v2 HMAC, never the raw token); platform=desktop app=bir-desktop; loopback default via from_env; protocol v2 HMAC; GPUI_AGENT_TOKEN required to bind unless GPUI_AGENT_INSECURE_NO_TOKEN=1; delivery=semantic (virtual returns virtual_unavailable; no OS HID); screenshot=macOS mailbox drain screencapture -l (relative .png under screenshot dir), else screenshot_unavailable addr=127.0.0.1:17421
+2026-09-12T02:08:21.372148Z  INFO bir_desktop::events: crates/bir-desktop/src/events.rs:118: macOS: Registered distributed notification observer for 'dev.goldcoders.bir.DatabaseChanged'
