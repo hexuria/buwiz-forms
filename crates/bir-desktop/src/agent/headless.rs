@@ -766,12 +766,16 @@ mod tests {
                 let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
                 let server = thread::spawn(|| serve(true));
                 thread::sleep(Duration::from_millis(300));
-                let mut blocked =
-                    AgentClient::connect(addr).with_timeout(Duration::from_millis(200));
-                blocked = blocked.with_token(token.to_string());
-                assert!(
-                    blocked.wait_ready().is_err(),
-                    "headless must not dual-write while bind+lock are held"
+                // Do not TCP-connect to `holder`. The placeholder never
+                // accept()s, so the handshake sits in the listen backlog.
+                // On Windows, dropping that listener still lets the real
+                // server bind and log "listening", but new clients then
+                // fail the handshake for the rest of the wait.
+                let blocked = serve_blocker(addr).expect("probe bind");
+                assert_eq!(
+                    blocked,
+                    Some(ServeBlocker::BindInUse),
+                    "headless must not bind while the placeholder holds the port"
                 );
                 drop(lock);
                 drop(holder);
