@@ -807,6 +807,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bir"
+version = "0.1.0"
+dependencies = [
+ "bir-desktop",
+]
+
+[[package]]
 name = "bir-core"
 version = "0.1.0"
 dependencies = [

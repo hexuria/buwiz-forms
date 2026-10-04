@@ -12,6 +12,12 @@ and demo tax money rows onto cell-id inputs via `html-frozen/*/writer-cells.json
 2551Q also fills Year Ended (MM/YYYY) and quarter xboxes. Writer-cell letter
 combs ASCII-uppercase for BIR CAPITAL LETTERS print; profile/DB values stay as stored.
 
+## Headless CLI (`bir`)
+
+The headless agent installs as crate `bir` (`cargo install bir` or `cargo binstall bir`).
+That binary is not the desktop app. Desktop dmg/deb/exe releases stay on tags
+`vMAJOR.MINOR.PATCH`. The CLI publishes from tags `bir-vMAJOR.MINOR.PATCH`.
+
 ---
 
 ## Current Development Status

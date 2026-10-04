@@ -8,6 +8,8 @@ verbs live in this host as `invoke` names. Start at the
 [Authorization](#authorization) if you are driving painted `bir` or
 `bir-headless` from CLI / MCP / Grok Bot.
 
+The published CLI is crate `bir` (`cargo install bir`). `bir-headless` is the in-repo cargo target for the same daemon.
+
 Launch is env only. There is no `scripts/bir-agent` wrapper. Set
 `GPUI_AGENT=1`, `GPUI_AGENT_TOKEN`, and `GPUI_AGENT_ADDR` on the host, then
 point `gpui-agent` at the same token and address. Default bind is

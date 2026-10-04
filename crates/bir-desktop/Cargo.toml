@@ -3,14 +3,16 @@ name = "bir-desktop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-default-run = "bir"
+description = "eBIRForms desktop application library. The shipped app executable is still named bir; the cargo target is bir-desktop so it does not collide with the bir CLI."
+repository = "https://github.com/hexuria/buwiz-forms"
+default-run = "bir-desktop"
 
 [lib]
 name = "bir_desktop"
 path = "src/lib.rs"
 
 [[bin]]
-name = "bir"
+name = "bir-desktop"
 path = "src/main.rs"
 
 [[bin]]
@@ -39,8 +41,8 @@ mas_build = []
 
 [dependencies]
 dotenvy = { workspace = true }
-bir-core = { path = "../bir-core" }
-bir-print = { path = "../bir-print" }
+bir-core = { path = "../bir-core", version = "0.1.0" }
+bir-print = { path = "../bir-print", version = "0.1.0" }
 gpui-kit = { workspace = true }
 gpui = { workspace = true }
 gpui-component = { workspace = true }
@@ -68,7 +70,7 @@ tray-icon = "0.24.0"
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4", optional = true }
+gpui-agent = { version = "0.1.0", optional = true }
 # Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown / logs).
 clap = { version = "4", features = ["derive"], optional = true }
 

@@ -1,8 +1,9 @@
-# bir-headless (not the desktop app): just publish-headless
-#   just publish-headless            bump patch of BIR_HEADLESS_VERSION, push main, tag bir-headless-v<version>
-#   just publish-headless 0.2.0      tag that exact version
+# Headless CLI crate `bir`: just publish-bir
+#   just publish-bir                 bump patch of crates/bir, push main, tag bir-v<version>
+#   just publish-bir 0.1.0           tag that exact version (first release)
+# CI on bir-v* cargo-publishes `bir` and uploads cargo-binstall archives.
 # Desktop releases stay `just publish` / `just publish 0.2.0` (tag v*).
-# Neither recipe cargo-publishes. bir-headless CI only builds the binary.
+# This recipe does not cargo-publish and does not read a registry token.
 set dotenv-load := true
 
 set windows-shell := ["pwsh", "-NoProfile", "-c"]
@@ -51,7 +52,7 @@ help:
 
 # Run the app locally. Frozen HTML print previews are compiled into bir-print.
 run:
-    cargo run --locked --bin bir --features dev-tools
+    cargo run --locked --bin bir-desktop --features dev-tools
 
 # Run code formatting, linting, and type checking
 [unix]
@@ -359,6 +360,8 @@ exe *args="": build-frozen-html-identity
         Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting EXE packaging."
         exit $LASTEXITCODE
     }
+    python scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     $VERSION = "{{VERSION}}"
     
@@ -423,6 +426,8 @@ msix *args="": build-frozen-html-identity
         Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting MSIX packaging."
         exit $LASTEXITCODE
     }
+    python scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     $VERSION = "{{VERSION}}"
     $MSIX_DIR = "target/release-artifacts/msix-staging"
@@ -565,9 +570,9 @@ publish version="":
     git push origin "v$NEW_VER"
     Write-Host "🚀 Release v$NEW_VER triggered"
 
-# Bump the patch, or tag an exact version, as bir-headless-v* (not the desktop release).
+# Bump the patch, or tag an exact version, as bir-v* (not the desktop release).
 [unix]
-publish-headless version="":
+publish-bir version="":
     #!/usr/bin/env bash
     set -euo pipefail
     ver="{{version}}"
@@ -576,13 +581,13 @@ publish-headless version="":
         exit 1
     fi
     if [ -n "${ver}" ]; then
-        python3 scripts/publish_bir_headless.py "${ver}"
+        python3 scripts/publish_bir.py "${ver}"
     else
-        python3 scripts/publish_bir_headless.py
+        python3 scripts/publish_bir.py
     fi
 
 [windows]
-publish-headless version="":
+publish-bir version="":
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     $ver = '{{version}}'
@@ -590,9 +595,9 @@ publish-headless version="":
         Write-Error "version must be MAJOR.MINOR.PATCH, got $ver"
     }
     if ($ver) {
-        python scripts/publish_bir_headless.py $ver
+        python scripts/publish_bir.py $ver
     } else {
-        python scripts/publish_bir_headless.py
+        python scripts/publish_bir.py
     }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -628,6 +633,8 @@ _package-mac args="": build-frozen-html-identity
     cargo build --locked --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
     echo "Building for x86_64..."
     cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
+    python3 scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
+    python3 scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -686,6 +693,8 @@ _package-mac-appstore args="": build-frozen-html-identity
     echo "Building for x86_64..."
     cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
     
+    python3 scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
+    python3 scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -764,6 +773,7 @@ _package-linux args="": build-frozen-html-identity
     FEATURES_FLAG=""
     if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
     cargo build --locked --release --target {{LINUX_TARGET}} $FEATURES_FLAG
+    python3 scripts/alias_desktop_bin.py target/{{LINUX_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then
         DEB="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"

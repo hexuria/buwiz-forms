@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/bir",
     "crates/bir-core",
     "crates/bir-desktop",
     "crates/bir-print",
@@ -93,3 +94,8 @@ panic = "abort"
 strip = true
 opt-level = "z"
 
+
+# Local/CI builds use the reviewed gpui-agent git rev. The patch table is not
+# published. crates.io `bir` depends on gpui-agent 0.1.0 once that crate is published.
+[patch.crates-io]
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4" }
