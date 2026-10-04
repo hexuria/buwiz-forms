@@ -352,20 +352,36 @@ impl Drop for ServePidGuard {
     }
 }
 
+/// True when a loopback client finishes the TCP handshake.
+///
+/// On Windows, `bind` + `listen` can succeed on a port whose previous
+/// listener was closed, while every new handshake still fails. Logging
+/// "listening" is not readiness. `serve --wait` drops that socket and
+/// binds again instead of publishing a pid for a deaf port.
+fn listener_accepts(addr: SocketAddr) -> bool {
+    std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok()
+}
+
+fn abandon_deaf_listener(addr: SocketAddr, shutdown: &std::sync::atomic::AtomicBool) {
+    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if PortProbe::bind(addr).is_ok() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn serve(wait: bool) -> Result<(), ExitCode> {
     let config = load_serve_config()?;
     let token_set = config.token.is_some();
 
     loop {
-        if let Err(error) = wait_until_unblocked(config.addr, wait) {
-            eprintln!("{error}");
-            return Err(ExitCode::from(if error.contains("already open") {
-                1
-            } else {
-                2
-            }));
-        }
-
+        // The real `listen` is the bind check. A throwaway successful bind
+        // (what `serve_blocker` does) is closed before that listen. On
+        // Windows, closing the previous socket — listening or not — can
+        // leave the next listener unable to accept.
         let (opened, path) = match open_serve_database() {
             Ok(opened) => opened,
             Err(error) if wait && error.contains("already open") => {
@@ -380,16 +396,6 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         };
 
         let db = Arc::new(Mutex::new(opened));
-        let cron_db = db.clone();
-        thread::spawn(move || {
-            if let Ok(rt) = tokio::runtime::Runtime::new() {
-                rt.block_on(async move {
-                    bir_core::background_cron::start_cron_jobs(cron_db).await;
-                });
-            } else {
-                eprintln!("Failed to initialize Tokio runtime for headless background tasks");
-            }
-        });
         let host = Arc::new(Mutex::new(host_for_database(db.clone())));
         let mailbox = AgentMailbox::new();
         let (addr, shutdown) = match spawn_mailbox(
@@ -411,6 +417,32 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                 return Err(ExitCode::from(2));
             }
         };
+
+        if !listener_accepts(addr) {
+            drop(host);
+            drop(db);
+            abandon_deaf_listener(addr, &shutdown);
+            if wait {
+                eprintln!("waiting for bind {addr} …");
+                thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+            eprintln!(
+                "gpui-agent bind {addr} accepted no connections. Quit painted `bir`                  or the previous headless process and retry.                  `bir-headless serve --wait` polls until a handshake succeeds."
+            );
+            return Err(ExitCode::from(2));
+        }
+
+        let cron_db = db.clone();
+        thread::spawn(move || {
+            if let Ok(rt) = tokio::runtime::Runtime::new() {
+                rt.block_on(async move {
+                    bir_core::background_cron::start_cron_jobs(cron_db).await;
+                });
+            } else {
+                eprintln!("Failed to initialize Tokio runtime for headless background tasks");
+            }
+        });
 
         if let Err(error) = headless_daemon::write_current_pid() {
             eprintln!("pid file: {error}");
@@ -865,6 +897,9 @@ mod tests {
                     "serve --wait exited while the placeholder still held the port"
                 );
                 drop(lock);
+                // Abort the placeholder listen socket. A graceful close on
+                // Windows can leave the next listener bound but deaf.
+                let _ = socket2::SockRef::from(&holder).set_linger(Some(Duration::from_secs(0)));
                 drop(holder);
                 let started = Instant::now();
                 while started.elapsed() < Duration::from_secs(8) && !pid_path.is_file() {
@@ -878,32 +913,36 @@ mod tests {
                     pid_path.is_file(),
                     "serve --wait never acquired bind+DB after release"
                 );
-                // Pid is written only after spawn_mailbox's listen succeeds.
+                // Pid is written only after a loopback TCP handshake succeeds.
                 let mut ready = false;
-                let hello_deadline = Instant::now() + Duration::from_secs(5);
+                let mut last_handshake_error = String::from("no attempt");
+                let hello_deadline = Instant::now() + Duration::from_secs(8);
                 while Instant::now() < hello_deadline {
                     let mut client =
-                        AgentClient::connect(addr).with_timeout(Duration::from_secs(1));
+                        AgentClient::connect(addr).with_timeout(Duration::from_secs(2));
                     client = client.with_token(token.to_string());
-                    if client.wait_ready().is_ok() {
-                        let hello = client.expect_ok(Op::Hello).expect("hello");
-                        assert_eq!(
-                            hello.hello.as_ref().map(|info| info.platform),
-                            Some(PlatformKind::Headless),
-                            "{hello:?}"
-                        );
-                        client
-                            .invoke("profile.list", json!({}))
-                            .expect("profile.list after wait");
-                        client.expect_ok(Op::Shutdown).expect("shutdown");
-                        ready = true;
-                        break;
+                    match client.wait_ready() {
+                        Ok(_) => {
+                            let hello = client.expect_ok(Op::Hello).expect("hello");
+                            assert_eq!(
+                                hello.hello.as_ref().map(|info| info.platform),
+                                Some(PlatformKind::Headless),
+                                "{hello:?}"
+                            );
+                            client
+                                .invoke("profile.list", json!({}))
+                                .expect("profile.list after wait");
+                            client.expect_ok(Op::Shutdown).expect("shutdown");
+                            ready = true;
+                            break;
+                        }
+                        Err(error) => last_handshake_error = error,
                     }
                     thread::sleep(Duration::from_millis(100));
                 }
                 assert!(
                     ready,
-                    "serve --wait bound, but the agent handshake never succeeded"
+                    "serve --wait bound, but the agent handshake never succeeded: {last_handshake_error}"
                 );
                 let joined = server.join().expect("serve thread");
                 assert!(joined.is_ok(), "{joined:?}");
