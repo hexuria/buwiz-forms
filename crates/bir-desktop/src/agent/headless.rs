@@ -149,9 +149,46 @@ pub enum ServeBlocker {
     DatabaseInUse,
 }
 
+/// Occupy `addr` without `listen`.
+///
+/// `TcpListener::bind` listens. A client can finish the TCP handshake into
+/// that backlog before anything calls `accept`. On Windows, dropping the
+/// listener without `accept` still lets a later socket bind and log that it
+/// is listening, but new agent handshakes on the port then fail. `serve
+/// --wait` polls this probe while a client may already be connecting, so the
+/// probe must not listen. Connection attempts get refused; the port is still
+/// busy for a real bind.
+struct PortProbe {
+    socket: socket2::Socket,
+}
+
+impl PortProbe {
+    fn bind(addr: SocketAddr) -> std::io::Result<Self> {
+        let domain = match addr {
+            SocketAddr::V4(_) => socket2::Domain::IPV4,
+            SocketAddr::V6(_) => socket2::Domain::IPV6,
+        };
+        let socket =
+            socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?;
+        if addr.is_ipv6() {
+            socket.set_only_v6(true)?;
+        }
+        socket.set_reuse_address(false)?;
+        socket.bind(&socket2::SockAddr::from(addr))?;
+        Ok(Self { socket })
+    }
+
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.socket
+            .local_addr()?
+            .as_socket()
+            .ok_or_else(|| std::io::Error::other("probe socket has no IP address"))
+    }
+}
+
 /// Probe bind then the live-DB sidecar lock. Does not keep either.
 pub fn serve_blocker(addr: SocketAddr) -> Result<Option<ServeBlocker>, String> {
-    match std::net::TcpListener::bind(addr) {
+    match PortProbe::bind(addr) {
         Ok(_) => {}
         Err(error) if error.kind() == ErrorKind::AddrInUse => {
             return Ok(Some(ServeBlocker::BindInUse));
@@ -776,13 +813,28 @@ mod tests {
     }
 
     #[test]
+    fn bind_probe_occupies_port_without_accepting() {
+        let probe = PortProbe::bind("127.0.0.1:0".parse().unwrap()).expect("probe");
+        let addr = probe.local_addr().expect("probe addr");
+        let refused = std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(300));
+        assert!(
+            refused.is_err(),
+            "probe must not complete a TCP handshake; Windows keeps an unaccepted one after drop"
+        );
+        let occupied = std::net::TcpListener::bind(addr).expect_err("port held");
+        assert_eq!(occupied.kind(), ErrorKind::AddrInUse);
+    }
+
+    #[test]
     fn serve_wait_binds_after_port_and_lock_released() {
         let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
         let addr = holder.local_addr().expect("addr");
         let directory = tempfile::tempdir().expect("temp dir");
         let path = directory.path().join("wait.db");
+        let pid_path = directory.path().join("serve-wait.pid");
         let addr_s = addr.to_string();
         let path_s = path.to_str().expect("utf8 path").to_string();
+        let pid_s = pid_path.to_str().expect("utf8 path").to_string();
         let token = "wait-secret";
         temp_env::with_vars(
             [
@@ -790,17 +842,18 @@ mod tests {
                 ("GPUI_AGENT_TOKEN", Some(token)),
                 ("GPUI_AGENT_ADDR", Some(addr_s.as_str())),
                 ("BIR_DATABASE_PATH", Some(path_s.as_str())),
+                ("BIR_HEADLESS_PID", Some(pid_s.as_str())),
                 ("EBIR_TEST_ENV", Some("1")),
             ],
             || {
                 let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
                 let server = thread::spawn(|| serve(true));
                 thread::sleep(Duration::from_millis(300));
-                // Do not TCP-connect to `holder`. The placeholder never
-                // accept()s, so the handshake sits in the listen backlog.
-                // On Windows, dropping that listener still lets the real
-                // server bind and log "listening", but new clients then
-                // fail the handshake for the rest of the wait.
+                // Do not TCP-connect while `holder` (or a listening probe)
+                // owns the port. The handshake would sit in the listen
+                // backlog. On Windows, dropping that socket without accept
+                // still lets the real server bind, but later clients fail
+                // the agent handshake for the rest of the wait.
                 let blocked = serve_blocker(addr).expect("probe bind");
                 assert_eq!(
                     blocked,
@@ -814,8 +867,21 @@ mod tests {
                 drop(lock);
                 drop(holder);
                 let started = Instant::now();
+                while started.elapsed() < Duration::from_secs(8) && !pid_path.is_file() {
+                    if server.is_finished() {
+                        let joined = server.join().expect("serve thread");
+                        panic!("serve --wait exited before it was ready: {joined:?}");
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                assert!(
+                    pid_path.is_file(),
+                    "serve --wait never acquired bind+DB after release"
+                );
+                // Pid is written only after spawn_mailbox's listen succeeds.
                 let mut ready = false;
-                while started.elapsed() < Duration::from_secs(8) {
+                let hello_deadline = Instant::now() + Duration::from_secs(5);
+                while Instant::now() < hello_deadline {
                     let mut client =
                         AgentClient::connect(addr).with_timeout(Duration::from_secs(1));
                     client = client.with_token(token.to_string());
@@ -835,7 +901,10 @@ mod tests {
                     }
                     thread::sleep(Duration::from_millis(100));
                 }
-                assert!(ready, "serve --wait never acquired bind+DB after release");
+                assert!(
+                    ready,
+                    "serve --wait bound, but the agent handshake never succeeded"
+                );
                 let joined = server.join().expect("serve thread");
                 assert!(joined.is_ok(), "{joined:?}");
             },

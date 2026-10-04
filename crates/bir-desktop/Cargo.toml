@@ -25,7 +25,7 @@ dev-tools = []
 inspector = []
 # Opt-in gpui-agent control plane. Default off. Runtime still requires
 # `GPUI_AGENT=1` (and `GPUI_AGENT_ALLOW_RELEASE=1` for release binaries).
-agent = ["dep:gpui-agent", "dep:clap"]
+agent = ["dep:gpui-agent", "dep:clap", "dep:socket2"]
 # Mac App Store variant. Not a platform: the same `target_os = "macos"` ships
 # both a direct/notarized build and a sandboxed App Store build, so no
 # `cfg(target_os)` can tell them apart. This selects the sandboxed one, which
@@ -73,6 +73,7 @@ global-hotkey = "0.8"
 gpui-agent = { version = "0.1.0", optional = true }
 # Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown / logs).
 clap = { version = "4", features = ["derive"], optional = true }
+socket2 = { version = "0.6.5", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
