@@ -1,3 +1,8 @@
+# bir-headless (not the desktop app): just publish-headless
+#   just publish-headless            bump patch of BIR_HEADLESS_VERSION, push main, tag bir-headless-v<version>
+#   just publish-headless 0.2.0      tag that exact version
+# Desktop releases stay `just publish` / `just publish 0.2.0` (tag v*).
+# Neither recipe cargo-publishes. bir-headless CI only builds the binary.
 set dotenv-load := true
 
 set windows-shell := ["pwsh", "-NoProfile", "-c"]
@@ -559,6 +564,38 @@ publish version="":
     git push origin main
     git push origin "v$NEW_VER"
     Write-Host "🚀 Release v$NEW_VER triggered"
+
+# Bump the patch, or tag an exact version, as bir-headless-v* (not the desktop release).
+[unix]
+publish-headless version="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ver="{{version}}"
+    if [ -n "${ver}" ] && ! [[ "${ver}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "version must be MAJOR.MINOR.PATCH, got ${ver}" >&2
+        exit 1
+    fi
+    if [ -n "${ver}" ]; then
+        python3 scripts/publish_bir_headless.py "${ver}"
+    else
+        python3 scripts/publish_bir_headless.py
+    fi
+
+[windows]
+publish-headless version="":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    $ver = '{{version}}'
+    if ($ver -and $ver -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+        Write-Error "version must be MAJOR.MINOR.PATCH, got $ver"
+    }
+    if ($ver) {
+        python scripts/publish_bir_headless.py $ver
+    } else {
+        python scripts/publish_bir_headless.py
+    }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 
 # Remove build artifacts
 [unix]
