@@ -195,7 +195,7 @@ host with env vars, then talk to it with `gpui-agent`.
 # Build the painted app with the control plane. `dev-tools` is not required;
 # add it only for --dev-export-live-database or to open a form that is still
 # being certified from a *release* build.
-cargo build --locked --bin bir --features agent
+cargo build --locked --bin bir-desktop --features agent
 
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret          # required to bind (protocol v2 HMAC)
@@ -203,7 +203,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when 
 # Release binaries also need:
 # export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./target/debug/bir
+./target/debug/bir-desktop
 ```
 
 Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:

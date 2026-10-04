@@ -125,7 +125,7 @@ errors, window responsive throughout, back to idle CPU afterwards.
 
 ```bash
 export GPUI_AGENT=1 GPUI_AGENT_TOKEN='dev-secret' GPUI_AGENT_ADDR='127.0.0.1:17421'
-cargo run --locked --bin bir --features dev-tools,agent
+cargo run --locked --bin bir-desktop --features dev-tools,agent
 ```
 
 1. **Idle cost.** Leave the app alone on the Global Dashboard with no agent

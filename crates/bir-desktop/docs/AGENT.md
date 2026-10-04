@@ -385,7 +385,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421
 # optional: export GPUI_AGENT_LOG_REQUESTS=1
 # demo-only (never live DB): export GPUI_AGENT_INSECURE_NO_TOKEN=1
 # painted:
-#   cargo run --locked --bin bir --features dev-tools,agent
+#   cargo run --locked --bin bir-desktop --features dev-tools,agent
 # headless (GUI closed, or Linux/box):
 #   cargo run --locked --bin bir-headless --features agent -- serve
 #   cargo run --locked --bin bir-headless --features agent -- serve --wait
@@ -546,7 +546,7 @@ export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN='dev-secret'   # required to bind
 export GPUI_AGENT_ADDR='127.0.0.1:17421'
 # NativeChat on 17421: export GPUI_AGENT_ADDR='127.0.0.1:17423'
-cargo run --locked --bin bir --features dev-tools,agent
+cargo run --locked --bin bir-desktop --features dev-tools,agent
 ```
 
 Release (only if you intentionally want the control plane in a release binary).
@@ -558,7 +558,7 @@ export GPUI_AGENT=1
 export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_TOKEN='dev-secret'
 export GPUI_AGENT_ADDR='127.0.0.1:17421'
-cargo run --release --locked --bin bir --features agent
+cargo run --release --locked --bin bir-desktop --features agent
 ```
 
 Install the CLI from the pinned gpui-agent repo (separate checkout). **v1
@@ -830,7 +830,7 @@ Do not run this at the same time as `bir-headless serve` on the same addr:
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret
 export GPUI_AGENT_ADDR=127.0.0.1:17421
-cargo run --locked --bin bir --features agent
+cargo run --locked --bin bir-desktop --features agent
 # other terminal:
 gpui-agent --addr 127.0.0.1:17421 --token dev-secret hello
 gpui-agent snapshot

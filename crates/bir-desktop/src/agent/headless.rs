@@ -17,7 +17,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use bir_core::db::{self, Database};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use gpui_agent::DEFAULT_ADDR_STR;
 use gpui_agent::client::AgentClient;
 use gpui_agent::mailbox::AgentMailbox;
@@ -75,8 +75,25 @@ pub fn run() -> ExitCode {
     }
 }
 
+fn executable_stem(argv0: &str) -> &str {
+    let stem = std::path::Path::new(argv0)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("bir");
+    if stem.is_empty() { "bir" } else { stem }
+}
+
+fn parse_cli() -> Cli {
+    let mut command = Cli::command();
+    if let Some(argv0) = std::env::args().next() {
+        command.set_bin_name(executable_stem(&argv0));
+    }
+    let matches = command.get_matches();
+    Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit())
+}
+
 fn run_cli() -> Result<(), ExitCode> {
-    let cli = Cli::parse();
+    let cli = parse_cli();
     let command = cli.command.unwrap_or(Command::Serve);
     if cli.detach && !matches!(command, Command::Serve) {
         eprintln!("--detach is only valid with `serve` (example: bir-headless serve --detach)");
@@ -746,6 +763,19 @@ mod tests {
     }
 
     #[test]
+    fn executable_stem_uses_argv0_not_a_fixed_name() {
+        assert_eq!(executable_stem("bir"), "bir");
+        assert_eq!(executable_stem("/usr/local/bin/bir"), "bir");
+        assert_eq!(executable_stem("bir.exe"), "bir");
+        assert_eq!(executable_stem("bir-headless"), "bir-headless");
+        assert_eq!(
+            executable_stem("./target/debug/bir-headless"),
+            "bir-headless"
+        );
+        assert_eq!(executable_stem(""), "bir");
+    }
+
+    #[test]
     fn serve_wait_binds_after_port_and_lock_released() {
         let holder = TcpListener::bind("127.0.0.1:0").expect("hold port");
         let addr = holder.local_addr().expect("addr");
@@ -776,6 +806,10 @@ mod tests {
                     blocked,
                     Some(ServeBlocker::BindInUse),
                     "headless must not bind while the placeholder holds the port"
+                );
+                assert!(
+                    !server.is_finished(),
+                    "serve --wait exited while the placeholder still held the port"
                 );
                 drop(lock);
                 drop(holder);
