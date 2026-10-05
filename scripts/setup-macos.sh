@@ -9,6 +9,10 @@
 #   - Rust toolchain via rustup (if cargo is missing), plus BOTH darwin
 #     targets — `just app` / `just _package-mac` build aarch64 + x86_64 and
 #     lipo them into a universal binary
+#   - gpui-agent CLI — the control-plane client that drives the app
+#     (github.com/hexuria/gpui-agent), installed at the exact rev Cargo.lock
+#     pins so CLI and host speak the same protocol (v1 CLI can't talk to a
+#     v2 host)
 #
 # What it does NOT need (unlike Windows/Linux):
 #   - No system OpenSSL: openssl-src compiles from vendored source with the
@@ -144,6 +148,37 @@ install_rust() {
 }
 
 # ---------------------------------------------------------------------------
+# gpui-agent CLI — drives the app over the opt-in control plane
+# (GPUI_AGENT=1 + GPUI_AGENT_TOKEN on the host, then `gpui-agent hello`).
+# Protocol version must match the host: read the rev Cargo.lock pins for the
+# library dep and install the CLI at that same rev.
+# ---------------------------------------------------------------------------
+gpui_agent_rev() {
+    # Cargo.lock line looks like:
+    #   source = "git+https://github.com/hexuria/gpui-agent?rev=<sha>#<sha>"
+    sed -n 's/.*gpui-agent?rev=\([0-9a-fA-F]\{7,64\}\)#.*/\1/p' Cargo.lock 2>/dev/null | head -1
+}
+
+install_gpui_agent() {
+    local rev
+    rev="$(gpui_agent_rev)"
+    if [ -z "$rev" ]; then
+        warn "could not read gpui-agent rev from Cargo.lock — run from the repo root"
+        return 0
+    fi
+    local installed_rev=""
+    if command -v gpui-agent >/dev/null 2>&1; then
+        installed_rev="$(cargo install --list 2>/dev/null | sed -n 's/.*gpui-agent?rev=\([0-9a-fA-F]\{7,64\}\)#.*/\1/p' | head -1)"
+        if [ "$installed_rev" = "$rev" ]; then
+            log "gpui-agent already installed at pinned rev ${rev:0:7}"
+            return 0
+        fi
+    fi
+    log "Installing gpui-agent CLI at pinned rev ${rev:0:7}"
+    cargo install --git https://github.com/hexuria/gpui-agent --rev "$rev" gpui-agent-cli
+}
+
+# ---------------------------------------------------------------------------
 # Brew packages. python@3.13 is versioned: it ships `python3.13` plus an
 # unversioned bin dir at <prefix>/opt/python@3.13/libexec/bin — prepend that
 # to PATH when you want `python3` to be 3.13 (Xcode's 3.9 wins otherwise).
@@ -225,6 +260,14 @@ check() {
     else
         warn "create-dmg not installed — 'just app' will produce a .zip instead of a .dmg"
     fi
+    # gpui-agent CLI — required for agent-driven control; rev must match the
+    # Cargo.lock pin so protocol versions agree.
+    if command -v gpui-agent >/dev/null 2>&1; then
+        printf '  %-14s %s\n' "gpui-agent" "$(command -v gpui-agent)"
+    else
+        printf '  %-14s MISSING (needed to drive the app over the control plane)\n' "gpui-agent"
+        ok=0
+    fi
     [ "$ok" -eq 1 ] && log "All required tooling present" || warn "Missing pieces — run scripts/setup-macos.sh"
     return $((1 - ok))
 }
@@ -240,6 +283,7 @@ main() {
     ensure_brew
     install_brew_packages
     install_rust
+    install_gpui_agent
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
@@ -262,6 +306,17 @@ Done. Next steps:
 
 Packaging tools already on macOS: lipo, codesign, PlistBuddy, productbuild.
 OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
+
+To drive the app from the CLI (gpui-agent was installed at the Cargo.lock
+rev): build the host with the agent feature and launch with env vars —
+
+    cargo build --locked --bin bir --features agent
+    export GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret
+    ./target/debug/bir &        # then, another shell:
+    gpui-agent hello            # protocol, app, platform, ready
+    gpui-agent keybindings      # {id, chord, scope, dangerous}
+
+Full contract: crates/bir-desktop/docs/AGENT.md
 
 EOF
 }
