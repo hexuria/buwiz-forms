@@ -93,9 +93,18 @@ stamper with `stamp_frozen_names.py --check-all`.
 - **Python 3.13**: Used by freeze inventory/stamp checks and packaging identity scripts.
 
 ### 🍏 macOS Dependencies
+Run the one-shot setup script (idempotent; installs Xcode CLT, Homebrew
+packages, and the Rust toolchain with both universal-build targets):
+
+```bash
+scripts/setup-macos.sh           # install everything
+scripts/setup-macos.sh --check   # verify an existing install
+scripts/setup-macos.sh --extras  # also cargo-audit/outdated/machete + node
+```
 
 No external document renderer is required. The app uses the platform WebView
-with its bundled offline HTML form assets.
+with its bundled offline HTML form assets. OpenSSL compiles from vendored
+source — the system perl + clang are all it needs.
 
 ### 🪟 Windows Dependencies
 - **OpenSSL** (Required for SQLCipher and networking):
