@@ -1,0 +1,42 @@
+[package]
+name = "bir-suggest"
+description = "Format-repair and catalog suggestions for BIR form fields (TIN OCR repair, Ñ-safe name fold, sample RDO/form catalog, layout fingerprint). Suggestions only: bir-rules owns validation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# PUA engine crates, pinned by git rev (no PUA tag yet).
+[dependencies]
+pua-core = { git = "https://github.com/hexuria/pua", rev = "e1635f12908deda99308f03222c4265043e0e749", features = ["serde"] }
+pua-text = { git = "https://github.com/hexuria/pua", rev = "e1635f12908deda99308f03222c4265043e0e749" }
+pua-graph = { git = "https://github.com/hexuria/pua", rev = "e1635f12908deda99308f03222c4265043e0e749" }
+serde = { workspace = true }
+toml = { version = "1.0", default-features = false, features = ["parse", "serde"] }
+blake3 = { version = "1.8", default-features = false, features = ["pure"] }
+
+[dev-dependencies]
+proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }
+unicode-normalization = { version = "0.1", default-features = false, features = ["std"] }
+
+# Same bar as the PUA engine: integer-only, no unwraps in library code, no unordered maps
+# (clippy.toml next to this manifest).
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+float_arithmetic = "deny"
+float_cmp = "deny"
+dbg_macro = "deny"
+todo = "deny"
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+too_many_lines = "allow"

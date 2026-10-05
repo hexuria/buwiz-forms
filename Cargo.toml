@@ -7,6 +7,8 @@ members = [
     "crates/bir-rules",
     "crates/bir-rules-codegen",
     "crates/bir-rules-platform",
+    "crates/bir-suggest",
+    "crates/bir-cor-extract",
 ]
 default-members = ["crates/bir-desktop"]
 
