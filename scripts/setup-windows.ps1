@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     One-shot Windows dev environment setup for E-BIRForms (buwiz-forms).
@@ -23,12 +22,31 @@ $ErrorActionPreference = 'Stop'
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 
+# Self-elevate: installs write to Program Files and the machine PATH, so this
+# needs admin rights. Relaunching keeps the documented command working from a
+# regular PowerShell window (shows a UAC prompt).
+$principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Step "Requesting administrator rights (UAC prompt)"
+    $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList `
+        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`""
+    exit $elevated.ExitCode
+}
+
 # 1. Chocolatey
 if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-    Write-Step "Installing Chocolatey"
-    Set-ExecutionPolicy Bypass -Scope Process -Force
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+    # Pinned-version package install (Chocolatey's documented offline method):
+    # downloads an inspectable artifact instead of executing a live remote
+    # script as Administrator.
+    $chocoVersion = '2.7.4'
+    Write-Step "Installing Chocolatey $chocoVersion"
+    $nupkg = "$env:TEMP\chocolatey.$chocoVersion.nupkg"
+    $nupkgDir = "$env:TEMP\chocolatey-install"
+    curl.exe -sSfL -o $nupkg "https://community.chocolatey.org/api/v2/package/chocolatey/$chocoVersion"
+    Expand-Archive -Path $nupkg -DestinationPath $nupkgDir -Force
+    & "$nupkgDir\tools\chocolateyInstall.ps1"
+    if ($LASTEXITCODE -ne 0) { Write-Error "Chocolatey install failed"; exit $LASTEXITCODE }
+    $env:Path = "$env:ProgramData\chocolatey\bin;$env:Path"
 } else {
     Write-Step "Chocolatey already installed -  skipping"
 }
@@ -39,11 +57,27 @@ choco install openssl just strawberryperl nasm powershell-core -y --no-progress
 if ($LASTEXITCODE -ne 0) { Write-Error "choco install failed"; exit $LASTEXITCODE }
 
 # 3. Visual Studio Build Tools (MSVC C++ workload + Windows 11 SDK)
+# The compiler alone is not enough: linking needs a Windows SDK, so an existing
+# install missing the SDK component still gets it added.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-$hasVCTools = (Test-Path $vswhere) -and (& $vswhere -products * `
-    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-    -property installationPath | Select-Object -First 1)
-if (-not $hasVCTools) {
+$vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+$vsComponent = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
+$sdkComponent = 'Microsoft.VisualStudio.Component.Windows11SDK.22621'
+$vcPath = $null
+$sdkPath = $null
+if (Test-Path $vswhere) {
+    $vcPath = & $vswhere -products * -requires $vsComponent -property installationPath | Select-Object -First 1
+    $sdkPath = & $vswhere -products * -requires $sdkComponent -property installationPath | Select-Object -First 1
+}
+if ($vcPath -and $sdkPath) {
+    Write-Step "MSVC C++ build tools + Windows 11 SDK already installed -  skipping"
+} elseif ($vcPath -and -not $sdkPath) {
+    Write-Step "Adding Windows 11 SDK 22621 to existing VS install"
+    $p = Start-Process -FilePath $vsInstaller -Wait -PassThru -ArgumentList `
+        'modify','--installPath',"`"$vcPath`"",'--add',$sdkComponent,
+        '--quiet','--wait','--norestart'
+    if ($p.ExitCode -ne 0) { Write-Error "VS modify failed (exit $($p.ExitCode))"; exit $p.ExitCode }
+} else {
     Write-Step "Installing VS 2022 Build Tools (VCTools + Windows 11 SDK 22621)"
     $bootstrapper = "$env:TEMP\vs_buildtools.exe"
     curl.exe -sSfL -o $bootstrapper https://aka.ms/vs/17/release/vs_buildtools.exe
@@ -53,8 +87,6 @@ if (-not $hasVCTools) {
         '--add','Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
         '--add','Microsoft.VisualStudio.Component.Windows11SDK.22621'
     if ($p.ExitCode -ne 0) { Write-Error "VS Build Tools install failed (exit $($p.ExitCode))"; exit $p.ExitCode }
-} else {
-    Write-Step "MSVC C++ build tools already installed -  skipping"
 }
 
 # 4. Rust via rustup (stable)
@@ -86,8 +118,12 @@ Write-Step "Setting user env: OPENSSL_DIR=$opensslDir, OPENSSL_LIB_DIR=$($libFil
 [Environment]::SetEnvironmentVariable('OPENSSL_LIB_DIR', $libFile.DirectoryName, 'User')
 
 # Strawberry Perl must precede Git Bash's MSYS perl on PATH for vendored
-# openssl-src builds; choco puts it on the machine PATH already, so a fresh
-# PowerShell window picks it up. For THIS session, fix PATH now too.
+# openssl-src builds. Persist it at the front of the machine PATH so new
+# shells (not just this process) resolve the right perl. NASM goes on PATH too.
+$pathDirs = @('C:\Strawberry\perl\bin', 'C:\Strawberry\perl\site\bin', 'C:\Strawberry\c\bin', 'C:\Program Files\NASM')
+$machineEntries = ([Environment]::GetEnvironmentVariable('Path','Machine') -split ';') |
+    Where-Object { $_ -and ($pathDirs -notcontains $_.TrimEnd('\')) }
+[Environment]::SetEnvironmentVariable('Path', ($pathDirs + $machineEntries) -join ';', 'Machine')
 $env:Path = "C:\Strawberry\perl\bin;C:\Strawberry\c\bin;C:\Program Files\NASM;$cargoBin;" +
     [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
     [Environment]::GetEnvironmentVariable('Path','User')

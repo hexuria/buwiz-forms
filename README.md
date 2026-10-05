@@ -103,6 +103,7 @@ VS 2022 Build Tools, Rust, and the required `OPENSSL_*` env vars):
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
 ```
+The script self-elevates via UAC — it works from a regular PowerShell window.
 
 Or install the pieces manually:
 - **OpenSSL** (Required for SQLCipher and networking):
