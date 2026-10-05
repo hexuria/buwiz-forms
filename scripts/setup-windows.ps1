@@ -11,6 +11,7 @@
       * Visual Studio 2022 Build Tools: MSVC C++ workload + Windows 11 SDK
       * Rust toolchain via rustup (stable; rust-toolchain.toml adds
         rustfmt + clippy components)
+      * gpui-agent CLI (drives the app when built with --features agent)
       * User env vars OPENSSL_DIR / OPENSSL_LIB_DIR so cargo finds OpenSSL
 
 .EXAMPLE
@@ -101,7 +102,24 @@ if (-not (Test-Path "$cargoBin\cargo.exe") -and -not (Get-Command cargo -ErrorAc
     Write-Step "Rust already installed -  skipping"
 }
 
-# 5. OPENSSL_DIR / OPENSSL_LIB_DIR (libsqlite3-sys bundled-sqlcipher fails without them)
+# 5. gpui-agent CLI (client for the agent control plane; the app embeds its
+# own host, so only the CLI is needed -  todo-headless is the demo's daemon).
+# The CLI must match the rev bir-desktop pins in Cargo.toml: protocol skew
+# fails closed, so installing unpinned HEAD can break the handshake.
+$gpuiRev = Select-String -Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'crates\bir-desktop\Cargo.toml') `
+    -Pattern 'gpui-agent\s*=\s*\{[^}]*rev\s*=\s*"([0-9a-f]+)"' |
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+$env:Path = "$cargoBin;$env:Path"
+if ($gpuiRev) {
+    Write-Step "Installing gpui-agent CLI (pinned rev $gpuiRev, matches Cargo.toml)"
+    & "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent --rev $gpuiRev gpui-agent-cli
+} else {
+    Write-Step "Installing gpui-agent CLI (no rev pin found; using HEAD)"
+    & "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent gpui-agent-cli
+}
+if ($LASTEXITCODE -ne 0) { Write-Error "gpui-agent install failed"; exit $LASTEXITCODE }
+
+# 6. OPENSSL_DIR / OPENSSL_LIB_DIR (libsqlite3-sys bundled-sqlcipher fails without them)
 $opensslDir = $null
 foreach ($candidate in 'C:\Program Files\OpenSSL-Win64', 'C:\Program Files\OpenSSL') {
     if (Test-Path "$candidate\include") { $opensslDir = $candidate; break }
@@ -128,4 +146,9 @@ $env:Path = "C:\Strawberry\perl\bin;C:\Strawberry\c\bin;C:\Program Files\NASM;$c
     [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
     [Environment]::GetEnvironmentVariable('Path','User')
 
-Write-Step "Done. Open a NEW PowerShell window, then:  cd <repo> ; just run"
+Write-Step @"
+Done. Open a NEW PowerShell window, then:  cd <repo> ; just run
+Agent control plane: build --features agent, set GPUI_AGENT=1, drive with gpui-agent.
+NOTE: HMAC token auth currently fails closed on Windows (gpui-agent's nonce
+source is Unix-only); use GPUI_AGENT_INSECURE_NO_TOKEN=1 for local-only driving.
+"@

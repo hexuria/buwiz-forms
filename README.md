@@ -195,6 +195,17 @@ reach it unless you compile `--features agent` (Mac release bundle:
 until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
 host with env vars, then talk to it with `gpui-agent`.
 
+The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
+(`scripts\setup-windows.ps1` installs it on Windows at the rev pinned in
+`crates/bir-desktop/Cargo.toml`; elsewhere:
+`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`).
+
+**Windows note:** the HMAC token handshake fails closed on Windows at the
+current pin — gpui-agent's nonce source is `/dev/urandom` (Unix-only), so the
+host drops connections before the challenge. For local-only driving on
+Windows, set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`
+(never on shared machines).
+
 ```bash
 # Build the painted app with the control plane. `dev-tools` is not required;
 # add it only for --dev-export-live-database or to open a form that is still
