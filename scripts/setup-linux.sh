@@ -19,20 +19,26 @@
 #     patchelf (packaging), Xvfb (headless GTK tests), python3
 #   - Rust toolchain via rustup (if cargo is missing)
 #   - `just` command runner (distro package when available, else cargo install)
+#   - gpui-agent CLI — drives the app over 127.0.0.1 when the binary is built
+#     `--features agent` and launched with GPUI_AGENT=1. Installed at the same
+#     git rev the workspace pins, so protocol versions never drift apart.
 #
 # Usage:
 #   scripts/setup-linux.sh              # install everything
 #   scripts/setup-linux.sh --check      # verify only, install nothing
 #   scripts/setup-linux.sh --extras     # also install cargo-audit/outdated/machete + node
+#   scripts/setup-linux.sh --no-agent   # skip installing the gpui-agent CLI
 #
 set -euo pipefail
 
 CHECK_ONLY=0
 WITH_EXTRAS=0
+WITH_AGENT=1
 for arg in "$@"; do
     case "$arg" in
-        --check)   CHECK_ONLY=1 ;;
-        --extras)  WITH_EXTRAS=1 ;;
+        --check)    CHECK_ONLY=1 ;;
+        --extras)   WITH_EXTRAS=1 ;;
+        --no-agent) WITH_AGENT=0 ;;
         -h|--help)
             sed -n '2,30p' "$0"
             exit 0
@@ -40,6 +46,8 @@ for arg in "$@"; do
         *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
     esac
 done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
@@ -218,11 +226,39 @@ install_rust() {
 }
 
 # ---------------------------------------------------------------------------
+# gpui-agent — the client half of the agent control plane. The app embeds the
+# matching host crate pinned by git rev in crates/bir-desktop/Cargo.toml; the
+# CLI has to speak the same protocol revision, so install that exact rev
+# instead of tracking main. If the manifest can't be read (script copied out
+# of the repo), fall back to the default branch with a warning.
+# ---------------------------------------------------------------------------
+install_gpui_agent() {
+    if command -v gpui-agent >/dev/null 2>&1; then
+        log "gpui-agent already installed"
+        return 0
+    fi
+    local manifest="$SCRIPT_DIR/../crates/bir-desktop/Cargo.toml"
+    local rev=""
+    if [ -f "$manifest" ]; then
+        rev="$(grep -oE 'gpui-agent = \{ git = "[^"]+", rev = "[0-9a-f]+"' "$manifest" \
+            | grep -oE '[0-9a-f]{7,}' | tail -1)"
+    fi
+    if [ -n "$rev" ]; then
+        log "Installing gpui-agent CLI @ $rev (matches the app's pinned host crate)"
+        cargo install --git https://github.com/hexuria/gpui-agent --rev "$rev" \
+            --locked gpui-agent-cli
+    else
+        warn "could not read the pinned gpui-agent rev; installing from main"
+        cargo install --git https://github.com/hexuria/gpui-agent --locked gpui-agent-cli
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # --check mode: verify the toolchain end to end
 # ---------------------------------------------------------------------------
 check() {
     local ok=1
-    for tool in cargo rustc just python3 pkg-config perl cc; do
+    for tool in cargo rustc just python3 pkg-config perl cc gpui-agent; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf '  %-10s %s\n' "$tool" "$("$tool" --version 2>/dev/null | head -1)"
         else
@@ -269,6 +305,9 @@ main() {
 
     install_rust
     install_just
+    if [ "$WITH_AGENT" -eq 1 ]; then
+        install_gpui_agent
+    fi
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
@@ -307,6 +346,14 @@ Blank white window on a VM / software GPU? llvmpipe's Vulkan path can
 present stale frames — force the Gl backend by hiding the Vulkan ICD:
 
     VK_ICD_FILENAMES=/dev/null just run
+
+Drive the app with gpui-agent (build the agent feature in, enable the host
+with GPUI_AGENT=1, then talk to it with the CLI):
+
+    cargo build --locked --bin bir --features dev-tools,agent
+    GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret ./target/debug/bir &
+    GPUI_AGENT_TOKEN=dev-secret gpui-agent hello
+    GPUI_AGENT_TOKEN=dev-secret gpui-agent snapshot --pretty
 
 EOF
 }

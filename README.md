@@ -113,9 +113,13 @@ the Rust toolchain and `just`, then verifies the result:
 scripts/setup-linux.sh           # install everything
 scripts/setup-linux.sh --check   # verify an existing install
 scripts/setup-linux.sh --extras  # also cargo-audit/outdated/machete + node
+scripts/setup-linux.sh --no-agent # skip the gpui-agent CLI
 ```
 
-It covers Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro, and openSUSE. On other
+It covers Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro, and openSUSE. It also
+installs the `gpui-agent` CLI (pinned to the same git rev as the app's embedded
+host crate) so the app can be driven headlessly — see
+[Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent). On other
 distributions, install the equivalent of these Ubuntu/Debian packages:
 ```bash
 sudo apt-get update
