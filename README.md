@@ -104,18 +104,36 @@ with its bundled offline HTML form assets.
   ```
   *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`).*
 
-### 🐧 Linux Dependencies (Ubuntu/Debian)
-Building the GPUI frontend and running tests requires various graphic, windowing, and system libraries:
+### 🐧 Linux Dependencies
+The fastest path is the cross-distro setup script, which detects your package
+manager (apt, dnf, pacman, zypper), installs the system libraries below plus
+the Rust toolchain and `just`, then verifies the result:
+
+```bash
+scripts/setup-linux.sh           # install everything
+scripts/setup-linux.sh --check   # verify an existing install
+scripts/setup-linux.sh --extras  # also cargo-audit/outdated/machete + node
+```
+
+It covers Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro, and openSUSE. On other
+distributions, install the equivalent of these Ubuntu/Debian packages:
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  pkg-config libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev \
+  build-essential pkg-config perl python3 \
+  libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev \
   libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
   libwayland-client0 libasound2-dev libudev-dev libvulkan-dev \
   libfontconfig1-dev libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
-  mesa-vulkan-drivers libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+  libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev \
+  mesa-vulkan-drivers libappindicator3-dev librsvg2-dev patchelf xvfb \
+  fonts-noto-core fonts-noto-color-emoji
 ```
 - **WebKitGTK** powers the bundled offline HTML preview, print, and PDF export host.
+- **OpenSSL** compiles from source (`openssl-src` vendored) — a C toolchain and `perl` are required even when `libssl-dev` is installed.
+- **Noto Sans** is the UI font — without it the window presents as a blank white frame.
+- Headless machines can run the GTK print tests under the virtual framebuffer: `xvfb-run -a just test`.
+- **Blank window on a VM / software GPU:** llvmpipe's Vulkan path can present stale frames. Force the Gl backend with `VK_ICD_FILENAMES=/dev/null just run`.
 
 ---
 
