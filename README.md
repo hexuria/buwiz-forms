@@ -98,11 +98,21 @@ No external document renderer is required. The app uses the platform WebView
 with its bundled offline HTML form assets.
 
 ### 🪟 Windows Dependencies
+Run the one-shot setup script (idempotent; installs Chocolatey packages,
+VS 2022 Build Tools, Rust, and the required `OPENSSL_*` env vars):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+```
+The script self-elevates via UAC — it works from a regular PowerShell window.
+
+Or install the pieces manually:
 - **OpenSSL** (Required for SQLCipher and networking):
   ```powershell
   choco install openssl -y
   ```
-  *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`).*
+  *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`), and `OPENSSL_LIB_DIR` to the VC x64 lib dir (e.g., `C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD`).*
+- **Visual Studio 2022 Build Tools** with the C++ workload and Windows 11 SDK.
+- **Strawberry Perl and NASM** (required by the vendored `openssl-src` build; Strawberry Perl must precede Git Bash's perl on `PATH`).
 
 ### 🐧 Linux Dependencies
 The fastest path is the cross-distro setup script, which detects your package
@@ -206,6 +216,17 @@ reach it unless you compile `--features agent` (Mac release bundle:
 `just _package-mac --agent`). Even a feature-enabled binary stays silent
 until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
 host with env vars, then talk to it with `gpui-agent`.
+
+The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
+(`scripts\setup-windows.ps1` installs it on Windows at the rev pinned in
+`crates/bir-desktop/Cargo.toml`; elsewhere:
+`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`).
+
+**Windows note:** the HMAC token handshake fails closed on Windows at the
+current pin — gpui-agent's nonce source is `/dev/urandom` (Unix-only), so the
+host drops connections before the challenge. For local-only driving on
+Windows, set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`
+(never on shared machines).
 
 ```bash
 # Build the painted app with the control plane. `dev-tools` is not required;
