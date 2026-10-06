@@ -17,12 +17,12 @@ point `gpui-agent` at the same token and address. Default bind is
 queue stay host-side; the client must not skip them.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
-`8b864fbbd9de08565f4a90cb9284446a44f85d7f` (`main` after PR #40 —
+`1edec4dbf49755bf91ffbbc23359698ea5b867f4` (`main` after PR #40 —
 `Op::Keybinding` / `Keybindings`, `screenshot --mode scrolled`,
 `assert --visible` / `--in-viewport`, `wait_until`). Host GPUI is
 **gpui-pre** through gpui-kit 0.6. Cookbook:
-[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/8b864fbbd9de08565f4a90cb9284446a44f85d7f/docs/INTEGRATING.md)
-and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/8b864fbbd9de08565f4a90cb9284446a44f85d7f/docs/SDK.md).
+[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/1edec4dbf49755bf91ffbbc23359698ea5b867f4/docs/INTEGRATING.md)
+and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/1edec4dbf49755bf91ffbbc23359698ea5b867f4/docs/SDK.md).
 Do not fork the protocol. There is no crates.io release; git/path only.
 CLI and host **must** both be on this rev (or later). A v1 CLI cannot talk
 to a v2 host.
@@ -66,7 +66,7 @@ These are host constraints. They do not fork protocol v2.
   `bir` and `bir-headless serve` both default to `127.0.0.1:17421` and take
   `bir_data.db.owner.lock`. See [Two hosts, one agent port](#two-hosts-one-agent-port).
   There is **no** protocol `Op::Yield` / `Takeover`.
-- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/8b864fbbd9de08565f4a90cb9284446a44f85d7f/docs/ADR-001-daemon-sot.md))
+- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/1edec4dbf49755bf91ffbbc23359698ea5b867f4/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
   + the same SQLCipher key). Smoke C reopen of the GUI is offline
@@ -559,14 +559,17 @@ export GPUI_AGENT_ADDR='127.0.0.1:17421'
 cargo run --release --locked --bin bir --features agent
 ```
 
-Install the CLI from the pinned gpui-agent repo (separate checkout). **v1
-CLI cannot speak v2 HMAC** — install this rev, not an older `main`:
+Install the CLI from the pinned gpui-agent repo. **v1 CLI cannot speak v2
+HMAC** — install the rev the workspace pins, not an older `main`. Every
+setup script (`scripts/setup-linux.sh`, `scripts/setup-macos.sh`,
+`scripts/setup-windows.ps1`) resolves and installs that rev automatically;
+manually:
 
 ```bash
-git clone https://github.com/hexuria/gpui-agent
-cd gpui-agent
-git checkout 8b864fbbd9de08565f4a90cb9284446a44f85d7f
-cargo install --path crates/gpui-agent-cli --locked
+REV=$(grep -oE 'gpui-agent = \{ git = "[^"]+", rev = "[0-9a-f]+"' \
+    crates/bir-desktop/Cargo.toml | grep -oE '[0-9a-f]{7,}' | tail -1)
+cargo install --git https://github.com/hexuria/gpui-agent --rev "$REV" \
+    --locked gpui-agent-cli
 ```
 
 ### Mac: Screen Recording (TCC)
@@ -612,7 +615,7 @@ gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
 ### Mac: bir-headless
 
 Clap: `serve` / `status` / `shutdown` / `logs`, global `--wait` and `--detach`.
-Shell matches gpui-agent `apps/todo-headless` on pin `8b864fbbd9de08565f4a90cb9284446a44f85d7f`:
+Shell matches gpui-agent `apps/todo-headless` on pin `1edec4dbf49755bf91ffbbc23359698ea5b867f4`:
 `from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
 `GPUI_AGENT_TOKEN` is required to bind. `--detach` / `logs --follow` are the
 Docker-like lab path; Mac production uses the launchd example (no `--detach`).
@@ -715,7 +718,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
-Other terminal (CLI from pin `8b864fbbd9de08565f4a90cb9284446a44f85d7f`):
+Other terminal (CLI from pin `1edec4dbf49755bf91ffbbc23359698ea5b867f4`):
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
