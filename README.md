@@ -100,7 +100,11 @@ packages, and the Rust toolchain with both universal-build targets):
 scripts/setup-macos.sh           # install everything
 scripts/setup-macos.sh --check   # verify an existing install
 scripts/setup-macos.sh --extras  # also cargo-audit/outdated/machete + node
+scripts/setup-macos.sh --no-agent # skip the gpui-agent CLI
 ```
+
+It also installs the `gpui-agent` CLI at the rev pinned in Cargo.lock — see
+[Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent).
 
 No external document renderer is required. The app uses the platform WebView
 with its bundled offline HTML form assets. OpenSSL compiles from vendored
@@ -113,6 +117,8 @@ VS 2022 Build Tools, Rust, and the required `OPENSSL_*` env vars):
 powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
 ```
 The script self-elevates via UAC — it works from a regular PowerShell window.
+It also installs the `gpui-agent` CLI at the rev pinned in `crates/bir-desktop/Cargo.toml`
+— see [Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent).
 
 Or install the pieces manually:
 - **OpenSSL** (Required for SQLCipher and networking):
@@ -198,7 +204,7 @@ sudo apt-get install -y \
 We follow a "less is better" philosophy. You only need to remember a few core commands:
 
 - `just run` — Run the app locally with developer diagnostics.
-- `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
+- `just install` — Automatically figure out your OS and build the installer package (macOS DMG/PKG, Windows MSIX/EXE, Linux DEB/Tarball).
 - `DEV_MODE=true just install --inspector` — Compiles a package with internal diagnostics unlocked.
 - `just _package-mac --agent` — Mac release `.app` with the gpui-agent control plane compiled in. Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
@@ -227,9 +233,11 @@ until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
 host with env vars, then talk to it with `gpui-agent`.
 
 The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
-(`scripts\setup-windows.ps1` installs it on Windows at the rev pinned in
-`crates/bir-desktop/Cargo.toml`; elsewhere:
-`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`).
+and is installed automatically by every setup script — `setup-windows.ps1`,
+`setup-linux.sh`, and `setup-macos.sh` all resolve the rev the app pins
+(`crates/bir-desktop/Cargo.toml` / `Cargo.lock`) so driver and host can never
+drift on protocol version. Manually:
+`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
 
 **Windows note:** the HMAC token handshake fails closed on Windows at the
 current pin — gpui-agent's nonce source is `/dev/urandom` (Unix-only), so the

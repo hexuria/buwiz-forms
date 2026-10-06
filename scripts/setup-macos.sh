@@ -24,15 +24,18 @@
 #   scripts/setup-macos.sh              # install everything
 #   scripts/setup-macos.sh --check      # verify only, install nothing
 #   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete + node
+#   scripts/setup-macos.sh --no-agent   # skip installing the gpui-agent CLI
 #
 set -euo pipefail
 
 CHECK_ONLY=0
 WITH_EXTRAS=0
+WITH_AGENT=1
 for arg in "$@"; do
     case "$arg" in
-        --check)   CHECK_ONLY=1 ;;
-        --extras)  WITH_EXTRAS=1 ;;
+        --check)    CHECK_ONLY=1 ;;
+        --extras)   WITH_EXTRAS=1 ;;
+        --no-agent) WITH_AGENT=0 ;;
         -h|--help)
             sed -n '2,30p' "$0"
             exit 0
@@ -260,13 +263,15 @@ check() {
     else
         warn "create-dmg not installed — 'just app' will produce a .zip instead of a .dmg"
     fi
-    # gpui-agent CLI — required for agent-driven control; rev must match the
-    # Cargo.lock pin so protocol versions agree.
-    if command -v gpui-agent >/dev/null 2>&1; then
-        printf '  %-14s %s\n' "gpui-agent" "$(command -v gpui-agent)"
-    else
-        printf '  %-14s MISSING (needed to drive the app over the control plane)\n' "gpui-agent"
-        ok=0
+    # gpui-agent CLI — required for agent-driven control unless --no-agent;
+    # rev must match the Cargo.lock pin so protocol versions agree.
+    if [ "$WITH_AGENT" -eq 1 ]; then
+        if command -v gpui-agent >/dev/null 2>&1; then
+            printf '  %-14s %s\n' "gpui-agent" "$(command -v gpui-agent)"
+        else
+            printf '  %-14s MISSING (needed to drive the app over the control plane)\n' "gpui-agent"
+            ok=0
+        fi
     fi
     [ "$ok" -eq 1 ] && log "All required tooling present" || warn "Missing pieces — run scripts/setup-macos.sh"
     return $((1 - ok))
@@ -283,7 +288,9 @@ main() {
     ensure_brew
     install_brew_packages
     install_rust
-    install_gpui_agent
+    if [ "$WITH_AGENT" -eq 1 ]; then
+        install_gpui_agent
+    fi
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"

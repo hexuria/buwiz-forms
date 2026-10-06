@@ -258,7 +258,9 @@ install_gpui_agent() {
 # ---------------------------------------------------------------------------
 check() {
     local ok=1
-    for tool in cargo rustc just python3 pkg-config perl cc gpui-agent; do
+    local tools="cargo rustc just python3 pkg-config perl cc"
+    [ "$WITH_AGENT" -eq 1 ] && tools="$tools gpui-agent"
+    for tool in $tools; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf '  %-10s %s\n' "$tool" "$("$tool" --version 2>/dev/null | head -1)"
         else
