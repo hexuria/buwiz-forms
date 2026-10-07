@@ -284,11 +284,7 @@ fn set_std_handle_inheritable(which: StdHandle, inheritable: bool) -> bool {
             return false;
         }
         let was = flags & HANDLE_FLAG_INHERIT != 0;
-        let new_flags = if inheritable {
-            HANDLE_FLAG_INHERIT
-        } else {
-            0
-        };
+        let new_flags = if inheritable { HANDLE_FLAG_INHERIT } else { 0 };
         let _ = SetHandleInformation(handle, HANDLE_FLAG_INHERIT, new_flags);
         was
     }
