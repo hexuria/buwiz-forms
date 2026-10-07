@@ -217,6 +217,83 @@ fn windows_pid_alive(pid: u32) -> bool {
     }
 }
 
+/// Temporarily clear HANDLE_FLAG_INHERIT on this process's stdout/stderr so a
+/// detached child does not keep piped stdio open (see spawn_detached_command).
+#[cfg(windows)]
+struct WindowsStdioInheritGuard {
+    stdout_was_inheritable: bool,
+    stderr_was_inheritable: bool,
+}
+
+#[cfg(windows)]
+impl WindowsStdioInheritGuard {
+    fn clear() -> Self {
+        let stdout_was_inheritable = set_std_handle_inheritable(StdHandle::Stdout, false);
+        let stderr_was_inheritable = set_std_handle_inheritable(StdHandle::Stderr, false);
+        Self {
+            stdout_was_inheritable,
+            stderr_was_inheritable,
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WindowsStdioInheritGuard {
+    fn drop(&mut self) {
+        if self.stdout_was_inheritable {
+            set_std_handle_inheritable(StdHandle::Stdout, true);
+        }
+        if self.stderr_was_inheritable {
+            set_std_handle_inheritable(StdHandle::Stderr, true);
+        }
+    }
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+enum StdHandle {
+    Stdout,
+    Stderr,
+}
+
+/// Returns whether the handle previously had HANDLE_FLAG_INHERIT set.
+#[cfg(windows)]
+fn set_std_handle_inheritable(which: StdHandle, inheritable: bool) -> bool {
+    const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5; // (DWORD)-11
+    const STD_ERROR_HANDLE: u32 = 0xFFFFFFF4; // (DWORD)-12
+    const HANDLE_FLAG_INHERIT: u32 = 0x1;
+    const INVALID_HANDLE_VALUE: isize = -1;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetStdHandle(n: u32) -> *mut std::ffi::c_void;
+        fn GetHandleInformation(handle: *mut std::ffi::c_void, flags: *mut u32) -> i32;
+        fn SetHandleInformation(handle: *mut std::ffi::c_void, mask: u32, flags: u32) -> i32;
+    }
+    let id = match which {
+        StdHandle::Stdout => STD_OUTPUT_HANDLE,
+        StdHandle::Stderr => STD_ERROR_HANDLE,
+    };
+    // SAFETY: kernel32 std-handle queries; null/INVALID ignored.
+    unsafe {
+        let handle = GetStdHandle(id);
+        if handle.is_null() || handle as isize == INVALID_HANDLE_VALUE {
+            return false;
+        }
+        let mut flags = 0u32;
+        if GetHandleInformation(handle, &mut flags) == 0 {
+            return false;
+        }
+        let was = flags & HANDLE_FLAG_INHERIT != 0;
+        let new_flags = if inheritable {
+            HANDLE_FLAG_INHERIT
+        } else {
+            0
+        };
+        let _ = SetHandleInformation(handle, HANDLE_FLAG_INHERIT, new_flags);
+        was
+    }
+}
+
 /// Spawn `exe serve` (plus `--wait`) with stdio on the log file, then return.
 pub fn spawn_detached_serve(exe: &Path, wait: bool) -> Result<DetachInfo, String> {
     let mut args = vec!["serve".to_string()];
@@ -263,6 +340,15 @@ pub fn spawn_detached_command(exe: &Path, args: &[String]) -> Result<DetachInfo,
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
+
+    // On Windows, CreateProcess inherits every inheritable handle by default.
+    // When the parent was launched with piped stdio (e.g. `Command::output` in
+    // tests or a supervised launcher), the detached child keeps those pipe
+    // ends open and the parent waiter never sees EOF — CI hangs for hours.
+    // Clear inherit on our stdout/stderr for the spawn only; the log handles
+    // passed via STARTF_USESTDHANDLES stay inheritable.
+    #[cfg(windows)]
+    let _stdio_inherit_guard = WindowsStdioInheritGuard::clear();
 
     let mut child = cmd
         .spawn()
