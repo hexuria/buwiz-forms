@@ -23,7 +23,7 @@
 # Usage:
 #   scripts/setup-macos.sh              # install everything
 #   scripts/setup-macos.sh --check      # verify only, install nothing
-#   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete + node
+#   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete
 #   scripts/setup-macos.sh --no-agent   # skip installing the gpui-agent CLI
 #
 set -euo pipefail
@@ -295,7 +295,6 @@ main() {
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
         cargo install cargo-audit cargo-outdated cargo-machete
-        brew list --versions node >/dev/null 2>&1 || brew install node
     fi
 
     log "Verifying toolchain"
