@@ -5,7 +5,7 @@
 //! the option code, which is what the XML serializes.
 
 use bir_core::validation::official_tax_relief_code;
-use gpui::{Context, Entity, SharedString, Window};
+use gpui::{AppContext, Context, Entity, SharedString, Window};
 use gpui_component::select::{SelectItem, SelectState};
 
 #[derive(Clone)]
