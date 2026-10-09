@@ -1806,6 +1806,9 @@ impl Render for Form2551QView {
         };
 
         let profile_resolution_banner = if let Some(error) = &self.draft.profile_resolution_error {
+            const TITLE: &str = "Filing blocked — effective taxpayer profile is unresolved";
+            const GUIDANCE: &str = "Review and confirm the COR/profile effective dates, then reopen or refresh this return.";
+            let copy_text = format!("{TITLE}\n{error}\n{GUIDANCE}");
             let banner = rsx! {
                 <div
                     px_4
@@ -1819,12 +1822,16 @@ impl Render for Form2551QView {
                     border_color={cx.theme().danger.opacity(0.35)}
                     text_color={cx.theme().foreground}
                 >
-                    <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().danger}>
-                        {"Filing blocked — effective taxpayer profile is unresolved"}
+                    <div flex items_center justify_between gap_2>
+                        <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().danger}>
+                            {TITLE}
+                        </div>
+                        {gpui_component::clipboard::Clipboard::new("profile-resolution-error-copy")
+                            .value(copy_text)}
                     </div>
                     <div text_sm>{error.clone()}</div>
                     <div text_sm>
-                        {"Review and confirm the COR/profile effective dates, then reopen or refresh this return."}
+                        {GUIDANCE}
                     </div>
                 </div>
             };
@@ -3074,6 +3081,35 @@ impl Render for Form2551QView {
                                         })),
                                 );
                             }
+                        }
+
+                        if !self.validation_errors.is_empty() {
+                            let errors_text = self
+                                .validation_errors
+                                .iter()
+                                .map(|(field, message)| format!("{field}: {message}"))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            toolbar = toolbar.child(
+                                gpui_component::button::Button::new("copy_errors_btn")
+                                    .label("Copy Errors")
+                                    .ghost()
+                                    .on_click(cx.listener(move |_, _, window, cx| {
+                                        cx.write_to_clipboard(
+                                            gpui::ClipboardItem::new_string(errors_text.clone()),
+                                        );
+                                        use gpui_component::WindowExt;
+                                        window.push_notification(
+                                            gpui_component::notification::Notification::new()
+                                                .message(
+                                                    "Validation errors copied to clipboard."
+                                                        .to_string(),
+                                                )
+                                                .autohide(true),
+                                            cx,
+                                        );
+                                    })),
+                            );
                         }
 
                         toolbar

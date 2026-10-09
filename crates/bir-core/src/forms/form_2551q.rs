@@ -860,6 +860,17 @@ impl Form2551QDraft {
             }
         }
 
+        // `2551q-tax-rate-eight-percent`: Item 13 = 8% on this return zeroes
+        // Items 20/21/22 along with the rest of the figures. Profile:
+        // official-match.
+        if self.auto_compute_penalties
+            && matches!(self.item_13_election, Item13Election::EightPercent)
+        {
+            self.surcharge = 0.0;
+            self.interest = 0.0;
+            self.compromise = 0.0;
+        }
+
         // Line 23: Total Penalties
         self.total_penalties =
             ((self.surcharge + self.interest + self.compromise) * 100.0).round() / 100.0;
@@ -1272,7 +1283,11 @@ impl From<&Form2551QDraft> for FilingCalculationSnapshot {
 }
 
 use super::FormValidator;
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
+use crate::validation::{
+    OFFICIAL_INVALID_RDO_MESSAGE, OFFICIAL_MIN_FORM_YEAR, OFFICIAL_OLD_VERSION_MESSAGE,
+    fits_official_maxlength, rdo_code_is_official_option, validate_email, validate_ph_phone,
+    validate_zip,
+};
 
 impl FormValidator for Form2551QDraft {
     fn validate(&self) -> Vec<(String, String)> {
@@ -1289,10 +1304,35 @@ impl FormValidator for Form2551QDraft {
                 }),
             ));
         }
+        let today = chrono::Local::now().date_naive();
         if !(1900..=9999).contains(&self.taxable_year) {
             errors.push((
                 "taxable_year".to_string(),
                 "Taxable year must be a 4-digit year".to_string(),
+            ));
+        } else if self.taxable_year < OFFICIAL_MIN_FORM_YEAR {
+            // `2551q-input-year-revision`: official rewrites <2018 to 2018 at
+            // input, so a <2018 period can never reach filing; the gate's
+            // rejection preserves that boundary (`2551q-validate-year-min`
+            // accepts 1900+ only because input made lower years unreachable).
+            errors.push((
+                "taxable_year".to_string(),
+                OFFICIAL_OLD_VERSION_MESSAGE.to_string(),
+            ));
+        } else if self
+            .filing_period_bounds()
+            .is_some_and(|(period_start, _)| period_start > today)
+        {
+            // Profile: app-stricter. Official `validateItem2()` only alerts on
+            // blur when the year-END is after today and keeps the value;
+            // `validateForm()` has no future check. Item 2 is the year the
+            // calendar/fiscal year ends, so comparing it to today would block
+            // Q1–Q3 of a fiscal year ending next calendar year. We reject only
+            // a quarter that has not started yet.
+            errors.push((
+                "taxable_year".to_string(),
+                "The selected quarter has not started yet; Items 2 and 3 cannot be a future period."
+                    .to_string(),
             ));
         }
 
@@ -1331,24 +1371,25 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
-        if self.tax_relief && self.tax_relief_specification.trim().is_empty() {
+        // `2551q-validate-treaty`: official rejects relief-Yes with the
+        // selector at index zero. `txtTaxReliefSpecify` is a select whose
+        // options are `0` (blank), `1` Special Rate and `2` International Tax
+        // Treaty (HTA L874–879; no "Both", unlike 1601C), so anything that
+        // does not map to 1 or 2 is a value official cannot submit.
+        if self.tax_relief
+            && crate::validation::official_tax_relief_code(&self.tax_relief_specification, false)
+                .is_none()
+        {
             errors.push((
                 "tax_relief_specification".to_string(),
-                "Tax-relief specification is required when tax relief is selected".to_string(),
-            ));
-        } else if self.tax_relief_specification.chars().count() > 100 {
-            errors.push((
-                "tax_relief_specification".to_string(),
-                "Tax-relief specification exceeds the official 100-character submission limit"
-                    .to_string(),
+                "Please specify Tax Relief on Item 12.".to_string(),
             ));
         }
 
-        if self.other_tax_credit_description.chars().count() > 100 {
+        if !fits_official_maxlength(&self.other_tax_credit_description, 50) {
             errors.push((
                 "other_tax_credit_description".to_string(),
-                "Other tax credit description exceeds the official 100-character submission limit"
-                    .to_string(),
+                "Other tax credit description exceeds the official 50-character field".to_string(),
             ));
         }
 
@@ -1467,18 +1508,26 @@ impl FormValidator for Form2551QDraft {
             }
         }
 
-        if self.zip_code.trim().is_empty() {
-            // Already handled by the loop above, but we keep it here if we want to separate logic
-        } else if !validate_zip(&self.zip_code) {
+        // `2551q-validate-rdo` rejects only a blank RDO (handled by the
+        // required loop above); its `"000"` check is commented out (HTA
+        // L4915), so official accepts the placeholder. Profile: app-stricter —
+        // we reject the placeholder and, since our field is free text, any
+        // code the rdo.xml-built dropdown could not hold.
+        if !self.rdo_code.trim().is_empty() && !rdo_code_is_official_option(&self.rdo_code) {
+            errors.push((
+                "rdo_code".to_string(),
+                OFFICIAL_INVALID_RDO_MESSAGE.to_string(),
+            ));
+        }
+
+        if !self.zip_code.trim().is_empty() && !validate_zip(&self.zip_code) {
             errors.push((
                 "zip_code".to_string(),
                 "Zip Code must be 4 digits".to_string(),
             ));
         }
 
-        if self.contact_number.trim().is_empty() {
-            // Already handled
-        } else if !validate_ph_phone(&self.contact_number) {
+        if !self.contact_number.trim().is_empty() && !validate_ph_phone(&self.contact_number) {
             errors.push((
                 "contact_number".to_string(),
                 "Contact Number must be valid".to_string(),
@@ -1492,23 +1541,24 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
-        // Reviewed XML/submission capacities, deliberately independent of the
-        // shorter printed combs. Longer legal values use the HTML renderer's
-        // reviewed plain-box layout instead of being truncated to comb cells.
+        // Official input caps (maxlength on the official form). The submitted
+        // XML cannot represent values the official app cannot produce, so the
+        // caps are enforced here even though the frozen HTML renderer can lay
+        // out longer text in its plain-box fallback.
         for (field, label, value, capacity) in [
             (
                 "taxpayer_name",
                 "Taxpayer name",
                 self.taxpayer_name.as_str(),
-                100,
+                50,
             ),
             (
                 "registered_address",
                 "Registered address",
                 self.registered_address.as_str(),
-                200,
+                100,
             ),
-            ("email", "Email address", self.email.as_str(), 100),
+            ("email", "Email address", self.email.as_str(), 50),
             (
                 "contact_number",
                 "Contact number",
@@ -1516,7 +1566,7 @@ impl FormValidator for Form2551QDraft {
                 20,
             ),
         ] {
-            if value.chars().count() > capacity {
+            if !fits_official_maxlength(value, capacity) {
                 errors.push((
                     field.to_string(),
                     format!("{label} exceeds the official {capacity}-character submission limit"),
@@ -1539,6 +1589,10 @@ impl FormValidator for Form2551QDraft {
             ));
         }
         let mut seen_atc_codes = HashSet::new();
+        // Item 13 = 8% can only be ticked on the initial-quarter return
+        // (`item_13_is_applicable`), which is where official zeroes figures.
+        let eight_percent_on_this_return =
+            matches!(self.item_13_election, Item13Election::EightPercent);
         for (i, row) in self.schedule_1.iter().enumerate() {
             let field = format!("schedule_1_row_{}", i + 1);
             let normalized_atc = row.atc.trim().to_ascii_uppercase();
@@ -1626,7 +1680,15 @@ impl FormValidator for Form2551QDraft {
                 self.quarter,
                 self.year_end_month,
             ) else {
-                unreachable!("a registered ATC always has a rate resolution");
+                errors.push((
+                    field,
+                    format!(
+                        "Schedule 1 row {} ATC {} has no rate resolution for this return period",
+                        i + 1,
+                        entry.code
+                    ),
+                ));
+                continue;
             };
             let AtcRateResolution::Single(expected_rate) = rate_resolution else {
                 errors.push((
@@ -1668,21 +1730,72 @@ impl FormValidator for Form2551QDraft {
                 ));
             }
 
-            let annual_eight_percent = matches!(
+            let row_has_amounts = row.taxable_amount.abs() >= TWO_DECIMAL_TOLERANCE
+                || row.tax_due.abs() >= TWO_DECIMAL_TOLERANCE;
+            if eight_percent_on_this_return && row_has_amounts {
+                // `2551q-tax-rate-eight-percent`: ticking Item 13 = 8% on this
+                // (initial-quarter) return zeroes and disables every ATC row.
+                // Profile: app-stricter — official zeroes the rows silently;
+                // we reject so no entered amount is discarded unseen.
+                errors.push((
+                    format!("schedule_1_row_{}", i + 1),
+                    format!(
+                        "Schedule 1 row {} must be NIL when Item 13 is the 8% option on this return; the official option zeroes every ATC row",
+                        i + 1
+                    ),
+                ));
+            } else if matches!(
                 self.annual_income_tax_election,
                 Some(AnnualIncomeTaxElection::EightPercent)
-            );
-            if (annual_eight_percent
-                || matches!(self.item_13_election, Item13Election::EightPercent))
-                && entry.code == "PT010"
-                && (row.taxable_amount.abs() >= TWO_DECIMAL_TOLERANCE
-                    || row.tax_due.abs() >= TWO_DECIMAL_TOLERANCE)
+            ) && entry.code == "PT010"
+                && row_has_amounts
             {
+                // Later quarters of an 8% year: official has no Item 13 tick
+                // to zero anything, but the 8% option is in lieu of Section
+                // 116 percentage tax, so PT010 stays NIL. Other ATCs are
+                // independently taxable and are left alone.
                 errors.push((
                     format!("schedule_1_row_{}", i + 1),
                     "PT010 must be a NIL row for every quarter of a taxable year covered by the 8% income-tax election because that option is in lieu of Section 116 percentage tax"
                         .to_string(),
                 ));
+            }
+        }
+
+        // Items 15/16/17 and 20/21/22 under the 8% option ticked on this
+        // return: official `taxRateOption()` zeroes and disables all six.
+        // Profile: app-stricter for 15/16/17 — official zeroes them silently;
+        // we reject a nonzero entry instead. 20/21/22 are zeroed by
+        // `recompute` (official-match) and rejected here only if overridden.
+        if eight_percent_on_this_return {
+            for (field, label, value) in [
+                (
+                    "creditable_withheld",
+                    "Item 15 creditable tax withheld",
+                    self.creditable_tax_withheld,
+                ),
+                (
+                    "tax_paid_previous",
+                    "Item 16 tax paid previously",
+                    self.tax_paid_previous,
+                ),
+                (
+                    "other_tax_credit",
+                    "Item 17 other tax credit/payment",
+                    self.other_tax_credit,
+                ),
+                ("surcharge", "Item 20 surcharge", self.surcharge),
+                ("interest", "Item 21 interest", self.interest),
+                ("compromise", "Item 22 compromise", self.compromise),
+            ] {
+                if value.abs() >= TWO_DECIMAL_TOLERANCE {
+                    errors.push((
+                        field.to_string(),
+                        format!(
+                            "{label} must be zero under the 8% election; the official option zeroes and disables every listed figure"
+                        ),
+                    ));
+                }
             }
         }
 
@@ -2429,7 +2542,7 @@ mod tests {
 
     #[test]
     fn profile_sync_refreshes_the_editable_taxpayer_type_snapshot() {
-        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
         let mut updated_profile = test_profile();
         updated_profile.taxpayer_type = TaxpayerType::Corporation;
 
@@ -2445,12 +2558,12 @@ mod tests {
             IncomeTaxElection::GraduatedOsd,
             IncomeTaxElection::GraduatedItemized,
         ] {
-            let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+            let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
             let mut updated_profile = test_profile();
             updated_profile
                 .tax_elections
                 .push(crate::profile::TaxElectionHistory {
-                    taxable_year: 2099,
+                    taxable_year: 2026,
                     election,
                     elected_at: chrono::NaiveDateTime::default(),
                     source_form: "profile_manager".into(),
@@ -2468,12 +2581,12 @@ mod tests {
 
     #[test]
     fn profile_sync_applies_a_saved_eight_percent_election_to_item_13() {
-        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
         let mut updated_profile = test_profile();
         updated_profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::EightPercent,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "profile_manager".into(),
@@ -2486,7 +2599,7 @@ mod tests {
 
     #[test]
     fn profile_sync_clears_item_13_when_later_quarter_context_is_unknown() {
-        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
         draft.quarter = 2;
         draft.business_start_date = None;
         draft.item_13_election = Item13Election::Graduated;
@@ -2501,7 +2614,7 @@ mod tests {
     #[test]
     fn profile_sync_keeps_later_quarter_item_13_blank_until_election_is_recorded() {
         let profile = test_profile();
-        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 2);
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 2);
         draft.item_13_election = Item13Election::NotApplicable;
 
         draft.sync_with_profile(&profile);
@@ -2519,12 +2632,12 @@ mod tests {
         profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::GraduatedOsd,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "profile_manager".into(),
             });
-        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 2);
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 2);
 
         draft.sync_with_profile(&profile);
 
@@ -2558,7 +2671,7 @@ mod tests {
 
     #[test]
     fn validation_requires_conditional_descriptions() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.tax_relief = true;
         draft.other_tax_credit = 10.0;
         draft.recompute(None);
@@ -2575,7 +2688,7 @@ mod tests {
                 .any(|(field, _)| field == "other_tax_credit_description")
         );
 
-        draft.tax_relief_specification = "Special law".to_string();
+        draft.tax_relief_specification = "Special Rate".to_string();
         draft.other_tax_credit_description = "Prior payment".to_string();
         let errors = draft.validate();
         assert!(
@@ -2588,9 +2701,9 @@ mod tests {
 
     #[test]
     fn validation_accepts_values_that_use_adaptive_print_text_boxes() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.tax_relief = true;
-        draft.tax_relief_specification = "X".repeat(27);
+        draft.tax_relief_specification = "2".to_string();
         draft.taxpayer_name = "N".repeat(41);
         draft.registered_address = "A".repeat(72);
         draft.email = "abcdefghijklmnopqrst@example.com".to_string();
@@ -2611,7 +2724,7 @@ mod tests {
 
     #[test]
     fn validation_enforces_reviewed_submission_limits_not_comb_capacities() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.tax_relief = true;
         draft.tax_relief_specification = "X".repeat(101);
         draft.taxpayer_name = "N".repeat(101);
@@ -2620,8 +2733,9 @@ mod tests {
         draft.contact_number = "9".repeat(21);
 
         let errors = draft.validate();
+        // `txtTaxReliefSpecify` records no official maxlength, so it is
+        // deliberately absent from this list.
         for field in [
-            "tax_relief_specification",
             "taxpayer_name",
             "registered_address",
             "email",
@@ -2638,7 +2752,7 @@ mod tests {
 
     #[test]
     fn item_13_applicability_uses_taxpayer_type_quarter_and_pt010_activity() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         assert_eq!(draft.item_13_is_applicable(), Some(true));
 
         // A NIL PT010 return is still a Sec. 116 activity return.
@@ -2664,10 +2778,10 @@ mod tests {
     #[test]
     fn new_registrant_can_make_item_13_election_on_the_commencement_quarter() {
         let mut profile = test_profile();
-        profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2099, 8, 15);
+        profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2026, 8, 15);
 
         for (quarter, expected) in [(1, false), (2, false), (3, true), (4, false)] {
-            let draft = Form2551QDraft::new_from_profile(&profile, 2099, quarter);
+            let draft = Form2551QDraft::new_from_profile(&profile, 2026, quarter);
             assert_eq!(
                 draft.item_13_is_applicable(),
                 Some(expected),
@@ -2675,7 +2789,7 @@ mod tests {
             );
         }
 
-        let mut initial_return = Form2551QDraft::new_from_profile(&profile, 2099, 3);
+        let mut initial_return = Form2551QDraft::new_from_profile(&profile, 2026, 3);
         initial_return.item_13_election = Item13Election::Graduated;
         initial_return.schedule_1[0].taxable_amount = 50_000.0;
         initial_return.recompute(None);
@@ -2691,7 +2805,7 @@ mod tests {
     fn later_quarter_without_business_start_snapshot_fails_closed() {
         let mut profile = test_profile();
         profile.business_start_date = None;
-        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 2);
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 2);
         draft.item_13_election = Item13Election::NotApplicable;
 
         assert_eq!(draft.item_13_is_applicable(), None);
@@ -2702,7 +2816,7 @@ mod tests {
 
     #[test]
     fn validation_enforces_the_exact_item_13_election_matrix() {
-        let mut applicable = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut applicable = make_draft(50_000.0, 0.0, 2026, 1);
         for election in [Item13Election::Graduated, Item13Election::EightPercent] {
             applicable.item_13_election = election;
             assert!(
@@ -2726,12 +2840,12 @@ mod tests {
 
         let mut inapplicable_cases = Vec::new();
 
-        let mut later_quarter = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut later_quarter = make_draft(50_000.0, 0.0, 2026, 1);
         later_quarter.quarter = 2;
         later_quarter.annual_income_tax_election = Some(AnnualIncomeTaxElection::Graduated);
         inapplicable_cases.push(("later quarter".to_string(), later_quarter));
 
-        let mut without_pt010 = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut without_pt010 = make_draft(50_000.0, 0.0, 2026, 1);
         without_pt010.schedule_1 = vec![Schedule1Row::new("PT040").expect("PT040 must exist")];
         without_pt010.recompute(None);
         inapplicable_cases.push(("no PT010 activity".to_string(), without_pt010));
@@ -2743,7 +2857,7 @@ mod tests {
             TaxpayerType::Estate,
             TaxpayerType::Trust,
         ] {
-            let mut non_individual = make_draft(50_000.0, 0.0, 2099, 1);
+            let mut non_individual = make_draft(50_000.0, 0.0, 2026, 1);
             non_individual.taxpayer_type = Some(taxpayer_type.clone());
             inapplicable_cases.push((format!("{taxpayer_type:?} taxpayer"), non_individual));
         }
@@ -2776,30 +2890,60 @@ mod tests {
     }
 
     #[test]
-    fn eight_percent_election_requires_nil_pt010_but_preserves_other_atcs() {
-        let mut positive_pt010 = make_draft(50_000.0, 0.0, 2099, 1);
+    fn eight_percent_election_requires_all_atc_rows_and_figures_nil() {
+        // `2551q-tax-rate-eight-percent`: the official option zeroes and
+        // disables every ATC row and every listed figure; the return is
+        // compliance-only, so non-PT010 activity is rejected too.
+        let mut positive_pt010 = make_draft(50_000.0, 0.0, 2026, 1);
         positive_pt010.item_13_election = Item13Election::EightPercent;
         let errors = positive_pt010.validate();
         assert!(errors.iter().any(|(field, message)| {
-            field == "schedule_1_row_1" && message.contains("must be a NIL row")
+            field == "schedule_1_row_1" && message.contains("must be NIL")
         }));
 
-        let mut valid = make_draft(0.0, 0.0, 2099, 1);
-        valid.item_13_election = Item13Election::EightPercent;
-        let mut other_activity = Schedule1Row::new("PT040").expect("PT040 must exist");
-        other_activity.taxable_amount = 50_000.0;
-        valid.schedule_1.push(other_activity);
-        valid.recompute(None);
+        let mut other_activity = make_draft(0.0, 0.0, 2026, 1);
+        other_activity.item_13_election = Item13Election::EightPercent;
+        let mut row = Schedule1Row::new("PT040").expect("PT040 must exist");
+        row.taxable_amount = 50_000.0;
+        other_activity.schedule_1.push(row);
+        other_activity.recompute(None);
+        let errors = other_activity.validate();
+        assert!(
+            errors.iter().any(|(field, _)| field == "schedule_1_row_2"),
+            "non-PT010 activity is also zeroed by the official 8% option: {errors:?}"
+        );
 
+        let mut credited = make_draft(0.0, 0.0, 2026, 1);
+        credited.item_13_election = Item13Election::EightPercent;
+        credited.creditable_tax_withheld = 100.0;
+        credited.auto_compute_penalties = false;
+        credited.compromise = 1_000.0;
+        let errors = credited.validate();
+        for field in ["creditable_withheld", "compromise"] {
+            assert!(
+                errors.iter().any(|(error_field, _)| error_field == field),
+                "{field} is zeroed by the official 8% option: {errors:?}"
+            );
+        }
+
+        // Automatic penalties are zeroed like official `taxRateOption()`.
+        let mut late = make_draft(0.0, 0.0, 2024, 1);
+        late.item_13_election = Item13Election::EightPercent;
+        late.recompute(None);
+        assert_eq!(
+            (late.surcharge, late.interest, late.compromise),
+            (0.0, 0.0, 0.0)
+        );
+
+        let mut valid = make_draft(0.0, 0.0, 2026, 1);
+        valid.item_13_election = Item13Election::EightPercent;
         let errors = valid.validate();
         assert!(
             errors
                 .iter()
-                .all(|(field, _)| field != "schedule_1_row_1" && field != "schedule_1_row_2"),
-            "a NIL PT010 election must not erase independently taxable non-PT010 activity: {errors:?}"
+                .all(|(field, _)| !field.starts_with("schedule_1_row_")),
+            "an all-NIL Schedule 1 must validate under the 8% election: {errors:?}"
         );
-        assert_eq!(valid.schedule_1[0].tax_due, 0.0);
-        assert_eq!(valid.schedule_1[1].tax_due, 1_500.0);
     }
 
     #[test]
@@ -2865,26 +3009,40 @@ mod tests {
         eight_percent_profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::EightPercent,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "2551Qv2018".into(),
             });
 
-        let q1 = Form2551QDraft::new_from_profile(&eight_percent_profile, 2099, 1);
+        let q1 = Form2551QDraft::new_from_profile(&eight_percent_profile, 2026, 1);
         assert_eq!(q1.item_13_election, Item13Election::EightPercent);
         assert_eq!(
             q1.annual_income_tax_election,
             Some(AnnualIncomeTaxElection::EightPercent)
         );
 
-        let mut q2 = Form2551QDraft::new_from_profile(&eight_percent_profile, 2099, 2);
+        let mut q2 = Form2551QDraft::new_from_profile(&eight_percent_profile, 2026, 2);
         q2.item_13_election = Item13Election::NotApplicable;
         q2.schedule_1[0].taxable_amount = 100.0;
         q2.recompute(None);
         assert!(q2.validate().iter().any(|(field, message)| {
             field == "schedule_1_row_1" && message.contains("NIL row")
         }));
+
+        // Later quarters keep independently taxable non-PT010 activity: the
+        // official 8% tick that zeroes every row exists only on Q1.
+        let mut q2_other = Form2551QDraft::new_from_profile(&eight_percent_profile, 2026, 2);
+        q2_other.item_13_election = Item13Election::NotApplicable;
+        let mut row = Schedule1Row::new("PT040").expect("PT040 must exist");
+        row.taxable_amount = 50_000.0;
+        q2_other.schedule_1.push(row);
+        q2_other.recompute(None);
+        let errors = q2_other.validate();
+        assert!(
+            errors.iter().all(|(field, _)| field != "schedule_1_row_2"),
+            "a later-quarter 8% filer's non-PT010 activity must not be rejected: {errors:?}"
+        );
     }
 
     #[test]
@@ -2893,13 +3051,13 @@ mod tests {
             let mut profile = test_profile();
             let mut elections = vec![
                 crate::profile::TaxElectionHistory {
-                    taxable_year: 2099,
+                    taxable_year: 2026,
                     election: IncomeTaxElection::EightPercent,
                     elected_at: chrono::NaiveDateTime::default(),
                     source_form: "2551Qv2018".into(),
                 },
                 crate::profile::TaxElectionHistory {
-                    taxable_year: 2099,
+                    taxable_year: 2026,
                     election: IncomeTaxElection::GraduatedOsd,
                     elected_at: chrono::NaiveDateTime::default(),
                     source_form: "1701Q".into(),
@@ -2910,7 +3068,7 @@ mod tests {
             }
             profile.tax_elections = elections;
 
-            let draft = Form2551QDraft::new_from_profile(&profile, 2099, 1);
+            let draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
             assert_eq!(
                 draft.annual_income_tax_election,
                 Some(AnnualIncomeTaxElection::Conflicting)
@@ -2938,7 +3096,7 @@ mod tests {
 
     #[test]
     fn validation_fails_closed_without_a_taxpayer_type_snapshot() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.taxpayer_type = None;
 
         for election in [
@@ -2960,14 +3118,14 @@ mod tests {
 
     #[test]
     fn queue_boundary_rejects_item_13_choices_that_conflict_with_applicability() {
-        let mut applicable = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut applicable = make_draft(50_000.0, 0.0, 2026, 1);
         applicable.item_13_election = Item13Election::NotApplicable;
         let errors = applicable
             .transition_to_queued()
             .expect_err("NotApplicable must not queue when Item 13 applies");
         assert!(errors.iter().any(|(field, _)| field == "item_13_election"));
 
-        let mut inapplicable = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut inapplicable = make_draft(50_000.0, 0.0, 2026, 1);
         inapplicable.quarter = 2;
         let errors = inapplicable
             .transition_to_queued()
@@ -2977,7 +3135,7 @@ mod tests {
 
     #[test]
     fn queue_revalidation_reverts_an_upgraded_unanswered_draft() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft
             .transition_to_queued()
             .expect("the explicit graduated election should queue");
@@ -3005,12 +3163,12 @@ mod tests {
         profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::GraduatedUnspecified,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "2551Qv2018".into(),
             });
-        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 1);
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.schedule_1[0].taxable_amount = 50_000.0;
         draft.recompute(None);
         assert_eq!(
@@ -3032,7 +3190,7 @@ mod tests {
         changed_profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::EightPercent,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "profile_manager".into(),
@@ -3053,12 +3211,12 @@ mod tests {
         profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::GraduatedUnspecified,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "2551Qv2018".into(),
             });
-        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 1);
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft
             .transition_to_queued()
             .expect("the reviewed return should queue");
@@ -3079,7 +3237,7 @@ mod tests {
 
     #[test]
     fn queue_revalidation_reverts_a_legacy_draft_missing_taxpayer_type() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft
             .transition_to_queued()
             .expect("the fully owned Item 13 election should queue");
@@ -3155,7 +3313,7 @@ mod tests {
     #[test]
     fn queue_revalidation_detects_tampered_totals_and_rates() {
         for tamper in ["total", "rate"] {
-            let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+            let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
             draft
                 .transition_to_queued()
                 .expect("the reviewed return should queue");
@@ -3186,7 +3344,7 @@ mod tests {
             "penalty_mode",
             "business_start",
         ] {
-            let mut draft = make_draft(50_000.0, 300.0, 2099, 1);
+            let mut draft = make_draft(50_000.0, 300.0, 2026, 1);
             draft.other_tax_credit = 200.0;
             draft.other_tax_credit_description = "Adjustment".into();
             if tamper == "zero_rate_amount" {
@@ -3236,7 +3394,7 @@ mod tests {
 
     #[test]
     fn queue_revalidation_rejects_legacy_records_without_a_fingerprint() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft
             .transition_to_queued()
             .expect("the reviewed return should queue");
@@ -3257,12 +3415,12 @@ mod tests {
         original_profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::GraduatedUnspecified,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "2551Qv2018".into(),
             });
-        let mut draft = Form2551QDraft::new_from_profile(&original_profile, 2099, 2);
+        let mut draft = Form2551QDraft::new_from_profile(&original_profile, 2026, 2);
         draft.item_13_election = Item13Election::NotApplicable;
         draft.schedule_1[0].taxable_amount = 50_000.0;
         draft.recompute(None);
@@ -3274,7 +3432,7 @@ mod tests {
         changed_profile
             .tax_elections
             .push(crate::profile::TaxElectionHistory {
-                taxable_year: 2099,
+                taxable_year: 2026,
                 election: IncomeTaxElection::EightPercent,
                 elected_at: chrono::NaiveDateTime::default(),
                 source_form: "2551Qv2018".into(),
@@ -3291,7 +3449,7 @@ mod tests {
     #[test]
     fn validation_rejects_sub_cent_monetary_inputs() {
         for field in ["schedule", "creditable", "previous", "other", "surcharge"] {
-            let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+            let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
             match field {
                 "schedule" => draft.schedule_1[0].taxable_amount = 50_000.004,
                 "creditable" => draft.creditable_tax_withheld = 0.004,
@@ -3326,7 +3484,7 @@ mod tests {
 
     #[test]
     fn validation_rejects_negative_other_tax_credit() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.other_tax_credit = -1.0;
         draft.recompute(None);
 
@@ -3350,7 +3508,7 @@ mod tests {
         ];
 
         for (field, value) in cases {
-            let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+            let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
             draft.auto_compute_penalties = false;
             match field {
                 "surcharge" => draft.surcharge = value,
@@ -3379,7 +3537,11 @@ mod tests {
 
     #[test]
     fn queue_boundary_recomputes_stale_derived_values() {
-        let mut draft = make_draft(10_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(10_000.0, 0.0, 2026, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 0.0;
+        draft.interest = 0.0;
+        draft.compromise = 0.0;
         draft.schedule_1[0].taxable_amount = 50_000.0;
         draft.schedule_1[0].tax_due = 1.0;
         draft.total_tax_due = 1.0;
@@ -3398,7 +3560,7 @@ mod tests {
 
     #[test]
     fn non_amended_item_16_must_be_zero() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.is_amended = false;
         draft.tax_paid_previous = 500.0;
 
@@ -3411,7 +3573,7 @@ mod tests {
 
     #[test]
     fn validation_rejects_values_that_overflow_official_amount_combs() {
-        let draft = make_draft(100_000_000_000_000.0, 0.0, 2099, 1);
+        let draft = make_draft(100_000_000_000_000.0, 0.0, 2026, 1);
 
         let errors = draft.validate();
 
@@ -3427,7 +3589,7 @@ mod tests {
 
     #[test]
     fn validation_enforces_overpayment_disposition_at_queue_boundary() {
-        let mut draft = make_draft(50_000.0, 4_000.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 4_000.0, 2026, 1);
         assert!(draft.total_amount_payable < 0.0);
 
         let errors = draft
@@ -3447,7 +3609,7 @@ mod tests {
 
     #[test]
     fn validation_forbids_disposition_without_an_overpayment() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         assert!(draft.total_amount_payable > 0.0);
         draft.overpayment_disposition = OverpaymentDisposition::Refund;
 
@@ -3461,7 +3623,7 @@ mod tests {
 
     #[test]
     fn validation_bounds_period_and_attached_sheet_fields() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.year_end_month = 6;
         draft.number_of_attached_sheets = 100;
 
@@ -3483,9 +3645,13 @@ mod tests {
 
     #[test]
     fn scenario_1_filed_on_time_with_overpayment() {
-        // Q1 2026 deadline = 2026-04-25. If today < deadline, filed on time.
-        // We use a future year to guarantee on-time filing.
-        let mut draft = make_draft(50_000.0, 4_000.0, 2099, 1);
+        // Automatic penalties are disabled so this exercises only the
+        // credit/payable arithmetic of an on-time filing.
+        let mut draft = make_draft(50_000.0, 4_000.0, 2026, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 0.0;
+        draft.interest = 0.0;
+        draft.compromise = 0.0;
         draft.recompute(None);
 
         // Line 14: 50000 * 3% = 1500
@@ -3556,7 +3722,11 @@ mod tests {
 
     #[test]
     fn zero_tax_filed_on_time_no_penalties() {
-        let mut draft = make_draft(0.0, 0.0, 2099, 1);
+        let mut draft = make_draft(0.0, 0.0, 2026, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 0.0;
+        draft.interest = 0.0;
+        draft.compromise = 0.0;
         draft.recompute(None);
 
         assert_eq!(draft.total_tax_due, 0.0);
@@ -3569,7 +3739,7 @@ mod tests {
 
     #[test]
     fn multiple_atc_rows_sum_correctly() {
-        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
         // Row 1: PT010 at 3%
         draft.schedule_1[0].taxable_amount = 100_000.0;
         // Row 2: PT105 at 5%
@@ -3589,7 +3759,7 @@ mod tests {
 
     #[test]
     fn validation_rejects_noncanonical_atc_schedule_data() {
-        let mut draft = make_draft(10_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(10_000.0, 0.0, 2026, 1);
 
         draft.schedule_1[0].atc = "PT999".to_string();
         assert!(
@@ -3636,7 +3806,7 @@ mod tests {
 
     #[test]
     fn validation_accepts_tax_due_within_half_cent_two_decimal_tolerance() {
-        let mut draft = make_draft(10_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(10_000.0, 0.0, 2026, 1);
         draft.schedule_1[0].tax_due += 0.004;
 
         assert!(
@@ -3649,7 +3819,7 @@ mod tests {
 
     #[test]
     fn validation_accepts_six_schedule_rows_supported_by_xml() {
-        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(100_000.0, 0.0, 2026, 1);
         draft.schedule_1 = ["PT010", "PT040", "PT060", "PT090", "PT140", "PT180"]
             .into_iter()
             .map(|code| Schedule1Row::new(code).expect("test ATC must be canonical"))
@@ -3665,7 +3835,7 @@ mod tests {
 
     #[test]
     fn schedule_continuation_sheet_minimum_preserves_user_owned_attachments() {
-        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(100_000.0, 0.0, 2026, 1);
         draft.schedule_1 = ["PT010", "PT040", "PT041", "PT060", "PT070", "PT090"]
             .into_iter()
             .map(|code| Schedule1Row::new(code).expect("test ATC must be canonical"))
@@ -3694,7 +3864,7 @@ mod tests {
 
     #[test]
     fn validation_rejects_duplicate_schedule_atcs() {
-        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(100_000.0, 0.0, 2026, 1);
         draft.schedule_1 = vec![Schedule1Row::default_pt010(), Schedule1Row::default_pt010()];
 
         let errors = draft.validate();
@@ -3708,7 +3878,7 @@ mod tests {
 
     #[test]
     fn validation_rejects_schedule_rows_beyond_verified_xml_capacity() {
-        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(100_000.0, 0.0, 2026, 1);
         draft.schedule_1 = [
             "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
             "PT170",
@@ -3745,7 +3915,7 @@ mod tests {
 
     #[test]
     fn validation_requires_item_5_to_count_generated_schedule_attachments() {
-        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(100_000.0, 0.0, 2026, 1);
         draft.schedule_1 = [
             "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
             "PT170",
@@ -3772,7 +3942,7 @@ mod tests {
 
     #[test]
     fn other_tax_credit_reduces_payable() {
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
         draft.other_tax_credit = 500.0;
         draft.recompute(None);
 
@@ -3786,7 +3956,7 @@ mod tests {
 
     #[test]
     fn total_tax_credits_includes_all_three_sources() {
-        let mut draft = make_draft(50_000.0, 1000.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 1000.0, 2026, 1);
         draft.is_amended = true;
         draft.tax_paid_previous = 200.0;
         draft.other_tax_credit = 300.0;
@@ -3800,7 +3970,7 @@ mod tests {
 
     #[test]
     fn tax_paid_previous_only_counted_when_amended() {
-        let mut draft = make_draft(50_000.0, 1000.0, 2099, 1);
+        let mut draft = make_draft(50_000.0, 1000.0, 2026, 1);
         draft.is_amended = false;
         draft.tax_paid_previous = 500.0; // should be ignored
         draft.recompute(None);
@@ -3808,5 +3978,145 @@ mod tests {
         // Line 18 should NOT include tax_paid_previous
         assert_eq!(draft.total_tax_credits, 1000.0);
         assert_eq!(draft.tax_payable, 500.0); // 1500 - 1000
+    }
+
+    #[test]
+    fn official_parity_rejects_out_of_range_year_and_placeholder_rdo() {
+        let draft = make_draft(50_000.0, 0.0, 2017, 1);
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "taxable_year")
+        );
+
+        // A quarter that has not started yet is rejected.
+        let mut draft = make_draft(
+            50_000.0,
+            0.0,
+            u16::try_from(chrono::Utc::now().year() + 1).expect("next year fits u16"),
+            1,
+        );
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "taxable_year")
+        );
+
+        draft.rdo_code = "000".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "rdo_code")
+        );
+
+        // The official dropdown holds only rdo.xml codes.
+        draft.rdo_code = "999".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "rdo_code")
+        );
+
+        draft.rdo_code = "018".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "rdo_code")
+        );
+    }
+
+    #[test]
+    fn official_parity_rejects_unselected_tax_relief_selector() {
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.tax_relief = true;
+
+        // `txtTaxReliefSpecify` options: 0 (blank), 1 Special Rate, 2
+        // International Tax Treaty (HTA L874–879).
+        for spec in ["1", "2", "Special Rate", "International Tax Treaty"] {
+            draft.tax_relief_specification = spec.to_string();
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(field, _)| field != "tax_relief_specification"),
+                "spec {spec:?} should validate"
+            );
+        }
+
+        draft.tax_relief_specification = String::new();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "tax_relief_specification"),
+            "a relief-Yes return with the selector unselected must be rejected"
+        );
+
+        // "0" is the unselected option; 2551Q has no "Both"; free text is not
+        // an option official can submit.
+        for spec in ["0", "3", "Both", "Special law 123"] {
+            draft.tax_relief_specification = spec.to_string();
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .any(|(field, _)| field == "tax_relief_specification"),
+                "spec {spec:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn fiscal_year_ending_next_year_accepts_started_quarters() {
+        // Item 2 is the year the fiscal year ends. A fiscal year ending in
+        // twelve months from now has its Q1 already under way.
+        let today = chrono::Local::now().date_naive();
+        let fiscal_end = today
+            .checked_add_months(chrono::Months::new(11))
+            .expect("date in range");
+        let mut draft = make_draft(
+            50_000.0,
+            0.0,
+            u16::try_from(fiscal_end.year()).expect("year fits u16"),
+            1,
+        );
+        draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+        draft.year_end_month = u8::try_from(fiscal_end.month()).expect("month fits u8");
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "taxable_year"),
+            "a started fiscal Q1 must pass even when the fiscal year ends next calendar year"
+        );
+
+        draft.quarter = 4;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "taxable_year"),
+            "a fiscal quarter that has not started must be rejected"
+        );
+    }
+
+    #[test]
+    fn official_parity_enforces_field_length_caps() {
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.taxpayer_name = "N".repeat(51);
+        draft.registered_address = "A".repeat(101);
+        draft.email = format!("{}@example.com", "e".repeat(40));
+        let errors = draft.validate();
+        for field in ["taxpayer_name", "registered_address", "email"] {
+            assert!(
+                errors.iter().any(|(error_field, _)| error_field == field),
+                "expected an error for {field}: {errors:?}"
+            );
+        }
     }
 }

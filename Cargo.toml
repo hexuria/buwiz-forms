@@ -28,7 +28,10 @@ chrono = { version = "0.4", features = ["serde"] }
 aes = "0.8"
 cbc = "0.1"
 sha2 = "0.10"
-flate2 = "1"
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+# Bundle C zlib so IAF compression matches the official Encrypt.exe byte for
+# byte on every platform (system zlib versions differ).
+libz-sys = { version = "1", default-features = false, features = ["static", "libc"] }
 zeroize = { version = "1", features = ["derive"] }
 aes-gcm = "0.10"
 

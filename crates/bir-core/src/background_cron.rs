@@ -1759,7 +1759,7 @@ mod tests {
             "email": "guard@example.com",
             "default_form_type": "2551Qv2018",
             "taxpayer_type": "Individual",
-            "business_start_date": "2090-01-01"
+            "business_start_date": "2010-01-01"
         }))
         .unwrap()
     }
@@ -1767,7 +1767,7 @@ mod tests {
     fn reviewed_profile() -> TaxpayerProfile {
         let mut profile = test_profile();
         profile.tax_elections.push(TaxElectionHistory {
-            taxable_year: 2099,
+            taxable_year: 2024,
             election: IncomeTaxElection::GraduatedUnspecified,
             elected_at: chrono::NaiveDateTime::default(),
             source_form: "2551Qv2018".to_string(),
@@ -1777,7 +1777,7 @@ mod tests {
     }
 
     fn queued_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
-        let mut draft = Form2551QDraft::new_from_effective_profile(profile, 2099, 1);
+        let mut draft = Form2551QDraft::new_from_effective_profile(profile, 2024, 1);
         draft.item_13_election = Item13Election::Graduated;
         draft
             .transition_to_queued()
@@ -1786,7 +1786,7 @@ mod tests {
     }
 
     fn queued_1601c_draft(profile: &TaxpayerProfile) -> Form1601CDraft {
-        let mut draft = Form1601CDraft::new_from_profile(profile, 2099, 5);
+        let mut draft = Form1601CDraft::new_from_profile(profile, 2024, 5);
         draft.any_taxes_withheld = false;
         draft
             .transition_to_queued()
@@ -2162,7 +2162,7 @@ mod tests {
             .iter()
             .find(|job| {
                 job.name
-                    == "Waiting for 1601C May 2099 confirmation for 123-456-789-000 (receipts@example.com)"
+                    == "Waiting for 1601C May 2024 confirmation for 123-456-789-000 (receipts@example.com)"
             })
             .expect("successful submission should schedule its confirmation email poll");
         assert_eq!(email_job.status, "Queued");

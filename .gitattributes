@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Encrypted IAF samples are opaque bytes; never normalize them.
+crates/bir-core/tests/sample-payloads/*.iaf.xml binary

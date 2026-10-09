@@ -41,25 +41,33 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtTIN1", tin1.clone());
         insert(&mut fields, "frm1601c:txtTIN2", tin2.clone());
         insert(&mut fields, "frm1601c:txtTIN3", tin3.clone());
+        // Page 1's `maxlength="3"` only limits typing: official fills both
+        // branch fields from the profile `tin4` (HTA L3779–3780), which
+        // `padZeros` pads to 5 digits, so both carry the same 5-wide value.
         insert(&mut fields, "frm1601c:txtBranchCode", branch.clone());
         insert(&mut fields, "frm1601c:txtRDOCode", self.rdo_code.clone());
 
         // Use encoded spaces if requested by original XML format, but text should be fine
+        // Name, address and line of business are uppercased to mirror the
+        // official `capital()` onblur handler. Profile: official-match. The
+        // email is not: the effective `capital()` (string-util.js L236) skips
+        // `txtEmail`, so it is submitted as entered and only printed in
+        // capitals by the renderer.
         insert(
             &mut fields,
             "frm1601c:txtTaxpayerName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
         insert(
             &mut fields,
             "frm1601c:txtAddress",
-            self.registered_address.clone(),
+            self.registered_address.to_uppercase(),
         );
         if !self.registered_address_2.is_empty() {
             insert(
                 &mut fields,
                 "frm1601c:txtAddress2",
-                self.registered_address_2.clone(),
+                self.registered_address_2.to_uppercase(),
             );
         }
         insert(&mut fields, "frm1601c:txtZipCode", self.zip_code.clone());
@@ -88,7 +96,11 @@ impl Form1601CDraft {
             &mut fields,
             "frm1601c:selTreaty",
             if self.tax_relief {
-                self.tax_relief_specification.clone()
+                // `validate` rejects unmapped values; if one reaches here
+                // anyway, keep it verbatim rather than emit "0" (no relief)
+                // under SpecialTax = Yes.
+                crate::validation::official_tax_relief_code(&self.tax_relief_specification, true)
+                    .unwrap_or_else(|| self.tax_relief_specification.trim().to_string())
             } else {
                 "0".to_string()
             },
@@ -136,10 +148,17 @@ impl Form1601CDraft {
             "frm1601c:txtTax27",
             self.tax_27_taxes_withheld_for_remittance,
         );
+        // `1601c-input-011`: on a non-amended return the official handler
+        // disables Item 28 and resets it to 0.00; the serialized field mirrors
+        // that even when validate() was bypassed. Profile: official-match.
         insert_money(
             &mut fields,
             "frm1601c:txtTax28",
-            self.tax_28_tax_remitted_previously,
+            if self.is_amended {
+                self.tax_28_tax_remitted_previously
+            } else {
+                0.0
+            },
         );
 
         insert(
@@ -196,7 +215,7 @@ impl Form1601CDraft {
         insert(
             &mut fields,
             "frm1601c:txtPg2TaxpayerName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
 
         // Schedule I — the verified 1601-C payload exposes three rows.
@@ -252,7 +271,7 @@ impl Form1601CDraft {
         insert(
             &mut fields,
             "frm1601c:txtLineBus",
-            self.line_of_business.clone(),
+            self.line_of_business.to_uppercase(),
         );
 
         fields
@@ -803,8 +822,8 @@ mod tests {
             .expect("generated 1601-C XML should parse back into typed state");
 
         assert!(parsed.tax_relief);
-        assert_eq!(parsed.tax_relief_specification, "International Tax Treaty");
-        assert_eq!(parsed.registered_address_2, "Second address line");
+        assert_eq!(parsed.tax_relief_specification, "2");
+        assert_eq!(parsed.registered_address_2, "SECOND ADDRESS LINE");
         assert_eq!(parsed.schedule_1, draft.schedule_1);
         assert_eq!(parsed.tax_26_adjustment, 150.0);
         assert_eq!(parsed.tax_27_taxes_withheld_for_remittance, 1_150.0);
@@ -1010,7 +1029,7 @@ frm1601c:txtLineBus
         );
         assert_eq!(
             fields_with_optional_address["frm1601c:txtAddress2"],
-            "Reviewed second address line"
+            "REVIEWED SECOND ADDRESS LINE"
         );
     }
 

@@ -1342,3 +1342,29 @@ fn profile_version_validation_rejects_invalid_effective_date_range() {
             .contains("effective end date before its start date")
     }));
 }
+
+#[test]
+fn profile_tin_must_pass_the_official_check_digit() {
+    let mut profile = self_employed_profile(false, None, false);
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .all(|error| error.field != "tin")
+    );
+
+    // 010-558-055 fails chkt.exe's check digit.
+    profile.tin.segment3 = "055".into();
+    assert!(validate_profile(&profile).iter().any(|error| {
+        error.field == "tin" && error.message == "You have entered an incorrect TIN"
+    }));
+
+    // Dummy TINs are rejected even though chkt.exe accepts 000000000.
+    profile.tin.segment1 = "000".into();
+    profile.tin.segment2 = "000".into();
+    profile.tin.segment3 = "000".into();
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .any(|error| error.field == "tin")
+    );
+}

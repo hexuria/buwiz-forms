@@ -63,8 +63,12 @@ impl Form2551QDraft {
         insert(
             &mut fields,
             "frm2551Qv2018:txtTaxReliefSpecify",
+            // Known labels map to the official option code; anything else is
+            // preserved verbatim (the official `<option>` values for this
+            // field were never captured), never dropped to blank.
             if self.tax_relief {
-                self.tax_relief_specification.clone()
+                crate::validation::official_tax_relief_code(&self.tax_relief_specification, false)
+                    .unwrap_or_else(|| self.tax_relief_specification.trim().to_string())
             } else {
                 String::new()
             },
@@ -94,15 +98,19 @@ impl Form2551QDraft {
             "frm2551Qv2018:txtRDOCode",
             self.rdo_code.clone(),
         );
+        // Name and address are uppercased to mirror the official `capital()`
+        // onblur handler. Profile: official-match. The email is not: the
+        // effective `capital()` (string-util.js L236) skips `txtEmail`, so it
+        // is submitted as entered and only printed in capitals by the renderer.
         insert(
             &mut fields,
             "frm2551Qv2018:registeredName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
         insert(
             &mut fields,
             "frm2551Qv2018:registeredAddress",
-            self.registered_address.clone(),
+            self.registered_address.to_uppercase(),
         );
         insert(&mut fields, "frm2551Qv2018:zipCode", self.zip_code.clone());
         insert(
@@ -202,7 +210,7 @@ impl Form2551QDraft {
         insert(
             &mut fields,
             "frm2551Qv2018:txtPg2TaxpayerName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
         insert(&mut fields, "frm2551Qv2018:txtCurrentPage", "1");
         insert(&mut fields, "frm2551Qv2018:txtMaxPage", "2");
@@ -460,7 +468,7 @@ mod tests {
         draft.year_end_month = 6;
         draft.number_of_attached_sheets = 3;
         draft.tax_relief = true;
-        draft.tax_relief_specification = "Special Law 123".to_string();
+        draft.tax_relief_specification = "International Tax Treaty".to_string();
         draft.item_13_election = Item13Election::EightPercent;
         draft.other_tax_credit_description = "Prior quarter adjustment".to_string();
         draft.overpayment_disposition = OverpaymentDisposition::Refund;
@@ -474,10 +482,7 @@ mod tests {
         assert_eq!(fields["frm2551Qv2018:txtSheets"], "3");
         assert_eq!(fields["frm2551Qv2018:taxTreaty_1"], "true");
         assert_eq!(fields["frm2551Qv2018:taxTreaty_2"], "false");
-        assert_eq!(
-            fields["frm2551Qv2018:txtTaxReliefSpecify"],
-            "Special Law 123"
-        );
+        assert_eq!(fields["frm2551Qv2018:txtTaxReliefSpecify"], "2");
         assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");
         assert_eq!(fields["frm2551Qv2018:taxRate2"], "true");
         assert_eq!(
@@ -486,6 +491,20 @@ mod tests {
         );
         assert_eq!(fields["frm2551Qv2018:overPayment1"], "true");
         assert_eq!(fields["frm2551Qv2018:overPayment2"], "false");
+    }
+
+    #[test]
+    fn unmapped_tax_relief_specification_serializes_verbatim_not_blank() {
+        let mut draft = sample_draft();
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "  Special law 123 ".to_string();
+
+        let fields = draft.to_bir_field_map();
+
+        assert_eq!(
+            fields["frm2551Qv2018:txtTaxReliefSpecify"],
+            "Special law 123"
+        );
     }
 
     #[test]
