@@ -12,7 +12,23 @@ use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_dec
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
 use bir_core::forms::form_2551q::{Form2551QDraft, Item13Election};
 use bir_core::profile::TaxpayerProfile;
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+
+/// SHA-256 of each sample plaintext encrypted by the official eBIRForms
+/// `Encrypt.exe` (sha256 `429337f4…4d2c`, unchanged from 7.9.6.0 through
+/// 7.9.6.2.1), run under emulation. Our `compress_and_encrypt` must match
+/// it byte for byte; regenerating samples can never change these.
+const OFFICIAL_ENCRYPT_EXE_SHA256: [(&str, &str); 2] = [
+    (
+        "1601C-062025",
+        "e7b6d0f9433f41608e9bb0bf059be513e9203c2ea549136cad8e35e9bdb91a47",
+    ),
+    (
+        "2551Q-122025Q1",
+        "282dcc73bfd7233ae37b56b1f4afcd994ed93719bd2a69048e552b7cbea28a4b",
+    ),
+];
 
 fn dummy_profile(default_form_type: &str, taxpayer_type: &str) -> TaxpayerProfile {
     // 123-456-788 passes the official check digit; every value is fictitious.
@@ -98,6 +114,21 @@ fn check_sample(stem: &str, plaintext: &str) {
         plaintext.as_bytes(),
         "encryption must round-trip"
     );
+
+    let official = OFFICIAL_ENCRYPT_EXE_SHA256
+        .iter()
+        .find(|(name, _)| *name == stem)
+        .map(|(_, sha)| *sha);
+    if let Some(official) = official {
+        let digest: String = Sha256::digest(&encrypted)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_eq!(
+            digest, official,
+            "{stem}: compress_and_encrypt no longer matches the official Encrypt.exe output"
+        );
+    }
 
     let dir = samples_dir();
     let plain_path = dir.join(format!("{stem}.plain.xml"));

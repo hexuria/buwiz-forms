@@ -144,7 +144,10 @@ fn dcp_encrypt_cbc(key: &[u8; 32], iv: &[u8; 16], indata: &[u8], outdata: &mut [
 pub fn compress_and_encrypt(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>, CryptoError> {
     let (key, iv) = derive_key_and_iv(passphrase);
 
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    // Encrypt.exe compresses with zlib level 9 (`78 DA` header). C zlib at
+    // that level reproduces its output byte for byte; see
+    // tests/sample_payloads_test.rs.
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
     encoder.write_all(plaintext)?;
     let compressed = encoder.finish()?;
 

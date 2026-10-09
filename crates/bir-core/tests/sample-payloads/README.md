@@ -23,7 +23,11 @@ files. If the change is intended, regenerate them with:
 UPDATE_SAMPLE_PAYLOADS=1 cargo test -p bir-core --test sample_payloads_test
 ```
 
-These are not byte-identical to what the official eBIRForms app writes.
+The encryption step is byte-identical to the official `Encrypt.exe`: running
+it under emulation on these plaintexts gives exactly the `*.iaf.xml` bytes,
+pinned by hash in the test.
+
+The plaintext is not byte-identical to what the official eBIRForms app writes.
 Official `saveXML` emits fields in form order, `escape()`s only the name, line
 of business and address (folding Address 2 into the `txtAddress` div), leaves
 other values raw, and appends a trailer. Ours emits keys sorted and
