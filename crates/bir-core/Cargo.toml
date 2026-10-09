@@ -57,7 +57,14 @@ libc = "0.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { workspace = true, features = ["apple-native"] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+# windows-native is required: keyring 3.x has no default credential store, so
+# a featureless build silently falls back to an in-memory mock. The SQLCipher
+# master key then never persists and every relaunch regenerates it, which
+# makes the existing database unreadable and gets it quarantined.
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
 keyring = { workspace = true }
 
 [dev-dependencies]

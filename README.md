@@ -93,29 +93,76 @@ stamper with `stamp_frozen_names.py --check-all`.
 - **Python 3.13**: Used by freeze inventory/stamp checks and packaging identity scripts.
 
 ### 🍏 macOS Dependencies
+Run the one-shot setup script (idempotent; installs Xcode CLT, Homebrew
+packages, and the Rust toolchain with both universal-build targets):
+
+```bash
+scripts/setup-macos.sh           # install everything
+scripts/setup-macos.sh --check   # verify an existing install
+scripts/setup-macos.sh --extras  # also cargo-audit/outdated/machete + node
+scripts/setup-macos.sh --no-agent # skip the gpui-agent CLI
+```
+
+It also installs the `gpui-agent` CLI at the rev pinned in Cargo.lock — see
+[Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent).
 
 No external document renderer is required. The app uses the platform WebView
-with its bundled offline HTML form assets.
+with its bundled offline HTML form assets. OpenSSL compiles from vendored
+source — the system perl + clang are all it needs.
 
 ### 🪟 Windows Dependencies
+Run the one-shot setup script (idempotent; installs Chocolatey packages,
+VS 2022 Build Tools, Rust, and the required `OPENSSL_*` env vars):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+```
+The script self-elevates via UAC — it works from a regular PowerShell window.
+It also installs the `gpui-agent` CLI at the rev pinned in `crates/bir-desktop/Cargo.toml`
+— see [Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent).
+
+Or install the pieces manually:
 - **OpenSSL** (Required for SQLCipher and networking):
   ```powershell
   choco install openssl -y
   ```
-  *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`).*
+  *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`), and `OPENSSL_LIB_DIR` to the VC x64 lib dir (e.g., `C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD`).*
+- **Visual Studio 2022 Build Tools** with the C++ workload and Windows 11 SDK.
+- **Strawberry Perl and NASM** (required by the vendored `openssl-src` build; Strawberry Perl must precede Git Bash's perl on `PATH`).
 
-### 🐧 Linux Dependencies (Ubuntu/Debian)
-Building the GPUI frontend and running tests requires various graphic, windowing, and system libraries:
+### 🐧 Linux Dependencies
+The fastest path is the cross-distro setup script, which detects your package
+manager (apt, dnf, pacman, zypper), installs the system libraries below plus
+the Rust toolchain and `just`, then verifies the result:
+
+```bash
+scripts/setup-linux.sh           # install everything
+scripts/setup-linux.sh --check   # verify an existing install
+scripts/setup-linux.sh --extras  # also cargo-audit/outdated/machete + node
+scripts/setup-linux.sh --no-agent # skip the gpui-agent CLI
+```
+
+It covers Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro, and openSUSE. It also
+installs the `gpui-agent` CLI (pinned to the same git rev as the app's embedded
+host crate) so the app can be driven headlessly — see
+[Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent). On other
+distributions, install the equivalent of these Ubuntu/Debian packages:
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  pkg-config libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev \
+  build-essential pkg-config perl python3 \
+  libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev \
   libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
   libwayland-client0 libasound2-dev libudev-dev libvulkan-dev \
   libfontconfig1-dev libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
-  mesa-vulkan-drivers libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+  libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev \
+  mesa-vulkan-drivers libappindicator3-dev librsvg2-dev patchelf xvfb \
+  fonts-noto-core fonts-noto-color-emoji
 ```
 - **WebKitGTK** powers the bundled offline HTML preview, print, and PDF export host.
+- **OpenSSL** compiles from source (`openssl-src` vendored) — a C toolchain and `perl` are required even when `libssl-dev` is installed.
+- **Noto Sans** is the UI font — without it the window presents as a blank white frame.
+- Headless machines can run the GTK print tests under the virtual framebuffer: `xvfb-run -a just test`.
+- **Blank window on a VM / software GPU:** llvmpipe's Vulkan path can present stale frames. Force the Gl backend with `VK_ICD_FILENAMES=/dev/null just run`.
 
 ---
 
@@ -157,7 +204,7 @@ sudo apt-get install -y \
 We follow a "less is better" philosophy. You only need to remember a few core commands:
 
 - `just run` — Run the app locally with developer diagnostics.
-- `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
+- `just install` — Automatically figure out your OS and build the installer package (macOS DMG/PKG, Windows MSIX/EXE, Linux DEB/Tarball).
 - `DEV_MODE=true just install --inspector` — Compiles a package with internal diagnostics unlocked.
 - `just _package-mac --agent` — Mac release `.app` with the gpui-agent control plane compiled in. Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
@@ -184,6 +231,19 @@ reach it unless you compile `--features agent` (Mac release bundle:
 `just _package-mac --agent`). Even a feature-enabled binary stays silent
 until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
 host with env vars, then talk to it with `gpui-agent`.
+
+The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
+and is installed automatically by every setup script — `setup-windows.ps1`,
+`setup-linux.sh`, and `setup-macos.sh` all resolve the rev the app pins
+(`crates/bir-desktop/Cargo.toml` / `Cargo.lock`) so driver and host can never
+drift on protocol version. Manually:
+`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
+
+**Windows note:** the HMAC token handshake fails closed on Windows at the
+current pin — gpui-agent's nonce source is `/dev/urandom` (Unix-only), so the
+host drops connections before the challenge. For local-only driving on
+Windows, set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`
+(never on shared machines).
 
 ```bash
 # Build the painted app with the control plane. `dev-tools` is not required;
