@@ -26,7 +26,7 @@
 # Usage:
 #   scripts/setup-linux.sh              # install everything
 #   scripts/setup-linux.sh --check      # verify only, install nothing
-#   scripts/setup-linux.sh --extras     # also install cargo-audit/outdated/machete + node
+#   scripts/setup-linux.sh --extras     # also install cargo-audit/outdated/machete
 #   scripts/setup-linux.sh --no-agent   # skip installing the gpui-agent CLI
 #
 set -euo pipefail
@@ -314,12 +314,6 @@ main() {
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
         cargo install cargo-audit cargo-outdated cargo-machete
-        case "$PM" in
-            apt-get) install_pkgs "nodejs npm" ;;
-            dnf)     install_pkgs "nodejs npm" ;;
-            pacman)  install_pkgs "nodejs npm" ;;
-            zypper)  install_pkgs "nodejs npm" ;;
-        esac
     fi
 
     # Freeze-inventory / stamp CI scripts expect Python 3.13; warn if older.
