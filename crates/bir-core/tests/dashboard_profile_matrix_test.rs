@@ -1,4 +1,5 @@
-use bir_core::calendar_rules::{DeadlineKind, DeadlineOverride, DeadlinePeriod, DeadlineResolver};
+use bir_core::calendar_rules::{DeadlineOverride, DeadlinePeriod, DeadlineResolver};
+use bir_core::forms::{FormSetSource, PerYearFormsSet};
 use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
 use bir_core::integration::{
     deadline_applies_to_profile, profile_deadline_overrides_for_year,
@@ -7,33 +8,16 @@ use bir_core::integration::{
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, ExciseTaxCategory, IncomeTaxElection, ManualObligationOverride,
-    ManualObligationOverrideAction, ProfileDeadlineOverride, RegisteredTaxType,
-    RegistrationActivityStatus, TaxClassification, TaxElectionHistory, TaxProfileVersion,
-    TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
+    ManualObligationOverrideAction, ProfileDeadlineOverride, ProfileYearFacts, RegisteredTaxType,
+    RegistrationActivityStatus, TaxClassification, TaxElectionHistory,
+    TaxProfileResolutionIssueKind, TaxProfileVersion, TaxProfileVersionStatus, TaxpayerProfile,
+    TaxpayerType,
 };
 use bir_core::validation::validate_profile;
 use chrono::NaiveDate;
 use std::collections::BTreeSet;
 
 const TAXABLE_YEAR: u16 = 2026;
-// One annual ITR per year: the primary is selected by classification, EOPT
-// tier, and deduction election. Self-employed defaults to 1701; an 8%/OSD
-// election maps to 1701A; a Micro/Small tier (2024+) without such an election
-// maps to the simplified 1701MS.
-const SELF_EMPLOYED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
-const SELF_EMPLOYED_NON_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701Q", "2551Q"];
-const SELF_EMPLOYED_NON_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q"];
-const SELF_EMPLOYED_NON_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701A", "1701Q"];
-const SELF_EMPLOYED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
-const SELF_EMPLOYED_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701Q", "2550Q"];
-const SELF_EMPLOYED_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q", "2550Q"];
-const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701A", "1701Q", "2550Q"];
-const MIXED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
-const MIXED_NON_VAT_8_PERCENT: &[&str] = &["1701", "1701Q"];
-const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
-const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1601C", "1604CF", "2316"];
-const EXPANDED_WITHHOLDING: &[&str] = &["0619E", "1601EQ", "1604E"];
-const FINAL_WITHHOLDING: &[&str] = &["0619F", "1600WP", "1601F", "1601FQ", "1602", "1603"];
 
 fn base_profile(
     taxpayer_type: TaxpayerType,
@@ -91,6 +75,7 @@ fn base_profile(
         birth_date: None,
         compliance_source_mode: Default::default(),
         per_year_forms: Default::default(),
+        profile_years: Default::default(),
     }
 }
 
@@ -99,24 +84,17 @@ fn forms_for(profile: &TaxpayerProfile) -> BTreeSet<String> {
 }
 
 fn forms_for_year(profile: &TaxpayerProfile, year: u16) -> BTreeSet<String> {
-    let mut p = profile.clone();
-    p.ensure_profile_version_ledger();
-    configure_forms_set_for_year(&mut p, year);
-    recurring_obligation_forms_for_profile_and_year(&p, year)
+    recurring_obligation_forms_for_profile_and_year(profile, year)
         .into_iter()
         .collect()
 }
 
-fn configure_forms_set_for_year(profile: &mut TaxpayerProfile, year: u16) {
-    let suggestions = bir_core::integration::form_suggestions_for_profile_year(profile, year);
-    let reconciliation = bir_core::forms::reconcile_forms_set_for_year(
+fn with_manual_forms(mut profile: TaxpayerProfile, year: u16, codes: &[&str]) -> TaxpayerProfile {
+    profile.per_year_forms.insert(
         year,
-        profile.per_year_forms.get(&year),
-        &suggestions,
+        PerYearFormsSet::from_codes(year, codes.iter().copied(), FormSetSource::Manual),
     );
     profile
-        .per_year_forms
-        .insert(year, reconciliation.forms_set);
 }
 
 fn expected(codes: &[&str]) -> BTreeSet<String> {
@@ -125,15 +103,6 @@ fn expected(codes: &[&str]) -> BTreeSet<String> {
 
 fn assert_forms(label: &str, profile: &TaxpayerProfile, codes: &[&str]) {
     assert_eq!(forms_for(profile), expected(codes), "{label}");
-}
-
-fn assert_forms_union(label: &str, profile: &TaxpayerProfile, groups: &[&[&str]]) {
-    let mut codes = BTreeSet::new();
-    for group in groups {
-        codes.extend(expected(group));
-    }
-
-    assert_eq!(forms_for(profile), codes, "{label}");
 }
 
 fn add_eight_percent_election(profile: &mut TaxpayerProfile, year: u16) {
@@ -185,378 +154,103 @@ fn confirmed_version(
     version
 }
 
+fn configure_forms_set_for_year(profile: &mut TaxpayerProfile, year: u16) {
+    profile
+        .per_year_forms
+        .entry(year)
+        .or_insert_with(|| PerYearFormsSet::new(year));
+}
+
 #[test]
 fn dashboard_profile_matrix_base_forms_for_2026() {
-    let pure_comp = base_profile(
-        TaxpayerType::Individual,
-        Some(TaxClassification::PurelyCompensation),
-    );
-    assert_forms("pure compensation", &pure_comp, &["1700"]);
-
-    let mut pure_comp_single = pure_comp.clone();
-    pure_comp_single.has_single_employer = true;
-    assert_forms("pure compensation single employer", &pure_comp_single, &[]);
-
+    let empty = self_employed_profile(false, None, false);
     assert_forms(
-        "self-employed non-vat no tier",
-        &self_employed_profile(false, None, false),
-        SELF_EMPLOYED_NON_VAT,
-    );
-    assert_forms(
-        "self-employed non-vat micro",
-        &self_employed_profile(false, Some(EoptTier::Micro), false),
-        SELF_EMPLOYED_NON_VAT_MICRO_SMALL,
-    );
-    assert_forms(
-        "self-employed non-vat small",
-        &self_employed_profile(false, Some(EoptTier::Small), false),
-        SELF_EMPLOYED_NON_VAT_MICRO_SMALL,
-    );
-    assert_forms(
-        "self-employed non-vat medium",
-        &self_employed_profile(false, Some(EoptTier::Medium), false),
-        SELF_EMPLOYED_NON_VAT,
-    );
-    assert_forms(
-        "self-employed non-vat large",
-        &self_employed_profile(false, Some(EoptTier::Large), false),
-        SELF_EMPLOYED_NON_VAT,
-    );
-    assert_forms(
-        "self-employed non-vat 8 percent",
-        &self_employed_profile(false, None, true),
-        SELF_EMPLOYED_NON_VAT_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed non-vat micro 8 percent",
-        &self_employed_profile(false, Some(EoptTier::Micro), true),
-        SELF_EMPLOYED_NON_VAT_MICRO_SMALL_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed non-vat small 8 percent",
-        &self_employed_profile(false, Some(EoptTier::Small), true),
-        SELF_EMPLOYED_NON_VAT_MICRO_SMALL_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed non-vat medium 8 percent",
-        &self_employed_profile(false, Some(EoptTier::Medium), true),
-        SELF_EMPLOYED_NON_VAT_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed non-vat large 8 percent",
-        &self_employed_profile(false, Some(EoptTier::Large), true),
-        SELF_EMPLOYED_NON_VAT_8_PERCENT,
+        "no manual set means no dashboard forms, even for self-employed non-VAT",
+        &empty,
+        &[],
     );
 
+    let vat = self_employed_profile(true, None, false);
     assert_forms(
-        "self-employed vat no tier",
-        &self_employed_profile(true, None, false),
-        SELF_EMPLOYED_VAT,
-    );
-    assert_forms(
-        "self-employed vat micro",
-        &self_employed_profile(true, Some(EoptTier::Micro), false),
-        SELF_EMPLOYED_VAT_MICRO_SMALL,
-    );
-    assert_forms(
-        "self-employed vat small",
-        &self_employed_profile(true, Some(EoptTier::Small), false),
-        SELF_EMPLOYED_VAT_MICRO_SMALL,
-    );
-    assert_forms(
-        "self-employed vat medium",
-        &self_employed_profile(true, Some(EoptTier::Medium), false),
-        SELF_EMPLOYED_VAT,
-    );
-    assert_forms(
-        "self-employed vat large",
-        &self_employed_profile(true, Some(EoptTier::Large), false),
-        SELF_EMPLOYED_VAT,
-    );
-    assert_forms(
-        "self-employed vat 8 percent",
-        &self_employed_profile(true, None, true),
-        SELF_EMPLOYED_VAT_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed vat micro 8 percent",
-        &self_employed_profile(true, Some(EoptTier::Micro), true),
-        SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed vat small 8 percent",
-        &self_employed_profile(true, Some(EoptTier::Small), true),
-        SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed vat medium 8 percent",
-        &self_employed_profile(true, Some(EoptTier::Medium), true),
-        SELF_EMPLOYED_VAT_8_PERCENT,
-    );
-    assert_forms(
-        "self-employed vat large 8 percent",
-        &self_employed_profile(true, Some(EoptTier::Large), true),
-        SELF_EMPLOYED_VAT_8_PERCENT,
+        "VAT-registered still has no dashboard forms until the user picks them",
+        &vat,
+        &[],
     );
 
-    let mut mixed_non_vat = base_profile(
-        TaxpayerType::Individual,
-        Some(TaxClassification::MixedIncome),
-    );
-    assert_forms("mixed income non-vat", &mixed_non_vat, MIXED_NON_VAT);
-    mixed_non_vat.eopt_tier = Some(EoptTier::Micro);
-    assert_forms(
-        "mixed income non-vat micro tier",
-        &mixed_non_vat,
-        MIXED_NON_VAT,
-    );
-    add_eight_percent_election(&mut mixed_non_vat, TAXABLE_YEAR);
-    assert_forms(
-        "mixed income non-vat 8 percent",
-        &mixed_non_vat,
-        MIXED_NON_VAT_8_PERCENT,
-    );
-    mixed_non_vat.is_vat_registered = true;
-    assert_forms("mixed income vat", &mixed_non_vat, MIXED_VAT);
-
-    let corp_non_vat = base_profile(TaxpayerType::Corporation, None);
-    assert_forms(
-        "corporation non-vat",
-        &corp_non_vat,
-        &["1702Q", "1702RT", "2551Q"],
-    );
-    let mut corp_vat = corp_non_vat.clone();
-    corp_vat.is_vat_registered = true;
-    assert_forms("corporation vat", &corp_vat, &["1702Q", "1702RT", "2550Q"]);
-
-    let partnership_non_vat = base_profile(TaxpayerType::Partnership, None);
-    assert_forms(
-        "partnership non-vat",
-        &partnership_non_vat,
-        &["1702Q", "1702RT", "2551Q"],
-    );
-    let mut partnership_vat = partnership_non_vat.clone();
-    partnership_vat.is_vat_registered = true;
-    assert_forms(
-        "partnership vat",
-        &partnership_vat,
-        &["1702Q", "1702RT", "2550Q"],
-    );
-
-    assert_forms(
-        "cooperative exempt",
-        &base_profile(
-            TaxpayerType::Cooperative,
-            Some(TaxClassification::CooperativeExempt),
-        ),
-        &["1702EX", "1702Q"],
+    let chosen = with_manual_forms(
+        self_employed_profile(true, None, false),
+        TAXABLE_YEAR,
+        &["2551Q", "1601C"],
     );
     assert_forms(
-        "cooperative taxable",
-        &base_profile(
-            TaxpayerType::Cooperative,
-            Some(TaxClassification::CooperativeTaxable),
-        ),
-        &["1702Q", "1702RT"],
-    );
-    assert_forms(
-        "cooperative mixed",
-        &base_profile(
-            TaxpayerType::Cooperative,
-            Some(TaxClassification::CooperativeMixed),
-        ),
-        &["1702MX", "1702Q"],
-    );
-    assert_forms(
-        "cooperative default treatment",
-        &base_profile(TaxpayerType::Cooperative, None),
-        &["1702Q", "1702RT"],
-    );
-
-    assert_forms(
-        "estate",
-        &base_profile(TaxpayerType::Estate, None),
-        &["1701", "1701Q"],
-    );
-    assert_forms(
-        "trust",
-        &base_profile(TaxpayerType::Trust, None),
-        &["1701", "1701Q"],
+        "manual 2551Q+1601C for 2026 even if VAT would have inferred 2550Q",
+        &chosen,
+        &["1601C", "2551Q"],
     );
 }
 
 #[test]
 fn dashboard_profile_matrix_withholding_modifiers() {
-    let base = self_employed_profile(false, None, false);
-
-    let mut compensation = base.clone();
-    compensation.withholds_compensation = true;
-    assert_forms_union(
-        "withholding compensation",
-        &compensation,
-        &[SELF_EMPLOYED_NON_VAT, COMPENSATION_WITHHOLDING],
-    );
-
-    let mut legacy_compensation = self_employed_profile(false, None, false);
-    legacy_compensation.has_employees = true;
-    assert_forms_union(
-        "legacy has employees maps to compensation withholding",
-        &legacy_compensation,
-        &[SELF_EMPLOYED_NON_VAT, COMPENSATION_WITHHOLDING],
-    );
-
-    let mut expanded = base.clone();
-    expanded.withholds_expanded = true;
-    assert_forms_union(
-        "withholding expanded",
-        &expanded,
-        &[SELF_EMPLOYED_NON_VAT, EXPANDED_WITHHOLDING],
-    );
-
-    let mut legacy_expanded = self_employed_profile(false, None, false);
-    legacy_expanded.is_expanded_withholding_agent = true;
-    assert_forms_union(
-        "legacy expanded withholding agent maps to expanded withholding",
-        &legacy_expanded,
-        &[SELF_EMPLOYED_NON_VAT, EXPANDED_WITHHOLDING],
-    );
-
-    let mut top_withholding_agent = self_employed_profile(false, None, false);
-    top_withholding_agent.is_top_withholding_agent = true;
-    assert_forms_union(
-        "top withholding agent maps to expanded withholding",
-        &top_withholding_agent,
-        &[SELF_EMPLOYED_NON_VAT, EXPANDED_WITHHOLDING],
-    );
-
-    let mut government_withholding_entity = self_employed_profile(false, None, false);
-    government_withholding_entity.is_government_withholding_entity = true;
-    assert_forms_union(
-        "government withholding entity maps to expanded withholding",
-        &government_withholding_entity,
-        &[SELF_EMPLOYED_NON_VAT, EXPANDED_WITHHOLDING],
-    );
-
-    let mut final_wh = base.clone();
-    final_wh.withholds_final = true;
-    assert_forms_union(
-        "withholding final",
-        &final_wh,
-        &[SELF_EMPLOYED_NON_VAT, FINAL_WITHHOLDING],
-    );
-
-    let mut all = base;
-    all.withholds_compensation = true;
-    all.withholds_expanded = true;
-    all.withholds_final = true;
-    assert_forms_union(
-        "all withholding",
-        &all,
-        &[
-            SELF_EMPLOYED_NON_VAT,
-            COMPENSATION_WITHHOLDING,
-            EXPANDED_WITHHOLDING,
-            FINAL_WITHHOLDING,
-        ],
-    );
-
-    let mut single_employer = base_profile(
-        TaxpayerType::Individual,
-        Some(TaxClassification::PurelyCompensation),
-    );
-    single_employer.has_single_employer = true;
-    single_employer.withholds_compensation = true;
+    let mut withholding = self_employed_profile(false, None, false);
+    withholding.withholds_compensation = true;
+    withholding.withholds_expanded = true;
+    withholding.withholds_final = true;
     assert_forms(
-        "pure compensation single employer with compensation withholding",
-        &single_employer,
-        COMPENSATION_WITHHOLDING,
+        "withholding flags do not infer a forms set",
+        &withholding,
+        &[],
+    );
+
+    let chosen = with_manual_forms(withholding, TAXABLE_YEAR, &["2551Q", "1601C", "0619E"]);
+    assert_forms(
+        "manual set is the dashboard list",
+        &chosen,
+        &["0619E", "1601C", "2551Q"],
     );
 }
 
 #[test]
 fn dashboard_profile_matrix_registration_status_modifiers() {
-    let active = self_employed_profile(false, None, false);
+    let chosen = with_manual_forms(
+        self_employed_profile(false, None, false),
+        TAXABLE_YEAR,
+        &["2551Q", "1601C"],
+    );
     assert_forms(
-        "active registration keeps recurring obligations",
-        &active,
-        SELF_EMPLOYED_NON_VAT,
+        "manual set is the dashboard list for an active registration",
+        &chosen,
+        &["1601C", "2551Q"],
     );
 
-    let mut dormant_operational = active.clone();
+    let mut dormant_operational = chosen.clone();
     dormant_operational.registration_activity_status =
         RegistrationActivityStatus::DormantOperational;
     assert_forms(
-        "dormant operational keeps NIL filing obligations",
+        "dormant operational does not rewrite a Manual Forms Set",
         &dormant_operational,
-        SELF_EMPLOYED_NON_VAT,
+        &["1601C", "2551Q"],
     );
 
-    let mut legacy_dormant = active.clone();
-    legacy_dormant.is_dormant = true;
-    assert_forms(
-        "legacy dormant flag keeps NIL filing obligations",
-        &legacy_dormant,
-        SELF_EMPLOYED_NON_VAT,
-    );
-
-    let mut temporarily_inactive = active.clone();
-    temporarily_inactive.registration_activity_status =
-        RegistrationActivityStatus::TemporarilyInactive;
-    assert_forms(
-        "temporarily inactive keeps NIL filing obligations",
-        &temporarily_inactive,
-        SELF_EMPLOYED_NON_VAT,
-    );
-
-    let mut officially_closed = active;
+    let mut officially_closed = chosen;
     officially_closed.registration_activity_status = RegistrationActivityStatus::OfficiallyClosed;
     assert_forms(
-        "officially closed has no recurring obligations",
+        "officially closed does not drop a Manual Forms Set",
         &officially_closed,
-        &[],
-    );
-
-    let mut closed_with_withholding = self_employed_profile(false, None, false);
-    closed_with_withholding.withholds_compensation = true;
-    closed_with_withholding.withholds_expanded = true;
-    closed_with_withholding.withholds_final = true;
-    closed_with_withholding.registration_activity_status =
-        RegistrationActivityStatus::OfficiallyClosed;
-    assert_forms(
-        "official closure suppresses income and withholding obligations",
-        &closed_with_withholding,
-        &[],
+        &["1601C", "2551Q"],
     );
 }
 
 #[test]
 fn dashboard_profile_matrix_excise_modifiers() {
-    let cases = [
-        (ExciseTaxCategory::Alcohol, "2200A"),
-        (ExciseTaxCategory::AutomobilesAndNonEssential, "2200AN"),
-        (ExciseTaxCategory::Mineral, "2200M"),
-        (ExciseTaxCategory::Petroleum, "2200P"),
-        (ExciseTaxCategory::Tobacco, "2200T"),
-    ];
+    let mut profile = self_employed_profile(false, None, false);
+    profile.excise_tax_categories = vec![ExciseTaxCategory::Alcohol];
+    assert_forms("excise flags do not infer a forms set", &profile, &[]);
 
-    for (category, form_code) in &cases {
-        let mut profile = self_employed_profile(false, None, false);
-        profile.excise_tax_categories = vec![category.clone()];
-        assert_forms(
-            &format!("excise category {:?}", category),
-            &profile,
-            &["1701", "1701Q", *form_code, "2551Q"],
-        );
-    }
-
-    let mut all_excise = self_employed_profile(false, None, false);
-    all_excise.excise_tax_categories = cases.iter().map(|(category, _)| category.clone()).collect();
+    let chosen = with_manual_forms(profile, TAXABLE_YEAR, &["2200A", "2551Q"]);
     assert_forms(
-        "all excise categories",
-        &all_excise,
-        &[
-            "1701", "1701Q", "2200A", "2200AN", "2200M", "2200P", "2200T", "2551Q",
-        ],
+        "manual excise form is the dashboard list",
+        &chosen,
+        &["2200A", "2551Q"],
     );
 }
 
@@ -592,6 +286,14 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
     );
     profile.profile_versions = vec![non_vat_2025, vat_2026];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    profile.per_year_forms.insert(
+        2025,
+        PerYearFormsSet::from_codes(2025, ["2551Q"].iter().copied(), FormSetSource::Manual),
+    );
+    profile.per_year_forms.insert(
+        2026,
+        PerYearFormsSet::from_codes(2026, ["2550Q"].iter().copied(), FormSetSource::Manual),
+    );
 
     let forms_2025 = forms_for_year(&profile, 2025);
     let forms_2026 = forms_for(&profile);
@@ -603,16 +305,22 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
 }
 
 #[test]
-fn cor_versioned_mode_requires_confirmed_versions() {
+fn missing_profile_year_is_not_a_profile_versions_blocker() {
     let mut profile = self_employed_profile(false, None, false);
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    assert!(recurring_obligation_forms_for_profile_and_year(&profile, TAXABLE_YEAR).is_empty());
     assert!(
         validate_profile(&profile)
             .iter()
-            .any(|error| error.field == "profile_versions")
+            .all(|error| error.field != "profile_versions"),
+        "COR confirmed versions are not a V1 save gate"
     );
+    let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
+    assert!(resolved.effective_segments.is_empty());
+    assert!(resolved.issues.iter().any(|issue| {
+        issue.kind == TaxProfileResolutionIssueKind::NoProfileYear
+            && issue.message == "no 2026 profile"
+    }));
 }
 
 #[test]
@@ -790,8 +498,10 @@ fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let forms = forms_for(&profile);
-    assert!(forms.contains("2551Q"));
-    assert!(!forms.contains("2550Q"));
+    assert!(
+        forms.is_empty(),
+        "COR draft/confirmed versions do not invent a Forms Set"
+    );
     assert!(
         validate_profile(&profile)
             .iter()
@@ -814,59 +524,41 @@ fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
     assert!(
         validate_profile(&profile)
             .iter()
-            .any(|error| error.field == "profile_versions")
+            .all(|error| error.field != "profile_versions"),
+        "overlapping COR ledger dates are not a V1 filing blocker"
     );
 }
 
 #[test]
 fn yearly_profile_resolution_excludes_undated_confirmed_version() {
-    let mut profile = self_employed_profile(false, None, false);
-    let version = confirmed_version(
-        &profile,
-        "undated",
-        "Undated migrated profile",
-        None,
-        None,
-        vec![RegisteredTaxType::PercentageTax],
-        false,
-    );
-    profile.profile_versions = vec![version];
-    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-
+    let profile = self_employed_profile(false, None, false);
     let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
-
     assert!(resolved.effective_segments.is_empty());
-    assert_eq!(resolved.issues.len(), 1);
+    assert!(
+        resolved
+            .issues
+            .iter()
+            .any(|issue| issue.kind
+                == bir_core::profile::TaxProfileResolutionIssueKind::NoProfileYear)
+    );
 }
 
 #[test]
-fn yearly_profile_resolution_accepts_sequential_midyear_versions() {
+fn yearly_profile_resolution_returns_the_year_clone() {
     let mut profile = self_employed_profile(false, None, false);
-    let first = confirmed_version(
-        &profile,
-        "first",
-        "First half",
-        Some((2026, 1, 1)),
-        Some((2026, 6, 30)),
-        vec![RegisteredTaxType::PercentageTax],
-        false,
-    );
-    let second = confirmed_version(
-        &profile,
-        "second",
-        "Second half",
-        Some((2026, 7, 1)),
-        None,
-        vec![RegisteredTaxType::ValueAddedTax],
-        true,
-    );
-    profile.profile_versions = vec![second, first];
-    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    profile.full_name = "2026 clone".into();
+    profile.capture_current_as_year(TAXABLE_YEAR).unwrap();
+    profile.full_name = "2025 clone".into();
+    profile.capture_current_as_year(TAXABLE_YEAR - 1).unwrap();
 
     let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
 
-    assert_eq!(resolved.effective_segments.len(), 2);
+    assert_eq!(resolved.effective_segments.len(), 1);
     assert!(resolved.issues.is_empty());
+    assert_eq!(
+        resolved.effective_segments[0].cor.registered_name,
+        "2026 clone"
+    );
 }
 
 #[test]
@@ -891,7 +583,7 @@ fn compensation_withholding_does_not_suggest_form_1600() {
 }
 
 #[test]
-fn vat_percentage_withholding_tax_type_suggests_form_1600() {
+fn vat_percentage_withholding_tax_type_does_not_infer_form_1600() {
     let mut profile = self_employed_profile(false, None, false);
     let version = confirmed_version(
         &profile,
@@ -906,12 +598,17 @@ fn vat_percentage_withholding_tax_type_suggests_form_1600() {
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let forms = forms_for(&profile);
+    assert!(
+        !forms.contains("1600"),
+        "withholding tax types do not infer a Forms Set"
+    );
 
-    assert!(forms.contains("1600"));
+    let chosen = with_manual_forms(profile, TAXABLE_YEAR, &["1600"]);
+    assert!(forms_for(&chosen).contains("1600"));
 }
 
 #[test]
-fn profile_scoped_deadline_override_applies_after_global_rules() {
+fn profile_scoped_deadline_override_on_cor_ledger_is_not_a_filing_lookup() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
         &profile,
@@ -939,32 +636,14 @@ fn profile_scoped_deadline_override_applies_after_global_rules() {
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let overrides = profile_deadline_overrides_for_year(&profile, 2026);
-    let deadlines = DeadlineResolver::resolve_taxable_year_with_overrides(2026, &overrides);
-    let q1_1701q = deadlines
-        .iter()
-        .find(|deadline| {
-            deadline.form_code == "1701Q"
-                && matches!(
-                    deadline.period,
-                    DeadlinePeriod::Quarterly {
-                        taxable_year: 2026,
-                        quarter: 1
-                    }
-                )
-        })
-        .unwrap();
-
-    assert!(matches!(
-        q1_1701q.deadline,
-        DeadlineKind::Dated {
-            final_deadline,
-            ..
-        } if final_deadline == NaiveDate::from_ymd_opt(2026, 5, 20).unwrap()
-    ));
+    assert!(
+        overrides.is_empty(),
+        "COR-ledger deadline overrides are not a V1 filing lookup"
+    );
 }
 
 #[test]
-fn profile_global_deadline_override_conflict_is_reported() {
+fn profile_global_deadline_override_conflict_is_not_reported_from_cor_ledger() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
         &profile,
@@ -1009,30 +688,18 @@ fn profile_global_deadline_override_conflict_is_reported() {
         2026,
         &global_overrides,
     );
-    let issue = preview
-        .consistency_report
-        .issues
-        .iter()
-        .find(|issue| issue.code == "PROFILE_GLOBAL_DEADLINE_OVERRIDE_CONFLICT")
-        .expect("missing profile/global override conflict diagnostic");
-
-    assert_eq!(issue.version_id.as_deref(), Some("cor-2026"));
-    assert_eq!(issue.form_code.as_deref(), Some("1701Q"));
-    assert_eq!(
-        issue.source.as_deref(),
-        Some("Profile deadline override + global deadline override")
-    );
     assert!(
-        issue
-            .fix_hint
-            .as_deref()
-            .unwrap_or_default()
-            .contains("Profile-specific overrides win")
+        preview
+            .consistency_report
+            .issues
+            .iter()
+            .all(|issue| issue.code != "PROFILE_GLOBAL_DEADLINE_OVERRIDE_CONFLICT"),
+        "COR-ledger deadline overrides must not conflict with global calendar rules"
     );
 }
 
 #[test]
-fn profile_override_validation_requires_reason_and_source() {
+fn ledger_override_hygiene_is_not_a_save_gate() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
         &profile,
@@ -1064,20 +731,11 @@ fn profile_override_validation_requires_reason_and_source() {
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    let messages = validate_profile(&profile)
-        .into_iter()
-        .map(|error| error.message)
-        .collect::<Vec<_>>();
-
     assert!(
-        messages
+        validate_profile(&profile)
             .iter()
-            .any(|message| message.contains("requires a reason and source"))
-    );
-    assert!(
-        messages
-            .iter()
-            .any(|message| { message.contains("requires a title, source, and form code") })
+            .all(|error| error.field != "profile_versions"),
+        "ledger override hygiene is not a V1 save gate"
     );
 }
 
@@ -1142,7 +800,10 @@ fn eight_percent_election_preserves_non_pt010_percentage_tax_obligation() {
     );
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-    configure_forms_set_for_year(&mut profile, 2026);
+    profile.per_year_forms.insert(
+        2026,
+        PerYearFormsSet::from_codes(2026, ["2551Q"].iter().copied(), FormSetSource::Manual),
+    );
 
     let preview = profile.preview_obligations_for_year(2026);
 
@@ -1296,7 +957,10 @@ fn manual_include_still_reports_missing_calendar_rule_for_1704() {
     });
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-    configure_forms_set_for_year(&mut profile, 2026);
+    profile.per_year_forms.insert(
+        2026,
+        PerYearFormsSet::from_codes(2026, ["1704"].iter().copied(), FormSetSource::Manual),
+    );
 
     let preview = profile.preview_obligations_for_year(2026);
     let issue = preview
@@ -1322,7 +986,7 @@ fn manual_include_still_reports_missing_calendar_rule_for_1704() {
 }
 
 #[test]
-fn profile_version_validation_rejects_invalid_effective_date_range() {
+fn profile_version_ledger_date_range_is_not_a_save_gate() {
     let mut profile = self_employed_profile(false, None, false);
     let version = confirmed_version(
         &profile,
@@ -1336,9 +1000,28 @@ fn profile_version_validation_rejects_invalid_effective_date_range() {
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    assert!(validate_profile(&profile).iter().any(|error| {
-        error
-            .message
-            .contains("effective end date before its start date")
-    }));
+    assert!(
+        validate_profile(&profile).iter().all(|error| {
+            !error
+                .message
+                .contains("effective end date before its start date")
+        }),
+        "COR ledger date ranges are not a V1 save gate"
+    );
+}
+
+#[test]
+fn validate_profile_rejects_year_before_business_start() {
+    let mut profile = self_employed_profile(false, None, false);
+    profile.business_start_date = Some(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    profile
+        .profile_years
+        .insert(2023, ProfileYearFacts::from_profile(&profile));
+
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .any(|error| error.field == "profile_years"
+                && error.message.contains("before Business Start Date"))
+    );
 }

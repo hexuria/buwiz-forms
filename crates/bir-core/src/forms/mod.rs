@@ -13,8 +13,11 @@ pub mod form_2307;
 pub mod form_2550q;
 pub mod form_2551q;
 pub mod forms_set;
+pub mod inventory;
+pub mod inventory_catalog;
 pub mod registry;
 pub mod support_level;
+pub mod templates;
 
 pub use atc::{ATC_TABLE_2551Q, AtcEntry, AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 pub use form_1601c::Form1601CDraft;
@@ -25,6 +28,9 @@ pub use forms_set::{
     FormSuggestion, FormSuggestionSource, FormsSetReconcileResult, PerYearFormsSet,
     reconcile_forms_set_for_year,
 };
+pub use inventory::{
+    FormInventorySpec, GenericFormDraft, has_inventory, inventory_codes, load_spec,
+};
 #[allow(deprecated)]
 // re-exporting deprecated forms_for_taxpayer / forms_for_profile for backward compat only
 pub use registry::{
@@ -33,8 +39,9 @@ pub use registry::{
 };
 pub use support_level::{
     FORM_CAPABILITY_REGISTRY, FormCapabilities, FormCapabilityRecord, FormSupportLevel,
-    can_open_certification_draft, can_queue_for_submission, find_form_capability,
-    find_form_capability_by_id, form_support_level, queue_authorized_form_type_id,
+    can_open_certification_draft, can_open_inventory_editor, can_queue_for_submission,
+    find_form_capability, find_form_capability_by_id, form_support_level,
+    queue_authorized_form_type_id,
 };
 
 pub mod form_0605_xml;

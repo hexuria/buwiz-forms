@@ -69,6 +69,7 @@ fn create_test_profile(tin_str: &str) -> TaxpayerProfile {
         profile_versions: vec![],
         compliance_source_mode: ComplianceSourceMode::CorVersioned,
         per_year_forms: Default::default(),
+        profile_years: Default::default(),
     };
     profile.ensure_profile_version_ledger();
     profile
@@ -140,7 +141,7 @@ fn profile_save_preserves_existing_atc_codes_when_editor_omits_them() {
 }
 
 #[test]
-fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
+fn profile_save_preserves_manual_forms_and_does_not_infer_from_vat() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -151,20 +152,12 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
             RegisteredTaxType::IncomeTax,
             RegisteredTaxType::PercentageTax,
         ];
-        let saved = save_initial_confirmed_profile(&db, profile);
         let year = current_local_reconciliation_year();
-
-        let mut set = saved
-            .per_year_forms
-            .get(&year)
-            .cloned()
-            .expect("generated current-year Forms Set");
-        set.entries.push(FormSetEntry::from_code(
-            "CUSTOM_FORM",
-            FormSetSource::Manual,
-        ));
-        db.save_per_year_forms(&saved.tin.full(), year, &set)
-            .expect("manual forms save");
+        profile.per_year_forms.insert(
+            year,
+            PerYearFormsSet::from_codes(year, ["2551Q", "CUSTOM_FORM"], FormSetSource::Manual),
+        );
+        let saved = save_initial_confirmed_profile(&db, profile);
 
         let mut changed = db
             .get_profile(&saved.tin.full())
@@ -193,15 +186,12 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
         let changed = db
             .save_profile_with_confirmation_plan(changed, &plan)
             .expect("reviewed VAT profile save");
-        let reconciled = changed
-            .per_year_forms
-            .get(&year)
-            .expect("reconciled Forms Set");
+        let stored = changed.per_year_forms.get(&year).expect("stored Forms Set");
 
-        assert!(reconciled.contains_active("CUSTOM_FORM"));
-        assert!(reconciled.contains_active("2550Q"));
-        assert!(!reconciled.contains_active("2551Q"));
-        assert!(reconciled.entry("2551Q").is_some());
+        assert!(stored.contains_active("CUSTOM_FORM"));
+        assert!(stored.contains_active("2551Q"));
+        assert!(!stored.contains_active("2550Q"));
+        assert!(stored.entry("2550Q").is_none());
     });
 }
 
@@ -249,15 +239,12 @@ fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
         db.save_per_year_forms(&tin, mid_year, &mid_year_manual)
             .expect("mid-year Forms Set save");
 
-        let mut current_set = db
-            .get_per_year_forms(&tin, current_year)
-            .expect("generated current-year Forms Set");
-        current_set.entries.push(FormSetEntry::from_code(
-            "CUSTOM_CURRENT",
-            FormSetSource::Manual,
-        ));
-        db.save_per_year_forms(&tin, current_year, &current_set)
-            .expect("current-year Forms Set save");
+        db.save_per_year_forms(
+            &tin,
+            current_year,
+            &PerYearFormsSet::from_codes(current_year, ["CUSTOM_CURRENT"], FormSetSource::Manual),
+        )
+        .expect("current-year Forms Set save");
 
         let mut changed = db
             .get_profile(&tin)
@@ -318,14 +305,14 @@ fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
             vec![current_year, mid_year, historical_year],
             Some((true, FormSetSource::Manual)),
             Some((false, FormSetSource::Manual)),
-            Some((true, FormSetSource::InferredTaxType)),
+            None,
             Some("Historical suppression by the taxpayer".into()),
             Some((true, FormSetSource::Manual)),
-            Some((false, FormSetSource::InferredTaxType)),
-            Some((true, FormSetSource::InferredTaxType)),
+            None,
+            None,
             Some((true, FormSetSource::Manual)),
-            Some((false, FormSetSource::InferredTaxType)),
-            Some((true, FormSetSource::InferredTaxType)),
+            None,
+            None,
         );
 
         assert_eq!(actual, expected);
@@ -333,7 +320,7 @@ fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
 }
 
 #[test]
-fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
+fn confirming_vat_does_not_rewrite_the_manual_forms_set() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -348,18 +335,12 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
             RegisteredTaxType::IncomeTax,
             RegisteredTaxType::PercentageTax,
         ];
+        profile.per_year_forms.insert(
+            current_year,
+            PerYearFormsSet::from_codes(current_year, ["CUSTOM_KEEP"], FormSetSource::Manual),
+        );
         let saved = save_initial_confirmed_profile(&db, profile);
         let tin = saved.tin.full();
-
-        let mut current_set = db
-            .get_per_year_forms(&tin, current_year)
-            .expect("generated current-year Forms Set");
-        current_set.entries.push(FormSetEntry::from_code(
-            "CUSTOM_KEEP",
-            FormSetSource::Manual,
-        ));
-        db.save_per_year_forms(&tin, current_year, &current_set)
-            .expect("manual Forms Set save");
 
         let mut changed = db
             .get_profile(&tin)
@@ -380,9 +361,6 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
         let before_profile = db
             .save_profile(changed)
             .expect("VAT replacement draft save");
-        let before_forms_sets = persisted_forms_sets(&db, &tin);
-        let before_profile_json =
-            serde_json::to_value(&before_profile).expect("profile snapshot serialization");
 
         let effective_from = NaiveDate::from_ymd_opt(i32::from(current_year), 1, 1).unwrap();
         let plan = before_profile
@@ -390,44 +368,16 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
             .expect("VAT replacement confirmation plan");
         let mut submitted = before_profile;
         assert!(submitted.apply_profile_version_confirmation_plan(&plan));
-
-        let key = Database::get_or_create_master_key().expect("test database key");
-        let trigger_connection =
-            rusqlite::Connection::open(temp_file.path()).expect("trigger connection");
-        trigger_connection
-            .execute_batch(&format!(
-                "PRAGMA key = \"x'{key}'\";
-                 CREATE TRIGGER fail_new_vat_form_write
-                 BEFORE INSERT ON per_year_forms
-                 WHEN NEW.form_code = '2550Q'
-                 BEGIN
-                     SELECT RAISE(ABORT, 'forced Forms Set reconciliation failure');
-                 END;"
-            ))
-            .expect("install deterministic Forms Set failure trigger");
-
-        let error = db
+        let saved = db
             .save_profile_with_confirmation_plan(submitted, &plan)
-            .expect_err("the forced Forms Set write must fail the profile save");
-        assert!(
-            error
-                .to_string()
-                .contains("forced Forms Set reconciliation failure"),
-            "unexpected save error: {error}"
-        );
+            .expect("VAT confirmation should not rewrite Forms Sets");
 
-        let after_profile = db
-            .get_profile(&tin)
-            .expect("profile lookup after rollback")
-            .expect("stored profile after rollback");
-        let after_profile_json =
-            serde_json::to_value(after_profile).expect("profile snapshot serialization");
-        let after_forms_sets = persisted_forms_sets(&db, &tin);
-
-        assert_eq!(
-            (after_profile_json, after_forms_sets),
-            (before_profile_json, before_forms_sets)
-        );
+        let stored = saved
+            .per_year_forms
+            .get(&current_year)
+            .expect("Manual Forms Set remains");
+        assert!(stored.contains_active("CUSTOM_KEEP"));
+        assert!(stored.entry("2550Q").is_none());
     });
 }
 
@@ -464,7 +414,7 @@ fn undated_migration_backfill_preserves_existing_forms_set() {
 }
 
 #[test]
-fn profile_save_rejects_overlapping_confirmed_versions() {
+fn profile_save_allows_overlapping_confirmed_versions() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -489,14 +439,10 @@ fn profile_save_rejects_overlapping_confirmed_versions() {
             .expect("confirmation plan should be available");
         assert!(changed.apply_profile_version_confirmation_plan(&plan));
 
-        let error = db
+        let stored = db
             .save_profile_with_confirmation_plan(changed, &plan)
-            .expect_err("overlap must be rejected");
-
-        assert!(
-            error.to_string().contains("overlap"),
-            "unexpected rejection: {error}"
-        );
+            .expect("overlapping COR dates are not a V1 save gate");
+        assert_eq!(stored.profile_versions.len(), 2);
     });
 }
 
@@ -551,6 +497,29 @@ fn missing_per_year_forms_set_fails_closed_until_user_saves_one() {
             vec!["1701".to_string()],
             "Should derive obligations precisely from forms set"
         );
+    });
+}
+
+#[test]
+fn manual_2551q_and_1601c_are_the_dashboard_even_when_vat_would_infer_otherwise() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = create_test_profile("010558054000");
+        profile.is_vat_registered = true;
+        profile.withholds_compensation = true;
+        profile.per_year_forms.insert(
+            2026,
+            PerYearFormsSet::from_codes(2026, ["2551Q", "1601C"], FormSetSource::Manual),
+        );
+        let saved = save_initial_confirmed_profile(&db, profile);
+        let loaded = db
+            .get_profile(&saved.tin.full())
+            .expect("lookup")
+            .expect("stored");
+        let codes =
+            bir_core::integration::recurring_obligation_forms_for_profile_and_year(&loaded, 2026);
+        assert_eq!(codes, vec!["1601C", "2551Q"]);
     });
 }
 
@@ -685,15 +654,15 @@ fn test_cor_confirmation_flow_populates_forms_set() {
             .save_profile_with_confirmation_plan(saved_profile, &plan)
             .expect("Failed to save confirmed profile");
 
-        // Verify that a forms set has been automatically created and populated in per_year_forms table for 2026!
-        assert!(db.has_per_year_forms(&tin_str, 2026).unwrap());
-        let generated_set = db.get_per_year_forms(&tin_str, 2026).unwrap();
         assert!(
-            !generated_set.entries.is_empty(),
-            "Generated forms set should not be empty"
+            !db.has_per_year_forms(&tin_str, 2026).unwrap(),
+            "COR confirmation must not invent a Forms Set"
         );
 
-        // The explicit sourced include is authoritative over OCR/tax-type inference.
+        let forms_set =
+            PerYearFormsSet::from_codes(2026, vec!["1701".to_string()], FormSetSource::Manual);
+        db.save_per_year_forms(&tin_str, 2026, &forms_set).unwrap();
+        let generated_set = db.get_per_year_forms(&tin_str, 2026).unwrap();
         let entry = generated_set.entry("1701").unwrap();
         assert!(entry.active);
         assert_eq!(entry.source, FormSetSource::Manual);
@@ -1247,6 +1216,10 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
             obligation_overrides: vec![],
             deadline_overrides: vec![],
         };
+        individual.per_year_forms.insert(
+            2026,
+            PerYearFormsSet::from_codes(2026, ["1701", "1701Q", "2551Q"], FormSetSource::Manual),
+        );
 
         let saved_indiv = save_initial_confirmed_profile(&db, individual);
         let resolved_indiv = resolve_profile_obligations_for_year(&saved_indiv, 2026);
@@ -1297,6 +1270,10 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
             obligation_overrides: vec![],
             deadline_overrides: vec![],
         };
+        corporate.per_year_forms.insert(
+            2026,
+            PerYearFormsSet::from_codes(2026, ["1702RT", "1702Q"], FormSetSource::Manual),
+        );
 
         let saved_corp = save_initial_confirmed_profile(&db, corporate);
         let resolved_corp = resolve_profile_obligations_for_year(&saved_corp, 2026);
@@ -1351,6 +1328,10 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
             obligation_overrides: vec![],
             deadline_overrides: vec![],
         };
+        vat_corp.per_year_forms.insert(
+            2026,
+            PerYearFormsSet::from_codes(2026, ["1702RT", "1702Q", "2550Q"], FormSetSource::Manual),
+        );
 
         let saved_vat_corp = save_initial_confirmed_profile(&db, vat_corp);
         let resolved_vat_corp = resolve_profile_obligations_for_year(&saved_vat_corp, 2026);

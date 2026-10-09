@@ -62,7 +62,7 @@ impl ProfileManagerView {
             .when(forms_years.is_empty(), |this| {
                 this.child(rsx! {
                     <div text_sm text_color={cx.theme().danger}>
-                        {"No Forms Set is configured. Add forms in COR > Forms & Elections before creating a calendar."}
+                        {"No Forms Set is configured. Check forms on the Tax Profile tab before creating a calendar."}
                     </div>
                 })
             })

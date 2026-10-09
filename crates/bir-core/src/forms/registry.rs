@@ -917,6 +917,21 @@ mod tests {
         );
     }
 
+    #[allow(deprecated)]
+    #[test]
+    fn forms_for_profile_is_not_the_filing_router() {
+        let vat = forms_for_profile(&TaxpayerType::Individual, true, false);
+        let non_vat = forms_for_profile(&TaxpayerType::Individual, false, false);
+        assert!(
+            vat.iter().any(|form| form.code == "2550Q"),
+            "deprecated helper still filters VAT metadata"
+        );
+        assert!(
+            non_vat.iter().any(|form| form.code == "2551Q"),
+            "deprecated helper still filters non-VAT metadata"
+        );
+    }
+
     #[test]
     fn monthly_vat_is_not_a_required_2023_onward_obligation() {
         assert_eq!(

@@ -417,7 +417,7 @@ pub fn form_suggestions_for_profile_year(
     profile: &TaxpayerProfile,
     year: u16,
 ) -> Vec<FormSuggestion> {
-    let resolved = profile.resolve_tax_profile_for_year(year);
+    let resolved = profile.resolve_tax_profile_for_year_from_ledger(year);
     if resolved.has_blocking_issues() {
         return Vec::new();
     }
@@ -582,7 +582,7 @@ pub fn resolve_profile_obligations_for_year(
     let mut code_version_ids: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut consistency_report = ProfileConsistencyReport::default();
 
-    let resolved_profile = profile.resolve_tax_profile_for_year(year);
+    let resolved_profile = profile.resolve_tax_profile_for_year_from_ledger(year);
     for issue in resolved_profile.issues {
         consistency_report.push_detailed(
             ProfileConsistencySeverity::NeedsReview,
@@ -1451,7 +1451,7 @@ pub fn primary_annual_itrs_for_profile_year(
     year: u16,
 ) -> (Option<&'static str>, Option<&'static str>) {
     let election = profile.income_tax_election_for_year(year);
-    let resolved = profile.resolve_tax_profile_for_year(year);
+    let resolved = profile.resolve_tax_profile_for_year_from_ledger(year);
     let primary = match resolved.effective_segments.first() {
         Some(version) => primary_annual_itr_for(
             &version.taxpayer_type,
@@ -1661,17 +1661,18 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
         profile
     }
 
-    fn configure_forms_set_from_suggestions(profile: &mut TaxpayerProfile, year: u16) {
-        let suggestions = form_suggestions_for_profile_year(profile, year);
-        let reconciliation = crate::forms::reconcile_forms_set_for_year(year, None, &suggestions);
-        profile
-            .per_year_forms
-            .insert(year, reconciliation.forms_set);
+    fn configure_manual_forms(profile: &mut TaxpayerProfile, year: u16, codes: &[&str]) {
+        use crate::forms::{FormSetSource, PerYearFormsSet};
+        profile.per_year_forms.insert(
+            year,
+            PerYearFormsSet::from_codes(year, codes.iter().copied(), FormSetSource::Manual),
+        );
     }
 
     fn configure_confirmed_cor_evidence(
@@ -1717,10 +1718,9 @@ mod tests {
 
     #[test]
     fn registration_fee_infers_0605_only_for_the_cor_registration_year() {
-        use crate::profile::RegisteredTaxType;
-
         let mut profile =
             profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        profile.business_start_date = NaiveDate::from_ymd_opt(2026, 7, 18);
         configure_confirmed_cor_evidence(
             &mut profile,
             false,
@@ -1728,7 +1728,7 @@ mod tests {
             &[],
             None,
         );
-        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2026, 7, 18);
         profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2026, 7, 18);
 
         let registration_year = form_suggestions_for_profile_year(&profile, 2026);
@@ -1753,6 +1753,9 @@ mod tests {
         profile.profile_versions.clear();
         profile.business_start_date = NaiveDate::from_ymd_opt(2026, 7, 18);
         profile.ensure_profile_version_ledger();
+        profile.profile_years.clear();
+        profile.capture_current_as_year(2026).unwrap();
+        profile.capture_current_as_year(2027).unwrap();
 
         let registration_year = form_suggestions_for_profile_year(&profile, 2026);
         assert!(registration_year.iter().any(|suggestion| {
@@ -2056,12 +2059,12 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
-
-        // PurelyCompensation should NOT be allowed to file 2551Q
         let current_year = chrono::Local::now().year() as u16;
-        configure_forms_set_from_suggestions(&mut profile, current_year);
+        let _ = profile.capture_current_as_year(current_year);
+        configure_manual_forms(&mut profile, current_year, &["1700"]);
         let err = validate_form_applicability("2551Q", &profile, current_year);
         assert!(err.is_some());
 
@@ -2127,10 +2130,13 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
         };
         profile.ensure_profile_version_ledger();
         let current_year = chrono::Local::now().year() as u16;
-        configure_forms_set_from_suggestions(&mut profile, current_year);
+        let _ = profile.capture_current_as_year(current_year);
+        let _ = profile.capture_current_as_year(2026);
+        configure_manual_forms(&mut profile, current_year, &["2551Q", "1701Q", "1701"]);
 
         let forms = applicable_forms_for_profile(&profile);
         assert!(forms.iter().any(|code| code == "2551Q"));
@@ -2144,7 +2150,7 @@ mod tests {
     fn recurring_dashboard_forms_hide_transaction_forms_for_compensation_profile() {
         let mut profile =
             profile_for_dashboard(crate::profile::TaxClassification::PurelyCompensation, false);
-        configure_forms_set_from_suggestions(&mut profile, 2026);
+        configure_manual_forms(&mut profile, 2026, &["1700"]);
 
         let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -2155,7 +2161,7 @@ mod tests {
     fn recurring_dashboard_forms_keep_only_profile_obligations_for_non_vat_business() {
         let mut profile =
             profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
-        configure_forms_set_from_suggestions(&mut profile, 2026);
+        configure_manual_forms(&mut profile, 2026, &["1701Q", "1701", "2551Q"]);
 
         let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -2234,7 +2240,7 @@ mod tests {
 
         profile.per_year_forms.insert(
             2026,
-            PerYearFormsSet::from_codes(2026, ["1702RT", "1701Q", "2550M"], FormSetSource::CorAi),
+            PerYearFormsSet::from_codes(2026, ["1702RT", "1701Q", "2550M"], FormSetSource::Manual),
         );
 
         let codes = profile.active_form_codes_for_year(2026);

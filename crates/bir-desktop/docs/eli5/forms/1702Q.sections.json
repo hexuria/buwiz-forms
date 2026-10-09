@@ -1,0 +1,520 @@
+{
+  "form_code": "1702Q",
+  "rules_id": "1702q-v2018c",
+  "frozen_bundle": "1702q-2018",
+  "field_count": 113,
+  "sections": [
+    {
+      "id": "period",
+      "title": "Filing period & return flags",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:rbQuarter_1",
+        "frm1702q:rbQuarter_2",
+        "frm1702q:rbQuarter_3",
+        "frm1702q:rbAmendedRtn_1",
+        "frm1702q:rbAmendedRtn_2"
+      ]
+    },
+    {
+      "id": "identity",
+      "title": "Taxpayer identity (profile-sourced)",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:txtTIN1",
+        "frm1702q:txtTIN2",
+        "frm1702q:txtTIN3",
+        "frm1702q:txtBranchCode",
+        "frm1702q:txtRDOCode",
+        "frm1702q:txtTaxpayerName1",
+        "frm1702q:txtAddress",
+        "frm1702q:txtZipCode",
+        "frm1702q:txtTelNum#occurrence-1",
+        "frm1702q:txtTelNum#occurrence-2",
+        "txtEmail"
+      ]
+    },
+    {
+      "id": "computation",
+      "title": "Main tax computation / withholdings",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:rbForClndrFscl_1",
+        "frm1702q:rbForClndrFscl_2",
+        "frm1702q:rbYrEndMonth",
+        "frm1702q:txtYrEndYear",
+        "frm1702q:txtATC_1",
+        "frm1702q:rbATC_1",
+        "frm1702q:cbATC_2",
+        "frm1702q:rbATC_2",
+        "frm1702q:rbMthdOfDdctns_1",
+        "frm1702q:rbMthdOfDdctns_2",
+        "frm1702q:rbTxRlf_1",
+        "frm1702q:rbTxRlf_2",
+        "frm1702q:txtTxRlfSpcfy",
+        "frm1702q:txtTax14",
+        "frm1702q:txtTax15",
+        "frm1702q:txtTax16",
+        "frm1702q:txtTax17",
+        "frm1702q:txtTax18",
+        "frm1702q:txtTax19",
+        "frm1702q:txtTax20",
+        "frm1702q:txtTax21",
+        "frm1702q:txtTax22",
+        "frm1702q:txtTax23",
+        "frm1702q:txtTax24",
+        "frm1702q:txtTax25",
+        "frm1702q:txtSheets"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 1A",
+      "title": "Schedule 1 Item 1A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax1A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 1B",
+      "title": "Schedule 1 Item 1B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax1B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 2A",
+      "title": "Schedule 1 Item 2A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax2A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 2B",
+      "title": "Schedule 1 Item 2B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax2B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 3A",
+      "title": "Schedule 1 Item 3A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax3A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 3B",
+      "title": "Schedule 1 Item 3B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax3B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 4A",
+      "title": "Schedule 1 Item 4A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax4A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 4B",
+      "title": "Schedule 1 Item 4B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax4B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 5A",
+      "title": "Schedule 1 Item 5A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax5A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 5B",
+      "title": "Schedule 1 Item 5B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax5B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 6A",
+      "title": "Schedule 1 Item 6A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax6A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 6B",
+      "title": "Schedule 1 Item 6B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax6B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 7A",
+      "title": "Schedule 1 Item 7A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax7A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 7B",
+      "title": "Schedule 1 Item 7B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax7B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 8A",
+      "title": "Schedule 1 Item 8A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax8A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 8B",
+      "title": "Schedule 1 Item 8B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax8B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 9A",
+      "title": "Schedule 1 Item 9A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax9A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 9B",
+      "title": "Schedule 1 Item 9B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax9B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 10A",
+      "title": "Schedule 1 Item 10A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax10A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 10B",
+      "title": "Schedule 1 Item 10B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax10B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 11A",
+      "title": "Schedule 1 Item 11A",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax11A"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 11B",
+      "title": "Schedule 1 Item 11B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax11B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 12B",
+      "title": "Schedule 1 Item 12B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax12B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 1 Item 13B",
+      "title": "Schedule 1 Item 13B",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched1:txtTax13B"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 1",
+      "title": "Schedule 2 Item 1",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax1"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 2",
+      "title": "Schedule 2 Item 2",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax2"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 3",
+      "title": "Schedule 2 Item 3",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax3"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 4",
+      "title": "Schedule 2 Item 4",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax4"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 5",
+      "title": "Schedule 2 Item 5",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax5"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 6",
+      "title": "Schedule 2 Item 6",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax6"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 7",
+      "title": "Schedule 2 Item 7",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax7"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 8",
+      "title": "Schedule 2 Item 8",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax8"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 9",
+      "title": "Schedule 2 Item 9",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax9"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 10",
+      "title": "Schedule 2 Item 10",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax10"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 11",
+      "title": "Schedule 2 Item 11",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax11"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 12",
+      "title": "Schedule 2 Item 12",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax12"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 2 Item 13",
+      "title": "Schedule 2 Item 13",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched2:txtTax13"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 3 Item 1",
+      "title": "Schedule 3 Item 1",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched3:txtTax1"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 3 Item 2",
+      "title": "Schedule 3 Item 2",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched3:txtTax2"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 3 Item 3",
+      "title": "Schedule 3 Item 3",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched3:txtTax3"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 3 Item 4",
+      "title": "Schedule 3 Item 4",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched3:txtTax4"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 3 Item 5",
+      "title": "Schedule 3 Item 5",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched3:txtTax5"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 3 Item 6",
+      "title": "Schedule 3 Item 6",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched3:txtTax6"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 1",
+      "title": "Schedule 4 Item 1",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax1"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 2",
+      "title": "Schedule 4 Item 2",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax2"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 3",
+      "title": "Schedule 4 Item 3",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax3"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 4",
+      "title": "Schedule 4 Item 4",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax4"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 5",
+      "title": "Schedule 4 Item 5",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax5"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 6",
+      "title": "Schedule 4 Item 6",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax6"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 6 row 1",
+      "title": "Schedule 4 Item 6 row 1",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:chkOthrTxCrdts0",
+        "frm1702q:Sched4:txtOthrTxCrdts0",
+        "frm1702q:Sched4:txtOthrTxCrdtAmnt0"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 6 row 2",
+      "title": "Schedule 4 Item 6 row 2",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:chkOthrTxCrdts1",
+        "frm1702q:Sched4:txtOthrTxCrdts1",
+        "frm1702q:Sched4:txtOthrTxCrdtAmnt1"
+      ]
+    },
+    {
+      "id": "schedule:Schedule 4 Item 7",
+      "title": "Schedule 4 Item 7",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:Sched4:txtTax7"
+      ]
+    },
+    {
+      "id": "payment",
+      "title": "Payment / signature / agency / workflow",
+      "editor_hidden": false,
+      "fields": [
+        "frm1702q:txtCurrentPage",
+        "frm1702q:txtMaxPage",
+        "resultOtherSpecify",
+        "txtFinalFlag",
+        "txtEnroll",
+        "ebirOnlineConfirmUsername",
+        "ebirOnlineUsername",
+        "ebirOnlineSecret",
+        "frm1702q:txtLOB",
+        "driveSelectTPExport"
+      ]
+    },
+    {
+      "id": "print_xml",
+      "title": "Print / XML only (hidden in editor)",
+      "editor_hidden": true,
+      "fields": [
+        "frm1702q:txtPg2TIN1",
+        "frm1702q:txtPg2TIN2",
+        "frm1702q:txtPg2TIN3",
+        "frm1702q:txtPg2BranchCode",
+        "frm1702q:txtPg2TaxpayerName"
+      ]
+    }
+  ]
+}

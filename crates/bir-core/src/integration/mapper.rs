@@ -380,6 +380,7 @@ mod tests {
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
             per_year_forms: Default::default(),
+            profile_years: Default::default(),
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
@@ -400,6 +401,7 @@ mod tests {
             registration_activity_status: Default::default(),
         };
         profile.ensure_profile_version_ledger();
+        let _ = profile.capture_current_as_year(2026);
         profile
     }
 
@@ -462,6 +464,7 @@ mod tests {
     fn test_mapper_2551q_keeps_unresolved_profile_import_fail_closed() {
         let mapper = Mapper2551Q;
         let mut profile = test_profile();
+        profile.profile_years.clear();
         profile.profile_versions.clear();
 
         let FormDraftOutput::Form2551Q(draft) = mapper.map(&test_payload(), &profile).unwrap();
@@ -470,7 +473,7 @@ mod tests {
             draft
                 .profile_resolution_error
                 .as_deref()
-                .is_some_and(|message| message.contains("No confirmed"))
+                .is_some_and(|message| message.contains("no 2026 profile"))
         );
         assert!(draft.taxpayer_name.is_empty());
         assert!(draft.rdo_code.is_empty());

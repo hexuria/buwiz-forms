@@ -247,7 +247,7 @@ mod tests {
 
         // Save a set with one suppressed entry.
         let mut set =
-            PerYearFormsSet::from_codes(2026, ["2551Q", "1701Q", "1701"], FormSetSource::CorAi);
+            PerYearFormsSet::from_codes(2026, ["2551Q", "1701Q", "1701"], FormSetSource::Manual);
         set.entries[1].active = false;
         set.entries[1].reason = Some("filed annually instead".into());
         db.save_per_year_forms(tin, 2026, &set).unwrap();

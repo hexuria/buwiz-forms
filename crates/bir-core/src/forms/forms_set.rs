@@ -1,12 +1,9 @@
 //! Per-year **Forms Set** — the user-owned, authoritative list of which BIR forms a
 //! taxpayer files in a given taxable year.
 //!
-//! This replaces the rule-based temporal suggestion engine. A Forms Set is established
-//! once per taxable year, either from exact form codes extracted from a reviewed
-//! Certificate of Registration (COR), from the registered-tax-type fallback when the COR
-//! has no exact form list, or by manual selection ([`FormSetSource::Manual`]). It is
-//! persisted in the `per_year_forms` table and read by the dashboard and deadline
-//! resolver. Different years may hold different sets.
+//! V1: the user picks forms per year. Only [`FormSetSource::Manual`] entries
+//! are filing-active. The set is persisted in `per_year_forms` and read by the
+//! dashboard and deadline resolver. Different years may hold different sets.
 
 use crate::forms::registry::{FilingFrequency, canonical_form_code, find_form};
 use chrono::NaiveDate;
@@ -224,9 +221,12 @@ impl FormSetEntry {
         }
     }
 
-    /// True only when this entry is both included and safe for downstream filing.
+    /// True only when this entry is a user-chosen Manual include, resolved,
+    /// and marked active. Non-Manual sources cannot drive the dashboard.
     pub fn is_filing_active(&self) -> bool {
-        self.active && self.review_status == FormSetReviewStatus::Resolved
+        self.active
+            && self.review_status == FormSetReviewStatus::Resolved
+            && self.source == FormSetSource::Manual
     }
 
     pub fn needs_review(&self) -> bool {
@@ -587,6 +587,17 @@ mod tests {
     }
 
     #[test]
+    fn non_manual_sources_cannot_become_active_form_codes() {
+        let inferred =
+            PerYearFormsSet::from_codes(2026, ["2551Q", "1601C"], FormSetSource::InferredTaxType);
+        assert!(inferred.active_form_codes().is_empty());
+        let reviewed = PerYearFormsSet::from_codes(2026, ["2551Q"], FormSetSource::ReviewedCor);
+        assert!(reviewed.active_form_codes().is_empty());
+        let manual = PerYearFormsSet::from_codes(2026, ["2551Q", "1601C"], FormSetSource::Manual);
+        assert_eq!(manual.active_form_codes(), vec!["2551Q", "1601C"]);
+    }
+
+    #[test]
     fn from_code_unknown_is_custom_openended() {
         let entry = FormSetEntry::from_code("ZZZZ", FormSetSource::Manual);
         assert!(entry.custom);
@@ -606,7 +617,7 @@ mod tests {
         let mut set = PerYearFormsSet::from_codes(
             2026,
             ["1701", "1701A", "1701MS", "2551Q"],
-            FormSetSource::InferredTaxType,
+            FormSetSource::Manual,
         );
 
         // Self-employed default primary is 1701; the other ITRs deactivate,
@@ -623,8 +634,7 @@ mod tests {
 
     #[test]
     fn deactivate_redundant_annual_itrs_falls_back_to_group_order() {
-        let mut set =
-            PerYearFormsSet::from_codes(2026, ["1701A", "1701MS"], FormSetSource::InferredTaxType);
+        let mut set = PerYearFormsSet::from_codes(2026, ["1701A", "1701MS"], FormSetSource::Manual);
 
         // The implied primary (1701) is not among the active entries, so the
         // first active member in canonical group order (1701A) survives.
@@ -637,8 +647,7 @@ mod tests {
     fn deactivate_redundant_annual_itrs_ignores_single_and_cross_group() {
         // One active individual ITR + one active corporate ITR: no conflict
         // within either group, nothing changes.
-        let mut set =
-            PerYearFormsSet::from_codes(2026, ["1701", "1702RT"], FormSetSource::InferredTaxType);
+        let mut set = PerYearFormsSet::from_codes(2026, ["1701", "1702RT"], FormSetSource::Manual);
         assert!(!set.deactivate_redundant_annual_itrs(Some("1701"), Some("1702RT")));
         assert!(set.contains_active("1701"));
         assert!(set.contains_active("1702RT"));
@@ -684,7 +693,7 @@ mod tests {
     #[test]
     fn active_codes_exclude_inactive() {
         let mut set =
-            PerYearFormsSet::from_codes(2026, ["2551Q", "1701Q", "1701"], FormSetSource::CorAi);
+            PerYearFormsSet::from_codes(2026, ["2551Q", "1701Q", "1701"], FormSetSource::Manual);
         // Suppress one
         set.entries[1].active = false;
         let codes = set.active_form_codes();
@@ -882,5 +891,57 @@ mod tests {
         assert!(entry.effective_from.is_none());
         assert!(entry.effective_until.is_none());
         assert!(entry.conflict.is_none());
+    }
+
+    #[test]
+    fn cron_and_xml_writers_do_not_read_profile_router_flags() {
+        fn production(src: &str) -> &str {
+            src.split("#[cfg(test)]").next().unwrap_or(src)
+        }
+        let flags = [
+            "is_vat_registered",
+            "withholds_compensation",
+            "withholds_expanded",
+            "withholds_final",
+            "is_top_withholding_agent",
+            "is_government_withholding_entity",
+            "is_gpp_partner",
+            "has_single_employer",
+            "is_dormant",
+            "excise_tax_categories",
+            "registration_activity_status",
+        ];
+        let sources = [
+            (
+                "background_cron.rs",
+                production(include_str!("../background_cron.rs")),
+            ),
+            ("db/drafts.rs", production(include_str!("../db/drafts.rs"))),
+            (
+                "form_2551q_xml.rs",
+                production(include_str!("form_2551q_xml.rs")),
+            ),
+            (
+                "form_1601c_xml.rs",
+                production(include_str!("form_1601c_xml.rs")),
+            ),
+            (
+                "form_2550q_xml.rs",
+                production(include_str!("form_2550q_xml.rs")),
+            ),
+        ];
+        for (name, src) in sources {
+            for flag in flags {
+                let without_comments = src
+                    .lines()
+                    .filter(|line| !line.trim_start().starts_with("//"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                assert!(
+                    !without_comments.contains(flag),
+                    "{name} production code still mentions {flag}"
+                );
+            }
+        }
     }
 }

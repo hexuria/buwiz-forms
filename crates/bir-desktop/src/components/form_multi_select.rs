@@ -1,8 +1,8 @@
 //! Shared searchable multi-select over the official BIR form registry.
 //!
-//! The COR evidence editor and the calendar override editor both need a
-//! type-to-filter checkbox picker of every official form code. Building the
-//! option list here keeps the two selectors identical as the registry grows.
+//! The tax-profile Forms Set, calendar override editor, and any other
+//! official-form picker share this type-to-filter checkbox list. Building the
+//! option list here keeps those selectors identical as the registry grows.
 
 use gpui::{Context, Window};
 

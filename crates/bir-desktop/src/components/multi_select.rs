@@ -510,6 +510,7 @@ impl Render for MultiSelectState {
                         absolute
                         left_0
                         w_full
+                        when={(self.drop_down, |d| d.top(px(36.)))}
                         when={(!self.drop_down, |d| d.bottom(px(0.)))}
                     >
                         {v_flex()

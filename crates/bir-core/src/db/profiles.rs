@@ -8,12 +8,6 @@ use crate::profile::{
     TaxProfileVersionStatus, TaxpayerProfile,
 };
 
-fn reconciliation_calendar_year(local_date: chrono::NaiveDate) -> u16 {
-    use chrono::Datelike as _;
-
-    local_date.year() as u16
-}
-
 fn same_persisted_version_except_label(
     stored: &TaxProfileVersion,
     submitted: &TaxProfileVersion,
@@ -48,6 +42,11 @@ fn validate_reviewed_confirmation_plan(
     submitted_profile: &TaxpayerProfile,
     reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
 ) -> Result<(), DbError> {
+    // V1: filing uses profile-year clones. An empty submitted ledger is allowed
+    // so Save Profile can drop historical COR versions without a review plan.
+    if submitted_profile.profile_versions.is_empty() && reviewed_plan.is_none() {
+        return Ok(());
+    }
     let Some(existing_profile) = existing_profile else {
         let confirmed = submitted_profile
             .profile_versions
@@ -321,6 +320,7 @@ impl Database {
             ("per_year_forms", "tin"),
             ("profile_calendar_events", "profile_tin"),
             ("profile_calendar_links", "profile_tin"),
+            ("form_templates", "tin"),
         ] {
             conn.execute(
                 &format!("UPDATE {table} SET {column} = ?1 WHERE {column} = ?2"),
@@ -368,7 +368,7 @@ impl Database {
         mut profile: TaxpayerProfile,
         reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
     ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
-        profile.ensure_profile_version_ledger();
+        // V1 filing reads profile-year clones. Do not recreate a COR ledger.
         let tin = profile.tin.full();
         let previous_tin = profile
             .id
@@ -396,9 +396,8 @@ impl Database {
         }
 
         validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, reviewed_plan)?;
-        profile
-            .validate_confirmed_profile_timeline()
-            .map_err(DbError::Other)?;
+        // Filing reads profile-year clones. Empty submitted `profile_versions`
+        // is allowed so Save can drop a historical COR ledger.
 
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
@@ -435,48 +434,6 @@ impl Database {
 
         for (year, set) in &profile.per_year_forms {
             super::forms_set::execute_replace_per_year_forms(&tx, &tin, *year, set)?;
-        }
-
-        // Refresh the current year and every already stored year in the same
-        // transaction as the profile update. Ambiguous or undated timelines
-        // preserve existing Forms Sets instead of guessing.
-        let mut years_to_update = std::collections::BTreeSet::new();
-        // Filing obligations follow the desktop user's local calendar year.
-        // Using UTC here can reconcile the previous year during the first
-        // local hours of January 1 in time zones east of UTC, while the UI and
-        // emitted compliance event already identify the new local year.
-        let current_year = reconciliation_calendar_year(chrono::Local::now().date_naive());
-        years_to_update.insert(current_year);
-        years_to_update.extend(profile.per_year_forms.keys().copied());
-        if let Some(stored) = &existing_profile {
-            years_to_update.extend(stored.per_year_forms.keys().copied());
-        }
-
-        for year in years_to_update {
-            let resolved = profile.resolve_tax_profile_for_year(year);
-            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
-                continue;
-            }
-
-            let suggestions =
-                crate::integration::validation::form_suggestions_for_profile_year(&profile, year);
-            let existing_set = profile.per_year_forms.get(&year).or_else(|| {
-                existing_profile
-                    .as_ref()
-                    .and_then(|stored| stored.per_year_forms.get(&year))
-            });
-            let result =
-                crate::forms::reconcile_forms_set_for_year(year, existing_set, &suggestions);
-            if !result.conflicts.is_empty() {
-                tracing::warn!(
-                    tin = %tin,
-                    taxable_year = year,
-                    conflicts = result.conflicts.len(),
-                    "Forms Set reconciliation requires review"
-                );
-            }
-            super::forms_set::execute_replace_per_year_forms(&tx, &tin, year, &result.forms_set)?;
-            profile.per_year_forms.insert(year, result.forms_set);
         }
 
         tx.commit()?;
@@ -595,6 +552,7 @@ impl Database {
             ("data_providers", "profile_tin"),
             ("per_year_forms", "tin"),
             ("profile_calendar_events", "profile_tin"),
+            ("form_templates", "tin"),
         ] {
             tx.execute(
                 &format!("DELETE FROM {table} WHERE {column} = ?1"),
@@ -630,7 +588,6 @@ impl Database {
 mod tests {
     use super::*;
     use crate::db::ProfileCalendarLink;
-    use chrono::{FixedOffset, TimeZone, Utc};
     use tempfile::NamedTempFile;
 
     fn listing_test_profile(seg1: &str) -> TaxpayerProfile {
@@ -757,21 +714,6 @@ mod tests {
     }
 
     #[test]
-    fn reconciliation_calendar_year_uses_local_date_at_utc_positive_year_boundary() {
-        let utc = Utc
-            .with_ymd_and_hms(2026, 12, 31, 10, 30, 0)
-            .single()
-            .expect("valid UTC instant");
-        let utc_plus_14 = FixedOffset::east_opt(14 * 60 * 60).expect("valid UTC+14 offset");
-        let local_date = utc.with_timezone(&utc_plus_14).date_naive();
-
-        assert_eq!(
-            (utc.date_naive(), reconciliation_calendar_year(local_date)),
-            (chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), 2027)
-        );
-    }
-
-    #[test]
     fn profile_reads_do_not_synthesize_a_missing_version_ledger() {
         let file = NamedTempFile::new().unwrap();
         let db = Database::open(file.path()).unwrap();
@@ -815,6 +757,27 @@ mod tests {
         let listed = db.list_profiles().unwrap();
         assert_eq!(listed.len(), 1);
         assert!(listed[0].profile_versions.is_empty());
+    }
+
+    #[test]
+    fn save_profile_does_not_recreate_a_cor_version_ledger() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        let mut profile = listing_test_profile("333");
+        profile.profile_versions.clear();
+        profile.capture_current_as_year(2026).expect("2026 clone");
+
+        let saved = db.save_profile(profile).expect("save");
+        assert!(
+            saved.profile_versions.is_empty(),
+            "save must not synthesize a COR ledger"
+        );
+
+        let loaded = db
+            .get_profile(&saved.tin.full())
+            .unwrap()
+            .expect("reloaded");
+        assert!(loaded.profile_versions.is_empty());
+        assert!(loaded.profile_years.contains_key(&2026));
     }
 
     #[test]
