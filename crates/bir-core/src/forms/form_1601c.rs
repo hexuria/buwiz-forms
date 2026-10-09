@@ -9,8 +9,9 @@ use super::{FilingStatus, FormValidator};
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{
-    OFFICIAL_MIN_FORM_YEAR, fits_official_maxlength, official_tax_relief_code, relaxed_dev_mode,
-    valid_rdo_code, validate_email, validate_ph_phone, validate_zip,
+    OFFICIAL_INVALID_RDO_MESSAGE, OFFICIAL_MIN_FORM_YEAR, OFFICIAL_OLD_VERSION_MESSAGE,
+    fits_official_maxlength, official_tax_relief_code, rdo_code_is_placeholder, relaxed_dev_mode,
+    validate_email, validate_ph_phone, validate_zip,
 };
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
@@ -612,12 +613,12 @@ impl FormValidator for Form1601CDraft {
         } else if self.taxable_year < OFFICIAL_MIN_FORM_YEAR {
             errors.push((
                 "taxable_year".to_string(),
-                "Please file using the old version of the form".to_string(),
+                OFFICIAL_OLD_VERSION_MESSAGE.to_string(),
             ));
         } else if self.taxable_year as i32 > current_year {
             errors.push((
                 "taxable_year".to_string(),
-                "Invalid year. Year should not be later than the current year".to_string(),
+                "Invalid year. Year should not be later than the current year.".to_string(),
             ));
         }
 
@@ -629,7 +630,7 @@ impl FormValidator for Form1601CDraft {
         } else if self.taxable_year as i32 == current_year && self.month as u32 > current_month {
             errors.push((
                 "month".to_string(),
-                "Invalid month. Month should not be later than the current month".to_string(),
+                "Invalid month. Month should not be later than the current month.".to_string(),
             ));
         }
 
@@ -655,10 +656,10 @@ impl FormValidator for Form1601CDraft {
 
         if self.rdo_code.trim().is_empty() {
             errors.push(("rdo_code".to_string(), "RDO is required".to_string()));
-        } else if !relaxed_dev_mode() && !valid_rdo_code(&self.rdo_code) {
+        } else if rdo_code_is_placeholder(&self.rdo_code) {
             errors.push((
                 "rdo_code".to_string(),
-                "RDO Code must be a valid Revenue District Office code on Item 7".to_string(),
+                OFFICIAL_INVALID_RDO_MESSAGE.to_string(),
             ));
         }
 
@@ -693,11 +694,6 @@ impl FormValidator for Form1601CDraft {
             errors.push((
                 "zip_code".to_string(),
                 "Valid ZIP Code required".to_string(),
-            ));
-        } else if !fits_official_maxlength(&self.zip_code, 12) {
-            errors.push((
-                "zip_code".to_string(),
-                "ZIP Code exceeds the official 12-character field".to_string(),
             ));
         }
 
@@ -756,7 +752,7 @@ impl FormValidator for Form1601CDraft {
             }
         }
 
-        if !self.is_amended && self.tax_28_tax_remitted_previously != 0.0 {
+        if !self.is_amended && self.tax_28_tax_remitted_previously.abs() >= 0.005 {
             errors.push((
                 "tax_28_tax_remitted_previously".to_string(),
                 "Item 28 accepts entries only on an amended return".to_string(),
@@ -773,6 +769,20 @@ impl FormValidator for Form1601CDraft {
         }
 
         for (index, row) in self.schedule_1.iter().enumerate() {
+            // `1601c-validate-047`: the official validate inspects a Schedule I
+            // date only when that field is nonblank and never requires row
+            // completeness. The recommended app behavior requires every column
+            // once a row carries any value, so a fully blank row is skipped.
+            let row_has_data = !row.previous_month.trim().is_empty()
+                || !row.date_paid.trim().is_empty()
+                || !row.drawee_bank_code_or_agency.trim().is_empty()
+                || !row.payment_number.trim().is_empty()
+                || row.tax_paid != 0.0
+                || row.should_be_tax_due != 0.0
+                || row.adjustment != 0.0;
+            if !row_has_data {
+                continue;
+            }
             let field = format!("schedule_1_row_{}", index + 1);
             if !valid_month_year(&row.previous_month) {
                 errors.push((
@@ -1381,18 +1391,18 @@ mod tests {
         );
 
         draft.taxable_year = current_year;
-        draft.month = if today.month() == 12 {
-            1 // December has no later month; pick January of same year? cannot be later — test future month only when possible
-        } else {
-            today.month() as u8 + 1
-        };
-        if today.month() != 12 {
+        if today.month() < 12 {
+            draft.month = today.month() as u8 + 1;
             assert!(draft.validate().iter().any(|(field, _)| field == "month"));
+        } else {
+            // December leaves no later month this year; the current month must pass.
+            draft.month = 12;
+            assert!(draft.validate().iter().all(|(field, _)| field != "month"));
         }
     }
 
     #[test]
-    fn official_parity_rejects_non_dropdown_rdo_and_amended_item28() {
+    fn official_parity_rejects_placeholder_rdo_and_amended_item28() {
         let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
         draft.any_taxes_withheld = false;
 
@@ -1404,12 +1414,14 @@ mod tests {
                 .any(|(field, _)| field == "rdo_code")
         );
 
+        // The official dropdown can only contain real codes, so its validate
+        // tests selectedIndex == 0 alone; a non-placeholder value is accepted.
         draft.rdo_code = "999".to_string();
         assert!(
             draft
                 .validate()
                 .iter()
-                .any(|(field, _)| field == "rdo_code")
+                .all(|(field, _)| field != "rdo_code")
         );
 
         draft.rdo_code = "018".to_string();

@@ -30,35 +30,30 @@ pub fn validate_required(field: &'static str, label: &str, value: &str) -> Optio
 /// official forms alert "Please file using the old version of the form."
 pub const OFFICIAL_MIN_FORM_YEAR: u16 = 2018;
 
-/// Revenue District Office codes accepted by the official eBIRForms RDO
-/// dropdown, extracted verbatim from the official `xml/rdo.xml` (138 entries,
-/// v7.9.5.0). "000" is the blank placeholder and is intentionally absent.
-pub const RDO_CODES: &[&str] = &[
-    "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012", "013",
-    "014", "015", "016", "018", "019", "020", "022", "024", "026", "027", "028", "029", "030",
-    "031", "032", "033", "034", "035", "036", "037", "038", "039", "040", "041", "042", "043",
-    "044", "045", "046", "047", "048", "049", "050", "051", "052", "055", "056", "057", "058",
-    "059", "060", "061", "062", "063", "064", "065", "066", "067", "068", "069", "070", "071",
-    "072", "073", "074", "075", "076", "077", "078", "079", "080", "081", "082", "083", "084",
-    "085", "086", "087", "088", "089", "090", "091", "092", "094", "095", "096", "097", "098",
-    "099", "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110", "111",
-    "112", "113", "114", "115", "116", "117", "118", "119", "120", "121", "122", "123", "124",
-    "125", "126", "127", "132", "17A", "17B", "21A", "21B", "21C", "23A", "23B", "25A", "25B",
-    "43A", "43B", "53A", "53B", "54A", "54B", "93A", "93B",
-];
+/// Exact alert the official forms show when the return-period year predates
+/// this revision (`1601c-input-006`, `2551q-input-year-revision`).
+pub const OFFICIAL_OLD_VERSION_MESSAGE: &str = "Please file using the old version of the form.";
 
-/// Official RDO dropdown domain: a real RDO code, never the "000" placeholder.
-pub fn valid_rdo_code(code: &str) -> bool {
-    RDO_CODES.contains(&code.trim())
+/// Exact alert the official forms show when the RDO selection is blank or the
+/// "000" placeholder (`1601c-save-016`, `1601c-validate-027`,
+/// `2551q-validate-rdo`).
+pub const OFFICIAL_INVALID_RDO_MESSAGE: &str = "Please enter a valid RDO Code on Item 7.";
+
+/// The official RDO dropdown's blank placeholder. Both official forms reject
+/// it (a `selectedIndex` of zero); any other value is one the dropdown could
+/// not contain, so the official validate never tests membership further.
+pub fn rdo_code_is_placeholder(code: &str) -> bool {
+    code.trim() == "000"
 }
 
-/// Dev-mode escape hatch: set `EBIR_RELAXED_VALIDATION=1` to skip checks that
-/// gate against reference data BIR ultimately enforces server-side (strict
-/// TIN composition, RDO-code membership). Format and submission rules the
-/// official form validates client-side still apply. Intended for development
-/// and test filings only.
+/// Dev-mode escape hatch: set `EBIR_RELAXED_VALIDATION=1` in a debug build to
+/// skip the strict TIN composition check, so test TINs like
+/// `000-000-000-00000` validate. Every other rule the official form enforces
+/// client-side still applies. The flag is compiled out of release builds so a
+/// production binary can never relax a gate.
 pub fn relaxed_dev_mode() -> bool {
-    relaxed_dev_mode_enabled(std::env::var("EBIR_RELAXED_VALIDATION").ok().as_deref())
+    cfg!(debug_assertions)
+        && relaxed_dev_mode_enabled(std::env::var("EBIR_RELAXED_VALIDATION").ok().as_deref())
 }
 
 fn relaxed_dev_mode_enabled(value: Option<&str>) -> bool {
@@ -87,10 +82,11 @@ pub fn official_tax_relief_code(spec: &str, allow_both: bool) -> Option<String> 
 }
 
 /// Official field-length limits used by the eBIRForms `maxlength` attributes.
-/// Reaching BIR with an over-long value truncates or corrupts the wire file, so
-/// we reject it instead.
+/// `maxlength` counts the raw input, so this counts raw characters without
+/// trimming. Reaching BIR with an over-long value truncates or corrupts the
+/// wire file, so we reject it instead.
 pub fn fits_official_maxlength(value: &str, max_chars: usize) -> bool {
-    value.trim().chars().count() <= max_chars
+    value.chars().count() <= max_chars
 }
 
 pub fn validate_zip(zip: &str) -> bool {
@@ -312,16 +308,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rdo_code_list_matches_official_dropdown_domain() {
-        assert!(valid_rdo_code("001"));
-        assert!(valid_rdo_code("018"));
-        assert!(valid_rdo_code("93B"));
-        assert!(!valid_rdo_code("18"));
-        assert!(!valid_rdo_code("000"));
-        assert!(!valid_rdo_code("999"));
-        assert!(!valid_rdo_code("abc"));
-        assert!(!valid_rdo_code(""));
-        assert_eq!(RDO_CODES.len(), 138);
+    fn rdo_placeholder_matches_the_official_selected_index_zero() {
+        assert!(rdo_code_is_placeholder("000"));
+        assert!(rdo_code_is_placeholder(" 000 "));
+        assert!(!rdo_code_is_placeholder("001"));
+        assert!(!rdo_code_is_placeholder("018"));
+        assert!(!rdo_code_is_placeholder(""));
+        assert!(!rdo_code_is_placeholder("999"));
     }
 
     #[test]

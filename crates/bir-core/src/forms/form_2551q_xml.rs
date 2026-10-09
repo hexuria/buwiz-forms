@@ -65,7 +65,7 @@ impl Form2551QDraft {
             "frm2551Qv2018:txtTaxReliefSpecify",
             if self.tax_relief {
                 crate::validation::official_tax_relief_code(&self.tax_relief_specification, false)
-                    .unwrap_or_else(|| self.tax_relief_specification.clone())
+                    .unwrap_or_default()
             } else {
                 String::new()
             },

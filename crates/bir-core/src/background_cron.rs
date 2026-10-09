@@ -1759,7 +1759,7 @@ mod tests {
             "email": "guard@example.com",
             "default_form_type": "2551Qv2018",
             "taxpayer_type": "Individual",
-            "business_start_date": "2090-01-01"
+            "business_start_date": "2010-01-01"
         }))
         .unwrap()
     }
@@ -1767,7 +1767,7 @@ mod tests {
     fn reviewed_profile() -> TaxpayerProfile {
         let mut profile = test_profile();
         profile.tax_elections.push(TaxElectionHistory {
-            taxable_year: 2099,
+            taxable_year: 2024,
             election: IncomeTaxElection::GraduatedUnspecified,
             elected_at: chrono::NaiveDateTime::default(),
             source_form: "2551Qv2018".to_string(),
@@ -1777,7 +1777,7 @@ mod tests {
     }
 
     fn queued_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
-        let mut draft = Form2551QDraft::new_from_effective_profile(profile, 2099, 1);
+        let mut draft = Form2551QDraft::new_from_effective_profile(profile, 2024, 1);
         draft.item_13_election = Item13Election::Graduated;
         draft
             .transition_to_queued()

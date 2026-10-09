@@ -41,7 +41,14 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtTIN1", tin1.clone());
         insert(&mut fields, "frm1601c:txtTIN2", tin2.clone());
         insert(&mut fields, "frm1601c:txtTIN3", tin3.clone());
-        insert(&mut fields, "frm1601c:txtBranchCode", branch.clone());
+        // Page 1's branch field caps at 3 characters while page 2's caps at 5
+        // (official field records `frm1601c:txtBranchCode` vs
+        // `frm1601c:txtPg2BranchCode`).
+        insert(
+            &mut fields,
+            "frm1601c:txtBranchCode",
+            format!("{:0>3}", branch),
+        );
         insert(&mut fields, "frm1601c:txtRDOCode", self.rdo_code.clone());
 
         // Use encoded spaces if requested by original XML format, but text should be fine
@@ -89,7 +96,7 @@ impl Form1601CDraft {
             "frm1601c:selTreaty",
             if self.tax_relief {
                 crate::validation::official_tax_relief_code(&self.tax_relief_specification, true)
-                    .unwrap_or_else(|| self.tax_relief_specification.clone())
+                    .unwrap_or_else(|| "0".to_string())
             } else {
                 "0".to_string()
             },
@@ -137,10 +144,17 @@ impl Form1601CDraft {
             "frm1601c:txtTax27",
             self.tax_27_taxes_withheld_for_remittance,
         );
+        // `1601c-input-011`: on a non-amended return the official handler
+        // disables Item 28 and resets it to 0.00; the serialized field mirrors
+        // that even when validate() was bypassed.
         insert_money(
             &mut fields,
             "frm1601c:txtTax28",
-            self.tax_28_tax_remitted_previously,
+            if self.is_amended {
+                self.tax_28_tax_remitted_previously
+            } else {
+                0.0
+            },
         );
 
         insert(
@@ -193,7 +207,11 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtPg2TIN1", tin1);
         insert(&mut fields, "frm1601c:txtPg2TIN2", tin2);
         insert(&mut fields, "frm1601c:txtPg2TIN3", tin3);
-        insert(&mut fields, "frm1601c:txtPg2BranchCode", branch);
+        insert(
+            &mut fields,
+            "frm1601c:txtPg2BranchCode",
+            format!("{:0>5}", branch),
+        );
         insert(
             &mut fields,
             "frm1601c:txtPg2TaxpayerName",
@@ -628,15 +646,17 @@ fn verify_source_money(
     }
 }
 
+/// Returns the raw (unpadded) branch segment; call sites pad it to each
+/// field's official width.
 fn split_tin(tin: &str) -> (String, String, String, String) {
     if tin.contains('-') {
         let parts: Vec<&str> = tin.split('-').collect();
-        let branch = parts.get(3).copied().unwrap_or("00000");
+        let branch = parts.get(3).copied().unwrap_or("000");
         return (
             parts.first().copied().unwrap_or("").to_string(),
             parts.get(1).copied().unwrap_or("").to_string(),
             parts.get(2).copied().unwrap_or("").to_string(),
-            format!("{:0>5}", branch),
+            branch.to_string(),
         );
     }
 
@@ -648,13 +668,13 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
             .to_string()
     };
 
-    let branch_raw = digits.get(9..).filter(|s| !s.is_empty()).unwrap_or("00000");
+    let branch_raw = digits.get(9..).filter(|s| !s.is_empty()).unwrap_or("000");
 
     (
         segment(0, 3),
         segment(3, 6),
         segment(6, 9),
-        format!("{:0>5}", branch_raw),
+        branch_raw.to_string(),
     )
 }
 
