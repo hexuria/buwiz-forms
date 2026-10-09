@@ -10,8 +10,8 @@ use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{
     OFFICIAL_INVALID_RDO_MESSAGE, OFFICIAL_MIN_FORM_YEAR, OFFICIAL_OLD_VERSION_MESSAGE,
-    fits_official_maxlength, official_tax_relief_code, rdo_code_is_official_option,
-    relaxed_dev_mode, validate_email, validate_ph_phone, validate_zip,
+    fits_official_maxlength, official_tax_relief_code, rdo_code_is_official_option, validate_email,
+    validate_ph_phone, validate_zip,
 };
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
@@ -634,7 +634,7 @@ impl FormValidator for Form1601CDraft {
             ));
         }
 
-        if self.tin.trim().is_empty() || (!relaxed_dev_mode() && !valid_submission_tin(&self.tin)) {
+        if !valid_submission_tin(&self.tin) {
             errors.push((
                 "tin".to_string(),
                 "TIN must use 12 to 14 digits in either compact form or the reviewed 3-3-3-branch format"
