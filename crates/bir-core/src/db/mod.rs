@@ -771,7 +771,13 @@ impl Database {
                 info!("Loaded existing master key from native keychain");
                 Ok(hex_key)
             }
-            Err(_) => {
+            // Only NoEntry is a genuine miss: no key exists yet, so
+            // generating one is safe. Every other error means the store may
+            // still hold a live key we failed to read; generating a
+            // replacement in that case would make the existing database
+            // permanently undecryptable - the same failure mode the macOS
+            // keychain path in this file refuses to risk.
+            Err(keyring::Error::NoEntry) => {
                 info!("Generating new master key and storing in native keychain");
                 let key: [u8; 32] = rand::random();
                 let hex_key = hex::encode(key);
@@ -783,6 +789,12 @@ impl Database {
                 }
                 Ok(hex_key)
             }
+            Err(e) => Err(DbError::KeychainCli(format!(
+                "Could not read the existing SQLCipher master key: {e}. \
+                 Refusing to generate a replacement, because that would \
+                 make the database permanently unreadable. Fix keyring \
+                 access and retry."
+            ))),
         }
     }
 
