@@ -98,8 +98,10 @@ impl Form2551QDraft {
             "frm2551Qv2018:txtRDOCode",
             self.rdo_code.clone(),
         );
-        // Name, address and email are uppercased to mirror the official
-        // `capital(this, event)` onblur handler. Profile: official-match.
+        // Name and address are uppercased to mirror the official `capital()`
+        // onblur handler. Profile: official-match. The email is not: the
+        // effective `capital()` (string-util.js L236) skips `txtEmail`, so it
+        // is submitted as entered and only printed in capitals by the renderer.
         insert(
             &mut fields,
             "frm2551Qv2018:registeredName",
@@ -116,7 +118,7 @@ impl Form2551QDraft {
             "frm2551Qv2018:telNo",
             self.contact_number.clone(),
         );
-        insert(&mut fields, "txtEmail", self.email.to_uppercase());
+        insert(&mut fields, "txtEmail", self.email.clone());
 
         insert_money(&mut fields, "frm2551Qv2018:txt14", self.total_tax_due);
         insert_money(

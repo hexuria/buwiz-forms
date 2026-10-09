@@ -41,20 +41,18 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtTIN1", tin1.clone());
         insert(&mut fields, "frm1601c:txtTIN2", tin2.clone());
         insert(&mut fields, "frm1601c:txtTIN3", tin3.clone());
-        // Page 1's branch field caps at 3 characters while page 2's caps at 5
-        // (official field records `frm1601c:txtBranchCode` vs
-        // `frm1601c:txtPg2BranchCode`).
-        insert(
-            &mut fields,
-            "frm1601c:txtBranchCode",
-            format!("{:0>3}", branch),
-        );
+        // Page 1's `maxlength="3"` only limits typing: official fills both
+        // branch fields from the profile `tin4` (HTA L3779–3780), which
+        // `padZeros` pads to 5 digits, so both carry the same 5-wide value.
+        insert(&mut fields, "frm1601c:txtBranchCode", branch.clone());
         insert(&mut fields, "frm1601c:txtRDOCode", self.rdo_code.clone());
 
         // Use encoded spaces if requested by original XML format, but text should be fine
-        // Name, address, line of business and email are uppercased to mirror
-        // the official `capital(this, event)` onblur handler. Profile:
-        // official-match.
+        // Name, address and line of business are uppercased to mirror the
+        // official `capital()` onblur handler. Profile: official-match. The
+        // email is not: the effective `capital()` (string-util.js L236) skips
+        // `txtEmail`, so it is submitted as entered and only printed in
+        // capitals by the renderer.
         insert(
             &mut fields,
             "frm1601c:txtTaxpayerName",
@@ -90,7 +88,7 @@ impl Form1601CDraft {
             self.category_of_agent == "G",
         );
 
-        insert(&mut fields, "txtEmail", self.email_address.to_uppercase());
+        insert(&mut fields, "txtEmail", self.email_address.clone());
 
         // Item 13 — Tax Relief / Treaty
         insert_bool_1_2(&mut fields, "frm1601c:SpecialTax", self.tax_relief);
@@ -213,11 +211,7 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtPg2TIN1", tin1);
         insert(&mut fields, "frm1601c:txtPg2TIN2", tin2);
         insert(&mut fields, "frm1601c:txtPg2TIN3", tin3);
-        insert(
-            &mut fields,
-            "frm1601c:txtPg2BranchCode",
-            format!("{:0>5}", branch),
-        );
+        insert(&mut fields, "frm1601c:txtPg2BranchCode", branch);
         insert(
             &mut fields,
             "frm1601c:txtPg2TaxpayerName",
@@ -652,17 +646,15 @@ fn verify_source_money(
     }
 }
 
-/// Returns the raw (unpadded) branch segment; call sites pad it to each
-/// field's official width.
 fn split_tin(tin: &str) -> (String, String, String, String) {
     if tin.contains('-') {
         let parts: Vec<&str> = tin.split('-').collect();
-        let branch = parts.get(3).copied().unwrap_or("000");
+        let branch = parts.get(3).copied().unwrap_or("00000");
         return (
             parts.first().copied().unwrap_or("").to_string(),
             parts.get(1).copied().unwrap_or("").to_string(),
             parts.get(2).copied().unwrap_or("").to_string(),
-            branch.to_string(),
+            format!("{:0>5}", branch),
         );
     }
 
@@ -674,13 +666,13 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
             .to_string()
     };
 
-    let branch_raw = digits.get(9..).filter(|s| !s.is_empty()).unwrap_or("000");
+    let branch_raw = digits.get(9..).filter(|s| !s.is_empty()).unwrap_or("00000");
 
     (
         segment(0, 3),
         segment(3, 6),
         segment(6, 9),
-        branch_raw.to_string(),
+        format!("{:0>5}", branch_raw),
     )
 }
 

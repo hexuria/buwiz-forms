@@ -10,8 +10,8 @@ use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{
     OFFICIAL_INVALID_RDO_MESSAGE, OFFICIAL_MIN_FORM_YEAR, OFFICIAL_OLD_VERSION_MESSAGE,
-    fits_official_maxlength, official_tax_relief_code, rdo_code_is_placeholder, relaxed_dev_mode,
-    validate_email, validate_ph_phone, validate_zip,
+    fits_official_maxlength, official_tax_relief_code, rdo_code_is_official_option,
+    relaxed_dev_mode, validate_email, validate_ph_phone, validate_zip,
 };
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
@@ -656,7 +656,10 @@ impl FormValidator for Form1601CDraft {
 
         if self.rdo_code.trim().is_empty() {
             errors.push(("rdo_code".to_string(), "RDO is required".to_string()));
-        } else if rdo_code_is_placeholder(&self.rdo_code) {
+        } else if !rdo_code_is_official_option(&self.rdo_code) {
+            // `1601c-validate-027`: official rejects the `'000'` placeholder
+            // (`selectedIndex == 0`); the dropdown itself limits every other
+            // value to rdo.xml, which free text must enforce here.
             errors.push((
                 "rdo_code".to_string(),
                 OFFICIAL_INVALID_RDO_MESSAGE.to_string(),
@@ -706,6 +709,13 @@ impl FormValidator for Form1601CDraft {
             errors.push((
                 "contact_number".to_string(),
                 "Telephone number exceeds the official 20-character field".to_string(),
+            ));
+        }
+
+        if !fits_official_maxlength(&self.line_of_business, 60) {
+            errors.push((
+                "line_of_business".to_string(),
+                "Line of business exceeds the official 60-character field".to_string(),
             ));
         }
 
@@ -1419,14 +1429,14 @@ mod tests {
                 .any(|(field, _)| field == "rdo_code")
         );
 
-        // The official dropdown can only contain real codes, so its validate
-        // tests selectedIndex == 0 alone; a non-placeholder value is accepted.
+        // The official dropdown holds only rdo.xml codes, so free text
+        // outside that list is rejected too.
         draft.rdo_code = "999".to_string();
         assert!(
             draft
                 .validate()
                 .iter()
-                .all(|(field, _)| field != "rdo_code")
+                .any(|(field, _)| field == "rdo_code")
         );
 
         draft.rdo_code = "018".to_string();

@@ -39,11 +39,14 @@ pub const OFFICIAL_OLD_VERSION_MESSAGE: &str = "Please file using the old versio
 /// `2551q-validate-rdo`).
 pub const OFFICIAL_INVALID_RDO_MESSAGE: &str = "Please enter a valid RDO Code on Item 7.";
 
-/// The official RDO dropdown's blank placeholder. Both official forms reject
-/// it (a `selectedIndex` of zero); any other value is one the dropdown could
-/// not contain, so the official validate never tests membership further.
-pub fn rdo_code_is_placeholder(code: &str) -> bool {
-    code.trim() == "000"
+/// Whether `code` is one the official RDO dropdown can hold. `getRdo()` builds
+/// that dropdown from `xml/rdo.xml` behind a blank `'000'` placeholder, so the
+/// official app can only submit a listed code (or the placeholder, which
+/// 1601C rejects via `selectedIndex == 0`). Our field is free text, so this
+/// membership test is the only place the dropdown's domain is enforced; the
+/// placeholder is not in `rdo.json` and fails here too.
+pub fn rdo_code_is_official_option(code: &str) -> bool {
+    crate::reference::get_rdo(code.trim()).is_some()
 }
 
 /// Dev-mode escape hatch: set `EBIR_RELAXED_VALIDATION=1` in a debug build to
@@ -308,13 +311,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rdo_placeholder_matches_the_official_selected_index_zero() {
-        assert!(rdo_code_is_placeholder("000"));
-        assert!(rdo_code_is_placeholder(" 000 "));
-        assert!(!rdo_code_is_placeholder("001"));
-        assert!(!rdo_code_is_placeholder("018"));
-        assert!(!rdo_code_is_placeholder(""));
-        assert!(!rdo_code_is_placeholder("999"));
+    fn rdo_options_match_the_official_dropdown() {
+        assert!(rdo_code_is_official_option("001"));
+        assert!(rdo_code_is_official_option(" 018 "));
+        // The blank placeholder and codes absent from rdo.xml are not options.
+        assert!(!rdo_code_is_official_option("000"));
+        assert!(!rdo_code_is_official_option(""));
+        assert!(!rdo_code_is_official_option("999"));
     }
 
     #[test]
