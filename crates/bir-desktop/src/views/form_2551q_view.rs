@@ -29,6 +29,9 @@ use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
 use super::email_confirmation_view::EmailConfirmationView;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::tax_relief_select::{
+    TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
+};
 
 pub enum Form2551QEvent {
     BackToDashboard,
@@ -126,7 +129,7 @@ pub struct Form2551QView {
     tax_relief: bool,
     year_end_month_input: Entity<InputState>,
     attached_sheets_input: Entity<InputState>,
-    tax_relief_specification_input: Entity<InputState>,
+    tax_relief_select: Entity<TaxReliefSelectState>,
 
     // Schedule 1 row inputs (parallel to draft.schedule_1)
     row_inputs: Vec<ScheduleRowInputs>,
@@ -235,11 +238,10 @@ impl Form2551QView {
             input.set_value(draft.number_of_attached_sheets.to_string(), window, cx);
         });
 
-        let tax_relief_specification_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Special law or treaty details"));
-        tax_relief_specification_input.update(cx, |input, cx| {
-            input.set_value(draft.tax_relief_specification.clone(), window, cx);
-        });
+        // Item 12A is a select on the official form (1 Special Rate,
+        // 2 International Tax Treaty); 2551Q has no "Both".
+        let tax_relief_select =
+            new_tax_relief_select(&draft.tax_relief_specification, false, window, cx);
 
         let other_tax_credit_description_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder("Describe the Item 17 credit/payment")
@@ -360,18 +362,11 @@ impl Form2551QView {
             },
         );
         let sub6 = cx.subscribe_in(
-            &tax_relief_specification_input,
+            &tax_relief_select,
             window,
-            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
-                InputEvent::Change => {
-                    this.is_validated = false;
-                    this.sync_from_inputs(cx);
-                }
-                InputEvent::Focus => {
-                    this.suppressed_sections.insert("filing_period");
-                    cx.notify();
-                }
-                _ => {}
+            |this: &mut Self, _, _: &SelectEvent<Vec<TaxReliefOption>>, _, cx| {
+                this.is_validated = false;
+                this.sync_from_inputs(cx);
             },
         );
         let sub7 = cx.subscribe_in(
@@ -533,7 +528,7 @@ impl Form2551QView {
             tax_relief,
             year_end_month_input,
             attached_sheets_input,
-            tax_relief_specification_input,
+            tax_relief_select,
             row_inputs,
             atc_select,
             creditable_withheld_input,
@@ -588,11 +583,7 @@ impl Form2551QView {
             .trim()
             .parse::<u16>()
             .unwrap_or(0);
-        self.draft.tax_relief_specification = self
-            .tax_relief_specification_input
-            .read(cx)
-            .value()
-            .to_string();
+        self.draft.tax_relief_specification = selected_tax_relief_code(&self.tax_relief_select, cx);
 
         // Sync schedule rows
         for (i, row_state) in self.row_inputs.iter().enumerate() {
@@ -2129,11 +2120,17 @@ impl Render for Form2551QView {
                             items_center
                             gap_2
                             when={(is_editable, |el| el.cursor_pointer())}
-                            on_click={cx.listener(move |this, _, _, cx| {
+                            on_click={cx.listener(move |this, _, window, cx| {
                                 if !this.is_editable() {
                                     return;
                                 }
                                 this.tax_relief = !this.tax_relief;
+                                if !this.tax_relief {
+                                    // Official `chageTreaty` resets the select on No.
+                                    this.tax_relief_select.update(cx, |select, cx| {
+                                        select.set_selected_index(None, window, cx);
+                                    });
+                                }
                                 this.is_validated = false;
                                 this.sync_from_inputs(cx);
                             })}
@@ -2241,7 +2238,8 @@ impl Render for Form2551QView {
                     px_2
                     py_1
                 >
-                    {Input::new(&self.tax_relief_specification_input)
+                    {Select::new(&self.tax_relief_select)
+                        .placeholder("Choose Special Rate or International Tax Treaty")
                         .disabled(!is_editable)
                         .appearance(false)}
                 </div>
@@ -2703,12 +2701,7 @@ impl Render for Form2551QView {
                     .map(|count| count <= 99)
                     .unwrap_or(false)
                 && (!self.tax_relief
-                    || !self
-                        .tax_relief_specification_input
-                        .read(cx)
-                        .value()
-                        .trim()
-                        .is_empty())
+                    || self.tax_relief_select.read(cx).selected_value().is_some())
                 && !matches!(self.draft.item_13_election, Item13Election::Unanswered));
 
         let is_background_info_valid = is_submitted

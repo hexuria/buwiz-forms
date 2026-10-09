@@ -14,6 +14,10 @@ use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCH
 use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::tax_relief_select::{
+    TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
+};
+use gpui_component::select::{Select, SelectEvent};
 
 pub enum Form1601CEvent {
     BackToDashboard,
@@ -136,7 +140,7 @@ pub struct Form1601CView {
     number_of_sheets: Entity<InputState>,
     atc: Entity<InputState>,
     tax_relief: bool,
-    tax_relief_specification: Entity<InputState>,
+    tax_relief_specification: Entity<TaxReliefSelectState>,
 
     // Part IV Schedule I inputs (parallel to draft.schedule_1)
     schedule_row_inputs: Vec<ScheduleRowInputs>,
@@ -271,8 +275,10 @@ impl Form1601CView {
 
         let number_of_sheets = create_text_input(cx, &draft.number_of_sheets.to_string(), window);
         let atc = create_text_input(cx, &draft.atc, window);
+        // Item 13A is a select on the official form: 1 Special Rate,
+        // 2 International Tax Treaty, 3 Both.
         let tax_relief_specification =
-            create_text_input(cx, &draft.tax_relief_specification, window);
+            new_tax_relief_select(&draft.tax_relief_specification, true, window, cx);
         let schedule_row_inputs = draft
             .schedule_1
             .iter()
@@ -306,7 +312,6 @@ impl Form1601CView {
         let inputs = vec![
             number_of_sheets.clone(),
             atc.clone(),
-            tax_relief_specification.clone(),
             tax_14_total_compensation.clone(),
             tax_15_statutory_minimum_wage.clone(),
             tax_16_holiday_pay.clone(),
@@ -324,6 +329,15 @@ impl Form1601CView {
             tax_33_interest.clone(),
             tax_34_compromise.clone(),
         ];
+
+        subscriptions.push(cx.subscribe_in(
+            &tax_relief_specification,
+            window,
+            |this: &mut Self, _, _: &SelectEvent<Vec<TaxReliefOption>>, _, cx| {
+                this.is_validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
 
         for input in inputs {
             subscriptions.push(cx.subscribe_in(
@@ -449,7 +463,7 @@ impl Form1601CView {
         self.draft.atc = get_text(&self.atc, cx);
         self.draft.tax_relief = self.tax_relief;
         self.draft.tax_relief_specification = if self.tax_relief {
-            get_text(&self.tax_relief_specification, cx)
+            selected_tax_relief_code(&self.tax_relief_specification, cx)
         } else {
             String::new()
         };
@@ -1441,11 +1455,9 @@ impl Render for Form1601CView {
                                                                     if !this.tax_relief {
                                                                         this.tax_relief_specification.update(
                                                                             cx,
-                                                                            |input, cx| {
-                                                                                input.set_value(
-                                                                                    String::new(),
-                                                                                    window,
-                                                                                    cx,
+                                                                            |select, cx| {
+                                                                                select.set_selected_index(
+                                                                                    None, window, cx,
                                                                                 );
                                                                             },
                                                                         );
@@ -1461,11 +1473,7 @@ impl Render for Form1601CView {
                                                 </div>
                                             })
                                             .when(self.tax_relief, |content| {
-                                                content.child(self.render_input_row(
-                                                    "13A If yes, specify",
-                                                    &self.tax_relief_specification,
-                                                    cx,
-                                                ))
+                                                content.child(self.render_tax_relief_row())
                                             })}
                         </div>
                         <div bg={cx.theme().background}
@@ -1754,6 +1762,22 @@ impl Form1601CView {
                         self.draft.tax_26_adjustment,
                         cx,
                     )}
+                </div>
+            </div>
+        }
+    }
+
+    fn render_tax_relief_row(&self) -> impl IntoElement {
+        let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
+        rsx! {
+            <div flex justify_between items_center gap_4>
+                <div w_1_2 text_sm font_weight={FontWeight::MEDIUM}>
+                    {"13A If yes, specify"}
+                </div>
+                <div w_1_2>
+                    {Select::new(&self.tax_relief_specification)
+                        .placeholder("Choose Special Rate, Treaty, or Both")
+                        .disabled(is_disabled)}
                 </div>
             </div>
         }
