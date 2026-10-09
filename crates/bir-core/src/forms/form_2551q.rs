@@ -1272,7 +1272,10 @@ impl From<&Form2551QDraft> for FilingCalculationSnapshot {
 }
 
 use super::FormValidator;
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
+use crate::validation::{
+    OFFICIAL_MIN_FORM_YEAR, official_tax_relief_code, relaxed_dev_mode, valid_rdo_code,
+    validate_email, validate_ph_phone, validate_zip,
+};
 
 impl FormValidator for Form2551QDraft {
     fn validate(&self) -> Vec<(String, String)> {
@@ -1293,6 +1296,11 @@ impl FormValidator for Form2551QDraft {
             errors.push((
                 "taxable_year".to_string(),
                 "Taxable year must be a 4-digit year".to_string(),
+            ));
+        } else if self.taxable_year < OFFICIAL_MIN_FORM_YEAR {
+            errors.push((
+                "taxable_year".to_string(),
+                "Please file using the old version of the form".to_string(),
             ));
         }
 
@@ -1335,6 +1343,13 @@ impl FormValidator for Form2551QDraft {
             errors.push((
                 "tax_relief_specification".to_string(),
                 "Tax-relief specification is required when tax relief is selected".to_string(),
+            ));
+        } else if self.tax_relief
+            && official_tax_relief_code(&self.tax_relief_specification, false).is_none()
+        {
+            errors.push((
+                "tax_relief_specification".to_string(),
+                "Tax-relief specification must be one of the official options: 1 (Special Rate) or 2 (International Tax Treaty)".to_string(),
             ));
         } else if self.tax_relief_specification.chars().count() > 100 {
             errors.push((
@@ -1467,6 +1482,16 @@ impl FormValidator for Form2551QDraft {
             }
         }
 
+        if !self.rdo_code.trim().is_empty()
+            && !relaxed_dev_mode()
+            && !valid_rdo_code(&self.rdo_code)
+        {
+            errors.push((
+                "rdo_code".to_string(),
+                "RDO Code must be a valid Revenue District Office code".to_string(),
+            ));
+        }
+
         if self.zip_code.trim().is_empty() {
             // Already handled by the loop above, but we keep it here if we want to separate logic
         } else if !validate_zip(&self.zip_code) {
@@ -1492,23 +1517,24 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
-        // Reviewed XML/submission capacities, deliberately independent of the
-        // shorter printed combs. Longer legal values use the HTML renderer's
-        // reviewed plain-box layout instead of being truncated to comb cells.
+        // Official input caps (maxlength on the official form). The submitted
+        // XML cannot represent values the official app cannot produce, so the
+        // caps are enforced here even though the frozen HTML renderer can lay
+        // out longer text in its plain-box fallback.
         for (field, label, value, capacity) in [
             (
                 "taxpayer_name",
                 "Taxpayer name",
                 self.taxpayer_name.as_str(),
-                100,
+                50,
             ),
             (
                 "registered_address",
                 "Registered address",
                 self.registered_address.as_str(),
-                200,
+                100,
             ),
-            ("email", "Email address", self.email.as_str(), 100),
+            ("email", "Email address", self.email.as_str(), 50),
             (
                 "contact_number",
                 "Contact number",
@@ -2575,7 +2601,7 @@ mod tests {
                 .any(|(field, _)| field == "other_tax_credit_description")
         );
 
-        draft.tax_relief_specification = "Special law".to_string();
+        draft.tax_relief_specification = "Special Rate".to_string();
         draft.other_tax_credit_description = "Prior payment".to_string();
         let errors = draft.validate();
         assert!(
@@ -2590,7 +2616,7 @@ mod tests {
     fn validation_accepts_values_that_use_adaptive_print_text_boxes() {
         let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
         draft.tax_relief = true;
-        draft.tax_relief_specification = "X".repeat(27);
+        draft.tax_relief_specification = "2".to_string();
         draft.taxpayer_name = "N".repeat(41);
         draft.registered_address = "A".repeat(72);
         draft.email = "abcdefghijklmnopqrst@example.com".to_string();
@@ -3808,5 +3834,84 @@ mod tests {
         // Line 18 should NOT include tax_paid_previous
         assert_eq!(draft.total_tax_credits, 1000.0);
         assert_eq!(draft.tax_payable, 500.0); // 1500 - 1000
+    }
+
+    #[test]
+    fn official_parity_rejects_pre_2018_year_and_non_dropdown_rdo() {
+        let draft = make_draft(50_000.0, 0.0, 2017, 1);
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "taxable_year")
+        );
+
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.rdo_code = "000".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "rdo_code")
+        );
+
+        draft.rdo_code = "999".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "rdo_code")
+        );
+
+        draft.rdo_code = "018".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "rdo_code")
+        );
+    }
+
+    #[test]
+    fn official_parity_rejects_tax_relief_outside_dropdown_domain() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.tax_relief = true;
+
+        for spec in ["1", "2", "Special Rate", "International Tax Treaty"] {
+            draft.tax_relief_specification = spec.to_string();
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(field, _)| field != "tax_relief_specification"),
+                "spec {spec:?} should validate"
+            );
+        }
+
+        for spec in ["3", "Both", "Special Law 123"] {
+            draft.tax_relief_specification = spec.to_string();
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .any(|(field, _)| field == "tax_relief_specification"),
+                "spec {spec:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn official_parity_enforces_field_length_caps() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.taxpayer_name = "N".repeat(51);
+        draft.registered_address = "A".repeat(101);
+        draft.email = format!("{}@example.com", "e".repeat(40));
+        let errors = draft.validate();
+        for field in ["taxpayer_name", "registered_address", "email"] {
+            assert!(
+                errors.iter().any(|(error_field, _)| error_field == field),
+                "expected an error for {field}: {errors:?}"
+            );
+        }
     }
 }

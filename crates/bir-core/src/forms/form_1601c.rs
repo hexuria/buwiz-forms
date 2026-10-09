@@ -8,7 +8,11 @@
 use super::{FilingStatus, FormValidator};
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::profile::TaxpayerProfile;
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
+use crate::validation::{
+    OFFICIAL_MIN_FORM_YEAR, fits_official_maxlength, official_tax_relief_code, relaxed_dev_mode,
+    valid_rdo_code, validate_email, validate_ph_phone, validate_zip,
+};
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -596,10 +600,24 @@ impl FormValidator for Form1601CDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();
 
+        let today = chrono::Local::now().date_naive();
+        let current_year = today.year();
+        let current_month = today.month();
+
         if !(1900..=9999).contains(&self.taxable_year) {
             errors.push((
                 "taxable_year".to_string(),
                 "Taxable year must be a 4-digit year".to_string(),
+            ));
+        } else if self.taxable_year < OFFICIAL_MIN_FORM_YEAR {
+            errors.push((
+                "taxable_year".to_string(),
+                "Please file using the old version of the form".to_string(),
+            ));
+        } else if self.taxable_year as i32 > current_year {
+            errors.push((
+                "taxable_year".to_string(),
+                "Invalid year. Year should not be later than the current year".to_string(),
             ));
         }
 
@@ -608,9 +626,14 @@ impl FormValidator for Form1601CDraft {
                 "month".to_string(),
                 "Month must be between 1 and 12".to_string(),
             ));
+        } else if self.taxable_year as i32 == current_year && self.month as u32 > current_month {
+            errors.push((
+                "month".to_string(),
+                "Invalid month. Month should not be later than the current month".to_string(),
+            ));
         }
 
-        if !valid_submission_tin(&self.tin) {
+        if self.tin.trim().is_empty() || (!relaxed_dev_mode() && !valid_submission_tin(&self.tin)) {
             errors.push((
                 "tin".to_string(),
                 "TIN must use 12 to 14 digits in either compact form or the reviewed 3-3-3-branch format"
@@ -632,16 +655,37 @@ impl FormValidator for Form1601CDraft {
 
         if self.rdo_code.trim().is_empty() {
             errors.push(("rdo_code".to_string(), "RDO is required".to_string()));
+        } else if !relaxed_dev_mode() && !valid_rdo_code(&self.rdo_code) {
+            errors.push((
+                "rdo_code".to_string(),
+                "RDO Code must be a valid Revenue District Office code on Item 7".to_string(),
+            ));
         }
 
         if self.taxpayer_name.trim().is_empty() {
             errors.push(("taxpayer_name".to_string(), "Name is required".to_string()));
+        } else if !fits_official_maxlength(&self.taxpayer_name, 50) {
+            errors.push((
+                "taxpayer_name".to_string(),
+                "Name exceeds the official 50-character field".to_string(),
+            ));
         }
 
         if self.registered_address.trim().is_empty() {
             errors.push((
                 "registered_address".to_string(),
                 "Address is required".to_string(),
+            ));
+        } else if !fits_official_maxlength(&self.registered_address, 100) {
+            errors.push((
+                "registered_address".to_string(),
+                "Address exceeds the official 100-character field".to_string(),
+            ));
+        }
+        if !fits_official_maxlength(&self.registered_address_2, 50) {
+            errors.push((
+                "registered_address_2".to_string(),
+                "Address (line 2) exceeds the official 50-character field".to_string(),
             ));
         }
 
@@ -650,12 +694,29 @@ impl FormValidator for Form1601CDraft {
                 "zip_code".to_string(),
                 "Valid ZIP Code required".to_string(),
             ));
+        } else if !fits_official_maxlength(&self.zip_code, 12) {
+            errors.push((
+                "zip_code".to_string(),
+                "ZIP Code exceeds the official 12-character field".to_string(),
+            ));
         }
 
         if !validate_ph_phone(&self.contact_number) {
             errors.push((
                 "contact_number".to_string(),
                 "Valid Philippine phone number required".to_string(),
+            ));
+        } else if !fits_official_maxlength(&self.contact_number, 20) {
+            errors.push((
+                "contact_number".to_string(),
+                "Telephone number exceeds the official 20-character field".to_string(),
+            ));
+        }
+
+        if !fits_official_maxlength(&self.email_address, 60) {
+            errors.push((
+                "email_address".to_string(),
+                "Email address exceeds the official 60-character field".to_string(),
             ));
         }
 
@@ -681,10 +742,24 @@ impl FormValidator for Form1601CDraft {
             ));
         }
 
-        if self.tax_relief && self.tax_relief_specification.trim().is_empty() {
+        if self.tax_relief {
+            if self.tax_relief_specification.trim().is_empty() {
+                errors.push((
+                    "tax_relief_specification".to_string(),
+                    "Item 13A is required when payees avail of tax relief".to_string(),
+                ));
+            } else if official_tax_relief_code(&self.tax_relief_specification, true).is_none() {
+                errors.push((
+                    "tax_relief_specification".to_string(),
+                    "Item 13A must be one of the official options: 1 (Special Rate), 2 (International Tax Treaty), or 3 (Both)".to_string(),
+                ));
+            }
+        }
+
+        if !self.is_amended && self.tax_28_tax_remitted_previously != 0.0 {
             errors.push((
-                "tax_relief_specification".to_string(),
-                "Item 13A is required when payees avail of tax relief".to_string(),
+                "tax_28_tax_remitted_previously".to_string(),
+                "Item 28 accepts entries only on an amended return".to_string(),
             ));
         }
 
@@ -707,12 +782,25 @@ impl FormValidator for Form1601CDraft {
                         index + 1
                     ),
                 ));
+            } else if month_year_in_future(&row.previous_month, today) {
+                errors.push((
+                    field.clone(),
+                    format!("Schedule I row {} month cannot be a future date", index + 1),
+                ));
             }
             if !valid_calendar_date(&row.date_paid) {
                 errors.push((
                     field.clone(),
                     format!(
                         "Schedule I row {} requires a valid MM/DD/YYYY date paid",
+                        index + 1
+                    ),
+                ));
+            } else if calendar_date_in_future(&row.date_paid, today) {
+                errors.push((
+                    field.clone(),
+                    format!(
+                        "Schedule I row {} date paid cannot be a future date",
                         index + 1
                     ),
                 ));
@@ -946,6 +1034,18 @@ fn valid_calendar_date(value: &str) -> bool {
         && chrono::NaiveDate::parse_from_str(value, "%m/%d/%Y").is_ok()
 }
 
+/// Mirrors the official `validateMonthYear` mask: MM/YYYY must not exceed the
+/// filing machine's current month.
+fn month_year_in_future(value: &str, today: chrono::NaiveDate) -> bool {
+    chrono::NaiveDate::parse_from_str(&format!("01/{value}"), "%d/%m/%Y")
+        .is_ok_and(|date| (date.year(), date.month()) > (today.year(), today.month()))
+}
+
+/// Mirrors the official `validateDate` mask: MM/DD/YYYY must not be a future date.
+fn calendar_date_in_future(value: &str, today: chrono::NaiveDate) -> bool {
+    chrono::NaiveDate::parse_from_str(value, "%m/%d/%Y").is_ok_and(|date| date > today)
+}
+
 fn valid_submission_tin(value: &str) -> bool {
     let value = value.trim();
     if value.chars().all(|ch| ch.is_ascii_digit()) {
@@ -1071,7 +1171,7 @@ mod tests {
                 .any(|(field, _)| field == "tax_relief_specification")
         );
 
-        draft.tax_relief_specification = "Special Law 123".to_string();
+        draft.tax_relief_specification = "International Tax Treaty".to_string();
         assert!(
             draft
                 .validate()
@@ -1248,5 +1348,173 @@ mod tests {
                 .any(|(field, _)| field == "queue_authorization")
         );
         assert_eq!(draft.status, FilingStatus::Draft);
+    }
+
+    #[test]
+    fn official_parity_rejects_out_of_range_periods() {
+        let today = chrono::Local::now().date_naive();
+        let current_year = today.year() as u16;
+
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), current_year - 1, 6);
+        draft.any_taxes_withheld = false;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "taxable_year" && field != "month")
+        );
+
+        draft.taxable_year = 2017;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "taxable_year")
+        );
+
+        draft.taxable_year = current_year + 1;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "taxable_year")
+        );
+
+        draft.taxable_year = current_year;
+        draft.month = if today.month() == 12 {
+            1 // December has no later month; pick January of same year? cannot be later — test future month only when possible
+        } else {
+            today.month() as u8 + 1
+        };
+        if today.month() != 12 {
+            assert!(draft.validate().iter().any(|(field, _)| field == "month"));
+        }
+    }
+
+    #[test]
+    fn official_parity_rejects_non_dropdown_rdo_and_amended_item28() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+
+        draft.rdo_code = "000".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "rdo_code")
+        );
+
+        draft.rdo_code = "999".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "rdo_code")
+        );
+
+        draft.rdo_code = "018".to_string();
+        draft.is_amended = false;
+        draft.tax_28_tax_remitted_previously = 100.0;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "tax_28_tax_remitted_previously")
+        );
+
+        draft.is_amended = true;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "tax_28_tax_remitted_previously")
+        );
+    }
+
+    #[test]
+    fn official_parity_rejects_future_schedule_dates() {
+        let today = chrono::Local::now().date_naive();
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        let mut row = schedule_row("01/2030", 1.0, 1.0);
+        row.date_paid = "01/15/2030".to_string();
+        draft.schedule_1 = vec![row];
+        let errors = draft.validate();
+        assert_eq!(
+            errors
+                .iter()
+                .filter(|(field, _)| field == "schedule_1_row_1")
+                .count(),
+            2
+        );
+
+        let past_month = today
+            .checked_sub_months(chrono::Months::new(1))
+            .expect("one month ago exists");
+        draft.schedule_1[0].previous_month = past_month.format("%m/%Y").to_string();
+        draft.schedule_1[0].date_paid = today
+            .checked_sub_days(chrono::Days::new(1))
+            .expect("yesterday exists")
+            .format("%m/%d/%Y")
+            .to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(_, message)| !message.contains("future date"))
+        );
+    }
+
+    #[test]
+    fn official_parity_enforces_field_length_caps() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        draft.taxpayer_name = "N".repeat(51);
+        draft.registered_address = "A".repeat(101);
+        draft.registered_address_2 = "B".repeat(51);
+        let errors = draft.validate();
+        for field in [
+            "taxpayer_name",
+            "registered_address",
+            "registered_address_2",
+        ] {
+            assert!(
+                errors.iter().any(|(error_field, _)| error_field == field),
+                "expected an error for {field}"
+            );
+        }
+    }
+
+    #[test]
+    fn item_13_accepts_codes_and_labels_official_can_serialize() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        draft.tax_relief = true;
+
+        for spec in [
+            "1",
+            "2",
+            "3",
+            "Special Rate",
+            "International Tax Treaty",
+            "Both",
+        ] {
+            draft.tax_relief_specification = spec.to_string();
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(field, _)| field != "tax_relief_specification"),
+                "spec {spec:?} should validate"
+            );
+        }
+
+        draft.tax_relief_specification = "Special Law 123".to_string();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "tax_relief_specification")
+        );
     }
 }

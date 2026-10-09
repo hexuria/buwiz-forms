@@ -64,7 +64,8 @@ impl Form2551QDraft {
             &mut fields,
             "frm2551Qv2018:txtTaxReliefSpecify",
             if self.tax_relief {
-                self.tax_relief_specification.clone()
+                crate::validation::official_tax_relief_code(&self.tax_relief_specification, false)
+                    .unwrap_or_else(|| self.tax_relief_specification.clone())
             } else {
                 String::new()
             },
@@ -97,12 +98,12 @@ impl Form2551QDraft {
         insert(
             &mut fields,
             "frm2551Qv2018:registeredName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
         insert(
             &mut fields,
             "frm2551Qv2018:registeredAddress",
-            self.registered_address.clone(),
+            self.registered_address.to_uppercase(),
         );
         insert(&mut fields, "frm2551Qv2018:zipCode", self.zip_code.clone());
         insert(
@@ -110,7 +111,7 @@ impl Form2551QDraft {
             "frm2551Qv2018:telNo",
             self.contact_number.clone(),
         );
-        insert(&mut fields, "txtEmail", self.email.clone());
+        insert(&mut fields, "txtEmail", self.email.to_uppercase());
 
         insert_money(&mut fields, "frm2551Qv2018:txt14", self.total_tax_due);
         insert_money(
@@ -202,7 +203,7 @@ impl Form2551QDraft {
         insert(
             &mut fields,
             "frm2551Qv2018:txtPg2TaxpayerName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
         insert(&mut fields, "frm2551Qv2018:txtCurrentPage", "1");
         insert(&mut fields, "frm2551Qv2018:txtMaxPage", "2");
@@ -460,7 +461,7 @@ mod tests {
         draft.year_end_month = 6;
         draft.number_of_attached_sheets = 3;
         draft.tax_relief = true;
-        draft.tax_relief_specification = "Special Law 123".to_string();
+        draft.tax_relief_specification = "International Tax Treaty".to_string();
         draft.item_13_election = Item13Election::EightPercent;
         draft.other_tax_credit_description = "Prior quarter adjustment".to_string();
         draft.overpayment_disposition = OverpaymentDisposition::Refund;
@@ -474,10 +475,7 @@ mod tests {
         assert_eq!(fields["frm2551Qv2018:txtSheets"], "3");
         assert_eq!(fields["frm2551Qv2018:taxTreaty_1"], "true");
         assert_eq!(fields["frm2551Qv2018:taxTreaty_2"], "false");
-        assert_eq!(
-            fields["frm2551Qv2018:txtTaxReliefSpecify"],
-            "Special Law 123"
-        );
+        assert_eq!(fields["frm2551Qv2018:txtTaxReliefSpecify"], "2");
         assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");
         assert_eq!(fields["frm2551Qv2018:taxRate2"], "true");
         assert_eq!(
