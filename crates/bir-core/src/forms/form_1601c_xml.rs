@@ -52,6 +52,9 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtRDOCode", self.rdo_code.clone());
 
         // Use encoded spaces if requested by original XML format, but text should be fine
+        // Name, address, line of business and email are uppercased to mirror
+        // the official `capital(this, event)` onblur handler. Profile:
+        // official-match.
         insert(
             &mut fields,
             "frm1601c:txtTaxpayerName",
@@ -95,8 +98,11 @@ impl Form1601CDraft {
             &mut fields,
             "frm1601c:selTreaty",
             if self.tax_relief {
+                // `validate` rejects unmapped values; if one reaches here
+                // anyway, keep it verbatim rather than emit "0" (no relief)
+                // under SpecialTax = Yes.
                 crate::validation::official_tax_relief_code(&self.tax_relief_specification, true)
-                    .unwrap_or_else(|| "0".to_string())
+                    .unwrap_or_else(|| self.tax_relief_specification.trim().to_string())
             } else {
                 "0".to_string()
             },
@@ -146,7 +152,7 @@ impl Form1601CDraft {
         );
         // `1601c-input-011`: on a non-amended return the official handler
         // disables Item 28 and resets it to 0.00; the serialized field mirrors
-        // that even when validate() was bypassed.
+        // that even when validate() was bypassed. Profile: official-match.
         insert_money(
             &mut fields,
             "frm1601c:txtTax28",

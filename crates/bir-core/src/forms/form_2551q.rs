@@ -1710,7 +1710,9 @@ impl FormValidator for Form2551QDraft {
             );
             // `2551q-tax-rate-eight-percent`: the official 8% option zeroes and
             // disables every ATC row — the return files compliance-only — so no
-            // row may carry amounts, not just PT010.
+            // row may carry amounts, not just PT010. Profile: app-stricter —
+            // official zeroes the rows silently; we reject so no entered
+            // amount is discarded without the filer seeing it.
             if (annual_eight_percent
                 || matches!(self.item_13_election, Item13Election::EightPercent))
                 && (row.taxable_amount.abs() >= TWO_DECIMAL_TOLERANCE
@@ -1726,6 +1728,8 @@ impl FormValidator for Form2551QDraft {
             }
         }
 
+        // Items 15/16/17 under the 8% option. Profile: app-stricter — official
+        // zeroes these silently; we reject a nonzero entry instead.
         if matches!(self.item_13_election, Item13Election::EightPercent)
             || matches!(
                 self.annual_income_tax_election,

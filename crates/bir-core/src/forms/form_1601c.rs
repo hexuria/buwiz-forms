@@ -752,6 +752,9 @@ impl FormValidator for Form1601CDraft {
             }
         }
 
+        // `1601c-input-011`. Profile: app-stricter — official disables Item 28
+        // and silently resets it to 0.00 on a non-amended return; we flag the
+        // stale value instead of discarding it.
         if !self.is_amended && self.tax_28_tax_remitted_previously.abs() >= 0.005 {
             errors.push((
                 "tax_28_tax_remitted_previously".to_string(),
@@ -773,6 +776,8 @@ impl FormValidator for Form1601CDraft {
             // date only when that field is nonblank and never requires row
             // completeness. The recommended app behavior requires every column
             // once a row carries any value, so a fully blank row is skipped.
+            // Profile: app-stricter — diverges from official, which accepts
+            // partially filled rows.
             let row_has_data = !row.previous_month.trim().is_empty()
                 || !row.date_paid.trim().is_empty()
                 || !row.drawee_bank_code_or_agency.trim().is_empty()

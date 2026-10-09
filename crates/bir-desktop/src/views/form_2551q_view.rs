@@ -1806,10 +1806,9 @@ impl Render for Form2551QView {
         };
 
         let profile_resolution_banner = if let Some(error) = &self.draft.profile_resolution_error {
-            let error_detail = error.clone();
-            let copy_text = format!(
-                "Filing blocked — effective taxpayer profile is unresolved\n{error}\nReview and confirm the COR/profile effective dates, then reopen or refresh this return."
-            );
+            const TITLE: &str = "Filing blocked — effective taxpayer profile is unresolved";
+            const GUIDANCE: &str = "Review and confirm the COR/profile effective dates, then reopen or refresh this return.";
+            let copy_text = format!("{TITLE}\n{error}\n{GUIDANCE}");
             let banner = rsx! {
                 <div
                     px_4
@@ -1825,14 +1824,14 @@ impl Render for Form2551QView {
                 >
                     <div flex items_center justify_between gap_2>
                         <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().danger}>
-                            {"Filing blocked — effective taxpayer profile is unresolved"}
+                            {TITLE}
                         </div>
                         {gpui_component::clipboard::Clipboard::new("profile-resolution-error-copy")
                             .value(copy_text)}
                     </div>
-                    <div text_sm>{error_detail}</div>
+                    <div text_sm>{error.clone()}</div>
                     <div text_sm>
-                        {"Review and confirm the COR/profile effective dates, then reopen or refresh this return."}
+                        {GUIDANCE}
                     </div>
                 </div>
             };

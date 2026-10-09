@@ -63,9 +63,12 @@ impl Form2551QDraft {
         insert(
             &mut fields,
             "frm2551Qv2018:txtTaxReliefSpecify",
+            // Known labels map to the official option code; anything else is
+            // preserved verbatim (the official `<option>` values for this
+            // field were never captured), never dropped to blank.
             if self.tax_relief {
                 crate::validation::official_tax_relief_code(&self.tax_relief_specification, false)
-                    .unwrap_or_default()
+                    .unwrap_or_else(|| self.tax_relief_specification.trim().to_string())
             } else {
                 String::new()
             },
@@ -95,6 +98,8 @@ impl Form2551QDraft {
             "frm2551Qv2018:txtRDOCode",
             self.rdo_code.clone(),
         );
+        // Name, address and email are uppercased to mirror the official
+        // `capital(this, event)` onblur handler. Profile: official-match.
         insert(
             &mut fields,
             "frm2551Qv2018:registeredName",
@@ -484,6 +489,20 @@ mod tests {
         );
         assert_eq!(fields["frm2551Qv2018:overPayment1"], "true");
         assert_eq!(fields["frm2551Qv2018:overPayment2"], "false");
+    }
+
+    #[test]
+    fn unmapped_tax_relief_specification_serializes_verbatim_not_blank() {
+        let mut draft = sample_draft();
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "  Special law 123 ".to_string();
+
+        let fields = draft.to_bir_field_map();
+
+        assert_eq!(
+            fields["frm2551Qv2018:txtTaxReliefSpecify"],
+            "Special law 123"
+        );
     }
 
     #[test]
