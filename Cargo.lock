@@ -807,6 +807,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bir"
+version = "0.1.0"
+dependencies = [
+ "bir-desktop",
+]
+
+[[package]]
 name = "bir-core"
 version = "0.1.0"
 dependencies = [
@@ -905,6 +912,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "smol",
+ "socket2",
  "temp-env",
  "tempfile",
  "thiserror 2.0.20",
@@ -3658,7 +3666,7 @@ dependencies = [
 [[package]]
 name = "gpui-agent"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/gpui-agent?rev=1edec4dbf49755bf91ffbbc23359698ea5b867f4#1edec4dbf49755bf91ffbbc23359698ea5b867f4"
+source = "git+https://github.com/hexuria/gpui-agent?rev=8cab33e2c779f42499c2ec47c94f87963668ee19#8cab33e2c779f42499c2ec47c94f87963668ee19"
 dependencies = [
  "hmac 0.12.1",
  "png 0.17.16",

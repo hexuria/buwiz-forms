@@ -12,6 +12,12 @@ and demo tax money rows onto cell-id inputs via `html-frozen/*/writer-cells.json
 2551Q also fills Year Ended (MM/YYYY) and quarter xboxes. Writer-cell letter
 combs ASCII-uppercase for BIR CAPITAL LETTERS print; profile/DB values stay as stored.
 
+## Headless CLI (`bir`)
+
+The headless agent installs as crate `bir` (`cargo install bir` or `cargo binstall bir`).
+That binary is not the desktop app. Desktop dmg/deb/exe releases stay on tags
+`vMAJOR.MINOR.PATCH`. The CLI publishes from tags `bir-vMAJOR.MINOR.PATCH`.
+
 ---
 
 ## Current Development Status
@@ -249,7 +255,7 @@ Windows, set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`
 # Build the painted app with the control plane. `dev-tools` is not required;
 # add it only for --dev-export-live-database or to open a form that is still
 # being certified from a *release* build.
-cargo build --locked --bin bir --features agent
+cargo build --locked --bin bir-desktop --features agent
 
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret          # required to bind (protocol v2 HMAC)
@@ -257,7 +263,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when 
 # Release binaries also need:
 # export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./target/debug/bir
+./target/debug/bir-desktop
 ```
 
 Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:

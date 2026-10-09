@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -57,9 +57,40 @@ impl Harness {
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        self.cmd(args)
-            .output()
-            .unwrap_or_else(|error| panic!("spawn {} {:?}: {error}", self.bin.display(), args))
+        // Bound every CLI wait. Unbounded `.output()` previously hung Windows CI
+        // for ~6h when a detached child inherited piped stdio.
+        self.run_deadline(args, Duration::from_secs(45))
+    }
+
+    fn run_deadline(&self, args: &[&str], budget: Duration) -> Output {
+        let child = self
+            .cmd(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|error| panic!("spawn {} {:?}: {error}", self.bin.display(), args));
+        let child_pid = child.id();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = tx.send(child.wait_with_output());
+        });
+        match rx.recv_timeout(budget) {
+            Ok(Ok(output)) => output,
+            Ok(Err(error)) => panic!("wait {} {:?}: {error}", self.bin.display(), args),
+            Err(_) => {
+                terminate_pid(child_pid);
+                if let Some(daemon_pid) = self.live_pid() {
+                    terminate_pid(daemon_pid);
+                }
+                panic!(
+                    "timed out after {:?} waiting for {} {:?}\nlog:\n{}",
+                    budget,
+                    self.bin.display(),
+                    args,
+                    std::fs::read_to_string(&self.log).unwrap_or_default()
+                );
+            }
+        }
     }
 
     fn wait_ready(&self) {
@@ -111,6 +142,9 @@ impl Drop for Harness {
 }
 
 fn pid_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
     #[cfg(unix)]
     {
         std::process::Command::new("kill")
@@ -121,19 +155,57 @@ fn pid_alive(pid: u32) -> bool {
             .map(|status| status.success())
             .unwrap_or(false)
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        windows_pid_alive(pid)
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = pid;
-        true
+        false
+    }
+}
+
+#[cfg(windows)]
+fn windows_pid_alive(pid: u32) -> bool {
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+        fn GetExitCodeProcess(handle: *mut std::ffi::c_void, code: *mut u32) -> i32;
+    }
+    // SAFETY: Win32 process-query handles; closed before return.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(handle, &mut code) != 0;
+        CloseHandle(handle);
+        ok && code == STILL_ACTIVE
     }
 }
 
 fn terminate_pid(pid: u32) {
-    let _ = std::process::Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
 }
 
 fn wait_log_contains(path: &Path, needle: &str, budget: Duration) -> String {
