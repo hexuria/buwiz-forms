@@ -139,8 +139,17 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1600wp-2010" => Some(include_str!(
             "../../../html-frozen/1600wp-2010/writer-cells.json"
         )),
+        "1601-fq-2020" => Some(include_str!(
+            "../../../html-frozen/1601-fq-2020/writer-cells.json"
+        )),
         "1601c-2018" => Some(include_str!(
             "../../../html-frozen/1601c-2018/writer-cells.json"
+        )),
+        "1601eq-2019" => Some(include_str!(
+            "../../../html-frozen/1601eq-2019/writer-cells.json"
+        )),
+        "1603q-2018" => Some(include_str!(
+            "../../../html-frozen/1603q-2018/writer-cells.json"
         )),
         "1606-2018" => Some(include_str!(
             "../../../html-frozen/1606-2018/writer-cells.json"
