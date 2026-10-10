@@ -1,0 +1,1862 @@
+{
+ "form_id": "1701-v2018",
+ "html_slug": "1701-2018",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Text cells and combs: caption beside or above the cell, or the column header of the NOLCO and Schedule 5 tables. Booleans: X in the box immediately left of the printed option (Yes/No, civil status, filing status, taxpayer type, ATC, tax rate and deduction method, overpayment). Amounts: every amount is a 9-slot comb with no centavo comb, and the writer value is formatted 1,234.00, so no money_joins and the amounts stay blank. The item 1 sheet has only a YYYY comb. Stamped TIN cells keep their catalog name=. Split date combs, the email, the attachment-count boxes and the signature block stay blank.",
+ "joins": [
+  {
+   "writer_key": "frm1701:txtPg1I1Year",
+   "html_id": "p1c4",
+   "printed": "1 For the Year (YYYY)",
+   "reason": "YYYY comb beside the \"( YYYY)\" caption; the sheet has no separate MM comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I5RDOCode",
+   "html_id": "p1c21",
+   "printed": "5 RDO Code",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I8TaxpayerName",
+   "html_id": "p1c37",
+   "printed": "8 Taxpayer's Name",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I9Address",
+   "html_id": "p1c39",
+   "printed": "9 Registered Address (first line)",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I9Address2",
+   "html_id": "p1c40",
+   "printed": "9 Registered Address (second line)",
+   "reason": "second address line directly under the item 9 line"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I9AZipCode",
+   "html_id": "p1c42",
+   "printed": "9A ZIP Code",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I12Citizenship",
+   "html_id": "p1c52",
+   "printed": "12 Citizenship",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I14ForeignTaxNumber",
+   "html_id": "p1c54",
+   "printed": "14 Foreign Tax Number, if applicable",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I15TelNum",
+   "html_id": "p1c59",
+   "printed": "15 Contact Number (Landline/Cellphone No.)",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I34Agency",
+   "html_id": "p1c137",
+   "printed": "34 Cash/Bank Debit Memo, Drawee Bank/Agency",
+   "reason": "row 34 under the Drawee Bank/Agency column"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I34Number",
+   "html_id": "p1c138",
+   "printed": "34 Cash/Bank Debit Memo, Number",
+   "reason": "row 34 under the Number column"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I35Agency",
+   "html_id": "p1c144",
+   "printed": "35 Check, Drawee Bank/Agency",
+   "reason": "row 35 under the Drawee Bank/Agency column"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I235Number",
+   "html_id": "p1c145",
+   "printed": "35 Check, Number",
+   "reason": "row 35 under the Number column; key name carries the 35 item number"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I36Number",
+   "html_id": "p1c151",
+   "printed": "36 Tax Debit Memo, Number",
+   "reason": "row 36 under the Number column"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I37Particular",
+   "html_id": "p1c157",
+   "printed": "37 Others, Particulars (specify below)",
+   "reason": "row 37 under the Particulars column"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I37Agency",
+   "html_id": "p1c158",
+   "printed": "37 Others, Drawee Bank/Agency",
+   "reason": "row 37 under the Drawee Bank/Agency column"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I37Number",
+   "html_id": "p1c159",
+   "printed": "37 Others, Number",
+   "reason": "row 37 under the Number column"
+  },
+  {
+   "writer_key": "frm1701:txtPg2TaxpayerName",
+   "html_id": "p2c6",
+   "printed": "Tax Filer's Last Name (page 2 header)",
+   "reason": "header name cell under \"Tax Filer's Last Name\""
+  },
+  {
+   "writer_key": "frm1701:txtPg2I2SpouseRDOCode",
+   "html_id": "p2c17",
+   "printed": "2 RDO Code (Part IV)",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg2I5SpouseName",
+   "html_id": "p2c31",
+   "printed": "5 Spouse's Name",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg2I6TelNum",
+   "html_id": "p2c33",
+   "printed": "6 Contact Number",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg2I7Citizenship",
+   "html_id": "p2c35",
+   "printed": "7 Citizenship",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg2I9ForeignTaxNumber",
+   "html_id": "p2c38",
+   "printed": "9 Foreign Tax Number",
+   "reason": "caption or column header names the item; text sits beside or below it"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_19Desc",
+   "html_id": "p2c134",
+   "printed": "19 Add: Other Non-Operating Income (specify below)",
+   "reason": "description cell on the item 19 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_20Desc",
+   "html_id": "p2c139",
+   "printed": "20 (specify below)",
+   "reason": "description cell on the item 20 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3TaxpayerName",
+   "html_id": "p3c6",
+   "printed": "Tax Filer's Last Name (page 3 header)",
+   "reason": "header name cell under \"Tax Filer's Last Name\""
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_27Desc",
+   "html_id": "p3c16",
+   "printed": "27 Add: Other Non-Operating Income (specify below)",
+   "reason": "description cell on the item 27 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17dDesc",
+   "html_id": "p3c98",
+   "printed": "17d (description)",
+   "reason": "description cell on the item 17d row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_1Desc",
+   "html_id": "p3c110",
+   "printed": "5.A item 1, Description",
+   "reason": "Description column, item 1"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_1Legal",
+   "html_id": "p3c112",
+   "printed": "5.A item 1, Legal Basis",
+   "reason": "Legal Basis column, item 1"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_2Desc",
+   "html_id": "p3c115",
+   "printed": "5.A item 2, Description",
+   "reason": "Description column, item 2"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_2Legal",
+   "html_id": "p3c117",
+   "printed": "5.A item 2, Legal Basis",
+   "reason": "Legal Basis column, item 2"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_4Desc",
+   "html_id": "p3c123",
+   "printed": "5.B item 4, Description",
+   "reason": "Description column, item 4"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_4Legal",
+   "html_id": "p3c125",
+   "printed": "5.B item 4, Legal Basis",
+   "reason": "Legal Basis column, item 4"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_5Desc",
+   "html_id": "p3c128",
+   "printed": "5.B item 5, Description",
+   "reason": "Description column, item 5"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_5Legal",
+   "html_id": "p3c130",
+   "printed": "5.B item 5, Legal Basis",
+   "reason": "Legal Basis column, item 5"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_8D",
+   "html_id": "p3c186",
+   "printed": "Total NOLCO - Taxpayer/Filer (Sum of Items 4D to 7D)",
+   "reason": "Current Year (D) column of the total row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4TaxpayerName",
+   "html_id": "p4c6",
+   "printed": "Tax Filer's Last Name (page 4 header)",
+   "reason": "header name cell under \"Tax Filer's Last Name\""
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_13D",
+   "html_id": "p4c46",
+   "printed": "Total NOLCO - Spouse (Sum of Items 9D to 12D)",
+   "reason": "Current Year (D) column of the total row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_9Specify",
+   "html_id": "p4c172",
+   "printed": "9 (specify below)",
+   "reason": "specify cell on the item 9 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_4Year",
+   "html_id": "p3c157",
+   "printed": "4 Year Incurred",
+   "reason": "row 4 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_4A",
+   "html_id": "p3c158",
+   "printed": "4 A. Amount",
+   "reason": "row 4 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_4B",
+   "html_id": "p3c159",
+   "printed": "4 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 4 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_4C",
+   "html_id": "p3c160",
+   "printed": "4 C. NOLCO Expired (Unapplied)",
+   "reason": "row 4 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_4D",
+   "html_id": "p3c161",
+   "printed": "4 D. NOLCO Applied (Current Year)",
+   "reason": "row 4 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_4E",
+   "html_id": "p3c162",
+   "printed": "4 E. Net Operating Loss (Unapplied)",
+   "reason": "row 4 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_5Year",
+   "html_id": "p3c164",
+   "printed": "5 Year Incurred",
+   "reason": "row 5 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_5A",
+   "html_id": "p3c165",
+   "printed": "5 A. Amount",
+   "reason": "row 5 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_5B",
+   "html_id": "p3c166",
+   "printed": "5 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 5 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_5C",
+   "html_id": "p3c167",
+   "printed": "5 C. NOLCO Expired (Unapplied)",
+   "reason": "row 5 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_5D",
+   "html_id": "p3c168",
+   "printed": "5 D. NOLCO Applied (Current Year)",
+   "reason": "row 5 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_5E",
+   "html_id": "p3c169",
+   "printed": "5 E. Net Operating Loss (Unapplied)",
+   "reason": "row 5 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_6Year",
+   "html_id": "p3c171",
+   "printed": "6 Year Incurred",
+   "reason": "row 6 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_6A",
+   "html_id": "p3c172",
+   "printed": "6 A. Amount",
+   "reason": "row 6 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_6B",
+   "html_id": "p3c173",
+   "printed": "6 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 6 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_6C",
+   "html_id": "p3c174",
+   "printed": "6 C. NOLCO Expired (Unapplied)",
+   "reason": "row 6 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_6D",
+   "html_id": "p3c175",
+   "printed": "6 D. NOLCO Applied (Current Year)",
+   "reason": "row 6 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_6E",
+   "html_id": "p3c176",
+   "printed": "6 E. Net Operating Loss (Unapplied)",
+   "reason": "row 6 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_7Year",
+   "html_id": "p3c178",
+   "printed": "7 Year Incurred",
+   "reason": "row 7 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_7A",
+   "html_id": "p3c179",
+   "printed": "7 A. Amount",
+   "reason": "row 7 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_7B",
+   "html_id": "p3c180",
+   "printed": "7 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 7 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_7C",
+   "html_id": "p3c181",
+   "printed": "7 C. NOLCO Expired (Unapplied)",
+   "reason": "row 7 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_7D",
+   "html_id": "p3c182",
+   "printed": "7 D. NOLCO Applied (Current Year)",
+   "reason": "row 7 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_7E",
+   "html_id": "p3c183",
+   "printed": "7 E. Net Operating Loss (Unapplied)",
+   "reason": "row 7 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_9Year",
+   "html_id": "p4c17",
+   "printed": "9 Year Incurred",
+   "reason": "row 9 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_9A",
+   "html_id": "p4c18",
+   "printed": "9 A. Amount",
+   "reason": "row 9 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_9B",
+   "html_id": "p4c19",
+   "printed": "9 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 9 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_9C",
+   "html_id": "p4c20",
+   "printed": "9 C. NOLCO Expired (Unapplied)",
+   "reason": "row 9 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_9D",
+   "html_id": "p4c21",
+   "printed": "9 D. NOLCO Applied (Current Year)",
+   "reason": "row 9 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_9E",
+   "html_id": "p4c22",
+   "printed": "9 E. Net Operating Loss (Unapplied)",
+   "reason": "row 9 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_10Year",
+   "html_id": "p4c24",
+   "printed": "10 Year Incurred",
+   "reason": "row 10 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_10A",
+   "html_id": "p4c25",
+   "printed": "10 A. Amount",
+   "reason": "row 10 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_10B",
+   "html_id": "p4c26",
+   "printed": "10 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 10 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_10C",
+   "html_id": "p4c27",
+   "printed": "10 C. NOLCO Expired (Unapplied)",
+   "reason": "row 10 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_10D",
+   "html_id": "p4c28",
+   "printed": "10 D. NOLCO Applied (Current Year)",
+   "reason": "row 10 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_10E",
+   "html_id": "p4c29",
+   "printed": "10 E. Net Operating Loss (Unapplied)",
+   "reason": "row 10 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_11Year",
+   "html_id": "p4c31",
+   "printed": "11 Year Incurred",
+   "reason": "row 11 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_11A",
+   "html_id": "p4c32",
+   "printed": "11 A. Amount",
+   "reason": "row 11 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_11B",
+   "html_id": "p4c33",
+   "printed": "11 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 11 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_11C",
+   "html_id": "p4c34",
+   "printed": "11 C. NOLCO Expired (Unapplied)",
+   "reason": "row 11 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_11D",
+   "html_id": "p4c35",
+   "printed": "11 D. NOLCO Applied (Current Year)",
+   "reason": "row 11 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_11E",
+   "html_id": "p4c36",
+   "printed": "11 E. Net Operating Loss (Unapplied)",
+   "reason": "row 11 under the \"E\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_12Year",
+   "html_id": "p4c38",
+   "printed": "12 Year Incurred",
+   "reason": "row 12 under the \"Year Incurred\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_12A",
+   "html_id": "p4c39",
+   "printed": "12 A. Amount",
+   "reason": "row 12 under the \"A\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_12B",
+   "html_id": "p4c40",
+   "printed": "12 B. NOLCO Applied (Previous Year/s)",
+   "reason": "row 12 under the \"B\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_12C",
+   "html_id": "p4c41",
+   "printed": "12 C. NOLCO Expired (Unapplied)",
+   "reason": "row 12 under the \"C\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_12D",
+   "html_id": "p4c42",
+   "printed": "12 D. NOLCO Applied (Current Year)",
+   "reason": "row 12 under the \"D\" column header"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IShed6_12E",
+   "html_id": "p4c43",
+   "printed": "12 E. Net Operating Loss (Unapplied)",
+   "reason": "row 12 under the \"E\" column header"
+  }
+ ],
+ "money_joins": [],
+ "xbox_joins": [
+  {
+   "writer_key": "frm1701:rdoPg1I2AmendedYes",
+   "html_id": "p1c7",
+   "printed": "2 Amended Return? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I2AmendedNo",
+   "html_id": "p1c8",
+   "printed": "2 Amended Return? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I3ShortPeriodYes",
+   "html_id": "p1c9",
+   "printed": "3 Short Period Return? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I3ShortPeriodNo",
+   "html_id": "p1c10",
+   "printed": "3 Short Period Return? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I6TaxpayerTypeS",
+   "html_id": "p1c23",
+   "printed": "6 Taxpayer Type Single Proprietor",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I6TaxpayerTypeP",
+   "html_id": "p1c24",
+   "printed": "6 Taxpayer Type Professional",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I6TaxpayerTypeE",
+   "html_id": "p1c25",
+   "printed": "6 Taxpayer Type Estate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I6TaxpayerTypeT",
+   "html_id": "p1c26",
+   "printed": "6 Taxpayer Type Trust",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I6TaxpayerTypeC",
+   "html_id": "p1c27",
+   "printed": "6 Taxpayer Type Compensation Earner",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II012",
+   "html_id": "p1c30",
+   "printed": "7 ATC II012 Business Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II014",
+   "html_id": "p1c29",
+   "printed": "7 ATC II014 Income from Profession-Graduated IT Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II013",
+   "html_id": "p1c31",
+   "printed": "7 ATC II013 Mixed Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II011",
+   "html_id": "p1c32",
+   "printed": "7 ATC II011 Compensation Income",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II015",
+   "html_id": "p1c33",
+   "printed": "7 ATC II015 Business Income - 8% IT Rate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II017",
+   "html_id": "p1c34",
+   "printed": "7 ATC II017 Income from Profession - 8% IT Rate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I7ATC_II016",
+   "html_id": "p1c35",
+   "printed": "7 ATC II016 Mixed Income - 8% IT Rate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I13ForeignTaxCreditsYes",
+   "html_id": "p1c55",
+   "printed": "13 Claiming Foreign Tax Credits? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I13ForeignTaxCreditsNo",
+   "html_id": "p1c56",
+   "printed": "13 Claiming Foreign Tax Credits? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I16CivilStatusS",
+   "html_id": "p1c61",
+   "printed": "16 Civil Status Single",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I16CivilStatusM",
+   "html_id": "p1c62",
+   "printed": "16 Civil Status Married",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I16CivilStatusLS",
+   "html_id": "p1c63",
+   "printed": "16 Civil Status Legally Separated",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I16CivilStatusW",
+   "html_id": "p1c64",
+   "printed": "16 Civil Status Widow/er",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I17SpouseIncomeYes",
+   "html_id": "p1c67",
+   "printed": "17 If married, spouse has income? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I17SpouseIncomeNo",
+   "html_id": "p1c68",
+   "printed": "17 If married, spouse has income? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I18FilingStatusJ",
+   "html_id": "p1c69",
+   "printed": "18 Filing Status Joint Filing",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I18FilingStatusS",
+   "html_id": "p1c70",
+   "printed": "18 Filing Status Separate Filing",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I19IncomeExemptYes",
+   "html_id": "p1c73",
+   "printed": "19 Income EXEMPT from Income Tax? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I19IncomeExemptNo",
+   "html_id": "p1c75",
+   "printed": "19 Income EXEMPT from Income Tax? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I20IncomeSpecialYes",
+   "html_id": "p1c74",
+   "printed": "20 Income subject to SPECIAL/PREFERENTIAL RATE? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I20IncomeSpecialNo",
+   "html_id": "p1c76",
+   "printed": "20 Income subject to SPECIAL/PREFERENTIAL RATE? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I21TaxRateG",
+   "html_id": "p1c78",
+   "printed": "21 Tax Rate Graduated Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I21AMethodDeductionI",
+   "html_id": "p1c79",
+   "printed": "21A Method of Deduction Itemized Deduction",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I21AMethodDeductionO",
+   "html_id": "p1c80",
+   "printed": "21A Method of Deduction Optional Standard Deduction",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1I21TaxRateP",
+   "html_id": "p1c81",
+   "printed": "21 Tax Rate 8% in lieu of Graduated Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1OverpaymentRefund",
+   "html_id": "p1c121",
+   "printed": "Overpayment: To be refunded",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1OverpaymentTCC",
+   "html_id": "p1c122",
+   "printed": "Overpayment: To be issued a Tax Credit Certificate (TCC)",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg1OverpaymentCarryOver",
+   "html_id": "p1c123",
+   "printed": "Overpayment: To be carried over as a tax credit",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I3SpouseTypeS",
+   "html_id": "p2c19",
+   "printed": "3 Filer's Spouse Type Single Proprietor",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I3SpouseTypeP",
+   "html_id": "p2c20",
+   "printed": "3 Filer's Spouse Type Professional",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I3SpouseTypeC",
+   "html_id": "p2c21",
+   "printed": "3 Filer's Spouse Type Compensation Earner",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II012",
+   "html_id": "p2c24",
+   "printed": "4 ATC II012 Business Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II014",
+   "html_id": "p2c23",
+   "printed": "4 ATC II014 Income from Profession-Graduated IT Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II013",
+   "html_id": "p2c25",
+   "printed": "4 ATC II013 Mixed Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II011",
+   "html_id": "p2c29",
+   "printed": "4 ATC II011 Compensation Income",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II015",
+   "html_id": "p2c27",
+   "printed": "4 ATC II015 Business Income - 8% IT Rate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II017",
+   "html_id": "p2c26",
+   "printed": "4 ATC II017 Income from Profession - 8% IT Rate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I4ATC_II016",
+   "html_id": "p2c28",
+   "printed": "4 ATC II016 Mixed Income - 8% IT Rate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I10IncomeExemptYes",
+   "html_id": "p2c42",
+   "printed": "10 Income EXEMPT from Income Tax? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I10IncomeExemptNo",
+   "html_id": "p2c43",
+   "printed": "10 Income EXEMPT from Income Tax? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I11IncomeSpecialYes",
+   "html_id": "p2c41",
+   "printed": "11 Income subject to SPECIAL/PREFERENTIAL RATE? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I11IncomeSpecialNo",
+   "html_id": "p2c44",
+   "printed": "11 Income subject to SPECIAL/PREFERENTIAL RATE? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I12TaxRateG",
+   "html_id": "p2c46",
+   "printed": "12 Tax Rate Graduated Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I12AMethodDeductionI",
+   "html_id": "p2c47",
+   "printed": "12A Method of Deduction Itemized Deduction",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I12AMethodDeductionO",
+   "html_id": "p2c48",
+   "printed": "12A Method of Deduction Optional Standard Deduction",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I12TaxRateP",
+   "html_id": "p2c49",
+   "printed": "12 Tax Rate 8% in lieu of Graduated Rates",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ],
+ "left_out": [
+  {
+   "html_id": "p1c45",
+   "reason": "Item 10 date of birth: three combs (MM, DD, YYYY) under one key txtPg1I10BirthDate; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c46",
+   "reason": "Item 10 date of birth: three combs (MM, DD, YYYY) under one key txtPg1I10BirthDate; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c47",
+   "reason": "Item 10 date of birth: three combs (MM, DD, YYYY) under one key txtPg1I10BirthDate; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c48",
+   "reason": "Item 11 email: not joined; the print path uppercases joined values but the official capital() skips txtEmail"
+  },
+  {
+   "html_id": "p1c87",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c88",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c90",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c91",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c93",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c94",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c96",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c97",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c99",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c100",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c102",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c103",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c105",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c106",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c108",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c109",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c111",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c112",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c114",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c115",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c117",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c125",
+   "reason": "signature block line (authorized representative): no layout key"
+  },
+  {
+   "html_id": "p1c127",
+   "reason": "Item 33 number of attachments: two single-character boxes for one 2-digit key"
+  },
+  {
+   "html_id": "p1c128",
+   "reason": "Item 33 number of attachments: two single-character boxes for one 2-digit key"
+  },
+  {
+   "html_id": "p1c139",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c140",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c141",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c142",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c146",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c147",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c148",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c149",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c152",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c153",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c154",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c155",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p1c160",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c161",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c162",
+   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
+  },
+  {
+   "html_id": "p1c163",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c55",
+   "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
+  },
+  {
+   "html_id": "p2c56",
+   "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
+  },
+  {
+   "html_id": "p2c58",
+   "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
+  },
+  {
+   "html_id": "p2c60",
+   "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
+  },
+  {
+   "html_id": "p2c61",
+   "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
+  },
+  {
+   "html_id": "p2c63",
+   "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
+  },
+  {
+   "html_id": "p2c68",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c69",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c71",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c72",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c74",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c75",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c77",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c78",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c84",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c85",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c87",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c88",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c90",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c91",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c93",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c94",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c98",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c99",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c101",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c102",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c104",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c105",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c107",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c108",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c110",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c111",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c114",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c115",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c117",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c118",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c120",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c121",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c123",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c124",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c127",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c128",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c130",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c131",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c136",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c137",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c141",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c142",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c144",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c145",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c147",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c148",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c150",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c151",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c153",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c154",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c156",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p2c157",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c12",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c13",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c18",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c19",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c21",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c22",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c24",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c25",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c27",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c28",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c30",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c31",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c33",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c34",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c37",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c38",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c40",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c41",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c43",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c44",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c46",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c47",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c49",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c50",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c52",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c53",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c55",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c56",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c58",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c59",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c61",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c62",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c64",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c65",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c67",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c68",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c70",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c71",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c73",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c74",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c76",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c77",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c79",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c80",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c82",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c83",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c87",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c88",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c91",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c92",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c95",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c96",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c100",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c101",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c103",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c104",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c113",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c118",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c120",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c126",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c131",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c133",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c140",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c141",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c143",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c144",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c146",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p3c147",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c50",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c51",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c53",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c54",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c56",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c57",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c59",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c60",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c62",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c63",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c66",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c67",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c69",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c70",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c72",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c73",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c75",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c76",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c78",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c79",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c81",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c82",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c84",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c85",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c87",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c88",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c90",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c91",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c93",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c94",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c98",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c99",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c101",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c102",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c104",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c105",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c107",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c108",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c110",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c111",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c113",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c114",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c116",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c117",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c120",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c121",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c123",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c124",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c126",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c127",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c133",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c134",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c137",
+   "reason": "Part VII item 2-4 description cell: no layout key"
+  },
+  {
+   "html_id": "p4c139",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c140",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c142",
+   "reason": "Part VII item 2-4 description cell: no layout key"
+  },
+  {
+   "html_id": "p4c144",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c145",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c147",
+   "reason": "Part VII item 2-4 description cell: no layout key"
+  },
+  {
+   "html_id": "p4c149",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c150",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c152",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c153",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c156",
+   "reason": "Part VII item 6-8 description cell: no layout key"
+  },
+  {
+   "html_id": "p4c158",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c159",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c161",
+   "reason": "Part VII item 6-8 description cell: no layout key"
+  },
+  {
+   "html_id": "p4c163",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c164",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c167",
+   "reason": "Part VII item 6-8 description cell: no layout key"
+  },
+  {
+   "html_id": "p4c169",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c170",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c174",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c175",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c177",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c178",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c180",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  },
+  {
+   "html_id": "p4c181",
+   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+  }
+ ]
+}
