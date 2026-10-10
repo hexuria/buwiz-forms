@@ -1,0 +1,40 @@
+[package]
+name = "bir-cor-extract"
+description = "Deterministic COR (BIR Form 2303) label extraction from OCR text: values as spans into the original text, per-field confidence from the match type."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# PUA engine crates, pinned by git rev (no PUA tag yet).
+[dependencies]
+pua-core = { git = "https://github.com/hexuria/pua", rev = "e1635f12908deda99308f03222c4265043e0e749", features = ["serde"] }
+pua-graph = { git = "https://github.com/hexuria/pua", rev = "e1635f12908deda99308f03222c4265043e0e749" }
+serde = { workspace = true }
+blake3 = { version = "1.8", default-features = false, features = ["pure"] }
+
+[dev-dependencies]
+proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }
+unicode-normalization = { version = "0.1", default-features = false, features = ["std"] }
+
+# Same bar as the PUA engine: integer-only, no unwraps in library code, no unordered maps
+# (clippy.toml next to this manifest).
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+float_arithmetic = "deny"
+float_cmp = "deny"
+dbg_macro = "deny"
+todo = "deny"
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+too_many_lines = "allow"

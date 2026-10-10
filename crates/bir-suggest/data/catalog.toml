@@ -1,0 +1,21 @@
+# Sample RDO / form-code catalog. NON-AUTHORITATIVE (q8 / ADR 0007).
+# Real BIR validation lives in bir-rules; this pack only suggests longest-exact matches.
+[[codes]]
+code = "2303"
+kind = "form"
+label = "COR"
+
+[[codes]]
+code = "1700"
+kind = "form"
+label = "AFS"
+
+[[codes]]
+code = "RDO-39"
+kind = "rdo"
+label = "Quezon City"
+
+[[codes]]
+code = "RDO-50"
+kind = "rdo"
+label = "South Makati"
