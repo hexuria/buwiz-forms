@@ -1,0 +1,1008 @@
+{
+ "form_id": "1702rt-v2018c",
+ "html_slug": "1702rt-2018c",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or above it, or the printed item number on its row. Items 1, 3, 4, 13 and 21 options take xbox_joins (box immediately left of the printed option). Name and address continuation lines join under the item 8/9 captions. Item 7 RDO takes drpPg1Pt1I7RDOCode (txtRDO holds the same code, one cell only). Part II/IV and Schedule III/V amounts are 12-slot pesos-only combs with no centavo comb, so no money_joins pair exists and they stay blank. Schedule II rows and Schedule IIIA rows have no printed item numbers and stay blank. Item 2 Year Ended and Item 10 date stay blank (single boxes or three-comb dates under one key). Stamped TIN combs (name=) take no join.",
+ "joins": [
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I8Name1",
+   "html_id": "p1c36",
+   "printed": "8 Registered Name, line 1",
+   "reason": "item 8 caption sits above the first name line"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I8Name2",
+   "html_id": "p1c37",
+   "printed": "8 Registered Name, line 2",
+   "reason": "second line of the item 8 block"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I8Name3",
+   "html_id": "p1c38",
+   "printed": "8 Registered Name, line 3",
+   "reason": "third line of the item 8 block"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I9Address1",
+   "html_id": "p1c40",
+   "printed": "9 Registered Address, line 1",
+   "reason": "item 9 caption sits above the first address line"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I9Address2",
+   "html_id": "p1c41",
+   "printed": "9 Registered Address, line 2",
+   "reason": "second line of the item 9 block"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I9Address3",
+   "html_id": "p1c42",
+   "printed": "9 Registered Address, line 3",
+   "reason": "third line of the item 9 block (30-slot comb)"
+  },
+  {
+   "writer_key": "frm1702RT:txtZIP",
+   "html_id": "p1c44",
+   "printed": "9A ZIP Code",
+   "reason": "caption \"9A ZIP Code\" directly left of the 4-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:drpPg1Pt1I7RDOCode",
+   "html_id": "p1c33",
+   "printed": "7 RDO Code",
+   "reason": "caption \"7 RDO Code\" directly left of the 3-slot comb; txtRDO carries the same code and gets no second cell"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I11Contact",
+   "html_id": "p1c52",
+   "printed": "11 Contact Number",
+   "reason": "caption directly left of the 11-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt1I12Email",
+   "html_id": "p1c54",
+   "printed": "12 Email Address",
+   "reason": "caption directly left of the 32-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt2SignatoryTin1",
+   "html_id": "p1c91",
+   "printed": "TIN (first signatory block)",
+   "reason": "caption \"TIN\" directly left of the cell"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt2SignatoryTin2",
+   "html_id": "p1c95",
+   "printed": "TIN (second signatory block)",
+   "reason": "caption \"TIN\" directly left of the cell"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I23DebitMemoC1",
+   "html_id": "p1c103",
+   "printed": "23 Cash/Bank Debit Memo, Drawee Bank/Agency",
+   "reason": "column header \"Drawee Bank/Agency\" above the 5-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I23DebitMemoC2",
+   "html_id": "p1c104",
+   "printed": "23 Cash/Bank Debit Memo, Number",
+   "reason": "column header \"Number\" above the 7-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I24CheckC1",
+   "html_id": "p1c110",
+   "printed": "24 Check, Drawee Bank/Agency",
+   "reason": "item 24 caption left; same column as item 23 bank cell"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I24CheckC2",
+   "html_id": "p1c111",
+   "printed": "24 Check, Number",
+   "reason": "item 24 caption left; same column as item 23 number cell"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I25TaxDebitC2",
+   "html_id": "p1c117",
+   "printed": "25 Tax Debit Memo, Number",
+   "reason": "item 25 caption left; Number column"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I26Others",
+   "html_id": "p1c123",
+   "printed": "26 Others (specify below)",
+   "reason": "item 26 caption above the 7-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I26OthersC1",
+   "html_id": "p1c124",
+   "printed": "26 Others, Drawee Bank/Agency",
+   "reason": "item 26 row, Drawee Bank/Agency column"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg1Pt3I26OthersC2",
+   "html_id": "p1c125",
+   "printed": "26 Others, Number",
+   "reason": "item 26 row, Number column"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg2RegisteredName",
+   "html_id": "p2c6",
+   "printed": "Registered Name",
+   "reason": "caption \"Registered Name\" directly above the 24-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:Pg2Pt4I40IncomeTaxRate",
+   "html_id": "p2c37",
+   "printed": "40 Applicable Income Tax Rate",
+   "reason": "caption directly left of the 2-slot rate comb, \"%\" follows"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg2Pt4I53C1",
+   "html_id": "p2c66",
+   "printed": "53 Other Tax Credits/Payments (specify), description",
+   "reason": "item 53 caption left of the 23-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg2Pt4I54C1",
+   "html_id": "p2c70",
+   "printed": "54 description",
+   "reason": "item 54 caption left of the 23-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3RegisteredName",
+   "html_id": "p3c6",
+   "printed": "Registered Name",
+   "reason": "caption \"Registered Name\" directly above the 24-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3Sc1I17dC1",
+   "html_id": "p3c52",
+   "printed": "17 d description",
+   "reason": "item d caption left of the 23-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3Sc1I17eC1",
+   "html_id": "p3c56",
+   "printed": "17 e description",
+   "reason": "item e caption left of the 23-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3Sc1I17fC1",
+   "html_id": "p3c60",
+   "printed": "17 f description",
+   "reason": "item f caption left of the 23-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3Sc1I17gC1",
+   "html_id": "p3c64",
+   "printed": "17 g description",
+   "reason": "item g caption left of the 23-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3Sc1I17hC1",
+   "html_id": "p3c68",
+   "printed": "17 h description",
+   "reason": "item h caption left of the 23-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg3Sc1I17iC1",
+   "html_id": "p3c72",
+   "printed": "17 i description",
+   "reason": "item i caption left of the 23-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4RegisteredName",
+   "html_id": "p4c6",
+   "printed": "Registered Name",
+   "reason": "caption \"Registered Name\" directly above the 24-slot comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc4I1C1",
+   "html_id": "p4c76",
+   "printed": "Schedule IV item 1, Year",
+   "reason": "item 1 row label; 4-slot Year column comb (column header \"Year\")"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc4I2C1",
+   "html_id": "p4c81",
+   "printed": "Schedule IV item 2, Year",
+   "reason": "item 2 row label; 4-slot Year column comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc4I3C1",
+   "html_id": "p4c86",
+   "printed": "Schedule IV item 3, Year",
+   "reason": "item 3 row label; 4-slot Year column comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc5I2C1",
+   "html_id": "p4c118",
+   "printed": "Schedule V item 2 description",
+   "reason": "item 2 row label; 24-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc5I3C1",
+   "html_id": "p4c122",
+   "printed": "Schedule V item 3 description",
+   "reason": "item 3 row label; 24-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc5I5C1",
+   "html_id": "p4c129",
+   "printed": "Schedule V item 5 description",
+   "reason": "item 5 row label; 24-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc5I6C1",
+   "html_id": "p4c133",
+   "printed": "Schedule V item 6 description",
+   "reason": "item 6 row label; 24-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc5I7C1",
+   "html_id": "p4c138",
+   "printed": "Schedule V item 7 description",
+   "reason": "item 7 row label; 24-slot description comb"
+  },
+  {
+   "writer_key": "frm1702RT:txtPg4Sc5I8C1",
+   "html_id": "p4c142",
+   "printed": "Schedule V item 8 description",
+   "reason": "item 8 row label; 24-slot description comb"
+  }
+ ],
+ "money_joins": [],
+ "xbox_joins": [
+  {
+   "writer_key": "frm1702RT:rdoPg1I1Calendar",
+   "html_id": "p1c8",
+   "printed": "1 For the Calendar",
+   "reason": "box immediately left of \"Calendar\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1I1Fiscal",
+   "html_id": "p1c7",
+   "printed": "1 For the Fiscal",
+   "reason": "box immediately left of \"Fiscal\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1I3AmmendYes",
+   "html_id": "p1c12",
+   "printed": "3 Amended Return? Yes",
+   "reason": "box immediately left of \"Yes\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1I3AmmendNo",
+   "html_id": "p1c13",
+   "printed": "3 Amended Return? No",
+   "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1I4ShortPeriodYes",
+   "html_id": "p1c14",
+   "printed": "4 Short Period Return? Yes",
+   "reason": "box immediately left of \"Yes\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1I4ShortPeriodNo",
+   "html_id": "p1c15",
+   "printed": "4 Short Period Return? No",
+   "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+   "html_id": "p1c56",
+   "printed": "13 Itemized Deductions [Section 34 (A-J), NIRC]",
+   "reason": "box immediately left of the Itemized option"
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+   "html_id": "p1c57",
+   "printed": "13 Optional Standard Deduction (OSD)",
+   "reason": "box immediately left of the OSD option"
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1Pt2I21OverpaymentRefunded",
+   "html_id": "p1c78",
+   "printed": "21 To be refunded",
+   "reason": "box immediately left of \"To be refunded\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1Pt2I21OverpaymentIssued",
+   "html_id": "p1c79",
+   "printed": "21 To be issued a Tax Credit Certificate (TCC)",
+   "reason": "box immediately left of \"To be issued a TCC\""
+  },
+  {
+   "writer_key": "frm1702RT:rdoPg1Pt2I21OverpaymentCarried",
+   "html_id": "p1c80",
+   "printed": "21 To be carried over as tax credit",
+   "reason": "box immediately left of \"To be carried over\""
+  }
+ ],
+ "left_out": [
+  {
+   "html_id": "p1c11",
+   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; the ATC keys (rdoPg1I5Atc, drpPg1I5AtcOther, rdoPg1I5AtcOther) stay blank"
+  },
+  {
+   "html_id": "p1c16",
+   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; the ATC keys (rdoPg1I5Atc, drpPg1I5AtcOther, rdoPg1I5AtcOther) stay blank"
+  },
+  {
+   "html_id": "p1c17",
+   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; the ATC keys (rdoPg1I5Atc, drpPg1I5AtcOther, rdoPg1I5AtcOther) stay blank"
+  },
+  {
+   "html_id": "p1c18",
+   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; the ATC keys (rdoPg1I5Atc, drpPg1I5AtcOther, rdoPg1I5AtcOther) stay blank"
+  },
+  {
+   "html_id": "p1c19",
+   "reason": "Item 2 Year Ended: four single-character boxes; the keys are one month dropdown and one year text, which a join cannot split across boxes"
+  },
+  {
+   "html_id": "p1c20",
+   "reason": "Item 2 Year Ended: four single-character boxes; the keys are one month dropdown and one year text, which a join cannot split across boxes"
+  },
+  {
+   "html_id": "p1c21",
+   "reason": "Item 2 Year Ended: four single-character boxes; the keys are one month dropdown and one year text, which a join cannot split across boxes"
+  },
+  {
+   "html_id": "p1c22",
+   "reason": "Item 2 Year Ended: four single-character boxes; the keys are one month dropdown and one year text, which a join cannot split across boxes"
+  },
+  {
+   "html_id": "p1c46",
+   "reason": "Item 10 Date of Incorporation: three combs (MM/DD/YYYY) under one layout key (txtPg1Pt1I10)"
+  },
+  {
+   "html_id": "p1c48",
+   "reason": "Item 10 Date of Incorporation: three combs (MM/DD/YYYY) under one layout key (txtPg1Pt1I10)"
+  },
+  {
+   "html_id": "p1c50",
+   "reason": "Item 10 Date of Incorporation: three combs (MM/DD/YYYY) under one layout key (txtPg1Pt1I10)"
+  },
+  {
+   "html_id": "p1c60",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c62",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c64",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c67",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c69",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c71",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c73",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c75",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c82",
+   "reason": "attach authorization letter line: no layout key"
+  },
+  {
+   "html_id": "p1c83",
+   "reason": "attach authorization letter line: no layout key"
+  },
+  {
+   "html_id": "p1c85",
+   "reason": "22 Number of Attachments: txtPg1Pt2PagesFilled is a page count, not the attachment count; left blank"
+  },
+  {
+   "html_id": "p1c89",
+   "reason": "Title of Signatory cell: 1702RT has no title key (the signatory keys are names); left blank"
+  },
+  {
+   "html_id": "p1c93",
+   "reason": "Title of Signatory cell: 1702RT has no title key (the signatory keys are names); left blank"
+  },
+  {
+   "html_id": "p1c105",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c106",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c107",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c108",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c112",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c113",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c114",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c115",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c118",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c119",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c120",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c121",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p1c126",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c127",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c128",
+   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
+  },
+  {
+   "html_id": "p1c129",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p2c9",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c11",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c13",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c15",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c17",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c19",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c21",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c24",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c26",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c28",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c30",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c33",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c35",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c40",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c42",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c44",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c47",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c49",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c51",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c53",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c55",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c57",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c59",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c61",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c63",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c68",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c72",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c74",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c76",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c79",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c81",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p2c83",
+   "reason": "Part IV money comb (12) with no 2-slot centavo comb beside it; the form says do not enter centavos and a join cannot round to whole pesos; left blank"
+  },
+  {
+   "html_id": "p3c10",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c12",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c14",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c16",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c18",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c20",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c22",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c24",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c26",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c28",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c30",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c32",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c34",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c36",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c38",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c40",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c44",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c47",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c50",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c54",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c58",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c62",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c66",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c70",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c74",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c76",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p3c81",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c82",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c83",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c85",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c86",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c87",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c89",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c90",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c91",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c93",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c94",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c95",
+   "reason": "Schedule II rows 1-4: the printed rows carry no item number and the Description/Legal Basis/Amount headers sit above row 1 only; row identity is positional, so left blank"
+  },
+  {
+   "html_id": "p3c97",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c9",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c11",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c13",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c21",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c23",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c25",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c28",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c30",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c32",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c35",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c37",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c39",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c42",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c44",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c46",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c52",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c53",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c54",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c56",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c57",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c58",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c60",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c61",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c62",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c64",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c65",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c66",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c68",
+   "reason": "Schedule IIIA NOLCO rows 4-7: no item number printed beside the rows in the text layer; the Year, A and B columns cannot be tied to a row key, left blank"
+  },
+  {
+   "html_id": "p4c77",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c78",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c79",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c82",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c83",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c84",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c87",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c88",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c89",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c96",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c97",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c98",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c99",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c101",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c102",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c103",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c104",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c106",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c107",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c108",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c109",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c111",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c115",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c120",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c124",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c126",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c131",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c135",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c140",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c144",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c146",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  },
+  {
+   "html_id": "p4c148",
+   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
+  }
+ ]
+}

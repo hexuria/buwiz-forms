@@ -190,8 +190,14 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1702ex-2018" => Some(include_str!(
             "../../../html-frozen/1702ex-2018/writer-cells.json"
         )),
+        "1702mx-2018c" => Some(include_str!(
+            "../../../html-frozen/1702mx-2018c/writer-cells.json"
+        )),
         "1702q-2018" => Some(include_str!(
             "../../../html-frozen/1702q-2018/writer-cells.json"
+        )),
+        "1702rt-2018c" => Some(include_str!(
+            "../../../html-frozen/1702rt-2018c/writer-cells.json"
         )),
         "1706-2018" => Some(include_str!(
             "../../../html-frozen/1706-2018/writer-cells.json"
@@ -237,6 +243,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
+        )),
+        "2550q-2024" => Some(include_str!(
+            "../../../html-frozen/2550q-2024/writer-cells.json"
         )),
         "2551q-2018" => Some(include_str!(
             "../../../html-frozen/2551q-2018/writer-cells.json"
