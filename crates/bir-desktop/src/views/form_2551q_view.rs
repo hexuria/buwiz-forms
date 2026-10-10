@@ -28,6 +28,7 @@ use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
 use super::email_confirmation_view::EmailConfirmationView;
+use crate::agent::assist::{self, AssistState};
 use crate::components::form_engine::FormViewTrait;
 use crate::components::tax_relief_select::{
     TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
@@ -35,6 +36,9 @@ use crate::components::tax_relief_select::{
 
 pub enum Form2551QEvent {
     BackToDashboard,
+    /// Close this form without saving (the Dismiss button, after confirming
+    /// when there are unsaved changes).
+    Dismissed,
     Saved,
     Submitted,
     Confirmed,
@@ -153,6 +157,17 @@ pub struct Form2551QView {
     is_email_tracking_active: bool,
     is_generating_pdf: bool,
     release_claim_confirm_open: bool,
+    /// Dismiss was pressed with unsaved changes: ask before discarding.
+    dismiss_confirm_open: bool,
+
+    /// Per-box sources, unsaved-edit flags and the one-form lock (shared
+    /// with the agent host through the drain).
+    assist: AssistState,
+    /// Fillable box values as last seen, so a change found by
+    /// `sync_from_inputs` can be attributed to the user.
+    known_values: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Set while the agent's draft is being written into the inputs.
+    applying_agent_draft: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -409,6 +424,7 @@ impl Form2551QView {
                             || this.draft.last_error != updated.last_error)
                     {
                         this.draft = updated;
+                        this.known_values = assist::fillable_values_2551q(&this.draft);
                         this.release_claim_confirm_open = false;
                         // Refresh cached email tracking status
                         this.is_email_tracking_active = db_guard
@@ -470,6 +486,7 @@ impl Form2551QView {
                         this.is_email_tracking_active = profile.is_email_tracking_active();
                         Ok::<_, String>((was_editable, resolution_error))
                     })();
+                    this.rebase_known_values();
 
                     match refresh_result {
                         Ok((_, Some(error))) => {
@@ -516,6 +533,7 @@ impl Form2551QView {
 
         let initial_status_message = draft.profile_resolution_error.clone();
         let last_profile_period = (draft.quarter, draft.tax_period_basis, draft.year_end_month);
+        let known_values = assist::fillable_values_2551q(&draft);
         let mut view = Self {
             draft,
             db,
@@ -547,6 +565,10 @@ impl Form2551QView {
             is_email_tracking_active,
             is_generating_pdf: false,
             release_claim_confirm_open: false,
+            dismiss_confirm_open: false,
+            assist: AssistState::default(),
+            known_values,
+            applying_agent_draft: false,
             _subscriptions: subscriptions,
         };
         view.validation_errors = view.validate_for_submit(cx);
@@ -668,8 +690,147 @@ impl Form2551QView {
             }
         }
         tracing::debug!("sync_from_inputs: recomputed draft");
+        self.note_box_changes();
         self.validation_errors = self.validate_for_submit(cx);
         cx.notify();
+    }
+
+    /// Attribute every fillable box that changed since last seen to the user,
+    /// unless the change is the agent's draft being written in.
+    fn note_box_changes(&mut self) {
+        let now = assist::fillable_values_2551q(&self.draft);
+        if !self.applying_agent_draft && self.draft.is_editable() {
+            let changed = assist::changed_keys(&self.known_values, &now);
+            if !changed.is_empty() {
+                self.assist.note_user_edits(changed);
+                self.dismiss_confirm_open = false;
+            }
+        }
+        self.known_values = now;
+    }
+
+    /// Forget box changes made by a reload (status refresh, profile
+    /// reconciliation): they are not the user's typing.
+    fn rebase_known_values(&mut self) {
+        self.known_values = assist::fillable_values_2551q(&self.draft);
+    }
+
+    pub(crate) fn agent_assist(&self) -> &AssistState {
+        &self.assist
+    }
+
+    pub(crate) fn agent_set_assist(&mut self, assist: AssistState, cx: &mut Context<Self>) {
+        if self.assist != assist {
+            self.assist = assist;
+            cx.notify();
+        }
+    }
+
+    /// Write the agent host's draft into the form when its fillable boxes
+    /// differ from what the form shows (a `form.fill` of any box).
+    pub(crate) fn agent_apply_draft(
+        &mut self,
+        draft: &Form2551QDraft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.is_editable()
+            || !draft.is_editable()
+            || assist::fillable_values_2551q(&self.draft) == assist::fillable_values_2551q(draft)
+        {
+            return;
+        }
+        let rows_changed = self.draft.schedule_1.len() != draft.schedule_1.len()
+            || self
+                .draft
+                .schedule_1
+                .iter()
+                .zip(&draft.schedule_1)
+                .any(|(a, b)| a.atc != b.atc);
+        self.draft = draft.clone();
+        self.quarter = draft.quarter;
+        self.is_amended = draft.is_amended;
+        self.original_return_filed_and_paid_on_time = draft.original_return_filed_and_paid_on_time;
+        self.tax_relief = draft.tax_relief;
+        set_text_if_changed(
+            &self.year_end_month_input,
+            &draft.year_end_month.to_string(),
+            window,
+            cx,
+        );
+        set_text_if_changed(
+            &self.attached_sheets_input,
+            &draft.number_of_attached_sheets.to_string(),
+            window,
+            cx,
+        );
+        let relief =
+            bir_core::validation::official_tax_relief_code(&draft.tax_relief_specification, false);
+        if selected_tax_relief_code(&self.tax_relief_select, cx)
+            != relief.clone().unwrap_or_default()
+        {
+            self.tax_relief_select
+                .update(cx, |select, cx| match &relief {
+                    Some(code) => select.set_selected_value(code, window, cx),
+                    None => select.set_selected_index(None, window, cx),
+                });
+        }
+        if rows_changed {
+            self.row_inputs = draft
+                .schedule_1
+                .iter()
+                .map(|row| Self::new_schedule_row_inputs(Some(row.taxable_amount), window, cx))
+                .collect();
+            let options = available_atc_options(&self.draft.schedule_1);
+            self.atc_select.update(cx, |select, cx| {
+                select.set_items(options, window, cx);
+                select.set_selected_index(None, window, cx);
+            });
+        } else {
+            for (row, inputs) in draft.schedule_1.iter().zip(&self.row_inputs) {
+                set_money_if_changed(&inputs.taxable_amount, row.taxable_amount, window, cx);
+            }
+        }
+        set_money_if_changed(
+            &self.creditable_withheld_input,
+            draft.creditable_tax_withheld,
+            window,
+            cx,
+        );
+        set_money_if_changed(
+            &self.tax_paid_previous_input,
+            draft.tax_paid_previous,
+            window,
+            cx,
+        );
+        set_money_if_changed(
+            &self.other_tax_credit_input,
+            draft.other_tax_credit,
+            window,
+            cx,
+        );
+        set_text_if_changed(
+            &self.other_tax_credit_description_input,
+            &draft.other_tax_credit_description,
+            window,
+            cx,
+        );
+        self.is_validated = false;
+        self.applying_agent_draft = true;
+        self.sync_from_inputs(cx);
+        self.applying_agent_draft = false;
+    }
+
+    /// The Dismiss button: close without saving, asking first when there are
+    /// unsaved changes (the user's or the agent's).
+    fn request_dismiss(&mut self, cx: &mut Context<Self>) {
+        if self.assist.unsaved_changes && self.draft.is_editable() {
+            self.dismiss_confirm_open = true;
+            cx.notify();
+        } else {
+            self.dismiss_confirm_open = false;
+            cx.emit(Form2551QEvent::Dismissed);
+        }
     }
 
     fn add_schedule_row(&mut self, atc_code: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -809,6 +970,7 @@ impl Form2551QView {
             .or_else(|| draft.profile_resolution_error.clone());
         self.is_amended = draft.is_amended;
         self.draft = draft.clone();
+        self.rebase_known_values();
         self.release_claim_confirm_open = false;
         self.is_validated = false;
         cx.notify();
@@ -834,6 +996,8 @@ impl Form2551QView {
                     status = ?self.draft.status,
                     "Form saved to database"
                 );
+                self.assist.note_saved();
+                self.dismiss_confirm_open = false;
                 window.push_notification(
                     gpui_component::notification::Notification::new()
                         .message("Form saved.".to_string())
@@ -2870,6 +3034,44 @@ impl Render for Form2551QView {
                     {{
                         let mut toolbar = div().flex().items_center().gap_3();
 
+                        if self.dismiss_confirm_open {
+                            toolbar = toolbar
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child("Discard unsaved changes?"),
+                                )
+                                .child(
+                                    gpui_component::button::Button::new(
+                                        "form-2551q-dismiss-confirm",
+                                    )
+                                    .label("Discard and close")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.dismiss_confirm_open = false;
+                                        cx.emit(Form2551QEvent::Dismissed);
+                                    })),
+                                )
+                                .child(
+                                    gpui_component::button::Button::new("form-2551q-dismiss-keep")
+                                        .label("Keep editing")
+                                        .ghost()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.dismiss_confirm_open = false;
+                                            cx.notify();
+                                        })),
+                                );
+                        } else {
+                            toolbar = toolbar.child(
+                                gpui_component::button::Button::new("form-2551q-dismiss")
+                                    .label("Dismiss")
+                                    .ghost()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.request_dismiss(cx);
+                                    })),
+                            );
+                        }
+
                         match &self.draft.status {
                             FilingStatus::Draft => {
                                 toolbar = toolbar.child(
@@ -3134,5 +3336,41 @@ impl Render for Form2551QView {
                 </div>
             </div>
         }
+    }
+}
+
+/// Write `value` into a text input only when it differs (`set_value` emits a
+/// change event even for an identical value).
+fn set_text_if_changed(
+    input: &Entity<InputState>,
+    value: &str,
+    window: &mut Window,
+    cx: &mut Context<Form2551QView>,
+) {
+    if input.read(cx).value() != value {
+        input.update(cx, |input, cx| {
+            input.set_value(value.to_string(), window, cx)
+        });
+    }
+}
+
+/// Write an amount only when the parsed input differs, keeping the user's
+/// own formatting of an equal amount.
+fn set_money_if_changed(
+    input: &Entity<InputState>,
+    value: f64,
+    window: &mut Window,
+    cx: &mut Context<Form2551QView>,
+) {
+    let current = input.read(cx).value().trim().replace(',', "");
+    let current = if current.is_empty() {
+        Some(0.0)
+    } else {
+        current.parse::<f64>().ok()
+    };
+    if current != Some(value) {
+        input.update(cx, |input, cx| {
+            input.set_value(format!("{value:.2}"), window, cx)
+        });
     }
 }

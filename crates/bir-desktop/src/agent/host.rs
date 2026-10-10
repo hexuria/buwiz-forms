@@ -7932,4 +7932,46 @@ mod tests {
         let dismissed = call(&mut host, "form.dismiss", json!({}));
         assert!(dismissed.ok, "{:?}", dismissed.error);
     }
+
+    /// The desktop drain rebuilds the host from the views each request; the
+    /// view's flags must drive the lock and the dismiss refusal.
+    #[test]
+    fn view_assist_state_drives_lock_and_dismiss() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let draft = host.form_2551q_draft().unwrap().clone();
+
+        // As snapshot_host does: the view says the user typed into a box.
+        host.replace_form_2551q_state(draft.clone(), false, false, Vec::new());
+        let mut typed = AssistState::default();
+        typed.note_user_edits(["creditable_tax_withheld".to_string()]);
+        host.set_form_2551q_assist(typed);
+        let refused = call(&mut host, "form.dismiss", json!({}));
+        assert!(
+            refused
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("unsaved edits")),
+            "{:?}",
+            refused.error
+        );
+
+        // The view saved: the lock is released and nothing blocks dismiss.
+        let mut saved = AssistState::default();
+        saved.note_saved();
+        host.replace_form_2551q_state(draft, false, false, Vec::new());
+        host.set_form_2551q_assist(saved);
+        let other = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(other.ok, "{:?}", other.error);
+    }
 }
