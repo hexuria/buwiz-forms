@@ -11,8 +11,8 @@
             <div>frm2200P:txtPg1TIN4=00000frm2200P:txtPg1TIN4=</div>    
             <div>frm2200P:txtPg1I5RDO=039frm2200P:txtPg1I5RDO=</div>    
             <div>frm2200P:rdoPg1Pt1I6RDO=039frm2200P:rdoPg1Pt1I6RDO=</div>    
-            <div>frm2200P:txtPg1Pt1I6RegisteredName=SAMPLE%20DUMMY%20TAXPAYERfrm2200P:txtPg1Pt1I6RegisteredName=</div>    
-            <div>frm2200P:txtPg1Pt1I7RegisteredAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2200P:txtPg1Pt1I7RegisteredAddress=</div>    
+            <div>frm2200P:txtPg1Pt1I6RegisteredName=SAMPLE DUMMY TAXPAYERfrm2200P:txtPg1Pt1I6RegisteredName=</div>    
+            <div>frm2200P:txtPg1Pt1I7RegisteredAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2200P:txtPg1Pt1I7RegisteredAddress=</div>    
             <div>frm2200P:txtPg1Pt1I7RegisteredAddress2=frm2200P:txtPg1Pt1I7RegisteredAddress2=</div>    
             <div>frm2200P:txPg1I7ZipCode=1100frm2200P:txPg1I7ZipCode=</div>    
             <div>frm2200P:txtPg1Pt1I8ContactNumber=09170000000frm2200P:txtPg1Pt1I8ContactNumber=</div>    
@@ -73,8 +73,8 @@
             <div>frm2200P:txtPg2TinC4=00000frm2200P:txtPg2TinC4=</div>    
             <div>frm2200P:txtPg2RegisteredName=SAMPLE DUMMY TAXPAYERfrm2200P:txtPg2RegisteredName=</div>    
             <div>frm2200P:txtSched1ATC1=XP010frm2200P:txtSched1ATC1=</div>    
-            <div>frm2200P:txtSched1Description1=Lubricating Oilsfrm2200P:txtSched1Description1=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure1=Per Literfrm2200P:txtSched1UnitOfMeasure1=</div>    
+            <div>frm2200P:txtSched1Description1=LUBRICATING OILSfrm2200P:txtSched1Description1=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure1=PER LITERfrm2200P:txtSched1UnitOfMeasure1=</div>    
             <div>frm2200P:txtSched1ApplicableRate1=10.00frm2200P:txtSched1ApplicableRate1=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval1=frm2200P:txtSched1PlaceOfRemoval1=</div>    
             <div>frm2200P:txtSched1LocalManuProd1=frm2200P:txtSched1LocalManuProd1=</div>    
@@ -87,8 +87,8 @@
             <div>frm2200P:txtSched1TotTaxPaid1=frm2200P:txtSched1TotTaxPaid1=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue1=frm2200P:txtSched1BasicExciseTaxDue1=</div>    
             <div>frm2200P:txtSched1ATC2=XP020frm2200P:txtSched1ATC2=</div>    
-            <div>frm2200P:txtSched1Description2=Greasesfrm2200P:txtSched1Description2=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure2=Per Kgfrm2200P:txtSched1UnitOfMeasure2=</div>    
+            <div>frm2200P:txtSched1Description2=GREASESfrm2200P:txtSched1Description2=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure2=PER KGfrm2200P:txtSched1UnitOfMeasure2=</div>    
             <div>frm2200P:txtSched1ApplicableRate2=10.00frm2200P:txtSched1ApplicableRate2=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval2=frm2200P:txtSched1PlaceOfRemoval2=</div>    
             <div>frm2200P:txtSched1LocalManuProd2=frm2200P:txtSched1LocalManuProd2=</div>    
@@ -101,8 +101,8 @@
             <div>frm2200P:txtSched1TotTaxPaid2=frm2200P:txtSched1TotTaxPaid2=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue2=frm2200P:txtSched1BasicExciseTaxDue2=</div>    
             <div>frm2200P:txtSched1ATC3=XP030frm2200P:txtSched1ATC3=</div>    
-            <div>frm2200P:txtSched1Description3=Processed Gasfrm2200P:txtSched1Description3=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure3=Per Literfrm2200P:txtSched1UnitOfMeasure3=</div>    
+            <div>frm2200P:txtSched1Description3=PROCESSED GASfrm2200P:txtSched1Description3=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure3=PER LITERfrm2200P:txtSched1UnitOfMeasure3=</div>    
             <div>frm2200P:txtSched1ApplicableRate3=10.00frm2200P:txtSched1ApplicableRate3=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval3=frm2200P:txtSched1PlaceOfRemoval3=</div>    
             <div>frm2200P:txtSched1LocalManuProd3=frm2200P:txtSched1LocalManuProd3=</div>    
@@ -115,8 +115,8 @@
             <div>frm2200P:txtSched1TotTaxPaid3=frm2200P:txtSched1TotTaxPaid3=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue3=frm2200P:txtSched1BasicExciseTaxDue3=</div>    
             <div>frm2200P:txtSched1ATC4=XP040frm2200P:txtSched1ATC4=</div>    
-            <div>frm2200P:txtSched1Description4=Waxes and Petroleumfrm2200P:txtSched1Description4=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure4=Per Kgfrm2200P:txtSched1UnitOfMeasure4=</div>    
+            <div>frm2200P:txtSched1Description4=WAXES AND PETROLEUMfrm2200P:txtSched1Description4=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure4=PER KGfrm2200P:txtSched1UnitOfMeasure4=</div>    
             <div>frm2200P:txtSched1ApplicableRate4=10.00frm2200P:txtSched1ApplicableRate4=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval4=frm2200P:txtSched1PlaceOfRemoval4=</div>    
             <div>frm2200P:txtSched1LocalManuProd4=frm2200P:txtSched1LocalManuProd4=</div>    
@@ -129,8 +129,8 @@
             <div>frm2200P:txtSched1TotTaxPaid4=frm2200P:txtSched1TotTaxPaid4=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue4=frm2200P:txtSched1BasicExciseTaxDue4=</div>    
             <div>frm2200P:txtSched1ATC5=XP050frm2200P:txtSched1ATC5=</div>    
-            <div>frm2200P:txtSched1Description5=Denatured Alcohol used for motive powerfrm2200P:txtSched1Description5=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure5=Per Literfrm2200P:txtSched1UnitOfMeasure5=</div>    
+            <div>frm2200P:txtSched1Description5=DENATURED ALCOHOL USED FOR MOTIVE POWERfrm2200P:txtSched1Description5=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure5=PER LITERfrm2200P:txtSched1UnitOfMeasure5=</div>    
             <div>frm2200P:txtSched1ApplicableRate5=10.0frm2200P:txtSched1ApplicableRate5=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval5=frm2200P:txtSched1PlaceOfRemoval5=</div>    
             <div>frm2200P:txtSched1LocalManuProd5=frm2200P:txtSched1LocalManuProd5=</div>    
@@ -143,8 +143,8 @@
             <div>frm2200P:txtSched1TotTaxPaid5=frm2200P:txtSched1TotTaxPaid5=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue5=frm2200P:txtSched1BasicExciseTaxDue5=</div>    
             <div>frm2200P:txtSched1ATC6=XP060frm2200P:txtSched1ATC6=</div>    
-            <div>frm2200P:txtSched1Description6=Unleaded Premium Gasolinefrm2200P:txtSched1Description6=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure6=Per Literfrm2200P:txtSched1UnitOfMeasure6=</div>    
+            <div>frm2200P:txtSched1Description6=UNLEADED PREMIUM GASOLINEfrm2200P:txtSched1Description6=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure6=PER LITERfrm2200P:txtSched1UnitOfMeasure6=</div>    
             <div>frm2200P:txtSched1ApplicableRate6=10.00frm2200P:txtSched1ApplicableRate6=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval6=BATANGAS DEPOTfrm2200P:txtSched1PlaceOfRemoval6=</div>    
             <div>frm2200P:txtSched1LocalManuProd6=10,000.00frm2200P:txtSched1LocalManuProd6=</div>    
@@ -157,8 +157,8 @@
             <div>frm2200P:txtSched1TotTaxPaid6=frm2200P:txtSched1TotTaxPaid6=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue6=125,000.10frm2200P:txtSched1BasicExciseTaxDue6=</div>    
             <div>frm2200P:txtSched1ATC7=XP080frm2200P:txtSched1ATC7=</div>    
-            <div>frm2200P:txtSched1Description7=Regular Gasolinefrm2200P:txtSched1Description7=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure7=Per Literfrm2200P:txtSched1UnitOfMeasure7=</div>    
+            <div>frm2200P:txtSched1Description7=REGULAR GASOLINEfrm2200P:txtSched1Description7=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure7=PER LITERfrm2200P:txtSched1UnitOfMeasure7=</div>    
             <div>frm2200P:txtSched1ApplicableRate7=10.00frm2200P:txtSched1ApplicableRate7=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval7=frm2200P:txtSched1PlaceOfRemoval7=</div>    
             <div>frm2200P:txtSched1LocalManuProd7=frm2200P:txtSched1LocalManuProd7=</div>    
@@ -171,8 +171,8 @@
             <div>frm2200P:txtSched1TotTaxPaid7=frm2200P:txtSched1TotTaxPaid7=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue7=frm2200P:txtSched1BasicExciseTaxDue7=</div>    
             <div>frm2200P:txtSched1ATC8=XP085frm2200P:txtSched1ATC8=</div>    
-            <div>frm2200P:txtSched1Description8=Pyrolysis Gasolinefrm2200P:txtSched1Description8=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure8=Per Literfrm2200P:txtSched1UnitOfMeasure8=</div>    
+            <div>frm2200P:txtSched1Description8=PYROLYSIS GASOLINEfrm2200P:txtSched1Description8=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure8=PER LITERfrm2200P:txtSched1UnitOfMeasure8=</div>    
             <div>frm2200P:txtSched1ApplicableRate8=10.00frm2200P:txtSched1ApplicableRate8=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval8=frm2200P:txtSched1PlaceOfRemoval8=</div>    
             <div>frm2200P:txtSched1LocalManuProd8=frm2200P:txtSched1LocalManuProd8=</div>    
@@ -185,8 +185,8 @@
             <div>frm2200P:txtSched1TotTaxPaid8=frm2200P:txtSched1TotTaxPaid8=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue8=frm2200P:txtSched1BasicExciseTaxDue8=</div>    
             <div>frm2200P:txtSched1ATC9=XP090frm2200P:txtSched1ATC9=</div>    
-            <div>frm2200P:txtSched1Description9=Naphthafrm2200P:txtSched1Description9=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure9=Per Literfrm2200P:txtSched1UnitOfMeasure9=</div>    
+            <div>frm2200P:txtSched1Description9=NAPHTHAfrm2200P:txtSched1Description9=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure9=PER LITERfrm2200P:txtSched1UnitOfMeasure9=</div>    
             <div>frm2200P:txtSched1ApplicableRate9=10.00frm2200P:txtSched1ApplicableRate9=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval9=frm2200P:txtSched1PlaceOfRemoval9=</div>    
             <div>frm2200P:txtSched1LocalManuProd9=frm2200P:txtSched1LocalManuProd9=</div>    
@@ -199,8 +199,8 @@
             <div>frm2200P:txtSched1TotTaxPaid9=frm2200P:txtSched1TotTaxPaid9=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue9=frm2200P:txtSched1BasicExciseTaxDue9=</div>    
             <div>frm2200P:txtSched1ATC10=XP100frm2200P:txtSched1ATC10=</div>    
-            <div>frm2200P:txtSched1Description10=Naphtha to be used for petro-chemicalsfrm2200P:txtSched1Description10=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure10=Per Literfrm2200P:txtSched1UnitOfMeasure10=</div>    
+            <div>frm2200P:txtSched1Description10=NAPHTHA TO BE USED FOR PETRO-CHEMICALSfrm2200P:txtSched1Description10=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure10=PER LITERfrm2200P:txtSched1UnitOfMeasure10=</div>    
             <div>frm2200P:txtSched1ApplicableRate10=0.00frm2200P:txtSched1ApplicableRate10=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval10=frm2200P:txtSched1PlaceOfRemoval10=</div>    
             <div>frm2200P:txtSched1LocalManuProd10=frm2200P:txtSched1LocalManuProd10=</div>    
@@ -213,8 +213,8 @@
             <div>frm2200P:txtSched1TotTaxPaid10=frm2200P:txtSched1TotTaxPaid10=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue10=frm2200P:txtSched1BasicExciseTaxDue10=</div>    
             <div>frm2200P:txtSched1ATC11=XP105frm2200P:txtSched1ATC11=</div>    
-            <div>frm2200P:txtSched1Description11=Naphtha and Pyrolysis gasoline, when used as a raw material in the production or in the refining of petroleum products, or as a replacement for natural-gas-fired combined cycle power plant style=frm2200P:txtSched1Description11=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure11=Per Literfrm2200P:txtSched1UnitOfMeasure11=</div>    
+            <div>frm2200P:txtSched1Description11=NAPHTHA AND PYROLYSIS GASOLINE, WHEN USED AS A RAW MATERIAL IN THE PRODUCTION OR IN THE REFINING OF PETROLEUM PRODUCTS, OR AS A REPLACEMENT FOR NATURAL-GAS-FIRED COMBINED CYCLE POWER PLANT STYLE=frm2200P:txtSched1Description11=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure11=PER LITERfrm2200P:txtSched1UnitOfMeasure11=</div>    
             <div>frm2200P:txtSched1ApplicableRate11=0.00frm2200P:txtSched1ApplicableRate11=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval11=frm2200P:txtSched1PlaceOfRemoval11=</div>    
             <div>frm2200P:txtSched1LocalManuProd11=frm2200P:txtSched1LocalManuProd11=</div>    
@@ -227,8 +227,8 @@
             <div>frm2200P:txtSched1TotTaxPaid11=frm2200P:txtSched1TotTaxPaid11=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue11=frm2200P:txtSched1BasicExciseTaxDue11=</div>    
             <div>frm2200P:txtSched1ATC12=XP110frm2200P:txtSched1ATC12=</div>    
-            <div>frm2200P:txtSched1Description12=Aviation Gasolinefrm2200P:txtSched1Description12=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure12=Per Literfrm2200P:txtSched1UnitOfMeasure12=</div>    
+            <div>frm2200P:txtSched1Description12=AVIATION GASOLINEfrm2200P:txtSched1Description12=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure12=PER LITERfrm2200P:txtSched1UnitOfMeasure12=</div>    
             <div>frm2200P:txtSched1ApplicableRate12=4.00frm2200P:txtSched1ApplicableRate12=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval12=frm2200P:txtSched1PlaceOfRemoval12=</div>    
             <div>frm2200P:txtSched1LocalManuProd12=frm2200P:txtSched1LocalManuProd12=</div>    
@@ -241,8 +241,8 @@
             <div>frm2200P:txtSched1TotTaxPaid12=frm2200P:txtSched1TotTaxPaid12=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue12=frm2200P:txtSched1BasicExciseTaxDue12=</div>    
             <div>frm2200P:txtSched1ATC13=XP120frm2200P:txtSched1ATC13=</div>    
-            <div>frm2200P:txtSched1Description13=Aviation Turbo Jet Fuelfrm2200P:txtSched1Description13=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure13=Per Literfrm2200P:txtSched1UnitOfMeasure13=</div>    
+            <div>frm2200P:txtSched1Description13=AVIATION TURBO JET FUELfrm2200P:txtSched1Description13=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure13=PER LITERfrm2200P:txtSched1UnitOfMeasure13=</div>    
             <div>frm2200P:txtSched1ApplicableRate13=4.00frm2200P:txtSched1ApplicableRate13=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval13=frm2200P:txtSched1PlaceOfRemoval13=</div>    
             <div>frm2200P:txtSched1LocalManuProd13=frm2200P:txtSched1LocalManuProd13=</div>    
@@ -255,8 +255,8 @@
             <div>frm2200P:txtSched1TotTaxPaid13=frm2200P:txtSched1TotTaxPaid13=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue13=frm2200P:txtSched1BasicExciseTaxDue13=</div>    
             <div>frm2200P:txtSched1ATC14=XP130frm2200P:txtSched1ATC14=</div>    
-            <div>frm2200P:txtSched1Description14=Kerosenefrm2200P:txtSched1Description14=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure14=Per Literfrm2200P:txtSched1UnitOfMeasure14=</div>    
+            <div>frm2200P:txtSched1Description14=KEROSENEfrm2200P:txtSched1Description14=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure14=PER LITERfrm2200P:txtSched1UnitOfMeasure14=</div>    
             <div>frm2200P:txtSched1ApplicableRate14=5.00"frm2200P:txtSched1ApplicableRate14=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval14=frm2200P:txtSched1PlaceOfRemoval14=</div>    
             <div>frm2200P:txtSched1LocalManuProd14=frm2200P:txtSched1LocalManuProd14=</div>    
@@ -269,8 +269,8 @@
             <div>frm2200P:txtSched1TotTaxPaid14=frm2200P:txtSched1TotTaxPaid14=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue14=frm2200P:txtSched1BasicExciseTaxDue14=</div>    
             <div>frm2200P:txtSched1ATC15=XP131frm2200P:txtSched1ATC15=</div>    
-            <div>frm2200P:txtSched1Description15=Kerosene used as aviation fuelfrm2200P:txtSched1Description15=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure15=Per Literfrm2200P:txtSched1UnitOfMeasure15=</div>    
+            <div>frm2200P:txtSched1Description15=KEROSENE USED AS AVIATION FUELfrm2200P:txtSched1Description15=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure15=PER LITERfrm2200P:txtSched1UnitOfMeasure15=</div>    
             <div>frm2200P:txtSched1ApplicableRate15=4.00frm2200P:txtSched1ApplicableRate15=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval15=frm2200P:txtSched1PlaceOfRemoval15=</div>    
             <div>frm2200P:txtSched1LocalManuProd15=frm2200P:txtSched1LocalManuProd15=</div>    
@@ -283,8 +283,8 @@
             <div>frm2200P:txtSched1TotTaxPaid15=frm2200P:txtSched1TotTaxPaid15=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue15=frm2200P:txtSched1BasicExciseTaxDue15=</div>    
             <div>frm2200P:txtSched1ATC16=XP140frm2200P:txtSched1ATC16=</div>    
-            <div>frm2200P:txtSched1Description16=Diesel Fuel Oilfrm2200P:txtSched1Description16=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure16=Per Literfrm2200P:txtSched1UnitOfMeasure16=</div>    
+            <div>frm2200P:txtSched1Description16=DIESEL FUEL OILfrm2200P:txtSched1Description16=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure16=PER LITERfrm2200P:txtSched1UnitOfMeasure16=</div>    
             <div>frm2200P:txtSched1ApplicableRate16=6.00frm2200P:txtSched1ApplicableRate16=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval16=PASIG TERMINALfrm2200P:txtSched1PlaceOfRemoval16=</div>    
             <div>frm2200P:txtSched1LocalManuProd16=frm2200P:txtSched1LocalManuProd16=</div>    
@@ -297,8 +297,8 @@
             <div>frm2200P:txtSched1TotTaxPaid16=100.00frm2200P:txtSched1TotTaxPaid16=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue16=1,000.00frm2200P:txtSched1BasicExciseTaxDue16=</div>    
             <div>frm2200P:txtSched1ATC17=XP150frm2200P:txtSched1ATC17=</div>    
-            <div>frm2200P:txtSched1Description17=LPG used as Motive Powerfrm2200P:txtSched1Description17=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure17=Per Kgfrm2200P:txtSched1UnitOfMeasure17=</div>    
+            <div>frm2200P:txtSched1Description17=LPG USED AS MOTIVE POWERfrm2200P:txtSched1Description17=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure17=PER KGfrm2200P:txtSched1UnitOfMeasure17=</div>    
             <div>frm2200P:txtSched1ApplicableRate17=6.00frm2200P:txtSched1ApplicableRate17=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval17=frm2200P:txtSched1PlaceOfRemoval17=</div>    
             <div>frm2200P:txtSched1LocalManuProd17=frm2200P:txtSched1LocalManuProd17=</div>    
@@ -312,7 +312,7 @@
             <div>frm2200P:txtSched1BasicExciseTaxDue17=frm2200P:txtSched1BasicExciseTaxDue17=</div>    
             <div>frm2200P:txtSched1ATC18=XP160frm2200P:txtSched1ATC18=</div>    
             <div>frm2200P:txtSched1Description18=LPGfrm2200P:txtSched1Description18=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure18=Per Kgfrm2200P:txtSched1UnitOfMeasure18=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure18=PER KGfrm2200P:txtSched1UnitOfMeasure18=</div>    
             <div>frm2200P:txtSched1ApplicableRate18=3.00frm2200P:txtSched1ApplicableRate18=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval18=frm2200P:txtSched1PlaceOfRemoval18=</div>    
             <div>frm2200P:txtSched1LocalManuProd18=frm2200P:txtSched1LocalManuProd18=</div>    
@@ -325,8 +325,8 @@
             <div>frm2200P:txtSched1TotTaxPaid18=frm2200P:txtSched1TotTaxPaid18=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue18=frm2200P:txtSched1BasicExciseTaxDue18=</div>    
             <div>frm2200P:txtSched1ATC19=XP165frm2200P:txtSched1ATC19=</div>    
-            <div>frm2200P:txtSched1Description19=LPG used in the production of petro-chemical productsfrm2200P:txtSched1Description19=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure19=Per Kgfrm2200P:txtSched1UnitOfMeasure19=</div>    
+            <div>frm2200P:txtSched1Description19=LPG USED IN THE PRODUCTION OF PETRO-CHEMICAL PRODUCTSfrm2200P:txtSched1Description19=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure19=PER KGfrm2200P:txtSched1UnitOfMeasure19=</div>    
             <div>frm2200P:txtSched1ApplicableRate19=0.00frm2200P:txtSched1ApplicableRate19=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval19=frm2200P:txtSched1PlaceOfRemoval19=</div>    
             <div>frm2200P:txtSched1LocalManuProd19=frm2200P:txtSched1LocalManuProd19=</div>    
@@ -339,8 +339,8 @@
             <div>frm2200P:txtSched1TotTaxPaid19=frm2200P:txtSched1TotTaxPaid19=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue19=frm2200P:txtSched1BasicExciseTaxDue19=</div>    
             <div>frm2200P:txtSched1ATC20=XP170frm2200P:txtSched1ATC20=</div>    
-            <div>frm2200P:txtSched1Description20=Asphaltfrm2200P:txtSched1Description20=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure20=Per Kgfrm2200P:txtSched1UnitOfMeasure20=</div>    
+            <div>frm2200P:txtSched1Description20=ASPHALTfrm2200P:txtSched1Description20=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure20=PER KGfrm2200P:txtSched1UnitOfMeasure20=</div>    
             <div>frm2200P:txtSched1ApplicableRate20=10.00frm2200P:txtSched1ApplicableRate20=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval20=frm2200P:txtSched1PlaceOfRemoval20=</div>    
             <div>frm2200P:txtSched1LocalManuProd20=frm2200P:txtSched1LocalManuProd20=</div>    
@@ -353,8 +353,8 @@
             <div>frm2200P:txtSched1TotTaxPaid20=frm2200P:txtSched1TotTaxPaid20=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue20=frm2200P:txtSched1BasicExciseTaxDue20=</div>    
             <div>frm2200P:txtSched1ATC21=XP180frm2200P:txtSched1ATC21=</div>    
-            <div>frm2200P:txtSched1Description21=Bunker Fuel Oil and similar fuelfrm2200P:txtSched1Description21=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure21=Per Literfrm2200P:txtSched1UnitOfMeasure21=</div>    
+            <div>frm2200P:txtSched1Description21=BUNKER FUEL OIL AND SIMILAR FUELfrm2200P:txtSched1Description21=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure21=PER LITERfrm2200P:txtSched1UnitOfMeasure21=</div>    
             <div>frm2200P:txtSched1ApplicableRate21=6.00frm2200P:txtSched1ApplicableRate21=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval21=frm2200P:txtSched1PlaceOfRemoval21=</div>    
             <div>frm2200P:txtSched1LocalManuProd21=frm2200P:txtSched1LocalManuProd21=</div>    
@@ -367,8 +367,8 @@
             <div>frm2200P:txtSched1TotTaxPaid21=frm2200P:txtSched1TotTaxPaid21=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue21=frm2200P:txtSched1BasicExciseTaxDue21=</div>    
             <div>frm2200P:txtSched1ATC22=XP190frm2200P:txtSched1ATC22=</div>    
-            <div>frm2200P:txtSched1Description22=Base Stocks for tube oils and greases, HVD, aromatic extracts, etc.frm2200P:txtSched1Description22=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure22=Per Literfrm2200P:txtSched1UnitOfMeasure22=</div>    
+            <div>frm2200P:txtSched1Description22=BASE STOCKS FOR TUBE OILS AND GREASES, HVD, AROMATIC EXTRACTS, ETC.frm2200P:txtSched1Description22=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure22=PER LITERfrm2200P:txtSched1UnitOfMeasure22=</div>    
             <div>frm2200P:txtSched1ApplicableRate22=10.00frm2200P:txtSched1ApplicableRate22=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval22=frm2200P:txtSched1PlaceOfRemoval22=</div>    
             <div>frm2200P:txtSched1LocalManuProd22=frm2200P:txtSched1LocalManuProd22=</div>    
@@ -381,8 +381,8 @@
             <div>frm2200P:txtSched1TotTaxPaid22=frm2200P:txtSched1TotTaxPaid22=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue22=frm2200P:txtSched1BasicExciseTaxDue22=</div>    
             <div>frm2200P:txtSched1ATC23=XP200frm2200P:txtSched1ATC23=</div>    
-            <div>frm2200P:txtSched1Description23=Petroleum Cokefrm2200P:txtSched1Description23=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure23=Per MTfrm2200P:txtSched1UnitOfMeasure23=</div>    
+            <div>frm2200P:txtSched1Description23=PETROLEUM COKEfrm2200P:txtSched1Description23=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure23=PER MTfrm2200P:txtSched1UnitOfMeasure23=</div>    
             <div>frm2200P:txtSched1ApplicableRate23=6.00frm2200P:txtSched1ApplicableRate23=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval23=frm2200P:txtSched1PlaceOfRemoval23=</div>    
             <div>frm2200P:txtSched1LocalManuProd23=frm2200P:txtSched1LocalManuProd23=</div>    
@@ -395,8 +395,8 @@
             <div>frm2200P:txtSched1TotTaxPaid23=frm2200P:txtSched1TotTaxPaid23=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue23=frm2200P:txtSched1BasicExciseTaxDue23=</div>    
             <div>frm2200P:txtSched1ATC24=XP210frm2200P:txtSched1ATC24=</div>    
-            <div>frm2200P:txtSched1Description24=Petroleum Coke for motive power frm2200P:txtSched1Description24=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure24=Per MTfrm2200P:txtSched1UnitOfMeasure24=</div>    
+            <div>frm2200P:txtSched1Description24=PETROLEUM COKE FOR MOTIVE POWER frm2200P:txtSched1Description24=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure24=PER MTfrm2200P:txtSched1UnitOfMeasure24=</div>    
             <div>frm2200P:txtSched1ApplicableRate24=0.00frm2200P:txtSched1ApplicableRate24=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval24=frm2200P:txtSched1PlaceOfRemoval24=</div>    
             <div>frm2200P:txtSched1LocalManuProd24=frm2200P:txtSched1LocalManuProd24=</div>    
@@ -409,8 +409,8 @@
             <div>frm2200P:txtSched1TotTaxPaid24=frm2200P:txtSched1TotTaxPaid24=</div>    
             <div>frm2200P:txtSched1BasicExciseTaxDue24=frm2200P:txtSched1BasicExciseTaxDue24=</div>    
             <div>frm2200P:txtSched1ATC25=XP220frm2200P:txtSched1ATC25=</div>    
-            <div>frm2200P:txtSched1Description25=Additives for lubricating oils and greasesfrm2200P:txtSched1Description25=</div>    
-            <div>frm2200P:txtSched1UnitOfMeasure25=Per Liter/Kgfrm2200P:txtSched1UnitOfMeasure25=</div>    
+            <div>frm2200P:txtSched1Description25=ADDITIVES FOR LUBRICATING OILS AND GREASESfrm2200P:txtSched1Description25=</div>    
+            <div>frm2200P:txtSched1UnitOfMeasure25=PER LITER/KGfrm2200P:txtSched1UnitOfMeasure25=</div>    
             <div>frm2200P:txtSched1ApplicableRate25=10.00frm2200P:txtSched1ApplicableRate25=</div>    
             <div>frm2200P:txtSched1PlaceOfRemoval25=frm2200P:txtSched1PlaceOfRemoval25=</div>    
             <div>frm2200P:txtSched1LocalManuProd25=frm2200P:txtSched1LocalManuProd25=</div>    
@@ -454,7 +454,7 @@
             <div>frm2200P:txtSched1BasicExciseTaxDue27=frm2200P:txtSched1BasicExciseTaxDue27=</div>    
             <div>frm2200P:txtSched1TotalTaxDue=126,100.10frm2200P:txtSched1TotalTaxDue=</div>    
             <div>frm2200P:sched1AddedRowCount=0frm2200P:sched1AddedRowCount=</div>    
-            <div>frm2200P:txtLOB=Sample Consulting Servicesfrm2200P:txtLOB=</div>    
+            <div>frm2200P:txtLOB=SAMPLE CONSULTING SERVICESfrm2200P:txtLOB=</div>    
             <div>frm2200P:txtCurrentPage=1frm2200P:txtCurrentPage=</div>    
             <div>frm2200P:txtMaxPage=2frm2200P:txtMaxPage=</div>    
             <div>driveSelectTPExport=0driveSelectTPExport=</div>    

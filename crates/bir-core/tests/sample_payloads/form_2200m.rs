@@ -50,6 +50,17 @@ fn sample_2200m() -> Form2200MDraft {
     row.volume_taxable = Some(3.0);
     row.local_tax_due = Some(120.0);
 
+    // Two rows past the page's ten, added with "Add row".
+    let row = draft.row_mut(10).unwrap();
+    row.description = "Clay x".into();
+    row.place_of_removal = "Rizal".into();
+    row.local_tax_due = Some(10.0);
+    row.imported_taxable = Some(7.0);
+    let row = draft.row_mut(11).unwrap();
+    row.description = "Shale".into();
+    row.place_of_removal = "Bulacan".into();
+    row.total_tax_due = Some(3.0);
+
     draft.balance_carried_over = 1_000.0;
     draft.creditable_excise_tax = 234.565;
     draft.surcharge = 25.5;
@@ -67,10 +78,11 @@ fn form_2200m_sample_payload_is_current() {
     let payload = draft
         .to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 2200M must validate: {errors:?}"));
-    check_sample(
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
         "2200M-03142025",
-        "2200m-v2018",
+        &layout,
         &payload,
-        "932bb1b6427e87b6fe49434fc44c9b31409fcc656ddfc1a51c2ad7d1043a35ea",
+        "2f76621a8578a8c47dadc7b5045916e0531383662d32da15647e2e0c209af521",
     );
 }
