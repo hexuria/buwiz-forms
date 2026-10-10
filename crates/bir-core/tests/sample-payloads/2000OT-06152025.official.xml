@@ -11,14 +11,16 @@
             <div>frm2000OT:txtTIN3=788frm2000OT:txtTIN3=</div>    
             <div>frm2000OT:txtBranchCode=00000frm2000OT:txtBranchCode=</div>    
             <div>frm2000OT:txtRDOCode=039frm2000OT:txtRDOCode=</div>    
-            <div>frm2000OT:txtTaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm2000OT:txtTaxpayerName=</div>    
-            <div>frm2000OT:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2000OT:txtAddress=</div>    
+            <div>frm2000OT:txtTaxpayerName=SAMPLE DUMMY TAXPAYERfrm2000OT:txtTaxpayerName=</div>    
+            <div>frm2000OT:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2000OT:txtAddress=</div>    
+            <div>frm2000OT:txtAddress2=frm2000OT:txtAddress2=</div>    
             <div>frm2000OT:txtZipCode=1100frm2000OT:txtZipCode=</div>    
             <div>frm2000OT:txtTelNum=09170000000frm2000OT:txtTelNum=</div>    
             <div>txtEmail=sample.taxpayer@example.comtxtEmail=</div>    
             <div>frm2000OT:optParty_1=truefrm2000OT:optParty_1=</div>    
             <div>frm2000OT:optParty_2=falsefrm2000OT:optParty_2=</div>    
-            <div>frm2000OT:txtOtherName=SAMPLE%20BUYER%20CORPfrm2000OT:txtOtherName=</div>    
+            <div>frm2000OT:txtOtherName=SAMPLE BUYER CORPfrm2000OT:txtOtherName=</div>    
+            <div>frm2000OT:txtOtherName2=frm2000OT:txtOtherName2=</div>    
             <div>frm2000OT:txtOtherTIN=987654321000frm2000OT:txtOtherTIN=</div>    
             <div>frm2000OT:rbTransNature_1=falsefrm2000OT:rbTransNature_1=</div>    
             <div>frm2000OT:rbTransNature_2=truefrm2000OT:rbTransNature_2=</div>    
@@ -121,6 +123,6 @@
             <div>frm2000OT:Sched2:txtTaxableBase=2,750,000.01frm2000OT:Sched2:txtTaxableBase=</div>    
             <div>frm2000OT:txtCurrentPage=1frm2000OT:txtCurrentPage=</div>    
             <div>frm2000OT:txtMaxPage=2frm2000OT:txtMaxPage=</div>    
-            <div>frm2000OT:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm2000OT:txtLineBus=</div>    
+            <div>frm2000OT:txtLineBus=SAMPLE CONSULTING SERVICESfrm2000OT:txtLineBus=</div>    
                 
             All Rights Reserved BIR 2012.0

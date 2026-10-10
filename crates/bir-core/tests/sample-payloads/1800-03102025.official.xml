@@ -11,21 +11,24 @@
             <div>frm1800v2018:txtTIN3=788frm1800v2018:txtTIN3=</div>    
             <div>frm1800v2018:txtBranchCode=00000frm1800v2018:txtBranchCode=</div>    
             <div>frm1800v2018:txtRDOCode=039frm1800v2018:txtRDOCode=</div>    
-            <div>frm1800v2018:txtDonorName=SAMPLE%20DUMMY%20TAXPAYERfrm1800v2018:txtDonorName=</div>    
-            <div>frm1800v2018:txtRegAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1800v2018:txtRegAddress=</div>    
+            <div>frm1800v2018:txtDonorName=SAMPLE DUMMY TAXPAYERfrm1800v2018:txtDonorName=</div>    
+            <div>frm1800v2018:txtRegAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1800v2018:txtRegAddress=</div>    
+            <div>frm1800v2018:txtRegAddress2=frm1800v2018:txtRegAddress2=</div>    
             <div>frm1800v2018:txtZipCode=1100frm1800v2018:txtZipCode=</div>    
-            <div>frm1800v2018:txtResAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1800v2018:txtResAddress=</div>    
+            <div>frm1800v2018:txtResAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1800v2018:txtResAddress=</div>    
+            <div>frm1800v2018:txtResAddress2=frm1800v2018:txtResAddress2=</div>    
             <div>frm1800v2018:txtZipCode2=1100frm1800v2018:txtZipCode2=</div>    
             <div>frm1800v2018:txtContact=09170000000frm1800v2018:txtContact=</div>    
             <div>frm1800v2018:txtEmail=SAMPLE.TAXPAYER@EXAMPLE.COMfrm1800v2018:txtEmail=</div>    
-            <div>frm1800v2018:txtDoneeNameA=MARIA%20SAMPLE-DONEE<div>frm1800v2018:txtDoneeTINA=111222333000frm1800v2018:txtDoneeTINA=</div>    
+            <div>frm1800v2018:txtDoneeNameA=MARIA SAMPLE-DONEEfrm1800v2018:txtDoneeNameA=</div>    
+            <div>frm1800v2018:txtDoneeTINA=111222333000frm1800v2018:txtDoneeTINA=</div>    
             <div>frm1800v2018:txtDoneeNameB=PEDRO EXAMPLEfrm1800v2018:txtDoneeNameB=</div>    
             <div>frm1800v2018:txtDoneeTINB=444555666frm1800v2018:txtDoneeTINB=</div>    
             <div>frm1800v2018:txtDoneeNameC=frm1800v2018:txtDoneeNameC=</div>    
             <div>frm1800v2018:txtDoneeTINC=frm1800v2018:txtDoneeTINC=</div>    
             <div>frm1800v2018:txtDoneeNameD=frm1800v2018:txtDoneeNameD=</div>    
             <div>frm1800v2018:txtDoneeTIND=frm1800v2018:txtDoneeTIND=</div>    
-            frm1800v2018:txtDoneeNameA=</div>    
+            <div>frm1800v2018:txtDoneeNameE=frm1800v2018:txtDoneeNameE=</div>    
             <div>frm1800v2018:txtDoneeTINE=frm1800v2018:txtDoneeTINE=</div>    
             <div>frm1800v2018:TaxTreatyYN_Y=truefrm1800v2018:TaxTreatyYN_Y=</div>    
             <div>frm1800v2018:TaxTreatyYN_N=falsefrm1800v2018:TaxTreatyYN_N=</div>    
@@ -163,6 +166,6 @@
             <div>ds106modYes=falseds106modYes=</div>    
             <div>ds106modNo=falseds106modNo=</div>    
             <div>frm1800v2018:numOfDays=0frm1800v2018:numOfDays=</div>    
-            <div>frm1800v2018:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm1800v2018:txtLineBus=</div>    
+            <div>frm1800v2018:txtLineBus=SAMPLE CONSULTING SERVICESfrm1800v2018:txtLineBus=</div>    
                 
             All Rights Reserved BIR 2012.0

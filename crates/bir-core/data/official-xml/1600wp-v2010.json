@@ -194,7 +194,7 @@
       "parts": [
         {
           "source": "frm1600WP:txtTaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -206,7 +206,7 @@
       "parts": [
         {
           "source": "frm1600WP:txtAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

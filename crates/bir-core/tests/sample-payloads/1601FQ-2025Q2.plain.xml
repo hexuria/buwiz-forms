@@ -14,8 +14,9 @@
             <div>frm1601FQ:txtTIN3=788frm1601FQ:txtTIN3=</div>	
             <div>frm1601FQ:txtBranchCode=00000frm1601FQ:txtBranchCode=</div>	
             <div>frm1601FQ:txtRDOCode=039frm1601FQ:txtRDOCode=</div>	
-            <div>frm1601FQ:txtTaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm1601FQ:txtTaxpayerName=</div>	
-            <div>frm1601FQ:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1601FQ:txtAddress=</div>	
+            <div>frm1601FQ:txtTaxpayerName=SAMPLE DUMMY TAXPAYERfrm1601FQ:txtTaxpayerName=</div>	
+            <div>frm1601FQ:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1601FQ:txtAddress=</div>	
+            <div>frm1601FQ:txtAddress2=frm1601FQ:txtAddress2=</div>	
             <div>frm1601FQ:txtZipCode=1100frm1601FQ:txtZipCode=</div>	
             <div>frm1601FQ:txtTelNum=09170000000frm1601FQ:txtTelNum=</div>	
             <div>frm1601FQ:CatAgent_P=truefrm1601FQ:CatAgent_P=</div>	
@@ -24,6 +25,30 @@
             <div>frm1601FQ:SpecialTax_1=truefrm1601FQ:SpecialTax_1=</div>	
             <div>frm1601FQ:SpecialTax_2=falsefrm1601FQ:SpecialTax_2=</div>	
             <div>frm1601FQ:drpSpecialTax=2frm1601FQ:drpSpecialTax=</div>	
+            <div>frm1601FQ:txtAtcCode1=WI226frm1601FQ:txtAtcCode1=</div>	
+            <div>frm1601FQ:txtTaxBase1=123,456.79frm1601FQ:txtTaxBase1=</div>	
+            <div>frm1601FQ:txtTaxRate1= 20.0frm1601FQ:txtTaxRate1=</div>	
+            <div>frm1601FQ:txtTaxbeWithHeld1=24,691.36frm1601FQ:txtTaxbeWithHeld1=</div>	
+            <div>frm1601FQ:txtAtcCode2=WI250frm1601FQ:txtAtcCode2=</div>	
+            <div>frm1601FQ:txtTaxBase2=1,000.01frm1601FQ:txtTaxBase2=</div>	
+            <div>frm1601FQ:txtTaxRate2= 20.0frm1601FQ:txtTaxRate2=</div>	
+            <div>frm1601FQ:txtTaxbeWithHeld2=200.00frm1601FQ:txtTaxbeWithHeld2=</div>	
+            <div>frm1601FQ:txtAtcCode3=WC212frm1601FQ:txtAtcCode3=</div>	
+            <div>frm1601FQ:txtTaxBase3=50,000.00frm1601FQ:txtTaxBase3=</div>	
+            <div>frm1601FQ:txtTaxRate3= 30.0frm1601FQ:txtTaxRate3=</div>	
+            <div>frm1601FQ:txtTaxbeWithHeld3=15,000.00frm1601FQ:txtTaxbeWithHeld3=</div>	
+            <div>frm1601FQ:txtAtcCode4=WI202frm1601FQ:txtAtcCode4=</div>	
+            <div>frm1601FQ:txtTaxBase4=77,777.77frm1601FQ:txtTaxBase4=</div>	
+            <div>frm1601FQ:txtTaxRate4= 10.0frm1601FQ:txtTaxRate4=</div>	
+            <div>frm1601FQ:txtTaxbeWithHeld4=7,777.78frm1601FQ:txtTaxbeWithHeld4=</div>	
+            <div>frm1601FQ:txtAtcCode5=WC212frm1601FQ:txtAtcCode5=</div>	
+            <div>frm1601FQ:txtTaxBase5=999.99frm1601FQ:txtTaxBase5=</div>	
+            <div>frm1601FQ:txtTaxRate5= 25.0frm1601FQ:txtTaxRate5=</div>	
+            <div>frm1601FQ:txtTaxbeWithHeld5=250.00frm1601FQ:txtTaxbeWithHeld5=</div>	
+            <div>frm1601FQ:txtAtcCode6=frm1601FQ:txtAtcCode6=</div>	
+            <div>frm1601FQ:txtTaxBase6=frm1601FQ:txtTaxBase6=</div>	
+            <div>frm1601FQ:txtTaxRate6=frm1601FQ:txtTaxRate6=</div>	
+            <div>frm1601FQ:txtTaxbeWithHeld6=0.00frm1601FQ:txtTaxbeWithHeld6=</div>	
             <div>frm1601FQ:txtAtcCode1=WI226frm1601FQ:txtAtcCode1=</div>	
             <div>frm1601FQ:txtTaxBase1=123,456.79frm1601FQ:txtTaxBase1=</div>	
             <div>frm1601FQ:txtTaxRate1= 20.0frm1601FQ:txtTaxRate1=</div>	
@@ -118,7 +143,7 @@
             <div>txtRate4=0.00txtRate4=</div>	
             <div>txtReqWithheld4=0.00txtReqWithheld4=</div>	
             <div>txtDvTotalSchedI=25,000.00txtDvTotalSchedI=</div>	
-            <div>frm1601FQ:txtCurrentPage=1frm1601FQ:txtCurrentPage=</div>	
+            <div>frm1601FQ:txtCurrentPage=frm1601FQ:txtCurrentPage=</div>	
             <div>frm1601FQ:txtMaxPage=2frm1601FQ:txtMaxPage=</div>	
             <div>AtcCd1=trueAtcCd1=</div>	
             <div>AtcCd2=falseAtcCd2=</div>	
@@ -166,7 +191,7 @@
             <div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>	
             <div>ebirOnlineUsername=ebirOnlineUsername=</div>	
             <div>ebirOnlineSecret=ebirOnlineSecret=</div>	
-            <div>frm1601FQ:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm1601FQ:txtLineBus=</div>	
+            <div>frm1601FQ:txtLineBus=SAMPLE CONSULTING SERVICESfrm1601FQ:txtLineBus=</div>	
             <div>driveSelectTPExport=0driveSelectTPExport=</div>	
             	
             All Rights Reserved BIR 2012.0

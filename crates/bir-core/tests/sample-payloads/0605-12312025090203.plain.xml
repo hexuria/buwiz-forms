@@ -23,10 +23,10 @@
             <div>frm0605:txtRDOCode=039frm0605:txtRDOCode=</div>	
             <div>frm0605:txtClassification:_1=truefrm0605:txtClassification:_1=</div>	
             <div>frm0605:txtClassification:_2=falsefrm0605:txtClassification:_2=</div>	
-            <div>frm0605:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm0605:txtLineBus=</div>	
-            <div>frm0605:txtTaxPayerName=SAMPLE%20DUMMY%20TAXPAYERfrm0605:txtTaxPayerName=</div>	
+            <div>frm0605:txtLineBus=SAMPLE CONSULTING SERVICESfrm0605:txtLineBus=</div>	
+            <div>frm0605:txtTaxPayerName=SAMPLE DUMMY TAXPAYERfrm0605:txtTaxPayerName=</div>	
             <div>frm0605:txtTelNum=09170000000frm0605:txtTelNum=</div>	
-            <div>frm0605:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm0605:txtAddress=</div>	
+            <div>frm0605:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm0605:txtAddress=</div>	
             <div>frm0605:txtZipCode=1100frm0605:txtZipCode=</div>	
             <div>frm0605:itemModeOfPayment:_1=truefrm0605:itemModeOfPayment:_1=</div>	
             <div>frm0605:txtNumOfInstallment=3frm0605:txtNumOfInstallment=</div>	

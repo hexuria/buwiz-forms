@@ -5,32 +5,20 @@
   "official_hta": "BIR-Form2551Qv2018.hta",
   "official_hta_sha256": "dc5c19710400e9bd15ceccd1bbeafc5290074b17b2d460af5f8921c6a7f93186",
   "header": "<?xml version='1.0'?>",
-  "lead": "\n\t\t",
+  "lead": "\t\t",
   "value_rules": [],
   "entries": [
     {
       "key": "frm2551Qv2018:forThe_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:forThe_2",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:rtnMonth",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:rtnMonth",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:rtnMonth",
@@ -42,19 +30,7 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtYear",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtYear",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtYear",
@@ -66,55 +42,43 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:qtr_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:qtr_2",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:qtr_3",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:qtr_4",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:amendedRtn_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:amendedRtn_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtSheets",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtSheets",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtSheets",
@@ -126,19 +90,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtTIN1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtTIN1",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtTIN1",
@@ -150,19 +102,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtTIN2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtTIN2",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtTIN2",
@@ -174,19 +114,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtTIN3",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtTIN3",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtTIN3",
@@ -198,19 +126,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtBranchCode",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtBranchCode",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtBranchCode",
@@ -222,19 +138,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:txtRDOCode",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:txtRDOCode",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "000",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtRDOCode",
@@ -246,19 +150,7 @@
         }
       ],
       "default": "000",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:registeredName",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:registeredName",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:registeredName",
@@ -270,19 +162,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
-    },
-    {
-      "key": "frm2551Qv2018:registeredAddress",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm2551Qv2018:registeredAddress",
-          "codec": "js-escape"
-        }
-      ],
-      "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:registeredAddress",
@@ -294,7 +174,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:zipCode",
@@ -302,11 +182,11 @@
       "parts": [
         {
           "source": "frm2551Qv2018:zipCode",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:telNo",
@@ -318,7 +198,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtEmail",
@@ -330,19 +210,19 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:taxTreaty_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:taxTreaty_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtTaxReliefSpecify",
@@ -354,19 +234,19 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:taxRate1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:taxRate2",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt14",
@@ -378,7 +258,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt15",
@@ -390,7 +270,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt16",
@@ -402,7 +282,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt17Specify",
@@ -414,7 +294,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt17",
@@ -426,7 +306,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt18",
@@ -438,7 +318,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt19",
@@ -450,7 +330,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt20",
@@ -462,7 +342,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt21",
@@ -474,7 +354,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt22",
@@ -486,7 +366,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt23",
@@ -498,7 +378,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txt24",
@@ -510,19 +390,19 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:overPayment1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:overPayment2",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtTaxAgentNo",
@@ -534,7 +414,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtDateIssue",
@@ -546,7 +426,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtDateExpiry",
@@ -558,7 +438,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAgency25",
@@ -570,7 +450,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtNumber25",
@@ -582,7 +462,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtDate25",
@@ -594,7 +474,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAmount25",
@@ -606,7 +486,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAgency26",
@@ -618,7 +498,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtNumber26",
@@ -630,7 +510,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtDate26",
@@ -642,7 +522,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAmount26",
@@ -654,7 +534,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAgency27",
@@ -666,7 +546,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtNumber27",
@@ -678,7 +558,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtDate27",
@@ -690,7 +570,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAmount27",
@@ -702,7 +582,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtParticular28",
@@ -714,7 +594,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAgency28",
@@ -726,7 +606,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtNumber28",
@@ -738,7 +618,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtDate28",
@@ -750,7 +630,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtAmount28",
@@ -762,7 +642,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtPg2TIN1",
@@ -774,7 +654,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtPg2TIN2",
@@ -786,7 +666,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtPg2TIN3",
@@ -798,7 +678,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtPg2BranchCode",
@@ -810,7 +690,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtPg2TaxpayerName",
@@ -822,7 +702,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "drpATC1",
@@ -834,7 +714,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCAmt1",
@@ -846,7 +726,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCRate1",
@@ -858,7 +738,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCDue1",
@@ -870,7 +750,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "drpATC2",
@@ -882,7 +762,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCAmt2",
@@ -894,7 +774,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCRate2",
@@ -906,7 +786,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCDue2",
@@ -918,7 +798,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "drpATC3",
@@ -930,7 +810,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCAmt3",
@@ -942,7 +822,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCRate3",
@@ -954,7 +834,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCDue3",
@@ -966,7 +846,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "drpATC4",
@@ -978,7 +858,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCAmt4",
@@ -990,7 +870,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCRate4",
@@ -1002,7 +882,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCDue4",
@@ -1014,7 +894,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "drpATC5",
@@ -1026,7 +906,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCAmt5",
@@ -1038,7 +918,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCRate5",
@@ -1050,7 +930,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCDue5",
@@ -1062,7 +942,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "drpATC6",
@@ -1074,7 +954,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCAmt6",
@@ -1086,7 +966,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCRate6",
@@ -1098,7 +978,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtATCDue6",
@@ -1110,7 +990,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtTotalSched1",
@@ -1122,7 +1002,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtCurrentPage",
@@ -1134,7 +1014,7 @@
         }
       ],
       "default": "1",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "frm2551Qv2018:txtMaxPage",
@@ -1146,7 +1026,7 @@
         }
       ],
       "default": "2",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtFinalFlag",
@@ -1158,7 +1038,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "txtEnroll",
@@ -1170,7 +1050,7 @@
         }
       ],
       "default": "N",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "ebirOnlineConfirmUsername",
@@ -1182,7 +1062,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "ebirOnlineUsername",
@@ -1194,7 +1074,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "ebirOnlineSecret",
@@ -1206,7 +1086,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t"
+      "after": "\t\t"
     },
     {
       "key": "driveSelectTPExport",
@@ -1218,7 +1098,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t\n\t\tAll Rights Reserved BIR 2012.0"
+      "after": "\t\t\t\tAll Rights Reserved BIR 2012.0"
     }
   ]
 }

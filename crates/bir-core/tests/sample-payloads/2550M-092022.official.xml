@@ -9,10 +9,10 @@
             <div>frm2550m:txtTIN3=788frm2550m:txtTIN3=</div>	
             <div>frm2550m:txtBranchCode=00000frm2550m:txtBranchCode=</div>	
             <div>frm2550m:txtRDOCode=039frm2550m:txtRDOCode=</div>	
-            <div>frm2550m:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm2550m:txtLineBus=</div>	
-            <div>frm2550m:txtTaxPayerName=SAMPLE%20DUMMY%20TAXPAYERfrm2550m:txtTaxPayerName=</div>	
+            <div>frm2550m:txtLineBus=SAMPLE CONSULTING SERVICESfrm2550m:txtLineBus=</div>	
+            <div>frm2550m:txtTaxPayerName=SAMPLE DUMMY TAXPAYERfrm2550m:txtTaxPayerName=</div>	
             <div>frm2550m:txtTelephoneNum=09170000000frm2550m:txtTelephoneNum=</div>	
-            <div>frm2550m:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2550m:txtAddress=</div>	
+            <div>frm2550m:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2550m:txtAddress=</div>	
             <div>frm2550m:txtZipCode=1100frm2550m:txtZipCode=</div>	
             <div>frm2550m:OptSpecialTax1=falsefrm2550m:OptSpecialTax1=</div>	
             <div>frm2550m:OptSpecialTax2=truefrm2550m:OptSpecialTax2=</div>	

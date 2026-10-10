@@ -17,10 +17,10 @@
             <div>frm1606:txtTINS3=321frm1606:txtTINS3=</div>	
             <div>frm1606:txtBranchCodeS=00000frm1606:txtBranchCodeS=</div>	
             <div>frm1606:txtRDOCodeS=040frm1606:txtRDOCodeS=</div>	
-            <div>frm1606:txtBuyerName=SAMPLE%20DUMMY%20TAXPAYERfrm1606:txtBuyerName=</div>	
-            <div>frm1606:txtSellerName=DELA%20CRUZ%2C%20SAMPLE%20SELLERfrm1606:txtSellerName=</div>	
-            <div>frm1606:txtBuyerAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1606:txtBuyerAddress=</div>	
-            <div>frm1606:txtSellerAddress=456%20EXAMPLE%20AVENUE%2C%20MAKATI%20CITYfrm1606:txtSellerAddress=</div>	
+            <div>frm1606:txtBuyerName=SAMPLE DUMMY TAXPAYERfrm1606:txtBuyerName=</div>	
+            <div>frm1606:txtSellerName=DELA CRUZ, SAMPLE SELLERfrm1606:txtSellerName=</div>	
+            <div>frm1606:txtBuyerAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1606:txtBuyerAddress=</div>	
+            <div>frm1606:txtSellerAddress=456 EXAMPLE AVENUE, MAKATI CITYfrm1606:txtSellerAddress=</div>	
             <div>frm1606:txt13=WI155frm1606:txt13=</div>	
             <div>frm1606:optATC13_2=truefrm1606:optATC13_2=</div>	
             <div>frm1606:txt13C=WC155frm1606:txt13C=</div>	

@@ -11,8 +11,8 @@
             <div>frm2200M:txtPg1TIN4=00000frm2200M:txtPg1TIN4=</div>    
             <div>frm2200M:txtPg1I5RDO=039frm2200M:txtPg1I5RDO=</div>    
             <div>frm2200M:rdoPg1Pt1I6RDO=039frm2200M:rdoPg1Pt1I6RDO=</div>    
-            <div>frm2200M:txtPg1Pt1I6RegisteredName=SAMPLE%20DUMMY%20TAXPAYERfrm2200M:txtPg1Pt1I6RegisteredName=</div>    
-            <div>frm2200M:txtPg1Pt1I7RegisteredAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2200M:txtPg1Pt1I7RegisteredAddress=</div>    
+            <div>frm2200M:txtPg1Pt1I6RegisteredName=SAMPLE DUMMY TAXPAYERfrm2200M:txtPg1Pt1I6RegisteredName=</div>    
+            <div>frm2200M:txtPg1Pt1I7RegisteredAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2200M:txtPg1Pt1I7RegisteredAddress=</div>    
             <div>frm2200M:txtPg1Pt1I7RegisteredAddress2=frm2200M:txtPg1Pt1I7RegisteredAddress2=</div>    
             <div>frm2200M:txPg1I7ZipCode=1100frm2200M:txPg1I7ZipCode=</div>    
             <div>frm2200M:txtPg1Pt1I8ContactNumber=09170000000frm2200M:txtPg1Pt1I8ContactNumber=</div>    
@@ -75,9 +75,9 @@
             <div>frm2200M:txtSched1ATC1=XM010frm2200M:txtSched1ATC1=</div>    
             <div>frm2200M:txtSched1ATC2=XM010frm2200M:txtSched1ATC2=</div>    
             <div>frm2200M:txtSched1ATC3=XM010frm2200M:txtSched1ATC3=</div>    
-            <div>frm2200M:txtSched1Description1=Coal and Coke - January 1, 2018frm2200M:txtSched1Description1=</div>    
-            <div>frm2200M:txtSched1Description2=Coal and Coke - January 1, 2019frm2200M:txtSched1Description2=</div>    
-            <div>frm2200M:txtSched1Description3=Coal and Coke - January 1, 2020 and onwardsfrm2200M:txtSched1Description3=</div>    
+            <div>frm2200M:txtSched1Description1=COAL AND COKE - JANUARY 1, 2018frm2200M:txtSched1Description1=</div>    
+            <div>frm2200M:txtSched1Description2=COAL AND COKE - JANUARY 1, 2019frm2200M:txtSched1Description2=</div>    
+            <div>frm2200M:txtSched1Description3=COAL AND COKE - JANUARY 1, 2020 AND ONWARDSfrm2200M:txtSched1Description3=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval1=PASIG YARDfrm2200M:txtSched1_PlaceOfRemoval1=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval2=frm2200M:txtSched1_PlaceOfRemoval2=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval3=frm2200M:txtSched1_PlaceOfRemoval3=</div>    
@@ -100,7 +100,7 @@
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF2=frm2200M:txtSched1_LocallyExtractedTaxDueF2=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF3=frm2200M:txtSched1_LocallyExtractedTaxDueF3=</div>    
             <div>frm2200M:txtSched1ATC4=XM020frm2200M:txtSched1ATC4=</div>    
-            <div>frm2200M:txtSched1Description4=Non-metallic minerals and quarry resourcesfrm2200M:txtSched1Description4=</div>    
+            <div>frm2200M:txtSched1Description4=NON-METALLIC MINERALS AND QUARRY RESOURCESfrm2200M:txtSched1Description4=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval4=RIZAL QUARRYfrm2200M:txtSched1_PlaceOfRemoval4=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA4=frm2200M:txtSched1_VOMRITaxableA4=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB4=frm2200M:txtSched1_VOMRIExemptB4=</div>    
@@ -109,7 +109,7 @@
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateE4=4%frm2200M:txtSched1_LocallyExtractedTaxRateE4=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF4=40,000.00frm2200M:txtSched1_LocallyExtractedTaxDueF4=</div>    
             <div>frm2200M:txtSched1ATC5=XM030frm2200M:txtSched1ATC5=</div>    
-            <div>frm2200M:txtSched1Description5=Copper and other Metallic Mineralsfrm2200M:txtSched1Description5=</div>    
+            <div>frm2200M:txtSched1Description5=COPPER AND OTHER METALLIC MINERALSfrm2200M:txtSched1Description5=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval5=frm2200M:txtSched1_PlaceOfRemoval5=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA5=frm2200M:txtSched1_VOMRITaxableA5=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB5=frm2200M:txtSched1_VOMRIExemptB5=</div>    
@@ -118,7 +118,7 @@
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateE5=4%frm2200M:txtSched1_LocallyExtractedTaxRateE5=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF5=frm2200M:txtSched1_LocallyExtractedTaxDueF5=</div>    
             <div>frm2200M:txtSched1ATC6=XM040frm2200M:txtSched1ATC6=</div>    
-            <div>frm2200M:txtSched1Description6=Gold and Chromitefrm2200M:txtSched1Description6=</div>    
+            <div>frm2200M:txtSched1Description6=GOLD AND CHROMITEfrm2200M:txtSched1Description6=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval6=frm2200M:txtSched1_PlaceOfRemoval6=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA6=frm2200M:txtSched1_VOMRITaxableA6=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB6=frm2200M:txtSched1_VOMRIExemptB6=</div>    
@@ -127,7 +127,7 @@
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateE6=4%frm2200M:txtSched1_LocallyExtractedTaxRateE6=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF6=frm2200M:txtSched1_LocallyExtractedTaxDueF6=</div>    
             <div>frm2200M:txtSched1ATC7=XM050frm2200M:txtSched1ATC7=</div>    
-            <div>frm2200M:txtSched1Description7=Indegenous Petroleumfrm2200M:txtSched1Description7=</div>    
+            <div>frm2200M:txtSched1Description7=INDEGENOUS PETROLEUMfrm2200M:txtSched1Description7=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval7=frm2200M:txtSched1_PlaceOfRemoval7=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA7=frm2200M:txtSched1_VOMRITaxableA7=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB7=frm2200M:txtSched1_VOMRIExemptB7=</div>    
@@ -136,7 +136,7 @@
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateE7=6%frm2200M:txtSched1_LocallyExtractedTaxRateE7=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF7=frm2200M:txtSched1_LocallyExtractedTaxDueF7=</div>    
             <div>frm2200M:txtSched1ATC8=XM051frm2200M:txtSched1ATC8=</div>    
-            <div>frm2200M:txtSched1Description8=Natural Gas or Liquified Natural Gas (Locally extracted)frm2200M:txtSched1Description8=</div>    
+            <div>frm2200M:txtSched1Description8=NATURAL GAS OR LIQUIFIED NATURAL GAS (LOCALLY EXTRACTED)frm2200M:txtSched1Description8=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval8=frm2200M:txtSched1_PlaceOfRemoval8=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA8=frm2200M:txtSched1_VOMRITaxableA8=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB8=frm2200M:txtSched1_VOMRIExemptB8=</div>    
@@ -241,7 +241,7 @@
             <div>frm2200M:txtSched1_TotalTaxDue10=frm2200M:txtSched1_TotalTaxDue10=</div>    
             <div>frm2200M:TotalExciseTaxDue=101,853.37frm2200M:TotalExciseTaxDue=</div>    
             <div>frm2200M:sched1AddedRowCount=0frm2200M:sched1AddedRowCount=</div>    
-            <div>frm2200M:txtLOB=Sample Consulting Servicesfrm2200M:txtLOB=</div>    
+            <div>frm2200M:txtLOB=SAMPLE CONSULTING SERVICESfrm2200M:txtLOB=</div>    
             <div>frm2200M:txtCurrentPage=1frm2200M:txtCurrentPage=</div>    
             <div>frm2200M:txtMaxPage=2frm2200M:txtMaxPage=</div>    
             <div>driveSelectTPExport=0driveSelectTPExport=</div>    

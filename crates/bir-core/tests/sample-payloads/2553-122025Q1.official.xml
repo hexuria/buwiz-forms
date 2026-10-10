@@ -15,10 +15,10 @@
             <div>frm2553:txtTIN3=788frm2553:txtTIN3=</div>	
             <div>frm2553:txtBranchCode=00000frm2553:txtBranchCode=</div>	
             <div>frm2553:txtRDOCode=039frm2553:txtRDOCode=</div>	
-            <div>frm2553:txtDescription=SAMPLE%20CONSULTING%20SERVICESfrm2553:txtDescription=</div>	
-            <div>frm2553:txtTPName=SAMPLE%20DUMMY%20TAXPAYERfrm2553:txtTPName=</div>	
+            <div>frm2553:txtDescription=SAMPLE CONSULTING SERVICESfrm2553:txtDescription=</div>	
+            <div>frm2553:txtTPName=SAMPLE DUMMY TAXPAYERfrm2553:txtTPName=</div>	
             <div>frm2553:txtTelNum=09170000000frm2553:txtTelNum=</div>	
-            <div>frm2553:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2553:txtAddress=</div>	
+            <div>frm2553:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2553:txtAddress=</div>	
             <div>frm2553:txtZipCode=1100frm2553:txtZipCode=</div>	
             <div>frm2553:optTreaty_1=truefrm2553:optTreaty_1=</div>	
             <div>frm2553:optTreaty_2=falsefrm2553:optTreaty_2=</div>	

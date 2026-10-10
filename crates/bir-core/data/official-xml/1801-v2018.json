@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1801-v2018",
-  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
+  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
   "official_hta": "BIR-Form1801v2018.hta",
   "official_hta_sha256": "d19c4ebe40ed109094ef43687ed5486a003bd11a67a251bdd5545a41c2f46d8d",
   "header": "<?xml version='1.0'?>",
-  "lead": "\n\t",
+  "lead": "\t",
   "value_rules": [],
   "entries": [
     {
@@ -17,8 +17,8 @@
           "codec": "raw"
         }
       ],
-      "default": "01",
-      "after": "\n\t"
+      "default": "",
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtDateDay",
@@ -29,8 +29,8 @@
           "codec": "raw"
         }
       ],
-      "default": "01",
-      "after": "\n\t"
+      "default": "",
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtDateYear",
@@ -41,20 +41,20 @@
           "codec": "raw"
         }
       ],
-      "default": "2000",
-      "after": "\n\t"
+      "default": "",
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:amendedRtn_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:amendedRtn_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtSheets",
@@ -66,7 +66,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtAtc",
@@ -78,7 +78,7 @@
         }
       ],
       "default": "ES 010",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:tinA_1",
@@ -90,7 +90,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:tinB_1",
@@ -102,7 +102,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:tinC_1",
@@ -114,7 +114,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:branchCode_1",
@@ -126,7 +126,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtRDOCode_1",
@@ -137,8 +137,8 @@
           "codec": "raw"
         }
       ],
-      "default": "",
-      "after": "\n\t"
+      "default": "000",
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:registeredName_1",
@@ -150,7 +150,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:registeredAddress_1",
@@ -162,19 +162,19 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:categoryNonResident_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:categoryNonResident_2",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:adminName",
@@ -186,7 +186,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTINE1",
@@ -198,7 +198,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTINE2",
@@ -210,7 +210,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTINE3",
@@ -222,7 +222,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtBranchCodeE",
@@ -234,7 +234,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:telephoneNumber",
@@ -246,7 +246,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtEmail",
@@ -258,19 +258,19 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:optTreaty_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:optTreaty_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:treatyY",
@@ -282,79 +282,79 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:fileGranted_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:fileGranted_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:instGranted_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:instGranted_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:settled_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:settled_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:extGranted_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:extGranted_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:freq_Mon",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:freq_Qtr",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:freq_Semi",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:freq_Other",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:freqOtherInput",
@@ -366,7 +366,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxableEstate",
@@ -378,7 +378,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxRate",
@@ -389,8 +389,8 @@
           "codec": "raw"
         }
       ],
-      "default": "NaN%",
-      "after": "\n\t"
+      "default": "0%",
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtEstTaxDue",
@@ -402,7 +402,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtCredits_ForeignEst",
@@ -414,7 +414,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtCredits_TaxPrev",
@@ -426,7 +426,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtCredits_Tot",
@@ -438,7 +438,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxPayable",
@@ -450,7 +450,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtInstallmentYear",
@@ -462,7 +462,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtInstallment",
@@ -474,7 +474,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxPayable_1st",
@@ -486,7 +486,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPen_Surcharge",
@@ -498,7 +498,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPen_Interest",
@@ -510,7 +510,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPen_Compromise",
@@ -522,7 +522,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPen_Tot",
@@ -534,7 +534,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTotPayable",
@@ -546,7 +546,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:cashBank",
@@ -558,7 +558,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:cashNum",
@@ -570,7 +570,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:cashDate",
@@ -582,7 +582,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:cashAmt",
@@ -594,7 +594,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:checkBank",
@@ -606,7 +606,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:checkNum",
@@ -618,7 +618,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:checkDate",
@@ -630,7 +630,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:checkAmt",
@@ -642,7 +642,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018taxkNum",
@@ -654,7 +654,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:taxDate",
@@ -666,7 +666,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:taxAmt",
@@ -678,7 +678,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:othersDetails",
@@ -690,7 +690,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:othersBank",
@@ -702,7 +702,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:othersNum",
@@ -714,7 +714,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:othersDate",
@@ -726,7 +726,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:othersAmt",
@@ -738,7 +738,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:tinA_2",
@@ -750,7 +750,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:tinB_2",
@@ -762,7 +762,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:tinC_2",
@@ -774,7 +774,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:branchCode_2",
@@ -786,7 +786,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:registeredName_2",
@@ -798,7 +798,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtRealProp_A",
@@ -810,7 +810,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtRealProp_B",
@@ -822,7 +822,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtRealProp_C",
@@ -834,7 +834,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtFam_A",
@@ -846,7 +846,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtFam_B",
@@ -858,7 +858,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtFam_C",
@@ -870,7 +870,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPersonalProp_A",
@@ -882,7 +882,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPersonalProp_B",
@@ -894,7 +894,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtPersonalProp_C",
@@ -906,7 +906,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxable_A",
@@ -918,7 +918,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxable_B",
@@ -930,7 +930,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTaxable_C",
@@ -942,7 +942,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtBusiness_A",
@@ -954,7 +954,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtBusiness_B",
@@ -966,7 +966,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtBusiness_C",
@@ -978,7 +978,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtGrossEst_A",
@@ -990,7 +990,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtGrossEst_B",
@@ -1002,7 +1002,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtGrossEst_C",
@@ -1014,7 +1014,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtOrdDed_A",
@@ -1026,7 +1026,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtOrdDed_B",
@@ -1038,7 +1038,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtOrdDed_C",
@@ -1050,7 +1050,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtEstAfterDed_A",
@@ -1062,7 +1062,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtEstAfterDed_B",
@@ -1074,7 +1074,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtEstAfterDed_C",
@@ -1086,7 +1086,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtStandardDed_C",
@@ -1098,7 +1098,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtFamDed_C",
@@ -1110,7 +1110,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtOtherDed_Specify",
@@ -1122,7 +1122,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtOtherDed_C",
@@ -1134,7 +1134,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtTotalDed_C",
@@ -1146,7 +1146,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtNetEst_C",
@@ -1158,7 +1158,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtShareSpouse_C",
@@ -1170,7 +1170,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtNetTaxEst_C",
@@ -1182,247 +1182,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Oct_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Oct_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Td_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Td_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Loc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Loc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Lot_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Lot_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Area_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Area_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Class_1'",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Class_1'",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Oct_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Oct_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Td_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Td_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Loc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Loc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Lot_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Lot_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Area_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Area_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Class_2'",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Class_2'",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Fmv_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Fmv_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Zonal_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Zonal_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Exc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Exc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Conj_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Conj_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Fmv_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Fmv_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Zonal_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Zonal_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Exc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Exc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1Conj_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1Conj_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched1Exc_Total",
@@ -1434,7 +1194,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched1Conj_Total",
@@ -1446,223 +1206,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AOct_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AOct_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1ATd_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1ATd_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1ALoc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1ALoc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AArea_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AArea_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AClass_1'",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AClass_1'",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AFmv_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AFmv_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AZonal_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AZonal_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AExc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AExc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AConj_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AConj_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AOct_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AOct_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1ATd_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1ATd_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1ALoc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1ALoc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AArea_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AArea_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AClass_2'",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AClass_2'",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AFmv_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AFmv_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AZonal_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AZonal_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AExc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AExc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched1AConj_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched1AConj_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched1AExc_Total",
@@ -1674,7 +1218,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched1AConj_Total",
@@ -1686,175 +1230,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Corp_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Corp_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Class_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Class_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Stock_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Stock_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Shares_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Shares_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2FmvPerShare_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2FmvPerShare_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Exc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Exc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Conj_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Conj_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Corp_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Corp_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Class_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Class_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Stock_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Stock_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Shares_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Shares_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2FmvPerShare_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2FmvPerShare_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Exc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Exc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2Conj_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2Conj_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched2Exc_Total",
@@ -1866,7 +1242,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched2Conj_Total",
@@ -1878,79 +1254,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2AParticulars_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2AParticulars_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2AExc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2AExc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2AConj_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2AConj_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2AParticulars_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2AParticulars_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2AExc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2AExc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched2AConj_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched2AConj_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched2AExc_Total",
@@ -1962,7 +1266,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched2AConj_Total",
@@ -1974,79 +1278,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched3Particulars_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched3Particulars_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched3Exc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched3Exc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched3Conj_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched3Conj_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched3Particulars_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched3Particulars_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched3Exc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched3Exc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched3Conj_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched3Conj_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched3Exc_Total",
@@ -2058,7 +1290,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched3Conj_Total",
@@ -2070,127 +1302,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Name_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Name_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Address_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Address_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Rdo_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Rdo_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "000",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Exc_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Exc_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Conj_1",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Conj_1",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Name_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Name_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Address_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Address_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Rdo_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Rdo_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "000",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Exc_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Exc_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
-    },
-    {
-      "key": "frm1801v2018:sched4Conj_2",
-      "kind": "value",
-      "parts": [
-        {
-          "source": "frm1801v2018:sched4Conj_2",
-          "codec": "raw"
-        }
-      ],
-      "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched4Exc_Total",
@@ -2202,7 +1314,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched4Conj_Total",
@@ -2214,7 +1326,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5EstateExc",
@@ -2226,7 +1338,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5EstateConj",
@@ -2238,7 +1350,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5InsolventExc",
@@ -2250,7 +1362,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5InsolventConj",
@@ -2262,7 +1374,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5UnpaidExc",
@@ -2274,7 +1386,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5UnpaidConj",
@@ -2286,7 +1398,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5LossesExc",
@@ -2298,7 +1410,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5LossesConj",
@@ -2310,7 +1422,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5VanishingExc",
@@ -2322,7 +1434,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5VanishingConj",
@@ -2334,7 +1446,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5TransferExc",
@@ -2346,7 +1458,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5TransferConj",
@@ -2358,7 +1470,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5Others_Specify",
@@ -2370,7 +1482,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5OthersExc",
@@ -2382,7 +1494,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5OthersConj",
@@ -2394,7 +1506,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5Exc_Total",
@@ -2406,7 +1518,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:sched5Conj_Total",
@@ -2418,7 +1530,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t"
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtCurrentPage",
@@ -2429,8 +1541,8 @@
           "codec": "raw"
         }
       ],
-      "default": "1",
-      "after": "\n\t"
+      "default": "",
+      "after": "\t"
     },
     {
       "key": "frm1801v2018:txtMaxPage",
@@ -2442,7 +1554,7 @@
         }
       ],
       "default": "2",
-      "after": "\n\t\n\tAll Rights Reserved BIR 2012.0"
+      "after": "\t\tAll Rights Reserved BIR 2012.0"
     }
   ]
 }

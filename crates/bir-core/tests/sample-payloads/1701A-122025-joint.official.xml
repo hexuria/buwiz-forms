@@ -16,8 +16,9 @@
             <div>frm1701A:optATC_2=falsefrm1701A:optATC_2=</div>  
             <div>frm1701A:optATC_3=falsefrm1701A:optATC_3=</div>  
             <div>frm1701A:optATC_4=falsefrm1701A:optATC_4=</div>  
-            <div>frm1701A:txtTaxpayerName=DUMMY%2C%20SAMPLE%20TAXPAYERfrm1701A:txtTaxpayerName=</div>  
-            <div>frm1701A:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1701A:txtAddress=</div>  
+            <div>frm1701A:txtTaxpayerName=DUMMY, SAMPLE TAXPAYERfrm1701A:txtTaxpayerName=</div>  
+            <div>frm1701A:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1701A:txtAddress=</div>  
+            <div>frm1701A:txtAddress2=frm1701A:txtAddress2=</div>  
             <div>frm1701A:txtZipCode=1100frm1701A:txtZipCode=</div>  
             <div>frm1701A:txtBirthDate=01/15/1980frm1701A:txtBirthDate=</div>  
             <div>txtEmail=sample.taxpayer@example.comtxtEmail=</div>  
@@ -168,7 +169,7 @@
             <div>frm1701A:optSpouseTaxRate_2=truefrm1701A:optSpouseTaxRate_2=</div>  
             <div>frm1701A:txtCurrentPage=1frm1701A:txtCurrentPage=</div>  
             <div>frm1701A:txtMaxPage=2frm1701A:txtMaxPage=</div>  
-            <div>frm1701A:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm1701A:txtLineBus=</div>  
+            <div>frm1701A:txtLineBus=SAMPLE CONSULTING SERVICESfrm1701A:txtLineBus=</div>  
             <div>frm1701A:txtCtrmodalPartIVA=0frm1701A:txtCtrmodalPartIVA=</div>  
             <div>frm1701A:txtCtrmodalPartIVB=0frm1701A:txtCtrmodalPartIVB=</div>  
             <div>frm1701A:txtZIP=frm1701A:txtZIP=</div>  

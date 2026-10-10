@@ -9,15 +9,17 @@
             <div>frm2000:txtTIN3=788frm2000:txtTIN3=</div>    
             <div>frm2000:txtBranchCode=00000frm2000:txtBranchCode=</div>    
             <div>frm2000:txtRDOCode=039frm2000:txtRDOCode=</div>    
-            <div>frm2000:txtTaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm2000:txtTaxpayerName=</div>    
-            <div>frm2000:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2000:txtAddress=</div>    
+            <div>frm2000:txtTaxpayerName=SAMPLE DUMMY TAXPAYERfrm2000:txtTaxpayerName=</div>    
+            <div>frm2000:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2000:txtAddress=</div>    
+            <div>frm2000:txtAddress2=frm2000:txtAddress2=</div>    
             <div>frm2000:txtZipCode=1100frm2000:txtZipCode=</div>    
             <div>frm2000:txtTelNum=09170000000frm2000:txtTelNum=</div>    
             <div>txtEmail=sample.taxpayer@example.comtxtEmail=</div>    
             <div>frm2000:optParty_1=truefrm2000:optParty_1=</div>    
             <div>frm2000:optParty_2=falsefrm2000:optParty_2=</div>    
             <div>frm2000:optParty_3=falsefrm2000:optParty_3=</div>    
-            <div>frm2000:txtOtherName=SAMPLE%20CREDITOR%20CORPfrm2000:txtOtherName=</div>    
+            <div>frm2000:txtOtherName=SAMPLE CREDITOR CORPfrm2000:txtOtherName=</div>    
+            <div>frm2000:txtOtherName2=frm2000:txtOtherName2=</div>    
             <div>frm2000:txtOtherTIN=987654321000frm2000:txtOtherTIN=</div>    
             <div>frm2000:optMode_1=falsefrm2000:optMode_1=</div>    
             <div>frm2000:optMode_2=truefrm2000:optMode_2=</div>    
@@ -141,6 +143,6 @@
             <div>ds132modYes=falseds132modYes=</div>    
             <div>ds132modNo=falseds132modNo=</div>    
             <div>frm2000:numOfMonths132=0frm2000:numOfMonths132=</div>    
-            <div>frm2000:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm2000:txtLineBus=</div>    
+            <div>frm2000:txtLineBus=SAMPLE CONSULTING SERVICESfrm2000:txtLineBus=</div>    
                 
             All Rights Reserved BIR 2012.0

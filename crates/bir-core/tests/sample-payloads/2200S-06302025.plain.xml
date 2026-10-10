@@ -10,11 +10,11 @@
             <div>frm2200S:txtTIN3=788frm2200S:txtTIN3=</div>	
             <div>frm2200S:txtBranchCode=00000frm2200S:txtBranchCode=</div>	
             <div>frm2200S:txtRDOCode=039frm2200S:txtRDOCode=</div>	
-            <div>frm2200S:taxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm2200S:taxpayerName=</div>	
-            <div>frm2200S:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2200S:txtAddress=</div>	
+            <div>frm2200S:taxpayerName=SAMPLE DUMMY TAXPAYERfrm2200S:taxpayerName=</div>	
+            <div>frm2200S:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2200S:txtAddress=</div>	
             <div>frm2200S:txtZipCode=1100frm2200S:txtZipCode=</div>	
             <div>frm2200S:txtTelNum=09170000000frm2200S:txtTelNum=</div>	
-            <div>frm2200S:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm2200S:txtLineBus=</div>	
+            <div>frm2200S:txtLineBus=SAMPLE CONSULTING SERVICESfrm2200S:txtLineBus=</div>	
             <div>frm2200S:txtPSIC=1104frm2200S:txtPSIC=</div>	
             <div>txtEmail=sample.taxpayer@example.comtxtEmail=</div>	
             <div>frm2200SoptRegion=130000000frm2200SoptRegion=</div>	

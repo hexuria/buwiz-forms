@@ -183,14 +183,13 @@ function prepare(html) {
   }
   // Some getRdo() bodies give the #rdoSelect select another id (2200Tv2020,
   // 2200Av2020: '…:rdoCode'); the submit loop writes that id.
-  const rdoSelectSrc = functionSource('getRdo', [html]) || '';
+  const rdoSelectSrc = optionalFunctionSource('getRdo', html) || '';
   const rdoSelectId = /<select[^>]*?id='([^']+)'/.exec(rdoSelectSrc);
   if (rdoCell && rdoSelectId && /#rdoSelect['"]\)\.html/.test(rdoSelectSrc) && !doc.getElementById(rdoSelectId[1])) {
     rdoCell.innerHTML = `<select id='${rdoSelectId[1]}' name='${rdoSelectId[1]}' size='1'><option value='000'> </option></select>`;
   }
   // Other forms' getRdo() injects its own <select id='…'> into div#rdoContainer
   // (2552v2018: frm2552:rdoPg1Pt1I5RDO); the submit loop writes it too.
-  const rdoContainer = doc.getElementById('rdoContainer');
   const injected = /function\s+getRdo\s*\([^)]*\)\s*\{[^}]*?<select id='([^']+)'/.exec(html);
   if (rdoContainer && injected && !doc.getElementById(injected[1])) {
     rdoContainer.innerHTML = `<select id='${injected[1]}' name='${injected[1]}' size='1'><option value='000'>000</option></select>`;

@@ -17,16 +17,17 @@
             <div>frm1702MX:txtPg1TINMASK=00000frm1702MX:txtPg1TINMASK=</div>	
             <div>frm1702MX:txtPg1Pt1I7RDO=039frm1702MX:txtPg1Pt1I7RDO=</div>	
             <div>frm1702MX:drpPg1Pt1I7RDO=039frm1702MX:drpPg1Pt1I7RDO=</div>	
-            <div>frm1702MX:txtPg1Pt1I9RegisteredName=SAMPLE%20DUMMY%20TAXPAYERfrm1702MX:txtPg1Pt1I9RegisteredName=</div>	
+            <div>frm1702MX:rdoPg1Pt1I7RDO=000frm1702MX:rdoPg1Pt1I7RDO=</div>	
+            <div>frm1702MX:txtPg1Pt1I9RegisteredName=SAMPLE DUMMY TAXPAYERfrm1702MX:txtPg1Pt1I9RegisteredName=</div>	
             <div>frm1702MX:txtPg1Pt1I9RegisteredName2=frm1702MX:txtPg1Pt1I9RegisteredName2=</div>	
             <div>frm1702MX:txtPg1Pt1I9RegisteredName3=frm1702MX:txtPg1Pt1I9RegisteredName3=</div>	
-            <div>frm1702MX:txtPg1Pt1I10RegisteredAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1702MX:txtPg1Pt1I10RegisteredAddress=</div>	
+            <div>frm1702MX:txtPg1Pt1I10RegisteredAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1702MX:txtPg1Pt1I10RegisteredAddress=</div>	
             <div>frm1702MX:txtPg1Pt1I10RegisteredAddress2=frm1702MX:txtPg1Pt1I10RegisteredAddress2=</div>	
             <div>frm1702MX:txtPg1Pt1I10RegisteredAddress3=frm1702MX:txtPg1Pt1I10RegisteredAddress3=</div>	
             <div>frm1702MX:txtZIP=1100frm1702MX:txtZIP=</div>	
             <div>frm1702MX:txtPg1Pt1I8=01/15/2015frm1702MX:txtPg1Pt1I8=</div>	
             <div>frm1702MX:txtPg1Pt1I11ContactNumber=09170000000frm1702MX:txtPg1Pt1I11ContactNumber=</div>	
-            <div>frm1702MX:txtPg1Pt1I12Email=SAMPLE.TAXPAYER@EXAMPLE.COMfrm1702MX:txtPg1Pt1I12Email=</div>	
+            <div>frm1702MX:txtPg1Pt1I12Email=sample.taxpayer@example.comfrm1702MX:txtPg1Pt1I12Email=</div>	
             <div>frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized=truefrm1702MX:rdoPg1Pt1I13MethodOfDeducItemized=</div>	
             <div>frm1702MX:rdoPg1Pt1I13MethodOfDeducOptional=falsefrm1702MX:rdoPg1Pt1I13MethodOfDeducOptional=</div>	
             <div>frm1702MX:txtPg1Pt2I14TotalIncome=635125frm1702MX:txtPg1Pt2I14TotalIncome=</div>	

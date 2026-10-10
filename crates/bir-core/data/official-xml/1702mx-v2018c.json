@@ -6,7 +6,12 @@
   "official_hta_sha256": "34dbe79d6bf934718e86c73d8fdea4eb4a4e6a86c939ab0ecf231282d744acf7",
   "header": "<?xml version='1.0'?>",
   "lead": "\t\n            ",
-  "value_rules": [],
+  "value_rules": [
+    {
+      "probe": "0.00",
+      "issue": "div count 587 vs 204"
+    }
+  ],
   "entries": [
     {
       "key": "frm1702MX:rdoPg1I1Calendar",
@@ -101,7 +106,8 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I6TINC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -113,7 +119,8 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I6TINC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -125,7 +132,8 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I6TINC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -137,7 +145,8 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I6TINC4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -170,12 +179,25 @@
       "after": "\t\n            "
     },
     {
+      "key": "frm1702MX:rdoPg1Pt1I7RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1702MX:rdoPg1Pt1I7RDO",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "000",
+      "after": "\t\n            "
+    },
+    {
       "key": "frm1702MX:txtPg1Pt1I9RegisteredName",
       "kind": "value",
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I9RegisteredName",
-          "codec": "js-escape",
+          "codec": "raw",
           "uppercase": true
         }
       ],
@@ -214,7 +236,7 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I10RegisteredAddress",
-          "codec": "js-escape",
+          "codec": "raw",
           "uppercase": true
         }
       ],
@@ -253,7 +275,8 @@
       "parts": [
         {
           "source": "frm1702MX:txtZIP",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -278,7 +301,8 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I11ContactNumber",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -290,8 +314,7 @@
       "parts": [
         {
           "source": "frm1702MX:txtPg1Pt1I12Email",
-          "codec": "raw",
-          "uppercase": true
+          "codec": "js-escape"
         }
       ],
       "default": "",

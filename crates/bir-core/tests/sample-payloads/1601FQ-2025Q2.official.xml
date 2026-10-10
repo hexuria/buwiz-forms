@@ -14,8 +14,9 @@
             <div>frm1601FQ:txtTIN3=788frm1601FQ:txtTIN3=</div>	
             <div>frm1601FQ:txtBranchCode=00000frm1601FQ:txtBranchCode=</div>	
             <div>frm1601FQ:txtRDOCode=039frm1601FQ:txtRDOCode=</div>	
-            <div>frm1601FQ:txtTaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm1601FQ:txtTaxpayerName=</div>	
-            <div>frm1601FQ:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1601FQ:txtAddress=</div>	
+            <div>frm1601FQ:txtTaxpayerName=SAMPLE DUMMY TAXPAYERfrm1601FQ:txtTaxpayerName=</div>	
+            <div>frm1601FQ:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1601FQ:txtAddress=</div>	
+            <div>frm1601FQ:txtAddress2=frm1601FQ:txtAddress2=</div>	
             <div>frm1601FQ:txtZipCode=1100frm1601FQ:txtZipCode=</div>	
             <div>frm1601FQ:txtTelNum=09170000000frm1601FQ:txtTelNum=</div>	
             <div>frm1601FQ:CatAgent_P=truefrm1601FQ:CatAgent_P=</div>	
@@ -166,7 +167,7 @@
             <div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>	
             <div>ebirOnlineUsername=ebirOnlineUsername=</div>	
             <div>ebirOnlineSecret=ebirOnlineSecret=</div>	
-            <div>frm1601FQ:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm1601FQ:txtLineBus=</div>	
+            <div>frm1601FQ:txtLineBus=SAMPLE CONSULTING SERVICESfrm1601FQ:txtLineBus=</div>	
             <div>driveSelectTPExport=0driveSelectTPExport=</div>	
             	
             All Rights Reserved BIR 2012.0

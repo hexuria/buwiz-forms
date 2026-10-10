@@ -21,8 +21,9 @@
             <div>frm1701q:optATC_4=falsefrm1701q:optATC_4=</div>	
             <div>frm1701q:optATC_5=falsefrm1701q:optATC_5=</div>	
             <div>frm1701q:optATC_6=falsefrm1701q:optATC_6=</div>	
-            <div>frm1701q:txtTaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm1701q:txtTaxpayerName=</div>	
-            <div>frm1701q:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1701q:txtAddress=</div>	
+            <div>frm1701q:txtTaxpayerName=SAMPLE DUMMY TAXPAYERfrm1701q:txtTaxpayerName=</div>	
+            <div>frm1701q:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1701q:txtAddress=</div>	
+            <div>frm1701q:txtAddress2=frm1701q:txtAddress2=</div>	
             <div>frm1701q:txtZipCode=1100frm1701q:txtZipCode=</div>	
             <div>frm1701q:txtBirthMonth=05frm1701q:txtBirthMonth=</div>	
             <div>frm1701q:txtBirthDay=17frm1701q:txtBirthDay=</div>	
@@ -41,6 +42,7 @@
             <div>frm1701q:txtSpouseTIN3=321frm1701q:txtSpouseTIN3=</div>	
             <div>frm1701q:txtSpouseBranchCode=00000frm1701q:txtSpouseBranchCode=</div>	
             <div>frm1701q:txtSpouseRDOCode=040frm1701q:txtSpouseRDOCode=</div>	
+            <div>frm1701q:txtSpouseRDOCode=000frm1701q:txtSpouseRDOCode=</div>	
             <div>frm1701q:optSpouseType_1=truefrm1701q:optSpouseType_1=</div>	
             <div>frm1701q:optSpouseType_2=falsefrm1701q:optSpouseType_2=</div>	
             <div>frm1701q:optSpouseType_3=falsefrm1701q:optSpouseType_3=</div>	
@@ -161,14 +163,14 @@
             <div>frm1701q:txt67B=500.00frm1701q:txt67B=</div>	
             <div>frm1701q:txt68A=96,308.00frm1701q:txt68A=</div>	
             <div>frm1701q:txt68B=50,688.00frm1701q:txt68B=</div>	
-            <div>frm1701q:txtCurrentPage=1frm1701q:txtCurrentPage=</div>	
+            <div>frm1701q:txtCurrentPage=frm1701q:txtCurrentPage=</div>	
             <div>frm1701q:txtMaxPage=2frm1701q:txtMaxPage=</div>	
             <div>txtFinalFlag=0txtFinalFlag=</div>	
             <div>txtEnroll=NtxtEnroll=</div>	
             <div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>	
             <div>ebirOnlineUsername=ebirOnlineUsername=</div>	
             <div>ebirOnlineSecret=ebirOnlineSecret=</div>	
-            <div>frm1701q:txtLOB=SAMPLE%20CONSULTING%20SERVICESfrm1701q:txtLOB=</div>	
+            <div>frm1701q:txtLOB=SAMPLE CONSULTING SERVICESfrm1701q:txtLOB=</div>	
             <div>frm1701q:txtTelno=09170000000frm1701q:txtTelno=</div>	
             <div>driveSelectTPExport=0driveSelectTPExport=</div>	
             	

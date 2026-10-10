@@ -122,7 +122,7 @@
       "parts": [
         {
           "source": "frm2550m:txtLineBus",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -134,7 +134,7 @@
       "parts": [
         {
           "source": "frm2550m:txtTaxPayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -158,7 +158,7 @@
       "parts": [
         {
           "source": "frm2550m:txtAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -846,222 +846,6 @@
         }
       ],
       "default": "0.00",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode1",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode2",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode3",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode4",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode5",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode6",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode7",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode8",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode9",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode10",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode11",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode12",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode13",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode14",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode15",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode16",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode17",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode18",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode19",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode20",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode21",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode22",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode23",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode24",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode25",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode26",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode27",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode28",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode29",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode30",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode31",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode32",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode33",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode34",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode35",
-      "kind": "bool",
-      "default": "false",
-      "after": "\t\n            "
-    },
-    {
-      "key": "AtcCode36",
-      "kind": "bool",
-      "default": "false",
       "after": "\t\n            "
     },
     {

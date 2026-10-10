@@ -8,8 +8,9 @@
             <div>frm1604e:txtTIN3=788frm1604e:txtTIN3=</div>    
             <div>frm1604e:txtBranchCode=00000frm1604e:txtBranchCode=</div>    
             <div>frm1604e:txtRDOCode=039frm1604e:txtRDOCode=</div>    
-            <div>frm1604e:txtWthhldngAgntsNme=Sample%20Dummy%20Taxpayerfrm1604e:txtWthhldngAgntsNme=</div>    
-            <div>frm1604e:txtAddress=123%20Sample%20Street%2C%20Barangay%20Example%2C%20Quezon%20Cityfrm1604e:txtAddress=</div>    
+            <div>frm1604e:txtWthhldngAgntsNme=Sample Dummy Taxpayerfrm1604e:txtWthhldngAgntsNme=</div>    
+            <div>frm1604e:txtAddress=123 Sample Street, Barangay Example, Quezon Cityfrm1604e:txtAddress=</div>    
+            <div>frm1604e:txtAddress2=frm1604e:txtAddress2=</div>    
             <div>frm1604e:txtZipCode=1100frm1604e:txtZipCode=</div>    
             <div>frm1604e:WthldngAgntCtgry_1=truefrm1604e:WthldngAgntCtgry_1=</div>    
             <div>frm1604e:WthldngAgntCtgry_2=falsefrm1604e:WthldngAgntCtgry_2=</div>    
@@ -126,7 +127,7 @@
             <div>frm1604e:txtPg2TaxpayerName=Sample Dummy Taxpayerfrm1604e:txtPg2TaxpayerName=</div>    
             <div>frm1604e:txtCurrentPage=1frm1604e:txtCurrentPage=</div>    
             <div>frm1604e:txtMaxPage=2frm1604e:txtMaxPage=</div>    
-            <div>frm1604e:txtLineBus=Sample%20Consulting%20Servicesfrm1604e:txtLineBus=</div>    
+            <div>frm1604e:txtLineBus=Sample Consulting Servicesfrm1604e:txtLineBus=</div>    
             <div>txtFinalFlag=0txtFinalFlag=</div>    
             <div>txtEnroll=NtxtEnroll=</div>    
             <div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>    
