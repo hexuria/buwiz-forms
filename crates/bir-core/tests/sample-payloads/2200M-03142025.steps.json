@@ -19,48 +19,37 @@
   "value": "2"
  },
  {
-  "set": "frm2200M:txtPg1TIN1",
-  "value": "123"
+  "call": "document.getElementById('frm2200M:txtPg1TIN1').value = \"123\""
  },
  {
-  "set": "frm2200M:txtPg1TIN2",
-  "value": "456"
+  "call": "document.getElementById('frm2200M:txtPg1TIN2').value = \"456\""
  },
  {
-  "set": "frm2200M:txtPg1TIN3",
-  "value": "788"
+  "call": "document.getElementById('frm2200M:txtPg1TIN3').value = \"788\""
  },
  {
-  "set": "frm2200M:txtPg1TIN4",
-  "value": "00000"
+  "call": "document.getElementById('frm2200M:txtPg1TIN4').value = \"00000\""
  },
  {
-  "set": "frm2200M:txtPg1I5RDO",
-  "value": "039"
+  "call": "document.getElementById('frm2200M:txtPg1I5RDO').value = \"039\""
  },
  {
-  "set": "frm2200M:rdoPg1Pt1I6RDO",
-  "value": "039"
+  "call": "var s = document.getElementById('frm2200M:rdoPg1Pt1I6RDO'); s.innerHTML = \"<option value='000'>000</option><option value='039'>039</option>\"; s.value = '039'"
  },
  {
-  "set": "frm2200M:txtPg1Pt1I6RegisteredName",
-  "value": "Sample Dummy Taxpayer"
+  "call": "document.getElementById('frm2200M:txtPg1Pt1I6RegisteredName').value = \"SAMPLE DUMMY TAXPAYER\""
  },
  {
-  "set": "frm2200M:txtPg1Pt1I7RegisteredAddress",
-  "value": "123 Sample Street, Barangay Example, Quezon City"
+  "call": "document.getElementById('frm2200M:txtPg1Pt1I7RegisteredAddress').value = \"123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITY\""
  },
  {
-  "set": "frm2200M:txPg1I7ZipCode",
-  "value": "1100"
+  "call": "document.getElementById('frm2200M:txPg1I7ZipCode').value = \"1100\""
  },
  {
-  "set": "frm2200M:txtPg1Pt1I8ContactNumber",
-  "value": "09170000000"
+  "call": "document.getElementById('frm2200M:txtPg1Pt1I8ContactNumber').value = \"09170000000\""
  },
  {
-  "set": "frm2200M:txtPg1Pt1I9Email",
-  "value": "sample.taxpayer@example.com"
+  "call": "document.getElementById('frm2200M:txtPg1Pt1I9Email').value = \"sample.taxpayer@example.com\""
  },
  {
   "set": "frm2200M:txtPg1Pt1I10Region",
@@ -124,28 +113,19 @@
   "value": "1000"
  },
  {
-  "set": "frm2200M:txtPg1P3I23ATaxPmntDposit",
-  "value": "100718.8"
+  "call": "document.getElementById('frm2200M:txtPg2TinC1').value = \"123\""
  },
  {
-  "set": "frm2200M:txtPg2TinC1",
-  "value": "123"
+  "call": "document.getElementById('frm2200M:txtPg2TinC2').value = \"456\""
  },
  {
-  "set": "frm2200M:txtPg2TinC2",
-  "value": "456"
+  "call": "document.getElementById('frm2200M:txtPg2TinC3').value = \"788\""
  },
  {
-  "set": "frm2200M:txtPg2TinC3",
-  "value": "788"
+  "call": "document.getElementById('frm2200M:txtPg2TinC4').value = \"00000\""
  },
  {
-  "set": "frm2200M:txtPg2TinC4",
-  "value": "00000"
- },
- {
-  "set": "frm2200M:txtPg2RegisteredName",
-  "value": "SAMPLE DUMMY TAXPAYER"
+  "call": "document.getElementById('frm2200M:txtPg2RegisteredName').value = \"SAMPLE DUMMY TAXPAYER\""
  },
  {
   "set": "frm2200M:txtSched1_PlaceOfRemoval1",
@@ -245,5 +225,43 @@
  },
  {
   "call": "document.getElementById('frm2200M:txtLOB').value = 'Sample Consulting Services'"
+ },
+ {
+  "call": "addRowSched1()"
+ },
+ {
+  "set": "frm2200M:txtSched1_description11",
+  "value": "Clay x"
+ },
+ {
+  "set": "frm2200M:txtSched1_PlaceOfRemoval11",
+  "value": "Rizal"
+ },
+ {
+  "set": "frm2200M:txtSched1_LocallyExtractedTaxDueF11",
+  "value": "10"
+ },
+ {
+  "set": "frm2200M:txtSched1_ImportedTaxableG11",
+  "value": "7"
+ },
+ {
+  "call": "addRowSched1()"
+ },
+ {
+  "set": "frm2200M:txtSched1_description12",
+  "value": "Shale"
+ },
+ {
+  "set": "frm2200M:txtSched1_PlaceOfRemoval12",
+  "value": "Bulacan"
+ },
+ {
+  "set": "frm2200M:txtSched1_TotalTaxDue12",
+  "value": "3"
+ },
+ {
+  "set": "frm2200M:txtPg1P3I23ATaxPmntDposit",
+  "value": "100728.8"
  }
 ]

@@ -30,21 +30,21 @@
             <div>frm2200M:rdoPg1Pt2MOPPrepayment=falsefrm2200M:rdoPg1Pt2MOPPrepayment=</div>    
             <div>frm2200M:rdoPg1Pt2MOPOther=truefrm2200M:rdoPg1Pt2MOPOther=</div>    
             <div>frm2200M:txtPg1Pt2MOPOtherDesc=SAMPLE SCHEMEfrm2200M:txtPg1Pt2MOPOtherDesc=</div>    
-            <div>frm2200M:txtPg1P3I16ExciseTaxDue=101,853.37frm2200M:txtPg1P3I16ExciseTaxDue=</div>    
+            <div>frm2200M:txtPg1P3I16ExciseTaxDue=101,863.37frm2200M:txtPg1P3I16ExciseTaxDue=</div>    
             <div>frm2200M:txtPg1P3I17ABalCarriedOver=1,000.00frm2200M:txtPg1P3I17ABalCarriedOver=</div>    
             <div>frm2200M:txtPg1P3I17BCredExciseTax=234.57frm2200M:txtPg1P3I17BCredExciseTax=</div>    
             <div>frm2200M:txtPg1P3I17CTotal=1,234.57frm2200M:txtPg1P3I17CTotal=</div>    
-            <div>frm2200M:txtPg1P3I18NetTaxDue=100,618.80frm2200M:txtPg1P3I18NetTaxDue=</div>    
+            <div>frm2200M:txtPg1P3I18NetTaxDue=100,628.80frm2200M:txtPg1P3I18NetTaxDue=</div>    
             <div>frm2200M:txtPg1P3I19PmntOnRtrnPrevFiled=0.00frm2200M:txtPg1P3I19PmntOnRtrnPrevFiled=</div>    
-            <div>frm2200M:txtPg1P3I20TaxStillDue=100,618.80frm2200M:txtPg1P3I20TaxStillDue=</div>    
+            <div>frm2200M:txtPg1P3I20TaxStillDue=100,628.80frm2200M:txtPg1P3I20TaxStillDue=</div>    
             <div>frm2200M:txtPg1P3I21ASurcharge=25.50frm2200M:txtPg1P3I21ASurcharge=</div>    
             <div>frm2200M:txtPg1P3I21BInterest=10.00frm2200M:txtPg1P3I21BInterest=</div>    
             <div>frm2200M:txtPg1P3I21CCompromise=1,000.00frm2200M:txtPg1P3I21CCompromise=</div>    
             <div>frm2200M:txtPg1P3I21DTotPenalties=1,035.50frm2200M:txtPg1P3I21DTotPenalties=</div>    
-            <div>frm2200M:txtPg1P3I22AmountPayable=101,654.30frm2200M:txtPg1P3I22AmountPayable=</div>    
-            <div>frm2200M:txtPg1P3I23ATaxPmntDposit=100,718.80frm2200M:txtPg1P3I23ATaxPmntDposit=</div>    
+            <div>frm2200M:txtPg1P3I22AmountPayable=101,664.30frm2200M:txtPg1P3I22AmountPayable=</div>    
+            <div>frm2200M:txtPg1P3I23ATaxPmntDposit=100,728.80frm2200M:txtPg1P3I23ATaxPmntDposit=</div>    
             <div>frm2200M:txtPg1P3I23BPenalties=1,035.50frm2200M:txtPg1P3I23BPenalties=</div>    
-            <div>frm2200M:txtPg1P3I23CTotPmntMade=101,754.30frm2200M:txtPg1P3I23CTotPmntMade=</div>    
+            <div>frm2200M:txtPg1P3I23CTotPmntMade=101,764.30frm2200M:txtPg1P3I23CTotPmntMade=</div>    
             <div>frm2200M:txtPg1P3I24BalToCarryOver=-100.00frm2200M:txtPg1P3I24BalToCarryOver=</div>    
             <div>frm2200M:txtPg1Pt4Indiv=frm2200M:txtPg1Pt4Indiv=</div>    
             <div>frm2200M:txtPg1Pt4NonIndiv=frm2200M:txtPg1Pt4NonIndiv=</div>    
@@ -146,31 +146,51 @@
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF8=frm2200M:txtSched1_LocallyExtractedTaxDueF8=</div>    
             <div>frm2200M:txtSched1ATC9=XM060frm2200M:txtSched1ATC9=</div>    
             <div>frm2200M:txtSched1ATC10=XM060frm2200M:txtSched1ATC10=</div>    
+            <div>frm2200M:txtSched1ATC11=XM060frm2200M:txtSched1ATC11=</div>    
+            <div>frm2200M:txtSched1ATC12=XM060frm2200M:txtSched1ATC12=</div>    
             <div>frm2200M:chkBoxSched1Description9=falsefrm2200M:chkBoxSched1Description9=</div>    
             <div>frm2200M:txtSched1_description9=SAND AND GRAVELfrm2200M:txtSched1_description9=</div>    
             <div>frm2200M:chkBoxSched1Description10=falsefrm2200M:chkBoxSched1Description10=</div>    
             <div>frm2200M:txtSched1_description10=MARBLEfrm2200M:txtSched1_description10=</div>    
+            <div>frm2200M:chkBoxSched1Description11=falsefrm2200M:chkBoxSched1Description11=</div>    
+            <div>frm2200M:txtSched1_description11=CLAY Xfrm2200M:txtSched1_description11=</div>    
+            <div>frm2200M:chkBoxSched1Description12=falsefrm2200M:chkBoxSched1Description12=</div>    
+            <div>frm2200M:txtSched1_description12=SHALEfrm2200M:txtSched1_description12=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemovalDisabled1=frm2200M:txtSched1_PlaceOfRemovalDisabled1=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval9=LAGUNA SITEfrm2200M:txtSched1_PlaceOfRemoval9=</div>    
             <div>frm2200M:txtSched1_PlaceOfRemoval10=ROMBLONfrm2200M:txtSched1_PlaceOfRemoval10=</div>    
+            <div>frm2200M:txtSched1_PlaceOfRemoval11=RIZALfrm2200M:txtSched1_PlaceOfRemoval11=</div>    
+            <div>frm2200M:txtSched1_PlaceOfRemoval12=BULACANfrm2200M:txtSched1_PlaceOfRemoval12=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableADisabled1=frm2200M:txtSched1_VOMRITaxableADisabled1=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA9=frm2200M:txtSched1_VOMRITaxableA9=</div>    
             <div>frm2200M:txtSched1_VOMRITaxableA10=3.00frm2200M:txtSched1_VOMRITaxableA10=</div>    
+            <div>frm2200M:txtSched1_VOMRITaxableA11=frm2200M:txtSched1_VOMRITaxableA11=</div>    
+            <div>frm2200M:txtSched1_VOMRITaxableA12=frm2200M:txtSched1_VOMRITaxableA12=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptBDisabled1=frm2200M:txtSched1_VOMRIExemptBDisabled1=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB9=frm2200M:txtSched1_VOMRIExemptB9=</div>    
             <div>frm2200M:txtSched1_VOMRIExemptB10=frm2200M:txtSched1_VOMRIExemptB10=</div>    
+            <div>frm2200M:txtSched1_VOMRIExemptB11=frm2200M:txtSched1_VOMRIExemptB11=</div>    
+            <div>frm2200M:txtSched1_VOMRIExemptB12=frm2200M:txtSched1_VOMRIExemptB12=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedRateCDisabled1=frm2200M:txtSched1_LocallyExtractedRateCDisabled1=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedRateC9=frm2200M:txtSched1_LocallyExtractedRateC9=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedRateC10=frm2200M:txtSched1_LocallyExtractedRateC10=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedRateC11=frm2200M:txtSched1_LocallyExtractedRateC11=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedRateC12=frm2200M:txtSched1_LocallyExtractedRateC12=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedRateDDisabled1=frm2200M:txtSched1_LocallyExtractedRateDDisabled1=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedRateD9=frm2200M:txtSched1_LocallyExtractedRateD9=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedRateD10=frm2200M:txtSched1_LocallyExtractedRateD10=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedRateD11=frm2200M:txtSched1_LocallyExtractedRateD11=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedRateD12=frm2200M:txtSched1_LocallyExtractedRateD12=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateEDisabled1=frm2200M:txtSched1_LocallyExtractedTaxRateEDisabled1=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateE9=4.00frm2200M:txtSched1_LocallyExtractedTaxRateE9=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxRateE10=frm2200M:txtSched1_LocallyExtractedTaxRateE10=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedTaxRateE11=frm2200M:txtSched1_LocallyExtractedTaxRateE11=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedTaxRateE12=frm2200M:txtSched1_LocallyExtractedTaxRateE12=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueFDisabled1=frm2200M:txtSched1_LocallyExtractedTaxDueFDisabled1=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF9=5.01frm2200M:txtSched1_LocallyExtractedTaxDueF9=</div>    
             <div>frm2200M:txtSched1_LocallyExtractedTaxDueF10=120.00frm2200M:txtSched1_LocallyExtractedTaxDueF10=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedTaxDueF11=10.00frm2200M:txtSched1_LocallyExtractedTaxDueF11=</div>    
+            <div>frm2200M:txtSched1_LocallyExtractedTaxDueF12=frm2200M:txtSched1_LocallyExtractedTaxDueF12=</div>    
             <div>frm2200M:txtSched1_ImportedTaxableG1=frm2200M:txtSched1_ImportedTaxableG1=</div>    
             <div>frm2200M:txtSched1_ImportedTaxableG2=frm2200M:txtSched1_ImportedTaxableG2=</div>    
             <div>frm2200M:txtSched1_ImportedTaxableG3=frm2200M:txtSched1_ImportedTaxableG3=</div>    
@@ -221,26 +241,40 @@
             <div>frm2200M:txtSched1_TotalTaxDue8=frm2200M:txtSched1_TotalTaxDue8=</div>    
             <div>frm2200M:txtSched1_descriptionCont9=SAND AND GRAVELfrm2200M:txtSched1_descriptionCont9=</div>    
             <div>frm2200M:txtSched1_descriptionCont10=MARBLEfrm2200M:txtSched1_descriptionCont10=</div>    
+            <div>frm2200M:txtSched1_descriptionCont11=CLAY Xfrm2200M:txtSched1_descriptionCont11=</div>    
+            <div>frm2200M:txtSched1_descriptionCont12=SHALEfrm2200M:txtSched1_descriptionCont12=</div>    
             <div>frm2200M:txtSched1_ImportedTaxableGDisabled2=frm2200M:txtSched1_ImportedTaxableGDisabled2=</div>    
             <div>frm2200M:txtSched1_ImportedTaxableG9=frm2200M:txtSched1_ImportedTaxableG9=</div>    
             <div>frm2200M:txtSched1_ImportedTaxableG10=frm2200M:txtSched1_ImportedTaxableG10=</div>    
+            <div>frm2200M:txtSched1_ImportedTaxableG11=7.00frm2200M:txtSched1_ImportedTaxableG11=</div>    
+            <div>frm2200M:txtSched1_ImportedTaxableG12=frm2200M:txtSched1_ImportedTaxableG12=</div>    
             <div>frm2200M:txtSched1_ImportedExemptHDisabled2=frm2200M:txtSched1_ImportedExemptHDisabled2=</div>    
             <div>frm2200M:txtSched1_ImportedExemptH9=frm2200M:txtSched1_ImportedExemptH9=</div>    
             <div>frm2200M:txtSched1_ImportedExemptH10=frm2200M:txtSched1_ImportedExemptH10=</div>    
+            <div>frm2200M:txtSched1_ImportedExemptH11=frm2200M:txtSched1_ImportedExemptH11=</div>    
+            <div>frm2200M:txtSched1_ImportedExemptH12=frm2200M:txtSched1_ImportedExemptH12=</div>    
             <div>frm2200M:txtSched1_ImportedTaxRateDisabled2=frm2200M:txtSched1_ImportedTaxRateDisabled2=</div>    
             <div>frm2200M:txtSched1_ImportedTaxRate9=2.50frm2200M:txtSched1_ImportedTaxRate9=</div>    
             <div>frm2200M:txtSched1_ImportedTaxRate10=frm2200M:txtSched1_ImportedTaxRate10=</div>    
+            <div>frm2200M:txtSched1_ImportedTaxRate11=frm2200M:txtSched1_ImportedTaxRate11=</div>    
+            <div>frm2200M:txtSched1_ImportedTaxRate12=frm2200M:txtSched1_ImportedTaxRate12=</div>    
             <div>frm2200M:txtSched1_ImportedTaxDueDisabled2=frm2200M:txtSched1_ImportedTaxDueDisabled2=</div>    
             <div>frm2200M:txtSched1_ImportedTaxDue9=frm2200M:txtSched1_ImportedTaxDue9=</div>    
             <div>frm2200M:txtSched1_ImportedTaxDue10=frm2200M:txtSched1_ImportedTaxDue10=</div>    
+            <div>frm2200M:txtSched1_ImportedTaxDue11=frm2200M:txtSched1_ImportedTaxDue11=</div>    
+            <div>frm2200M:txtSched1_ImportedTaxDue12=frm2200M:txtSched1_ImportedTaxDue12=</div>    
             <div>frm2200M:txtSched1_TaxDueAdjustmentDisabled2=frm2200M:txtSched1_TaxDueAdjustmentDisabled2=</div>    
             <div>frm2200M:txtSched1_TaxDueAdjustment9=frm2200M:txtSched1_TaxDueAdjustment9=</div>    
             <div>frm2200M:txtSched1_TaxDueAdjustment10=frm2200M:txtSched1_TaxDueAdjustment10=</div>    
+            <div>frm2200M:txtSched1_TaxDueAdjustment11=frm2200M:txtSched1_TaxDueAdjustment11=</div>    
+            <div>frm2200M:txtSched1_TaxDueAdjustment12=frm2200M:txtSched1_TaxDueAdjustment12=</div>    
             <div>frm2200M:txtSched1_TotalTaxDueDisabled2=frm2200M:txtSched1_TotalTaxDueDisabled2=</div>    
             <div>frm2200M:txtSched1_TotalTaxDue9=frm2200M:txtSched1_TotalTaxDue9=</div>    
             <div>frm2200M:txtSched1_TotalTaxDue10=frm2200M:txtSched1_TotalTaxDue10=</div>    
-            <div>frm2200M:TotalExciseTaxDue=101,853.37frm2200M:TotalExciseTaxDue=</div>    
-            <div>frm2200M:sched1AddedRowCount=0frm2200M:sched1AddedRowCount=</div>    
+            <div>frm2200M:txtSched1_TotalTaxDue11=frm2200M:txtSched1_TotalTaxDue11=</div>    
+            <div>frm2200M:txtSched1_TotalTaxDue12=3.00frm2200M:txtSched1_TotalTaxDue12=</div>    
+            <div>frm2200M:TotalExciseTaxDue=101,863.37frm2200M:TotalExciseTaxDue=</div>    
+            <div>frm2200M:sched1AddedRowCount=2frm2200M:sched1AddedRowCount=</div>    
             <div>frm2200M:txtLOB=SAMPLE CONSULTING SERVICESfrm2200M:txtLOB=</div>    
             <div>frm2200M:txtCurrentPage=1frm2200M:txtCurrentPage=</div>    
             <div>frm2200M:txtMaxPage=2frm2200M:txtMaxPage=</div>    

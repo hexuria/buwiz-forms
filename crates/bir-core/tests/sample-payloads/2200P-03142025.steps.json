@@ -16,68 +16,52 @@
   "value": "2"
  },
  {
-  "set": "frm2200P:txtPg1TIN1",
-  "value": "123"
+  "call": "document.getElementById('frm2200P:txtPg1TIN1').value = \"123\""
  },
  {
-  "set": "frm2200P:txtPg1TIN2",
-  "value": "456"
+  "call": "document.getElementById('frm2200P:txtPg1TIN2').value = \"456\""
  },
  {
-  "set": "frm2200P:txtPg1TIN3",
-  "value": "788"
+  "call": "document.getElementById('frm2200P:txtPg1TIN3').value = \"788\""
  },
  {
-  "set": "frm2200P:txtPg1TIN4",
-  "value": "00000"
+  "call": "document.getElementById('frm2200P:txtPg1TIN4').value = \"00000\""
  },
  {
-  "set": "frm2200P:txtPg1I5RDO",
-  "value": "039"
+  "call": "document.getElementById('frm2200P:txtPg1I5RDO').value = \"039\""
  },
  {
-  "set": "frm2200P:rdoPg1Pt1I6RDO",
-  "value": "039"
+  "call": "var s = document.getElementById('frm2200P:rdoPg1Pt1I6RDO'); s.innerHTML = \"<option value='000'>000</option><option value='039'>039</option>\"; s.value = '039'"
  },
  {
-  "set": "frm2200P:txtPg1Pt1I6RegisteredName",
-  "value": "Sample Dummy Taxpayer"
+  "call": "document.getElementById('frm2200P:txtPg1Pt1I6RegisteredName').value = \"SAMPLE DUMMY TAXPAYER\""
  },
  {
-  "set": "frm2200P:txtPg1Pt1I7RegisteredAddress",
-  "value": "123 Sample Street, Barangay Example, Quezon City"
+  "call": "document.getElementById('frm2200P:txtPg1Pt1I7RegisteredAddress').value = \"123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITY\""
  },
  {
-  "set": "frm2200P:txPg1I7ZipCode",
-  "value": "1100"
+  "call": "document.getElementById('frm2200P:txPg1I7ZipCode').value = \"1100\""
  },
  {
-  "set": "frm2200P:txtPg1Pt1I8ContactNumber",
-  "value": "09170000000"
+  "call": "document.getElementById('frm2200P:txtPg1Pt1I8ContactNumber').value = \"09170000000\""
  },
  {
-  "set": "frm2200P:txtPg1Pt1I9Email",
-  "value": "sample.taxpayer@example.com"
+  "call": "document.getElementById('frm2200P:txtPg1Pt1I9Email').value = \"sample.taxpayer@example.com\""
  },
  {
-  "set": "frm2200P:txtPg2TinC1",
-  "value": "123"
+  "call": "document.getElementById('frm2200P:txtPg2TinC1').value = \"123\""
  },
  {
-  "set": "frm2200P:txtPg2TinC2",
-  "value": "456"
+  "call": "document.getElementById('frm2200P:txtPg2TinC2').value = \"456\""
  },
  {
-  "set": "frm2200P:txtPg2TinC3",
-  "value": "788"
+  "call": "document.getElementById('frm2200P:txtPg2TinC3').value = \"788\""
  },
  {
-  "set": "frm2200P:txtPg2TinC4",
-  "value": "00000"
+  "call": "document.getElementById('frm2200P:txtPg2TinC4').value = \"00000\""
  },
  {
-  "set": "frm2200P:txtPg2RegisteredName",
-  "value": "SAMPLE DUMMY TAXPAYER"
+  "call": "document.getElementById('frm2200P:txtPg2RegisteredName').value = \"SAMPLE DUMMY TAXPAYER\""
  },
  {
   "call": "document.getElementById('frm2200P:txtLOB').value = 'Sample Consulting Services'"

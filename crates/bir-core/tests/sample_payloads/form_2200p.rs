@@ -66,6 +66,6 @@ fn form_2200p_sample_payload_is_current() {
         "2200P-03142025",
         "2200p-v2020",
         &payload,
-        "a6d040ab3d2694e713b6998691f0acded45340e1836475d149cde07af9dc1c81",
+        "71390796ec132328c492e3da1119d3133a6580b3de702b2ed344d196eaa1b647",
     );
 }

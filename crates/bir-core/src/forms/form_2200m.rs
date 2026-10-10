@@ -9,8 +9,9 @@
 //! Schedule 1 has ten official rows: rows 1–8 carry fixed ATCs, descriptions
 //! and rates (XM010 ×3, XM020, XM030, XM040, XM050, XM051); rows 9 and 10 are
 //! XM060 "others" rows where the filer types the description and both rates.
-//! The page can append rows past 10 (`addRowSched1`), but those controls are
-//! not part of the official submit layout, so the model stops at 10.
+//! "Add row" (`addRowSched1`) appends more XM060 rows; each of their cells
+//! lands at the end of its own column table in the page's DOM, so the upload
+//! carries them there (see [`Form2200MDraft::official_layout`]).
 //!
 //! Every Schedule 1 cell is free filer input: the official page computes no
 //! row arithmetic. Item 16 is the sum of column F (locally extracted tax due)
@@ -32,6 +33,27 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_2200M_FORM_ID: &str = "2200m-v2018";
 /// Official Schedule 1 rows in the submit layout.
 pub const FORM_2200M_SCHEDULE_ROWS: usize = 10;
+/// Upper bound on rows the editor lets the filer add (the page has none).
+pub const FORM_2200M_MAX_ROWS: usize = 200;
+/// Column controls of a Schedule 1 row, in their own column tables; an added
+/// row's control follows the previous row's in the same table.
+const SCHEDULE_COLUMNS: [&str; 15] = [
+    "txtSched1_PlaceOfRemoval",
+    "txtSched1_VOMRITaxableA",
+    "txtSched1_VOMRIExemptB",
+    "txtSched1_LocallyExtractedRateC",
+    "txtSched1_LocallyExtractedRateD",
+    "txtSched1_LocallyExtractedTaxRateE",
+    "txtSched1_LocallyExtractedTaxDueF",
+    "txtSched1_descriptionCont",
+    "txtSched1_ImportedTaxableG",
+    "txtSched1_ImportedExemptH",
+    "txtSched1_ImportedTaxRate",
+    "txtSched1_ImportedTaxDue",
+    "txtSched1_TaxDueAdjustment",
+    "txtSched1_TotalTaxDue",
+    "txtSched1ATC",
+];
 /// Rows 9 and 10 (index 8 and 9) take a filer description and rates.
 pub const FORM_2200M_FIRST_OTHER_ROW: usize = 8;
 
@@ -397,7 +419,7 @@ impl Form2200MDraft {
 
     /// Row `index` (0-based), growing the schedule to reach it.
     pub fn row_mut(&mut self, index: usize) -> Option<&mut Form2200MRow> {
-        if index >= FORM_2200M_SCHEDULE_ROWS {
+        if index >= FORM_2200M_MAX_ROWS {
             return None;
         }
         if self.schedule.len() <= index {
@@ -574,7 +596,7 @@ impl Form2200MDraft {
             put(key, official_amount(value));
         }
 
-        for index in 0..FORM_2200M_SCHEDULE_ROWS {
+        for index in 0..self.row_count() {
             let n = index + 1;
             let row = self.row(index);
             put(
@@ -631,6 +653,13 @@ impl Form2200MDraft {
                 // populateTable2Desc copies it to the continuation table.
                 put(&format!("txtSched1_descriptionCont{n}"), description);
                 put(&format!("chkBoxSched1Description{n}"), flag(false));
+                if index >= FORM_2200M_SCHEDULE_ROWS {
+                    // sched1RowTemplate gives every added row the XM060 ATC.
+                    put(
+                        &format!("txtSched1ATC{n}"),
+                        FORM_2200M_OTHER_ATC.to_string(),
+                    );
+                }
                 put(
                     &format!("txtSched1_LocallyExtractedTaxRateE{n}"),
                     optional_amount(row.local_rate),
@@ -649,11 +678,54 @@ impl Form2200MDraft {
                 String::new()
             },
         );
-        put("sched1AddedRowCount", "0".to_string());
+        // addRowSched1 counts the rows it adds.
+        put(
+            "sched1AddedRowCount",
+            (self.row_count() - FORM_2200M_SCHEDULE_ROWS).to_string(),
+        );
         put("txtLOB", self.line_of_business.clone());
         // sleeptime() sets the pager to page 1 at load.
         put("txtCurrentPage", "1".to_string());
         fields
+    }
+
+    /// Rows on the page: the ten it loads with plus any the filer added.
+    pub fn row_count(&self) -> usize {
+        self.schedule.len().max(FORM_2200M_SCHEDULE_ROWS)
+    }
+
+    /// The generated layout with every added row's controls spliced in after
+    /// the previous row's control of the same column table (the description
+    /// table also holds each row's delete checkbox), as `sched1RowTemplate`
+    /// appends them.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        let base = crate::official_xml::layout(FORM_2200M_FORM_ID).map_err(|e| e.to_string())?;
+        let key = |column: &str, n: usize| format!("frm2200M:{column}{n}");
+        let last = FORM_2200M_SCHEDULE_ROWS;
+        let mut insertions = Vec::new();
+        for n in (last + 1)..=self.row_count() {
+            insertions.push(RowInsertion {
+                after: key("txtSched1_description", n - 1),
+                copies: vec![
+                    (
+                        key("chkBoxSched1Description", last),
+                        key("chkBoxSched1Description", n),
+                    ),
+                    (
+                        key("txtSched1_description", last),
+                        key("txtSched1_description", n),
+                    ),
+                ],
+            });
+            for column in SCHEDULE_COLUMNS {
+                insertions.push(RowInsertion {
+                    after: key(column, n - 1),
+                    copies: vec![(key(column, last), key(column, n))],
+                });
+            }
+        }
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -852,21 +924,19 @@ impl Form2200MDraft {
         }
 
         // checkPartVFields, row by row.
-        if self.schedule.len() > FORM_2200M_SCHEDULE_ROWS {
+        if self.schedule.len() > FORM_2200M_MAX_ROWS {
             err(
                 "schedule",
-                "Schedule 1 has 10 rows on the official submit layout.",
+                "Schedule 1 takes at most 200 rows in this editor.",
             );
         }
-        for (index, row) in self
-            .schedule
-            .iter()
-            .enumerate()
-            .take(FORM_2200M_SCHEDULE_ROWS)
-        {
+        for (index, row) in self.schedule.iter().enumerate() {
             let n = index + 1;
             let other_row = index >= FORM_2200M_FIRST_OTHER_ROW;
-            let used = !row.place_of_removal.trim().is_empty()
+            // checkPartVFields checks every added row (11 onwards) whole.
+            let added_row = index >= FORM_2200M_SCHEDULE_ROWS;
+            let used = added_row
+                || !row.place_of_removal.trim().is_empty()
                 || row.amount_cells().iter().any(Option::is_some);
             let described = other_row && !row.description.trim().is_empty();
             if !used && !described {
@@ -1029,6 +1099,19 @@ impl QueueableForm for Form2200MDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
+    }
+    /// Added rows extend the page, so the plaintext follows
+    /// [`Form2200MDraft::official_layout`].
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
 
