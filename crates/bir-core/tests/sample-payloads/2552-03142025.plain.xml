@@ -11,8 +11,8 @@
             <div>frm2552:txtPg1TIN4=00000frm2552:txtPg1TIN4=</div>    
             <div>frm2552:txtPg1I5RDO=039frm2552:txtPg1I5RDO=</div>    
             <div>frm2552:rdoPg1Pt1I5RDO=039frm2552:rdoPg1Pt1I5RDO=</div>    
-            <div>frm2552:txtPg1Pt1I6Name=SAMPLE%20DUMMY%20TAXPAYERfrm2552:txtPg1Pt1I6Name=</div>    
-            <div>frm2552:txtPg1Pt1I7RegisteredAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm2552:txtPg1Pt1I7RegisteredAddress=</div>    
+            <div>frm2552:txtPg1Pt1I6Name=SAMPLE DUMMY TAXPAYERfrm2552:txtPg1Pt1I6Name=</div>    
+            <div>frm2552:txtPg1Pt1I7RegisteredAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2552:txtPg1Pt1I7RegisteredAddress=</div>    
             <div>frm2552:txtPg1Pt1I7RegisteredAddress2=frm2552:txtPg1Pt1I7RegisteredAddress2=</div>    
             <div>frm2552:txPg1I7ZipCode=1100frm2552:txPg1I7ZipCode=</div>    
             <div>frm2552:txtPg1Pt1I8ContactNumber=09170000000frm2552:txtPg1Pt1I8ContactNumber=</div>    
@@ -92,27 +92,27 @@
             <div>frm2552:txtPg2Pt5Sch1Corp1=SAMPLE LISTED CORPfrm2552:txtPg2Pt5Sch1Corp1=</div>    
             <div>frm2552:txtPg2Pt5Sch1NumShares1=1,000.00frm2552:txtPg2Pt5Sch1NumShares1=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxBase1=1,234,567.89frm2552:txtPg2Pt5Sch1TaxBase1=</div>    
-            <div>frm2552:txtPg2Pt5Sch1TaxRate1=6/10 of 1%frm2552:txtPg2Pt5Sch1TaxRate1=</div>    
+            <div>frm2552:txtPg2Pt5Sch1TaxRate1=6/10 OF 1%frm2552:txtPg2Pt5Sch1TaxRate1=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxDue1=7,407.00frm2552:txtPg2Pt5Sch1TaxDue1=</div>    
             <div>frm2552:txtPg2Pt5Sch1Corp2=SAMPLE LISTED CORPfrm2552:txtPg2Pt5Sch1Corp2=</div>    
             <div>frm2552:txtPg2Pt5Sch1NumShares2=500.50frm2552:txtPg2Pt5Sch1NumShares2=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxBase2=1,000,000.00frm2552:txtPg2Pt5Sch1TaxBase2=</div>    
-            <div>frm2552:txtPg2Pt5Sch1TaxRate2=6/10 of 1%frm2552:txtPg2Pt5Sch1TaxRate2=</div>    
+            <div>frm2552:txtPg2Pt5Sch1TaxRate2=6/10 OF 1%frm2552:txtPg2Pt5Sch1TaxRate2=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxDue2=6,000.00frm2552:txtPg2Pt5Sch1TaxDue2=</div>    
             <div>frm2552:txtPg2Pt5Sch1Corp3=SAMPLE LISTED CORPfrm2552:txtPg2Pt5Sch1Corp3=</div>    
             <div>frm2552:txtPg2Pt5Sch1NumShares3=75.00frm2552:txtPg2Pt5Sch1NumShares3=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxBase3=2,500.83frm2552:txtPg2Pt5Sch1TaxBase3=</div>    
-            <div>frm2552:txtPg2Pt5Sch1TaxRate3=6/10 of 1%frm2552:txtPg2Pt5Sch1TaxRate3=</div>    
+            <div>frm2552:txtPg2Pt5Sch1TaxRate3=6/10 OF 1%frm2552:txtPg2Pt5Sch1TaxRate3=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxDue3=15.00frm2552:txtPg2Pt5Sch1TaxDue3=</div>    
             <div>frm2552:txtPg2Pt5Sch1Corp4=frm2552:txtPg2Pt5Sch1Corp4=</div>    
             <div>frm2552:txtPg2Pt5Sch1NumShares4=0.00frm2552:txtPg2Pt5Sch1NumShares4=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxBase4=0.00frm2552:txtPg2Pt5Sch1TaxBase4=</div>    
-            <div>frm2552:txtPg2Pt5Sch1TaxRate4=6/10 of 1%frm2552:txtPg2Pt5Sch1TaxRate4=</div>    
+            <div>frm2552:txtPg2Pt5Sch1TaxRate4=6/10 OF 1%frm2552:txtPg2Pt5Sch1TaxRate4=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxDue4=0.00frm2552:txtPg2Pt5Sch1TaxDue4=</div>    
             <div>frm2552:txtPg2Pt5Sch1Corp5=frm2552:txtPg2Pt5Sch1Corp5=</div>    
             <div>frm2552:txtPg2Pt5Sch1NumShares5=0.00frm2552:txtPg2Pt5Sch1NumShares5=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxBase5=0.00frm2552:txtPg2Pt5Sch1TaxBase5=</div>    
-            <div>frm2552:txtPg2Pt5Sch1TaxRate5=6/10 of 1%frm2552:txtPg2Pt5Sch1TaxRate5=</div>    
+            <div>frm2552:txtPg2Pt5Sch1TaxRate5=6/10 OF 1%frm2552:txtPg2Pt5Sch1TaxRate5=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxDue5=0.00frm2552:txtPg2Pt5Sch1TaxDue5=</div>    
             <div>frm2552:txtPg2Pt5Sch1TaxDueTot=13,422.00frm2552:txtPg2Pt5Sch1TaxDueTot=</div>    
             <div>frm2552:txtPg2Pt5Sch2Date1=frm2552:txtPg2Pt5Sch2Date1=</div>    
@@ -222,7 +222,7 @@
             <div>frm2552:txtPg2Pt6Buyer5=frm2552:txtPg2Pt6Buyer5=</div>    
             <div>frm2552:txtPg2Pt6Corp5=frm2552:txtPg2Pt6Corp5=</div>    
             <div>frm2552:txtPg2Pt6NumShares5=0.00frm2552:txtPg2Pt6NumShares5=</div>    
-            <div>frm2552:txtLOB=Sample Consulting Servicesfrm2552:txtLOB=</div>    
+            <div>frm2552:txtLOB=SAMPLE CONSULTING SERVICESfrm2552:txtLOB=</div>    
             <div>frm2552:txtCurrentPage=1frm2552:txtCurrentPage=</div>    
             <div>frm2552:txtMaxPage=2frm2552:txtMaxPage=</div>    
             <div>Pg2Pt5Sch1SubTotal=Pg2Pt5Sch1SubTotal=</div>    

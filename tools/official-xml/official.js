@@ -198,7 +198,9 @@ function prepare(html) {
   // and div#rdoContainer (1702EX) with RDO selects at load.
   for (const [cell, suffix] of [['rdoSpouseSelect', 'txtSpouseRDOCode'], ['spouseRdoSelect', 'txtSpouseRDOCode'], ['rdoContainer', 'rdoPg1Pt1I7RDO']]) {
     const el = doc.getElementById(cell);
-    if (el && prefix && !doc.getElementById(prefix + ':' + suffix)) {
+    // Leave a select another getRdo() branch already put there (2552:
+    // frm2552:rdoPg1Pt1I5RDO in div#rdoContainer).
+    if (el && prefix && !doc.getElementById(prefix + ':' + suffix) && !el.querySelector('select')) {
       el.innerHTML = `<select id='${prefix}:${suffix}' name='${prefix}:${suffix}' size='1'><option value='000'>${suffix === 'rdoPg1Pt1I7RDO' ? '000' : ' '}</option></select>`;
     }
   }

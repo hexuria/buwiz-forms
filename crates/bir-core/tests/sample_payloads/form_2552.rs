@@ -84,7 +84,7 @@ fn form_2552_sample_payload_is_current() {
         "2552-03142025",
         "2552-v2018",
         &payload,
-        "c2a5de6e9b0c9b3d3a82ee0045770ecb4a84194f90cefc798dda28cea654e1f3",
+        "a14ed48bace1df2367a4c8d1896e5778d8a4780738fe7a7bcde2d622ab110a65",
     );
 }
 
@@ -158,14 +158,14 @@ fn form_2552_add_more_sample_payload_is_current() {
     let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
     assert_eq!(
         plaintext, official,
-        "{stem}: our plaintext differs from the official saveXMLsubmit() output"
+        "{stem}: our plaintext differs from the official upload (saveEncryptedProfile)"
     );
     let digest: String = Sha256::digest(&encrypted)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
     assert_eq!(
-        digest, "02bab05f8215410a5edf9d52179441b64dad453c73c75e62e648aa223c2d80ce",
+        digest, "f0cd1103dc5d74d956e3183d5fc53a8296e1fba4b3c07ee5f872ac5c1903448f",
         "{stem}: compress_and_encrypt no longer matches the official Encrypt.exe output"
     );
     if !updating {

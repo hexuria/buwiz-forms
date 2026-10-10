@@ -4,12 +4,13 @@
 //! (`compute13B` … `compute24`, `getRequiredWithheld`,
 //! `totalAmountandOutputTax`, `computeInputTaxSched4`,
 //! `computeInputTaxSched5`), `validate` with its exact alert texts, and
-//! `saveXMLsubmit` through [`crate::official_xml`].
+//! the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`].
 //!
 //! Schedules 1, 2, 3 (Parts A and B), 6, 7 and 8 write one row of controls per
 //! entry inside their modals, ahead of each modal's totals;
 //! [`Form2550MDraft::official_payload`] splices those rows into the fixed
-//! layout exactly where the page's own submit loop writes them.
+//! layout where they sit in `frmMain`: the upload (`saveEncryptedProfile`)
+//! writes every control in DOM order.
 
 use std::collections::BTreeMap;
 
@@ -970,7 +971,7 @@ impl Form2550MDraft {
         order.iter().map(|&i| groups[i].clone()).collect()
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id,
+    /// The official field values the upload (`saveEncryptedProfile`) reads, keyed by element id,
     /// including the Schedule 1 row controls.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.layout_fields();
@@ -1835,7 +1836,7 @@ impl QueueableForm for Form2550MDraft {
         self.to_bir_field_map()
     }
 
-    /// The fixed layout, with the Schedule 1 row controls the submit loop
+    /// The fixed layout, with the schedule row controls the upload
     /// writes between Item 26 and the Schedule 1 totals.
     fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = <Self as QueueableForm>::validate(self);

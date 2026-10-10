@@ -7,7 +7,7 @@
 //! `pageOneComputation`), the enable/reset handlers (`isAmended`,
 //! `availTaxRelief`, `kindOfTransaction`, `enableSchedule`,
 //! `handleOverpayment`), `validateAll` with its exact alert texts, and
-//! `saveXMLsubmit` through [`crate::official_xml`].
+//! the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`].
 //!
 //! Every derived amount on this form goes through `(…).toFixed(0)` before
 //! `formatCurrency`, so tax due and every total is a whole peso while the
@@ -17,7 +17,9 @@
 //! "(Add More...)" popup does: the fifth and later rows go to the popup
 //! (`Pg2Pt5Sch<n>PopTable1st/2nd`), row 5 shows `OTHERS` with the popup
 //! subtotal, and [`Form2552Draft::official_payload`] splices the popup's
-//! controls in ahead of `Pg2Pt5Sch<n>SubTotal`, where the page writes them.
+//! controls in ahead of `Pg2Pt5Sch<n>SubTotal`, where they sit in the DOM:
+//! the upload (`saveEncryptedProfile`) writes every `frmMain` control in DOM
+//! order, and the popup rows exist only once the filer adds them.
 
 use std::collections::BTreeMap;
 
@@ -526,6 +528,10 @@ impl Form2552Draft {
             ));
             controls.push((key(n, 8), official_amount(row.tax_due)));
         }
+        // saveEncryptedProfile writes every text control upper-cased.
+        for (_, value) in &mut controls {
+            *value = value.to_uppercase();
+        }
         controls
     }
 
@@ -550,7 +556,7 @@ impl Form2552Draft {
         (first, second)
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id,
+    /// The official field values the upload (`saveEncryptedProfile`) reads, keyed by element id,
     /// popup rows included.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.layout_fields();
@@ -1224,7 +1230,7 @@ impl QueueableForm for Form2552Draft {
     }
 
     /// The fixed layout, with the Add More popup's controls where the page's
-    /// submit loop writes them: ahead of `Pg2Pt5Sch<n>SubTotal`.
+    /// upload writes them: ahead of `Pg2Pt5Sch<n>SubTotal`.
     fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = <Self as QueueableForm>::validate(self);
         if !errors.is_empty() {
@@ -1481,6 +1487,13 @@ mod tests {
         assert_eq!(fields["frm2552:txtPg2Pt5Sch1_1Col6"], "50,002.50");
         assert_eq!(fields["frm2552:txtPg2Pt5Sch1_2Col8"], "74.00");
         assert_eq!(fields["Pg2Pt5Sch1PopLength"], "3");
+        d.overpayment = Form2552Overpayment::Refund;
+        let payload = d.to_bir_xml_payload().unwrap();
+        assert!(payload.contains(
+            "<div>frm2552:txtPg2Pt5Sch1_2Col7=6/10 OF 1%frm2552:txtPg2Pt5Sch1_2Col7=</div>"
+        ));
+        let popup = payload.find("frm2552:txtPg2Pt5Sch1_1Col1=").unwrap();
+        assert!(popup < payload.find("<div>Pg2Pt5Sch1SubTotal=").unwrap());
         d.schedule[6].buyer.clear();
         assert!(
             messages(&d)

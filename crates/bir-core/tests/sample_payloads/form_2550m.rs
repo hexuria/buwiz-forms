@@ -68,7 +68,7 @@ fn form_2550m_sample_payload_is_current() {
         "2550M-062022",
         "2550m-v2007",
         &payload,
-        "5d6d66d8005aa20bf2709d317204c5b9d0b508352dd31ffbf98fa94ab1f04102",
+        "bb7ff9366bfb4c84729842a126861ecec0d3512f905c520d7e095d223d6ed09a",
     );
 }
 
@@ -112,7 +112,7 @@ fn check_spliced_sample(stem: &str, plaintext: &str, official_encrypt_sha256: &s
     let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
     assert_eq!(
         plaintext, official,
-        "{stem}: our plaintext differs from the official saveXMLsubmit() output"
+        "{stem}: our plaintext differs from the official upload (saveEncryptedProfile)"
     );
     let digest: String = Sha256::digest(&encrypted)
         .iter()
@@ -139,7 +139,7 @@ fn form_2550m_schedule_1_sample_payload_is_current() {
     check_spliced_sample(
         "2550M-072022",
         &payload(sample_2550m_schedule_1()),
-        "537d9efdc32b81d56f13f292397a868253a169312a86b2499dfdb699d0ec0f17",
+        "db469f023104c6337570b4bf06b9b4a2f87b67a759d354f7acb4fd8f074c4225",
     );
 }
 
@@ -200,7 +200,7 @@ fn form_2550m_capital_goods_sample_payload_is_current() {
     check_spliced_sample(
         "2550M-082022",
         &payload(sample_2550m_capital_goods()),
-        "ee7ff72cac770ef70a09859577d87c0519ed4cb34c9e39d6bc892eb07008da45",
+        "968f32bebc3cd25ebe8445898a401891b7f0c0ef91fc883f9bb9796611172abb",
     );
 }
 
@@ -251,6 +251,6 @@ fn form_2550m_credits_sample_payload_is_current() {
     check_spliced_sample(
         "2550M-092022",
         &payload(sample_2550m_credits()),
-        "ac6a09196f30f06dd53397384a120bf0e8979defdc4d08c23bb4cb16b840b8df",
+        "98c8f3c08bb6f0a5db771793181015b9e07b1558b7f6e3c9ec63f203ed092aca",
     );
 }
