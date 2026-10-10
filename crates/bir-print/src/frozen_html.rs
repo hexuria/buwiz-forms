@@ -151,6 +151,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1701ms-2024" => Some(include_str!(
             "../../../html-frozen/1701ms-2024/writer-cells.json"
         )),
+        "1702ex-2018" => Some(include_str!(
+            "../../../html-frozen/1702ex-2018/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1783,6 +1786,90 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1702ex_fills_identity_whole_pesos_schedules_and_boxes() {
+        use bir_core::forms::form_1702ex::{
+            Form1702ExAtc, Form1702ExDeduction, Form1702ExDraft, Form1702ExOverpayment,
+            Form1702ExRow, Form1702ExSpecialRow,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Exempt Fixture Foundation Inc", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Charity", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1702EX", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1702ExDraft::new_from_profile(&profile, 2025);
+        draft.atc = Form1702ExAtc::IC011;
+        draft.deduction = Form1702ExDeduction::Itemized;
+        draft.date_of_incorporation = "03/01/2010".to_string();
+        draft.sales = 1_234_567.5;
+        draft.ordinary_items[1] = 10_000.0;
+        draft.other_deductions = vec![Form1702ExRow {
+            description: "Sample expense".to_string(),
+            amount: 5_000.0,
+        }];
+        draft.special_rows = vec![Form1702ExSpecialRow {
+            description: "Sample deduction".to_string(),
+            legal_basis: "RA 0000".to_string(),
+            amount: 15_000.0,
+        }];
+        draft.cwt_q4 = 1_000.0;
+        draft.overpayment = Form1702ExOverpayment::Refund;
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let cells = writer_cells("1702ex-2018").unwrap();
+        for key in cells
+            .joins
+            .keys()
+            .chain(cells.xbox_joins.iter().map(|join| &join.writer_key))
+        {
+            assert!(fields.contains_key(key), "print map lacks {key}");
+        }
+        let html = filled_document("1702ex-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c25"), "123");
+        assert_eq!(comb_text(&html, "p1c33"), "039");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p3c5"), "123456788");
+        assert!(comb_text(&html, "p1c36").starts_with("EXEMPT FIXTURE FOUNDATION INC"));
+        assert!(comb_text(&html, "p2c6").starts_with("EXEMPT FIXTURE FOUNDATIO"));
+        assert_eq!(comb_text(&html, "p1c50"), "2010");
+        assert_eq!(named_values(&html, "p1c19"), vec!["1".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["2".to_string()]);
+        assert_eq!(named_values(&html, "p1c22"), vec!["5".to_string()]);
+        // Whole pesos, right-aligned in the 12-slot comb.
+        assert_eq!(comb_text(&html, "p2c9"), "     1234568");
+        assert_eq!(comb_text(&html, "p3c12"), "       10000");
+        assert_eq!(comb_text(&html, "p3c52"), "SAMPLE EXPENSE");
+        assert_eq!(comb_text(&html, "p3c54"), "        5000");
+        assert_eq!(comb_text(&html, "p3c58"), "");
+        assert_eq!(comb_text(&html, "p3c81"), "SAMPLE DEDUCTIO");
+        assert_eq!(comb_text(&html, "p3c87"), "");
+        assert_eq!(comb_text(&html, "p2c47"), "        1000");
+        assert_eq!(comb_text(&html, "p1c83"), "      (1000)");
+        for checked in ["p1c7", "p1c13", "p1c15", "p1c11", "p1c56", "p1c86"] {
+            assert_eq!(
+                named_values(&html, checked),
+                vec!["X".to_string()],
+                "{checked}"
+            );
+        }
+        for unchecked in ["p1c8", "p1c12", "p1c18", "p1c57", "p1c87", "p1c88"] {
+            assert_eq!(
+                named_values(&html, unchecked),
+                vec!["".to_string()],
+                "{unchecked}"
+            );
+        }
+        // Items 18 and 41 (freeze preprints 000), signatory and Part III stay blank.
+        assert_eq!(comb_text(&html, "p1c75"), "");
+        assert_eq!(comb_text(&html, "p2c38"), "");
+        assert_eq!(comb_text(&html, "p1c116"), "");
+        assert!(!html.contains("name=\"frm1702EX:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // 2553 (1999) prints each amount in one text cell and 1702Q (2018) in
         // one 12-slot comb, not peso + cent combs.
@@ -1796,6 +1883,7 @@ mod tests {
             // 1701A (2018) prints whole pesos in one 8-slot comb per column.
             ("1701a-2018", false),
             ("1701ms-2024", false),
+            ("1702ex-2018", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
