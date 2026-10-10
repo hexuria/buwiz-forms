@@ -16,6 +16,7 @@ pub mod form_1706_view;
 pub mod form_1707_view;
 pub mod form_1707a_view;
 pub mod form_1800_view;
+pub mod form_1801_view;
 pub mod form_2550q_view;
 pub mod form_2551q_view;
 pub mod form_2553_view;

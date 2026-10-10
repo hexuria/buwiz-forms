@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1801-v2018",
-  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
   "official_hta": "BIR-Form1801v2018.hta",
   "official_hta_sha256": "d19c4ebe40ed109094ef43687ed5486a003bd11a67a251bdd5545a41c2f46d8d",
   "header": "<?xml version='1.0'?>",
@@ -17,7 +17,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "01",
       "after": "\n\t"
     },
     {
@@ -29,7 +29,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "01",
       "after": "\n\t"
     },
     {
@@ -41,7 +41,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "2000",
       "after": "\n\t"
     },
     {
@@ -122,6 +122,18 @@
       "parts": [
         {
           "source": "frm1801v2018:branchCode_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:txtRDOCode_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:txtRDOCode_1",
           "codec": "raw"
         }
       ],
@@ -377,7 +389,7 @@
           "codec": "raw"
         }
       ],
-      "default": "0%",
+      "default": "NaN%",
       "after": "\n\t"
     },
     {
@@ -1173,6 +1185,246 @@
       "after": "\n\t"
     },
     {
+      "key": "frm1801v2018:sched1Oct_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Oct_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Td_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Td_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Loc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Loc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Lot_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Lot_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Area_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Area_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Class_1'",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Class_1'",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Oct_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Oct_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Td_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Td_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Loc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Loc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Lot_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Lot_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Area_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Area_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Class_2'",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Class_2'",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Fmv_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Fmv_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Zonal_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Zonal_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Exc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Exc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Conj_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Conj_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Fmv_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Fmv_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Zonal_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Zonal_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Exc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Exc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1Conj_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1Conj_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
       "key": "frm1801v2018:sched1Exc_Total",
       "kind": "value",
       "parts": [
@@ -1190,6 +1442,222 @@
       "parts": [
         {
           "source": "frm1801v2018:sched1Conj_Total",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AOct_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AOct_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1ATd_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1ATd_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1ALoc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1ALoc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AArea_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AArea_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AClass_1'",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AClass_1'",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AFmv_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AFmv_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AZonal_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AZonal_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AExc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AExc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AConj_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AConj_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AOct_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AOct_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1ATd_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1ATd_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1ALoc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1ALoc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AArea_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AArea_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AClass_2'",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AClass_2'",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AFmv_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AFmv_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AZonal_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AZonal_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AExc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AExc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched1AConj_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched1AConj_2",
           "codec": "raw"
         }
       ],
@@ -1221,6 +1689,174 @@
       "after": "\n\t"
     },
     {
+      "key": "frm1801v2018:sched2Corp_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Corp_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Class_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Class_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Stock_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Stock_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Shares_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Shares_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2FmvPerShare_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2FmvPerShare_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Exc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Exc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Conj_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Conj_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Corp_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Corp_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Class_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Class_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Stock_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Stock_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Shares_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Shares_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2FmvPerShare_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2FmvPerShare_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Exc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Exc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2Conj_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2Conj_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
       "key": "frm1801v2018:sched2Exc_Total",
       "kind": "value",
       "parts": [
@@ -1238,6 +1874,78 @@
       "parts": [
         {
           "source": "frm1801v2018:sched2Conj_Total",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2AParticulars_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2AParticulars_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2AExc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2AExc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2AConj_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2AConj_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2AParticulars_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2AParticulars_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2AExc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2AExc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched2AConj_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched2AConj_2",
           "codec": "raw"
         }
       ],
@@ -1269,6 +1977,78 @@
       "after": "\n\t"
     },
     {
+      "key": "frm1801v2018:sched3Particulars_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched3Particulars_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched3Exc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched3Exc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched3Conj_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched3Conj_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched3Particulars_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched3Particulars_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched3Exc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched3Exc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched3Conj_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched3Conj_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
       "key": "frm1801v2018:sched3Exc_Total",
       "kind": "value",
       "parts": [
@@ -1286,6 +2066,126 @@
       "parts": [
         {
           "source": "frm1801v2018:sched3Conj_Total",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Name_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Name_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Address_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Address_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Rdo_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Rdo_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Exc_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Exc_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Conj_1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Conj_1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Name_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Name_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Address_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Address_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Rdo_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Rdo_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Exc_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Exc_2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\n\t"
+    },
+    {
+      "key": "frm1801v2018:sched4Conj_2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1801v2018:sched4Conj_2",
           "codec": "raw"
         }
       ],
@@ -1529,7 +2429,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "1",
       "after": "\n\t"
     },
     {
