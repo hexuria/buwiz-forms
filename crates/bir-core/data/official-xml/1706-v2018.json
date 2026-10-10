@@ -213,12 +213,24 @@
       "after": "\t\n            "
     },
     {
+      "key": "frm1706:txtRDOCodeB",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1706:txtRDOCodeB",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "\t\n            "
+    },
+    {
       "key": "frm1706:txtSellerName",
       "kind": "value",
       "parts": [
         {
           "source": "frm1706:txtSellerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -230,7 +242,7 @@
       "parts": [
         {
           "source": "frm1706:txtBuyerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -242,7 +254,7 @@
       "parts": [
         {
           "source": "frm1706:txtSellerAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -254,7 +266,7 @@
       "parts": [
         {
           "source": "frm1706:txtBuyerAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -266,7 +278,7 @@
       "parts": [
         {
           "source": "frm1706:txtSellerRAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -278,10 +290,22 @@
       "parts": [
         {
           "source": "frm1706:txtLocation",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm1706:txtRDOCode14A",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1706:txtRDOCode14A",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
       "after": "\t\n            "
     },
     {

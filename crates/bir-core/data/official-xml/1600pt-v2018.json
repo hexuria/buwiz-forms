@@ -27,7 +27,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1I1Month",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "00",
@@ -39,7 +40,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1I1Year",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -75,7 +77,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1I4NoOfSheets",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0",
@@ -87,7 +90,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1TIN1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -99,7 +103,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1TIN2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -111,7 +116,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1TIN3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -123,7 +129,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1TIN4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -135,10 +142,24 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1I6RDO",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:rdoPg1Pt1I7RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:rdoPg1Pt1I7RDO",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "000",
       "after": "    \n            "
     },
     {
@@ -147,7 +168,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt1I7WithholdingAgentsName",
-          "codec": "js-escape"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -159,7 +181,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt1I8RegisteredAddress",
-          "codec": "js-escape"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -171,7 +194,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt1I8RegisteredAddress2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -183,7 +207,8 @@
       "parts": [
         {
           "source": "frm1600PT:txPg1I8ZipCode",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -195,7 +220,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt1I9ContactNumber",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -219,7 +245,7 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt1I11Email",
-          "codec": "raw"
+          "codec": "js-escape"
         }
       ],
       "default": "",
@@ -243,10 +269,271 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt1I12TaxReliefSpec",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtAtcCd1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtAtcCd1",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxBase1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxBase1",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxRate1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxRate1",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxWithheld1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxWithheld1",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtAtcCd2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtAtcCd2",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxBase2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxBase2",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxRate2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxRate2",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxWithheld2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxWithheld2",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtAtcCd3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtAtcCd3",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxBase3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxBase3",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxRate3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxRate3",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxWithheld3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxWithheld3",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtAtcCd4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtAtcCd4",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxBase4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxBase4",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxRate4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxRate4",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxWithheld4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxWithheld4",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtAtcCd5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtAtcCd5",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxBase5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxBase5",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxRate5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxRate5",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600PT:txtPg1P2TaxWithheld5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600PT:txtPg1P2TaxWithheld5",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
       "after": "    \n            "
     },
     {
@@ -255,7 +542,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtTotalOtherTax",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -267,7 +555,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I18TotTaxWithheld",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -279,7 +568,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -291,7 +581,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I20OthrPymntsMade",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -303,7 +594,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I21TotTaxPymntsMade",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -315,7 +607,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I22TaxStillDueOverremit",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -327,7 +620,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I23Surcharge",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -339,7 +633,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I24Interest",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -351,7 +646,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I25Compromise",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -363,7 +659,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I26TotPenalties",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -375,7 +672,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1P2I27TotAmtStillDueOverremit",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -387,7 +685,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt4Indiv",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -399,7 +698,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt4NonIndiv",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -411,7 +711,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt4TaxAcredNo",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -423,7 +724,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt4DateOfIssue",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -435,7 +737,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt4DateOfExpiry",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -447,7 +750,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I28CashC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -459,7 +763,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I28CashC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -471,7 +776,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I28Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -483,7 +789,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I28CashC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -495,7 +802,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I29CheckC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -507,7 +815,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I29CheckC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -519,7 +828,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I29Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -531,7 +841,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I29CheckC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -543,7 +854,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I30TaxDebitC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -555,7 +867,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I30Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -567,7 +880,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I30TaxDebitC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -579,7 +893,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I31OthersC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -591,7 +906,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I31OthersC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -603,7 +919,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I31OthersC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -615,7 +932,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I31Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -627,7 +945,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg1Pt3I31OthersC4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -639,7 +958,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg2TinC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -651,7 +971,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg2TinC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -663,7 +984,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg2TinC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -675,7 +997,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg2TinC4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -687,7 +1010,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtPg2RegisteredName",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -699,7 +1023,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1SeqNo1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "1",
@@ -711,7 +1036,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TIN1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -723,7 +1049,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1Name1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -735,7 +1062,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1ATC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -747,7 +1075,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfIncPmt1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -759,7 +1088,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TaxRate1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -771,7 +1101,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -783,7 +1114,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1SeqNo2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "2",
@@ -795,7 +1127,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TIN2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -807,7 +1140,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1Name2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -819,7 +1153,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1ATC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -831,7 +1166,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfIncPmt2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -843,7 +1179,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TaxRate2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -855,7 +1192,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -867,7 +1205,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1SeqNo3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "3",
@@ -879,7 +1218,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TIN3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -891,7 +1231,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1Name3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -903,7 +1244,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1ATC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -915,7 +1257,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfIncPmt3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -927,7 +1270,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TaxRate3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -939,7 +1283,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -951,7 +1296,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1SeqNo4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "4",
@@ -963,7 +1309,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TIN4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -975,7 +1322,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1Name4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -987,7 +1335,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1ATC4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -999,7 +1348,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfIncPmt4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1011,7 +1361,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TaxRate4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1023,7 +1374,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1035,7 +1387,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1SeqNo5",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "5",
@@ -1059,7 +1412,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1Name5",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1071,7 +1425,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1ATC5",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1083,7 +1438,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfIncPmt5",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1095,7 +1451,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TaxRate5",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1107,7 +1464,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld5",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1119,7 +1477,8 @@
       "parts": [
         {
           "source": "frm1600PT:Pg2Sc1TotTxWthhldAndRmtted",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1131,7 +1490,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtLOB",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1143,7 +1503,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtCurrentPage",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1155,7 +1516,8 @@
       "parts": [
         {
           "source": "frm1600PT:txtMaxPage",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "2",
@@ -1167,7 +1529,8 @@
       "parts": [
         {
           "source": "hPartIITableSize",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1179,7 +1542,8 @@
       "parts": [
         {
           "source": "driveSelectTPExport",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0",
@@ -1191,7 +1555,8 @@
       "parts": [
         {
           "source": "txtFinalFlag",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1203,7 +1568,8 @@
       "parts": [
         {
           "source": "txtEnroll",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "N",
@@ -1215,7 +1581,8 @@
       "parts": [
         {
           "source": "ebirOnlineConfirmUsername",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1227,7 +1594,8 @@
       "parts": [
         {
           "source": "ebirOnlineUsername",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1239,7 +1607,8 @@
       "parts": [
         {
           "source": "ebirOnlineSecret",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",

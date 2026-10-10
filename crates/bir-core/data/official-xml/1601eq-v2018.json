@@ -5,7 +5,7 @@
   "official_hta": "BIR-Form1601EQ.hta",
   "official_hta_sha256": "cd56bf18d1da2127d578af611fe8005fe49913a65781bb603b22b31bbe548b96",
   "header": "<?xml version='1.0'?>",
-  "lead": "\n            ",
+  "lead": "            ",
   "value_rules": [],
   "entries": [
     {
@@ -18,55 +18,55 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optQuarter:1",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optQuarter:2",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optQuarter:3",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optQuarter:4",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optAmend:Y",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optAmend:N",
       "kind": "bool",
       "default": "true",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optWithheld:Y",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optWithheld:N",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtNoSheets",
@@ -78,7 +78,7 @@
         }
       ],
       "default": "0",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTIN1",
@@ -90,7 +90,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTIN2",
@@ -102,7 +102,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTIN3",
@@ -114,7 +114,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtBranchCode",
@@ -126,7 +126,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtRDOCode",
@@ -138,7 +138,7 @@
         }
       ],
       "default": "000",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTaxpayerName",
@@ -146,11 +146,11 @@
       "parts": [
         {
           "source": "frm1601EQ:txtTaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtLineBus",
@@ -158,11 +158,11 @@
       "parts": [
         {
           "source": "frm1601EQ:txtLineBus",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAddress",
@@ -170,15 +170,23 @@
       "parts": [
         {
           "source": "frm1601EQ:txtAddress",
-          "codec": "js-escape"
-        },
-        {
-          "source": "frm1601EQ:txtAddress2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAddress2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAddress2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtZipCode",
@@ -190,7 +198,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTelNum",
@@ -202,19 +210,19 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optCategory:P",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:optCategory:G",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "txtEmail",
@@ -226,7 +234,295 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAtcCd1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAtcCd1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxBase1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxBase1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxRate1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxRate1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxbeWithHeld1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxbeWithHeld1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAtcCd2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAtcCd2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxBase2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxBase2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxRate2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxRate2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxbeWithHeld2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxbeWithHeld2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAtcCd3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAtcCd3",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxBase3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxBase3",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxRate3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxRate3",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxbeWithHeld3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxbeWithHeld3",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAtcCd4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAtcCd4",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxBase4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxBase4",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxRate4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxRate4",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxbeWithHeld4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxbeWithHeld4",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAtcCd5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAtcCd5",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxBase5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxBase5",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxRate5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxRate5",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxbeWithHeld5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxbeWithHeld5",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtAtcCd6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtAtcCd6",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxBase6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxBase6",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxRate6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxRate6",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "            "
+    },
+    {
+      "key": "frm1601EQ:txtTaxbeWithHeld6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1601EQ:txtTaxbeWithHeld6",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTotalOtherTax",
@@ -238,7 +534,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax19",
@@ -250,7 +546,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax20",
@@ -262,7 +558,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax21",
@@ -274,7 +570,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax22",
@@ -286,7 +582,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax23",
@@ -298,7 +594,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax24",
@@ -310,7 +606,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax25",
@@ -322,7 +618,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax26",
@@ -334,7 +630,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax27",
@@ -346,7 +642,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax28",
@@ -358,7 +654,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax29",
@@ -370,7 +666,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtTax30",
@@ -382,25 +678,25 @@
         }
       ],
       "default": "0.00",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:ifRefund",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:ifIssueCert",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:ifCarriedOver",
       "kind": "bool",
       "default": "false",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "txtTaxAgentNo",
@@ -412,7 +708,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "txtDateIssue",
@@ -424,7 +720,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "txtDateExpiry",
@@ -436,7 +732,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAgency33",
@@ -448,7 +744,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtNumber33",
@@ -460,7 +756,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtDate33",
@@ -472,7 +768,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAmount33",
@@ -484,7 +780,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAgency34",
@@ -496,7 +792,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtNumber34",
@@ -508,7 +804,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtDate34",
@@ -520,7 +816,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAmount34",
@@ -532,7 +828,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAgency35",
@@ -544,7 +840,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtNumber35",
@@ -556,7 +852,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtDate35",
@@ -568,7 +864,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAmount35",
@@ -580,7 +876,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtParticular36",
@@ -592,7 +888,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAgency36",
@@ -604,7 +900,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtNumber36",
@@ -616,7 +912,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtDate36",
@@ -628,7 +924,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "frm1601EQ:txtAmount36",
@@ -640,7 +936,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "hPartIITableSize",
@@ -652,7 +948,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "txtFinalFlag",
@@ -664,7 +960,7 @@
         }
       ],
       "default": "0",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "txtEnroll",
@@ -676,7 +972,7 @@
         }
       ],
       "default": "N",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "ebirOnlineConfirmUsername",
@@ -688,7 +984,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "ebirOnlineUsername",
@@ -700,7 +996,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "ebirOnlineSecret",
@@ -712,7 +1008,7 @@
         }
       ],
       "default": "",
-      "after": "\n            "
+      "after": "            "
     },
     {
       "key": "driveSelectTPExport",
@@ -724,7 +1020,7 @@
         }
       ],
       "default": "0",
-      "after": "\n            \n            All Rights Reserved BIR 2012.0"
+      "after": "                        All Rights Reserved BIR 2012.0"
     }
   ]
 }

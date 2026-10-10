@@ -146,7 +146,7 @@
       "parts": [
         {
           "source": "frm1800v2018:txtDonorName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -158,11 +158,19 @@
       "parts": [
         {
           "source": "frm1800v2018:txtRegAddress",
-          "codec": "js-escape"
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtRegAddress2",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtRegAddress2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -186,11 +194,19 @@
       "parts": [
         {
           "source": "frm1800v2018:txtResAddress",
-          "codec": "js-escape"
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtResAddress2",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtResAddress2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -238,66 +254,106 @@
       "parts": [
         {
           "source": "frm1800v2018:txtDoneeNameA",
-          "codec": "js-escape"
-        },
-        {
-          "literal": "<div>frm1800v2018:txtDoneeTINA="
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeTINA",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeTINA",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeTINA=</div>    \n            <div>frm1800v2018:txtDoneeNameB="
-        },
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeNameB",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeNameB",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeNameB=</div>    \n            <div>frm1800v2018:txtDoneeTINB="
-        },
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeTINB",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeTINB",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeTINB=</div>    \n            <div>frm1800v2018:txtDoneeNameC="
-        },
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeNameC",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeNameC",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeNameC=</div>    \n            <div>frm1800v2018:txtDoneeTINC="
-        },
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeTINC",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeTINC",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeTINC=</div>    \n            <div>frm1800v2018:txtDoneeNameD="
-        },
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeNameD",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeNameD",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeNameD=</div>    \n            <div>frm1800v2018:txtDoneeTIND="
-        },
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeTIND",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1800v2018:txtDoneeTIND",
           "codec": "raw"
-        },
-        {
-          "literal": "frm1800v2018:txtDoneeTIND=</div>    \n            "
-        },
-        {
-          "source": "frm1800v2018:txtDoneeNameE",
-          "codec": "js-escape"
         }
       ],
-      "default": "<div>frm1800v2018:txtDoneeTINA=frm1800v2018:txtDoneeTINA=</div>    \n            <div>frm1800v2018:txtDoneeNameB=frm1800v2018:txtDoneeNameB=</div>    \n            <div>frm1800v2018:txtDoneeTINB=frm1800v2018:txtDoneeTINB=</div>    \n            <div>frm1800v2018:txtDoneeNameC=frm1800v2018:txtDoneeNameC=</div>    \n            <div>frm1800v2018:txtDoneeTINC=frm1800v2018:txtDoneeTINC=</div>    \n            <div>frm1800v2018:txtDoneeNameD=frm1800v2018:txtDoneeNameD=</div>    \n            <div>frm1800v2018:txtDoneeTIND=frm1800v2018:txtDoneeTIND=</div>    \n            ",
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1800v2018:txtDoneeNameE",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1800v2018:txtDoneeNameE",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
       "after": "    \n            "
     },
     {
@@ -1775,10 +1831,11 @@
       "kind": "value",
       "parts": [
         {
-          "literal": "1"
+          "source": "frm1800v2018:txtCurrentPage",
+          "codec": "raw"
         }
       ],
-      "default": "1",
+      "default": "",
       "after": "    \n            "
     },
     {
@@ -1835,7 +1892,7 @@
       "parts": [
         {
           "source": "frm1800v2018:txtLineBus",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

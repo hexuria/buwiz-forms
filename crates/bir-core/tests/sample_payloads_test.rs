@@ -97,7 +97,7 @@ pub(crate) fn check_sample(
         .unwrap_or_else(|e| panic!("missing {}: {e}", official_plain_path.display()));
     assert_eq!(
         plaintext, official_plain,
-        "{stem}: our plaintext differs from the official saveXMLsubmit() output"
+        "{stem}: our plaintext differs from the official upload (saveEncryptedProfile) output"
     );
 
     let digest: String = Sha256::digest(&encrypted)

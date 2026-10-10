@@ -34,6 +34,6 @@ fn form_1601c_sample_payload_is_current() {
         "1601C-062025",
         "1601c-v2018",
         &payload,
-        "74731b2485fc21e3ced644988515019ed271a4f7e7b0ac5e9b07a5c82011f16d",
+        "3998c1b12d3c00f4e3c7ea6d36db21ac214721900c04a0aae4b2637f620126fd",
     );
 }

@@ -50,11 +50,14 @@ pub enum Entry {
     },
 }
 
-/// 1702MX `numbertext` amounts: the official loop strips commas, turns
-/// `(5.00)` into `-5.00` (`NumWithParenthesis`) and writes no `<div>` (and
-/// no separator) when the result is numerically zero.
+/// 1702MX `numbertext` amounts: the official loop strips commas and turns
+/// `(5.00)` into `-5.00` (`NumWithParenthesis`). The upload loop
+/// (`saveEncryptedProfile`) stops there; the older `saveXMLsubmit` loop also
+/// writes no `<div>` (and no separator) when the result is numerically zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum NumberRule {
+    #[serde(rename = "normalize")]
+    Normalize,
     #[serde(rename = "omit-zero")]
     OmitZero,
 }
@@ -242,6 +245,7 @@ pub fn write(
                     default.clone()
                 };
                 let body = match number {
+                    Some(NumberRule::Normalize) => official_number_text(&body),
                     Some(NumberRule::OmitZero) => {
                         let normalized = official_number_text(&body);
                         if js_is_zero(&normalized) {
@@ -561,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn read_inverts_write_and_checks_duplicates() {
+    fn read_inverts_write_and_checks_structure() {
         let layout = layout("2551q-v2018").unwrap();
         let mut values = BTreeMap::new();
         values.insert(
@@ -576,28 +580,20 @@ mod tests {
             assert_eq!(read_back.get(key), Some(value), "{key}");
         }
 
-        // The two copies of a duplicated control must agree.
-        let tampered = plain.replacen(
-            "<div>frm2551Qv2018:rtnMonth=06frm2551Qv2018:rtnMonth=</div>",
-            "<div>frm2551Qv2018:rtnMonth=07frm2551Qv2018:rtnMonth=</div>",
-            1,
-        );
-        assert_ne!(tampered, plain);
-        assert!(matches!(
-            read(layout, &tampered),
-            Err(OfficialXmlError::Inconsistent { .. })
+        // Raw values (the upload loop doesn't escape): a value is read back as written.
+        assert!(plain.contains(
+            "<div>frm2551Qv2018:registeredName=PEÑA, JUANfrm2551Qv2018:registeredName=</div>"
         ));
         assert!(matches!(
-            read(layout, &plain.replace("\n\t\t<div>", "\n<div>")),
+            read(layout, &plain.replace("\t\t<div>", "\n<div>")),
             Err(OfficialXmlError::Layout { .. })
         ));
     }
 
     #[test]
     fn number_rule_matches_the_official_1702mx_loop() {
-        // `tools/official-xml/oracle.js` output for these values: commas
-        // stripped, "(5.00)" -> "-5.00", the zero amount and every untouched
-        // zero-default amount written as no <div> at all.
+        // `tools/official-xml/oracle.js` output (the upload loop) for these
+        // values: commas stripped, "(5.00)" -> "-5.00", zero amounts kept.
         let values: BTreeMap<String, String> = serde_json::from_str(include_str!(
             "../tests/official-xml/1702mx-number-rule.values.json"
         ))
@@ -609,10 +605,9 @@ mod tests {
         assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I14TotalIncome=1234.50"));
         assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I15LessTotalTax=-5.00"));
         assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I17=-1000.25"));
-        assert!(!ours.contains("<div>frm1702MX:txtPg1Pt2I16NetTaxPayable="));
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I16NetTaxPayable=0.00"));
         let back = read(layout, &ours).unwrap();
         assert_eq!(back["frm1702MX:txtPg1Pt2I14TotalIncome"], "1234.50");
-        assert!(!back.contains_key("frm1702MX:txtPg1Pt2I16NetTaxPayable"));
         assert_eq!(official_number_text("(1,234.50)"), "-1234.50");
         assert!(js_is_zero("") && js_is_zero("-0.00") && !js_is_zero("abc"));
     }
@@ -639,7 +634,8 @@ mod tests {
     fn empty_values_reproduce_the_official_page_defaults() {
         let layout = layout("2551q-v2018").unwrap();
         let plain = write(layout, &BTreeMap::new()).unwrap();
-        assert!(plain.starts_with("<?xml version='1.0'?>\n\t\t<div>frm2551Qv2018:forThe_1="));
+        // IE drops the newline after <xmp>, so the separator is "\t\t".
+        assert!(plain.starts_with("<?xml version='1.0'?>\t\t<div>frm2551Qv2018:forThe_1="));
         assert!(plain.contains(
             "<div>frm2551Qv2018:txtTaxReliefSpecify=0frm2551Qv2018:txtTaxReliefSpecify=</div>"
         ));

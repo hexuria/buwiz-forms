@@ -1,4 +1,9 @@
-// Shared helpers: run an official HTA's saveXMLsubmit() field loop in jsdom.
+// Shared helpers: run an official HTA's upload loop in jsdom.
+//
+// What eBIRForms uploads over SFTP is the file `saveEncryptedProfile(true)`
+// writes (every form's submit does `emailFilePath = saveEncryptedProfile(true)`
+// then RenameAndSendFile). Set OFFICIAL_LOOP=submit for the older
+// saveXMLsubmit() loop (eBIRForms Online path) instead.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -36,11 +41,22 @@ function matchBrace(src, i) {
 }
 
 function extractLoop(src) {
-  // The submit path. A few forms (1700) only have saveXML(isFinalCopy).
-  let fn = src.indexOf('function saveXMLsubmit(');
-  if (fn < 0) fn = src.indexOf('function saveXML(');
-  if (fn < 0) throw new Error('no saveXML function');
-  const start = src.indexOf('var allXML', fn);
+  let fn, start;
+  if (process.env.OFFICIAL_LOOP === 'submit') {
+    // A few forms (1700) only have saveXML(isFinalCopy).
+    fn = src.indexOf('function saveXMLsubmit(');
+    if (fn < 0) fn = src.indexOf('function saveXML(');
+    if (fn < 0) throw new Error('no saveXML function');
+    start = src.indexOf('var allXML', fn);
+  } else {
+    fn = src.indexOf('function saveEncryptedProfile(');
+    if (fn < 0) throw new Error('no saveEncryptedProfile function');
+    // The last allXML build before the file is encrypted (some forms keep an
+    // older, commented-out variant above it).
+    const enc = src.indexOf('EncryptFile(', fn);
+    start = src.lastIndexOf('var allXML', enc);
+    if (start < fn) throw new Error('allXML not found');
+  }
   if (start < 0) throw new Error('allXML not found');
   let forAt = skipTrivia(src, src.indexOf(';', src.indexOf('.elements', start)) + 1);
   while (!src.startsWith('for', forAt)) forAt = skipTrivia(src, src.indexOf(';', forAt) + 1);
@@ -84,18 +100,107 @@ function load(htaPath) {
   };
 }
 
+// A load-time helper's source, or null when absent or not parseable here.
+function optionalFunctionSource(name, html) {
+  try { return functionSource(name, [html]); } catch (e) { return null; }
+}
+
+// IE drops a newline directly after an <xmp> start tag (as for <pre>);
+// jsdom keeps it. The xmlFormat separator is read from that element, and the
+// user's real 2551Q upload proves IE's reading ("\t\t", not "\n\t\t").
+function ieXmpText(doc) {
+  for (const el of doc.querySelectorAll('xmp')) {
+    const t = el.textContent;
+    if (t.startsWith('\r\n')) el.textContent = t.slice(2);
+    else if (t.startsWith('\n')) el.textContent = t.slice(1);
+  }
+}
+
 // Build the DOM the way the page looks after its load handlers ran.
 function prepare(html) {
   const virtualConsole = new VirtualConsole(); // ignore jsdom CSS parse warnings
   const dom = new JSDOM(html, { runScripts: 'outside-only', virtualConsole });
   const doc = dom.window.document;
+  ieXmpText(doc);
   const form = doc.getElementById('frmMain');
   const first = form.querySelector('[id*=":"]');
   const prefix = first ? first.id.split(':')[0] : '';
-  // getRdo() injects the RDO select into td#rdoSelect at load.
+  // getRdo() injects the RDO select into td#rdoSelect at load, with the id
+  // its own markup names (frm1604c:rdoCode on 1604C; txtRDOCode on most).
   const rdoCell = doc.getElementById('rdoSelect');
-  if (rdoCell && prefix && !doc.getElementById(prefix + ':txtRDOCode')) {
-    rdoCell.innerHTML = `<select id='${prefix}:txtRDOCode' name='${prefix}:txtRDOCode' size='1'><option value='000'> </option></select>`;
+  const mainRdo = /function\s+getRdo\s*\([\s\S]*?<select[^>]*\bid=['"]([^'"]+)['"]/.exec(html);
+  const rdoId = mainRdo ? mainRdo[1] : prefix + ':txtRDOCode';
+  if (rdoCell && prefix && !doc.getElementById(rdoId)) {
+    rdoCell.innerHTML = `<select id='${rdoId}' name='${rdoId}' size='1'><option value='000'> </option></select>`;
+  }
+  // Other getRdo() bodies fill more cells with `$('#cell').html(data)`: 1606
+  // (seller, Item 16A in td#rdoSelect2/3), 1600VT/PT (td#rdoContainer).
+  // Inject those selects with the ids the page gives them.
+  const getRdo = optionalFunctionSource('getRdo', html);
+  if (getRdo) {
+    const selectIds = {};
+    for (const m of getRdo.matchAll(/var\s+(\w+)\s*=\s*"<select[^"]*?id='([^']+)'/g)) selectIds[m[1]] = m[2];
+    for (const m of getRdo.matchAll(/\$\('#(\w+)'\)\.html\((\w+)\)/g)) {
+      const cell = doc.getElementById(m[1]);
+      const id = selectIds[m[2]];
+      if (cell && id && !doc.getElementById(id)) {
+        cell.innerHTML = `<select id='${id}' name='${id}' size='1'><option value='000'> </option></select>`;
+      }
+    }
+  }
+  // populateAtcPart2() (1600VT/PT) draws the five empty Part II ATC rows at
+  // load; run the page's own function with a minimal `$(...).html()`.
+  const populate = optionalFunctionSource('populateAtcPart2', html);
+  if (populate) {
+    const w = dom.window;
+    w.d = doc;
+    w.$ = (sel) => {
+      const el = doc.getElementById(String(sel).replace(/^#/, ''));
+      return { html: (h) => (h === undefined ? el.innerHTML : (el.innerHTML = h)) };
+    };
+    w.eval(populate + '\npopulateAtcPart2();');
+    delete w.$;
+  }
+  // Other forms' getRdo() writes its own RDO select into div#rdoContainer
+  // (2200C: frm2200C:rdoPg1Pt1I6RDO). Take the id from the page's getRdo().
+  const rdoContainer = doc.getElementById('rdoContainer');
+  const rdoSelect = /function\s+getRdo\s*\([^]*?<select id='([^']+)'[^]*?\$\('#rdoContainer'\)/.exec(html);
+  if (rdoContainer && rdoSelect && !doc.getElementById(rdoSelect[1])) {
+    rdoContainer.innerHTML = `<select id='${rdoSelect[1]}' name='${rdoSelect[1]}' size='1'><option value='000'>000</option></select>`;
+  }
+  // 2200S: createStaticFieldForSched1() fills tbody#frm2200SBeverages with ten
+  // beverage rows (sales value, volume of removals, basic tax due) at init.
+  const beverages = doc.getElementById('frm2200SBeverages');
+  if (beverages && !beverages.querySelector('input')) {
+    let rows = '';
+    for (let x = 0; x < 10; x++) {
+      rows += `<tr><td><input type='hidden' id='frm2200S:hideProAppRate${x}' value='0'></td>` +
+        `<td><input type='text' id='frm2200S:txtSalesValue${x}' value='0.00'></td>` +
+        `<td><input type='text' id='frm2200S:txtVolumeRemovals${x}' value='0.00'></td>` +
+        `<td><input type='text' id='frm2200S:txtBasicTaxDue${x}' value='0.00' disabled></td></tr>`;
+    }
+    beverages.innerHTML = rows;
+  }
+  // Some getRdo() bodies give the #rdoSelect select another id (2200Tv2020,
+  // 2200Av2020: '…:rdoCode'); the submit loop writes that id.
+  const rdoSelectSrc = optionalFunctionSource('getRdo', html) || '';
+  const rdoSelectId = /<select[^>]*?id='([^']+)'/.exec(rdoSelectSrc);
+  if (rdoCell && rdoSelectId && /#rdoSelect['"]\)\.html/.test(rdoSelectSrc) && !doc.getElementById(rdoSelectId[1])) {
+    rdoCell.innerHTML = `<select id='${rdoSelectId[1]}' name='${rdoSelectId[1]}' size='1'><option value='000'> </option></select>`;
+  }
+  // Other forms' getRdo() injects its own <select id='…'> into div#rdoContainer
+  // (2552v2018: frm2552:rdoPg1Pt1I5RDO); the submit loop writes it too.
+  const injected = /function\s+getRdo\s*\([^)]*\)\s*\{[^}]*?<select id='([^']+)'/.exec(html);
+  if (rdoContainer && injected && !doc.getElementById(injected[1])) {
+    rdoContainer.innerHTML = `<select id='${injected[1]}' name='${injected[1]}' size='1'><option value='000'>000</option></select>`;
+  }
+  // getRdo() also fills td#rdoSpouseSelect / td#spouseRdoSelect (1700, 1701A)
+  // and div#rdoContainer (1702EX) with RDO selects at load.
+  for (const [cell, suffix] of [['rdoSpouseSelect', 'txtSpouseRDOCode'], ['spouseRdoSelect', 'txtSpouseRDOCode'], ['rdoContainer', 'rdoPg1Pt1I7RDO']]) {
+    const el = doc.getElementById(cell);
+    if (el && prefix && !doc.getElementById(prefix + ':' + suffix)) {
+      el.innerHTML = `<select id='${prefix}:${suffix}' name='${prefix}:${suffix}' size='1'><option value='000'>${suffix === 'rdoPg1Pt1I7RDO' ? '000' : ' '}</option></select>`;
+    }
   }
   // getDrives() (js/string-util.js) fills every drive select with a "0"
   // placeholder, selected, ahead of the machine's drive letters.
@@ -152,4 +257,4 @@ function run(dom, loop, libs = []) {
   throw new Error('too many undefined globals');
 }
 
-module.exports = { load, prepare, controls, setValue, run };
+module.exports = { load, prepare, controls, setValue, run, ieXmpText };

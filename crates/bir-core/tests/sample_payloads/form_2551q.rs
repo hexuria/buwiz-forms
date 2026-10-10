@@ -25,6 +25,6 @@ fn form_2551q_sample_payload_is_current() {
         "2551Q-122025Q1",
         "2551q-v2018",
         &payload,
-        "fa902b122f7a6dafca86314914279491aeceea8a46c23815178dd7403e820bb9",
+        "03ae790bfe2eb3593248f8204aea9d4614f4cecfadd642da61732d963f584d8d",
     );
 }

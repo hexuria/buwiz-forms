@@ -1,6 +1,9 @@
 // Derive the official submit plaintext layout of one form.
 //
-// Usage: node gen_layout.js <BIR-FormXXXX.hta> <form_id>   (JSON on stdout)
+// Usage: node gen_layout.js <BIR-FormXXXX.hta> <form_id> [setup.js]   (JSON on stdout)
+//
+// setup.js (optional) runs in the prepared page before each pass, for state
+// the page builds from a filer's choice rather than at load (setup/README.md).
 //
 // Run 1 puts a unique marker with a space in every text/select control and
 // checks every radio/checkbox; each <div> then shows which controls it holds,
@@ -8,10 +11,20 @@
 // page's own defaults, which gives each occurrence's default body.
 'use strict';
 const path = require('path');
-const { load, prepare, controls, setValue, run } = require('./official');
+const fs = require('fs');
+const { load, prepare: prepareStatic, controls, setValue, run } = require('./official');
 
-const [htaPath, formId] = process.argv.slice(2);
+const [htaPath, formId, setupPath] = process.argv.slice(2);
 const { html, libs, sha256, loop } = load(htaPath);
+const setup = setupPath ? fs.readFileSync(setupPath, 'utf8') : null;
+function prepare(source) {
+  const prepared = prepareStatic(source);
+  if (setup) {
+    prepared.dom.window.d = prepared.doc;
+    prepared.dom.window.eval(setup);
+  }
+  return prepared;
+}
 
 // Split the plaintext into: the text before the first <div>, each <div>
 // with the exact text that follows it, and the final tail. Forms differ in
@@ -104,8 +117,11 @@ const entries = marked.divs.map((d, n) => {
   }
   if (consumed !== d.body.length) parts.push({ literal: d.body.slice(consumed) });
   if (numberKeys.has(d.key)) {
+    // The saveXMLsubmit loop skips zero amounts; the upload loop
+    // (saveEncryptedProfile) only normalizes them.
+    const rule = defaultBody.some((b) => b === null) ? 'omit-zero' : 'normalize';
     const def = defaultBody[n] === null ? String(controlDefault.get(d.key) ?? '') : defaultBody[n];
-    return { key: d.key, kind: 'value', parts, default: def, number: 'omit-zero', after: d.after };
+    return { key: d.key, kind: 'value', parts, default: def, number: rule, after: d.after };
   }
   return { key: d.key, kind: 'value', parts, default: defaultBody[n], after: d.after };
 });
@@ -125,7 +141,7 @@ function expected(entry, value, n) {
   if (entry.kind === 'bool') return marked.divs[n].body;
   if (entry.number) {
     const v = officialNumber(value);
-    return v * 1 !== 0 ? v : null;
+    return entry.number === 'normalize' || v * 1 !== 0 ? v : null;
   }
   return entry.parts.map((p) => {
     if (p.literal !== undefined) return p.literal;

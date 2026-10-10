@@ -93,11 +93,11 @@
       "after": "\t\n\t\t\t"
     },
     {
-      "key": "frm1604c:txtRDOCode",
+      "key": "frm1604c:rdoCode",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1604c:txtRDOCode",
+          "source": "frm1604c:rdoCode",
           "codec": "raw"
         }
       ],
@@ -110,7 +110,7 @@
       "parts": [
         {
           "source": "frm1604c:registeredName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -122,7 +122,7 @@
       "parts": [
         {
           "source": "frm1604c:registeredAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
