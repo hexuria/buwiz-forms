@@ -17,6 +17,7 @@ use crate::components::form_engine::FormViewTrait;
 use crate::components::tax_relief_select::{
     TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
 };
+use crate::views::event_form_kit::Layout;
 use gpui_component::select::{Select, SelectEvent};
 
 pub enum Form1601CEvent {
@@ -1153,7 +1154,13 @@ impl Form1601CView {
 }
 
 impl Render for Form1601CView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
         let is_draft = matches!(self.draft.status, FilingStatus::Draft);
         let is_queued = matches!(self.draft.status, FilingStatus::Queued);
         let claim_active = self.draft.submission_claim_token.is_some()
@@ -1209,7 +1216,8 @@ impl Render for Form1601CView {
             .h_full()
             .bg(cx.theme().background)
             .child(rsx! {
-                <div flex items_center justify_between px_8 py_4
+                <div flex items_center justify_between flex_wrap gap_2 py_4
+                    px={pad}
                     bg={cx.theme().background}
                     border_b_1
                     border_color={cx.theme().border}>
@@ -1218,7 +1226,7 @@ impl Render for Form1601CView {
                         .on_click(cx.listener(|_, _, _, cx| {
                             cx.emit(Form1601CEvent::BackToDashboard);
                         }))}
-                    <div flex items_center gap_3>
+                    <div flex items_center flex_wrap gap_3>
                         {gpui_component::button::Button::new("save_draft_btn")
                             .label("Save Draft")
                             .outline()
@@ -1257,7 +1265,7 @@ impl Render for Form1601CView {
                 </div>
             })
             .child(rsx! {
-                <div p_6 border_b_1
+                <div p={pad} border_b_1
                     border_color={cx.theme().border}
                     bg={cx.theme().background}>
                     {self.render_header(cx)}
@@ -1290,8 +1298,8 @@ impl Render for Form1601CView {
             .child(rsx! {
                 <div id={crate::agent::ids::FORM_1601C_SCROLL} flex_1 w_full overflow_y_scroll
                     track_scroll={&self.scroll_handle}
-                    p_8>
-                    <div max_w={px(800.)} mx_auto flex flex_col gap_6>
+                    p={pad}>
+                    <div max_w={px(800.)} w_full mx_auto flex flex_col gap_6>
                         <div bg={cx.theme().background}
                             border_1
                             border_color={cx.theme().border}
@@ -1318,7 +1326,7 @@ impl Render for Form1601CView {
                                 )}</div>
                             </div>
                         </div>
-                        {self.render_schedule_section(is_draft, cx)}
+                        {self.render_schedule_section(layout, is_draft, cx)}
                         <div bg={cx.theme().background}
                             border_1
                             border_color={cx.theme().border}
@@ -1334,7 +1342,7 @@ impl Render for Form1601CView {
                                                 </div>
                                             })
                                             .child(rsx! {
-                                                <div flex gap_4 items_center>
+                                                <div flex flex_wrap gap_2 items_center>
                                                     <div>{"Amended Return?"}</div>
                                                     {div()
                                                             .id("amended_btn")
@@ -1372,7 +1380,7 @@ impl Render for Form1601CView {
                                                 </div>
                                             })
                                             .child(rsx! {
-                                                <div flex gap_4 items_center>
+                                                <div flex flex_wrap gap_2 items_center>
                                                     <div>{"Any Taxes Withheld?"}</div>
                                                     {div()
                                                             .id(crate::agent::ids::FORM_1601C_WITHHELD)
@@ -1412,15 +1420,15 @@ impl Render for Form1601CView {
                                                             })}
                                                 </div>
                                             })
-                                            .child(div().id(crate::agent::ids::FORM_1601C_SHEETS).child(self.render_input_row(
+                                            .child(div().id(crate::agent::ids::FORM_1601C_SHEETS).child(self.render_input_row(layout,
                                                 "Number of Sheets Attached",
                                                 &self.number_of_sheets,
                                                 cx,
                                             )))
-                                            .child(self.render_input_row("ATC", &self.atc, cx))
-                                            .child(self.render_category_of_agent(cx))
+                                            .child(self.render_input_row(layout,"ATC", &self.atc, cx))
+                                            .child(self.render_category_of_agent(layout, cx))
                                             .child(rsx! {
-                                                <div flex gap_4 items_center>
+                                                <div flex flex_wrap gap_2 items_center>
                                                     <div>{
                                                         "13 Payees availing of tax relief under Special Law or International Tax Treaty?"
                                                     }</div>
@@ -1473,7 +1481,7 @@ impl Render for Form1601CView {
                                                 </div>
                                             })
                                             .when(self.tax_relief, |content| {
-                                                content.child(self.render_tax_relief_row())
+                                                content.child(self.render_tax_relief_row(layout))
                                             })}
                         </div>
                         <div bg={cx.theme().background}
@@ -1484,7 +1492,7 @@ impl Render for Form1601CView {
                                 <div text_xl font_weight={FontWeight::BOLD}>
                                     {"Part II - Computation of Tax"}
                                 </div>
-                                {div().id(crate::agent::ids::FORM_1601C_TAX_14).child(self.render_input_row(
+                                {div().id(crate::agent::ids::FORM_1601C_TAX_14).child(self.render_input_row(layout,
                                     "14 Total Amount of Compensation",
                                     &self.tax_14_total_compensation,
                                     cx,
@@ -1492,89 +1500,89 @@ impl Render for Form1601CView {
                                 <div text_lg font_weight={FontWeight::SEMIBOLD} mt_4>
                                     {"Less: Non-Taxable/Exempt Compensation"}
                                 </div>
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "15 Statutory Minimum Wage",
                                     &self.tax_15_statutory_minimum_wage,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "16 Holiday Pay, Overtime Pay, Night Shift",
                                     &self.tax_16_holiday_pay,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "17 13th Month Pay and Other Benefits",
                                     &self.tax_17_13th_month_pay,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "18 De Minimis Benefits",
                                     &self.tax_18_de_minimis,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "19 SSS, GSIS, PHIC, HDMF Contributions",
                                     &self.tax_19_sss_gsis,
                                     cx,
                                 )}
-                                {self.render_input_with_text_row(
+                                {self.render_input_with_text_row(layout,
                                     "20 Other Non-Taxable Compensation",
                                     &self.tax_20_other_name,
                                     &self.tax_20_other_amount,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "21 Total Non-Taxable Compensation",
                                     self.draft.tax_21_total_non_taxable,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "22 Total Taxable Compensation (14 - 21)",
                                     self.draft.tax_22_total_taxable,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "23 Less: Taxable comp not subject to withholding",
                                     &self.tax_23_not_subject,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "24 Net Taxable Compensation (22 - 23)",
                                     self.draft.tax_24_net_taxable,
                                     cx,
                                 )}
-                                {div().id(crate::agent::ids::FORM_1601C_TAX_25).child(self.render_input_row(
+                                {div().id(crate::agent::ids::FORM_1601C_TAX_25).child(self.render_input_row(layout,
                                     "25 Total Taxes Withheld",
                                     &self.tax_25_total_taxes_withheld,
                                     cx,
                                 ))}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "26 Add/Less: Adjustment from Schedule I",
                                     self.draft.tax_26_adjustment,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "27 Taxes Withheld for Remittance",
                                     self.draft.tax_27_taxes_withheld_for_remittance,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "28 Less: Tax Remitted in Return Previously Filed",
                                     &self.tax_28_tax_remitted_previously,
                                     cx,
                                 )}
-                                {self.render_input_with_text_row(
+                                {self.render_input_with_text_row(layout,
                                     "29 Other Remittances Made",
                                     &self.tax_29_other_remittances_name,
                                     &self.tax_29_other_remittances_amount,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "30 Total Tax Remittances Made",
                                     self.draft.tax_30_total_tax_remittances,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "31 Tax Still Due/(Overremittance)",
                                     self.draft.tax_31_tax_still_due,
                                     cx,
@@ -1589,22 +1597,22 @@ impl Render for Form1601CView {
                                 <div text_xl font_weight={FontWeight::BOLD}>
                                     {"Add: Penalties"}
                                 </div>
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "32 Surcharge",
                                     &self.tax_32_surcharge,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "33 Interest",
                                     &self.tax_33_interest,
                                     cx,
                                 )}
-                                {self.render_input_row(
+                                {self.render_input_row(layout,
                                     "34 Compromise",
                                     &self.tax_34_compromise,
                                     cx,
                                 )}
-                                {self.render_computed_row(
+                                {self.render_computed_row(layout,
                                     "35 Total Penalties",
                                     self.draft.tax_35_total_penalties,
                                     cx,
@@ -1615,7 +1623,7 @@ impl Render for Form1601CView {
                             border_1
                             border_color={cx.theme().primary.opacity(0.2)}
                             rounded_lg>
-                            <div flex justify_between items_center p_6>
+                            <div flex justify_between items_center flex_wrap gap_2 p_6>
                                 <div text_2xl
                                     font_weight={FontWeight::BOLD}
                                     text_color={cx.theme().primary}>
@@ -1638,7 +1646,12 @@ impl Render for Form1601CView {
 }
 
 impl Form1601CView {
-    fn render_schedule_section(&self, is_editable: bool, cx: &Context<Self>) -> Div {
+    fn render_schedule_section(
+        &self,
+        layout: Layout,
+        is_editable: bool,
+        cx: &Context<Self>,
+    ) -> Div {
         let row_count = self.draft.schedule_1.len();
         let rows = self
             .schedule_row_inputs
@@ -1680,33 +1693,33 @@ impl Form1601CView {
                                     )),
                                 )
                             })}
-                        {self.render_input_row(
+                        {self.render_input_row(layout,
                             "1 Previous Month (MM/YYYY)",
                             &inputs.previous_month,
                             cx,
                         )}
-                        {self.render_input_row("2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, cx)}
-                        {self.render_input_row(
+                        {self.render_input_row(layout,"2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, cx)}
+                        {self.render_input_row(layout,
                             "3 Drawee Bank / Bank Code / Agency",
                             &inputs.drawee_bank_code_or_agency,
                             cx,
                         )}
-                        {self.render_input_row(
+                        {self.render_input_row(layout,
                             "4 Payment Reference Number",
                             &inputs.payment_number,
                             cx,
                         )}
-                        {self.render_input_row(
+                        {self.render_input_row(layout,
                             "5 Tax Paid (excluding penalties)",
                             &inputs.tax_paid,
                             cx,
                         )}
-                        {self.render_input_row(
+                        {self.render_input_row(layout,
                             "6 Should Be Tax Due for the Month",
                             &inputs.should_be_tax_due,
                             cx,
                         )}
-                        {self.render_computed_row(
+                        {self.render_computed_row(layout,
                             "7 Adjustment (Item 6 less Item 5)",
                             adjustment,
                             cx,
@@ -1722,7 +1735,7 @@ impl Form1601CView {
                 border_color={cx.theme().border}
                 rounded_lg>
                 <div flex flex_col gap_4 p_4>
-                    <div flex items_center justify_between>
+                    <div flex items_center justify_between flex_wrap gap_2>
                         <div flex flex_col gap_1>
                             <div text_xl font_weight={FontWeight::BOLD}>
                                 {"Part IV - Schedule I"}
@@ -1757,7 +1770,7 @@ impl Form1601CView {
                                     })}
                     </div>
                     {...rows}
-                    {self.render_computed_row(
+                    {self.render_computed_row(layout,
                         "4 Total Adjustment (to Part II, Item 26)",
                         self.draft.tax_26_adjustment,
                         cx,
@@ -1767,86 +1780,128 @@ impl Form1601CView {
         }
     }
 
-    fn render_tax_relief_row(&self) -> impl IntoElement {
-        let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        rsx! {
-            <div flex justify_between items_center gap_4>
-                <div w_1_2 text_sm font_weight={FontWeight::MEDIUM}>
-                    {"13A If yes, specify"}
-                </div>
-                <div w_1_2>
-                    {Select::new(&self.tax_relief_specification)
-                        .placeholder("Choose Special Rate, Treaty, or Both")
-                        .disabled(is_disabled)}
-                </div>
-            </div>
+    /// Label/control pair: side by side above Phone, stacked on Phone.
+    fn pair_row(layout: Layout) -> Div {
+        if layout == Layout::Phone {
+            div().flex().flex_col().gap_1().w_full()
+        } else {
+            div().flex().justify_between().items_center().gap_4()
         }
+    }
+
+    fn half(layout: Layout) -> Div {
+        if layout == Layout::Phone {
+            div().w_full()
+        } else {
+            div().w_1_2()
+        }
+    }
+
+    fn render_tax_relief_row(&self, layout: Layout) -> impl IntoElement {
+        let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
+        Self::pair_row(layout)
+            .child(
+                Self::half(layout)
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("13A If yes, specify"),
+            )
+            .child(
+                Self::half(layout).child(
+                    Select::new(&self.tax_relief_specification)
+                        .placeholder("Choose Special Rate, Treaty, or Both")
+                        .disabled(is_disabled),
+                ),
+            )
     }
 
     fn render_input_row(
         &self,
+        layout: Layout,
         label: &str,
         input: &Entity<InputState>,
         _cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        rsx! {
-            <div flex justify_between items_center gap_4>
-                <div w_1_2 text_sm font_weight={FontWeight::MEDIUM}>
-                    {label.to_string()}
-                </div>
-                <div w_1_2>{Input::new(input).disabled(is_disabled)}</div>
-            </div>
-        }
+        Self::pair_row(layout)
+            .child(
+                Self::half(layout)
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(label.to_string()),
+            )
+            .child(Self::half(layout).child(Input::new(input).disabled(is_disabled)))
     }
 
     fn render_input_with_text_row(
         &self,
+        layout: Layout,
         label: &str,
         text_input: &Entity<InputState>,
         amount_input: &Entity<InputState>,
         _cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        rsx! {
-            <div flex justify_between items_center gap_4>
-                <div w_1_2 flex flex_col gap_2>
-                    <div text_sm font_weight={FontWeight::MEDIUM}>
-                        {label.to_string()}
-                    </div>
-                    {Input::new(text_input).disabled(is_disabled)}
-                </div>
-                <div w_1_2>
-                    {Input::new(amount_input).disabled(is_disabled)}
-                </div>
-            </div>
-        }
+        let label_and_text = Self::half(layout)
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(label.to_string()),
+            )
+            .child(Input::new(text_input).disabled(is_disabled));
+        let row = if layout == Layout::Phone {
+            div().flex().flex_col().gap_2().w_full()
+        } else {
+            div().flex().justify_between().items_center().gap_4()
+        };
+        row.child(label_and_text)
+            .child(Self::half(layout).child(Input::new(amount_input).disabled(is_disabled)))
     }
 
-    fn render_computed_row(&self, label: &str, value: f64, cx: &Context<Self>) -> impl IntoElement {
-        rsx! {
-            <div flex justify_between items_center gap_4 p_2
-                bg={cx.theme().muted.opacity(0.5)}
-                rounded_md>
-                <div w_1_2 text_sm font_weight={FontWeight::BOLD}>
-                    {label.to_string()}
-                </div>
-                <div w_1_2 text_right font_weight={FontWeight::BOLD}>
-                    {format!("{:.2}", value)}
-                </div>
-            </div>
-        }
+    fn render_computed_row(
+        &self,
+        layout: Layout,
+        label: &str,
+        value: f64,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        Self::pair_row(layout)
+            .p_2()
+            .bg(cx.theme().muted.opacity(0.5))
+            .rounded_md()
+            .child(
+                Self::half(layout)
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child(label.to_string()),
+            )
+            .child(
+                Self::half(layout)
+                    .when(layout != Layout::Phone, |d| d.text_right())
+                    .font_weight(FontWeight::BOLD)
+                    .child(format!("{:.2}", value)),
+            )
     }
 
-    fn render_category_of_agent(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_category_of_agent(&self, layout: Layout, cx: &mut Context<Self>) -> impl IntoElement {
         let is_private = self.category_of_agent == "P";
         let is_government = self.category_of_agent == "G";
-        rsx! {
-            <div flex gap_4 items_center>
-                <div>{"11 Category of Withholding Agent"}</div>
-                {div()
+        let outer = if layout == Layout::Phone {
+            div().flex().flex_col().gap_2()
+        } else {
+            div().flex().gap_4().items_center()
+        };
+        outer
+            .child(div().child("11 Category of Withholding Agent"))
+            .child(
+                div()
                     .id(crate::agent::ids::FORM_1601C_CATEGORY)
                     .flex()
+                    .flex_wrap()
                     .gap_2()
                     .items_center()
                     .child(Self::category_choice_chip(
@@ -1862,9 +1917,8 @@ impl Form1601CView {
                         is_government,
                         "G",
                         cx,
-                    ))}
-            </div>
-        }
+                    )),
+            )
     }
 
     fn category_choice_chip(
