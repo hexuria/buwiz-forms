@@ -6737,7 +6737,7 @@ mod tests {
         assert!(!html.contains("Olongapo"));
         assert!(html.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
         assert!(!html.contains(FIXTURE_EMAIL));
-        assert!(html.contains("1000.00"));
+        assert!(html.contains("1,000.00"));
         assert!(html.contains("100.00"));
         assert!(
             html.split("<input").any(|tag| {
@@ -6763,6 +6763,18 @@ mod tests {
             None,
         );
         assert!(!print.ok);
+
+        // One form at a time: the 1601C must be closed before 2551Q opens.
+        let dismissed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.dismiss".into(),
+                args: json!({}),
+            }),
+            None,
+            None,
+        );
+        assert!(dismissed.ok, "{:?}", dismissed.error);
 
         let opened_q = handle_request(
             &mut host,

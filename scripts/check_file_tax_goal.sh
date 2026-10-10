@@ -23,12 +23,10 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/file-tax-goal.XXXXXX")"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
-# Pre-existing failures on main (GOAL "Blocked"). Exactly these three.
-ALLOWED_PREEXISTING_FAILURES=(
-  headless_file_db_profile_save_is_visible_on_reopen
-  headless_spawn_host_persists_profile_save_to_file_db
-  form_fill_fields_pdf_and_2551q_draft
-)
+# No failure is allowed: the three stale tests that used to be listed here
+# were fixed (dummy TIN -> check-digit-valid TIN, 1,000.00 amount format,
+# dismiss before opening a second form).
+ALLOWED_PREEXISTING_FAILURES=()
 
 # Named feature tests (GOAL "Done when"). Each must exist and pass.
 NAMED_FEATURE_TESTS=(
@@ -104,14 +102,14 @@ else
   fi
   unexpected=0
   for name in "${failed_names[@]+"${failed_names[@]}"}"; do
-    if contains "$(short_name "$name")" "${ALLOWED_PREEXISTING_FAILURES[@]}"; then
+    if contains "$(short_name "$name")" ${ALLOWED_PREEXISTING_FAILURES[@]+"${ALLOWED_PREEXISTING_FAILURES[@]}"}; then
       echo "note: allowed pre-existing failure: $name"
     else
       fail "bir-desktop test failed: $name"
       unexpected=1
     fi
   done
-  [[ "$unexpected" -eq 0 ]] && pass "no failures outside the three allowed pre-existing ones"
+  [[ "$unexpected" -eq 0 ]] && pass "no failing tests"
 fi
 
 echo "== 2. named feature tests"
