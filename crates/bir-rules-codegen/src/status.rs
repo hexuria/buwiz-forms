@@ -1055,7 +1055,7 @@ fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut 
     const EXPECTED: [(&str, &str, &str, u16, bool); 15] = [
         ("2551Q", "2018", "2551Qv2018", 1023, false),
         ("1601C", "2018", "1601Cv2018", 1023, false),
-        ("2553", "1999", "2553", 63, false),
+        ("2553", "1999", "2553", 1023, false),
         ("0619E", "2018", "0619Ev2018", 1007, false),
         ("0619F", "2018", "0619Fv2018", 1007, false),
         ("0605", "1999", "0605v1999", 1007, false),
@@ -1064,10 +1064,10 @@ fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut 
         ("1701", "2018", "1701v2018", 1007, false),
         ("1702RT", "2018C", "1702RTv2018C", 1007, false),
         ("1702MX", "2018C", "1702MXv2018C", 1007, false),
-        ("1606", "2018", "1606", 63, false),
-        ("1600VT", "2018", "1600VTv2018", 63, false),
-        ("1600PT", "2018", "1600PTv2018", 63, false),
-        ("1600WP", "2010", "1600WP", 63, false),
+        ("1606", "2018", "1606", 1023, false),
+        ("1600VT", "2018", "1600VTv2018", 1023, false),
+        ("1600PT", "2018", "1600PTv2018", 1023, false),
+        ("1600WP", "2010", "1600WP", 1023, false),
     ];
     let source = match sources.raw(CORE_CAPABILITIES_PATH) {
         Ok(source) => source,

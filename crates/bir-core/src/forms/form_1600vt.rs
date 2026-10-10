@@ -674,6 +674,24 @@ impl Form1600VtDraft {
         fields
     }
 
+    /// The field map plus print-only values the frozen 2018 sheet needs
+    /// (`derived:` keys, never submitted): the 14-digit TIN for page 2 and
+    /// each Part II rate without its decimal (`12.0` prints as `12`).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let (a, b, c, d) = split_tin(&self.tin);
+        fields.insert("derived:tin_digits".to_string(), format!("{a}{b}{c}{d}"));
+        for (index, row) in self.atc_rows.iter().enumerate().take(FORM_1600VT_ATC_ROWS) {
+            let rate = row.rate_text.trim_end_matches(".0");
+            let rate = rate
+                .strip_prefix('0')
+                .filter(|r| r.starts_with('.'))
+                .unwrap_or(rate);
+            fields.insert(format!("derived:rate{}", index + 1), rate.to_string());
+        }
+        fields
+    }
+
     /// The submit layout for the Item 10 category.
     pub fn layout_id(&self) -> &'static str {
         match self.agent_category {

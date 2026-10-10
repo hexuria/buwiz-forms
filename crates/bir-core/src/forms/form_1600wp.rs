@@ -511,6 +511,39 @@ impl Form1600WpDraft {
         fields
     }
 
+    /// The field map plus print-only values the frozen 2010 sheet needs
+    /// (`derived:` keys, never submitted): the "from" date in one comb, Part II
+    /// amounts on the sheet's fixed row for each ATC, and the attachment
+    /// header (period and TIN).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut put = |key: &str, value: String| {
+            fields.insert(format!("derived:{key}"), value);
+        };
+        put("from_date", self.date_code());
+        for row in &self.atc_rows {
+            put(
+                &format!("{}_base", row.atc_code),
+                official_amount(row.tax_base),
+            );
+            put(
+                &format!("{}_withheld", row.atc_code),
+                official_amount(row.tax_withheld),
+            );
+        }
+        for side in ["from", "to"] {
+            put(&format!("att_{side}_mm"), format!("{:02}", self.month));
+            put(&format!("att_{side}_dd"), format!("{:02}", self.day));
+            put(&format!("att_{side}_yyyy"), self.year.to_string());
+        }
+        let (a, b, c, d) = split_tin(&self.tin);
+        put("att_tin1", a);
+        put("att_tin2", b);
+        put("att_tin3", c);
+        put("att_branch", d);
+        fields
+    }
+
     /// The submit layout for the number of Part II rows.
     pub fn layout_id(&self) -> &'static str {
         FORM_1600WP_LAYOUT_IDS[self.atc_rows.len().min(2)]

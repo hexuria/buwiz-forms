@@ -332,12 +332,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1606",
+        // Desktop editor in views; print preview fills the frozen sheet
+        // through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -348,12 +355,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1600VTv2018",
+        // Desktop editor in views; print preview fills the frozen sheet
+        // through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -364,12 +378,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1600PTv2018",
+        // Desktop editor in views; print preview fills the frozen sheet
+        // through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -380,12 +401,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1600WP",
+        // Desktop editor in views; print preview fills the frozen sheet
+        // through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -563,7 +591,8 @@ mod tests {
     fn certification_draft_gate_does_not_claim_release_readiness() {
         assert!(can_open_certification_draft("2551Q"));
         for code in [
-            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "2553",
+            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
+            "2553", "1606", "1600VT", "1600PT", "1600WP",
         ] {
             assert!(
                 can_open_certification_draft(code),

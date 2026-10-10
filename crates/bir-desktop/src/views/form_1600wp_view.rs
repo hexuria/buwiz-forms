@@ -1138,7 +1138,7 @@ impl FormViewTrait for Form1600WpView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1600wp-2010",
             &fields,

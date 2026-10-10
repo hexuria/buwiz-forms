@@ -139,6 +139,18 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2553-1999" => Some(include_str!(
             "../../../html-frozen/2553-1999/writer-cells.json"
         )),
+        "1606-2018" => Some(include_str!(
+            "../../../html-frozen/1606-2018/writer-cells.json"
+        )),
+        "1600-vt-2018" => Some(include_str!(
+            "../../../html-frozen/1600-vt-2018/writer-cells.json"
+        )),
+        "1600-pt-2018" => Some(include_str!(
+            "../../../html-frozen/1600-pt-2018/writer-cells.json"
+        )),
+        "1600wp-2010" => Some(include_str!(
+            "../../../html-frozen/1600wp-2010/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1462,6 +1474,144 @@ mod tests {
         assert!(!html.contains("name=\"frm2553:"));
     }
 
+    fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Withholding Fixture Inc", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Fixture", "registered_address": "1 Fixture St",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": code, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filled_document_1606_fills_parties_atc_box_amounts_and_schedules() {
+        use bir_core::forms::form_1606::{
+            Form1606Draft, Form1606SellerType, Form1606TaxRate, Form1606Transaction,
+        };
+        let mut draft = Form1606Draft::new_from_profile(&withholding_profile("1606"), 2025, 1);
+        draft.transaction_month = 6;
+        draft.transaction_day = 15;
+        draft.is_amended = true;
+        draft.seller_tin = "98765432100000".into();
+        draft.seller_name = "Seller Fixture".into();
+        draft.seller_type = Some(Form1606SellerType::Corporation);
+        draft.tct_number = "T-1".into();
+        draft.set_transaction(Form1606Transaction::InstallmentSale);
+        draft.gross_selling_price = 5_000_000.0;
+        draft.installment_collected = 250_000.0;
+        draft.tax_rate = Some(Form1606TaxRate::OnePointFive);
+        draft.recompute();
+        let html = filled_document("1606-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "06");
+        assert_eq!(comb_text(&html, "p1c6"), "2025");
+        assert_eq!(named_values(&html, "p1c14"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["".to_string()]);
+        assert!(html.contains("WITHHOLDING FIXTURE INC"));
+        assert_eq!(comb_text(&html, "p1c27"), "123-456-788-00000");
+        assert_eq!(comb_text(&html, "p1c42"), "987-654-321-00000");
+        // Corporate seller at 1.5%: the WC 555 box.
+        assert_eq!(named_values(&html, "p1c57"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c53"), vec!["".to_string()]);
+        assert_eq!(comb_text(&html, "p1c74"), "1");
+        assert_eq!(comb_text(&html, "p1c76"), "5");
+        assert_eq!(comb_text(&html, "p1c70"), "250000");
+        assert_eq!(comb_text(&html, "p1c79"), "3750");
+        assert_eq!(comb_text(&html, "p1c81"), "00");
+        assert_eq!(named_values(&html, "p2c85"), vec!["X".to_string()]);
+        assert_eq!(comb_text(&html, "p2c81"), "5000000");
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c13"), "T-1");
+        assert!(!html.contains("name=\"frm1606:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_1600vt_and_1600pt_fill_identity_part_ii_and_schedule() {
+        use bir_core::forms::form_1600pt::{Form1600PtAgentCategory, Form1600PtDraft};
+        use bir_core::forms::form_1600vt::{
+            Form1600VtAgentCategory, Form1600VtDraft, Form1600VtScheduleRow,
+        };
+        let mut vt = Form1600VtDraft::new_from_profile(&withholding_profile("1600VT"), 2025, 6);
+        vt.set_agent_category(Form1600VtAgentCategory::Government);
+        vt.set_taxes_withheld(true);
+        vt.toggle_atc(2).unwrap();
+        vt.atc_rows[0].tax_base = 10_000.0;
+        vt.schedule.push(Form1600VtScheduleRow {
+            tin: "987654321000".into(),
+            payee_name: "Payee Fixture".into(),
+            atc: "WV110".into(),
+            income_payment: 10_000.0,
+            tax_rate: 12.0,
+            tax_withheld: 0.0,
+        });
+        vt.recompute();
+        let html = filled_document("1600-vt-2018", &vt.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "06");
+        assert_eq!(comb_text(&html, "p1c5"), "25");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c22"), "00000");
+        assert_eq!(named_values(&html, "p1c35"), vec!["X".to_string()]);
+        assert_eq!(comb_text(&html, "p1c50"), "WV110");
+        assert_eq!(comb_text(&html, "p1c51"), "10000");
+        assert_eq!(comb_text(&html, "p1c54"), "12");
+        assert_eq!(comb_text(&html, "p1c56"), "1200");
+        assert_eq!(comb_text(&html, "p1c136"), "1200");
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c17"), "PAYEE FIXTURE");
+        assert_eq!(comb_text(&html, "p2c21"), "1,200.00");
+        assert!(!html.contains("name=\"frm1600VT:"));
+
+        let mut pt = Form1600PtDraft::new_from_profile(&withholding_profile("1600PT"), 2025, 6);
+        pt.set_agent_category(Form1600PtAgentCategory::Government);
+        pt.set_taxes_withheld(true);
+        let wb200 = bir_core::forms::form_1600pt::form_1600pt_atc_index("WB200", "0.6").unwrap();
+        pt.toggle_atc(wb200).unwrap();
+        pt.atc_rows[0].tax_base = 10_000.0;
+        pt.recompute();
+        let html = filled_document("1600-pt-2018", &pt.to_print_field_map()).unwrap();
+        // 1600-PT prints Private left of Government (1600-VT the other way).
+        assert_eq!(named_values(&html, "p1c36"), vec!["X".to_string()]);
+        assert_eq!(comb_text(&html, "p1c50"), "WB200");
+        assert_eq!(comb_text(&html, "p1c54"), ".6");
+        assert_eq!(comb_text(&html, "p1c56"), "60");
+    }
+
+    #[test]
+    fn filled_document_1600wp_fills_part_ii_by_atc_row_and_schedule() {
+        use bir_core::forms::form_1600wp::{
+            Form1600WpAgentCategory, Form1600WpDraft, Form1600WpScheduleRow,
+        };
+        let mut draft = Form1600WpDraft::new_from_profile(&withholding_profile("1600WP"), 2025, 6);
+        draft.day = 15;
+        draft.set_taxes_withheld(true);
+        draft.set_agent_category(Form1600WpAgentCategory::Private);
+        draft.toggle_atc("WB194").unwrap();
+        draft.atc_rows[0].tax_base = 2_500.0;
+        draft.schedule.push(Form1600WpScheduleRow {
+            tin: "987654321000".into(),
+            payee_name: "Winner Fixture".into(),
+            atc_code: "WB194".into(),
+            amount: 2_500.0,
+            tax_withheld: 0.0,
+        });
+        draft.recompute();
+        let html = filled_document("1600wp-2010", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c1"), "06152025");
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c18"), vec!["X".to_string()]);
+        // The only ticked ATC is WB194: its printed row, not WB191's.
+        assert_eq!(comb_text(&html, "p1c47"), "2,500.00");
+        assert_eq!(comb_text(&html, "p1c49"), "250.00");
+        assert_eq!(comb_text(&html, "p1c32"), "");
+        assert_eq!(comb_text(&html, "p1c51"), "250.00");
+        assert_eq!(comb_text(&html, "p1c96"), "WINNER FIXTURE");
+        assert_eq!(comb_text(&html, "p1c74"), "00000");
+        assert!(!html.contains("name=\"frm1600WP:"));
+    }
+
     #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // 2553 (1999) prints each amount in one text cell, not peso + cent combs.
@@ -1469,6 +1619,10 @@ mod tests {
             ("1601c-2018", true),
             ("2551q-2018", true),
             ("2553-1999", false),
+            ("1606-2018", true),
+            ("1600-vt-2018", true),
+            ("1600-pt-2018", true),
+            ("1600wp-2010", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
