@@ -175,6 +175,15 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2553-1999" => Some(include_str!(
             "../../../html-frozen/2553-1999/writer-cells.json"
         )),
+        "1604f-2018" => Some(include_str!(
+            "../../../html-frozen/1604f-2018/writer-cells.json"
+        )),
+        "1604c-2018" => Some(include_str!(
+            "../../../html-frozen/1604c-2018/writer-cells.json"
+        )),
+        "1604e-2018" => Some(include_str!(
+            "../../../html-frozen/1604e-2018/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1543,6 +1552,127 @@ mod tests {
         assert!(!html.contains("name=\"derived:"));
     }
 
+    fn annual_fixture_profile(form: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Annual Fixture Corp", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Unit 1 Fixture Tower, 123 Sample Street, Barangay Example, Quezon City",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": form, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filled_document_1604f_fills_identity_schedules_and_boxes() {
+        use bir_core::forms::form_1604f::{Form1604fAgentCategory, Form1604fDraft};
+        let mut draft = Form1604fDraft::new_from_profile(&annual_fixture_profile("1604F"), 2025);
+        draft.agent_category = Form1604fAgentCategory::Private;
+        draft.schedules[1][2].date = "10/30/2025".into();
+        draft.schedules[1][2].reference = "tra-9".into();
+        draft.schedules[1][2].taxes_withheld = 1_234.5;
+        draft.schedules[1][2].penalties = 10.0;
+        draft.recompute();
+        let html = filled_document("1604f-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(comb_text(&html, "p1c12"), "123");
+        assert_eq!(comb_text(&html, "p1c18"), "00000");
+        assert_eq!(comb_text(&html, "p1c20"), "039");
+        assert_eq!(comb_text(&html, "p1c22"), "ANNUAL FIXTURE CORP");
+        assert_eq!(
+            comb_text(&html, "p1c24"),
+            "UNIT 1 FIXTURE TOWER, 123 SAMPLE STREET,"
+        );
+        assert!(comb_text(&html, "p1c25").starts_with(" BARANGAY EXAMPLE, QUEZON CITY"));
+        assert!(comb_text(&html, "p1c25").ends_with("1100"));
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(named_values(&html, "p1c96"), vec!["TRA-9".to_string()]);
+        assert_eq!(named_values(&html, "p1c97"), vec!["1,234.50".to_string()]);
+        assert_eq!(named_values(&html, "p1c99"), vec!["1,244.50".to_string()]);
+        assert_eq!(named_values(&html, "p1c109"), vec!["1,244.50".to_string()]);
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c27"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c38"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"frm1604f:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_1604c_fills_months_refund_items_and_boxes() {
+        use bir_core::forms::form_1604c::{Form1604cAgentCategory, Form1604cDraft};
+        let mut draft = Form1604cDraft::new_from_profile(&annual_fixture_profile("1604C"), 2025);
+        draft.agent_category = Form1604cAgentCategory::Government;
+        let row = &mut draft.months[11];
+        row.date = "01/15/2026".into();
+        row.bank = "Bank 12".into();
+        row.reference = "TRA12".into();
+        row.taxes_withheld = 5_000.0;
+        row.adjustment = -250.25;
+        draft.recompute();
+        let html = filled_document("1604c-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c27"), "1100");
+        assert_eq!(named_values(&html, "p1c114"), vec!["BANK 12".to_string()]);
+        assert_eq!(named_values(&html, "p1c116"), vec!["5,000.00".to_string()]);
+        assert_eq!(named_values(&html, "p1c169"), vec!["-250.25".to_string()]);
+        assert_eq!(named_values(&html, "p1c171"), vec!["4,749.75".to_string()]);
+        assert_eq!(named_values(&html, "p1c175"), vec!["4,749.75".to_string()]);
+        // Item 11 "No": Items 11A-13 stay blank on paper.
+        assert_eq!(comb_text(&html, "p1c40"), "");
+        assert_eq!(comb_text(&html, "p1c46"), "");
+        assert_eq!(named_values(&html, "p1c44"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c31"), vec!["X".to_string()]);
+
+        draft.refunds_released = true;
+        draft.refund_date = "03/15/2026".into();
+        draft.overremittance = 4_321.56;
+        draft.first_crediting_month = 2;
+        draft.recompute();
+        let html = filled_document("1604c-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c40"), "03");
+        assert_eq!(comb_text(&html, "p1c41"), "15");
+        assert_eq!(comb_text(&html, "p1c42"), "2026");
+        assert!(comb_text(&html, "p1c46").ends_with("4321"));
+        assert_eq!(comb_text(&html, "p1c48"), "56");
+        assert_eq!(comb_text(&html, "p1c50"), "02");
+        assert_eq!(named_values(&html, "p1c43"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_1604e_fills_both_schedules_and_page_two() {
+        use bir_core::forms::form_1604e::{Form1604eAgentCategory, Form1604eDraft};
+        let mut draft = Form1604eDraft::new_from_profile(&annual_fixture_profile("1604E"), 2025);
+        draft.agent_category = Form1604eAgentCategory::Private;
+        draft.top_withholding_agent = Some(true);
+        draft.schedule1[3].date = "01/30/2026".into();
+        draft.schedule1[3].bank = "Bank4".into();
+        draft.schedule1[3].reference = "Tra4".into();
+        draft.schedule1[3].taxes_withheld = 250_000.0;
+        draft.schedule2[11].date = "01/15/2026".into();
+        draft.schedule2[11].bank = "BankDec".into();
+        draft.schedule2[11].reference = "TRA12".into();
+        draft.schedule2[11].taxes_withheld = 333.33;
+        draft.schedule2[11].penalties = 12.0;
+        draft.recompute();
+        let html = filled_document("1604e-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c22"), "ANNUAL FIXTURE CORP");
+        assert_eq!(comb_text(&html, "p1c25"), " BARANGAY EXAMPLE, QUEZON CITY");
+        assert_eq!(named_values(&html, "p1c71"), vec!["TRA4".to_string()]);
+        assert_eq!(named_values(&html, "p1c72"), vec!["250,000.00".to_string()]);
+        assert_eq!(named_values(&html, "p1c78"), vec!["250,000.00".to_string()]);
+        assert_eq!(named_values(&html, "p1c170"), vec!["345.33".to_string()]);
+        assert_eq!(named_values(&html, "p1c174"), vec!["345.33".to_string()]);
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c6"), "ANNUAL FIXTURE CORP");
+        assert_eq!(named_values(&html, "p1c30"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c32"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c33"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1604e:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
     #[test]
     fn filled_document_2553_fills_identity_rows_totals_and_boxes() {
         use bir_core::forms::form_2553::{Form2553Draft, FORM_2553_ATC_OPTIONS};
@@ -2166,6 +2296,10 @@ mod tests {
             ("1701a-2018", false),
             ("1701ms-2024", false),
             ("1702ex-2018", false),
+            // 1604F/1604E print amounts in single text cells; 1604C splits Item 12.
+            ("1604f-2018", false),
+            ("1604c-2018", true),
+            ("1604e-2018", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
