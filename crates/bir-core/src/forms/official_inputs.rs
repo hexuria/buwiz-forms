@@ -22,37 +22,82 @@ pub fn within_round_limit(value: f64) -> bool {
     value.is_finite() && value.abs() < MAX_ROUNDED_AMOUNT
 }
 
-/// JavaScript `Number.prototype.toFixed(2)`: the exact binary value rounded
-/// half up to two decimals (`2.675.toFixed(2)` is `"2.67"`).
-pub fn to_fixed_2(value: f64) -> f64 {
+/// JavaScript `Number.prototype.toFixed(digits)`: the exact binary value
+/// rounded half up (`2.675.toFixed(2)` is `"2.67"`).
+pub fn to_fixed_text(value: f64, digits: usize) -> String {
     if !value.is_finite() {
-        return 0.0;
+        return "NaN".to_string();
     }
     // Rust prints the exact decimal expansion for a large precision.
-    let exact = format!("{:.40}", value.abs());
+    let exact = format!("{:.60}", value.abs());
     let (whole, frac) = exact.split_once('.').unwrap_or((&exact, "0"));
-    let mut digits: Vec<u8> = whole.bytes().chain(frac.bytes().take(2)).collect();
-    let round_up = frac.as_bytes().get(2).is_some_and(|d| *d >= b'5');
+    let mut kept: Vec<u8> = whole.bytes().chain(frac.bytes().take(digits)).collect();
+    let round_up = frac.as_bytes().get(digits).is_some_and(|d| *d >= b'5');
     if round_up {
-        let mut i = digits.len();
+        let mut i = kept.len();
         loop {
             if i == 0 {
-                digits.insert(0, b'1');
+                kept.insert(0, b'1');
                 break;
             }
             i -= 1;
-            if digits[i] == b'9' {
-                digits[i] = b'0';
+            if kept[i] == b'9' {
+                kept[i] = b'0';
             } else {
-                digits[i] += 1;
+                kept[i] += 1;
                 break;
             }
         }
     }
-    let text = String::from_utf8(digits).unwrap_or_default();
-    let (int_part, dec_part) = text.split_at(text.len() - 2);
-    let parsed: f64 = format!("{int_part}.{dec_part}").parse().unwrap_or(0.0);
-    if value < 0.0 { -parsed } else { parsed }
+    let text = String::from_utf8(kept).unwrap_or_default();
+    let (int_part, dec_part) = text.split_at(text.len() - digits);
+    let sign = if value < 0.0 { "-" } else { "" };
+    if digits == 0 {
+        format!("{sign}{int_part}")
+    } else {
+        format!("{sign}{int_part}.{dec_part}")
+    }
+}
+
+/// [`to_fixed_text`] with two digits, as a number.
+pub fn to_fixed_2(value: f64) -> f64 {
+    if !value.is_finite() {
+        return 0.0;
+    }
+    to_fixed_text(value, 2).parse().unwrap_or(0.0)
+}
+
+/// `formatCurrency(x.toFixed(2))`, the pattern most handlers use.
+pub fn format_fixed(value: f64) -> f64 {
+    if value.is_nan() {
+        0.0
+    } else {
+        cents(to_fixed_2(value))
+    }
+}
+
+/// Commas between thousands of the integer part, as the
+/// `/\B(?=(\d{3})+(?!\d))/g` replacements write them.
+pub fn group_thousands(text: &str) -> String {
+    let (sign, rest) = match text.strip_prefix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", text),
+    };
+    let (int_part, frac) = match rest.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (rest, None),
+    };
+    let mut grouped = String::new();
+    for (i, ch) in int_part.chars().enumerate() {
+        if i > 0 && (int_part.len() - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    match frac {
+        Some(frac) => format!("{sign}{grouped}.{frac}"),
+        None => format!("{sign}{grouped}"),
+    }
 }
 
 /// `NumWithComma()` on a field that may be blank: blank is `NaN`.
@@ -128,6 +173,9 @@ mod tests {
         assert_eq!(to_fixed_2(1_000_000.005), 1_000_000.01);
         assert_eq!(to_fixed_2(99.999), 100.0);
         assert_eq!(to_fixed_2(-1.5), -1.5);
+        assert_eq!(to_fixed_text(1234.5, 3), "1234.500");
+        assert_eq!(group_thousands("1234567.125"), "1,234,567.125");
+        assert_eq!(format_fixed(f64::NAN), 0.0);
     }
 
     #[test]

@@ -104,6 +104,12 @@ pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[
         "1706",
         "1706"
     ),
+    form_view_spec!(
+        Form1707,
+        super::form_1707_view::Form1707View,
+        "1707",
+        "1707"
+    ),
 ];
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {
