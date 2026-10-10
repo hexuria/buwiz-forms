@@ -8,6 +8,7 @@ pub mod form_0619e_view;
 pub mod form_0619f_view;
 pub mod form_1600pt_view;
 pub mod form_1600vt_view;
+pub mod form_1600wp_view;
 pub mod form_1601c_view;
 pub mod form_1606_view;
 pub mod form_1701_view;

@@ -1052,7 +1052,7 @@ fn check_impl_method_inventory(
 }
 
 fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut Vec<String>) {
-    const EXPECTED: [(&str, &str, &str, u16, bool); 14] = [
+    const EXPECTED: [(&str, &str, &str, u16, bool); 15] = [
         ("2551Q", "2018", "2551Qv2018", 1023, false),
         ("1601C", "2018", "1601Cv2018", 1023, false),
         ("2553", "1999", "2553", 63, false),
@@ -1067,6 +1067,7 @@ fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut 
         ("1606", "2018", "1606", 63, false),
         ("1600VT", "2018", "1600VTv2018", 63, false),
         ("1600PT", "2018", "1600PTv2018", 63, false),
+        ("1600WP", "2010", "1600WP", 63, false),
     ];
     let source = match sources.raw(CORE_CAPABILITIES_PATH) {
         Ok(source) => source,
