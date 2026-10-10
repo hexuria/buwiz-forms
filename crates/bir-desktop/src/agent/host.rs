@@ -1921,6 +1921,7 @@ impl BirAgentHost {
             return Ok(DispatchResult::json(json!({
                 "ok": form.validation_errors.is_empty(),
                 "errors": form.validation_errors.len(),
+                "field_errors": field_errors_json(&form.validation_errors),
                 "form": "1601C",
             })));
         }
@@ -1933,6 +1934,7 @@ impl BirAgentHost {
             return Ok(DispatchResult::json(json!({
                 "ok": form.validation_errors.is_empty(),
                 "errors": form.validation_errors.len(),
+                "field_errors": field_errors_json(&form.validation_errors),
                 "form": "2551Q",
             })));
         }
@@ -3943,6 +3945,14 @@ fn parse_dashboard_forms(raw: Option<&Value>) -> Result<Option<Vec<String>>, Str
             "dashboard.set_forms forms must be \"all\", a comma list, or an array of codes".into(),
         ),
     }
+}
+
+/// `[{field, message}]`, one per validation error, in the draft's order.
+fn field_errors_json(errors: &[(String, String)]) -> Vec<Value> {
+    errors
+        .iter()
+        .map(|(field, message)| json!({ "field": field, "message": message }))
+        .collect()
 }
 
 /// First and last day of a 1601C month.
@@ -8527,5 +8537,72 @@ mod tests {
         let context = call(&mut bare, "form.context", json!({}));
         assert!(context.ok, "{:?}", context.error);
         assert_eq!(context.result.unwrap()["elections"], json!([]));
+    }
+
+    #[test]
+    fn validate_returns_field_errors() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let validated = call(&mut host, "form.validate", json!({}));
+        assert!(validated.ok, "{:?}", validated.error);
+        let body = validated.result.unwrap();
+        assert_eq!(body["form"], "2551Q");
+        assert_eq!(body["ok"], false);
+        let errors = body["field_errors"].as_array().unwrap();
+        assert!(!errors.is_empty());
+        assert_eq!(body["errors"], errors.len());
+        for error in errors {
+            assert!(!error["field"].as_str().unwrap().is_empty(), "{error}");
+            assert!(!error["message"].as_str().unwrap().is_empty(), "{error}");
+        }
+        assert!(
+            errors
+                .iter()
+                .any(|error| error["field"] == "item_13_election"),
+            "{errors:?}"
+        );
+
+        // The same errors the draft reports, box by box.
+        let draft = host.form_2551q_draft().unwrap();
+        let expected: Vec<Value> = draft
+            .validate()
+            .into_iter()
+            .map(|(field, message)| json!({ "field": field, "message": message }))
+            .collect();
+        assert_eq!(errors, &expected);
+
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_14_total_compensation": "-5" }, "source": "ai" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let validated = call(&mut host, "filing.validate", json!({}));
+        assert!(validated.ok, "{:?}", validated.error);
+        let body = validated.result.unwrap();
+        assert_eq!(body["form"], "1601C");
+        assert_eq!(body["ok"], false);
+        let errors = body["field_errors"].as_array().unwrap();
+        assert_eq!(body["errors"], errors.len());
+        assert!(
+            errors
+                .iter()
+                .any(|error| error["field"] == "tax_14_total_compensation"),
+            "{errors:?}"
+        );
     }
 }
