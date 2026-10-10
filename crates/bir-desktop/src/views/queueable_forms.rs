@@ -105,6 +105,12 @@ pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[
         "2200m"
     ),
     form_view_spec!(
+        Form2200P,
+        super::form_2200p_view::Form2200PView,
+        "2200P",
+        "2200p"
+    ),
+    form_view_spec!(
         Form2200A,
         super::form_2200a_view::Form2200AView,
         "2200A",

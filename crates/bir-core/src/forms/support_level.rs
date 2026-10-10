@@ -350,6 +350,23 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "2200P",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Pv2020",
+        // The desktop editor is views::form_2200p_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "2200A",
         revision: "2020",
         // `form_id` is the official formType (filename segment).
@@ -537,6 +554,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
         assert!(can_queue_for_submission("2200M"));
         assert_eq!(queue_authorized_form_type_id("2200M"), Some("2200Mv2018"));
+        assert!(can_queue_for_submission("2200P"));
+        assert_eq!(queue_authorized_form_type_id("2200P"), Some("2200Pv2020"));
         assert!(can_queue_for_submission("2200A"));
         assert_eq!(queue_authorized_form_type_id("2200A"), Some("2200Av2020"));
         assert!(can_queue_for_submission("2200T"));
