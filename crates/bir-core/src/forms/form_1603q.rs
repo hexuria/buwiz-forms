@@ -5,11 +5,9 @@
 //! Ported from the official `BIR-Form1603Qv2018.hta` (eBIRForms 7.9.6.2.1):
 //! Schedule 1 (`computeTaxBase360` / `computeTaxBase330` and their tax
 //! steps), the compute chain (`computeTax17` … `computeTotalTaxStillDue`),
-//! `validateYear` / `validateForm` with their exact alert texts, and
-//! `saveXMLsubmit`.
+//! `validateYear` / `validateForm` with their exact alert texts, and the
+//! uploaded file `saveEncryptedProfile` writes (`data/official-xml/1603q-v2018.json`).
 //!
-//! Two run-time details the generated layout (`data/official-xml/1603q-v2018.json`)
-//! does not carry:
 //! - `getRdo()` replaces the static RDO select with one whose id is
 //!   `frm1603Q:rdoCode`, so that is the key the page submits;
 //! - the Schedule 1 percentage divisors and tax rates come from
@@ -22,9 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
-use crate::official_xml::{
-    Codec, Entry, OfficialLayout, Part, official_amount, parse_official_amount,
-};
+use crate::official_xml::{official_amount, parse_official_amount};
 use crate::profile::TaxpayerProfile;
 
 /// Rule-package id of the official layout.
@@ -407,28 +403,9 @@ impl Form1603QDraft {
             official_amount(self.schedule_total),
         );
         put(&p("txtLineBus"), text(&self.line_of_business));
+        // init() shows page 1; the page is validated and submitted from it.
+        put(&p("txtCurrentPage"), "1".to_string());
         fields
-    }
-
-    /// The generated layout with the RDO control under the id `getRdo()`
-    /// gives it (`frm1603Q:rdoCode`).
-    pub fn official_layout(&self) -> Result<OfficialLayout, crate::official_xml::OfficialXmlError> {
-        let mut layout = crate::official_xml::layout(FORM_1603Q_FORM_ID)?.clone();
-        let static_key = "frm1603Q:txtRDOCode";
-        let entry = layout
-            .entries
-            .iter_mut()
-            .find(|entry| matches!(entry, Entry::Value { key, .. } if key == static_key))
-            .ok_or_else(|| crate::official_xml::OfficialXmlError::UnknownKey(static_key.into()))?;
-        if let Entry::Value { key, parts, .. } = entry {
-            *key = "frm1603Q:rdoCode".to_string();
-            *parts = vec![Part::Source {
-                source: key.clone(),
-                codec: Codec::Raw,
-                uppercase: false,
-            }];
-        }
-        Ok(layout)
     }
 
     /// The exact official submit plaintext.
@@ -646,18 +623,6 @@ impl QueueableForm for Form1603QDraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
-    /// The generic writer over [`Self::official_layout`] (RDO id fix).
-    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
-        let errors = QueueableForm::validate(self);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-        let layout = self
-            .official_layout()
-            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
-        crate::official_xml::write(&layout, &self.field_map())
-            .map_err(|error| vec![("xml".to_string(), error.to_string())])
-    }
 }
 
 #[cfg(test)]
@@ -752,7 +717,7 @@ mod tests {
             draft.submission_filename(),
             "12345678800000-1603Qv2018-2025Q3#sample.taxpayer@example.com#.xml"
         );
-        let layout = draft.official_layout().unwrap();
+        let layout = crate::official_xml::layout(FORM_1603Q_FORM_ID).unwrap();
         let keys = layout.keys();
         assert!(!keys.contains("frm1603Q:txtRDOCode"));
         for key in fields.keys() {

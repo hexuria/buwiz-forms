@@ -4,15 +4,12 @@
 //! Ported from the official `BIR-Form1601EQ.hta` (eBIRForms 7.9.6.2.1): the
 //! ATC popup (`changedrpATCList` / `getATCCode` / `changeATCRate`), the
 //! compute chain (`getRequiredWithheld` … `computeOfTotalAmtDue`),
-//! `validateForm` with its exact alert texts, and `saveXMLsubmit`.
+//! `validateForm` with its exact alert texts, and the uploaded file
+//! `saveEncryptedProfile` writes (every `frmMain` control in DOM order).
 //!
-//! The official page builds part of what it submits at run time, so the
-//! generated layout (`data/official-xml/1601eq-v2018.json`, taken from the
-//! static page) lacks it. [`Form1601EqDraft::official_layout`] adds those
-//! controls at the places the page puts them in `frmMain`:
-//! - Items 13–18 (`txtAtcCd1..6`, `txtTaxBase`, `txtTaxRate`,
-//!   `txtTaxbeWithHeld`), drawn by `populateAtcPart2()` at load and redrawn by
-//!   `getATCCode()`, right after `txtEmail`;
+//! The generated layout (`data/official-xml/1601eq-v2018.json`) already has
+//! Items 13–18, which `populateAtcPart2()` draws at load. What the page adds
+//! later, [`Form1601EqDraft::official_layout`] adds where the DOM has it:
 //! - the popup's ATC checkboxes (`AtcCode1..n`), drawn when Item 11 is
 //!   answered, right before `hPartIITableSize`;
 //! - "Other Selected ATC" rows 7+ (more than six ATCs), right after
@@ -991,7 +988,12 @@ impl Form1601EqDraft {
         put(&p("txtBranchCode"), branch);
         put(&p("txtRDOCode"), self.rdo_code.trim().to_string());
         put(&p("txtTaxpayerName"), text(&self.taxpayer_name));
-        put(&p("txtLineBus"), text(&self.line_of_business));
+        // loadBGData copies the profile's escape()d line of business as is
+        // (no unescape, no capital() on this form).
+        put(
+            &p("txtLineBus"),
+            crate::official_xml::js_escape(self.line_of_business.trim()),
+        );
         // Address lines 1 and 2 are written back to back into one value.
         put(&p("txtAddress"), text(&self.registered_address));
         put(&p("txtAddress2"), String::new());
@@ -1125,9 +1127,6 @@ impl Form1601EqDraft {
             .map(value)
             .collect::<Vec<_>>()
         };
-
-        let main = row_entries(1..FORM_1601EQ_MAIN_ROWS + 1);
-        layout.entries.splice(email + 1..email + 1, main);
 
         let table_size =
             position(&layout, "hPartIITableSize").ok_or_else(|| missing("hPartIITableSize"))?;

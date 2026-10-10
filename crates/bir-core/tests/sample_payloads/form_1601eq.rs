@@ -1,8 +1,5 @@
-use crate::{dummy_profile, samples_dir};
-use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
+use crate::dummy_profile;
 use bir_core::forms::form_1601eq::{Form1601EqCategory, Form1601EqDraft, form_1601eq_atc_option};
-use bir_core::official_xml::{self, OfficialLayout};
-use sha2::{Digest, Sha256};
 
 fn sample_1601eq() -> Form1601EqDraft {
     let mut draft =
@@ -40,80 +37,16 @@ fn sample_1601eq() -> Form1601EqDraft {
     draft
 }
 
-/// [`crate::check_sample`] over a layout that carries the controls the
-/// official page draws at run time (ATC rows and popup checkboxes).
-pub(crate) fn check_runtime_sample(
-    stem: &str,
-    layout: &OfficialLayout,
-    plaintext: &str,
-    official_encrypt_sha256: &str,
-) {
-    let fields = official_xml::read(layout, plaintext).expect("sample follows the official layout");
-    assert!(!fields.is_empty());
-
-    let encrypted = compress_and_encrypt(plaintext.as_bytes(), BIR_IAF_PASSPHRASE)
-        .expect("sample payload must encrypt");
-    let decrypted =
-        decrypt_and_decompress(&encrypted, BIR_IAF_PASSPHRASE).expect("sample must decrypt");
-    assert_eq!(
-        decrypted,
-        plaintext.as_bytes(),
-        "encryption must round-trip"
-    );
-
-    let dir = samples_dir();
-    let plain_path = dir.join(format!("{stem}.plain.xml"));
-    let iaf_path = dir.join(format!("{stem}.iaf.xml"));
-    let updating = std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some();
-    if updating {
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(&plain_path, plaintext).unwrap();
-        std::fs::write(&iaf_path, &encrypted).unwrap();
-    }
-
-    let official_plain_path = dir.join(format!("{stem}.official.xml"));
-    let official_plain = std::fs::read_to_string(&official_plain_path)
-        .unwrap_or_else(|e| panic!("missing {}: {e}", official_plain_path.display()));
-    assert_eq!(
-        plaintext, official_plain,
-        "{stem}: our plaintext differs from the official saveXMLsubmit() output"
-    );
-
-    let digest: String = Sha256::digest(&encrypted)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
-    assert_eq!(
-        digest, official_encrypt_sha256,
-        "{stem}: compress_and_encrypt no longer matches the official Encrypt.exe output"
-    );
-
-    if updating {
-        return;
-    }
-    let committed = std::fs::read_to_string(&plain_path)
-        .unwrap_or_else(|e| panic!("missing {}: {e}", plain_path.display()));
-    assert_eq!(
-        committed, plaintext,
-        "{stem}: serializer output changed; rerun with UPDATE_SAMPLE_PAYLOADS=1 if intended"
-    );
-    assert_eq!(
-        std::fs::read(&iaf_path).unwrap(),
-        encrypted,
-        "{stem}: encrypted sample is stale"
-    );
-}
-
 #[test]
 fn form_1601eq_sample_payload_is_current() {
     let draft = sample_1601eq();
     let payload = draft
         .to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 1601EQ must validate: {errors:?}"));
-    check_runtime_sample(
+    crate::check_sample_with_layout(
         "1601EQ-2025Q1",
         &draft.official_layout().unwrap(),
         &payload,
-        "62a53602f3123d037375d02a9439fd3b1e553ff938c746ff703d1d262a84cefe",
+        "36cabf574ab41191c721f5ec77e0b3ed0252fceaa9414fa5d35a415c434a343b",
     );
 }

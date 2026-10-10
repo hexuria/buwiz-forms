@@ -49,30 +49,6 @@
             <div>frm1601FQ:txtTaxBase6=frm1601FQ:txtTaxBase6=</div>	
             <div>frm1601FQ:txtTaxRate6=frm1601FQ:txtTaxRate6=</div>	
             <div>frm1601FQ:txtTaxbeWithHeld6=0.00frm1601FQ:txtTaxbeWithHeld6=</div>	
-            <div>frm1601FQ:txtAtcCode1=WI226frm1601FQ:txtAtcCode1=</div>	
-            <div>frm1601FQ:txtTaxBase1=123,456.79frm1601FQ:txtTaxBase1=</div>	
-            <div>frm1601FQ:txtTaxRate1= 20.0frm1601FQ:txtTaxRate1=</div>	
-            <div>frm1601FQ:txtTaxbeWithHeld1=24,691.36frm1601FQ:txtTaxbeWithHeld1=</div>	
-            <div>frm1601FQ:txtAtcCode2=WI250frm1601FQ:txtAtcCode2=</div>	
-            <div>frm1601FQ:txtTaxBase2=1,000.01frm1601FQ:txtTaxBase2=</div>	
-            <div>frm1601FQ:txtTaxRate2= 20.0frm1601FQ:txtTaxRate2=</div>	
-            <div>frm1601FQ:txtTaxbeWithHeld2=200.00frm1601FQ:txtTaxbeWithHeld2=</div>	
-            <div>frm1601FQ:txtAtcCode3=WC212frm1601FQ:txtAtcCode3=</div>	
-            <div>frm1601FQ:txtTaxBase3=50,000.00frm1601FQ:txtTaxBase3=</div>	
-            <div>frm1601FQ:txtTaxRate3= 30.0frm1601FQ:txtTaxRate3=</div>	
-            <div>frm1601FQ:txtTaxbeWithHeld3=15,000.00frm1601FQ:txtTaxbeWithHeld3=</div>	
-            <div>frm1601FQ:txtAtcCode4=WI202frm1601FQ:txtAtcCode4=</div>	
-            <div>frm1601FQ:txtTaxBase4=77,777.77frm1601FQ:txtTaxBase4=</div>	
-            <div>frm1601FQ:txtTaxRate4= 10.0frm1601FQ:txtTaxRate4=</div>	
-            <div>frm1601FQ:txtTaxbeWithHeld4=7,777.78frm1601FQ:txtTaxbeWithHeld4=</div>	
-            <div>frm1601FQ:txtAtcCode5=WC212frm1601FQ:txtAtcCode5=</div>	
-            <div>frm1601FQ:txtTaxBase5=999.99frm1601FQ:txtTaxBase5=</div>	
-            <div>frm1601FQ:txtTaxRate5= 25.0frm1601FQ:txtTaxRate5=</div>	
-            <div>frm1601FQ:txtTaxbeWithHeld5=250.00frm1601FQ:txtTaxbeWithHeld5=</div>	
-            <div>frm1601FQ:txtAtcCode6=frm1601FQ:txtAtcCode6=</div>	
-            <div>frm1601FQ:txtTaxBase6=frm1601FQ:txtTaxBase6=</div>	
-            <div>frm1601FQ:txtTaxRate6=frm1601FQ:txtTaxRate6=</div>	
-            <div>frm1601FQ:txtTaxbeWithHeld6=0.00frm1601FQ:txtTaxbeWithHeld6=</div>	
             <div>frm1601FQ:txtTotalOtherTax=0.00frm1601FQ:txtTotalOtherTax=</div>	
             <div>frm1601FQ:txtTax20=47,919.14frm1601FQ:txtTax20=</div>	
             <div>frm1601FQ:txtTax21=25,000.00frm1601FQ:txtTax21=</div>	
@@ -143,7 +119,7 @@
             <div>txtRate4=0.00txtRate4=</div>	
             <div>txtReqWithheld4=0.00txtReqWithheld4=</div>	
             <div>txtDvTotalSchedI=25,000.00txtDvTotalSchedI=</div>	
-            <div>frm1601FQ:txtCurrentPage=frm1601FQ:txtCurrentPage=</div>	
+            <div>frm1601FQ:txtCurrentPage=1frm1601FQ:txtCurrentPage=</div>	
             <div>frm1601FQ:txtMaxPage=2frm1601FQ:txtMaxPage=</div>	
             <div>AtcCd1=trueAtcCd1=</div>	
             <div>AtcCd2=falseAtcCd2=</div>	
