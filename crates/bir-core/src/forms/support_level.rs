@@ -212,19 +212,12 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
         // Exact submit plaintext via the official layout; generic queue.
         form_id: "1604F",
-        // Desktop editor views::form_1604f_view; print preview fills the
-        // frozen 1604f-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
-            editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -235,19 +228,12 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
         // Exact submit plaintext via the official layout; generic queue.
         form_id: "1604C",
-        // Desktop editor views::form_1604c_view; print preview fills the
-        // frozen 1604c-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
-            editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -258,19 +244,12 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
         // Exact submit plaintext via the official layout; generic queue.
         form_id: "1604Ev2018",
-        // Desktop editor views::form_1604e_view; print preview fills the
-        // frozen 1604e-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
-            editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
