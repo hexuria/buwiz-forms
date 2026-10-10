@@ -389,9 +389,10 @@ pub fn period_column(period: &FilingPeriod) -> i64 {
     }
 }
 
-/// Every form on the generic submission path. Add a variant, its two
-/// lookups and its arm in [`crate::with_queueable_kind`] when a form joins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Every form on the generic submission path. When a form joins, add its
+/// variant here, to [`QueueableKind::ALL`] and an arm in
+/// [`crate::with_queueable_kind`]; lookups follow from its trait constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QueueableKind {
     Form2553,
     #[cfg(test)]
@@ -399,24 +400,34 @@ pub enum QueueableKind {
 }
 
 impl QueueableKind {
-    /// From `form_drafts.form_code`, e.g. `"2550Q"`.
-    pub fn from_form_code(code: &str) -> Option<Self> {
-        match code {
-            "2553" => Some(Self::Form2553),
-            #[cfg(test)]
-            test_support::TestForm::CODE => Some(Self::Test),
-            _ => None,
-        }
+    /// Every production form on the generic path.
+    pub const ALL: &'static [QueueableKind] = &[QueueableKind::Form2553];
+
+    fn candidates() -> impl Iterator<Item = QueueableKind> {
+        let all = Self::ALL.iter().copied();
+        #[cfg(test)]
+        let all = all.chain(std::iter::once(Self::Test));
+        all
     }
 
-    /// From a receipt's official form type, e.g. `"2550Qv2024"`.
+    /// `form_drafts.form_code`, e.g. `"2553"`.
+    pub fn form_code(self) -> &'static str {
+        crate::with_queueable_kind!(self, F => <F as QueueableForm>::FORM_CODE)
+    }
+
+    /// Official form type in filenames and transport, e.g. `"2553"`.
+    pub fn form_type(self) -> &'static str {
+        crate::with_queueable_kind!(self, F => <F as QueueableForm>::FORM_TYPE)
+    }
+
+    /// From `form_drafts.form_code`.
+    pub fn from_form_code(code: &str) -> Option<Self> {
+        Self::candidates().find(|kind| kind.form_code() == code)
+    }
+
+    /// From a receipt's official form type.
     pub fn from_form_type(form_type: &str) -> Option<Self> {
-        match form_type {
-            "2553" => Some(Self::Form2553),
-            #[cfg(test)]
-            test_support::TestForm::TYPE => Some(Self::Test),
-            _ => None,
-        }
+        Self::candidates().find(|kind| kind.form_type() == form_type)
     }
 }
 

@@ -24,14 +24,10 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::profile::TaxpayerProfile;
 
-pub enum Form2553Event {
-    BackToDashboard,
-    Saved,
-    PushNotification(String, String, String),
-}
-
-impl EventEmitter<Form2553Event> for Form2553View {}
+impl EventEmitter<QueueableFormEvent> for Form2553View {}
 
 /// Width classes the page lays out for.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -114,67 +110,6 @@ pub struct Form2553View {
 }
 
 impl Form2553View {
-    pub fn new(
-        draft: Form2553Draft,
-        db: Arc<Mutex<Database>>,
-        window: &mut Window,
-        cx: &mut Context<'_, Self>,
-    ) -> Self {
-        let mut inputs = BTreeMap::new();
-        let mut subscriptions = Vec::new();
-        let mut keys: Vec<(String, String, String)> = TEXT_INPUTS
-            .iter()
-            .map(|(key, _, placeholder)| {
-                (
-                    key.to_string(),
-                    placeholder.to_string(),
-                    Self::initial(&draft, key),
-                )
-            })
-            .collect();
-        for (key, _) in MONEY_INPUTS {
-            keys.push((key.to_string(), "0.00".into(), Self::initial(&draft, key)));
-        }
-        for row in 0..FORM_2553_ATC_ROWS {
-            keys.push((
-                amount_key(row),
-                "0.00".into(),
-                Self::initial(&draft, &amount_key(row)),
-            ));
-            keys.push((
-                rate_key(row),
-                "rate %".into(),
-                Self::initial(&draft, &rate_key(row)),
-            ));
-        }
-        for (key, placeholder, value) in keys {
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
-            inputs.insert(key, input);
-        }
-        let validation_errors = draft.validate();
-        Self {
-            draft,
-            db,
-            scroll_handle: ScrollHandle::new(),
-            inputs,
-            validation_errors,
-            parse_errors: Vec::new(),
-            status_message: None,
-            release_claim_confirm_open: false,
-            _subscriptions: subscriptions,
-        }
-    }
-
     /// Editor text for one input from the draft.
     fn initial(draft: &Form2553Draft, key: &str) -> String {
         let money = |value: f64| {
@@ -382,7 +317,7 @@ impl Form2553View {
             Ok(AbandonedClaimRelease::Released { draft, .. }) => {
                 self.draft = draft;
                 self.status_message = None;
-                cx.emit(Form2553Event::Saved);
+                cx.emit(QueueableFormEvent::Saved);
             }
             Ok(AbandonedClaimRelease::AlreadyClear { draft, .. }) => {
                 if let Some(draft) = draft {
@@ -959,6 +894,100 @@ impl Form2553View {
     }
 }
 
+impl QueueableFormView for Form2553View {
+    type Draft = Form2553Draft;
+
+    fn new(
+        draft: Form2553Draft,
+        db: Arc<Mutex<Database>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut inputs = BTreeMap::new();
+        let mut subscriptions = Vec::new();
+        let mut keys: Vec<(String, String, String)> = TEXT_INPUTS
+            .iter()
+            .map(|(key, _, placeholder)| {
+                (
+                    key.to_string(),
+                    placeholder.to_string(),
+                    Self::initial(&draft, key),
+                )
+            })
+            .collect();
+        for (key, _) in MONEY_INPUTS {
+            keys.push((key.to_string(), "0.00".into(), Self::initial(&draft, key)));
+        }
+        for row in 0..FORM_2553_ATC_ROWS {
+            keys.push((
+                amount_key(row),
+                "0.00".into(),
+                Self::initial(&draft, &amount_key(row)),
+            ));
+            keys.push((
+                rate_key(row),
+                "rate %".into(),
+                Self::initial(&draft, &rate_key(row)),
+            ));
+        }
+        for (key, placeholder, value) in keys {
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+            inputs.insert(key, input);
+        }
+        let validation_errors = draft.validate();
+        Self {
+            draft,
+            db,
+            scroll_handle: ScrollHandle::new(),
+            inputs,
+            validation_errors,
+            parse_errors: Vec::new(),
+            status_message: None,
+            release_claim_confirm_open: false,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2553Draft {
+        let today = chrono::Local::now().date_naive();
+        let quarter = if i32::from(year) == chrono::Datelike::year(&today) {
+            ((chrono::Datelike::month(&today) - 1) / 3 + 1) as u8
+        } else {
+            4
+        };
+        Form2553Draft::new_from_profile(profile, year, quarter)
+    }
+
+    /// 2553 is event-based on the dashboard; the return names its own
+    /// quarter (Item 3). Reopen this year's latest saved return.
+    fn load_draft(
+        db: &Database,
+        profile: &TaxpayerProfile,
+        year: u16,
+        period: u8,
+    ) -> Form2553Draft {
+        let tin = profile.tin.full();
+        (1..=4i64)
+            .filter_map(|q| {
+                db.get_queueable_draft::<Form2553Draft>(&tin, year, q)
+                    .ok()
+                    .flatten()
+            })
+            .max_by(|a, b| a.lifecycle.updated_at.cmp(&b.lifecycle.updated_at))
+            .unwrap_or_else(|| Self::new_draft(profile, year, period))
+    }
+}
+
 fn format_tin(tin: &str) -> String {
     let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
     if digits.len() < 9 {
@@ -1020,9 +1049,9 @@ impl FormViewTrait for Form2553View {
                     window,
                     cx,
                 );
-                cx.emit(Form2553Event::Saved);
+                cx.emit(QueueableFormEvent::Saved);
             }
-            Err(error) => cx.emit(Form2553Event::PushNotification(
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
                 "error".into(),
                 "Save failed".into(),
                 error,
@@ -1082,7 +1111,7 @@ impl FormViewTrait for Form2553View {
             window,
             cx,
         );
-        cx.emit(Form2553Event::Saved);
+        cx.emit(QueueableFormEvent::Saved);
         bir_core::background_cron::wake();
         cx.notify();
     }
@@ -1120,7 +1149,7 @@ impl FormViewTrait for Form2553View {
                 self.draft = draft;
                 self.status_message = None;
                 self.validation_errors = self.draft.validate();
-                cx.emit(Form2553Event::Saved);
+                cx.emit(QueueableFormEvent::Saved);
             }
             Err(error) => {
                 if let Ok(db) = self.db.lock()
@@ -1146,7 +1175,7 @@ impl FormViewTrait for Form2553View {
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() {
-            cx.emit(Form2553Event::PushNotification(
+            cx.emit(QueueableFormEvent::PushNotification(
                 "error".into(),
                 "Print preview failed".into(),
                 "Fix the highlighted numbers first. No filing state was changed.".into(),
@@ -1160,12 +1189,12 @@ impl FormViewTrait for Form2553View {
             "2553 — Print Preview",
             cx,
         ) {
-            Ok(kind) => cx.emit(Form2553Event::PushNotification(
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
                 "info".into(),
                 "Print preview".into(),
                 format!("{} No filing state was changed.", kind.status_message()),
             )),
-            Err(error) => cx.emit(Form2553Event::PushNotification(
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
                 "error".into(),
                 "Print preview failed".into(),
                 format!("{error}. No filing state was changed."),
@@ -1195,68 +1224,67 @@ impl Render for Form2553View {
             })
             .collect();
 
-        let toolbar = div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .justify_between()
-            .gap_2()
-            .px(pad)
-            .py_3()
-            .border_b_1()
-            .border_color(cx.theme().border)
-            .child(
-                Button::new("2553_back")
-                    .label("← Back")
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(Form2553Event::BackToDashboard))),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        Button::new("2553_preview")
-                            .label("Print preview")
-                            .outline()
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("2553_save")
-                            .label("Save draft")
-                            .outline()
-                            .disabled(!is_draft)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                            ),
-                    )
-                    .when(is_queued, |row| {
-                        row.child(
-                            Button::new("2553_cancel")
-                                .label("Cancel queue")
+        let toolbar =
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .px(pad)
+                .py_3()
+                .border_b_1()
+                .border_color(cx.theme().border)
+                .child(Button::new("2553_back").label("← Back").on_click(
+                    cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            Button::new("2553_preview")
+                                .label("Print preview")
                                 .outline()
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.revert_to_draft(window, cx)
-                                })),
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                                ),
                         )
-                    })
-                    .child(
-                        Button::new("2553_submit")
-                            .label("Queue for submission")
-                            .primary()
-                            .disabled(
-                                !is_draft
-                                    || !self.validation_errors.is_empty()
-                                    || !self.parse_errors.is_empty(),
+                        .child(
+                            Button::new("2553_save")
+                                .label("Save draft")
+                                .outline()
+                                .disabled(!is_draft)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                                ),
+                        )
+                        .when(is_queued, |row| {
+                            row.child(
+                                Button::new("2553_cancel")
+                                    .label("Cancel queue")
+                                    .outline()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.revert_to_draft(window, cx)
+                                    })),
                             )
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.mark_submitted(window, cx)),
-                            ),
-                    ),
-            );
+                        })
+                        .child(
+                            Button::new("2553_submit")
+                                .label("Queue for submission")
+                                .primary()
+                                .disabled(
+                                    !is_draft
+                                        || !self.validation_errors.is_empty()
+                                        || !self.parse_errors.is_empty(),
+                                )
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.mark_submitted(window, cx)
+                                })),
+                        ),
+                );
 
         let mut body = div()
             .w_full()

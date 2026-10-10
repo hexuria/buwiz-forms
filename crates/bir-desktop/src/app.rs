@@ -10,7 +10,6 @@ use crate::views::form_1702mx_view::{Form1702MXEvent, Form1702MXView};
 use crate::views::form_1702rt_view::{Form1702RTEvent, Form1702RTView};
 use crate::views::form_2550q_view::{Form2550QV2Event, Form2550QV2View};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
-use crate::views::form_2553_view::{Form2553Event, Form2553View};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
@@ -62,7 +61,8 @@ pub enum ActiveView {
     Form1701,
     Form1702RT,
     Form1702MX,
-    Form2553,
+    /// A form on the generic submission path (`views::queueable_forms`).
+    Queueable(bir_core::forms::queueable::QueueableKind),
     ProfileManager,
     CronTasks,
     Notifications,
@@ -172,8 +172,10 @@ pub struct AppState {
     pub(crate) pending_form_1702rt_draft: Option<bir_core::forms::form_1702rt::Form1702RTDraft>,
     pub(crate) form_1702mx_view: Option<Entity<Form1702MXView>>,
     pub(crate) pending_form_1702mx_draft: Option<bir_core::forms::form_1702mx::Form1702MXDraft>,
-    pub(crate) form_2553_view: Option<Entity<Form2553View>>,
-    pub(crate) pending_form_2553_draft: Option<bir_core::forms::form_2553::Form2553Draft>,
+    /// Editor of the open generic-queue form.
+    pub(crate) queueable_view: Option<AnyView>,
+    /// (form, year, period) to open on the next render, which has a `Window`.
+    pub(crate) pending_queueable: Option<(bir_core::forms::queueable::QueueableKind, u16, u8)>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -903,8 +905,8 @@ impl AppState {
             pending_form_1702rt_draft: None,
             form_1702mx_view: None,
             pending_form_1702mx_draft: None,
-            form_2553_view: None,
-            pending_form_2553_draft: None,
+            queueable_view: None,
+            pending_queueable: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -1593,8 +1595,8 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-            ActiveView::Form2553 => {
-                if let Some(view) = &self.form_2553_view {
+            ActiveView::Queueable(_) => {
+                if let Some(view) = &self.queueable_view {
                     view.clone().into_any_element()
                 } else {
                     let root = rsx! { <div>{"No form loaded"}</div> };
@@ -2066,42 +2068,25 @@ impl AppState {
             self.pending_form_1702mx_draft = Some(draft);
             self.active_view = ActiveView::Form1702MX;
             cx.notify();
-        } else if form_code == "2553"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        } else if let Some(spec) = crate::views::queueable_forms::spec_for_code(form_code)
+            && self.active_profile_tin.is_some()
         {
-            use bir_core::forms::form_2553::Form2553Draft;
-            // 2553 is event-based on the dashboard; the return itself names
-            // its quarter (Item 3). Reopen this year's latest saved return,
-            // else start one for the current quarter.
-            let existing = self.db.lock().ok().and_then(|db| {
-                (1..=4i64)
-                    .rev()
-                    .filter_map(|q| {
-                        db.get_queueable_draft::<Form2553Draft>(tin, year, q)
-                            .ok()
-                            .flatten()
-                    })
-                    .max_by(|a, b| a.lifecycle.updated_at.cmp(&b.lifecycle.updated_at))
-            });
-            let draft = existing.unwrap_or_else(|| {
-                let today = chrono::Local::now().date_naive();
-                let quarter = if i32::from(year) == chrono::Datelike::year(&today) {
-                    ((chrono::Datelike::month(&today) - 1) / 3 + 1) as u8
-                } else {
-                    4
-                };
-                Form2553Draft::new_from_profile(profile, year, quarter)
-            });
-            self.pending_form_2553_draft = Some(draft);
-            self.active_view = ActiveView::Form2553;
+            self.pending_queueable = Some((spec.kind, year, quarter));
+            self.queueable_view = None;
+            self.active_view = ActiveView::Queueable(spec.kind);
             cx.notify();
         }
     }
 }
 
 /// Push a typed notification to the GPUI window overlay.
-fn push_notification(level: &str, title: &str, message: &str, window: &mut Window, cx: &mut App) {
+pub(crate) fn push_notification(
+    level: &str,
+    title: &str,
+    message: &str,
+    window: &mut Window,
+    cx: &mut App,
+) {
     use gpui_component::WindowExt;
     use gpui_component::notification::Notification;
     let notification = match level {
@@ -2408,25 +2393,13 @@ impl Render for AppState {
             self.form_1702rt_view = Some(form_view);
         }
 
-        if let Some(draft) = self.pending_form_2553_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form2553View::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form2553Event, window, cx| match event {
-                    Form2553Event::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form2553Event::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form2553Event::Saved => cx.notify(),
-                },
-            )
-            .detach();
-            self.form_2553_view = Some(form_view);
+        if let Some((kind, year, period)) = self.pending_queueable.take()
+            && let Some(spec) = crate::views::queueable_forms::spec_for_kind(kind)
+            && let Some(tin) = self.active_profile_tin.clone()
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == tin).cloned()
+        {
+            let db = Arc::clone(&self.db);
+            self.queueable_view = Some((spec.open)(&profile, year, period, db, window, cx));
         }
 
         if let Some(draft) = self.pending_form_1702mx_draft.take() {

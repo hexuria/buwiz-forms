@@ -29,7 +29,6 @@ pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
 pub const PAGE_FORM_1701: &str = "page-form-1701";
 pub const PAGE_FORM_1702RT: &str = "page-form-1702rt";
 pub const PAGE_FORM_1702MX: &str = "page-form-1702mx";
-pub const PAGE_FORM_2553: &str = "page-form-2553";
 
 pub const NAV_GLOBAL_DASHBOARD: &str = "global_dashboard_btn";
 pub const NAV_NEW_PROFILE: &str = "add_profile_mini_btn";
@@ -168,9 +167,6 @@ pub const FORM_1702RT_SUBMIT: &str = "1702rt_submit";
 pub const FORM_1702MX_BACK: &str = "1702mx_back";
 pub const FORM_1702MX_SAVE: &str = "1702mx_save";
 pub const FORM_1702MX_SUBMIT: &str = "1702mx_submit";
-pub const FORM_2553_BACK: &str = "2553_back";
-pub const FORM_2553_SAVE: &str = "2553_save";
-pub const FORM_2553_SUBMIT: &str = "2553_submit";
 
 pub const DUES_LIST: &str = "dues-list";
 pub const JOBS_LIST: &str = "jobs-list";
@@ -363,7 +359,7 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => PAGE_FORM_1701,
         ActiveView::Form1702RT => PAGE_FORM_1702RT,
         ActiveView::Form1702MX => PAGE_FORM_1702MX,
-        ActiveView::Form2553 => PAGE_FORM_2553,
+        ActiveView::Queueable(kind) => queueable_spec(kind).page_id,
     }
 }
 
@@ -387,7 +383,7 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => "form-1701",
         ActiveView::Form1702RT => "form-1702rt",
         ActiveView::Form1702MX => "form-1702mx",
-        ActiveView::Form2553 => "form-2553",
+        ActiveView::Queueable(kind) => queueable_spec(kind).slug,
     }
 }
 
@@ -411,8 +407,8 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "form-1701" | "1701" => Some(ActiveView::Form1701),
         "form-1702rt" | "1702rt" => Some(ActiveView::Form1702RT),
         "form-1702mx" | "1702mx" => Some(ActiveView::Form1702MX),
-        "form-2553" | "2553" => Some(ActiveView::Form2553),
-        _ => None,
+        other => crate::views::queueable_forms::spec_for_slug(other)
+            .map(|spec| ActiveView::Queueable(spec.kind)),
     }
 }
 
@@ -436,8 +432,27 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Form1701,
     ActiveView::Form1702RT,
     ActiveView::Form1702MX,
-    ActiveView::Form2553,
 ];
+
+/// [`ALL_VIEWS`] plus every generic-queue form editor.
+pub fn all_views() -> Vec<ActiveView> {
+    ALL_VIEWS
+        .iter()
+        .copied()
+        .chain(
+            crate::views::queueable_forms::FORM_VIEW_SPECS
+                .iter()
+                .map(|spec| ActiveView::Queueable(spec.kind)),
+        )
+        .collect()
+}
+
+fn queueable_spec(
+    kind: bir_core::forms::queueable::QueueableKind,
+) -> &'static crate::views::queueable_forms::FormViewSpec {
+    crate::views::queueable_forms::spec_for_kind(kind)
+        .expect("every QueueableKind has a desktop view spec")
+}
 
 pub struct FormChrome {
     pub view: ActiveView,
@@ -518,23 +533,23 @@ pub const FORM_CHROME: &[FormChrome] = &[
         save: FORM_1702MX_SAVE,
         submit: FORM_1702MX_SUBMIT,
     },
-    FormChrome {
-        view: ActiveView::Form2553,
-        code: "2553",
-        back: FORM_2553_BACK,
-        save: FORM_2553_SAVE,
-        submit: FORM_2553_SUBMIT,
-    },
 ];
 
 pub fn form_chrome(view: ActiveView) -> Option<&'static FormChrome> {
-    FORM_CHROME.iter().find(|chrome| chrome.view == view)
+    FORM_CHROME
+        .iter()
+        .find(|chrome| chrome.view == view)
+        .or_else(|| crate::views::queueable_forms::spec_for_view(view).map(|spec| &spec.chrome))
 }
 
 /// Submit / confirm controls that would queue or file if the real widget ran.
 /// Semantic dispatch exposes confirmation only; virtual clicks must not hit these.
 pub fn is_filing_submit_control(id: &str) -> bool {
-    id == FORM_1601C_SUBMIT_CONFIRM || FORM_CHROME.iter().any(|chrome| chrome.submit == id)
+    id == FORM_1601C_SUBMIT_CONFIRM
+        || FORM_CHROME.iter().any(|chrome| chrome.submit == id)
+        || crate::views::queueable_forms::FORM_VIEW_SPECS
+            .iter()
+            .any(|spec| spec.chrome.submit == id)
 }
 
 #[cfg(test)]
@@ -545,11 +560,11 @@ mod tests {
     #[test]
     fn page_roots_are_unique_and_stable() {
         let mut seen = HashSet::new();
-        for view in ALL_VIEWS {
-            let id = page_root(*view);
+        for view in all_views() {
+            let id = page_root(view);
             assert!(id.starts_with("page-"), "{id}");
             assert!(seen.insert(id), "duplicate page root {id}");
-            assert_eq!(view_from_slug(view_slug(*view)), Some(*view));
+            assert_eq!(view_from_slug(view_slug(view)), Some(view));
         }
         assert_eq!(ALL_VIEWS.len(), 18);
     }
