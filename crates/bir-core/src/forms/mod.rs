@@ -3,8 +3,11 @@
 pub mod atc;
 pub mod excise_places;
 pub mod form_0605;
+pub mod form_0605_official;
 pub mod form_0619e;
+pub mod form_0619e_official;
 pub mod form_0619f;
+pub mod form_0619f_official;
 pub mod form_1600pt;
 pub mod form_1600vt;
 pub mod form_1600wp;
@@ -19,13 +22,17 @@ pub mod form_1604f;
 pub mod form_1606;
 pub mod form_1700;
 pub mod form_1701;
+pub mod form_1701_official;
 pub mod form_1701a;
 pub mod form_1701ms;
 pub mod form_1701q;
+pub mod form_1701q_official;
 pub mod form_1702ex;
 pub mod form_1702mx;
+pub mod form_1702mx_official;
 pub mod form_1702q;
 pub mod form_1702rt;
+pub mod form_1702rt_official;
 pub mod form_1706;
 pub mod form_1707;
 pub mod form_1707a;
@@ -346,13 +353,13 @@ impl FormDraft {
         match self {
             Self::Form2551Q(f) => &f.status,
             Self::Form1601C(f) => &f.status,
-            Self::Form0605(f) => &f.status,
-            Self::Form0619E(f) => &f.status,
-            Self::Form0619F(f) => &f.status,
-            Self::Form1701(f) => &f.status,
-            Self::Form1701Q(f) => &f.status,
-            Self::Form1702MX(f) => &f.status,
-            Self::Form1702RT(f) => &f.status,
+            Self::Form0605(f) => &f.lifecycle.status,
+            Self::Form0619E(f) => &f.lifecycle.status,
+            Self::Form0619F(f) => &f.lifecycle.status,
+            Self::Form1701(f) => &f.lifecycle.status,
+            Self::Form1701Q(f) => &f.lifecycle.status,
+            Self::Form1702MX(f) => &f.lifecycle.status,
+            Self::Form1702RT(f) => &f.lifecycle.status,
             Self::Form2550Q(f) => &f.status,
         }
     }

@@ -427,6 +427,13 @@ pub enum QueueableKind {
     Form1701A,
     Form1700,
     Form1702EX,
+    Form0605,
+    Form0619E,
+    Form0619F,
+    Form1701Q,
+    Form1702RT,
+    Form1701,
+    Form1702MX,
     #[cfg(test)]
     Test,
 }
@@ -467,6 +474,13 @@ impl QueueableKind {
         QueueableKind::Form1701A,
         QueueableKind::Form1700,
         QueueableKind::Form1702EX,
+        QueueableKind::Form0605,
+        QueueableKind::Form0619E,
+        QueueableKind::Form0619F,
+        QueueableKind::Form1701Q,
+        QueueableKind::Form1702RT,
+        QueueableKind::Form1701,
+        QueueableKind::Form1702MX,
     ];
 
     fn candidates() -> impl Iterator<Item = QueueableKind> {
@@ -632,6 +646,34 @@ macro_rules! with_queueable_kind {
             }
             $crate::forms::queueable::QueueableKind::Form1702EX => {
                 type $ty = $crate::forms::form_1702ex::Form1702ExDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form0605 => {
+                type $ty = $crate::forms::form_0605::Form0605Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form0619E => {
+                type $ty = $crate::forms::form_0619e::Form0619EDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form0619F => {
+                type $ty = $crate::forms::form_0619f::Form0619FDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1701Q => {
+                type $ty = $crate::forms::form_1701q::Form1701QDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1702RT => {
+                type $ty = $crate::forms::form_1702rt::Form1702RTDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1701 => {
+                type $ty = $crate::forms::form_1701::Form1701Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1702MX => {
+                type $ty = $crate::forms::form_1702mx::Form1702MXDraft;
                 $body
             }
             #[cfg(test)]

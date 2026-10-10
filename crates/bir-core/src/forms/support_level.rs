@@ -1010,84 +1010,33 @@ mod tests {
 
     #[test]
     fn queue_gate_is_semantic_and_registry_owned() {
-        assert!(can_queue_for_submission("2551Q"));
+        // Every record that claims the queue capabilities opens the gate with
+        // its own official form type; everything else fails closed.
+        let mut queueable = 0;
+        for record in FORM_CAPABILITY_REGISTRY {
+            if record.capabilities.can_queue() {
+                queueable += 1;
+                assert!(can_queue_for_submission(record.code), "{}", record.code);
+                assert_eq!(
+                    queue_authorized_form_type_id(record.code),
+                    Some(record.form_id),
+                    "{}",
+                    record.code
+                );
+            } else {
+                assert!(
+                    !can_queue_for_submission(record.code),
+                    "{} must fail closed",
+                    record.code
+                );
+                assert_eq!(queue_authorized_form_type_id(record.code), None);
+            }
+        }
+        assert!(queueable >= 3);
         assert_eq!(queue_authorized_form_type_id("2551Q"), Some("2551Qv2018"));
-        assert!(can_queue_for_submission("1601C"));
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
-        assert!(can_queue_for_submission("2553"));
-        assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
-        assert!(can_queue_for_submission("1604F"));
-        assert_eq!(queue_authorized_form_type_id("1604F"), Some("1604F"));
-        assert!(can_queue_for_submission("1604C"));
-        assert_eq!(queue_authorized_form_type_id("1604C"), Some("1604C"));
-        assert!(can_queue_for_submission("1604E"));
-        assert_eq!(queue_authorized_form_type_id("1604E"), Some("1604Ev2018"));
-        assert!(can_queue_for_submission("1606"));
-        assert_eq!(queue_authorized_form_type_id("1606"), Some("1606"));
-        assert!(can_queue_for_submission("1600VT"));
-        assert_eq!(queue_authorized_form_type_id("1600VT"), Some("1600VTv2018"));
-        assert!(can_queue_for_submission("1600PT"));
-        assert_eq!(queue_authorized_form_type_id("1600PT"), Some("1600PTv2018"));
-        assert!(can_queue_for_submission("1600WP"));
-        assert_eq!(queue_authorized_form_type_id("1600WP"), Some("1600WP"));
-        assert!(can_queue_for_submission("1601EQ"));
-        assert_eq!(queue_authorized_form_type_id("1601EQ"), Some("1601EQ"));
-        assert!(can_queue_for_submission("1601FQ"));
-        assert_eq!(queue_authorized_form_type_id("1601FQ"), Some("1601FQ"));
-        assert!(can_queue_for_submission("1603Q"));
-        assert_eq!(queue_authorized_form_type_id("1603Q"), Some("1603Qv2018"));
-        assert!(can_queue_for_submission("1602Q"));
-        assert_eq!(queue_authorized_form_type_id("1602Q"), Some("1602Qv2018"));
-        assert!(can_queue_for_submission("2552"));
-        assert_eq!(queue_authorized_form_type_id("2552"), Some("2552v2018"));
-        assert!(can_queue_for_submission("2550M"));
-        assert_eq!(queue_authorized_form_type_id("2550M"), Some("2550M"));
-        assert!(can_queue_for_submission("1706"));
-        assert_eq!(queue_authorized_form_type_id("1706"), Some("1706"));
-        assert!(can_queue_for_submission("1801"));
-        assert_eq!(queue_authorized_form_type_id("1801"), Some("1801v2018"));
-        assert!(can_queue_for_submission("1800"));
-        assert_eq!(queue_authorized_form_type_id("1800"), Some("1800v2018"));
-        assert!(can_queue_for_submission("1707A"));
-        assert_eq!(queue_authorized_form_type_id("1707A"), Some("1707Av2021"));
-        assert!(can_queue_for_submission("1707"));
-        assert_eq!(queue_authorized_form_type_id("1707"), Some("1707v2021"));
-        // No PROD SFTP folder for 2200ANv2018: modeled, not queueable.
-        assert!(!can_queue_for_submission("2200AN"));
-        assert_eq!(queue_authorized_form_type_id("2200AN"), None);
-        assert!(can_queue_for_submission("2200C"));
-        assert_eq!(queue_authorized_form_type_id("2200C"), Some("2200Cv2018"));
-        assert!(can_queue_for_submission("2200S"));
-        assert_eq!(queue_authorized_form_type_id("2200S"), Some("2200S"));
-        assert!(can_queue_for_submission("2000OT"));
-        assert_eq!(queue_authorized_form_type_id("2000OT"), Some("2000OTv2018"));
-        assert!(can_queue_for_submission("2000"));
-        assert_eq!(queue_authorized_form_type_id("2000"), Some("2000v2018"));
-        assert!(can_queue_for_submission("2200M"));
-        assert_eq!(queue_authorized_form_type_id("2200M"), Some("2200Mv2018"));
-        assert!(can_queue_for_submission("2200P"));
-        assert_eq!(queue_authorized_form_type_id("2200P"), Some("2200Pv2020"));
-        assert!(can_queue_for_submission("2200A"));
-        assert_eq!(queue_authorized_form_type_id("2200A"), Some("2200Av2020"));
-        assert!(can_queue_for_submission("2200T"));
-        assert_eq!(queue_authorized_form_type_id("2200T"), Some("2200Tv2020"));
-        assert!(can_queue_for_submission("1701MS"));
-        assert_eq!(queue_authorized_form_type_id("1701MS"), Some("1701MS"));
-        assert!(can_queue_for_submission("1702Q"));
-        assert_eq!(queue_authorized_form_type_id("1702Q"), Some("1702Qv2018C"));
-        assert!(can_queue_for_submission("1701A"));
-        assert_eq!(queue_authorized_form_type_id("1701A"), Some("1701A"));
-        assert!(can_queue_for_submission("1700"));
-        assert_eq!(queue_authorized_form_type_id("1700"), Some("1700v2018"));
-        assert!(can_queue_for_submission("1702EX"));
-        assert_eq!(
-            queue_authorized_form_type_id("1702EX"),
-            Some("1702EXv2018C")
-        );
-
-        for code in [
-            "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "9999",
-        ] {
+        // 2550Q stays frozen (bir-rules-codegen application freeze).
+        for code in ["2550Q", "9999"] {
             assert!(!can_queue_for_submission(code), "{code} must fail closed");
             assert_eq!(queue_authorized_form_type_id(code), None);
         }
@@ -1133,7 +1082,7 @@ mod tests {
     fn payment_form_uses_canonical_1999_identity() {
         let form = find_form_capability("0605").expect("0605 inventory record");
         assert_eq!(form.revision, "1999");
-        assert_eq!(form.form_id, "0605v1999");
+        assert_eq!(form.form_id, "0605");
         assert!(find_form_capability_by_id("0605v2018").is_none());
     }
 }

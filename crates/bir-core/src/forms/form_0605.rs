@@ -10,15 +10,15 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use super::queueable::SubmissionLifecycle;
+use super::{FilingPeriod, FormValidator, TypedBirForm};
 use crate::profile::{TaxpayerProfile, TaxpayerType};
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 
 pub const FORM_CODE: &str = "0605";
 pub const FORM_REVISION: &str = "1999";
 pub const FORM_TYPE_ID: &str = "0605v1999";
 pub const FORM_VERSION_LABEL: &str = "July 1999 (ENCS)";
-pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+pub const QUEUE_SUBMISSION_SUPPORTED: bool = true;
 
 /// Item 1. The two XML flags are derived from this single choice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -317,6 +317,15 @@ impl Form0605IndexedCode {
         }
     }
 
+    /// An ATC or tax type picked from the official popup list.
+    pub(crate) fn official(code: &str, xml_index: u16) -> Self {
+        Self {
+            code: code.to_string(),
+            xml_index,
+            evidence: Form0605CodeEvidence::ReviewedPair,
+        }
+    }
+
     pub(crate) fn imported_atc(code: String, xml_index: u16) -> Self {
         let is_reviewed = Form0605ReviewedAtc::ALL
             .iter()
@@ -449,24 +458,16 @@ pub struct Form0605Draft {
     #[serde(default)]
     pub preserved_unmodeled_xml_fields: BTreeMap<String, String>,
 
-    // Lifecycle.
-    pub status: FilingStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    #[serde(default)]
-    pub submitted_at: Option<String>,
-    #[serde(default)]
-    pub confirmed_at: Option<String>,
-    #[serde(default)]
-    pub submission_filename: Option<String>,
-    #[serde(default)]
-    pub receipt_id: Option<i64>,
-    #[serde(default)]
-    pub submission_attempts: u32,
-    #[serde(default)]
-    pub next_retry_at: Option<String>,
+    /// Pre-queue builds stored their own error text here. Kept so old JSON
+    /// round-trips; the generic lifecycle reports `submission_error`.
     #[serde(default)]
     pub last_error: Option<String>,
+
+    /// Status, queue authorization and retry state. Flattened so stored JSON
+    /// keeps the keys earlier builds wrote inline (`status`, `created_at`,
+    /// `submission_attempts`, ...).
+    #[serde(flatten)]
+    pub lifecycle: SubmissionLifecycle,
 }
 
 const fn default_quarter() -> u8 {
@@ -479,7 +480,6 @@ const fn default_year_end_month() -> u8 {
 
 impl Form0605Draft {
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, period_slot: u8) -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: None,
             tin: profile.tin.full(),
@@ -519,16 +519,8 @@ impl Form0605Draft {
             signatures: Form0605SignatureDetails::default(),
             payment_details: Form0605PaymentDetails::default(),
             preserved_unmodeled_xml_fields: BTreeMap::new(),
-            status: FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: SubmissionLifecycle::default(),
         }
     }
 
@@ -540,21 +532,13 @@ impl Form0605Draft {
         self.tax_type = Some(Form0605IndexedCode::reviewed_tax_type(value));
     }
 
-    /// Compute only the two formulas printed on the official form. No penalty
-    /// inference, non-negative clamp, or timestamp mutation occurs here.
+    /// The official compute chain (see `form_0605_official`).
     pub fn recompute(&mut self) {
-        self.item_20d_total_penalties =
-            self.item_20a_surcharge + self.item_20b_interest + self.item_20c_compromise;
-        self.item_21_total_amount_payable =
-            self.item_19_basic_tax_or_payment + self.item_20d_total_penalties;
+        self.official_recompute();
     }
 
     pub fn is_editable(&self) -> bool {
-        matches!(self.status, FilingStatus::Draft)
-    }
-
-    pub const fn can_queue_for_submission(&self) -> bool {
-        QUEUE_SUBMISSION_SUPPORTED
+        self.lifecycle.is_editable()
     }
 
     pub fn evidence_warnings(&self) -> Vec<String> {
@@ -596,382 +580,12 @@ impl Form0605Draft {
         }
         warnings
     }
-
-    /// Queueing remains unavailable until an exact submission contract exists.
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        let mut errors = self.validate();
-        errors.push((
-            "submission".to_string(),
-            "0605v1999 submission is manual/external; queue transport is not certified".to_string(),
-        ));
-        Err(errors)
-    }
-
-    pub fn transition_to_submitted(&mut self, _filename: String) -> Result<(), String> {
-        Err(
-            "0605v1999 cannot transition to Submitted because queue/submission transport is not certified"
-                .to_string(),
-        )
-    }
-
-    pub fn transition_to_confirmed(
-        &mut self,
-        _confirmed_at: String,
-        _receipt_id: Option<i64>,
-        _filename: Option<String>,
-    ) -> Result<(), String> {
-        Err(
-            "0605v1999 cannot transition to Confirmed because its submission-response contract is not certified"
-                .to_string(),
-        )
-    }
-
-    pub fn transition_to_paid(&mut self) -> Result<(), String> {
-        Err(
-            "0605v1999 cannot transition to Paid through an uncertified submission lifecycle"
-                .to_string(),
-        )
-    }
-
-    pub fn revert_to_draft(&mut self) -> Result<(), String> {
-        if matches!(self.status, FilingStatus::Paid) {
-            return Err("A paid 0605 record cannot be reverted automatically".to_string());
-        }
-        self.status = FilingStatus::Draft;
-        self.submitted_at = None;
-        self.confirmed_at = None;
-        self.receipt_id = None;
-        self.submission_filename = None;
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
-    }
-
-    pub fn record_submission_failure(&mut self, _error_message: String) -> Result<(), String> {
-        Err("0605v1999 has no certified queue attempt or retry persistence contract".to_string())
-    }
 }
 
 impl FormValidator for Form0605Draft {
+    /// The official `validate()` port; see `form_0605_official`.
     fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-
-        let tin_digits: String = self
-            .tin
-            .chars()
-            .filter(|character| character.is_ascii_digit())
-            .collect();
-        if !matches!(tin_digits.len(), 12..=14)
-            || self
-                .tin
-                .chars()
-                .any(|character| !character.is_ascii_digit() && character != '-')
-        {
-            errors.push((
-                "tin".to_string(),
-                "TIN must contain 12 to 14 digits including the 3- to 5-digit branch code"
-                    .to_string(),
-            ));
-        }
-        if !(1..=12).contains(&self.month) {
-            errors.push((
-                "month".to_string(),
-                "Open-ended persistence slot must be from 1 to 12".to_string(),
-            ));
-        }
-        if !(1..=4).contains(&self.quarter) {
-            errors.push((
-                "quarter".to_string(),
-                "Quarter must be selected independently from 1 to 4".to_string(),
-            ));
-        }
-        if !(1..=12).contains(&self.year_end_month) {
-            errors.push((
-                "year_end_month".to_string(),
-                "Year Ended month must be from 1 to 12".to_string(),
-            ));
-        }
-        if !(1900..=9999).contains(&self.taxable_year) {
-            errors.push((
-                "taxable_year".to_string(),
-                "Year Ended must contain four digits".to_string(),
-            ));
-        }
-        validate_required_date("due_date", self.due_date, &mut errors);
-        validate_required_date("return_period", self.return_period, &mut errors);
-
-        for (field, label, value) in [
-            ("rdo_code", "RDO code", self.rdo_code.as_str()),
-            (
-                "taxpayer_name",
-                "Taxpayer name",
-                self.taxpayer_name.as_str(),
-            ),
-            (
-                "line_of_business",
-                "Line of business / occupation",
-                self.line_of_business.as_str(),
-            ),
-            (
-                "registered_address",
-                "Registered address",
-                self.registered_address.as_str(),
-            ),
-            ("zip_code", "ZIP code", self.zip_code.as_str()),
-            (
-                "contact_number",
-                "Telephone number",
-                self.contact_number.as_str(),
-            ),
-            ("email", "Email address", self.email.as_str()),
-        ] {
-            if value.trim().is_empty() {
-                errors.push((field.to_string(), format!("{label} is required")));
-            }
-        }
-        if !self.rdo_code.trim().is_empty()
-            && (self.rdo_code.len() != 3
-                || !self
-                    .rdo_code
-                    .chars()
-                    .all(|character| character.is_ascii_digit()))
-        {
-            errors.push((
-                "rdo_code".to_string(),
-                "RDO code must be 3 digits".to_string(),
-            ));
-        }
-        if !self.zip_code.trim().is_empty() && !validate_zip(self.zip_code.trim()) {
-            errors.push((
-                "zip_code".to_string(),
-                "ZIP code must be 4 digits".to_string(),
-            ));
-        }
-        if !self.contact_number.trim().is_empty() && !validate_ph_phone(&self.contact_number) {
-            errors.push((
-                "contact_number".to_string(),
-                "Telephone number must be a valid Philippine mobile or landline number".to_string(),
-            ));
-        }
-        if !self.email.trim().is_empty() && !validate_email(&self.email) {
-            errors.push(("email".to_string(), "Email address is invalid".to_string()));
-        }
-
-        validate_code_selection(
-            "atc",
-            self.atc.as_ref(),
-            142,
-            |selection| {
-                Form0605ReviewedAtc::ALL.iter().copied().any(|candidate| {
-                    candidate.code() == selection.code()
-                        && candidate.xml_index() == selection.xml_index()
-                })
-            },
-            &mut errors,
-        );
-        validate_code_selection(
-            "tax_type",
-            self.tax_type.as_ref(),
-            37,
-            |selection| {
-                Form0605ReviewedTaxType::ALL
-                    .iter()
-                    .copied()
-                    .any(|candidate| {
-                        candidate.code() == selection.code()
-                            && candidate.xml_index() == selection.xml_index()
-                    })
-            },
-            &mut errors,
-        );
-
-        match self.manner_of_payment {
-            None => errors.push((
-                "manner_of_payment".to_string(),
-                "Item 17 Manner of Payment is required".to_string(),
-            )),
-            Some(Form0605MannerOfPayment::Others) => {
-                if self.other_manner_description.trim().is_empty() {
-                    errors.push((
-                        "other_manner_description".to_string(),
-                        "Item 17 Others requires a description".to_string(),
-                    ));
-                }
-            }
-            Some(_) if !self.other_manner_description.trim().is_empty() => errors.push((
-                "other_manner_description".to_string(),
-                "Clear the Others description unless Item 17 Others is selected".to_string(),
-            )),
-            Some(_) => {}
-        }
-
-        match self.type_of_payment {
-            None => errors.push((
-                "type_of_payment".to_string(),
-                "Item 18 Type of Payment is required".to_string(),
-            )),
-            Some(Form0605TypeOfPayment::Installment) => {
-                if self.number_of_installments.is_none_or(|count| count == 0) {
-                    errors.push((
-                        "number_of_installments".to_string(),
-                        "Installment payment requires a positive number of installments"
-                            .to_string(),
-                    ));
-                }
-            }
-            Some(_) if self.number_of_installments.is_some() => errors.push((
-                "number_of_installments".to_string(),
-                "Number of installments applies only when Installment is selected".to_string(),
-            )),
-            Some(_) => {}
-        }
-
-        for (field, value) in [
-            (
-                "item_19_basic_tax_or_payment",
-                self.item_19_basic_tax_or_payment,
-            ),
-            ("item_20a_surcharge", self.item_20a_surcharge),
-            ("item_20b_interest", self.item_20b_interest),
-            ("item_20c_compromise", self.item_20c_compromise),
-        ] {
-            if !value.is_finite() || value < 0.0 {
-                errors.push((
-                    field.to_string(),
-                    "Amount must be a finite, non-negative number".to_string(),
-                ));
-            }
-        }
-
-        for (field, value) in [
-            (
-                "payment_23_cash_or_bank_debit_memo.amount",
-                self.payment_details.cash_or_bank_debit_memo_amount,
-            ),
-            ("payment_24_check.amount", self.payment_details.check.amount),
-            (
-                "payment_25_tax_debit_memo.amount",
-                self.payment_details.tax_debit_memo.amount,
-            ),
-            (
-                "payment_26_others.amount",
-                self.payment_details.others.amount,
-            ),
-        ] {
-            if value.is_some_and(|amount| !amount.is_finite() || amount < 0.0) {
-                errors.push((
-                    field.to_string(),
-                    "Payment amount must be a finite, non-negative number".to_string(),
-                ));
-            }
-        }
-
-        for (field, value) in [
-            (
-                "payment_24_check.date",
-                self.payment_details.check.date.as_str(),
-            ),
-            (
-                "payment_25_tax_debit_memo.date",
-                self.payment_details.tax_debit_memo.date.as_str(),
-            ),
-            (
-                "payment_26_others.date",
-                self.payment_details.others.date.as_str(),
-            ),
-        ] {
-            if !value.trim().is_empty()
-                && chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").is_err()
-            {
-                errors.push((
-                    field.to_string(),
-                    "Payment date must use MM/DD/YYYY and be a real calendar date".to_string(),
-                ));
-            }
-        }
-
-        let expected_20d =
-            self.item_20a_surcharge + self.item_20b_interest + self.item_20c_compromise;
-        let expected_21 = self.item_19_basic_tax_or_payment + expected_20d;
-        for (field, actual, expected) in [
-            (
-                "item_20d_total_penalties",
-                self.item_20d_total_penalties,
-                expected_20d,
-            ),
-            (
-                "item_21_total_amount_payable",
-                self.item_21_total_amount_payable,
-                expected_21,
-            ),
-        ] {
-            if !actual.is_finite() || actual < 0.0 || (actual - expected).abs() > 0.001 {
-                errors.push((
-                    field.to_string(),
-                    format!("Computed amount must equal {expected:.2} and be non-negative"),
-                ));
-            }
-        }
-
-        errors
-    }
-}
-
-fn validate_required_date(
-    field: &str,
-    value: Option<Form0605Date>,
-    errors: &mut Vec<(String, String)>,
-) {
-    match value {
-        None => errors.push((field.to_string(), "Date is required".to_string())),
-        Some(date) => {
-            if let Err(message) = date.validate() {
-                errors.push((field.to_string(), message));
-            }
-        }
-    }
-}
-
-fn validate_code_selection(
-    field: &str,
-    selection: Option<&Form0605IndexedCode>,
-    maximum_index: u16,
-    is_reviewed_pair: impl Fn(&Form0605IndexedCode) -> bool,
-    errors: &mut Vec<(String, String)>,
-) {
-    let Some(selection) = selection else {
-        errors.push((field.to_string(), format!("{field} selection is required")));
-        return;
-    };
-    if selection.code().trim().is_empty()
-        || selection.xml_index() == 0
-        || selection.xml_index() > maximum_index
-    {
-        errors.push((
-            field.to_string(),
-            format!("{field} code/index pair is invalid"),
-        ));
-    }
-    if selection.requires_review() {
-        errors.push((
-            field.to_string(),
-            format!(
-                "Imported {field} pair {}↔index {} is preserved but lacks reviewed mapping evidence",
-                selection.code(),
-                selection.xml_index()
-            ),
-        ));
-    } else if !is_reviewed_pair(selection) {
-        errors.push((
-            field.to_string(),
-            format!(
-                "Persisted {field} pair {}↔index {} is marked reviewed but does not match locked source evidence",
-                selection.code(),
-                selection.xml_index()
-            ),
-        ));
+        self.official_errors()
     }
 }
 
@@ -1006,9 +620,9 @@ mod tests {
             "id": null,
             "full_name": "JUAN DELA CRUZ",
             "tin": {
-                "segment1": "000",
-                "segment2": "000",
-                "segment3": "000",
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "788",
                 "branch": "00000"
             },
             "rdo_code": "018",
@@ -1050,11 +664,11 @@ mod tests {
         draft.item_20a_surcharge = 10.0;
         draft.item_20b_interest = 20.0;
         draft.item_20c_compromise = 1_000.0;
-        draft.updated_at = "fixed".to_string();
+        draft.lifecycle.updated_at = "fixed".to_string();
         draft.recompute();
         assert_eq!(draft.item_20d_total_penalties, 1_030.0);
         assert_eq!(draft.item_21_total_amount_payable, 2_030.0);
-        assert_eq!(draft.updated_at, "fixed");
+        assert_eq!(draft.lifecycle.updated_at, "fixed");
     }
 
     #[test]
@@ -1095,7 +709,7 @@ mod tests {
         });
 
         assert!(draft.validate().iter().any(|(field, message)| {
-            field == "atc" && message.contains("does not match locked source evidence")
+            field == "atc" && message == "Please enter a valid ATC on Item 6."
         }));
     }
 
@@ -1115,60 +729,6 @@ mod tests {
                 .validate()
                 .iter()
                 .any(|(field, _)| field == "number_of_installments")
-        );
-    }
-
-    #[test]
-    fn queue_transition_is_non_panicking_and_always_disabled() {
-        let mut draft = valid_draft();
-        let errors = draft
-            .transition_to_queued()
-            .expect_err("0605 queueing must remain disabled");
-        assert_eq!(draft.status, FilingStatus::Draft);
-        assert!(errors.iter().any(|(field, _)| field == "submission"));
-    }
-
-    #[test]
-    fn injected_queued_status_cannot_transition_to_submitted() {
-        let mut draft = valid_draft();
-        draft.status = FilingStatus::Queued;
-        let result = draft.transition_to_submitted("x.xml".to_string());
-        assert!(result.is_err() && matches!(draft.status, FilingStatus::Queued));
-    }
-
-    #[test]
-    fn injected_submitted_status_cannot_transition_to_confirmed() {
-        let mut draft = valid_draft();
-        draft.status = FilingStatus::Submitted;
-        let result = draft.transition_to_confirmed("now".to_string(), None, None);
-        assert!(
-            result.is_err() && matches!(draft.status, FilingStatus::Submitted),
-            "uncertified confirmation transition mutated the draft"
-        );
-    }
-
-    #[test]
-    fn injected_confirmed_status_cannot_transition_to_paid() {
-        let mut draft = valid_draft();
-        draft.status = FilingStatus::Confirmed;
-        let result = draft.transition_to_paid();
-        assert!(
-            result.is_err() && matches!(draft.status, FilingStatus::Confirmed),
-            "uncertified payment transition mutated the draft"
-        );
-    }
-
-    #[test]
-    fn injected_queued_status_cannot_record_submission_failure() {
-        let mut draft = valid_draft();
-        draft.status = FilingStatus::Queued;
-        let result = draft.record_submission_failure("failure".to_string());
-        assert!(
-            result.is_err()
-                && matches!(draft.status, FilingStatus::Queued)
-                && draft.submission_attempts == 0
-                && draft.last_error.is_none(),
-            "uncertified retry transition mutated the draft"
         );
     }
 

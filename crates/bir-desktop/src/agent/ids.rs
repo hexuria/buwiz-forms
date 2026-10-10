@@ -20,15 +20,8 @@ pub const PAGE_IMPORT_EXPORT: &str = "page-import-export";
 pub const PAGE_SETTINGS: &str = "page-settings";
 pub const PAGE_ADMIN_CALENDAR: &str = "page-admin-calendar";
 pub const PAGE_FORM_2551Q: &str = "page-form-2551q";
-pub const PAGE_FORM_1701Q: &str = "page-form-1701q";
 pub const PAGE_FORM_1601C: &str = "page-form-1601c";
-pub const PAGE_FORM_0619E: &str = "page-form-0619e";
-pub const PAGE_FORM_0619F: &str = "page-form-0619f";
-pub const PAGE_FORM_0605: &str = "page-form-0605";
 pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
-pub const PAGE_FORM_1701: &str = "page-form-1701";
-pub const PAGE_FORM_1702RT: &str = "page-form-1702rt";
-pub const PAGE_FORM_1702MX: &str = "page-form-1702mx";
 
 pub const NAV_GLOBAL_DASHBOARD: &str = "global_dashboard_btn";
 pub const NAV_NEW_PROFILE: &str = "add_profile_mini_btn";
@@ -143,30 +136,9 @@ pub const FORM_2551Q_TAXABLE_0: &str = "form-2551q-taxable-0";
 pub const FORM_2551Q_BACK: &str = "back_btn";
 pub const FORM_2551Q_SAVE: &str = "save_btn";
 pub const FORM_2551Q_SUBMIT: &str = "submit_btn";
-pub const FORM_1701Q_BACK: &str = "1701q_back";
-pub const FORM_1701Q_SAVE: &str = "1701q_save";
-pub const FORM_1701Q_SUBMIT: &str = "1701q_manual";
-pub const FORM_0619E_BACK: &str = "0619e_back";
-pub const FORM_0619E_SAVE: &str = "0619e_save";
-pub const FORM_0619E_SUBMIT: &str = "0619e_manual";
-pub const FORM_0619F_BACK: &str = "0619f_back";
-pub const FORM_0619F_SAVE: &str = "0619f_save";
-pub const FORM_0619F_SUBMIT: &str = "0619f_manual";
-pub const FORM_0605_BACK: &str = "0605_back";
-pub const FORM_0605_SAVE: &str = "0605_save";
-pub const FORM_0605_SUBMIT: &str = "0605_manual";
 pub const FORM_2550Q_BACK: &str = "2550q_back";
 pub const FORM_2550Q_SAVE: &str = "2550q_save";
 pub const FORM_2550Q_SUBMIT: &str = "2550q_manual";
-pub const FORM_1701_BACK: &str = "1701_back";
-pub const FORM_1701_SAVE: &str = "1701_save";
-pub const FORM_1701_SUBMIT: &str = "1701_manual";
-pub const FORM_1702RT_BACK: &str = "1702rt_back";
-pub const FORM_1702RT_SAVE: &str = "1702rt_save";
-pub const FORM_1702RT_SUBMIT: &str = "1702rt_submit";
-pub const FORM_1702MX_BACK: &str = "1702mx_back";
-pub const FORM_1702MX_SAVE: &str = "1702mx_save";
-pub const FORM_1702MX_SUBMIT: &str = "1702mx_submit";
 
 pub const DUES_LIST: &str = "dues-list";
 pub const JOBS_LIST: &str = "jobs-list";
@@ -350,15 +322,8 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Settings => PAGE_SETTINGS,
         ActiveView::AdminCalendarDashboard => PAGE_ADMIN_CALENDAR,
         ActiveView::Form2551Q => PAGE_FORM_2551Q,
-        ActiveView::Form1701Q => PAGE_FORM_1701Q,
         ActiveView::Form1601C => PAGE_FORM_1601C,
-        ActiveView::Form0619E => PAGE_FORM_0619E,
-        ActiveView::Form0619F => PAGE_FORM_0619F,
-        ActiveView::Form0605 => PAGE_FORM_0605,
         ActiveView::Form2550Q => PAGE_FORM_2550Q,
-        ActiveView::Form1701 => PAGE_FORM_1701,
-        ActiveView::Form1702RT => PAGE_FORM_1702RT,
-        ActiveView::Form1702MX => PAGE_FORM_1702MX,
         ActiveView::Queueable(kind) => queueable_spec(kind).page_id,
     }
 }
@@ -374,15 +339,8 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Settings => "settings",
         ActiveView::AdminCalendarDashboard => "admin-calendar",
         ActiveView::Form2551Q => "form-2551q",
-        ActiveView::Form1701Q => "form-1701q",
         ActiveView::Form1601C => "form-1601c",
-        ActiveView::Form0619E => "form-0619e",
-        ActiveView::Form0619F => "form-0619f",
-        ActiveView::Form0605 => "form-0605",
         ActiveView::Form2550Q => "form-2550q",
-        ActiveView::Form1701 => "form-1701",
-        ActiveView::Form1702RT => "form-1702rt",
-        ActiveView::Form1702MX => "form-1702mx",
         ActiveView::Queueable(kind) => queueable_spec(kind).slug,
     }
 }
@@ -398,15 +356,8 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "settings" => Some(ActiveView::Settings),
         "admin-calendar" | "tax-calendars" => Some(ActiveView::AdminCalendarDashboard),
         "form-2551q" | "2551q" => Some(ActiveView::Form2551Q),
-        "form-1701q" | "1701q" => Some(ActiveView::Form1701Q),
         "form-1601c" | "1601c" => Some(ActiveView::Form1601C),
-        "form-0619e" | "0619e" => Some(ActiveView::Form0619E),
-        "form-0619f" | "0619f" => Some(ActiveView::Form0619F),
-        "form-0605" | "0605" => Some(ActiveView::Form0605),
         "form-2550q" | "2550q" => Some(ActiveView::Form2550Q),
-        "form-1701" | "1701" => Some(ActiveView::Form1701),
-        "form-1702rt" | "1702rt" => Some(ActiveView::Form1702RT),
-        "form-1702mx" | "1702mx" => Some(ActiveView::Form1702MX),
         other => crate::views::queueable_forms::spec_for_slug(other)
             .map(|spec| ActiveView::Queueable(spec.kind)),
     }
@@ -423,15 +374,8 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Settings,
     ActiveView::AdminCalendarDashboard,
     ActiveView::Form2551Q,
-    ActiveView::Form1701Q,
     ActiveView::Form1601C,
-    ActiveView::Form0619E,
-    ActiveView::Form0619F,
-    ActiveView::Form0605,
     ActiveView::Form2550Q,
-    ActiveView::Form1701,
-    ActiveView::Form1702RT,
-    ActiveView::Form1702MX,
 ];
 
 /// [`ALL_VIEWS`] plus every generic-queue form editor.
@@ -471,13 +415,6 @@ pub const FORM_CHROME: &[FormChrome] = &[
         submit: FORM_2551Q_SUBMIT,
     },
     FormChrome {
-        view: ActiveView::Form1701Q,
-        code: "1701Q",
-        back: FORM_1701Q_BACK,
-        save: FORM_1701Q_SAVE,
-        submit: FORM_1701Q_SUBMIT,
-    },
-    FormChrome {
         view: ActiveView::Form1601C,
         code: "1601C",
         back: FORM_1601C_BACK,
@@ -485,53 +422,11 @@ pub const FORM_CHROME: &[FormChrome] = &[
         submit: FORM_1601C_SUBMIT,
     },
     FormChrome {
-        view: ActiveView::Form0619E,
-        code: "0619E",
-        back: FORM_0619E_BACK,
-        save: FORM_0619E_SAVE,
-        submit: FORM_0619E_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form0619F,
-        code: "0619F",
-        back: FORM_0619F_BACK,
-        save: FORM_0619F_SAVE,
-        submit: FORM_0619F_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form0605,
-        code: "0605",
-        back: FORM_0605_BACK,
-        save: FORM_0605_SAVE,
-        submit: FORM_0605_SUBMIT,
-    },
-    FormChrome {
         view: ActiveView::Form2550Q,
         code: "2550Q",
         back: FORM_2550Q_BACK,
         save: FORM_2550Q_SAVE,
         submit: FORM_2550Q_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form1701,
-        code: "1701",
-        back: FORM_1701_BACK,
-        save: FORM_1701_SAVE,
-        submit: FORM_1701_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form1702RT,
-        code: "1702RT",
-        back: FORM_1702RT_BACK,
-        save: FORM_1702RT_SAVE,
-        submit: FORM_1702RT_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form1702MX,
-        code: "1702MX",
-        back: FORM_1702MX_BACK,
-        save: FORM_1702MX_SAVE,
-        submit: FORM_1702MX_SUBMIT,
     },
 ];
 
@@ -566,7 +461,7 @@ mod tests {
             assert!(seen.insert(id), "duplicate page root {id}");
             assert_eq!(view_from_slug(view_slug(view)), Some(view));
         }
-        assert_eq!(ALL_VIEWS.len(), 18);
+        assert_eq!(ALL_VIEWS.len(), 11);
     }
 
     #[test]

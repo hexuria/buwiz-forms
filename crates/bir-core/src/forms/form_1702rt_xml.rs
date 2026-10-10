@@ -1476,7 +1476,6 @@ impl Form1702RTDraft {
             None
         };
 
-        let now = chrono::Utc::now().to_rfc3339();
         let draft = Form1702RTDraft {
             id: None,
             tin,
@@ -1526,16 +1525,8 @@ impl Form1702RTDraft {
             xml_final_flag: field(fields, "txtFinalFlag").to_string(),
             preserved_transport_fields: fields.clone(),
             calculation_issues: Vec::new(),
-            status: super::FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
         if errors.is_empty() {
             Ok(draft)

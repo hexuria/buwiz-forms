@@ -126,6 +126,9 @@ macro_rules! layouts {
 /// Layouts of the forms the app serializes today. Add a form here when its
 /// field map moves to [`write`].
 const LAYOUTS: &[(&str, &str)] = layouts![
+    "0605-v2003",
+    "0619e-v2018",
+    "0619f-v2018",
     "1600pt-v2018-government",
     "1600pt-v2018-private",
     "1600vt-v2018-government",
@@ -143,11 +146,14 @@ const LAYOUTS: &[(&str, &str)] = layouts![
     "1604f-v2018",
     "1606-v2018",
     "1700-v2013",
+    "1701-v2018",
     "1701a-v2018",
     "1701ms-v2024",
+    "1701q-v2018",
     "1702ex-v2018c",
     "1702mx-v2018c",
     "1702q-v2018c",
+    "1702rt-v2018c",
     "1706-v2018",
     "1707-v2021",
     "1707a-v2021",

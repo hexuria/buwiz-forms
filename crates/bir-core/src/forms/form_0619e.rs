@@ -8,9 +8,9 @@
 //! encryption/upload to omitted executables. Form 0619-E therefore remains
 //! manual/external for submission.
 
-use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use super::queueable::SubmissionLifecycle;
+use super::{FilingPeriod, FormValidator, TypedBirForm};
 use crate::profile::TaxpayerProfile;
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -19,7 +19,7 @@ pub const FORM_REVISION: &str = "2018";
 pub const FORM_TYPE_ID: &str = "0619Ev2018";
 pub const ATC_CODE: &str = "WME10";
 pub const TAX_TYPE_CODE: &str = "WE";
-pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+pub const QUEUE_SUBMISSION_SUPPORTED: bool = true;
 
 /// Hash-locked source evidence for the exact January 2018 revision.
 pub const OFFICIAL_FORM_SHA256: &str =
@@ -211,24 +211,15 @@ pub struct Form0619EDraft {
     #[serde(default)]
     pub preserved_unmodeled_xml_fields: BTreeMap<String, String>,
 
-    // Lifecycle.
-    pub status: FilingStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    #[serde(default)]
-    pub submitted_at: Option<String>,
-    #[serde(default)]
-    pub confirmed_at: Option<String>,
-    #[serde(default)]
-    pub submission_filename: Option<String>,
-    #[serde(default)]
-    pub receipt_id: Option<i64>,
-    #[serde(default)]
-    pub submission_attempts: u32,
-    #[serde(default)]
-    pub next_retry_at: Option<String>,
+    /// Pre-queue builds stored their own error text here; kept so old JSON
+    /// round-trips. The generic lifecycle reports `submission_error`.
     #[serde(default)]
     pub last_error: Option<String>,
+
+    /// Status, queue authorization and retry state, flattened so stored JSON
+    /// keeps the keys earlier builds wrote inline (`status`, `created_at`, ...).
+    #[serde(flatten)]
+    pub lifecycle: SubmissionLifecycle,
 }
 
 fn deserialize_withholding_agent_category<'de, D>(
@@ -253,8 +244,7 @@ where
 
 impl Form0619EDraft {
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
-        Self {
+        let mut draft = Self {
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
@@ -266,9 +256,8 @@ impl Form0619EDraft {
             } else {
                 WithholdingAgentCategory::Private
             },
-            // Deliberately manual/fail-closed: the sample's day 10 is not a
-            // sufficient legal deadline rule.
-            due_day: None,
+            // The official page's default (`txtDueDay` value 10).
+            due_day: Some(10),
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
             line_of_business: profile.line_of_business.clone(),
@@ -293,17 +282,11 @@ impl Form0619EDraft {
             // reuse it as evidence for an encrypted submission payload.
             xml_final_flag: Form0619EXmlFinalFlag::One,
             preserved_unmodeled_xml_fields: BTreeMap::new(),
-            status: FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
-        }
+            lifecycle: SubmissionLifecycle::default(),
+        };
+        draft.recompute();
+        draft
     }
 
     pub const fn atc_code(&self) -> &'static str {
@@ -324,24 +307,13 @@ impl Form0619EDraft {
         }
     }
 
-    /// Only the three formulas printed by the official form are computed.
-    /// No clamping, penalty calculation, date lookup, or timestamp mutation is
-    /// performed here.
+    /// The official compute chain (see `form_0619e_official`).
     pub fn recompute(&mut self) {
-        self.item_16_net_amount_of_remittance =
-            self.item_14_amount_of_remittance - self.item_15_amount_remitted_previously;
-        self.item_17d_total_penalties =
-            self.item_17a_surcharge + self.item_17b_interest + self.item_17c_compromise;
-        self.item_18_total_amount_of_remittance =
-            self.item_16_net_amount_of_remittance + self.item_17d_total_penalties;
+        self.official_recompute();
     }
 
     pub fn is_editable(&self) -> bool {
-        matches!(self.status, FilingStatus::Draft)
-    }
-
-    pub const fn can_queue_for_submission(&self) -> bool {
-        QUEUE_SUBMISSION_SUPPORTED
+        self.lifecycle.is_editable()
     }
 
     pub fn xml_evidence_warnings(&self) -> Vec<String> {
@@ -373,281 +345,12 @@ impl Form0619EDraft {
         }
         warnings
     }
-
-    /// Queueing is deliberately unavailable until the dynamic endpoint,
-    /// helper binaries, confirmation semantics, and immutable persistence
-    /// contract are all reviewed.
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        let mut errors = self.validate();
-        errors.push((
-            "submission".to_string(),
-            "0619Ev2018 queueing is disabled: exact ciphertext generation, the dynamic tinDispatcher endpoint/credentials, omitted Encrypt.exe and cFTPSend.exe helpers, BIR validation response, and durable claim persistence are not certified"
-                .to_string(),
-        ));
-        Err(errors)
-    }
-
-    pub fn transition_to_submitted(&mut self, _filename: String) -> Result<(), String> {
-        Err(
-            "0619Ev2018 cannot transition to Submitted because queue/submission transport is not certified"
-                .to_string(),
-        )
-    }
-
-    pub fn transition_to_confirmed(
-        &mut self,
-        _confirmed_at: String,
-        _receipt_id: Option<i64>,
-        _filename: Option<String>,
-    ) -> Result<(), String> {
-        Err(
-            "0619Ev2018 cannot transition to Confirmed because its submission-response contract is not certified"
-                .to_string(),
-        )
-    }
-
-    pub fn transition_to_paid(&mut self) -> Result<(), String> {
-        Err(
-            "0619Ev2018 cannot transition to Paid through an uncertified submission lifecycle"
-                .to_string(),
-        )
-    }
-
-    pub fn revert_to_draft(&mut self) -> Result<(), String> {
-        if matches!(self.status, FilingStatus::Paid) {
-            return Err("A paid 0619-E record cannot be reverted automatically".to_string());
-        }
-        self.status = FilingStatus::Draft;
-        self.submitted_at = None;
-        self.confirmed_at = None;
-        self.receipt_id = None;
-        self.submission_filename = None;
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
-    }
-
-    pub fn record_submission_failure(&mut self, _error_msg: String) -> Result<(), String> {
-        Err("0619Ev2018 has no certified queue attempt or retry persistence contract".to_string())
-    }
 }
 
 impl FormValidator for Form0619EDraft {
+    /// The official `validateForm` port (see `form_0619e_official`).
     fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-        if self.printable_tin_segments().is_none() {
-            errors.push((
-                "tin".to_string(),
-                "TIN must contain 12 to 14 digits, with optional dashes".to_string(),
-            ));
-        }
-        if !(1..=12).contains(&self.month) {
-            errors.push((
-                "month".to_string(),
-                "Month must be from 1 to 12".to_string(),
-            ));
-        }
-        if !(1900..=9999).contains(&self.taxable_year) {
-            errors.push((
-                "taxable_year".to_string(),
-                "Taxable year must contain four digits".to_string(),
-            ));
-        }
-        for (field, label, value) in [
-            ("rdo_code", "RDO code", self.rdo_code.as_str()),
-            (
-                "taxpayer_name",
-                "Withholding agent name",
-                self.taxpayer_name.as_str(),
-            ),
-            (
-                "registered_address",
-                "Registered address",
-                self.registered_address.as_str(),
-            ),
-            ("zip_code", "ZIP code", self.zip_code.as_str()),
-            (
-                "contact_number",
-                "Contact number",
-                self.contact_number.as_str(),
-            ),
-            ("email", "Email address", self.email.as_str()),
-        ] {
-            if value.trim().is_empty() {
-                errors.push((field.to_string(), format!("{label} is required")));
-            }
-        }
-        if !self.rdo_code.trim().is_empty()
-            && (self.rdo_code.len() != 3
-                || !self
-                    .rdo_code
-                    .chars()
-                    .all(|character| character.is_ascii_digit()))
-        {
-            errors.push((
-                "rdo_code".to_string(),
-                "RDO code must be 3 digits".to_string(),
-            ));
-        }
-        if !self.zip_code.trim().is_empty() && !validate_zip(self.zip_code.trim()) {
-            errors.push((
-                "zip_code".to_string(),
-                "ZIP code must be 4 digits".to_string(),
-            ));
-        }
-        if !self.contact_number.trim().is_empty() && !validate_ph_phone(&self.contact_number) {
-            errors.push((
-                "contact_number".to_string(),
-                "Contact number must be a valid Philippine mobile or landline number".to_string(),
-            ));
-        }
-        if !self.email.trim().is_empty() && !validate_email(&self.email) {
-            errors.push(("email".to_string(), "Email address is invalid".to_string()));
-        }
-
-        match self.due_day {
-            None => errors.push((
-                "due_day".to_string(),
-                "Due day must be entered manually; the reviewed evidence does not prove a universal 0619-E due-day rule"
-                    .to_string(),
-            )),
-            Some(day) => {
-                let (month, year) = self.due_month_and_year();
-                if chrono::NaiveDate::from_ymd_opt(i32::from(year), u32::from(month), u32::from(day))
-                    .is_none()
-                {
-                    errors.push((
-                        "due_day".to_string(),
-                        "Due day is not valid for the computed due month/year".to_string(),
-                    ));
-                }
-            }
-        }
-
-        for (field, value) in [
-            (
-                "item_14_amount_of_remittance",
-                self.item_14_amount_of_remittance,
-            ),
-            (
-                "item_15_amount_remitted_previously",
-                self.item_15_amount_remitted_previously,
-            ),
-            ("item_17a_surcharge", self.item_17a_surcharge),
-            ("item_17b_interest", self.item_17b_interest),
-            ("item_17c_compromise", self.item_17c_compromise),
-        ] {
-            if !value.is_finite() || value < 0.0 {
-                errors.push((
-                    field.to_string(),
-                    "Amount must be a finite, non-negative number".to_string(),
-                ));
-            }
-        }
-        if !self.is_amended && self.item_15_amount_remitted_previously != 0.0 {
-            errors.push((
-                "item_15_amount_remitted_previously".to_string(),
-                "Item 15 applies only to an amended form".to_string(),
-            ));
-        }
-        if self.item_15_amount_remitted_previously > self.item_14_amount_of_remittance {
-            errors.push((
-                "item_15_amount_remitted_previously".to_string(),
-                "Item 15 exceeds Item 14; Item 16 would be negative and is not clamped".to_string(),
-            ));
-        }
-        if !self.any_taxes_withheld && self.item_14_amount_of_remittance != 0.0 {
-            errors.push((
-                "any_taxes_withheld".to_string(),
-                "Item 4 is No but Item 14 contains an amount of remittance".to_string(),
-            ));
-        }
-
-        validate_optional_date(
-            "tax_agent_date_of_issue",
-            &self.tax_agent_date_of_issue,
-            &mut errors,
-        );
-        validate_optional_date(
-            "tax_agent_date_of_expiry",
-            &self.tax_agent_date_of_expiry,
-            &mut errors,
-        );
-
-        let expected_16 =
-            self.item_14_amount_of_remittance - self.item_15_amount_remitted_previously;
-        let expected_17d =
-            self.item_17a_surcharge + self.item_17b_interest + self.item_17c_compromise;
-        let expected_18 = expected_16 + expected_17d;
-        for (field, actual, expected) in [
-            (
-                "item_16_net_amount_of_remittance",
-                self.item_16_net_amount_of_remittance,
-                expected_16,
-            ),
-            (
-                "item_17d_total_penalties",
-                self.item_17d_total_penalties,
-                expected_17d,
-            ),
-            (
-                "item_18_total_amount_of_remittance",
-                self.item_18_total_amount_of_remittance,
-                expected_18,
-            ),
-        ] {
-            if !actual.is_finite() || (actual - expected).abs() > 0.001 {
-                errors.push((
-                    field.to_string(),
-                    format!("Computed amount must equal {expected:.2}"),
-                ));
-            }
-        }
-
-        validate_payment_row(
-            "payment_19_cash_or_bank_debit_memo",
-            &self.payment_details.cash_or_bank_debit_memo,
-            false,
-            &self.payment_details.others_description,
-            &mut errors,
-        );
-        validate_payment_row(
-            "payment_20_check",
-            &self.payment_details.check,
-            false,
-            &self.payment_details.others_description,
-            &mut errors,
-        );
-        validate_payment_row(
-            "payment_21_tax_debit_memo",
-            &self.payment_details.tax_debit_memo,
-            false,
-            &self.payment_details.others_description,
-            &mut errors,
-        );
-        if !self
-            .payment_details
-            .tax_debit_memo
-            .drawee_bank_or_agency
-            .trim()
-            .is_empty()
-        {
-            errors.push((
-                "payment_21_tax_debit_memo.drawee_bank_or_agency".to_string(),
-                "Item 21 Drawee Bank/Agency is non-applicable on the official January 2018 form"
-                    .to_string(),
-            ));
-        }
-        validate_payment_row(
-            "payment_22_others",
-            &self.payment_details.others,
-            true,
-            &self.payment_details.others_description,
-            &mut errors,
-        );
-
+        let mut errors = self.official_errors();
         if self.xml_final_flag.requires_review() {
             errors.push((
                 "xml_final_flag".to_string(),
@@ -655,47 +358,7 @@ impl FormValidator for Form0619EDraft {
                     .to_string(),
             ));
         }
-
         errors
-    }
-}
-
-fn validate_payment_row(
-    field: &str,
-    row: &Form0619EPaymentRow,
-    is_others: bool,
-    others_description: &str,
-    errors: &mut Vec<(String, String)>,
-) {
-    if let Some(amount) = row.amount
-        && (!amount.is_finite() || amount < 0.0)
-    {
-        errors.push((
-            format!("{field}.amount"),
-            "Payment amount must be a finite, non-negative number".to_string(),
-        ));
-    }
-    if !row.date.trim().is_empty()
-        && chrono::NaiveDate::parse_from_str(row.date.trim(), "%m/%d/%Y").is_err()
-    {
-        errors.push((
-            format!("{field}.date"),
-            "Payment date must use MM/DD/YYYY".to_string(),
-        ));
-    }
-    if is_others && !row.is_empty() && others_description.trim().is_empty() {
-        errors.push((
-            "payment_22_others_description".to_string(),
-            "Item 22 payment details require an Others description".to_string(),
-        ));
-    }
-}
-
-fn validate_optional_date(field: &str, value: &str, errors: &mut Vec<(String, String)>) {
-    if !value.trim().is_empty()
-        && chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").is_err()
-    {
-        errors.push((field.to_string(), "Date must use MM/DD/YYYY".to_string()));
     }
 }
 
@@ -731,9 +394,9 @@ mod tests {
             "id": null,
             "full_name": "JUAN DELA CRUZ",
             "tin": {
-                "segment1": "000",
-                "segment2": "000",
-                "segment3": "000",
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "788",
                 "branch": "00000"
             },
             "rdo_code": "018",
@@ -771,12 +434,12 @@ mod tests {
     #[test]
     fn official_formulas_are_deterministic_and_do_not_rewrite_timestamps() {
         let mut draft = valid_draft();
-        draft.updated_at = "fixed".to_string();
+        draft.lifecycle.updated_at = "fixed".to_string();
         draft.recompute();
         assert_eq!(draft.item_16_net_amount_of_remittance, 1_000.0);
         assert_eq!(draft.item_17d_total_penalties, 230.0);
         assert_eq!(draft.item_18_total_amount_of_remittance, 1_230.0);
-        assert_eq!(draft.updated_at, "fixed");
+        assert_eq!(draft.lifecycle.updated_at, "fixed");
     }
 
     #[test]
@@ -785,13 +448,8 @@ mod tests {
         draft.is_amended = true;
         draft.item_15_amount_remitted_previously = 1_500.0;
         draft.recompute();
+        // computeNetAmtRem formats the negative difference as is.
         assert_eq!(draft.item_16_net_amount_of_remittance, -500.0);
-        assert!(
-            draft
-                .validate()
-                .iter()
-                .any(|(field, _)| { field == "item_15_amount_remitted_previously" })
-        );
     }
 
     #[test]
@@ -814,45 +472,13 @@ mod tests {
     }
 
     #[test]
-    fn due_day_is_manual_and_missing_evidence_fails_closed() {
-        let draft = Form0619EDraft::new_from_profile(&test_profile(), 2026, 4);
+    fn due_day_defaults_to_the_official_page_value_and_missing_fails() {
+        let mut draft = Form0619EDraft::new_from_profile(&test_profile(), 2026, 4);
+        assert_eq!(draft.due_day, Some(10));
+        draft.due_day = None;
         assert!(draft.validate().iter().any(|(field, message)| {
-            field == "due_day" && message.contains("entered manually")
+            field == "due_day" && message == "Please enter a valid Date on Item 2"
         }));
-    }
-
-    #[test]
-    fn queue_transition_is_non_panicking_and_always_disabled() {
-        let mut draft = valid_draft();
-        let errors = draft
-            .transition_to_queued()
-            .expect_err("0619-E queueing must remain disabled");
-        assert_eq!(draft.status, FilingStatus::Draft);
-        assert!(errors.iter().any(|(field, _)| field == "submission"));
-    }
-
-    #[test]
-    fn invalid_lifecycle_transitions_return_errors_instead_of_panicking() {
-        let mut draft = valid_draft();
-        draft.status = FilingStatus::Queued;
-        assert!(draft.transition_to_submitted("x.xml".to_string()).is_err());
-        assert_eq!(draft.status, FilingStatus::Queued);
-        assert!(
-            draft
-                .record_submission_failure("failure".to_string())
-                .is_err()
-        );
-        assert_eq!(draft.submission_attempts, 0);
-        draft.status = FilingStatus::Submitted;
-        assert!(
-            draft
-                .transition_to_confirmed("now".to_string(), None, None)
-                .is_err()
-        );
-        assert_eq!(draft.status, FilingStatus::Submitted);
-        draft.status = FilingStatus::Confirmed;
-        assert!(draft.transition_to_paid().is_err());
-        assert_eq!(draft.status, FilingStatus::Confirmed);
     }
 
     #[test]
@@ -870,18 +496,6 @@ mod tests {
         assert_eq!(draft.payment_details.check.number, "CHECK-2");
         assert_eq!(draft.payment_details.tax_debit_memo.number, "TDM-3");
         assert_eq!(draft.payment_details.others.number, "OTHER-4");
-    }
-
-    #[test]
-    fn item_21_rejects_the_officially_non_applicable_drawee_bank_field() {
-        let mut draft = valid_draft();
-        draft.payment_details.tax_debit_memo.drawee_bank_or_agency = "MUST NOT PRINT".to_string();
-
-        assert!(draft.validate().iter().any(|(field, message)| {
-            field == "payment_21_tax_debit_memo.drawee_bank_or_agency"
-                && message.contains("non-applicable")
-        }));
-        assert!(draft.try_to_bir_xml_payload().is_err());
     }
 
     #[test]
@@ -948,9 +562,9 @@ mod tests {
         assert_eq!(
             profile.tin.full(),
             Tin {
-                segment1: "000".into(),
-                segment2: "000".into(),
-                segment3: "000".into(),
+                segment1: "123".into(),
+                segment2: "456".into(),
+                segment3: "788".into(),
                 branch: "00000".into(),
             }
             .full()

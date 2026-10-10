@@ -1,1113 +1,1991 @@
-//! Evidence-safe editor for exact Form 1701, January 2018 (ENCS).
-//!
-//! The editor owns the semantic four-page return. It deliberately keeps
-//! electronic submission disabled: the reviewed source pack proves editable
-//! save round-trip, but not queue/final-flag behavior. Part X and attachment
-//! worksheet fields survive imported XML snapshots but are not guessed here.
+//! Editor for BIR Form 1701, Annual Income Tax Return for Individuals,
+//! Estates and Trusts (January 2018). Rust owns every calculation, validation
+//! and the official submit plaintext (`bir_core::forms::form_1701_official`);
+//! this view only edits source values. The layout reflows for desktop, tablet
+//! and phone widths; the spouse column appears for joint filing.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use bir_core::db::Database;
+use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
+use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1701::{
-    Form1701AmountSection, Form1701Atc, Form1701CivilStatus, Form1701DeductionMethod,
-    Form1701Draft, Form1701EmployerRow, Form1701JointFilingStatus, Form1701OverpaymentDisposition,
-    Form1701Party, Form1701PaymentRow, Form1701SpouseType, Form1701TaxRate, Form1701TaxpayerType,
+    Form1701AmountSection as Sec, Form1701Atc, Form1701CivilStatus, Form1701DeductionMethod,
+    Form1701Draft, Form1701JointFilingStatus, Form1701OverpaymentDisposition, Form1701Party,
+    Form1701SpouseType, Form1701TaxpayerType,
 };
-use bir_core::forms::{FilingStatus, FormValidator};
+use bir_core::forms::queueable::{QueueableForm, period_column};
+use bir_core::forms::{FilingPeriod, FilingStatus, can_queue_for_submission};
+use bir_core::official_xml::official_amount;
+use bir_core::profile::TaxpayerProfile;
+use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::button::ButtonVariants;
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
-pub enum Form1701Event {
-    BackToDashboard,
-    Saved,
-    Submitted,
-    Confirmed,
-    PushNotification(String, String, String),
+impl EventEmitter<QueueableFormEvent> for Form1701View {}
+
+/// Width classes the page lays out for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Phone,
+    Tablet,
+    Desktop,
 }
 
-impl EventEmitter<Form1701Event> for Form1701View {}
+impl Layout {
+    fn for_width(width: Pixels) -> Self {
+        if width < px(700.) {
+            Self::Phone
+        } else if width < px(1100.) {
+            Self::Tablet
+        } else {
+            Self::Desktop
+        }
+    }
+}
 
-const AMOUNT_INPUT_SPECS: &[(Form1701AmountSection, u8, &str)] = &[
-    (Form1701AmountSection::PartIi, 25, "Second installment"),
-    (Form1701AmountSection::PartIi, 27, "Interest"),
-    (Form1701AmountSection::PartIi, 28, "Surcharge"),
-    (Form1701AmountSection::PartIi, 29, "Compromise"),
-    (
-        Form1701AmountSection::Schedule2,
-        5,
-        "Less: non-taxable/exempt compensation",
-    ),
-    (
-        Form1701AmountSection::Schedule3,
-        8,
-        "Sales/revenues/receipts/fees",
-    ),
-    (
-        Form1701AmountSection::Schedule3,
-        9,
-        "Less: sales returns, allowances and discounts",
-    ),
-    (
-        Form1701AmountSection::Schedule3,
-        11,
-        "Less: cost of sales/services",
-    ),
-    (Form1701AmountSection::Schedule3, 13, "Itemized deductions"),
-    (
-        Form1701AmountSection::Schedule3,
-        14,
-        "Special allowable itemized deductions",
-    ),
-    (Form1701AmountSection::Schedule3, 15, "NOLCO"),
-    (
-        Form1701AmountSection::Schedule3,
-        19,
-        "Taxable income from prior business/profession",
-    ),
-    (Form1701AmountSection::Schedule3, 20, "Other taxable income"),
-    (Form1701AmountSection::Schedule3, 21, "Share from GPP"),
-    (
-        Form1701AmountSection::Schedule3,
-        26,
-        "8% sales/revenues/receipts/fees",
-    ),
-    (
-        Form1701AmountSection::Schedule3,
-        27,
-        "8% non-operating income",
-    ),
-    (Form1701AmountSection::Schedule4, 1, "Amortization"),
-    (Form1701AmountSection::Schedule4, 2, "Bad debts"),
-    (
-        Form1701AmountSection::Schedule4,
-        3,
-        "Charitable contributions",
-    ),
-    (Form1701AmountSection::Schedule4, 4, "Depletion"),
-    (Form1701AmountSection::Schedule4, 5, "Depreciation"),
-    (
-        Form1701AmountSection::Schedule4,
-        6,
-        "Entertainment/recreation",
-    ),
-    (Form1701AmountSection::Schedule4, 7, "Fringe benefits"),
-    (Form1701AmountSection::Schedule4, 8, "Interest"),
-    (Form1701AmountSection::Schedule4, 9, "Losses"),
-    (Form1701AmountSection::Schedule4, 10, "Pension trust"),
-    (Form1701AmountSection::Schedule4, 11, "Rental"),
-    (
-        Form1701AmountSection::Schedule4,
-        12,
-        "Research and development",
-    ),
-    (
-        Form1701AmountSection::Schedule4,
-        13,
-        "Salaries, wages and allowances",
-    ),
-    (
-        Form1701AmountSection::Schedule4,
-        14,
-        "SSS/GSIS/PhilHealth/HDMF contributions",
-    ),
-    (Form1701AmountSection::Schedule4, 15, "Taxes and licenses"),
-    (
-        Form1701AmountSection::Schedule4,
-        16,
-        "Transportation and travel",
-    ),
-    (Form1701AmountSection::Schedule6, 1, "NOLCO available"),
-    (Form1701AmountSection::Schedule6, 2, "NOLCO applied"),
-    (
-        Form1701AmountSection::PartVi,
-        2,
-        "Special-rate income tax due",
-    ),
-    (Form1701AmountSection::PartVi, 3, "Foreign tax credits"),
-    (
-        Form1701AmountSection::PartVii,
-        1,
-        "Prior year's excess credits",
-    ),
-    (
-        Form1701AmountSection::PartVii,
-        2,
-        "Quarterly income-tax payments",
-    ),
-    (
-        Form1701AmountSection::PartVii,
-        3,
-        "Creditable tax withheld for the first three quarters",
-    ),
-    (
-        Form1701AmountSection::PartVii,
-        4,
-        "Creditable tax withheld per BIR Form 2307 for the fourth quarter",
-    ),
-    (
-        Form1701AmountSection::PartVii,
-        6,
-        "Tax paid in return previously filed, if amended",
-    ),
-    (Form1701AmountSection::PartVii, 7, "Foreign tax credits"),
-    (Form1701AmountSection::PartVii, 8, "Special tax credits"),
-    (
-        Form1701AmountSection::PartVii,
-        9,
-        "Other tax credits/payments",
-    ),
-    (
-        Form1701AmountSection::PartViii,
-        1,
-        "Regular income tax otherwise due - special rate",
-    ),
-    (
-        Form1701AmountSection::PartViii,
-        2,
-        "Tax relief on special allowable itemized deductions",
-    ),
-    (
-        Form1701AmountSection::PartViii,
-        4,
-        "Less: income tax due under special rate",
-    ),
-    (
-        Form1701AmountSection::PartViii,
-        6,
-        "Add: special tax credit",
-    ),
-    (
-        Form1701AmountSection::PartViii,
-        8,
-        "Regular income tax otherwise due - exempt income",
-    ),
-    (
-        Form1701AmountSection::PartViii,
-        9,
-        "Tax relief on special allowable itemized deductions",
-    ),
-    (Form1701AmountSection::PartIx, 1, "Net income per books"),
-    (Form1701AmountSection::PartIx, 2, "Non-deductible expenses"),
-    (Form1701AmountSection::PartIx, 3, "Taxable other income"),
-    (Form1701AmountSection::PartIx, 4, "Special deductions"),
-    (
-        Form1701AmountSection::PartIx,
-        6,
-        "Income not subject to tax",
-    ),
-    (
-        Form1701AmountSection::PartIx,
-        7,
-        "Income subject to final tax",
-    ),
-    (
-        Form1701AmountSection::PartIx,
-        8,
-        "Special deductions allowed",
-    ),
-    (Form1701AmountSection::PartIx, 9, "Other reconciling items"),
+const TP: Form1701Party = Form1701Party::Taxpayer;
+const SP: Form1701Party = Form1701Party::Spouse;
+
+/// Free-text inputs: (key, label).
+const TEXT_INPUTS: &[(&str, &str)] = &[
+    ("year", "Item 1 — Year"),
+    ("month", "Item 1 — Month (short period)"),
+    ("name", "Item 8 — Taxpayer's Name"),
+    ("address", "Item 9 — Registered Address"),
+    ("zip", "Item 9A — ZIP Code"),
+    ("birth", "Item 10 — Date of Birth (MM/DD/YYYY)"),
+    ("email", "Item 11 — Email Address"),
+    ("citizenship", "Item 12 — Citizenship"),
+    ("foreign_no", "Item 14 — Foreign Tax Number"),
+    ("phone", "Item 15 — Contact Number"),
+    ("attachments", "Item 33 — Number of attachments"),
+    ("sp_tin", "Item 1 — Spouse TIN"),
+    ("sp_rdo", "Item 2 — Spouse RDO Code"),
+    ("sp_name", "Item 5 — Spouse's Name"),
+    ("sp_phone", "Item 6 — Contact Number"),
+    ("sp_citizenship", "Item 7 — Citizenship"),
+    ("sp_foreign_no", "Item 9 — Foreign Tax Number"),
+    ("d19", "Item 19 — Other taxable income (specify)"),
+    ("d20", "Item 20 — Other taxable income (specify)"),
+    ("d27", "Item 27 — Other non-operating income (specify)"),
+    ("d17d", "Schedule 4 Item 17d — Others (specify)"),
+    ("d7_9", "Part VII Item 9 — Others (specify)"),
 ];
 
-#[derive(Clone)]
-struct PairedAmountInputs {
-    taxpayer: Entity<InputState>,
-    spouse: Entity<InputState>,
-}
+/// Two-column amount inputs: (section, item, label).
+const PAIR_INPUTS: &[(Sec, u8, &str)] = &[
+    (
+        Sec::Schedule2,
+        5,
+        "5 — Less: non-taxable/exempt compensation",
+    ),
+    (Sec::Schedule3, 8, "8 — Sales/revenues/receipts/fees"),
+    (
+        Sec::Schedule3,
+        9,
+        "9 — Less: sales returns, allowances and discounts",
+    ),
+    (
+        Sec::Schedule3,
+        11,
+        "11 — Less: cost of sales/services (itemized)",
+    ),
+    (Sec::Schedule3, 19, "19 — Other taxable income"),
+    (Sec::Schedule3, 20, "20 — Other taxable income"),
+    (Sec::Schedule3, 21, "21 — Share in the net income of a GPP"),
+    (Sec::Schedule3, 26, "26 — Sales/revenues/receipts/fees"),
+    (Sec::Schedule3, 27, "27 — Other non-operating income"),
+    (
+        Sec::Schedule3,
+        29,
+        "29 — Allowable reduction (P250,000, pure business/profession)",
+    ),
+    (Sec::Schedule4, 1, "1 — Amortizations"),
+    (Sec::Schedule4, 2, "2 — Bad debts"),
+    (Sec::Schedule4, 3, "3 — Charitable and other contributions"),
+    (Sec::Schedule4, 4, "4 — Depletion"),
+    (Sec::Schedule4, 5, "5 — Depreciation"),
+    (
+        Sec::Schedule4,
+        6,
+        "6 — Entertainment, amusement and recreation",
+    ),
+    (Sec::Schedule4, 7, "7 — Fringe benefits"),
+    (Sec::Schedule4, 8, "8 — Interest"),
+    (Sec::Schedule4, 9, "9 — Losses"),
+    (Sec::Schedule4, 10, "10 — Pension trust"),
+    (Sec::Schedule4, 11, "11 — Rental"),
+    (Sec::Schedule4, 12, "12 — Research and development"),
+    (Sec::Schedule4, 13, "13 — Salaries, wages and allowances"),
+    (
+        Sec::Schedule4,
+        14,
+        "14 — SSS, GSIS, PhilHealth, HDMF and other contributions",
+    ),
+    (Sec::Schedule4, 15, "15 — Taxes and licenses"),
+    (Sec::Schedule4, 16, "16 — Transportation and travel"),
+    (Sec::Schedule6, 1, "1 — Gross income"),
+    (Sec::Schedule6, 2, "2 — Less: deductions"),
+    (
+        Sec::PartVi,
+        2,
+        "2 — Add: income tax due on special/exempt income",
+    ),
+    (Sec::PartVi, 3, "3 — Less: allowable tax relief"),
+    (Sec::PartVii, 1, "1 — Prior year's excess credits"),
+    (
+        Sec::PartVii,
+        2,
+        "2 — Tax payments for the first three quarters",
+    ),
+    (
+        Sec::PartVii,
+        3,
+        "3 — Creditable tax withheld for the first three quarters",
+    ),
+    (
+        Sec::PartVii,
+        4,
+        "4 — Creditable tax withheld per BIR Form 2307 (4th quarter)",
+    ),
+    (
+        Sec::PartVii,
+        6,
+        "6 — Tax paid in return previously filed (amended)",
+    ),
+    (Sec::PartVii, 7, "7 — Foreign tax credits"),
+    (Sec::PartVii, 8, "8 — Tax paid on special/exempt income"),
+    (Sec::PartVii, 9, "9 — Other tax credits/payments"),
+    (Sec::PartIx, 1, "1 — Net income/(loss) per books"),
+    (
+        Sec::PartIx,
+        2,
+        "2 — Add: non-deductible expenses/taxable other income",
+    ),
+    (
+        Sec::PartIx,
+        3,
+        "3 — Add: non-deductible expenses/taxable other income",
+    ),
+    (
+        Sec::PartIx,
+        4,
+        "4 — Add: non-deductible expenses/taxable other income",
+    ),
+    (
+        Sec::PartIx,
+        6,
+        "6 — Less: non-taxable income and income subjected to final tax",
+    ),
+    (
+        Sec::PartIx,
+        7,
+        "7 — Less: non-taxable income and income subjected to final tax",
+    ),
+    (Sec::PartIx, 8, "8 — Less: special deductions"),
+    (Sec::PartIx, 9, "9 — Less: special deductions"),
+    (
+        Sec::PartIi,
+        25,
+        "25 — Less: portion of tax payable allowed for 2nd installment",
+    ),
+    (Sec::PartIi, 27, "27 — Interest"),
+    (Sec::PartIi, 28, "28 — Surcharge"),
+    (Sec::PartIi, 29, "29 — Compromise"),
+];
 
-impl PairedAmountInputs {
-    fn all(&self) -> [Entity<InputState>; 2] {
-        [self.taxpayer.clone(), self.spouse.clone()]
+const IX_PARTICULARS: [u8; 7] = [2, 3, 4, 6, 7, 8, 9];
+
+fn section_code(section: Sec) -> &'static str {
+    match section {
+        Sec::PartIi => "p2",
+        Sec::Schedule2 => "s2",
+        Sec::Schedule3 => "s3",
+        Sec::Schedule4 => "s4",
+        Sec::Schedule6 => "s6",
+        Sec::PartVi => "p6",
+        Sec::PartVii => "p7",
+        Sec::PartViii => "p8",
+        Sec::PartIx => "p9",
     }
 }
 
-#[derive(Clone)]
-struct EmployerInputs {
-    name: Entity<InputState>,
-    tin: Entity<InputState>,
-    compensation: Entity<InputState>,
-    withheld: Entity<InputState>,
+fn pair_key(section: Sec, item: u8, party: Form1701Party) -> String {
+    let column = if party == TP { "a" } else { "b" };
+    format!("{}_{item}_{column}", section_code(section))
 }
 
-impl EmployerInputs {
-    fn all(&self) -> [Entity<InputState>; 4] {
-        [
-            self.name.clone(),
-            self.tin.clone(),
-            self.compensation.clone(),
-            self.withheld.clone(),
-        ]
+fn party_key(prefix: &str, party: Form1701Party) -> String {
+    format!("{prefix}_{}", if party == TP { "a" } else { "b" })
+}
+
+/// Every editor key besides the fixed text inputs.
+fn dynamic_keys() -> Vec<String> {
+    let mut keys = Vec::new();
+    for party in [TP, SP] {
+        for (section, item, _) in PAIR_INPUTS {
+            keys.push(pair_key(*section, *item, party));
+        }
+        for index in 0..4 {
+            keys.push(party_key(&format!("s4_17_{index}"), party));
+        }
+        for row in 0..2 {
+            for column in ["desc", "legal", "amt"] {
+                keys.push(party_key(&format!("s5_{row}_{column}"), party));
+            }
+        }
+        for row in 0..4 {
+            for column in ["year", "a", "b", "c", "d"] {
+                keys.push(party_key(&format!("s6_{row}_{column}"), party));
+            }
+        }
+    }
+    for row in 0..2 {
+        for column in ["name", "tin", "ci", "tw"] {
+            keys.push(format!("emp_{row}_{column}"));
+        }
+    }
+    for item in IX_PARTICULARS {
+        keys.push(format!("p9d_{item}"));
+    }
+    keys
+}
+
+/// Accepts `1,234.56`, `1234.5`, blank (zero).
+fn parse_amount(value: &str) -> Option<f64> {
+    let cleaned: String = value
+        .chars()
+        .filter(|c| *c != ',' && !c.is_whitespace())
+        .collect();
+    if cleaned.is_empty() {
+        return Some(0.0);
+    }
+    cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
+fn money_text(value: Option<f64>) -> String {
+    match value {
+        Some(v) if v != 0.0 => official_amount(v),
+        _ => String::new(),
     }
 }
 
-#[derive(Clone)]
-struct PaymentRowInputs {
-    agency: Entity<InputState>,
-    number: Entity<InputState>,
-    date: Entity<InputState>,
-    amount: Entity<InputState>,
-}
-
-impl PaymentRowInputs {
-    fn all(&self) -> [Entity<InputState>; 4] {
-        [
-            self.agency.clone(),
-            self.number.clone(),
-            self.date.clone(),
-            self.amount.clone(),
-        ]
+fn format_tin(tin: &str) -> String {
+    let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
+    if digits.len() < 9 {
+        return tin.to_string();
     }
+    let branch = digits.get(9..).unwrap_or("");
+    format!(
+        "{}-{}-{}-{:0>5}",
+        &digits[0..3],
+        &digits[3..6],
+        &digits[6..9],
+        branch
+    )
 }
 
 pub struct Form1701View {
-    pub draft: Form1701Draft,
+    draft: Form1701Draft,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
-    input_errors: Vec<(String, String)>,
+    inputs: BTreeMap<String, Entity<InputState>>,
     validation_errors: Vec<(String, String)>,
+    parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
-
-    period_end_month: Entity<InputState>,
-    number_of_attachments: Entity<InputState>,
-    registered_address: Entity<InputState>,
-    zip_code: Entity<InputState>,
-    date_of_birth: Entity<InputState>,
-    email: Entity<InputState>,
-    citizenship: Entity<InputState>,
-    foreign_tax_number: Entity<InputState>,
-    contact_number: Entity<InputState>,
-
-    spouse_tin: Entity<InputState>,
-    spouse_rdo_code: Entity<InputState>,
-    spouse_name: Entity<InputState>,
-    spouse_contact_number: Entity<InputState>,
-    spouse_citizenship: Entity<InputState>,
-    spouse_foreign_tax_number: Entity<InputState>,
-
-    schedule_3_description_19: Entity<InputState>,
-    schedule_3_description_20: Entity<InputState>,
-    schedule_3_description_27: Entity<InputState>,
-    part_vii_description_9: Entity<InputState>,
-    payment_37_description: Entity<InputState>,
-    machine_validation: Entity<InputState>,
-
-    amount_inputs: BTreeMap<(Form1701AmountSection, u8), PairedAmountInputs>,
-    employer_inputs: [EmployerInputs; 2],
-    payment_inputs: [PaymentRowInputs; 4],
+    release_claim_confirm_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Form1701View {
-    pub fn new(
-        mut draft: Form1701Draft,
-        db: Arc<Mutex<Database>>,
-        window: &mut Window,
-        cx: &mut Context<'_, Self>,
-    ) -> Self {
-        draft.recompute();
-
-        let period_end_month = text_input(cx, &draft.period_end_month.to_string(), "1-12", window);
-        let number_of_attachments = optional_u8_input(
-            cx,
-            draft.number_of_attachments,
-            "0-99; blank is empty",
-            window,
-        );
-        let registered_address =
-            text_input(cx, &draft.registered_address, "Registered address", window);
-        let zip_code = text_input(cx, &draft.zip_code, "ZIP code", window);
-        let date_of_birth = text_input(cx, &draft.date_of_birth, "MM/DD/YYYY", window);
-        let email = text_input(cx, &draft.email, "Email address", window);
-        let citizenship = text_input(cx, &draft.citizenship, "Citizenship", window);
-        let foreign_tax_number = text_input(
-            cx,
-            &draft.foreign_tax_number,
-            "Foreign tax number when applicable",
-            window,
-        );
-        let contact_number = text_input(cx, &draft.contact_number, "Contact number", window);
-
-        let spouse_tin = text_input(cx, &draft.spouse.tin, "Spouse TIN", window);
-        let spouse_rdo_code = text_input(cx, &draft.spouse.rdo_code, "Spouse RDO", window);
-        let spouse_name = text_input(cx, &draft.spouse.name, "Spouse name", window);
-        let spouse_contact_number = text_input(
-            cx,
-            &draft.spouse.contact_number,
-            "Spouse contact number",
-            window,
-        );
-        let spouse_citizenship =
-            text_input(cx, &draft.spouse.citizenship, "Spouse citizenship", window);
-        let spouse_foreign_tax_number = text_input(
-            cx,
-            &draft.spouse.foreign_tax_number,
-            "Spouse foreign tax number",
-            window,
-        );
-
-        let schedule_3_description_19 = text_input(
-            cx,
-            draft
-                .computations
-                .schedule_3_descriptions
-                .get(&19)
-                .map(String::as_str)
-                .unwrap_or(""),
-            "Item 19 description",
-            window,
-        );
-        let schedule_3_description_20 = text_input(
-            cx,
-            draft
-                .computations
-                .schedule_3_descriptions
-                .get(&20)
-                .map(String::as_str)
-                .unwrap_or(""),
-            "Item 20 description",
-            window,
-        );
-        let schedule_3_description_27 = text_input(
-            cx,
-            draft
-                .computations
-                .schedule_3_descriptions
-                .get(&27)
-                .map(String::as_str)
-                .unwrap_or(""),
-            "Item 27 description",
-            window,
-        );
-        let part_vii_description_9 = text_input(
-            cx,
-            &draft.computations.part_vii_item_9_description,
-            "Item 9 other credit/payment",
-            window,
-        );
-        let payment_37_description = text_input(
-            cx,
-            &draft.payment_details.item_37_others_description,
-            "Specify other payment",
-            window,
-        );
-        let machine_validation = text_input(
-            cx,
-            &draft.machine_validation_or_receipt_details,
-            "Machine validation / revenue official receipt details",
-            window,
-        );
-
-        let amount_inputs = AMOUNT_INPUT_SPECS
-            .iter()
-            .map(|(section, item, _)| {
-                (
-                    (*section, *item),
-                    PairedAmountInputs {
-                        taxpayer: optional_amount_input(
-                            cx,
-                            draft.amount(*section, *item, Form1701Party::Taxpayer),
-                            window,
-                        ),
-                        spouse: optional_amount_input(
-                            cx,
-                            draft.amount(*section, *item, Form1701Party::Spouse),
-                            window,
-                        ),
-                    },
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        let employer_inputs =
-            std::array::from_fn(|index| employer_input(cx, &draft.employers[index], window));
-        let payment_rows = [
-            &draft.payment_details.item_34_cash_or_bank_debit_memo,
-            &draft.payment_details.item_35_check,
-            &draft.payment_details.item_36_tax_debit_memo,
-            &draft.payment_details.item_37_others,
-        ];
-        let payment_inputs =
-            std::array::from_fn(|index| payment_input(cx, payment_rows[index], window));
-
-        let mut all_inputs = vec![
-            period_end_month.clone(),
-            number_of_attachments.clone(),
-            registered_address.clone(),
-            zip_code.clone(),
-            date_of_birth.clone(),
-            email.clone(),
-            citizenship.clone(),
-            foreign_tax_number.clone(),
-            contact_number.clone(),
-            spouse_tin.clone(),
-            spouse_rdo_code.clone(),
-            spouse_name.clone(),
-            spouse_contact_number.clone(),
-            spouse_citizenship.clone(),
-            spouse_foreign_tax_number.clone(),
-            schedule_3_description_19.clone(),
-            schedule_3_description_20.clone(),
-            schedule_3_description_27.clone(),
-            part_vii_description_9.clone(),
-            payment_37_description.clone(),
-            machine_validation.clone(),
-        ];
-        for inputs in amount_inputs.values() {
-            all_inputs.extend(inputs.all());
+    /// Editor text for one input from the draft.
+    fn initial(d: &Form1701Draft, key: &str) -> String {
+        let descs = &d.computations.schedule_3_descriptions;
+        let desc = |item: u8| descs.get(&item).cloned().unwrap_or_default();
+        match key {
+            "year" => return d.taxable_year.to_string(),
+            "month" => return d.period_end_month.to_string(),
+            "name" => return d.taxpayer_name.clone(),
+            "address" => return d.registered_address.clone(),
+            "zip" => return d.zip_code.clone(),
+            "birth" => return d.date_of_birth.clone(),
+            "email" => return d.email.clone(),
+            "citizenship" => return d.citizenship.clone(),
+            "foreign_no" => return d.foreign_tax_number.clone(),
+            "phone" => return d.contact_number.clone(),
+            "attachments" => {
+                return d
+                    .number_of_attachments
+                    .filter(|n| *n != 0)
+                    .map(|n| n.to_string())
+                    .unwrap_or_default();
+            }
+            "sp_tin" => return d.spouse.tin.clone(),
+            "sp_rdo" => return d.spouse_rdo_code.clone(),
+            "sp_name" => return d.spouse.name.clone(),
+            "sp_phone" => return d.spouse.contact_number.clone(),
+            "sp_citizenship" => return d.spouse.citizenship.clone(),
+            "sp_foreign_no" => return d.spouse.foreign_tax_number.clone(),
+            "d19" => return desc(19),
+            "d20" => return desc(20),
+            "d27" => return desc(27),
+            "d17d" => return d.computations.schedule_4_item_17d_description.clone(),
+            "d7_9" => return d.computations.part_vii_item_9_description.clone(),
+            _ => {}
         }
-        for inputs in &employer_inputs {
-            all_inputs.extend(inputs.all());
-        }
-        for inputs in &payment_inputs {
-            all_inputs.extend(inputs.all());
-        }
-
-        let mut subscriptions = Vec::new();
-        for input in all_inputs {
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if let InputEvent::Change = event {
-                        this.sync_from_inputs(cx);
+        for party in [TP, SP] {
+            for (section, item, _) in PAIR_INPUTS {
+                if key == pair_key(*section, *item, party) {
+                    return money_text(d.amount(*section, *item, party));
+                }
+            }
+            for index in 0..4 {
+                if key == party_key(&format!("s4_17_{index}"), party) {
+                    return money_text(d.computations.schedule_4_item_17[index].value(party));
+                }
+            }
+            let rows = if party == TP {
+                &d.computations.schedule_5_taxpayer
+            } else {
+                &d.computations.schedule_5_spouse
+            };
+            for (row, entry) in rows.iter().enumerate() {
+                for (column, value) in [
+                    ("desc", entry.description.clone()),
+                    ("legal", entry.legal_basis.clone()),
+                    ("amt", money_text(entry.amount)),
+                ] {
+                    if key == party_key(&format!("s5_{row}_{column}"), party) {
+                        return value;
                     }
-                },
-            ));
+                }
+            }
+            let nolco = if party == TP {
+                &d.computations.schedule_6_taxpayer_nolco
+            } else {
+                &d.computations.schedule_6_spouse_nolco
+            };
+            for (row, entry) in nolco.iter().enumerate() {
+                for (column, value) in [
+                    ("year", entry.year_incurred.clone()),
+                    ("a", money_text(entry.amount)),
+                    ("b", money_text(entry.applied_previous_years)),
+                    ("c", money_text(entry.expired)),
+                    ("d", money_text(entry.applied_current_year)),
+                ] {
+                    if key == party_key(&format!("s6_{row}_{column}"), party) {
+                        return value;
+                    }
+                }
+            }
         }
-
-        let validation_errors = draft.validate();
-        Self {
-            draft,
-            db,
-            scroll_handle: ScrollHandle::new(),
-            input_errors: Vec::new(),
-            validation_errors,
-            status_message: None,
-            period_end_month,
-            number_of_attachments,
-            registered_address,
-            zip_code,
-            date_of_birth,
-            email,
-            citizenship,
-            foreign_tax_number,
-            contact_number,
-            spouse_tin,
-            spouse_rdo_code,
-            spouse_name,
-            spouse_contact_number,
-            spouse_citizenship,
-            spouse_foreign_tax_number,
-            schedule_3_description_19,
-            schedule_3_description_20,
-            schedule_3_description_27,
-            part_vii_description_9,
-            payment_37_description,
-            machine_validation,
-            amount_inputs,
-            employer_inputs,
-            payment_inputs,
-            _subscriptions: subscriptions,
+        for (row, entry) in d.employers.iter().enumerate() {
+            for (column, value) in [
+                ("name", entry.employer_name.clone()),
+                ("tin", entry.employer_tin.clone()),
+                ("ci", money_text(entry.compensation_income)),
+                ("tw", money_text(entry.tax_withheld)),
+            ] {
+                if key == format!("emp_{row}_{column}") {
+                    return value;
+                }
+            }
         }
+        for item in IX_PARTICULARS {
+            if key == format!("p9d_{item}") {
+                return d
+                    .computations
+                    .part_ix_descriptions
+                    .get(&item)
+                    .cloned()
+                    .unwrap_or_default();
+            }
+        }
+        String::new()
     }
 
+    fn text(&self, key: &str, cx: &App) -> String {
+        self.inputs
+            .get(key)
+            .map(|input| input.read(cx).value().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Read every editor value into the draft, then recompute and validate.
+    /// A malformed number is reported instead of becoming zero.
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
-        self.input_errors.clear();
-
-        assign_required_month(
-            &mut self.draft.period_end_month,
-            &self.period_end_month,
-            cx,
-            &mut self.input_errors,
-        );
-        assign_optional_u8(
-            &mut self.draft.number_of_attachments,
-            &self.number_of_attachments,
-            "number_of_attachments",
-            99,
-            cx,
-            &mut self.input_errors,
-        );
-        self.draft.registered_address = input_text(&self.registered_address, cx);
-        self.draft.zip_code = input_text(&self.zip_code, cx);
-        self.draft.date_of_birth = input_text(&self.date_of_birth, cx);
-        self.draft.email = input_text(&self.email, cx);
-        self.draft.citizenship = input_text(&self.citizenship, cx);
-        self.draft.foreign_tax_number = input_text(&self.foreign_tax_number, cx);
-        self.draft.contact_number = input_text(&self.contact_number, cx);
-
-        self.draft.spouse.tin = input_text(&self.spouse_tin, cx);
-        self.draft.spouse.rdo_code = input_text(&self.spouse_rdo_code, cx);
-        self.draft.spouse.name = input_text(&self.spouse_name, cx);
-        self.draft.spouse.contact_number = input_text(&self.spouse_contact_number, cx);
-        self.draft.spouse.citizenship = input_text(&self.spouse_citizenship, cx);
-        self.draft.spouse.foreign_tax_number = input_text(&self.spouse_foreign_tax_number, cx);
-
-        self.draft
-            .computations
-            .schedule_3_descriptions
-            .insert(19, input_text(&self.schedule_3_description_19, cx));
-        self.draft
-            .computations
-            .schedule_3_descriptions
-            .insert(20, input_text(&self.schedule_3_description_20, cx));
-        self.draft
-            .computations
-            .schedule_3_descriptions
-            .insert(27, input_text(&self.schedule_3_description_27, cx));
-        self.draft.computations.part_vii_item_9_description =
-            input_text(&self.part_vii_description_9, cx);
-        self.draft.payment_details.item_37_others_description =
-            input_text(&self.payment_37_description, cx);
-        self.draft.machine_validation_or_receipt_details = input_text(&self.machine_validation, cx);
-
-        for ((section, item), inputs) in &self.amount_inputs {
-            assign_amount(
-                &mut self.draft,
-                *section,
-                *item,
-                Form1701Party::Taxpayer,
-                &inputs.taxpayer,
-                cx,
-                &mut self.input_errors,
-            );
-            assign_amount(
-                &mut self.draft,
-                *section,
-                *item,
-                Form1701Party::Spouse,
-                &inputs.spouse,
-                cx,
-                &mut self.input_errors,
-            );
+        if !self.draft.lifecycle.is_editable() {
+            return;
         }
-
-        for (index, inputs) in self.employer_inputs.iter().enumerate() {
-            let employer = &mut self.draft.employers[index];
-            employer.employer_name = input_text(&inputs.name, cx);
-            employer.employer_tin = input_text(&inputs.tin, cx);
-            assign_optional_amount(
-                &mut employer.compensation_income,
-                &inputs.compensation,
-                &format!("employer_{}_compensation", index + 1),
-                false,
-                cx,
-                &mut self.input_errors,
-            );
-            assign_optional_amount(
-                &mut employer.tax_withheld,
-                &inputs.withheld,
-                &format!("employer_{}_withheld", index + 1),
-                false,
-                cx,
-                &mut self.input_errors,
-            );
+        let mut errors: Vec<(String, String)> = Vec::new();
+        let mut d = self.draft.clone();
+        let number = |text: String, label: &str, errors: &mut Vec<(String, String)>| {
+            let parsed = parse_amount(&text);
+            if parsed.is_none() {
+                errors.push((
+                    label.to_string(),
+                    format!("{label}: \"{text}\" is not a number."),
+                ));
+            }
+            parsed
+        };
+        if let Some(year) = number(self.text("year", cx), "Item 1 year", &mut errors) {
+            d.taxable_year = if (0.0..=9999.0).contains(&year) {
+                year as u16
+            } else {
+                0
+            };
         }
+        if d.is_short_period
+            && let Some(month) = number(self.text("month", cx), "Item 1 month", &mut errors)
+        {
+            d.period_end_month = if (1.0..=12.0).contains(&month) {
+                month as u8
+            } else {
+                0
+            };
+        }
+        d.taxpayer_name = self.text("name", cx);
+        d.registered_address = self.text("address", cx);
+        d.zip_code = self.text("zip", cx).trim().to_string();
+        d.date_of_birth = self.text("birth", cx).trim().to_string();
+        d.email = self.text("email", cx).trim().to_string();
+        d.citizenship = self.text("citizenship", cx);
+        d.foreign_tax_number = self.text("foreign_no", cx);
+        d.contact_number = self.text("phone", cx).trim().to_string();
+        if let Some(count) = number(self.text("attachments", cx), "Item 33", &mut errors) {
+            d.number_of_attachments = Some(if (0.0..=99.0).contains(&count) {
+                count as u8
+            } else {
+                99
+            });
+        }
+        d.spouse.tin = self.text("sp_tin", cx).trim().to_string();
+        d.spouse_rdo_code = self.text("sp_rdo", cx).trim().to_string();
+        d.spouse.name = self.text("sp_name", cx);
+        d.spouse.contact_number = self.text("sp_phone", cx).trim().to_string();
+        d.spouse.citizenship = self.text("sp_citizenship", cx);
+        d.spouse.foreign_tax_number = self.text("sp_foreign_no", cx);
+        for (item, key) in [(19u8, "d19"), (20, "d20"), (27, "d27")] {
+            d.computations
+                .schedule_3_descriptions
+                .insert(item, self.text(key, cx));
+        }
+        d.computations.schedule_4_item_17d_description = self.text("d17d", cx);
+        d.computations.part_vii_item_9_description = self.text("d7_9", cx);
+        for item in IX_PARTICULARS {
+            d.computations
+                .part_ix_descriptions
+                .insert(item, self.text(&format!("p9d_{item}"), cx));
+        }
+        for party in [TP, SP] {
+            for (section, item, label) in PAIR_INPUTS {
+                if let Some(value) = number(
+                    self.text(&pair_key(*section, *item, party), cx),
+                    label,
+                    &mut errors,
+                ) {
+                    d.set_amount(*section, *item, party, Some(value));
+                }
+            }
+            for index in 0..4 {
+                if let Some(value) = number(
+                    self.text(&party_key(&format!("s4_17_{index}"), party), cx),
+                    "Schedule 4 Item 17",
+                    &mut errors,
+                ) {
+                    d.computations.schedule_4_item_17[index].set(party, Some(value));
+                }
+            }
+            for row in 0..2 {
+                let description = self.text(&party_key(&format!("s5_{row}_desc"), party), cx);
+                let legal = self.text(&party_key(&format!("s5_{row}_legal"), party), cx);
+                let amount = number(
+                    self.text(&party_key(&format!("s5_{row}_amt"), party), cx),
+                    "Schedule 5",
+                    &mut errors,
+                );
+                let rows = if party == TP {
+                    &mut d.computations.schedule_5_taxpayer
+                } else {
+                    &mut d.computations.schedule_5_spouse
+                };
+                rows[row].description = description;
+                rows[row].legal_basis = legal;
+                if let Some(amount) = amount {
+                    rows[row].amount = Some(amount);
+                }
+            }
+            for row in 0..4 {
+                let year = self.text(&party_key(&format!("s6_{row}_year"), party), cx);
+                let mut values = [None; 4];
+                for (slot, column) in ["a", "b", "c", "d"].iter().enumerate() {
+                    values[slot] = number(
+                        self.text(&party_key(&format!("s6_{row}_{column}"), party), cx),
+                        "Schedule 6 NOLCO",
+                        &mut errors,
+                    );
+                }
+                let rows = if party == TP {
+                    &mut d.computations.schedule_6_taxpayer_nolco
+                } else {
+                    &mut d.computations.schedule_6_spouse_nolco
+                };
+                let entry = &mut rows[row];
+                if row < 3 {
+                    entry.year_incurred = year.trim().to_string();
+                    if let Some(v) = values[0] {
+                        entry.amount = Some(v);
+                    }
+                }
+                if let Some(v) = values[1] {
+                    entry.applied_previous_years = Some(v);
+                }
+                if let Some(v) = values[2] {
+                    entry.expired = Some(v);
+                }
+                if let Some(v) = values[3] {
+                    entry.applied_current_year = Some(v);
+                }
+            }
+        }
+        for row in 0..2 {
+            d.employers[row].employer_name = self.text(&format!("emp_{row}_name"), cx);
+            d.employers[row].employer_tin =
+                self.text(&format!("emp_{row}_tin"), cx).trim().to_string();
+            if let Some(v) = number(
+                self.text(&format!("emp_{row}_ci"), cx),
+                "Schedule 1",
+                &mut errors,
+            ) {
+                d.employers[row].compensation_income = Some(v);
+            }
+            if let Some(v) = number(
+                self.text(&format!("emp_{row}_tw"), cx),
+                "Schedule 1",
+                &mut errors,
+            ) {
+                d.employers[row].tax_withheld = Some(v);
+            }
+        }
+        d.recompute();
+        d.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
+        self.validation_errors = d.validate();
+        self.parse_errors = errors;
+        self.draft = d;
+        cx.notify();
+    }
 
-        sync_payment_row(
-            &mut self.draft.payment_details.item_34_cash_or_bank_debit_memo,
-            &self.payment_inputs[0],
-            "payment_34",
-            cx,
-            &mut self.input_errors,
-        );
-        sync_payment_row(
-            &mut self.draft.payment_details.item_35_check,
-            &self.payment_inputs[1],
-            "payment_35",
-            cx,
-            &mut self.input_errors,
-        );
-        sync_payment_row(
-            &mut self.draft.payment_details.item_36_tax_debit_memo,
-            &self.payment_inputs[2],
-            "payment_36",
-            cx,
-            &mut self.input_errors,
-        );
-        sync_payment_row(
-            &mut self.draft.payment_details.item_37_others,
-            &self.payment_inputs[3],
-            "payment_37",
-            cx,
-            &mut self.input_errors,
-        );
-
+    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1701Draft)) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        change(&mut self.draft);
         self.draft.recompute();
-        self.validation_errors = self.input_errors.clone();
-        self.validation_errors.extend(self.draft.validate());
+        self.validation_errors = self.draft.validate();
+        self.status_message = None;
         cx.notify();
     }
 
     fn notify(
         &self,
+        kind: notification::NotificationType,
+        message: String,
         window: &mut Window,
         cx: &mut Context<Self>,
-        kind: gpui_component::notification::NotificationType,
-        message: impl Into<String>,
     ) {
-        use gpui_component::WindowExt;
         window.push_notification(
-            gpui_component::notification::Notification::new()
-                .message(message.into())
+            notification::Notification::new()
+                .message(message)
                 .with_type(kind)
                 .autohide(true),
             cx,
         );
     }
 
-    fn render_choice(
+    fn release_claim(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let draft = &self.draft;
+        let result = match self.db.lock() {
+            Ok(db) => db
+                .release_abandoned_claimed_queueable::<Form1701Draft>(
+                    &draft.tin,
+                    draft.taxable_year,
+                    period_column(&draft.filing_period()),
+                    ABANDONED_CLAIM_RELEASE_REASON,
+                )
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        self.release_claim_confirm_open = false;
+        match result {
+            Ok(AbandonedClaimRelease::Released { draft, .. }) => {
+                self.draft = draft;
+                self.status_message = None;
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Ok(AbandonedClaimRelease::AlreadyClear { draft, .. }) => {
+                if let Some(draft) = draft {
+                    self.draft = draft;
+                }
+            }
+            Err(error) => {
+                self.notify(
+                    notification::NotificationType::Error,
+                    format!("Could not release the claim: {error}"),
+                    window,
+                    cx,
+                );
+            }
+        }
+        self.validation_errors = self.draft.validate();
+        cx.notify();
+    }
+
+    // ── Rendering helpers ──
+
+    fn section(&self, title: &str, children: Vec<AnyElement>, cx: &Context<Self>) -> AnyElement {
+        rsx! {
+            <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+                <div text_lg font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+                {...children}
+            </div>
+        }
+        .into_any_element()
+    }
+
+    fn label(text: &str) -> Div {
+        div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(text.to_string())
+    }
+
+    /// A labelled input. On phones the label sits above the field.
+    fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
+        let input = self
+            .inputs
+            .get(key)
+            .expect("editor input registry is complete");
+        let editable = self.draft.lifecycle.is_editable();
+        let body = div().child(Input::new(input).disabled(!editable || disabled));
+        match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(Self::label(label))
+                .child(body.w_full()),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(Self::label(label).w(relative(0.5)))
+                .child(body.w(relative(0.5))),
+        }
+        .into_any_element()
+    }
+
+    fn text_field(&self, key: &str, layout: Layout) -> AnyElement {
+        let label = TEXT_INPUTS
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, l)| *l)
+            .unwrap_or("");
+        self.field(key, label, layout, false)
+    }
+
+    /// Two columns on desktop, one otherwise.
+    fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
+        if layout == Layout::Desktop {
+            let mut rows = div().flex().flex_col().gap_3().w_full();
+            let mut iter = children.into_iter();
+            while let Some(left) = iter.next() {
+                let mut row = div()
+                    .flex()
+                    .gap_6()
+                    .w_full()
+                    .child(div().flex_1().child(left));
+                row = match iter.next() {
+                    Some(right) => row.child(div().flex_1().child(right)),
+                    None => row.child(div().flex_1()),
+                };
+                rows = rows.child(row);
+            }
+            rows.into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .w_full()
+                .children(children)
+                .into_any_element()
+        }
+    }
+
+    fn joint(&self) -> bool {
+        self.draft.spouse_column_active()
+    }
+
+    fn amount_cell(&self, value: f64, cx: &Context<Self>) -> AnyElement {
+        div()
+            .p_2()
+            .rounded_md()
+            .bg(cx.theme().muted.opacity(0.5))
+            .text_right()
+            .font_weight(FontWeight::BOLD)
+            .child(official_amount(value))
+            .into_any_element()
+    }
+
+    /// One item row: label, then the taxpayer (A) and, for joint filing,
+    /// spouse (B) column. Phones stack the columns under the label.
+    fn item_row(&self, label: &str, cells: Vec<AnyElement>, layout: Layout) -> AnyElement {
+        let joint = self.joint();
+        let mut cells = cells.into_iter();
+        let a = cells.next().unwrap_or_else(|| div().into_any_element());
+        let b = cells.next().unwrap_or_else(|| div().into_any_element());
+        if layout == Layout::Phone {
+            let mut col = div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(Self::label(label));
+            col = col.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().text_xs().w(px(20.)).child("A"))
+                    .child(div().flex_1().child(a)),
+            );
+            if joint {
+                col = col.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_xs().w(px(20.)).child("B"))
+                        .child(div().flex_1().child(b)),
+                );
+            }
+            col.into_any_element()
+        } else {
+            let mut row = div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .w_full()
+                .child(Self::label(label).flex_1())
+                .child(div().w(px(220.)).child(a));
+            if joint {
+                row = row.child(div().w(px(220.)).child(b));
+            }
+            row.into_any_element()
+        }
+    }
+
+    fn input_row(
         &self,
+        section: Sec,
+        item: u8,
+        label: &str,
+        layout: Layout,
+        disabled: [bool; 2],
+    ) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let cells = [TP, SP]
+            .iter()
+            .zip(disabled)
+            .map(|(party, off)| {
+                let key = pair_key(section, item, *party);
+                let input = self
+                    .inputs
+                    .get(&key)
+                    .expect("editor input registry is complete");
+                Input::new(input)
+                    .disabled(!editable || off)
+                    .into_any_element()
+            })
+            .collect();
+        self.item_row(label, cells, layout)
+    }
+
+    fn computed_row(
+        &self,
+        section: Sec,
+        item: u8,
+        label: &str,
+        layout: Layout,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let cells = [TP, SP]
+            .iter()
+            .map(|party| {
+                self.amount_cell(self.draft.amount(section, item, *party).unwrap_or(0.0), cx)
+            })
+            .collect();
+        self.item_row(label, cells, layout)
+    }
+
+    fn column_header(&self, layout: Layout) -> AnyElement {
+        if layout == Layout::Phone {
+            return div().into_any_element();
+        }
+        let mut row = div()
+            .flex()
+            .gap_3()
+            .w_full()
+            .text_xs()
+            .font_weight(FontWeight::BOLD)
+            .child(div().flex_1())
+            .child(div().w(px(220.)).text_right().child("A — Taxpayer/Filer"));
+        if self.joint() {
+            row = row.child(div().w(px(220.)).text_right().child("B — Spouse"));
+        }
+        row.into_any_element()
+    }
+
+    fn label_for(section: Sec, item: u8) -> &'static str {
+        PAIR_INPUTS
+            .iter()
+            .find(|(s, i, _)| *s == section && *i == item)
+            .map(|(_, _, l)| *l)
+            .unwrap_or("")
+    }
+
+    fn party_flags(&self, test: impl Fn(&Form1701Draft, Form1701Party) -> bool) -> [bool; 2] {
+        [!test(&self.draft, TP), !test(&self.draft, SP)]
+    }
+
+    fn choice(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
         selected: bool,
+        disabled: bool,
+    ) -> Button {
+        let label: SharedString = label.into();
+        let button = Button::new(id).label(if selected {
+            format!("✓ {label}")
+        } else {
+            label.to_string()
+        });
+        let button = if selected {
+            button.primary()
+        } else {
+            button.outline()
+        };
+        button.disabled(disabled)
+    }
+
+    fn choice_row(title: &str, buttons: Vec<Button>) -> AnyElement {
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(Self::label(title))
+            .children(buttons)
+            .into_any_element()
+    }
+
+    fn yes_no(
+        &self,
+        id: &'static str,
+        title: &str,
+        value: Option<bool>,
+        set: fn(&mut Form1701Draft, bool),
         cx: &Context<Self>,
-        on_click: impl Fn(&mut Self) + 'static,
     ) -> AnyElement {
-        let root = rsx! {
-            <div
-                id={id}
-                px_3
-                py_2
-                border_1
-                border_color={if selected {
-                    cx.theme().primary
+        let editable = self.draft.lifecycle.is_editable();
+        Self::choice_row(
+            title,
+            vec![
+                Self::choice((id, 1usize), "Yes", value == Some(true), !editable)
+                    .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| set(d, true)))),
+                Self::choice((id, 0usize), "No", value == Some(false), !editable)
+                    .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| set(d, false)))),
+            ],
+        )
+    }
+
+    fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let d = &self.draft;
+        let mut children = vec![
+            self.text_field("year", layout),
+            self.yes_no(
+                "1701_amended",
+                "Item 2 — Amended return?",
+                Some(d.is_amended),
+                |d, v| d.is_amended = v,
+                cx,
+            ),
+            self.yes_no(
+                "1701_short",
+                "Item 3 — Short period return?",
+                Some(d.is_short_period),
+                |d, v| d.is_short_period = v,
+                cx,
+            ),
+        ];
+        if d.is_short_period {
+            children.push(self.text_field("month", layout));
+        }
+        self.section("Return period", vec![self.grid(layout, children)], cx)
+    }
+
+    fn render_background(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        let fixed = |label: &str, value: String| {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(Self::label(label))
+                .child(div().font_weight(FontWeight::BOLD).child(value))
+                .into_any_element()
+        };
+        let types: Vec<Button> = Form1701TaxpayerType::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, kind)| {
+                Self::choice(
+                    ("1701_type", index),
+                    kind.label(),
+                    d.taxpayer_type == Some(kind),
+                    !editable,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.edit(cx, |d| d.taxpayer_type = Some(kind))
+                }))
+            })
+            .collect();
+        let mixed_possible = matches!(
+            d.taxpayer_type,
+            Some(Form1701TaxpayerType::SingleProprietor | Form1701TaxpayerType::Professional)
+        );
+        let atcs: Vec<Button> = Form1701Atc::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, atc)| {
+                Self::choice(
+                    ("1701_atc", index),
+                    format!("{} — {}", atc.code(), atc.label()),
+                    d.atc == Some(atc),
+                    !editable,
+                )
+                .small()
+                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.atc = Some(atc))))
+            })
+            .collect();
+        let statuses: Vec<Button> = Form1701CivilStatus::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, status)| {
+                Self::choice(
+                    ("1701_civil", index),
+                    status.label(),
+                    d.civil_status == Some(status),
+                    !editable,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.edit(cx, |d| d.civil_status = Some(status))
+                }))
+            })
+            .collect();
+        let mut rows = vec![
+            self.grid(
+                layout,
+                vec![
+                    fixed("Item 4 — TIN", format_tin(&d.tin)),
+                    fixed("Item 5 — RDO Code", d.rdo_code.clone()),
+                    self.text_field("name", layout),
+                    self.text_field("address", layout),
+                    self.text_field("zip", layout),
+                    self.text_field("birth", layout),
+                    self.text_field("email", layout),
+                    self.text_field("citizenship", layout),
+                    self.text_field("phone", layout),
+                ],
+            ),
+            Self::choice_row("Item 6 — Taxpayer type", types),
+        ];
+        if mixed_possible {
+            rows.push(self.yes_no(
+                "1701_mixed",
+                "Also a compensation earner (mixed income)?",
+                Some(d.taxpayer_also_compensation_earner),
+                |d, v| d.taxpayer_also_compensation_earner = v,
+                cx,
+            ));
+        }
+        rows.push(Self::choice_row("Item 7 — ATC", atcs));
+        rows.push(self.yes_no(
+            "1701_ftc",
+            "Item 13 — Claiming foreign tax credits?",
+            d.claims_foreign_tax_credits,
+            |d, v| d.claims_foreign_tax_credits = Some(v),
+            cx,
+        ));
+        if d.claims_foreign_tax_credits == Some(true) {
+            rows.push(self.text_field("foreign_no", layout));
+        }
+        rows.push(Self::choice_row("Item 16 — Civil status", statuses));
+        if d.civil_status == Some(Form1701CivilStatus::Married) {
+            rows.push(self.yes_no(
+                "1701_spouse_income",
+                "Item 17 — Spouse has income?",
+                d.spouse_has_income,
+                |d, v| d.spouse_has_income = Some(v),
+                cx,
+            ));
+            if d.spouse_has_income == Some(true) {
+                let joint = d.joint_filing_status;
+                rows.push(Self::choice_row(
+                    "Item 18 — Filing status",
+                    vec![
+                        Self::choice(
+                            "1701_joint",
+                            "Joint filing",
+                            joint == Some(Form1701JointFilingStatus::Joint),
+                            !editable,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| {
+                                d.joint_filing_status = Some(Form1701JointFilingStatus::Joint)
+                            })
+                        })),
+                        Self::choice(
+                            "1701_separate",
+                            "Separate filing",
+                            joint == Some(Form1701JointFilingStatus::Separate),
+                            !editable,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| {
+                                d.joint_filing_status = Some(Form1701JointFilingStatus::Separate)
+                            })
+                        })),
+                    ],
+                ));
+            }
+        }
+        rows.push(self.yes_no(
+            "1701_exempt",
+            "Item 19 — Has income exempt from income tax?",
+            d.has_exempt_income,
+            |d, v| d.has_exempt_income = Some(v),
+            cx,
+        ));
+        rows.push(self.yes_no(
+            "1701_special",
+            "Item 20 — Has income subject to special/preferential rates?",
+            d.has_special_rate_income,
+            |d, v| d.has_special_rate_income = Some(v),
+            cx,
+        ));
+        if d.tax_rate == Some(bir_core::forms::form_1701::Form1701TaxRate::Graduated) {
+            rows.push(Self::choice_row(
+                "Item 21A — Method of deduction",
+                Form1701DeductionMethod::ALL
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, method)| {
+                        Self::choice(
+                            ("1701_method", index),
+                            method.label(),
+                            d.deduction_method == Some(method),
+                            !editable,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.edit(cx, |d| d.deduction_method = Some(method))
+                        }))
+                    })
+                    .collect(),
+            ));
+        }
+        self.section("Part I — Background Information (Taxpayer/Filer)", rows, cx)
+    }
+
+    fn render_spouse(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let sp = &self.draft.spouse;
+        let types: Vec<Button> = [
+            Form1701SpouseType::SingleProprietor,
+            Form1701SpouseType::Professional,
+            Form1701SpouseType::CompensationEarner,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, kind)| {
+            Self::choice(
+                ("1701_sp_type", index),
+                kind.label(),
+                sp.filer_type == Some(kind),
+                !editable,
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.edit(cx, |d| d.spouse.filer_type = Some(kind))
+            }))
+        })
+        .collect();
+        let atcs: Vec<Button> = Form1701Atc::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, atc)| {
+                Self::choice(
+                    ("1701_sp_atc", index),
+                    format!("{} — {}", atc.code(), atc.label()),
+                    sp.atc == Some(atc),
+                    !editable,
+                )
+                .small()
+                .on_click(
+                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.spouse.atc = Some(atc))),
+                )
+            })
+            .collect();
+        let mut rows = vec![
+            self.grid(
+                layout,
+                vec![
+                    self.text_field("sp_tin", layout),
+                    self.text_field("sp_rdo", layout),
+                    self.text_field("sp_name", layout),
+                    self.text_field("sp_phone", layout),
+                    self.text_field("sp_citizenship", layout),
+                ],
+            ),
+            Self::choice_row("Item 3 — Spouse type", types),
+        ];
+        if matches!(
+            sp.filer_type,
+            Some(Form1701SpouseType::SingleProprietor | Form1701SpouseType::Professional)
+        ) {
+            rows.push(self.yes_no(
+                "1701_sp_mixed",
+                "Also a compensation earner (mixed income)?",
+                Some(self.draft.spouse_also_compensation_earner),
+                |d, v| d.spouse_also_compensation_earner = v,
+                cx,
+            ));
+        }
+        rows.push(Self::choice_row("Item 4 — ATC", atcs));
+        rows.push(self.yes_no(
+            "1701_sp_ftc",
+            "Item 8 — Claiming foreign tax credits?",
+            sp.claims_foreign_tax_credits,
+            |d, v| d.spouse.claims_foreign_tax_credits = Some(v),
+            cx,
+        ));
+        if sp.claims_foreign_tax_credits == Some(true) {
+            rows.push(self.text_field("sp_foreign_no", layout));
+        }
+        rows.push(self.yes_no(
+            "1701_sp_exempt",
+            "Item 10 — Has income exempt from income tax?",
+            sp.has_exempt_income,
+            |d, v| d.spouse.has_exempt_income = Some(v),
+            cx,
+        ));
+        rows.push(self.yes_no(
+            "1701_sp_special",
+            "Item 11 — Has income subject to special/preferential rates?",
+            sp.has_special_rate_income,
+            |d, v| d.spouse.has_special_rate_income = Some(v),
+            cx,
+        ));
+        if sp.tax_rate == Some(bir_core::forms::form_1701::Form1701TaxRate::Graduated) {
+            rows.push(Self::choice_row(
+                "Item 12A — Method of deduction",
+                Form1701DeductionMethod::ALL
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, method)| {
+                        Self::choice(
+                            ("1701_sp_method", index),
+                            method.label(),
+                            sp.deduction_method == Some(method),
+                            !editable,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.edit(cx, |d| d.spouse.deduction_method = Some(method))
+                        }))
+                    })
+                    .collect(),
+            ));
+        }
+        self.section("Part IV — Background Information (Spouse)", rows, cx)
+    }
+
+    fn render_employers(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let mut children = Vec::new();
+        for row in 0..2 {
+            let owner = self.draft.employers[row].owner;
+            let mut owners = vec![
+                Self::choice(
+                    ("1701_emp_tp", row),
+                    "Taxpayer",
+                    owner == Some(TP),
+                    !editable,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.edit(cx, |d| d.employers[row].owner = Some(TP))
+                })),
+            ];
+            if self.joint() {
+                owners.push(
+                    Self::choice(("1701_emp_sp", row), "Spouse", owner == Some(SP), !editable)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.edit(cx, |d| d.employers[row].owner = Some(SP))
+                        })),
+                );
+            }
+            owners.push(
+                Self::choice(
+                    ("1701_emp_none", row),
+                    "Not used",
+                    owner.is_none(),
+                    !editable,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.edit(cx, |d| d.employers[row].owner = None)
+                })),
+            );
+            let mut card = div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_3()
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded_md()
+                .child(Self::choice_row(&format!("Employer {}", row + 1), owners));
+            if owner.is_some() {
+                card = card.child(self.grid(
+                    layout,
+                    vec![
+                        self.field(
+                            &format!("emp_{row}_name"),
+                            "Name of employer",
+                            layout,
+                            false,
+                        ),
+                        self.field(&format!("emp_{row}_tin"), "Employer TIN", layout, false),
+                        self.field(
+                            &format!("emp_{row}_ci"),
+                            "Compensation income",
+                            layout,
+                            false,
+                        ),
+                        self.field(&format!("emp_{row}_tw"), "Tax withheld", layout, false),
+                    ],
+                ));
+            }
+            children.push(card.into_any_element());
+        }
+        let no_comp = self.party_flags(|d, p| {
+            let atc = if p == TP { d.atc } else { d.spouse.atc };
+            matches!(
+                atc,
+                Some(Form1701Atc::Ii011 | Form1701Atc::Ii013 | Form1701Atc::Ii016)
+            )
+        });
+        children.push(self.column_header(layout));
+        children.push(self.computed_row(
+            Sec::Schedule2,
+            4,
+            "4 — Gross compensation income (Schedule 1)",
+            layout,
+            cx,
+        ));
+        children.push(self.input_row(
+            Sec::Schedule2,
+            5,
+            Self::label_for(Sec::Schedule2, 5),
+            layout,
+            no_comp,
+        ));
+        children.push(self.computed_row(
+            Sec::Schedule2,
+            6,
+            "6 — Taxable compensation income",
+            layout,
+            cx,
+        ));
+        children.push(self.computed_row(
+            Sec::Schedule2,
+            7,
+            "7 — Tax due (graduated rates)",
+            layout,
+            cx,
+        ));
+        self.section(
+            "Part V — Schedules 1 and 2: Compensation Income",
+            children,
+            cx,
+        )
+    }
+
+    fn graduated(&self, party: Form1701Party) -> bool {
+        let atc = if party == TP {
+            self.draft.atc
+        } else {
+            self.draft.spouse.atc
+        };
+        matches!(
+            atc,
+            Some(Form1701Atc::Ii012 | Form1701Atc::Ii013 | Form1701Atc::Ii014)
+        )
+    }
+
+    fn eight(&self, party: Form1701Party) -> bool {
+        let atc = if party == TP {
+            self.draft.atc
+        } else {
+            self.draft.spouse.atc
+        };
+        matches!(
+            atc,
+            Some(Form1701Atc::Ii015 | Form1701Atc::Ii016 | Form1701Atc::Ii017)
+        )
+    }
+
+    fn itemized(&self, party: Form1701Party) -> bool {
+        let method = if party == TP {
+            self.draft.deduction_method
+        } else {
+            self.draft.spouse.deduction_method
+        };
+        self.graduated(party) && method == Some(Form1701DeductionMethod::Itemized)
+    }
+
+    fn render_schedule_3(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let gr = [!self.graduated(TP), !self.graduated(SP)];
+        let item = [!self.itemized(TP), !self.itemized(SP)];
+        let eight = [!self.eight(TP), !self.eight(SP)];
+        let pure = [
+            !(self.eight(TP) && self.draft.atc != Some(Form1701Atc::Ii016)),
+            !(self.eight(SP) && self.draft.spouse.atc != Some(Form1701Atc::Ii016)),
+        ];
+        let mut a = vec![self.column_header(layout)];
+        a.push(self.input_row(
+            Sec::Schedule3,
+            8,
+            Self::label_for(Sec::Schedule3, 8),
+            layout,
+            gr,
+        ));
+        a.push(self.input_row(
+            Sec::Schedule3,
+            9,
+            Self::label_for(Sec::Schedule3, 9),
+            layout,
+            gr,
+        ));
+        a.push(self.computed_row(
+            Sec::Schedule3,
+            10,
+            "10 — Net sales/revenues/receipts/fees",
+            layout,
+            cx,
+        ));
+        a.push(self.input_row(
+            Sec::Schedule3,
+            11,
+            Self::label_for(Sec::Schedule3, 11),
+            layout,
+            item,
+        ));
+        for (n, label) in [
+            (12u8, "12 — Gross income from operation"),
+            (
+                13,
+                "13 — Ordinary allowable itemized deductions (Schedule 4)",
+            ),
+            (
+                14,
+                "14 — Special allowable itemized deductions (Schedule 5)",
+            ),
+            (15, "15 — NOLCO (Schedule 6)"),
+            (16, "16 — Total deductions"),
+            (17, "17 — Optional standard deduction (40% of Item 10)"),
+            (18, "18 — Net income/(loss)"),
+        ] {
+            a.push(self.computed_row(Sec::Schedule3, n, label, layout, cx));
+        }
+        a.push(self.text_field("d19", layout));
+        a.push(self.input_row(
+            Sec::Schedule3,
+            19,
+            Self::label_for(Sec::Schedule3, 19),
+            layout,
+            gr,
+        ));
+        a.push(self.text_field("d20", layout));
+        a.push(self.input_row(
+            Sec::Schedule3,
+            20,
+            Self::label_for(Sec::Schedule3, 20),
+            layout,
+            gr,
+        ));
+        a.push(self.input_row(
+            Sec::Schedule3,
+            21,
+            Self::label_for(Sec::Schedule3, 21),
+            layout,
+            gr,
+        ));
+        for (n, label) in [
+            (22u8, "22 — Total other taxable income"),
+            (23, "23 — Total taxable income"),
+            (24, "24 — Total taxable income (with compensation)"),
+            (25, "25 — Tax due (graduated rates)"),
+        ] {
+            a.push(self.computed_row(Sec::Schedule3, n, label, layout, cx));
+        }
+        let mut b = vec![self.column_header(layout)];
+        b.push(self.input_row(
+            Sec::Schedule3,
+            26,
+            Self::label_for(Sec::Schedule3, 26),
+            layout,
+            eight,
+        ));
+        b.push(self.text_field("d27", layout));
+        b.push(self.input_row(
+            Sec::Schedule3,
+            27,
+            Self::label_for(Sec::Schedule3, 27),
+            layout,
+            eight,
+        ));
+        b.push(self.computed_row(Sec::Schedule3, 28, "28 — Total", layout, cx));
+        b.push(self.input_row(
+            Sec::Schedule3,
+            29,
+            Self::label_for(Sec::Schedule3, 29),
+            layout,
+            pure,
+        ));
+        for (n, label) in [
+            (30u8, "30 — Taxable income/(loss)"),
+            (31, "31 — Tax due (8%)"),
+            (32, "32 — Total tax due (with compensation)"),
+        ] {
+            b.push(self.computed_row(Sec::Schedule3, n, label, layout, cx));
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .child(self.section("Schedule 3.A — Graduated Income Tax Rates", a, cx))
+            .child(self.section("Schedule 3.B — 8% Income Tax Rate", b, cx))
+            .into_any_element()
+    }
+
+    fn render_deductions(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let item = [!self.itemized(TP), !self.itemized(SP)];
+        let editable = self.draft.lifecycle.is_editable();
+        let mut four = vec![self.column_header(layout)];
+        for n in 1..=16u8 {
+            four.push(self.input_row(
+                Sec::Schedule4,
+                n,
+                Self::label_for(Sec::Schedule4, n),
+                layout,
+                item,
+            ));
+        }
+        for (index, label) in [
+            "17a — Others",
+            "17b — Others",
+            "17c — Others",
+            "17d — Others",
+        ]
+        .iter()
+        .enumerate()
+        {
+            if index == 3 {
+                four.push(self.text_field("d17d", layout));
+            }
+            let cells = [TP, SP]
+                .iter()
+                .zip(item)
+                .map(|(party, off)| {
+                    let key = party_key(&format!("s4_17_{index}"), *party);
+                    Input::new(&self.inputs[&key])
+                        .disabled(!editable || off)
+                        .into_any_element()
+                })
+                .collect();
+            four.push(self.item_row(label, cells, layout));
+        }
+        four.push(self.computed_row(
+            Sec::Schedule4,
+            18,
+            "18 — Total ordinary allowable itemized deductions",
+            layout,
+            cx,
+        ));
+
+        let mut five = Vec::new();
+        for party in [TP, SP] {
+            if party == SP && !self.joint() {
+                continue;
+            }
+            let off = !self.itemized(party);
+            for row in 0..2 {
+                let item_no = if party == TP { row + 1 } else { row + 4 };
+                five.push(self.grid(
+                    layout,
+                    vec![
+                        self.field(
+                            &party_key(&format!("s5_{row}_desc"), party),
+                            &format!("{item_no} — Description"),
+                            layout,
+                            off,
+                        ),
+                        self.field(
+                            &party_key(&format!("s5_{row}_legal"), party),
+                            &format!("{item_no} — Legal basis"),
+                            layout,
+                            off,
+                        ),
+                        self.field(
+                            &party_key(&format!("s5_{row}_amt"), party),
+                            &format!("{item_no} — Amount"),
+                            layout,
+                            off,
+                        ),
+                    ],
+                ));
+            }
+        }
+        let c = &self.draft.computations;
+        five.push(self.item_row(
+            "Total special allowable itemized deductions",
+            vec![
+                self.amount_cell(c.schedule_5_total_taxpayer.unwrap_or(0.0), cx),
+                self.amount_cell(c.schedule_5_total_spouse.unwrap_or(0.0), cx),
+            ],
+            layout,
+        ));
+
+        let mut six = vec![self.column_header(layout)];
+        six.push(self.input_row(
+            Sec::Schedule6,
+            1,
+            Self::label_for(Sec::Schedule6, 1),
+            layout,
+            item,
+        ));
+        six.push(self.input_row(
+            Sec::Schedule6,
+            2,
+            Self::label_for(Sec::Schedule6, 2),
+            layout,
+            item,
+        ));
+        six.push(self.computed_row(Sec::Schedule6, 3, "3 — Net operating loss", layout, cx));
+        for party in [TP, SP] {
+            if party == SP && !self.joint() {
+                continue;
+            }
+            let off = !self.itemized(party);
+            let rows = if party == TP {
+                &c.schedule_6_taxpayer_nolco
+            } else {
+                &c.schedule_6_spouse_nolco
+            };
+            let who = if party == TP { "Taxpayer" } else { "Spouse" };
+            for (row, entry) in rows.iter().enumerate() {
+                let current = row == 3;
+                let mut fields = Vec::new();
+                if current {
+                    fields.push(
+                        Self::label(&format!(
+                            "{who} — current-year loss {}",
+                            entry.year_incurred
+                        ))
+                        .into_any_element(),
+                    );
+                    fields.push(self.amount_cell(entry.amount.unwrap_or(0.0), cx));
                 } else {
-                    cx.theme().border
-                }}
-                bg={if selected {
-                    cx.theme().primary.opacity(0.15)
-                } else {
-                    cx.theme().background
-                }}
-                rounded_md
-                on_click={cx.listener(move |this, _, _, cx| {
-                    if this.draft.is_editable() {
-                        on_click(this);
+                    fields.push(self.field(
+                        &party_key(&format!("s6_{row}_year"), party),
+                        &format!("{who} — Year incurred"),
+                        layout,
+                        off,
+                    ));
+                    fields.push(self.field(
+                        &party_key(&format!("s6_{row}_a"), party),
+                        "A — Amount",
+                        layout,
+                        off,
+                    ));
+                }
+                fields.push(self.field(
+                    &party_key(&format!("s6_{row}_b"), party),
+                    "B — Applied previous years",
+                    layout,
+                    off,
+                ));
+                fields.push(self.field(
+                    &party_key(&format!("s6_{row}_c"), party),
+                    "C — Expired",
+                    layout,
+                    off,
+                ));
+                fields.push(self.field(
+                    &party_key(&format!("s6_{row}_d"), party),
+                    "D — Applied current year",
+                    layout,
+                    off,
+                ));
+                fields.push(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .child(Self::label("E — Net operating loss unapplied"))
+                        .child(official_amount(entry.unapplied.unwrap_or(0.0)))
+                        .into_any_element(),
+                );
+                six.push(
+                    div()
+                        .p_3()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .rounded_md()
+                        .child(self.grid(layout, fields))
+                        .into_any_element(),
+                );
+            }
+        }
+        six.push(self.item_row(
+            "Total NOLCO applied",
+            vec![
+                self.amount_cell(c.schedule_6_total_taxpayer.unwrap_or(0.0), cx),
+                self.amount_cell(c.schedule_6_total_spouse.unwrap_or(0.0), cx),
+            ],
+            layout,
+        ));
+        div()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .child(self.section(
+                "Schedule 4 — Ordinary Allowable Itemized Deductions",
+                four,
+                cx,
+            ))
+            .child(self.section(
+                "Schedule 5 — Special Allowable Itemized Deductions",
+                five,
+                cx,
+            ))
+            .child(self.section(
+                "Schedule 6 — Net Operating Loss Carry-Over (NOLCO)",
+                six,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    fn render_parts_vi_to_ix(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let none = [false, !self.joint()];
+        let amended = [
+            !self.draft.is_amended,
+            !self.draft.is_amended || !self.joint(),
+        ];
+        let mut six = vec![self.column_header(layout)];
+        six.push(self.computed_row(
+            Sec::PartVi,
+            1,
+            "1 — Income tax due (Schedule 3)",
+            layout,
+            cx,
+        ));
+        six.push(self.input_row(
+            Sec::PartVi,
+            2,
+            Self::label_for(Sec::PartVi, 2),
+            layout,
+            none,
+        ));
+        six.push(self.input_row(
+            Sec::PartVi,
+            3,
+            Self::label_for(Sec::PartVi, 3),
+            layout,
+            none,
+        ));
+        six.push(self.computed_row(Sec::PartVi, 4, "4 — Net", layout, cx));
+        six.push(self.computed_row(Sec::PartVi, 5, "5 — Total income tax due", layout, cx));
+        let mut seven = vec![self.column_header(layout)];
+        for n in 1..=9u8 {
+            if n == 5 {
+                seven.push(self.computed_row(
+                    Sec::PartVii,
+                    5,
+                    "5 — Tax withheld on compensation (Schedule 1)",
+                    layout,
+                    cx,
+                ));
+                continue;
+            }
+            if n == 9 {
+                seven.push(self.text_field("d7_9", layout));
+            }
+            let off = if n == 6 { amended } else { none };
+            seven.push(self.input_row(
+                Sec::PartVii,
+                n,
+                Self::label_for(Sec::PartVii, n),
+                layout,
+                off,
+            ));
+        }
+        seven.push(self.computed_row(
+            Sec::PartVii,
+            10,
+            "10 — Total tax credits/payments",
+            layout,
+            cx,
+        ));
+        let mut nine = vec![self.column_header(layout)];
+        for n in [1u8, 2, 3, 4] {
+            if n != 1 {
+                nine.push(self.field(
+                    &format!("p9d_{n}"),
+                    &format!("{n} — Particulars"),
+                    layout,
+                    false,
+                ));
+            }
+            nine.push(self.input_row(
+                Sec::PartIx,
+                n,
+                Self::label_for(Sec::PartIx, n),
+                layout,
+                none,
+            ));
+        }
+        nine.push(self.computed_row(Sec::PartIx, 5, "5 — Total", layout, cx));
+        for n in [6u8, 7, 8, 9] {
+            nine.push(self.field(
+                &format!("p9d_{n}"),
+                &format!("{n} — Particulars"),
+                layout,
+                false,
+            ));
+            nine.push(self.input_row(
+                Sec::PartIx,
+                n,
+                Self::label_for(Sec::PartIx, n),
+                layout,
+                none,
+            ));
+        }
+        nine.push(self.computed_row(Sec::PartIx, 10, "10 — Total", layout, cx));
+        nine.push(self.computed_row(
+            Sec::PartIx,
+            11,
+            "11 — Net taxable income/(loss)",
+            layout,
+            cx,
+        ));
+        div()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .child(self.section("Part VI — Summary of Income Tax Due", six, cx))
+            .child(self.section("Part VII — Tax Credits/Payments", seven, cx))
+            .child(self.section(
+                "Part IX — Reconciliation of Net Income per Books against Taxable Income",
+                nine,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    fn render_part_two(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let none = [false, !self.joint()];
+        let installment = [
+            self.draft.amount(Sec::PartIi, 24, TP).unwrap_or(0.0) <= 0.0,
+            !self.joint() || self.draft.amount(Sec::PartIi, 24, SP).unwrap_or(0.0) <= 0.0,
+        ];
+        let mut rows = vec![self.column_header(layout)];
+        for (n, label) in [
+            (22u8, "22 — Tax due"),
+            (23, "23 — Less: tax credits/payments"),
+            (24, "24 — Tax payable/(overpayment)"),
+        ] {
+            rows.push(self.computed_row(Sec::PartIi, n, label, layout, cx));
+        }
+        rows.push(self.input_row(
+            Sec::PartIi,
+            25,
+            Self::label_for(Sec::PartIi, 25),
+            layout,
+            installment,
+        ));
+        rows.push(self.computed_row(
+            Sec::PartIi,
+            26,
+            "26 — Amount of tax payable/(overpayment)",
+            layout,
+            cx,
+        ));
+        for n in [27u8, 28, 29] {
+            rows.push(self.input_row(
+                Sec::PartIi,
+                n,
+                Self::label_for(Sec::PartIi, n),
+                layout,
+                none,
+            ));
+        }
+        rows.push(self.computed_row(Sec::PartIi, 30, "30 — Total penalties", layout, cx));
+        rows.push(self.computed_row(
+            Sec::PartIi,
+            31,
+            "31 — Total amount payable/(overpayment)",
+            layout,
+            cx,
+        ));
+        rows.push(
+            div()
+                .flex()
+                .justify_between()
+                .gap_2()
+                .child(Self::label("32 — Aggregate amount payable/(overpayment)"))
+                .child(
+                    div().font_weight(FontWeight::BOLD).child(official_amount(
+                        self.draft
+                            .computations
+                            .part_ii_item_32_aggregate
+                            .unwrap_or(0.0),
+                    )),
+                )
+                .into_any_element(),
+        );
+        let overpaid = self.draft.amount(Sec::PartIi, 26, TP).unwrap_or(0.0) < 0.0
+            || self.draft.amount(Sec::PartIi, 26, SP).unwrap_or(0.0) < 0.0;
+        if overpaid {
+            let over = self.draft.overpayment_disposition;
+            rows.push(Self::choice_row(
+                "If overpayment, mark one:",
+                [
+                    (Form1701OverpaymentDisposition::Refund, "To be refunded"),
+                    (
+                        Form1701OverpaymentDisposition::TaxCreditCertificate,
+                        "To be issued a Tax Credit Certificate",
+                    ),
+                    (
+                        Form1701OverpaymentDisposition::CarryOver,
+                        "To be carried over as tax credit",
+                    ),
+                ]
+                .into_iter()
+                .enumerate()
+                .map(|(index, (value, label))| {
+                    Self::choice(("1701_over", index), label, over == value, !editable).on_click(
+                        cx.listener(move |this, _, _, cx| {
+                            this.edit(cx, |d| d.overpayment_disposition = value)
+                        }),
+                    )
+                })
+                .collect(),
+            ));
+        }
+        rows.push(self.text_field("attachments", layout));
+        self.section("Part II — Total Tax Payable", rows, cx)
+    }
+}
+
+impl QueueableFormView for Form1701View {
+    type Draft = Form1701Draft;
+
+    fn new(
+        draft: Form1701Draft,
+        db: Arc<Mutex<Database>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut inputs = BTreeMap::new();
+        let mut subscriptions = Vec::new();
+        let keys = TEXT_INPUTS
+            .iter()
+            .map(|(k, _)| k.to_string())
+            .chain(dynamic_keys());
+        for key in keys {
+            let value = Self::initial(&draft, &key);
+            let input = cx.new(|cx| InputState::new(window, cx));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
                         this.sync_from_inputs(cx);
                     }
-                })}
-            >
-                {label.into()}
-            </div>
-        };
-        root.into_any_element()
-    }
-
-    fn render_input_row(&self, label: &str, input: &Entity<InputState>) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>{Input::new(input).disabled(!self.draft.is_editable())}</div>
-            </div>
-        };
-        root.into_any_element()
-    }
-
-    fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
-            return div().into_any_element();
+                },
+            ));
+            inputs.insert(key, input);
         }
-        let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
-            list = list.child(rsx! { <div text_xs>{format!("{field}: {message}")}</div> });
+        let validation_errors = draft.validate();
+        Self {
+            draft,
+            db,
+            scroll_handle: ScrollHandle::new(),
+            inputs,
+            validation_errors,
+            parse_errors: Vec::new(),
+            status_message: None,
+            release_claim_confirm_open: false,
+            _subscriptions: subscriptions,
         }
-        let root = rsx! {
-            <div
-                p_4
-                border_1
-                border_color={cx.theme().warning}
-                bg={cx.theme().warning.opacity(0.1)}
-                rounded_lg
-            >
-                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
-                {list}
-            </div>
-        };
-        root.into_any_element()
     }
 
-    fn render_filing_and_taxpayer(&self, cx: &Context<Self>) -> AnyElement {
-        let mut choices = div().flex().flex_col().gap_3();
-        choices = choices.child(rsx! {
-            <div flex flex_wrap gap_2>
-                {...Form1701TaxpayerType::ALL.into_iter().map(|value| {
-                    self.render_choice(
-                        format!("1701_type_{value:?}"),
-                        format!("6 {}", value.label()),
-                        self.draft.taxpayer_type == Some(value),
-                        cx,
-                        move |this| this.draft.taxpayer_type = Some(value),
-                    )
-                })}
-            </div>
-        });
-        choices = choices.child(rsx! {
-            <div flex flex_wrap gap_2>
-                {...Form1701Atc::ALL.into_iter().map(|value| {
-                    self.render_choice(
-                        format!("1701_atc_{}", value.code()),
-                        format!("7 {} · {}", value.code(), value.label()),
-                        self.draft.atc == Some(value),
-                        cx,
-                        move |this| {
-                            this.draft.atc = Some(value);
-                            this.draft.tax_rate = value.tax_rate();
-                            if this.draft.tax_rate != Some(Form1701TaxRate::Graduated) {
-                                this.draft.deduction_method = None;
-                            }
-                        },
-                    )
-                })}
-            </div>
-        });
-        choices = choices.child(choice_group_taxpayer(self, cx));
-
-        let root = rsx! {
-            <div base={section_card(cx, "ITEMS 1-21 — FILING AND BACKGROUND INFORMATION")}>
-                <div text_sm>{format!(
-                    "Taxable year {} · TIN {} · RDO {} · Taxpayer {}",
-                    self.draft.taxable_year,
-                    self.draft.tin,
-                    self.draft.rdo_code,
-                    self.draft.taxpayer_name
-                )}</div>
-                <div flex flex_wrap gap_2>
-                    {self.render_choice(
-                        "1701_amended_yes",
-                        "2 Amended: Yes",
-                        self.draft.is_amended,
-                        cx,
-                        |this| this.draft.is_amended = true,
-                    )}
-                    {self.render_choice(
-                        "1701_amended_no",
-                        "2 Amended: No",
-                        !self.draft.is_amended,
-                        cx,
-                        |this| this.draft.is_amended = false,
-                    )}
-                    {self.render_choice(
-                        "1701_short_yes",
-                        "3 Short Period: Yes",
-                        self.draft.is_short_period,
-                        cx,
-                        |this| this.draft.is_short_period = true,
-                    )}
-                    {self.render_choice(
-                        "1701_short_no",
-                        "3 Short Period: No",
-                        !self.draft.is_short_period,
-                        cx,
-                        |this| this.draft.is_short_period = false,
-                    )}
-                </div>
-                {self.render_input_row(
-                    "Return period end month (annual return is December)",
-                    &self.period_end_month,
-                )}
-                {self.render_input_row("9 Registered address", &self.registered_address)}
-                {self.render_input_row("9A ZIP code", &self.zip_code)}
-                {self.render_input_row("10 Date of birth", &self.date_of_birth)}
-                {self.render_input_row("11 Email address", &self.email)}
-                {self.render_input_row("12 Citizenship", &self.citizenship)}
-                {self.render_input_row("14 Foreign tax number", &self.foreign_tax_number)}
-                {self.render_input_row("15 Contact number", &self.contact_number)}
-                {choices}
-            </div>
-        };
-        root.into_any_element()
+    fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form1701Draft {
+        let mut draft = Form1701Draft::new_from_profile(profile, year, 12);
+        draft.recompute();
+        draft
     }
 
-    fn render_spouse(&self, cx: &Context<Self>) -> AnyElement {
-        let mut card = section_card(cx, "SPOUSE BACKGROUND INFORMATION").child(rsx! {
-            <div flex gap_2>
-                {self.render_choice(
-                    "1701_spouse_enabled",
-                    if self.draft.spouse.enabled {
-                        "Spouse section enabled"
-                    } else {
-                        "Enable spouse section"
-                    },
-                    self.draft.spouse.enabled,
-                    cx,
-                    |this| this.draft.spouse.enabled = !this.draft.spouse.enabled,
-                )}
-            </div>
-        });
-        if self.draft.spouse.enabled {
-            card =
-                card.child(self.render_input_row("Spouse TIN", &self.spouse_tin))
-                    .child(self.render_input_row("Spouse RDO", &self.spouse_rdo_code))
-                    .child(self.render_input_row("Spouse name", &self.spouse_name))
-                    .child(self.render_input_row("Spouse contact", &self.spouse_contact_number))
-                    .child(self.render_input_row("Spouse citizenship", &self.spouse_citizenship))
-                    .child(self.render_input_row(
-                        "Spouse foreign tax number",
-                        &self.spouse_foreign_tax_number,
-                    ))
-                    .child(rsx! {
-                        <div flex flex_wrap gap_2>
-                            {...Form1701SpouseType::ALL.into_iter().map(|value| {
-                                self.render_choice(
-                                    format!("1701_spouse_type_{value:?}"),
-                                    value.label(),
-                                    self.draft.spouse.filer_type == Some(value),
-                                    cx,
-                                    move |this| this.draft.spouse.filer_type = Some(value),
-                                )
-                            })}
-                        </div>
-                    })
-                    .child(rsx! {
-                        <div flex flex_wrap gap_2>
-                            {...Form1701Atc::ALL.into_iter().map(|value| {
-                                self.render_choice(
-                                    format!("1701_spouse_atc_{}", value.code()),
-                                    format!("{} · {}", value.code(), value.label()),
-                                    self.draft.spouse.atc == Some(value),
-                                    cx,
-                                    move |this| {
-                                        this.draft.spouse.atc = Some(value);
-                                        this.draft.spouse.tax_rate = value.tax_rate();
-                                        if this.draft.spouse.tax_rate
-                                            != Some(Form1701TaxRate::Graduated)
-                                        {
-                                            this.draft.spouse.deduction_method = None;
-                                        }
-                                    },
-                                )
-                            })}
-                        </div>
-                    })
-                    .child(choice_group_spouse(self, cx));
-        }
-        card.into_any_element()
-    }
-
-    fn render_employers(&self, cx: &Context<Self>) -> AnyElement {
-        let mut card = section_card(cx, "SCHEDULE 1 — COMPENSATION INCOME");
-        for (index, inputs) in self.employer_inputs.iter().enumerate() {
-            let row = &self.draft.employers[index];
-            card = card.child(rsx! {
-                <div flex flex_col gap_2 p_3 border_1 border_color={cx.theme().border} rounded_md>
-                    <div font_weight={FontWeight::BOLD}>
-                        {format!("Employer row {}", index + 1)}
-                    </div>
-                    <div flex gap_2>
-                        {self.render_choice(
-                            format!("1701_employer_{}_taxpayer", index),
-                            "Taxpayer/Filer",
-                            row.owner == Some(Form1701Party::Taxpayer),
-                            cx,
-                            move |this| {
-                                this.draft.employers[index].owner =
-                                    Some(Form1701Party::Taxpayer)
-                            },
-                        )}
-                        {self.render_choice(
-                            format!("1701_employer_{}_spouse", index),
-                            "Spouse",
-                            row.owner == Some(Form1701Party::Spouse),
-                            cx,
-                            move |this| {
-                                this.draft.employers[index].owner = Some(Form1701Party::Spouse)
-                            },
-                        )}
-                        {self.render_choice(
-                            format!("1701_employer_{}_clear", index),
-                            "Unused",
-                            row.owner.is_none(),
-                            cx,
-                            move |this| this.draft.employers[index].owner = None,
-                        )}
-                    </div>
-                    {self.render_input_row("Employer name", &inputs.name)}
-                    {self.render_input_row("Employer TIN", &inputs.tin)}
-                    {self.render_input_row("Compensation income", &inputs.compensation)}
-                    {self.render_input_row("Tax withheld", &inputs.withheld)}
-                </div>
-            });
-        }
-        card.into_any_element()
-    }
-
-    fn render_amount_section(
-        &self,
-        section: Form1701AmountSection,
-        title: &str,
-        cx: &Context<Self>,
-    ) -> AnyElement {
-        let mut card = section_card(cx, title).child(amount_header(cx));
-        for (_, item, label) in AMOUNT_INPUT_SPECS
-            .iter()
-            .filter(|(candidate, _, _)| *candidate == section)
-        {
-            let inputs = &self.amount_inputs[&(section, *item)];
-            card = card.child(rsx! {
-                <div grid grid_cols={3} gap_3 items_center p_2 border_b_1 border_color={cx.theme().border}>
-                    <div text_sm>{format!("{item} {label}")}</div>
-                    {Input::new(&inputs.taxpayer).disabled(!self.draft.is_editable())}
-                    {Input::new(&inputs.spouse).disabled(!self.draft.is_editable())}
-                </div>
-            });
-        }
-        for (item, label) in computed_rows(section) {
-            card = card.child(rsx! {
-                <div grid grid_cols={3} gap_3 items_center p_2 border_b_1 border_color={cx.theme().border}>
-                    <div text_sm font_weight={FontWeight::BOLD}>{format!("{item} {label}")}</div>
-                    {computed_amount(
-                        self.draft.amount(section, *item, Form1701Party::Taxpayer),
-                        cx,
-                    )}
-                    {computed_amount(
-                        self.draft.amount(section, *item, Form1701Party::Spouse),
-                        cx,
-                    )}
-                </div>
-            });
-        }
-        card.into_any_element()
-    }
-
-    fn render_payment_section(&self, cx: &Context<Self>) -> AnyElement {
-        let labels = [
-            "34 Cash/Bank Debit Memo",
-            "35 Check",
-            "36 Tax Debit Memo",
-            "37 Others",
-        ];
-        let mut card = section_card(cx, "PART III — DETAILS OF PAYMENT").child(rsx! {
-            <div text_xs>
-                {"The reviewed XML has no drawee-bank/agency field for Item 36."}
-            </div>
-        });
-        for (index, inputs) in self.payment_inputs.iter().enumerate() {
-            card = card.child(rsx! {
-                <div flex flex_col gap_2 p_3 border_1 border_color={cx.theme().border} rounded_md>
-                    <div font_weight={FontWeight::BOLD}>{labels[index]}</div>
-                    <div grid grid_cols={4} gap_2>
-                        {Input::new(&inputs.agency)
-                            .disabled(index == 2 || !self.draft.is_editable())}
-                        {Input::new(&inputs.number).disabled(!self.draft.is_editable())}
-                        {Input::new(&inputs.date).disabled(!self.draft.is_editable())}
-                        {Input::new(&inputs.amount).disabled(!self.draft.is_editable())}
-                    </div>
-                </div>
-            });
-        }
-        let root = rsx! {
-            <div base={card}>
-                {self.render_input_row("37 Others description", &self.payment_37_description)}
-                {self.render_input_row("Machine validation / receipt", &self.machine_validation)}
-            </div>
-        };
-        root.into_any_element()
-    }
-
-    fn render_editor_sections(&self, cx: &Context<Self>) -> Vec<AnyElement> {
-        vec![
-            self.render_filing_and_taxpayer(cx),
-            self.render_spouse(cx),
-            self.render_employers(cx),
-            self.render_amount_section(
-                Form1701AmountSection::Schedule2,
-                "SCHEDULE 2 — TAX ON COMPENSATION INCOME",
-                cx,
-            ),
-            self.render_amount_section(
-                Form1701AmountSection::Schedule3,
-                "SCHEDULE 3 — BUSINESS/PROFESSION INCOME",
-                cx,
-            ),
-            {
-                let root = rsx! {
-                    <div base={section_card(cx, "SCHEDULE 3 — SPECIFY LINES")}>
-                        {self.render_input_row("19 Description", &self.schedule_3_description_19)}
-                        {self.render_input_row("20 Description", &self.schedule_3_description_20)}
-                        {self.render_input_row("27 Description", &self.schedule_3_description_27)}
-                    </div>
-                };
-                root.into_any_element()
-            },
-            self.render_amount_section(
-                Form1701AmountSection::Schedule4,
-                "SCHEDULE 4 — ORDINARY ALLOWABLE ITEMIZED DEDUCTIONS",
-                cx,
-            ),
-            self.render_amount_section(
-                Form1701AmountSection::Schedule6,
-                "SCHEDULE 6 — NOLCO SUMMARY",
-                cx,
-            ),
-            self.render_amount_section(Form1701AmountSection::PartVi, "PART VI — TAX DUE", cx),
-            self.render_amount_section(
-                Form1701AmountSection::PartVii,
-                "PART VII — TAX CREDITS/PAYMENTS",
-                cx,
-            ),
-            {
-                let root = rsx! {
-                    <div base={section_card(cx, "PART VII — OTHER CREDIT")}>
-                        {self.render_input_row("Item 9 description", &self.part_vii_description_9)}
-                    </div>
-                };
-                root.into_any_element()
-            },
-            self.render_amount_section(
-                Form1701AmountSection::PartViii,
-                "PART VIII — TAX RELIEF",
-                cx,
-            ),
-            self.render_amount_section(
-                Form1701AmountSection::PartIx,
-                "PART IX — RECONCILIATION OF NET INCOME",
-                cx,
-            ),
-            self.render_amount_section(
-                Form1701AmountSection::PartIi,
-                "PART II — TOTAL TAX PAYABLE/(OVERPAYMENT)",
-                cx,
-            ),
-            self.render_overpayment_and_attachments(cx),
-            self.render_payment_section(cx),
-        ]
-    }
-
-    fn render_overpayment_and_attachments(&self, cx: &Context<Self>) -> AnyElement {
-        let root = rsx! {
-            <div base={section_card(cx, "ITEMS 32-33 — OVERPAYMENT AND ATTACHMENTS")}>
-                <div text_sm>{format!(
-                    "Item 32 aggregate: {}",
-                    format_optional_amount(self.draft.computations.part_ii_item_32_aggregate)
-                )}</div>
-                <div flex flex_wrap gap_2>
-                    {...[
-                        Form1701OverpaymentDisposition::None,
-                        Form1701OverpaymentDisposition::Refund,
-                        Form1701OverpaymentDisposition::TaxCreditCertificate,
-                        Form1701OverpaymentDisposition::CarryOver,
-                    ]
-                    .into_iter()
-                    .map(|value| {
-                        self.render_choice(
-                            format!("1701_overpayment_{value:?}"),
-                            overpayment_label(value),
-                            self.draft.overpayment_disposition == value,
-                            cx,
-                            move |this| this.draft.overpayment_disposition = value,
-                        )
-                    })}
-                </div>
-                {self.render_input_row("33 Number of attachments", &self.number_of_attachments)}
-            </div>
-        };
-        root.into_any_element()
+    /// Annual: earlier builds stored the return with a NULL period column
+    /// (period key `A`); the first generic save adopts that row.
+    fn load_draft(
+        db: &Database,
+        profile: &TaxpayerProfile,
+        year: u16,
+        period: u8,
+    ) -> Form1701Draft {
+        let tin = profile.tin.full();
+        db.get_queueable_draft::<Form1701Draft>(&tin, year, 0)
+            .ok()
+            .flatten()
+            .or_else(|| {
+                db.get_form_draft_v2::<Form1701Draft>(&tin, "1701", year, &FilingPeriod::Annual)
+                    .ok()
+                    .flatten()
+            })
+            .unwrap_or_else(|| Self::new_draft(profile, year, period))
     }
 }
 
@@ -1115,776 +1993,398 @@ impl FormViewTrait for Form1701View {
     fn form_title(&self) -> &'static str {
         "BIR Form No. 1701"
     }
-
     fn form_subtitle(&self) -> &'static str {
         "Annual Income Tax Return for Individuals, Estates and Trusts"
     }
-
     fn form_version(&self) -> &'static str {
         "January 2018 (ENCS)"
     }
-
     fn current_status(&self) -> FilingStatus {
-        self.draft.status.clone()
+        self.draft.lifecycle.status.clone()
     }
-
     fn submitted_at(&self) -> Option<&str> {
-        self.draft.submitted_at.as_deref()
+        self.draft.lifecycle.submitted_at.as_deref()
     }
-
     fn confirmed_at(&self) -> Option<&str> {
-        self.draft.confirmed_at.as_deref()
+        self.draft.lifecycle.confirmed_at.as_deref()
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if !self.input_errors.is_empty() {
-            self.status_message = Some(
-                "Draft was not saved because one or more editor values cannot be parsed."
-                    .to_string(),
-            );
+        if !self.parse_errors.is_empty() {
             self.notify(
+                notification::NotificationType::Error,
+                "Fix the highlighted entries before saving.".into(),
                 window,
                 cx,
-                gpui_component::notification::NotificationType::Error,
-                "Fix invalid Form 1701 input text before saving.",
             );
             return;
         }
-
-        self.draft.updated_at = chrono::Utc::now().to_rfc3339();
-        let result = self
-            .db
-            .lock()
-            .map_err(|_| "Draft database lock is unavailable".to_string())
-            .and_then(|db| {
-                db.save_form_draft(
-                    &self.draft.tin,
-                    "1701",
-                    self.draft.taxable_year,
-                    None,
-                    &self.draft.status,
-                    &self.draft,
-                )
-                .map(|_| ())
-                .map_err(|error| error.to_string())
-            });
-
+        let result = match self.db.lock() {
+            Ok(db) => db
+                .save_queueable_draft(&self.draft)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
         match result {
-            Ok(()) => {
-                self.status_message = Some(if self.validation_errors.is_empty() {
-                    "Draft saved locally.".to_string()
-                } else {
-                    "Draft saved locally with unresolved review items; submission remains disabled."
-                        .to_string()
-                });
+            Ok(id) => {
+                self.draft.id = Some(id);
                 self.notify(
+                    notification::NotificationType::Success,
+                    "1701 draft saved.".into(),
                     window,
                     cx,
-                    gpui_component::notification::NotificationType::Success,
-                    "Form 1701 draft saved locally.",
                 );
-                cx.emit(Form1701Event::Saved);
+                cx.emit(QueueableFormEvent::Saved);
             }
-            Err(error) => {
-                self.status_message = Some(format!("Could not save draft: {error}"));
-                self.notify(
-                    window,
-                    cx,
-                    gpui_component::notification::NotificationType::Error,
-                    format!("Could not save Form 1701 draft: {error}"),
-                );
-            }
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Save failed".into(),
+                error,
+            )),
         }
-        cx.notify();
     }
 
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "1701v2018 is manual/external until queue and final-flag semantics are certified."
-                .to_string(),
-        );
-        cx.emit(Form1701Event::PushNotification(
-            "warning".to_string(),
-            "Manual / External Filing".to_string(),
-            "This Form 1701 draft cannot be queued or submitted by the app.".to_string(),
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !can_queue_for_submission(<Form1701Draft as QueueableForm>::FORM_CODE) {
+            self.status_message =
+                Some("1701 is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        let before = self.draft.clone();
+        if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
+            self.validation_errors = errors;
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        let saved = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_queueable(&self.draft)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        if let Err(error) = saved {
+            self.draft = before;
+            self.status_message = Some(format!(
+                "Could not queue Form 1701. No submission was started: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+        self.status_message = Some(format!(
+            "Queued for background submission as {}.",
+            self.draft.submission_filename()
         ));
+        self.notify(
+            notification::NotificationType::Success,
+            "Form 1701 queued.".into(),
+            window,
+            cx,
+        );
+        cx.emit(QueueableFormEvent::Saved);
+        bir_core::background_cron::wake();
         cx.notify();
     }
 
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "Payment status cannot be advanced automatically for a manual/external filing."
-                .to_string(),
-        );
+        self.status_message =
+            Some("1701 payment status needs a verified confirmation workflow.".into());
         cx.notify();
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.draft.revert_to_draft() {
-            Ok(()) => self.save_draft(window, cx),
-            Err(error) => {
-                self.status_message = Some(error.clone());
-                self.notify(
-                    window,
-                    cx,
-                    gpui_component::notification::NotificationType::Error,
-                    error,
-                );
-            }
+        if !matches!(self.draft.lifecycle.status, FilingStatus::Queued) {
+            self.status_message =
+                Some("This return cannot be reverted after submission has started.".into());
+            cx.notify();
+            return;
         }
-        cx.notify();
-    }
-
-    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Freeze the latest parseable editor values into one immutable
-        // envelope. Preview is experimental and never changes filing state.
-        self.sync_from_inputs(cx);
-        if !self.input_errors.is_empty() {
-            let message = format!(
-                "Experimental HTML preview was not opened because {} current editor value(s) could not be parsed. No filing state was changed.",
-                self.input_errors.len()
-            );
-            self.status_message = Some(message.clone());
-            self.notify(
-                window,
-                cx,
-                gpui_component::notification::NotificationType::Error,
-                message,
+        if !self.draft.lifecycle.is_unclaimed() {
+            self.release_claim_confirm_open = true;
+            self.status_message = Some(
+                "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
             );
             cx.notify();
             return;
         }
-
-        let render_draft = self.draft.clone();
-        match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "1701-2018",
-            &render_draft.to_bir_field_map(),
-            "1701 — Print Preview",
-            cx,
-        ) {
-            Ok(launch_kind) => {
-                let message = format!(
-                    "{} Form 1701 HTML parity remains experimental. No filing state was changed.",
-                    launch_kind.status_message()
-                );
-                self.status_message = Some(message);
-                launch_kind.observe_close(cx, |this, cx| {
-                    this.status_message = None;
-                    cx.notify();
-                });
+        let queued = self.draft.clone();
+        let canceled = match self.db.lock() {
+            Ok(db) => db
+                .cancel_queued_queueable(&queued)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match canceled {
+            Ok(draft) => {
+                self.draft = draft;
+                self.status_message = None;
+                self.validation_errors = self.draft.validate();
+                cx.emit(QueueableFormEvent::Saved);
             }
             Err(error) => {
-                let message = format!(
-                    "Experimental HTML print preview could not be opened: {error}. No filing state was changed."
-                );
-                self.status_message = Some(message.clone());
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form1701Draft>(
+                        &queued.tin,
+                        queued.taxable_year,
+                        period_column(&queued.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
                 self.notify(
+                    notification::NotificationType::Warning,
+                    format!("The queued return was not canceled: {error}"),
                     window,
                     cx,
-                    gpui_component::notification::NotificationType::Error,
-                    message,
                 );
             }
         }
         cx.notify();
     }
+
+    fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                "Fix the highlighted entries first. No filing state was changed.".into(),
+            ));
+            return;
+        }
+        let fields = self.draft.to_bir_field_map();
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "1701-2018",
+            &fields,
+            "1701 — Print Preview",
+            cx,
+        ) {
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
+                "info".into(),
+                "Print preview".into(),
+                format!("{} No filing state was changed.", kind.status_message()),
+            )),
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                format!("{error}. No filing state was changed."),
+            )),
+        }
+    }
 }
 
 impl Render for Form1701View {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let status_message = self.status_message.clone();
-        let evidence_warnings = self.draft.xml_evidence_warnings();
-        let is_draft = self.draft.is_editable();
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        let is_draft = self.draft.lifecycle.is_editable();
+        let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
+        let issues: Vec<AnyElement> = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter())
+            .take(25)
+            .map(|(_, message)| {
+                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
+                    .into_any_element()
+            })
+            .collect();
 
-        let mut content = div()
-            .max_w(px(1100.0))
+        let toolbar =
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .px(pad)
+                .py_3()
+                .border_b_1()
+                .border_color(cx.theme().border)
+                .child(Button::new("1701_back").label("← Back").on_click(
+                    cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            Button::new("1701_preview")
+                                .label("Print preview")
+                                .outline()
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                                ),
+                        )
+                        .child(
+                            Button::new("1701_save")
+                                .label("Save draft")
+                                .outline()
+                                .disabled(!is_draft)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                                ),
+                        )
+                        .when(is_queued, |row| {
+                            row.child(
+                                Button::new("1701_cancel")
+                                    .label("Cancel queue")
+                                    .outline()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.revert_to_draft(window, cx)
+                                    })),
+                            )
+                        })
+                        .child(
+                            Button::new("1701_submit")
+                                .label("Queue for submission")
+                                .primary()
+                                .disabled(
+                                    !is_draft
+                                        || !self.validation_errors.is_empty()
+                                        || !self.parse_errors.is_empty(),
+                                )
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.mark_submitted(window, cx)
+                                })),
+                        ),
+                );
+
+        let mut body = div()
+            .w_full()
+            .max_w(px(1180.))
             .mx_auto()
             .flex()
             .flex_col()
-            .gap_6()
-            .child(rsx! {
-                <div
-                    p_4
-                    rounded_lg
-                    border_1
-                    border_color={cx.theme().warning}
-                    bg={cx.theme().warning.opacity(0.1)}
-                >
-                    <div font_weight={FontWeight::BOLD}>{"Evidence boundary"}</div>
-                    {...evidence_warnings
-                        .into_iter()
-                        .map(|warning| rsx! {
-                            <div mt_1 text_sm>{format!("• {warning}")}</div>
-                        })}
-                </div>
-            });
-        if let Some(message) = status_message {
-            content = content.child(rsx! {
-                <div p_3 rounded_md bg={cx.theme().muted.opacity(0.5)}>
-                    {message}
-                </div>
-            });
-        }
-        content = content
-            .child(self.render_error_summary(cx))
-            .children(self.render_editor_sections(cx));
-
-        rsx! {
-            <div flex flex_col w_full h_full bg={cx.theme().background}>
-                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
-                    {gpui_component::button::Button::new("1701_back")
-                        .label("← Back")
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            cx.emit(Form1701Event::BackToDashboard);
-                        }))}
-                    <div flex gap_3>
-                        {gpui_component::button::Button::new("1701_save")
-                            .label("Save Draft")
-                            .outline()
-                            .disabled(!is_draft)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.save_draft(window, cx);
-                            }))}
-                        {gpui_component::button::Button::new("1701_manual")
-                            .label("Manual / External Filing")
-                            .primary()
-                            .disabled(true)}
-                    </div>
-                </div>
-                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
-                    {self.render_header(cx)}
-                    <div mt_6>{self.render_status_pipeline(cx)}</div>
-                </div>
-                <div
-                    id="1701_scroll"
-                    flex_1
-                    w_full
-                    overflow_y_scroll
-                    track_scroll={&self.scroll_handle}
-                    p_8
-                >
-                    {content}
-                </div>
-            </div>
-        }
-    }
-}
-
-fn choice_group_taxpayer(view: &Form1701View, cx: &Context<Form1701View>) -> AnyElement {
-    let rates = rsx! {
-        <div flex flex_wrap gap_2>
-            {...Form1701TaxRate::ALL.into_iter().map(|value| {
-                view.render_choice(
-                    format!("1701_rate_{value:?}"),
-                    value.label(),
-                    view.draft.tax_rate == Some(value),
-                    cx,
-                    move |this| {
-                        this.draft.tax_rate = Some(value);
-                        if value == Form1701TaxRate::EightPercent {
-                            this.draft.deduction_method = None;
-                        }
-                    },
+            .gap_5()
+            .when_some(self.status_message.clone(), |col, message| {
+                col.child(
+                    div()
+                        .p_3()
+                        .rounded_md()
+                        .bg(cx.theme().muted)
+                        .text_sm()
+                        .child(message),
                 )
-            })}
-        </div>
-    };
-    let deductions = rsx! {
-        <div flex flex_wrap gap_2>
-            {...Form1701DeductionMethod::ALL.into_iter().map(|value| {
-                view.render_choice(
-                    format!("1701_deduction_{value:?}"),
-                    value.label(),
-                    view.draft.deduction_method == Some(value),
-                    cx,
-                    move |this| this.draft.deduction_method = Some(value),
+            })
+            .when(self.release_claim_confirm_open, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            Button::new("1701_release_confirm")
+                                .label("Nothing reached BIR — release")
+                                .danger()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.release_claim(window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("1701_release_cancel")
+                                .label("Keep queued")
+                                .outline()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.release_claim_confirm_open = false;
+                                    cx.notify();
+                                })),
+                        ),
                 )
-            })}
-        </div>
-    };
-    let root = rsx! {
-        <div flex flex_col gap_2>
-            {rates}
-            {deductions}
-            {boolean_choices(
-                view,
-                cx,
-                "1701_ftc",
-                "13 Foreign tax credits",
-                view.draft.claims_foreign_tax_credits,
-                |this, value| this.draft.claims_foreign_tax_credits = Some(value),
-            )}
-            <div flex flex_wrap gap_2>
-                {...Form1701CivilStatus::ALL.into_iter().map(|value| {
-                    view.render_choice(
-                        format!("1701_civil_{value:?}"),
-                        format!("16 {}", value.label()),
-                        view.draft.civil_status == Some(value),
-                        cx,
-                        move |this| this.draft.civil_status = Some(value),
-                    )
-                })}
-            </div>
-            {boolean_choices(
-                view,
-                cx,
-                "1701_spouse_income",
-                "17 Spouse has income",
-                view.draft.spouse_has_income,
-                |this, value| this.draft.spouse_has_income = Some(value),
-            )}
-            <div flex gap_2>
-                {view.render_choice(
-                    "1701_joint",
-                    "18 Joint filing",
-                    view.draft.joint_filing_status == Some(Form1701JointFilingStatus::Joint),
-                    cx,
-                    |this| this.draft.joint_filing_status = Some(Form1701JointFilingStatus::Joint),
-                )}
-                {view.render_choice(
-                    "1701_separate",
-                    "18 Separate filing",
-                    view.draft.joint_filing_status == Some(Form1701JointFilingStatus::Separate),
-                    cx,
-                    |this| {
-                        this.draft.joint_filing_status = Some(Form1701JointFilingStatus::Separate)
-                    },
-                )}
-            </div>
-            {boolean_choices(
-                view,
-                cx,
-                "1701_exempt",
-                "19 Exempt income",
-                view.draft.has_exempt_income,
-                |this, value| this.draft.has_exempt_income = Some(value),
-            )}
-            {boolean_choices(
-                view,
-                cx,
-                "1701_special",
-                "20 Special-rate income",
-                view.draft.has_special_rate_income,
-                |this, value| this.draft.has_special_rate_income = Some(value),
-            )}
-        </div>
-    };
-    root.into_any_element()
-}
+            })
+            .child(self.render_period(layout, cx))
+            .child(self.render_background(layout, cx));
+        if self.joint() {
+            body = body.child(self.render_spouse(layout, cx));
+        }
+        body = body
+            .child(self.render_part_two(layout, cx))
+            .child(self.render_employers(layout, cx))
+            .child(self.render_schedule_3(layout, cx))
+            .child(self.render_deductions(layout, cx))
+            .child(self.render_parts_vi_to_ix(layout, cx));
+        if !issues.is_empty() {
+            body = body.child(self.section("Needs review", issues, cx));
+        }
 
-fn choice_group_spouse(view: &Form1701View, cx: &Context<Form1701View>) -> AnyElement {
-    let root = rsx! {
-        <div flex flex_col gap_2>
-            <div flex flex_wrap gap_2>
-                {...Form1701TaxRate::ALL.into_iter().map(|value| {
-                    view.render_choice(
-                        format!("1701_spouse_rate_{value:?}"),
-                        value.label(),
-                        view.draft.spouse.tax_rate == Some(value),
-                        cx,
-                        move |this| {
-                            this.draft.spouse.tax_rate = Some(value);
-                            if value == Form1701TaxRate::EightPercent {
-                                this.draft.spouse.deduction_method = None;
-                            }
-                        },
-                    )
-                })}
-            </div>
-            <div flex flex_wrap gap_2>
-                {...Form1701DeductionMethod::ALL.into_iter().map(|value| {
-                    view.render_choice(
-                        format!("1701_spouse_deduction_{value:?}"),
-                        value.label(),
-                        view.draft.spouse.deduction_method == Some(value),
-                        cx,
-                        move |this| this.draft.spouse.deduction_method = Some(value),
-                    )
-                })}
-            </div>
-            {boolean_choices(
-                view,
-                cx,
-                "1701_spouse_ftc",
-                "Foreign tax credits",
-                view.draft.spouse.claims_foreign_tax_credits,
-                |this, value| this.draft.spouse.claims_foreign_tax_credits = Some(value),
-            )}
-            {boolean_choices(
-                view,
-                cx,
-                "1701_spouse_exempt",
-                "Exempt income",
-                view.draft.spouse.has_exempt_income,
-                |this, value| this.draft.spouse.has_exempt_income = Some(value),
-            )}
-            {boolean_choices(
-                view,
-                cx,
-                "1701_spouse_special",
-                "Special-rate income",
-                view.draft.spouse.has_special_rate_income,
-                |this, value| this.draft.spouse.has_special_rate_income = Some(value),
-            )}
-        </div>
-    };
-    root.into_any_element()
-}
-
-fn boolean_choices(
-    view: &Form1701View,
-    cx: &Context<Form1701View>,
-    id: &'static str,
-    label: &'static str,
-    selected: Option<bool>,
-    set: impl Fn(&mut Form1701View, bool) + Copy + 'static,
-) -> AnyElement {
-    let root = rsx! {
-        <div flex gap_2>
-            {view.render_choice(
-                format!("{id}_yes"),
-                format!("{label}: Yes"),
-                selected == Some(true),
-                cx,
-                move |this| set(this, true),
-            )}
-            {view.render_choice(
-                format!("{id}_no"),
-                format!("{label}: No"),
-                selected == Some(false),
-                cx,
-                move |this| set(this, false),
-            )}
-        </div>
-    };
-    root.into_any_element()
-}
-
-fn section_card(cx: &Context<Form1701View>, title: &str) -> Div {
-    rsx! {
-        <div
-            flex
-            flex_col
-            gap_4
-            p_5
-            bg={cx.theme().background}
-            border_1
-            border_color={cx.theme().border}
-            rounded_lg
-        >
-            <div text_xl font_weight={FontWeight::BOLD}>{title.to_string()}</div>
-        </div>
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
+            .bg(cx.theme().background)
+            .child(toolbar)
+            .child(
+                div()
+                    .px(pad)
+                    .py_4()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(self.render_header(cx))
+                    .when(layout != Layout::Phone, |d| {
+                        d.child(div().mt_4().child(self.render_status_pipeline(cx)))
+                    }),
+            )
+            .child(
+                div()
+                    .id("1701_scroll")
+                    .flex_1()
+                    .w_full()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll_handle)
+                    .p(pad)
+                    .child(body),
+            )
     }
-}
-
-fn amount_header(cx: &Context<Form1701View>) -> AnyElement {
-    let root = rsx! {
-        <div
-            grid
-            grid_cols={3}
-            gap_3
-            p_2
-            bg={cx.theme().muted.opacity(0.5)}
-            font_weight={FontWeight::BOLD}
-        >
-            {"Particulars"}
-            {"A) Taxpayer/Filer"}
-            {"B) Spouse"}
-        </div>
-    };
-    root.into_any_element()
-}
-
-fn computed_amount(value: Option<f64>, cx: &Context<Form1701View>) -> AnyElement {
-    let root = rsx! {
-        <div p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
-            {format_optional_amount(value)}
-        </div>
-    };
-    root.into_any_element()
-}
-
-fn format_optional_amount(value: Option<f64>) -> String {
-    value.map_or_else(|| "—".to_string(), |amount| format!("₱ {amount:.0}"))
-}
-
-fn computed_rows(section: Form1701AmountSection) -> &'static [(u8, &'static str)] {
-    match section {
-        Form1701AmountSection::PartIi => &[
-            (22, "Total tax due"),
-            (23, "Tax credits/payments"),
-            (24, "Tax payable/(overpayment)"),
-            (26, "Tax payable after installment"),
-            (30, "Total penalties"),
-            (31, "Total amount payable/(overpayment)"),
-        ],
-        Form1701AmountSection::Schedule2 => &[
-            (4, "Gross compensation income"),
-            (6, "Taxable compensation income"),
-            (7, "Tax due"),
-        ],
-        Form1701AmountSection::Schedule3 => &[
-            (10, "Net sales/revenues/receipts/fees"),
-            (12, "Gross income from operation"),
-            (16, "Total itemized deductions"),
-            (17, "Optional standard deduction"),
-            (18, "Net income/(loss)"),
-            (22, "Total other taxable income"),
-            (23, "Taxable business income"),
-            (24, "Aggregate taxable income"),
-            (25, "Tax due under graduated rates"),
-            (28, "Total 8% gross sales and other income"),
-            (29, "Less: P250,000 reduction"),
-            (30, "Taxable income under 8%"),
-            (31, "Tax due at 8%"),
-            (32, "Total income tax due"),
-        ],
-        Form1701AmountSection::Schedule4 => &[(18, "Total ordinary allowable itemized deductions")],
-        Form1701AmountSection::Schedule6 => &[(3, "Net operating loss carry-over")],
-        Form1701AmountSection::PartVi => &[
-            (1, "Regular income tax due"),
-            (4, "Net special-rate tax"),
-            (5, "Total income tax due"),
-        ],
-        Form1701AmountSection::PartVii => &[
-            (5, "Tax withheld on compensation"),
-            (10, "Total tax credits/payments"),
-        ],
-        Form1701AmountSection::PartViii => &[
-            (3, "Total tax due"),
-            (5, "Tax payable after foreign credits"),
-            (7, "Tax payable after prior payments"),
-            (10, "Total relief/reduction"),
-        ],
-        Form1701AmountSection::PartIx => &[
-            (5, "Total additions"),
-            (10, "Total deductions"),
-            (11, "Taxable income per return"),
-        ],
-    }
-}
-
-fn overpayment_label(value: Form1701OverpaymentDisposition) -> &'static str {
-    match value {
-        Form1701OverpaymentDisposition::None => "No disposition",
-        Form1701OverpaymentDisposition::Refund => "Refund",
-        Form1701OverpaymentDisposition::TaxCreditCertificate => "Tax Credit Certificate",
-        Form1701OverpaymentDisposition::CarryOver => "Carry over",
-    }
-}
-
-fn text_input(
-    cx: &mut Context<Form1701View>,
-    value: &str,
-    placeholder: &str,
-    window: &mut Window,
-) -> Entity<InputState> {
-    let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder.to_string()));
-    if !value.is_empty() {
-        input.update(cx, |state, cx| {
-            state.set_value(value.to_string(), window, cx)
-        });
-    }
-    input
-}
-
-fn optional_u8_input(
-    cx: &mut Context<Form1701View>,
-    value: Option<u8>,
-    placeholder: &str,
-    window: &mut Window,
-) -> Entity<InputState> {
-    text_input(
-        cx,
-        &value.map(|value| value.to_string()).unwrap_or_default(),
-        placeholder,
-        window,
-    )
-}
-
-fn optional_amount_input(
-    cx: &mut Context<Form1701View>,
-    value: Option<f64>,
-    window: &mut Window,
-) -> Entity<InputState> {
-    text_input(
-        cx,
-        &value.map(|value| format!("{value:.0}")).unwrap_or_default(),
-        "Whole pesos; blank is empty",
-        window,
-    )
-}
-
-fn employer_input(
-    cx: &mut Context<Form1701View>,
-    row: &Form1701EmployerRow,
-    window: &mut Window,
-) -> EmployerInputs {
-    EmployerInputs {
-        name: text_input(cx, &row.employer_name, "Employer name", window),
-        tin: text_input(cx, &row.employer_tin, "Employer TIN", window),
-        compensation: optional_amount_input(cx, row.compensation_income, window),
-        withheld: optional_amount_input(cx, row.tax_withheld, window),
-    }
-}
-
-fn payment_input(
-    cx: &mut Context<Form1701View>,
-    row: &Form1701PaymentRow,
-    window: &mut Window,
-) -> PaymentRowInputs {
-    PaymentRowInputs {
-        agency: text_input(cx, &row.drawee_bank_or_agency, "Drawee bank/agency", window),
-        number: text_input(cx, &row.number, "Number", window),
-        date: text_input(cx, &row.date, "MM/DD/YYYY", window),
-        amount: optional_amount_input(cx, row.amount, window),
-    }
-}
-
-fn input_text(input: &Entity<InputState>, cx: &Context<Form1701View>) -> String {
-    input.read(cx).value().to_string()
-}
-
-fn parse_optional_u8(raw: &str, max: u8) -> Result<Option<u8>, String> {
-    if raw.trim().is_empty() {
-        return Ok(None);
-    }
-    let value = raw
-        .trim()
-        .parse::<u8>()
-        .map_err(|_| format!("{raw:?} is not a whole number"))?;
-    if value > max {
-        return Err(format!("Value must be between 0 and {max}"));
-    }
-    Ok(Some(value))
-}
-
-fn parse_optional_whole_peso(raw: &str, allow_negative: bool) -> Result<Option<f64>, String> {
-    if raw.trim().is_empty() {
-        return Ok(None);
-    }
-    let value = raw
-        .trim()
-        .replace(',', "")
-        .parse::<f64>()
-        .map_err(|_| format!("{raw:?} is not a numeric amount"))?;
-    if !value.is_finite() {
-        return Err("Amount must be finite".to_string());
-    }
-    if !allow_negative && value < 0.0 {
-        return Err("This line cannot contain a negative amount".to_string());
-    }
-    if (value - value.round()).abs() >= 0.001 {
-        return Err("Form 1701 accepts whole pesos only; do not enter centavos".to_string());
-    }
-    Ok(Some(value.round()))
-}
-
-fn assign_required_month(
-    target: &mut u8,
-    input: &Entity<InputState>,
-    cx: &Context<Form1701View>,
-    errors: &mut Vec<(String, String)>,
-) {
-    let raw = input_text(input, cx);
-    match raw.trim().parse::<u8>() {
-        Ok(value) if (1..=12).contains(&value) => *target = value,
-        _ => errors.push((
-            "period_end_month".to_string(),
-            "Enter a month from 1 to 12".to_string(),
-        )),
-    }
-}
-
-fn assign_optional_u8(
-    target: &mut Option<u8>,
-    input: &Entity<InputState>,
-    field: &str,
-    max: u8,
-    cx: &Context<Form1701View>,
-    errors: &mut Vec<(String, String)>,
-) {
-    match parse_optional_u8(&input_text(input, cx), max) {
-        Ok(value) => *target = value,
-        Err(message) => errors.push((field.to_string(), message)),
-    }
-}
-
-fn assign_optional_amount(
-    target: &mut Option<f64>,
-    input: &Entity<InputState>,
-    field: &str,
-    allow_negative: bool,
-    cx: &Context<Form1701View>,
-    errors: &mut Vec<(String, String)>,
-) {
-    match parse_optional_whole_peso(&input_text(input, cx), allow_negative) {
-        Ok(value) => *target = value,
-        Err(message) => errors.push((field.to_string(), message)),
-    }
-}
-
-fn assign_amount(
-    draft: &mut Form1701Draft,
-    section: Form1701AmountSection,
-    item: u8,
-    party: Form1701Party,
-    input: &Entity<InputState>,
-    cx: &Context<Form1701View>,
-    errors: &mut Vec<(String, String)>,
-) {
-    let raw = input_text(input, cx);
-    match parse_optional_whole_peso(&raw, true) {
-        Ok(value) => draft.set_amount(section, item, party, value),
-        Err(message) => errors.push((format!("{section:?}_{item}_{party:?}"), message)),
-    }
-}
-
-fn sync_payment_row(
-    target: &mut Form1701PaymentRow,
-    inputs: &PaymentRowInputs,
-    field: &str,
-    cx: &Context<Form1701View>,
-    errors: &mut Vec<(String, String)>,
-) {
-    target.drawee_bank_or_agency = input_text(&inputs.agency, cx);
-    target.number = input_text(&inputs.number, cx);
-    target.date = input_text(&inputs.date, cx);
-    assign_optional_amount(
-        &mut target.amount,
-        &inputs.amount,
-        &format!("{field}_amount"),
-        false,
-        cx,
-        errors,
-    );
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_optional_u8, parse_optional_whole_peso};
+    use super::{Layout, dynamic_keys, format_tin, pair_key, parse_amount};
+    use bir_core::forms::form_1701::{Form1701AmountSection, Form1701Party};
+    use gpui::px;
 
     #[test]
-    fn amount_parser_preserves_blank_as_none() {
-        assert_eq!(parse_optional_whole_peso("", true), Ok(None));
+    fn layout_breakpoints() {
+        assert!(Layout::for_width(px(390.)) == Layout::Phone);
+        assert!(Layout::for_width(px(820.)) == Layout::Tablet);
+        assert!(Layout::for_width(px(1280.)) == Layout::Desktop);
     }
 
     #[test]
-    fn amount_parser_rejects_invalid_text_instead_of_zeroing_it() {
-        assert!(parse_optional_whole_peso("not-a-number", true).is_err());
-    }
-
-    #[test]
-    fn amount_parser_enforces_whole_pesos() {
-        assert!(parse_optional_whole_peso("125.50", true).is_err());
-        assert_eq!(parse_optional_whole_peso("-1250", true), Ok(Some(-1_250.0)));
-    }
-
-    #[test]
-    fn attachment_count_is_blank_or_two_digits() {
-        assert_eq!(parse_optional_u8("", 99), Ok(None));
-        assert_eq!(parse_optional_u8("12", 99), Ok(Some(12)));
-        assert!(parse_optional_u8("100", 99).is_err());
+    fn entries_parse_and_keys_are_unique() {
+        assert_eq!(parse_amount("1,234.50"), Some(1234.5));
+        assert_eq!(parse_amount(""), Some(0.0));
+        assert_eq!(parse_amount("12a"), None);
+        assert_eq!(format_tin("12345678800000"), "123-456-788-00000");
+        assert_eq!(
+            pair_key(Form1701AmountSection::Schedule3, 8, Form1701Party::Spouse),
+            "s3_8_b"
+        );
+        let keys = dynamic_keys();
+        let unique: std::collections::BTreeSet<_> = keys.iter().collect();
+        assert_eq!(unique.len(), keys.len());
     }
 }

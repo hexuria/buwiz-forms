@@ -1,5 +1,8 @@
 //! Add `mod form_<code>;` here for each form with a sample payload.
 
+mod form_0605;
+mod form_0619e;
+mod form_0619f;
 mod form_1600pt;
 mod form_1600vt;
 mod form_1600wp;
@@ -13,10 +16,14 @@ mod form_1604e;
 mod form_1604f;
 mod form_1606;
 mod form_1700;
+mod form_1701;
 mod form_1701a;
 mod form_1701ms;
+mod form_1701q;
 mod form_1702ex;
+mod form_1702mx;
 mod form_1702q;
+mod form_1702rt;
 mod form_1706;
 mod form_1707;
 mod form_1707a;
