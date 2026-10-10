@@ -187,6 +187,15 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1707-2021" => Some(include_str!(
             "../../../html-frozen/1707-2021/writer-cells.json"
         )),
+        "1707a-2021" => Some(include_str!(
+            "../../../html-frozen/1707a-2021/writer-cells.json"
+        )),
+        "1800-2018" => Some(include_str!(
+            "../../../html-frozen/1800-2018/writer-cells.json"
+        )),
+        "1801-2018" => Some(include_str!(
+            "../../../html-frozen/1801-2018/writer-cells.json"
+        )),
         "2000-dst-2018" => Some(include_str!(
             "../../../html-frozen/2000-dst-2018/writer-cells.json"
         )),
