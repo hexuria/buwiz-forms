@@ -401,6 +401,7 @@ pub enum QueueableKind {
     Form1701Q,
     Form1702RT,
     Form1701,
+    Form1702MX,
     #[cfg(test)]
     Test,
 }
@@ -415,6 +416,7 @@ impl QueueableKind {
         QueueableKind::Form1701Q,
         QueueableKind::Form1702RT,
         QueueableKind::Form1701,
+        QueueableKind::Form1702MX,
     ];
 
     fn candidates() -> impl Iterator<Item = QueueableKind> {
@@ -476,6 +478,10 @@ macro_rules! with_queueable_kind {
             }
             $crate::forms::queueable::QueueableKind::Form1701 => {
                 type $ty = $crate::forms::form_1701::Form1701Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1702MX => {
+                type $ty = $crate::forms::form_1702mx::Form1702MXDraft;
                 $body
             }
             #[cfg(test)]

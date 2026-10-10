@@ -7,12 +7,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::FormValidator;
 use super::form_1702mx::{
     Form1702MXAtcSelection, Form1702MXDeductionMethod, Form1702MXDraft, Form1702MXFilingBasis,
     Form1702MXMandatoryAttachment, Form1702MXOverpaymentDisposition, Form1702MXPartII,
     Form1702MXPaymentDetail, PercentInput, WholePeso, WholePesoInput,
 };
-use super::{FilingStatus, FormValidator};
 
 const EXACT_SOURCE_FIELD_COUNT: usize = 210;
 
@@ -815,7 +815,6 @@ impl Form1702MXDraft {
                 field(fields, &format!("frm1702MX:txtPg4Sc10Itm{}", index + 1)).to_string();
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
         let draft = Self {
             id: None,
             tin: tin_segments.concat(),
@@ -909,16 +908,9 @@ impl Form1702MXDraft {
             xml_final_flag: field(fields, "txtFinalFlag").to_string(),
             preserved_xml_fields: fields.clone(),
             calculation_issues: Vec::new(),
-            status: FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
+            relief_details: Default::default(),
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
         if errors.is_empty() {
             Ok(draft)

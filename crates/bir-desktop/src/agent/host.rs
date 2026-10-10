@@ -703,7 +703,6 @@ impl BirAgentHost {
                 | ActiveView::Form2551Q
                 | ActiveView::Form1601C
                 | ActiveView::Form2550Q
-                | ActiveView::Form1702MX
                 | ActiveView::Queueable(_)
         ) && self.selected_tin.is_none()
             && target == ActiveView::Dashboard
@@ -4149,7 +4148,6 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Form2551Q => "Form 2551Q",
         ActiveView::Form1601C => "Form 1601C",
         ActiveView::Form2550Q => "Form 2550Q",
-        ActiveView::Form1702MX => "Form 1702MX",
         ActiveView::Queueable(kind) => crate::views::queueable_forms::spec_for_kind(kind)
             .map(|spec| spec.title)
             .unwrap_or("Form"),

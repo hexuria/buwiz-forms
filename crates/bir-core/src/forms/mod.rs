@@ -13,6 +13,7 @@ pub mod form_1701_official;
 pub mod form_1701q;
 pub mod form_1701q_official;
 pub mod form_1702mx;
+pub mod form_1702mx_official;
 pub mod form_1702rt;
 pub mod form_1702rt_official;
 pub mod form_2307;
@@ -323,7 +324,7 @@ impl FormDraft {
             Self::Form0619F(f) => &f.lifecycle.status,
             Self::Form1701(f) => &f.lifecycle.status,
             Self::Form1701Q(f) => &f.lifecycle.status,
-            Self::Form1702MX(f) => &f.status,
+            Self::Form1702MX(f) => &f.lifecycle.status,
             Self::Form1702RT(f) => &f.lifecycle.status,
             Self::Form2550Q(f) => &f.status,
         }
