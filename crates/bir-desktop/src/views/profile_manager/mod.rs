@@ -651,8 +651,7 @@ impl ProfileManagerView {
         let forms_editor_new_code_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Custom form code"));
         let forms_editor_registry_form_select = cx.new(|cx| {
-            let mut options: Vec<String> = bir_core::forms::registry::FORM_REGISTRY
-                .iter()
+            let mut options: Vec<String> = bir_core::forms::registry::picker_forms()
                 .map(|form| format!("{} - {}", form.code, form.title))
                 .collect();
             options.sort();
