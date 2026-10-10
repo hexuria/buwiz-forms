@@ -583,7 +583,17 @@ fn parse_optional_money(
     key: &str,
     errors: &mut Vec<(String, String)>,
 ) -> f64 {
-    let value = parse_optional::<f64>(fields, key, errors);
+    // Official amounts carry thousands separators: `1,234.50`.
+    let Some(value) = crate::official_xml::parse_official_amount(field(fields, key)) else {
+        errors.push((
+            key.to_string(),
+            format!(
+                "1601-C field {key} has invalid value {:?}",
+                field(fields, key)
+            ),
+        ));
+        return 0.0;
+    };
     if !value.is_finite() {
         errors.push((
             key.to_string(),
@@ -705,8 +715,9 @@ fn insert_bool_1_2(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
     );
 }
 
+/// Official money text: `1,234.50` (see [`crate::official_xml::official_amount`]).
 fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
-    insert(map, key, format!("{:.2}", value));
+    insert(map, key, crate::official_xml::official_amount(value));
 }
 
 #[cfg(test)]
@@ -786,15 +797,16 @@ mod tests {
 
         let field_map = draft.to_bir_field_map();
 
-        assert_eq!(field_map["frm1601c:txtTax14"], "100000.00");
-        assert_eq!(field_map["frm1601c:txtTax17"], "20000.00");
-        assert_eq!(field_map["frm1601c:txtTax21"], "20000.00"); // 15 to 20 = 20k
-        assert_eq!(field_map["frm1601c:txtTax22"], "80000.00"); // 14 - 21 = 80k
-        assert_eq!(field_map["frm1601c:txtTax27"], "15000.00"); // Taxes withheld
-        assert_eq!(field_map["frm1601c:txtTax36"], "15000.00"); // Total payable
+        // Official amounts carry thousands separators (formatCurrency/round).
+        assert_eq!(field_map["frm1601c:txtTax14"], "100,000.00");
+        assert_eq!(field_map["frm1601c:txtTax17"], "20,000.00");
+        assert_eq!(field_map["frm1601c:txtTax21"], "20,000.00"); // 15 to 20 = 20k
+        assert_eq!(field_map["frm1601c:txtTax22"], "80,000.00"); // 14 - 21 = 80k
+        assert_eq!(field_map["frm1601c:txtTax27"], "15,000.00"); // Taxes withheld
+        assert_eq!(field_map["frm1601c:txtTax36"], "15,000.00"); // Total payable
 
         let xml = draft.to_bir_xml_payload();
-        assert!(xml.contains("<div>frm1601c:txtTax22=80000.00frm1601c:txtTax22=</div>"));
+        assert!(xml.contains("<div>frm1601c:txtTax22=80,000.00frm1601c:txtTax22=</div>"));
     }
 
     fn valid_schedule_row(index: usize) -> Form1601CSchedule1Row {

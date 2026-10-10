@@ -35,18 +35,18 @@
 		<div>frm2551Qv2018:txtTaxReliefSpecify=0frm2551Qv2018:txtTaxReliefSpecify=</div>
 		<div>frm2551Qv2018:taxRate1=truefrm2551Qv2018:taxRate1=</div>
 		<div>frm2551Qv2018:taxRate2=falsefrm2551Qv2018:taxRate2=</div>
-		<div>frm2551Qv2018:txt14=5400.00frm2551Qv2018:txt14=</div>
+		<div>frm2551Qv2018:txt14=5,400.00frm2551Qv2018:txt14=</div>
 		<div>frm2551Qv2018:txt15=500.00frm2551Qv2018:txt15=</div>
 		<div>frm2551Qv2018:txt16=0.00frm2551Qv2018:txt16=</div>
 		<div>frm2551Qv2018:txt17Specify=frm2551Qv2018:txt17Specify=</div>
 		<div>frm2551Qv2018:txt17=0.00frm2551Qv2018:txt17=</div>
 		<div>frm2551Qv2018:txt18=500.00frm2551Qv2018:txt18=</div>
-		<div>frm2551Qv2018:txt19=4900.00frm2551Qv2018:txt19=</div>
+		<div>frm2551Qv2018:txt19=4,900.00frm2551Qv2018:txt19=</div>
 		<div>frm2551Qv2018:txt20=0.00frm2551Qv2018:txt20=</div>
 		<div>frm2551Qv2018:txt21=0.00frm2551Qv2018:txt21=</div>
 		<div>frm2551Qv2018:txt22=0.00frm2551Qv2018:txt22=</div>
 		<div>frm2551Qv2018:txt23=0.00frm2551Qv2018:txt23=</div>
-		<div>frm2551Qv2018:txt24=4900.00frm2551Qv2018:txt24=</div>
+		<div>frm2551Qv2018:txt24=4,900.00frm2551Qv2018:txt24=</div>
 		<div>frm2551Qv2018:overPayment1=falsefrm2551Qv2018:overPayment1=</div>
 		<div>frm2551Qv2018:overPayment2=falsefrm2551Qv2018:overPayment2=</div>
 		<div>txtTaxAgentNo=txtTaxAgentNo=</div>
@@ -75,9 +75,9 @@
 		<div>frm2551Qv2018:txtPg2BranchCode=00000frm2551Qv2018:txtPg2BranchCode=</div>
 		<div>frm2551Qv2018:txtPg2TaxpayerName=SAMPLE DUMMY TAXPAYERfrm2551Qv2018:txtPg2TaxpayerName=</div>
 		<div>drpATC1=1drpATC1=</div>
-		<div>txtATCAmt1=180000.00txtATCAmt1=</div>
+		<div>txtATCAmt1=180,000.00txtATCAmt1=</div>
 		<div>txtATCRate1=3.0txtATCRate1=</div>
-		<div>txtATCDue1=5400.00txtATCDue1=</div>
+		<div>txtATCDue1=5,400.00txtATCDue1=</div>
 		<div>drpATC2=0drpATC2=</div>
 		<div>txtATCAmt2=0.00txtATCAmt2=</div>
 		<div>txtATCRate2=0.00txtATCRate2=</div>
@@ -98,7 +98,7 @@
 		<div>txtATCAmt6=0.00txtATCAmt6=</div>
 		<div>txtATCRate6=0.00txtATCRate6=</div>
 		<div>txtATCDue6=0.00txtATCDue6=</div>
-		<div>txtTotalSched1=5400.00txtTotalSched1=</div>
+		<div>txtTotalSched1=5,400.00txtTotalSched1=</div>
 		<div>frm2551Qv2018:txtCurrentPage=1frm2551Qv2018:txtCurrentPage=</div>
 		<div>frm2551Qv2018:txtMaxPage=2frm2551Qv2018:txtMaxPage=</div>
 		<div>txtFinalFlag=1txtFinalFlag=</div>

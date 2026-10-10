@@ -4,10 +4,13 @@
 //! taxpayer: the plaintext BIR pseudo-XML and the encrypted IAF file that is
 //! uploaded (`dump_xml <file>` decrypts it back). No real taxpayer data.
 //!
-//! `<stem>.official.xml` is what the official eBIRForms `saveXMLsubmit()`
-//! writes for the same values, produced by `tools/official-xml/oracle.js`
-//! (the official HTA loop run in jsdom). Our plaintext must equal it byte for
-//! byte; regenerating our samples never changes it.
+//! `<stem>.official.xml` is what the official eBIRForms page submits when a
+//! filer enters `<stem>.steps.json`: `tools/official-xml/runtime.js` runs the
+//! official HTA with its own scripts, so the official handlers compute and
+//! format every derived amount, then its `saveXMLsubmit()` loop writes the
+//! plaintext. Our plaintext must equal it byte for byte, which checks our
+//! calculations, value formatting and serialization together. Regenerating our
+//! samples never changes it.
 //!
 //! Regenerate after an intentional serializer change with
 //! `UPDATE_SAMPLE_PAYLOADS=1 cargo test -p bir-core --test sample_payloads_test`.
@@ -27,11 +30,11 @@ use std::path::PathBuf;
 const OFFICIAL_ENCRYPT_EXE_SHA256: [(&str, &str); 2] = [
     (
         "1601C-062025",
-        "ca2ad1dc15cb59eab57a140f7a32763f380ffe7509d8e9f9b5095d1e7ce12052",
+        "74731b2485fc21e3ced644988515019ed271a4f7e7b0ac5e9b07a5c82011f16d",
     ),
     (
         "2551Q-122025Q1",
-        "34e727bd8b9e08bc5cbc3f43338c9ce2ff80eb802740e3ff5df78652ccf3cbef",
+        "fa902b122f7a6dafca86314914279491aeceea8a46c23815178dd7403e820bb9",
     ),
 ];
 
