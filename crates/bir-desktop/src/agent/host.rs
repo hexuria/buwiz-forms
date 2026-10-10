@@ -29,7 +29,9 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::agent::ProfileEditor;
-use crate::agent::assist::{self, AssistState, BoxSource};
+use crate::agent::assist::{
+    self, AssistState, BoxSource, parse_category_of_agent, parse_withheld_flag,
+};
 use crate::agent::html_demo::{self, DueRow, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
@@ -2323,6 +2325,7 @@ impl BirAgentHost {
                 "claimed": claimed,
                 "id": form.draft.id,
                 "fields": form_1601c_fields(&form.draft),
+                "boxes": fillable_boxes(assist::fillable_values_1601c(&form.draft), &form.assist),
             })));
         }
         if let Some(form) = &self.form_2551q
@@ -2336,61 +2339,106 @@ impl BirAgentHost {
                 "claimed": claimed,
                 "id": form.draft.id,
                 "fields": form_2551q_fields(&form.draft),
+                "boxes": fillable_boxes(assist::fillable_values_2551q(&form.draft), &form.assist),
             })));
         }
         Err("open form 1601C or 2551Q first".into())
     }
 
+    /// `form.fill`: write boxes by key with a source. A box the user typed
+    /// is never overwritten (`kept_user_boxes`). All-or-nothing on errors.
     fn form_fill(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.gate_locked()?;
         self.reconcile_open_forms_from_db();
         let fields = collect_fill_fields(args)?;
+        let source = BoxSource::parse_fill(args.get("source").and_then(Value::as_str))?;
         if self.active_view == ActiveView::Form1601C {
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            for key in fields.keys() {
-                if !is_1601c_fillable(key) {
-                    return Err(format!("unknown or read-only 1601C field `{key}`"));
+            let keyed = fields
+                .iter()
+                .map(|(key, value)| {
+                    assist::canonical_1601c_key(key)
+                        .map(|canonical| (canonical, value))
+                        .ok_or_else(|| format!("unknown or read-only 1601C field `{key}`"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut draft = form.draft.clone();
+            let (mut filled, mut kept) = (Vec::new(), Vec::new());
+            for (key, value) in keyed {
+                if form.assist.is_user_box(&key) {
+                    kept.push(key);
+                    continue;
                 }
+                assist::apply_1601c(&mut draft, &key, value)?;
+                filled.push(key);
             }
-            let applied: Vec<String> = fields.keys().cloned().collect();
-            for (key, value) in &fields {
-                apply_1601c_fill(&mut form.draft, key, value)?;
-                if let Some(key) = assist::canonical_1601c_key(key) {
-                    form.assist.note_agent_fill(&key, BoxSource::Ai);
-                }
+            draft.compute();
+            form.draft = draft;
+            for key in &filled {
+                form.assist.note_agent_fill(key, source);
             }
-            form.draft.compute();
-            form.validated = false;
-            return Ok(DispatchResult::json(json!({
-                "form": "1601C",
-                "applied": applied,
-            })));
+            if !filled.is_empty() {
+                form.validated = false;
+            }
+            return Ok(fill_result("1601C", source, filled, kept));
         }
         if self.active_view == ActiveView::Form2551Q {
             let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            for key in fields.keys() {
-                if !is_2551q_fillable(key) {
-                    return Err(format!("unknown or read-only 2551Q field `{key}`"));
+            let keyed = fields
+                .iter()
+                .map(|(key, value)| {
+                    assist::canonical_2551q_key(key)
+                        .map(|canonical| (canonical, value))
+                        .ok_or_else(|| format!("unknown or read-only 2551Q field `{key}`"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut draft = form.draft.clone();
+            let (mut filled, mut kept) = (Vec::new(), Vec::new());
+            for (key, value) in keyed {
+                if form.assist.is_user_box(&key) {
+                    kept.push(key);
+                    continue;
                 }
+                assist::apply_2551q(&mut draft, &key, value)?;
+                filled.push(key);
             }
-            let applied: Vec<String> = fields.keys().cloned().collect();
-            for (key, value) in &fields {
-                apply_2551q_fill(&mut form.draft, key, value)?;
-                if let Some(key) = assist::canonical_2551q_key(key) {
-                    form.assist.note_agent_fill(&key, BoxSource::Ai);
-                }
+            draft.recompute(None);
+            form.draft = draft;
+            for key in &filled {
+                form.assist.note_agent_fill(key, source);
             }
-            form.draft.recompute(None);
-            form.validated = false;
+            if !filled.is_empty() {
+                form.validated = false;
+            }
+            return Ok(fill_result("2551Q", source, filled, kept));
+        }
+        Err("open form 1601C or 2551Q first".into())
+    }
+
+    /// `form.needs_you`: required boxes (rules/forms/<form>/fields.json) that
+    /// are still empty.
+    fn form_needs_you(&mut self) -> Result<DispatchResult, String> {
+        self.reconcile_open_forms_from_db();
+        if let Some(form) = &self.form_1601c
+            && self.active_view == ActiveView::Form1601C
+        {
+            return Ok(DispatchResult::json(json!({
+                "form": "1601C",
+                "boxes": assist::needs_you_1601c(&form.draft),
+            })));
+        }
+        if let Some(form) = &self.form_2551q
+            && self.active_view == ActiveView::Form2551Q
+        {
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
-                "applied": applied,
+                "boxes": assist::needs_you_2551q(&form.draft),
             })));
         }
         Err("open form 1601C or 2551Q first".into())
@@ -2979,6 +3027,7 @@ impl BirAgentHost {
             "dashboard.filter" => self.dashboard_filter(args),
             "form.fields" => self.form_fields(),
             "form.fill" => self.form_fill(args),
+            "form.needs_you" => self.form_needs_you(),
             "form.pdf" | "form.preview_pdf" => self.form_pdf(),
             "form.print" => self.form_print(args),
             "form.revert_draft" | "draft.revert" => self.form_revert_draft(args),
@@ -3988,89 +4037,30 @@ fn field_desc(
     })
 }
 
-fn is_1601c_fillable(key: &str) -> bool {
-    matches!(
-        key,
-        "tax_14"
-            | "tax_25"
-            | "sheets"
-            | "any_taxes_withheld"
-            | "category_of_agent"
-            | ids::FORM_1601C_TAX_14
-            | ids::FORM_1601C_TAX_25
-            | ids::FORM_1601C_SHEETS
-            | ids::FORM_1601C_WITHHELD
-            | "form-1601c-withheld"
-            | ids::FORM_1601C_CATEGORY
-            | "form-1601c-category"
-    )
+fn fill_result(
+    form: &str,
+    source: BoxSource,
+    filled: Vec<String>,
+    kept_user_boxes: Vec<String>,
+) -> DispatchResult {
+    DispatchResult::json(json!({
+        "form": form,
+        "source": source.as_str(),
+        "applied": filled,
+        "filled": filled,
+        "kept_user_boxes": kept_user_boxes,
+    }))
 }
 
-fn apply_1601c_fill(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Result<(), String> {
-    match key {
-        "any_taxes_withheld" | ids::FORM_1601C_WITHHELD | "form-1601c-withheld" => {
-            draft.any_taxes_withheld = parse_withheld_flag(value)?;
-            return Ok(());
-        }
-        "category_of_agent" | ids::FORM_1601C_CATEGORY | "form-1601c-category" => {
-            draft.category_of_agent = parse_category_of_agent(value)?;
-            return Ok(());
-        }
-        _ => {}
-    }
-    let text = value_as_text(value)?;
-    match key {
-        "tax_14" | ids::FORM_1601C_TAX_14 => {
-            draft.tax_14_total_compensation = parse_money(&text)?;
-        }
-        "tax_25" | ids::FORM_1601C_TAX_25 => {
-            draft.tax_25_total_taxes_withheld = parse_money(&text)?;
-        }
-        "sheets" | ids::FORM_1601C_SHEETS => {
-            draft.number_of_sheets = text
-                .trim()
-                .parse()
-                .map_err(|_| format!("invalid sheets `{text}`"))?;
-        }
-        _ => return Err(format!("unknown 1601C field `{key}`")),
-    }
-    Ok(())
-}
-
-fn is_2551q_fillable(key: &str) -> bool {
-    matches!(
-        key,
-        "creditable_tax_withheld"
-            | "other_tax_credit"
-            | "taxable_amount"
-            | "schedule_1.0.taxable_amount"
-            | ids::FORM_2551Q_CREDITABLE
-            | ids::FORM_2551Q_OTHER_CREDIT
-            | ids::FORM_2551Q_TAXABLE_0
-    )
-}
-
-fn apply_2551q_fill(draft: &mut Form2551QDraft, key: &str, value: &Value) -> Result<(), String> {
-    let text = value_as_text(value)?;
-    match key {
-        "creditable_tax_withheld" | ids::FORM_2551Q_CREDITABLE => {
-            draft.creditable_tax_withheld = parse_money(&text)?;
-        }
-        "other_tax_credit" | ids::FORM_2551Q_OTHER_CREDIT => {
-            draft.other_tax_credit = parse_money(&text)?;
-        }
-        "taxable_amount" | "schedule_1.0.taxable_amount" | ids::FORM_2551Q_TAXABLE_0 => {
-            let amount = parse_money(&text)?;
-            if let Some(row) = draft.schedule_1.first_mut() {
-                row.taxable_amount = amount;
-                row.recompute();
-            } else {
-                return Err("2551Q schedule 1 has no rows".into());
-            }
-        }
-        _ => return Err(format!("unknown 2551Q field `{key}`")),
-    }
-    Ok(())
+/// Every fillable box with its value and source, for `form.fields`.
+fn fillable_boxes(values: BTreeMap<String, Value>, assist: &AssistState) -> Vec<Value> {
+    values
+        .into_iter()
+        .map(|(key, value)| {
+            let source = assist.sources.get(&key).map(|source| source.as_str());
+            json!({ "key": key, "value": value, "source": source })
+        })
+        .collect()
 }
 
 fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, String> {
@@ -4101,71 +4091,6 @@ fn withheld_snapshot_value(withheld: bool) -> String {
 
 fn category_snapshot_value(category: &str) -> String {
     category.to_string()
-}
-
-fn parse_withheld_flag(value: &Value) -> Result<bool, String> {
-    match value {
-        Value::Bool(flag) => Ok(*flag),
-        Value::Number(number) => match number.as_i64() {
-            Some(1) => Ok(true),
-            Some(0) => Ok(false),
-            _ => Err(
-                "any_taxes_withheld must be boolean true/false or Yes/No, not a non-0/1 number"
-                    .into(),
-            ),
-        },
-        Value::String(text) => parse_withheld_text(text),
-        _ => Err("any_taxes_withheld must be boolean true/false or Yes/No".into()),
-    }
-}
-
-fn parse_withheld_text(text: &str) -> Result<bool, String> {
-    match text.trim().to_ascii_lowercase().as_str() {
-        "true" | "yes" | "1" => Ok(true),
-        "false" | "no" | "0" => Ok(false),
-        other => Err(format!(
-            "any_taxes_withheld must be boolean true/false or Yes/No, not `{other}`"
-        )),
-    }
-}
-
-fn parse_category_of_agent(value: &Value) -> Result<String, String> {
-    match value {
-        Value::Bool(true) => Ok("P".into()),
-        Value::Bool(false) => Ok("G".into()),
-        Value::Number(number) => match number.as_i64() {
-            Some(1) => Ok("P".into()),
-            Some(0) => Ok("G".into()),
-            _ => Err(
-                "category_of_agent must be P or G (private/government); boolean true/false maps to P/G, not a non-0/1 number"
-                    .into(),
-            ),
-        },
-        Value::String(text) => parse_category_of_agent_text(text),
-        _ => Err(
-            "category_of_agent must be P or G (private/government), or boolean true/false for P/G"
-                .into(),
-        ),
-    }
-}
-
-fn parse_category_of_agent_text(text: &str) -> Result<String, String> {
-    match text.trim().to_ascii_lowercase().as_str() {
-        "p" | "private" | "true" | "yes" | "1" => Ok("P".into()),
-        "g" | "government" | "false" | "no" | "0" => Ok("G".into()),
-        other => Err(format!(
-            "category_of_agent must be P or G (private/government), not `{other}`"
-        )),
-    }
-}
-
-fn value_as_text(value: &Value) -> Result<String, String> {
-    match value {
-        Value::String(text) => Ok(text.clone()),
-        Value::Number(number) => Ok(number.to_string()),
-        Value::Bool(flag) => Ok(flag.to_string()),
-        _ => Err("field values must be strings or numbers".into()),
-    }
 }
 
 fn editor_from_profile(profile: &TaxpayerProfile) -> ProfileEditor {
@@ -7973,5 +7898,283 @@ mod tests {
             json!({ "code": "1601C", "year": year, "period": 12 }),
         );
         assert!(other.ok, "{:?}", other.error);
+    }
+
+    #[test]
+    fn fill_records_source_and_never_overwrites_user_box() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4, "tin": FILE_TAX_TIN }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        // Exactly the bir-mcp shape: {fields, source}; `source` is not a box.
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "schedule_1.0.taxable_amount": "120,000.00",
+                    "creditable_tax_withheld": 300,
+                    "other_tax_credit_description": "Advance payment",
+                    "schedule_1.1.atc": "PT010",
+                },
+                "source": "document",
+            }),
+        );
+        assert!(!filled.ok, "a duplicate ATC fails the whole fill");
+        assert_eq!(
+            host.form_2551q_creditable(),
+            Some(0.0),
+            "nothing applied on error"
+        );
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "schedule_1.0.taxable_amount": "120,000.00",
+                    "creditable_tax_withheld": 300,
+                    "other_tax_credit_description": "Advance payment",
+                },
+                "source": "document",
+            }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let body = filled.result.unwrap();
+        let mut keys: Vec<&str> = body["filled"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| key.as_str().unwrap())
+            .collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                "creditable_tax_withheld",
+                "other_tax_credit_description",
+                "schedule_1.0.taxable_amount",
+            ]
+        );
+        assert_eq!(body["kept_user_boxes"], json!([]));
+        let draft = host.form_2551q_draft().unwrap();
+        assert_eq!(draft.schedule_1[0].taxable_amount, 120_000.0);
+        assert_eq!(draft.creditable_tax_withheld, 300.0);
+        assert_eq!(draft.other_tax_credit_description, "Advance payment");
+        assert!(draft.total_tax_due > 0.0, "fill recomputes");
+        let assist = host.form_2551q_assist().unwrap();
+        assert_eq!(
+            assist.sources.get("schedule_1.0.taxable_amount"),
+            Some(&BoxSource::Document)
+        );
+
+        // Computed, profile-owned and election boxes are not fillable; nor
+        // is a made-up source.
+        for (fields, source) in [
+            (json!({ "total_tax_due": 1 }), "ai"),
+            (json!({ "taxpayer_name": "Someone Else" }), "ai"),
+            (json!({ "item_13_election": "eight_percent" }), "ai"),
+            (json!({ "other_tax_credit": 1 }), "user"),
+            (json!({ "other_tax_credit": 1 }), "guess"),
+        ] {
+            let refused = call(
+                &mut host,
+                "form.fill",
+                json!({ "fields": fields, "source": source }),
+            );
+            assert!(!refused.ok, "{fields} / {source} must be refused");
+        }
+
+        // The user types a box; the agent's next fill skips it.
+        let typed = handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::FORM_2551Q_CREDITABLE.into(),
+                value: "450.00".into(),
+            }),
+            None,
+            None,
+        );
+        assert!(typed.ok, "{:?}", typed.error);
+        let again = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": { "creditable_tax_withheld": "999", "other_tax_credit": "10" },
+                "source": "past_return",
+            }),
+        );
+        assert!(again.ok, "{:?}", again.error);
+        let body = again.result.unwrap();
+        assert_eq!(body["filled"], json!(["other_tax_credit"]));
+        assert_eq!(body["kept_user_boxes"], json!(["creditable_tax_withheld"]));
+        assert_eq!(host.form_2551q_creditable(), Some(450.0));
+        let assist = host.form_2551q_assist().unwrap();
+        assert_eq!(
+            assist.sources.get("creditable_tax_withheld"),
+            Some(&BoxSource::User)
+        );
+        assert_eq!(
+            assist.sources.get("other_tax_credit"),
+            Some(&BoxSource::PastReturn)
+        );
+
+        // form.fields reports every fillable box with its source.
+        let fields = call(&mut host, "form.fields", json!({}));
+        assert!(fields.ok, "{:?}", fields.error);
+        let boxes = fields.result.unwrap()["boxes"].clone();
+        assert!(
+            boxes.as_array().unwrap().iter().any(|item| {
+                item["key"] == "creditable_tax_withheld" && item["source"] == "user"
+            })
+        );
+
+        // 1601C: schedule rows by `schedule_1.<i>.<field>`, default source ai.
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12, "tin": FILE_TAX_TIN }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "tax_14_total_compensation": "50000",
+                    "tax_16_holiday_pay": "1,000.50",
+                    "schedule_1.0.previous_month": "11/2025",
+                    "schedule_1.0.tax_paid": "100",
+                    "schedule_1.0.should_be_tax_due": "150",
+                    "category_of_agent": "private",
+                    "tax_relief": true,
+                    "tax_relief_specification": "Special Rate",
+                },
+            }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let draft = host.form_1601c_draft().unwrap();
+        assert_eq!(draft.tax_14_total_compensation, 50_000.0);
+        assert_eq!(draft.tax_16_holiday_pay, 1000.5);
+        assert_eq!(draft.schedule_1.len(), 1);
+        assert_eq!(draft.schedule_1[0].adjustment, 50.0);
+        assert_eq!(draft.tax_26_adjustment, 50.0, "fill recomputes");
+        assert_eq!(draft.tax_relief_specification, "1");
+        assert_eq!(
+            host.form_1601c_assist()
+                .unwrap()
+                .sources
+                .get("schedule_1.0.tax_paid"),
+            Some(&BoxSource::Ai)
+        );
+        let gap = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "schedule_1.5.tax_paid": "1" } }),
+        );
+        assert!(!gap.ok, "rows are added one at a time");
+    }
+
+    #[test]
+    fn needs_you_lists_required_empty_boxes() {
+        // The profile has no telephone number on file.
+        let mut host = file_tax_host(|profile| profile.phone = String::new());
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let fields_of = |host: &mut BirAgentHost| -> Vec<String> {
+            let needs = call(host, "form.needs_you", json!({}));
+            assert!(needs.ok, "{:?}", needs.error);
+            let body = needs.result.unwrap();
+            body["boxes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| {
+                    assert!(!item["label"].as_str().unwrap().is_empty());
+                    item["field"].as_str().unwrap().to_string()
+                })
+                .collect()
+        };
+        let needs = call(&mut host, "form.needs_you", json!({}));
+        assert_eq!(needs.result.as_ref().unwrap()["form"], "2551Q");
+        let boxes = fields_of(&mut host);
+        assert!(boxes.contains(&"contact_number".to_string()), "{boxes:?}");
+        // Never inferred: Item 13 waits for the user.
+        assert!(boxes.contains(&"item_13_election".to_string()), "{boxes:?}");
+        // Filled from the profile: not listed.
+        assert!(!boxes.contains(&"taxpayer_name".to_string()), "{boxes:?}");
+        assert!(!boxes.contains(&"tax_relief_specification".to_string()));
+
+        // A conditional box appears only once its condition holds.
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_relief": true }, "source": "ai" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        assert!(fields_of(&mut host).contains(&"tax_relief_specification".to_string()));
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_relief_specification": "2" }, "source": "document" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        assert!(!fields_of(&mut host).contains(&"tax_relief_specification".to_string()));
+
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        // Taxes withheld = Yes: Items 14 and 25 must be greater than zero.
+        let boxes = fields_of(&mut host);
+        for field in [
+            "tax_14_total_compensation",
+            "tax_25_total_taxes_withheld",
+            "contact_number",
+        ] {
+            assert!(boxes.contains(&field.to_string()), "{field}: {boxes:?}");
+        }
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "tax_14_total_compensation": "50000",
+                    "schedule_1.0.tax_paid": "100",
+                },
+                "source": "past_return",
+            }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let boxes = fields_of(&mut host);
+        assert!(!boxes.contains(&"tax_14_total_compensation".to_string()));
+        assert!(boxes.contains(&"tax_25_total_taxes_withheld".to_string()));
+        // A Schedule I row that exists needs its month, date, bank, number.
+        assert!(
+            boxes.contains(&"schedule_1.0.previous_month".to_string()),
+            "{boxes:?}"
+        );
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "any_taxes_withheld": false }, "source": "ai" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        assert!(!fields_of(&mut host).contains(&"tax_25_total_taxes_withheld".to_string()));
     }
 }

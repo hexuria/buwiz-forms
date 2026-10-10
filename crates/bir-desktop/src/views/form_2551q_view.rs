@@ -2993,6 +2993,19 @@ impl Render for Form2551QView {
 
         let status_pipeline = <Self as FormViewTrait>::render_status_pipeline(self, cx);
 
+        let assist_panel = self
+            .draft
+            .is_editable()
+            .then(|| {
+                crate::components::assist_panel::assist_panel(
+                    "form-2551q-assist",
+                    &self.assist.agent_filled(),
+                    &assist::needs_you_2551q(&self.draft),
+                    cx,
+                )
+            })
+            .flatten()
+            .unwrap_or_else(|| div().into_any_element());
         let status_banner = rsx! {
             <div
                 flex
@@ -3311,6 +3324,7 @@ impl Render for Form2551QView {
                     }}
                 </div>
                 {status_banner}
+                {assist_panel}
                 <div flex_1 min_h_0 overflow_hidden>
                     {div()
                         .id("form-2551q-scroll")

@@ -1404,6 +1404,18 @@ impl Render for Form1601CView {
         } else {
             div().into_any_element()
         };
+        let assist_panel = self
+            .draft
+            .is_editable()
+            .then(|| {
+                crate::components::assist_panel::assist_panel(
+                    "form-1601c-assist",
+                    &self.assist.agent_filled(),
+                    &assist::needs_you_1601c(&self.draft),
+                    cx,
+                )
+            })
+            .flatten();
         let dismiss_actions = if self.dismiss_confirm_open {
             div()
                 .flex()
@@ -1498,6 +1510,7 @@ impl Render for Form1601CView {
                     </div>
                 </div>
             })
+            .when_some(assist_panel, |view, panel| view.child(panel))
             .child(rsx! {
                 <div p_6 border_b_1
                     border_color={cx.theme().border}

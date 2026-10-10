@@ -445,6 +445,24 @@ fn coerce(kind: Kind, key: &str, value: &Value) -> Result<Value, String> {
     })
 }
 
+/// Item 12A (2551Q) / 13A (1601C) is a select: store the official option
+/// code (labels such as "Special Rate" are accepted), or clear it.
+fn tax_relief_code(value: &Value, allow_both: bool) -> Result<Value, String> {
+    let text = value_text(value);
+    if text.trim().is_empty() {
+        return Ok(Value::String(String::new()));
+    }
+    bir_core::validation::official_tax_relief_code(&text, allow_both)
+        .map(Value::String)
+        .ok_or_else(|| {
+            if allow_both {
+                "tax_relief_specification must be 1 (Special Rate), 2 (International Tax Treaty) or 3 (Both)".into()
+            } else {
+                "tax_relief_specification must be 1 (Special Rate) or 2 (International Tax Treaty)".into()
+            }
+        })
+}
+
 fn set_top_level<T: Serialize + DeserializeOwned>(
     draft: &mut T,
     key: &str,
@@ -467,7 +485,12 @@ pub fn apply_2551q(draft: &mut Form2551QDraft, key: &str, value: &Value) -> Resu
         .find(|(name, _)| *name == key)
         .map(|(_, kind)| *kind)
         .ok_or_else(|| format!("unknown or read-only 2551Q field `{key}`"))?;
-    set_top_level(draft, key, coerce(kind, key, value)?)?;
+    let value = if key == "tax_relief_specification" {
+        tax_relief_code(value, false)?
+    } else {
+        coerce(kind, key, value)?
+    };
+    set_top_level(draft, key, value)?;
     if key == "tax_period_basis"
         && matches!(
             draft.tax_period_basis,
@@ -558,7 +581,12 @@ pub fn apply_1601c(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Resu
         .find(|(name, _)| *name == key)
         .map(|(_, kind)| *kind)
         .ok_or_else(|| format!("unknown or read-only 1601C field `{key}`"))?;
-    set_top_level(draft, key, coerce(kind, key, value)?)
+    let value = if key == "tax_relief_specification" {
+        tax_relief_code(value, true)?
+    } else {
+        coerce(kind, key, value)?
+    };
+    set_top_level(draft, key, value)
 }
 
 // ---------------------------------------------------------------- needs you
