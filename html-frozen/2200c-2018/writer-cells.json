@@ -22,12 +22,6 @@
    "reason": "last comb under the item 1 Date caption"
   },
   {
-   "writer_key": "frm2200C:txtPg1I3ATC",
-   "html_id": "p1c12",
-   "printed": "3 ATC",
-   "reason": "caption above the 5-slot comb"
-  },
-  {
    "writer_key": "frm2200C:txtPg1I4NoSheets",
    "html_id": "p1c13",
    "printed": "4 No. of Sheet/s Attached",
@@ -697,6 +691,10 @@
   {
    "html_id": "p2c124",
    "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
+  },
+  {
+   "html_id": "p1c12",
+   "reason": "frm2200C:txtPg1I3ATC: no fillable input name= for this cell (mixed/label/stamped)"
   }
  ]
 }
