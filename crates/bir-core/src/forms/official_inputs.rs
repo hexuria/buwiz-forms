@@ -232,10 +232,12 @@ pub fn extend_layout(
                 Entry::Value {
                     parts,
                     default,
+                    number,
                     after,
                     ..
                 } => Entry::Value {
                     key: new_key.clone(),
+                    number,
                     parts: parts
                         .into_iter()
                         .map(|part| match part {
