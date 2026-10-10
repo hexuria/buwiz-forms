@@ -70,6 +70,36 @@ function fileSystemObject() {
   };
 }
 
+// Microsoft.XMLDOM over the package files (js/tax-rate-helper.js loads
+// xml/taxRate.xml this way). That file starts with a comment *before* its
+// XML declaration; we parse it as BIR clearly intends (the declaration is
+// dropped), so the official rates load. Whether IE's MSXML tolerates the
+// misplaced declaration can't be checked here; if it doesn't, the official
+// page keeps its "0%" defaults.
+function xmlDom(window) {
+  const doc = {
+    async: true,
+    parseError: { errorCode: 0, reason: '', line: 0 },
+    documentElement: null,
+    load(p) {
+      const file = resolvePackagePath(String(p).replace(/^\.\.\//, ''));
+      if (!fs.existsSync(file)) { this.parseError = { errorCode: 1, reason: 'missing', line: 0 }; return false; }
+      return this.loadXML(fs.readFileSync(file, 'utf8'));
+    },
+    loadXML(text) {
+      const cleaned = text.replace(/<\?xml[^?]*\?>/, '');
+      const parsed = new window.DOMParser().parseFromString('<__root>' + cleaned + '</__root>', 'application/xml');
+      if (parsed.getElementsByTagName('parsererror').length) { this.parseError = { errorCode: 1, reason: 'parse', line: 0 }; return false; }
+      this.parsed = parsed;
+      this.documentElement = parsed.documentElement.firstElementChild;
+      return true;
+    },
+    getElementsByTagName(name) { return this.parsed ? this.parsed.getElementsByTagName(name) : []; },
+    selectNodes(xpath) { return this.parsed ? this.parsed.getElementsByTagName(xpath.split('/').pop()) : []; },
+  };
+  return doc;
+}
+
 const dom = new JSDOM(html, {
   url: 'file://' + path.resolve(htaPath),
   runScripts: 'dangerously',
@@ -77,12 +107,21 @@ const dom = new JSDOM(html, {
   virtualConsole,
   beforeParse(window) {
     window.ActiveXObject = function (progId) {
-      return /FileSystemObject/i.test(String(progId)) ? fileSystemObject() : inert();
+      if (/FileSystemObject/i.test(String(progId))) return fileSystemObject();
+      if (/XMLDOM|DOMDocument/i.test(String(progId))) return xmlDom(window);
+      return inert();
     };
     // JScript's Enumerator (drive listing): an empty collection.
     window.Enumerator = function () {
       return { atEnd: () => true, moveNext: () => {}, item: () => inert(), moveFirst: () => {} };
     };
+    // IE XML nodes expose .text (textContent).
+    if (!Object.getOwnPropertyDescriptor(window.Node.prototype, 'text')) {
+      Object.defineProperty(window.Element.prototype, 'text', {
+        configurable: true,
+        get() { return this.textContent; },
+      });
+    }
     window.alert = (msg) => alerts.push(String(msg));
     window.confirm = () => true;
     window.prompt = () => '';
