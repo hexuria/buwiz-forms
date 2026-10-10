@@ -5,8 +5,7 @@
 //! `compute38`, `compute16`, `compute17D`, `compute18`, `computePenalties`,
 //! `computeTotalAmtPayable`), `validate()` / `checkDate1()` /
 //! `initialValidateBeforeSave()` with their exact alert texts, and
-//! `saveXMLsubmit` through [`crate::official_xml`] (addresses and donees
-//! folded into one `<div>` the way the page writes them). Background
+//! the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`]. Background
 //! information comes from the taxpayer profile the way `loadBGData()` fills
 //! it.
 //!
@@ -300,7 +299,7 @@ impl Form1800Draft {
         )
     }
 
-    /// The official field values `saveXMLsubmit` writes, keyed by element id.
+    /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1800-v2018",
-  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
   "official_hta": "BIR-Form1800v2018.hta",
   "official_hta_sha256": "58b1ff5157f6d66f1ed1252c696d13ab9afe090bae0c1793faf42ef104159d37",
   "header": "<?xml version='1.0'?>",
@@ -17,7 +17,7 @@
           "codec": "raw"
         }
       ],
-      "default": "00",
+      "default": "01",
       "after": "    \n            "
     },
     {
@@ -29,7 +29,7 @@
           "codec": "raw"
         }
       ],
-      "default": "00",
+      "default": "01",
       "after": "    \n            "
     },
     {
@@ -41,7 +41,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "2000",
       "after": "    \n            "
     },
     {
@@ -1835,7 +1835,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "1",
       "after": "    \n            "
     },
     {
