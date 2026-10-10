@@ -1110,6 +1110,7 @@ impl Form1601EqDraft {
             }],
             key,
             default: String::new(),
+            number: None,
             after: after.clone(),
         };
         let row_entries = |rows: std::ops::Range<usize>| {

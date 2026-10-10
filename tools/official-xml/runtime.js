@@ -15,12 +15,14 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { load, setValue } = require('./official');
+const { load, setValue, ieXmpText } = require('./official');
 
 const [htaPath, inputsPath] = process.argv.slice(2);
 const steps = JSON.parse(fs.readFileSync(inputsPath, 'utf8'));
 const { html, loop } = load(htaPath);
 const alerts = [];
+// Files the page writes (path -> content), to capture the upload file.
+const written = new Map();
 
 const virtualConsole = new VirtualConsole();
 virtualConsole.on('jsdomError', (e) => {
@@ -63,7 +65,16 @@ function fileSystemObject() {
       const file = resolvePackagePath(p);
       return textStream(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
     },
-    CreateTextFile: () => textStream(''),
+    CreateTextFile: (p) => {
+      const stream = textStream('');
+      const parts = [];
+      stream.Write = (t) => parts.push(String(t));
+      stream.WriteLine = (t) => parts.push(String(t) + '\r\n');
+      stream.Close = () => { written.set(String(p), parts.join('')); };
+      // COM members are case-insensitive in JScript (xmlFile.write/close).
+      stream.write = stream.Write; stream.writeLine = stream.WriteLine; stream.close = stream.Close;
+      return stream;
+    },
     GetAbsolutePathName: (p) => resolvePackagePath(p),
     GetFolder: () => inert(),
     DeleteFile: () => {}, CreateFolder: () => {}, MoveFile: () => {}, CopyFile: () => {},
@@ -141,6 +152,7 @@ const dom = new JSDOM(html, {
 // timers settle before serializing.
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 dom.window.addEventListener('load', async () => {
+  ieXmpText(dom.window.document);
   await sleep(Number(process.env.RUNTIME_SETTLE_MS || 1500));
   const w = dom.window;
   const doc = w.document;
@@ -163,13 +175,31 @@ dom.window.addEventListener('load', async () => {
   }
   await sleep(500);
   let out;
-  try {
-    out = w.eval('var d = document;\n' + loop +
-      "\nallXML += tab + d.getElementById('xmlClose').innerHTML + '0';\nallXML;");
-  } catch (e) {
-    process.stderr.write('submit loop threw: ' + e.message + '\n');
-    process.exitCode = 1;
-    return;
+  if (process.env.OFFICIAL_LOOP === 'submit') {
+    try {
+      out = w.eval('var d = document;\n' + loop +
+        "\nallXML += tab + d.getElementById('xmlClose').innerHTML + '0';\nallXML;");
+    } catch (e) {
+      process.stderr.write('submit loop threw: ' + e.message + '\n');
+      process.exitCode = 1;
+      return;
+    }
+  } else {
+    // What the official submit uploads: the file saveEncryptedProfile(true)
+    // writes under IAF_RDO_Copy/ before EncryptFile() encrypts it.
+    try {
+      w.eval('saveEncryptedProfile(true)');
+    } catch (e) {
+      process.stderr.write('saveEncryptedProfile threw: ' + e.message + '\n' + (process.env.RUNTIME_DEBUG ? e.stack + '\n' : ''));
+    }
+    const upload = [...written].filter(([p]) => /IAF_RDO_Copy/i.test(p)).pop();
+    if (!upload) {
+      process.stderr.write('no IAF_RDO_Copy file was written; files: ' + JSON.stringify([...written.keys()]) + '\n');
+      if (alerts.length) process.stderr.write('alerts: ' + JSON.stringify(alerts) + '\n');
+      process.exitCode = 1;
+      return;
+    }
+    out = upload[1];
   }
   if (alerts.length) process.stderr.write('alerts: ' + JSON.stringify(alerts) + '\n');
   process.stdout.write(out);

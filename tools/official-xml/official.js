@@ -1,4 +1,9 @@
-// Shared helpers: run an official HTA's saveXMLsubmit() field loop in jsdom.
+// Shared helpers: run an official HTA's upload loop in jsdom.
+//
+// What eBIRForms uploads over SFTP is the file `saveEncryptedProfile(true)`
+// writes (every form's submit does `emailFilePath = saveEncryptedProfile(true)`
+// then RenameAndSendFile). Set OFFICIAL_LOOP=submit for the older
+// saveXMLsubmit() loop (eBIRForms Online path) instead.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -36,11 +41,22 @@ function matchBrace(src, i) {
 }
 
 function extractLoop(src) {
-  // The submit path. A few forms (1700) only have saveXML(isFinalCopy).
-  let fn = src.indexOf('function saveXMLsubmit(');
-  if (fn < 0) fn = src.indexOf('function saveXML(');
-  if (fn < 0) throw new Error('no saveXML function');
-  const start = src.indexOf('var allXML', fn);
+  let fn, start;
+  if (process.env.OFFICIAL_LOOP === 'submit') {
+    // A few forms (1700) only have saveXML(isFinalCopy).
+    fn = src.indexOf('function saveXMLsubmit(');
+    if (fn < 0) fn = src.indexOf('function saveXML(');
+    if (fn < 0) throw new Error('no saveXML function');
+    start = src.indexOf('var allXML', fn);
+  } else {
+    fn = src.indexOf('function saveEncryptedProfile(');
+    if (fn < 0) throw new Error('no saveEncryptedProfile function');
+    // The last allXML build before the file is encrypted (some forms keep an
+    // older, commented-out variant above it).
+    const enc = src.indexOf('EncryptFile(', fn);
+    start = src.lastIndexOf('var allXML', enc);
+    if (start < fn) throw new Error('allXML not found');
+  }
   if (start < 0) throw new Error('allXML not found');
   let forAt = skipTrivia(src, src.indexOf(';', src.indexOf('.elements', start)) + 1);
   while (!src.startsWith('for', forAt)) forAt = skipTrivia(src, src.indexOf(';', forAt) + 1);
@@ -89,19 +105,31 @@ function optionalFunctionSource(name, html) {
   try { return functionSource(name, [html]); } catch (e) { return null; }
 }
 
+// IE drops a newline directly after an <xmp> start tag (as for <pre>);
+// jsdom keeps it. The xmlFormat separator is read from that element, and the
+// user's real 2551Q upload proves IE's reading ("\t\t", not "\n\t\t").
+function ieXmpText(doc) {
+  for (const el of doc.querySelectorAll('xmp')) {
+    const t = el.textContent;
+    if (t.startsWith('\r\n')) el.textContent = t.slice(2);
+    else if (t.startsWith('\n')) el.textContent = t.slice(1);
+  }
+}
+
 // Build the DOM the way the page looks after its load handlers ran.
 function prepare(html) {
   const virtualConsole = new VirtualConsole(); // ignore jsdom CSS parse warnings
   const dom = new JSDOM(html, { runScripts: 'outside-only', virtualConsole });
   const doc = dom.window.document;
+  ieXmpText(doc);
   const form = doc.getElementById('frmMain');
   const first = form.querySelector('[id*=":"]');
   const prefix = first ? first.id.split(':')[0] : '';
   // getRdo() injects the RDO select into td#rdoSelect at load, with the id
   // its own markup names (frm1604c:rdoCode on 1604C; txtRDOCode on most).
   const rdoCell = doc.getElementById('rdoSelect');
-  const getRdo = /function\s+getRdo\s*\([\s\S]*?<select[^>]*\bid=['"]([^'"]+)['"]/.exec(html);
-  const rdoId = getRdo ? getRdo[1] : prefix + ':txtRDOCode';
+  const mainRdo = /function\s+getRdo\s*\([\s\S]*?<select[^>]*\bid=['"]([^'"]+)['"]/.exec(html);
+  const rdoId = mainRdo ? mainRdo[1] : prefix + ':txtRDOCode';
   if (rdoCell && prefix && !doc.getElementById(rdoId)) {
     rdoCell.innerHTML = `<select id='${rdoId}' name='${rdoId}' size='1'><option value='000'> </option></select>`;
   }
@@ -188,4 +216,4 @@ function run(dom, loop, libs = []) {
   throw new Error('too many undefined globals');
 }
 
-module.exports = { load, prepare, controls, setValue, run };
+module.exports = { load, prepare, controls, setValue, run, ieXmpText };
