@@ -432,13 +432,17 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 }
 
 fn connect_running() -> Result<AgentClient, ExitCode> {
-    let addr = match std::env::var("GPUI_AGENT_ADDR") {
-        Ok(raw) => raw.parse::<SocketAddr>().map_err(|error| {
-            eprintln!("invalid GPUI_AGENT_ADDR: {error}");
-            ExitCode::from(2)
-        })?,
-        Err(_) => DEFAULT_ADDR_STR.parse().expect("default addr"),
-    };
+    let explicit = std::env::var(super::discovery::ADDR_ENV).ok();
+    let records = super::discovery::list(Some("bir-desktop"));
+    let addr = super::discovery::client_addr(
+        explicit.as_deref(),
+        &records,
+        DEFAULT_ADDR_STR.parse().expect("default addr"),
+    )
+    .map_err(|error| {
+        eprintln!("{error}");
+        ExitCode::from(2)
+    })?;
     let token = std::env::var("GPUI_AGENT_TOKEN")
         .ok()
         .filter(|value| !value.is_empty());

@@ -131,9 +131,69 @@ pub fn resolve_addr(requested: std::net::SocketAddr) -> std::net::SocketAddr {
     std::net::SocketAddr::new(requested.ip(), 0)
 }
 
+/// Where a client should connect: an explicit address wins; otherwise a live
+/// record for `app` (headless first, since `status`/`shutdown` target the
+/// daemon); otherwise `default`.
+pub fn client_addr(
+    explicit: Option<&str>,
+    records: &[InstanceRecord],
+    default: std::net::SocketAddr,
+) -> Result<std::net::SocketAddr, String> {
+    if let Some(raw) = explicit.filter(|raw| !raw.is_empty()) {
+        return raw
+            .parse()
+            .map_err(|error| format!("invalid {ADDR_ENV}: {error}"));
+    }
+    let chosen = records
+        .iter()
+        .find(|rec| rec.mode == "headless")
+        .or_else(|| records.first());
+    match chosen {
+        Some(rec) => rec
+            .addr
+            .parse()
+            .map_err(|error| format!("bad discovery record for pid {}: {error}", rec.pid)),
+        None => Ok(default),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rec(pid: u32, addr: &str, mode: &str) -> InstanceRecord {
+        InstanceRecord {
+            app: "bir-desktop".into(),
+            pid,
+            addr: addr.into(),
+            mode: mode.into(),
+            protocol: 2,
+        }
+    }
+
+    #[test]
+    fn client_addr_prefers_explicit_then_headless_record_then_default() {
+        let default: std::net::SocketAddr = "127.0.0.1:17421".parse().unwrap();
+        let records = [
+            rec(10, "127.0.0.1:50001", "desktop"),
+            rec(11, "127.0.0.1:50002", "headless"),
+        ];
+        assert_eq!(
+            client_addr(Some("127.0.0.1:9"), &records, default)
+                .unwrap()
+                .port(),
+            9
+        );
+        assert_eq!(client_addr(None, &records, default).unwrap().port(), 50002);
+        assert_eq!(
+            client_addr(Some(""), &records[..1], default)
+                .unwrap()
+                .port(),
+            50001
+        );
+        assert_eq!(client_addr(None, &[], default).unwrap(), default);
+        assert!(client_addr(Some("nope"), &records, default).is_err());
+    }
 
     #[test]
     fn resolve_addr_falls_back_only_when_implicit() {
