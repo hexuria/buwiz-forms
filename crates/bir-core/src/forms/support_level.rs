@@ -335,6 +335,22 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         },
         release_ready: false,
     },
+    FormCapabilityRecord {
+        code: "1601FQ",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1601FQ",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
 ];
 
 /// Whether the app can actually draft/file a given form.
@@ -489,6 +505,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
         assert!(can_queue_for_submission("1601EQ"));
         assert_eq!(queue_authorized_form_type_id("1601EQ"), Some("1601EQ"));
+        assert!(can_queue_for_submission("1601FQ"));
+        assert_eq!(queue_authorized_form_type_id("1601FQ"), Some("1601FQ"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",

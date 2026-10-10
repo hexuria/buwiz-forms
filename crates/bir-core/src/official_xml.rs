@@ -94,8 +94,13 @@ macro_rules! layouts {
 
 /// Layouts of the forms the app serializes today. Add a form here when its
 /// field map moves to [`write`].
-const LAYOUTS: &[(&str, &str)] =
-    layouts!["1601c-v2018", "2551q-v2018", "2553-v1999", "1601eq-v2018",];
+const LAYOUTS: &[(&str, &str)] = layouts![
+    "1601c-v2018",
+    "2551q-v2018",
+    "2553-v1999",
+    "1601eq-v2018",
+    "1601fq-v2018",
+];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
 pub fn layout(form_id: &str) -> Result<&'static OfficialLayout, OfficialXmlError> {

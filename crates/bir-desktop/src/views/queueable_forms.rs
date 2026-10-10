@@ -104,6 +104,12 @@ pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[
         "1601EQ",
         "1601eq"
     ),
+    form_view_spec!(
+        Form1601FQ,
+        super::form_1601fq_view::Form1601FqView,
+        "1601FQ",
+        "1601fq"
+    ),
 ];
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {

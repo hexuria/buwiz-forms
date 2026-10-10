@@ -396,6 +396,7 @@ pub fn period_column(period: &FilingPeriod) -> i64 {
 pub enum QueueableKind {
     Form2553,
     Form1601EQ,
+    Form1601FQ,
     #[cfg(test)]
     Test,
 }
@@ -443,6 +444,10 @@ macro_rules! with_queueable_kind {
             }
             $crate::forms::queueable::QueueableKind::Form1601EQ => {
                 type $ty = $crate::forms::form_1601eq::Form1601EqDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1601FQ => {
+                type $ty = $crate::forms::form_1601fq::Form1601FqDraft;
                 $body
             }
             #[cfg(test)]
