@@ -39,7 +39,29 @@ fn pid_alive(pid: u32) -> bool {
         // SAFETY: signal 0 only checks existence/permission.
         unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+        const STILL_ACTIVE: u32 = 259;
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+            fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+            fn GetExitCodeProcess(handle: *mut std::ffi::c_void, code: *mut u32) -> i32;
+        }
+        // SAFETY: Win32 process-query handle, closed before returning.
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if handle.is_null() {
+                return false;
+            }
+            let mut code = 0u32;
+            let ok = GetExitCodeProcess(handle, &mut code) != 0;
+            CloseHandle(handle);
+            ok && code == STILL_ACTIVE
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = pid;
         true

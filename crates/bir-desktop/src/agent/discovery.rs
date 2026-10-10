@@ -46,16 +46,7 @@ pub fn remove_record(app: &str, pid: u32) {
 }
 
 pub fn pid_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        // SAFETY: signal 0 only checks existence/permission.
-        unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        true
-    }
+    super::headless_daemon::process_is_alive(pid)
 }
 
 /// Live records for `app` (or all apps when `None`); prunes dead ones.
