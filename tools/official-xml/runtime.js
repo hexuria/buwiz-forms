@@ -156,6 +156,9 @@ dom.window.addEventListener('load', async () => {
   await sleep(Number(process.env.RUNTIME_SETTLE_MS || 1500));
   const w = dom.window;
   const doc = w.document;
+  // HTAs run in IE7 mode, where an unknown input type such as "number"
+  // is a text box (1707v2021 Schedule 2 shares, row A).
+  for (const el of doc.querySelectorAll('input[type="number"]')) el.type = 'text';
   const fire = (el, type) => el.dispatchEvent(new w.Event(type, { bubbles: true }));
   for (const step of steps) {
     try {

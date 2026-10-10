@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1706-v2018",
-  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
   "official_hta": "BIR-Form1706.hta",
   "official_hta_sha256": "f29a02e0a80fb4a72cc90046e2773d05ac631df2ec06845f4c885eabcabafca1",
   "header": "<?xml version='1.0'?>",
@@ -17,7 +17,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "01",
       "after": "\t\n            "
     },
     {
@@ -29,7 +29,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "01",
       "after": "\t\n            "
     },
     {
@@ -41,7 +41,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "2000",
       "after": "\t\n            "
     },
     {
@@ -213,6 +213,18 @@
       "after": "\t\n            "
     },
     {
+      "key": "frm1706:txtRDOCodeB",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1706:txtRDOCodeB",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "\t\n            "
+    },
+    {
       "key": "frm1706:txtSellerName",
       "kind": "value",
       "parts": [
@@ -282,6 +294,18 @@
         }
       ],
       "default": "",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm1706:txtRDOCode14A",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1706:txtRDOCode14A",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
       "after": "\t\n            "
     },
     {

@@ -69,6 +69,17 @@ pub(crate) fn check_sample(
     official_encrypt_sha256: &str,
 ) {
     let layout = official_xml::layout(form_id).expect("official layout");
+    check_sample_with_layout(stem, layout, plaintext, official_encrypt_sha256);
+}
+
+/// [`check_sample`] for a form whose page adds rows at run time: the sample
+/// follows the form's own extension of the generated layout.
+pub(crate) fn check_sample_with_layout(
+    stem: &str,
+    layout: &official_xml::OfficialLayout,
+    plaintext: &str,
+    official_encrypt_sha256: &str,
+) {
     let fields = official_xml::read(layout, plaintext).expect("sample follows the official layout");
     assert!(!fields.is_empty());
 
