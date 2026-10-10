@@ -107,6 +107,10 @@ form_view_specs! {
     Form1600VT, super::form_1600vt_view::Form1600VtView, "1600VT", "1600vt";
     Form1600PT, super::form_1600pt_view::Form1600PtView, "1600PT", "1600pt";
     Form1600WP, super::form_1600wp_view::Form1600WpView, "1600WP", "1600wp";
+    Form1601EQ, super::form_1601eq_view::Form1601EqView, "1601EQ", "1601eq";
+    Form1601FQ, super::form_1601fq_view::Form1601FqView, "1601FQ", "1601fq";
+    Form1603Q, super::form_1603q_view::Form1603QView, "1603Q", "1603q";
+    Form1602Q, super::form_1602q_view::Form1602QView, "1602Q", "1602q";
 }
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {

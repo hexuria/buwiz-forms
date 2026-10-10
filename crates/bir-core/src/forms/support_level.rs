@@ -380,6 +380,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1606",
+        code: "1601EQ",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1601EQ",
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -396,6 +400,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1600VTv2018",
+        code: "1601FQ",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1601FQ",
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -412,6 +420,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1600PTv2018",
+        code: "1603Q",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1603Qv2018",
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -428,6 +440,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; submit plaintext replayed
         // through the full page runtime, queued on the generic path.
         form_id: "1600WP",
+        code: "1602Q",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1602Qv2018",
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -604,6 +621,14 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1600PT"), Some("1600PTv2018"));
         assert!(can_queue_for_submission("1600WP"));
         assert_eq!(queue_authorized_form_type_id("1600WP"), Some("1600WP"));
+        assert!(can_queue_for_submission("1601EQ"));
+        assert_eq!(queue_authorized_form_type_id("1601EQ"), Some("1601EQ"));
+        assert!(can_queue_for_submission("1601FQ"));
+        assert_eq!(queue_authorized_form_type_id("1601FQ"), Some("1601FQ"));
+        assert!(can_queue_for_submission("1603Q"));
+        assert_eq!(queue_authorized_form_type_id("1603Q"), Some("1603Qv2018"));
+        assert!(can_queue_for_submission("1602Q"));
+        assert_eq!(queue_authorized_form_type_id("1602Q"), Some("1602Qv2018"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
