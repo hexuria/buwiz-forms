@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "bir": {
+      "command": "bir-mcp",
+      "args": [],
+      "env": {
+        "GPUI_AGENT_TOKEN": "${GPUI_AGENT_TOKEN}"
+      }
+    }
+  }
+}
