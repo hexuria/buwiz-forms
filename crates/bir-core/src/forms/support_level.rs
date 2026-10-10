@@ -200,6 +200,23 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "1701MS",
+        revision: "2024",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout (radios, check boxes and the name) replayed through
+        // the full page runtime; queueing uses the generic path.
+        form_id: "1701MS",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
         form_id: "0619Ev2018",
@@ -471,6 +488,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
         assert!(can_queue_for_submission("2553"));
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
+        assert!(can_queue_for_submission("1701MS"));
+        assert_eq!(queue_authorized_form_type_id("1701MS"), Some("1701MS"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
