@@ -21,6 +21,7 @@ use bir_core::forms::form_2550q::{
     Form2550QQuarter, Form2550QRowFamily, Form2550QTaxpayerClassification,
 };
 use bir_core::forms::{FilingPeriod, FilingStatus, FormValidator};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::StyledExt;
 use gpui_component::button::ButtonVariants;
@@ -30,6 +31,7 @@ use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_validation::SemanticFieldTargets;
+use crate::views::event_form_kit::Layout;
 
 const YEAR_END_MONTH: &str = "year_end_month";
 const RAW_TAXABLE_YEAR: &str = "raw_taxable_year";
@@ -308,6 +310,8 @@ pub struct Form2550QV2View {
     draft: Form2550QDraft,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
+    /// Width class captured at the start of each render so row helpers can stack on Phone.
+    layout: std::cell::Cell<Layout>,
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
     editor_state_error: Option<String>,
@@ -703,6 +707,7 @@ impl Form2550QV2View {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
+            layout: std::cell::Cell::new(Layout::Desktop),
             input_errors: Vec::new(),
             validation_errors,
             editor_state_error,
@@ -1361,28 +1366,28 @@ impl Form2550QV2View {
     }
 
     fn render_input_row(&self, label: &str, key: &'static str) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>
-                    {Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable())}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .child(half(layout).text_sm().child(label.to_string()))
+            .child(
+                half(layout).child(
+                    Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable()),
+                ),
+            )
+            .into_any_element()
     }
 
     fn render_candidate_raw_text_row(&self, label: &str, key: &'static str) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>
-                    {Input::new(field(&self.candidate_raw_text_fields, key))
-                        .disabled(!self.editor_is_editable())}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .child(half(layout).text_sm().child(label.to_string()))
+            .child(
+                half(layout).child(
+                    Input::new(field(&self.candidate_raw_text_fields, key))
+                        .disabled(!self.editor_is_editable()),
+                ),
+            )
+            .into_any_element()
     }
 
     fn render_computed_row(
@@ -1391,13 +1396,24 @@ impl Form2550QV2View {
         value: Option<f64>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
-                <div text_sm font_weight={FontWeight::BOLD}>{label.to_string()}</div>
-                <div font_weight={FontWeight::BOLD}>{format_optional_money(value)}</div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .p_2()
+            .rounded_md()
+            .bg(cx.theme().muted.opacity(0.5))
+            .child(
+                half(layout)
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child(label.to_string()),
+            )
+            .child(
+                half(layout)
+                    .when(layout != Layout::Phone, |d| d.text_right())
+                    .font_weight(FontWeight::BOLD)
+                    .child(format_optional_money(value)),
+            )
+            .into_any_element()
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
@@ -1447,6 +1463,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 1 row {}", index + 1))}>
                 {input_pair("Purchase/import date", &row.date, editable)}
@@ -1494,6 +1514,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 3 row {}", index + 1))}>
                 {input_pair("Period from", &row.period_from, editable)}
@@ -1517,6 +1541,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 4 row {}", index + 1))}>
                 {input_pair("Period from", &row.period_from, editable)}
@@ -1771,10 +1799,17 @@ impl FormViewTrait for Form2550QV2View {
 }
 
 impl Render for Form2550QV2View {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        self.layout.set(layout);
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
         let is_draft = self.draft.is_editable();
         let editor_is_editable = self.editor_is_editable();
-        let mut basis_choices = div().flex().gap_2();
+        let mut basis_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [
             ("Calendar", Form2550QFilingBasis::Calendar),
             ("Fiscal", Form2550QFilingBasis::Fiscal),
@@ -1789,7 +1824,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut quarter_choices = div().flex().gap_2();
+        let mut quarter_choices = div().flex().flex_wrap().gap_2();
         for value in Form2550QQuarter::ALL {
             let action = ChoiceAction::Quarter(value);
             quarter_choices = quarter_choices.child(self.render_choice(
@@ -1801,7 +1836,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut amended_choices = div().flex().gap_2();
+        let mut amended_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::Amended(value);
             amended_choices = amended_choices.child(self.render_choice(
@@ -1813,7 +1848,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut short_period_choices = div().flex().gap_2();
+        let mut short_period_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::ShortPeriod(value);
             short_period_choices = short_period_choices.child(self.render_choice(
@@ -1825,7 +1860,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut class_choices = div().flex().gap_2();
+        let mut class_choices = div().flex().flex_wrap().gap_2();
         for value in Form2550QTaxpayerClassification::ALL {
             let action = ChoiceAction::Classification(value);
             class_choices = class_choices.child(self.render_choice(
@@ -1837,7 +1872,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut relief_choices = div().flex().gap_2();
+        let mut relief_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::TaxRelief(value);
             relief_choices = relief_choices.child(self.render_choice(
@@ -1870,6 +1905,7 @@ impl Render for Form2550QV2View {
         }
 
         let mut content = div()
+            .w_full()
             .max_w(px(1100.0))
             .mx_auto()
             .flex()
@@ -2093,13 +2129,13 @@ impl Render for Form2550QV2View {
 
         rsx! {
             <div flex flex_col w_full h_full bg={cx.theme().background}>
-                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                <div flex items_center justify_between flex_wrap gap_2 px={pad} py_4 border_b_1 border_color={cx.theme().border}>
                     {gpui_component::button::Button::new("2550q_back")
                         .label("← Back")
                         .on_click(cx.listener(|_, _, _, cx| {
                             cx.emit(Form2550QV2Event::BackToDashboard);
                         }))}
-                    <div flex items_center gap_3>
+                    <div flex items_center flex_wrap gap_3>
                         {gpui_component::button::Button::new("2550q_validate")
                             .label("Validate")
                             .outline()
@@ -2126,11 +2162,11 @@ impl Render for Form2550QV2View {
                             .disabled(true)}
                     </div>
                 </div>
-                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
+                <div p={pad} border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
                     {self.render_header(cx)}
                     <div mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>
-                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
+                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p={pad}>
                     {content}
                 </div>
             </div>
@@ -2188,14 +2224,33 @@ fn row_card(cx: &Context<Form2550QV2View>, title: &str) -> Div {
     }
 }
 
-fn input_pair(label: &str, input: &Entity<InputState>, editable: bool) -> AnyElement {
-    let root = rsx! {
-        <div flex items_center gap_3>
-            <div w_1_2 text_sm>{label.to_string()}</div>
-            <div w_1_2>{Input::new(input).disabled(!editable)}</div>
-        </div>
-    };
-    root.into_any_element()
+/// Label/control pair: side by side above Phone, stacked on Phone.
+fn pair_row(layout: Layout) -> Div {
+    if layout == Layout::Phone {
+        div().flex().flex_col().gap_1().w_full()
+    } else {
+        div().flex().justify_between().items_center().gap_4()
+    }
+}
+
+fn half(layout: Layout) -> Div {
+    if layout == Layout::Phone {
+        div().w_full().min_w_0()
+    } else {
+        div().w_1_2().min_w_0()
+    }
+}
+
+fn input_pair(
+    layout: Layout,
+    label: &str,
+    input: &Entity<InputState>,
+    editable: bool,
+) -> AnyElement {
+    pair_row(layout)
+        .child(half(layout).text_sm().child(label.to_string()))
+        .child(half(layout).child(Input::new(input).disabled(!editable)))
+        .into_any_element()
 }
 
 fn text_input(
