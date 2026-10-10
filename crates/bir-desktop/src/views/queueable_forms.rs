@@ -110,6 +110,12 @@ pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[
         "1600VT",
         "1600vt"
     ),
+    form_view_spec!(
+        Form1600PT,
+        super::form_1600pt_view::Form1600PtView,
+        "1600PT",
+        "1600pt"
+    ),
 ];
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {

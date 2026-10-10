@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "form_id": "1600pt-v2018",
+  "form_id": "1600pt-v2018-private",
   "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
   "official_hta": "BIR-Form1600PTv2018.hta",
   "official_hta_sha256": "2f0f2d7e58763f0a57b4b62fbe830a39656e92e03916cb8e058e0805c981af22",
@@ -1411,6 +1411,42 @@
         }
       ],
       "default": "2",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode1",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode2",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode3",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode4",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode5",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode6",
+      "kind": "bool",
+      "default": "false",
       "after": "    \n            "
     },
     {
