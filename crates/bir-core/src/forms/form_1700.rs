@@ -11,6 +11,18 @@
 //!
 //! Amount entries keep centavos (`round(this,2)`); computed items are
 //! `toFixed(0)` whole pesos.
+//!
+//! Schedule 1 takes more than four employers the way the official
+//! "(add more...)" popup (`modalPage2Part6`) does: the fourth and later rows
+//! are popup rows `4_1`, `4_2`, … (`saveSched1Items`), Item 4 then shows
+//! `OTHERS` with no TIN and the popup subtotal (`setUpSchedule1TableModal`,
+//! `computeSubTotal`, `computeSched1I5`), and each popup row is checked by
+//! `validateSched1('4_<n>')` with its own alert texts. Checked on the official
+//! page (runtime oracle, with IE's implicit `<tbody>` in the popup's empty
+//! tables): the popup rows are form controls inside `frmMain`, so they are
+//! part of what the page saves; [`Form1700Draft::to_bir_field_map`] carries
+//! Item 4's `OTHERS` row and the popup subtotal, while the popup controls
+//! themselves are left to the central serializer.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +38,10 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1700_FORM_ID: &str = "1700-v2013";
 /// Schedule 1 employer rows (Items 1–4).
 pub const FORM_1700_EMPLOYER_ROWS: usize = 4;
+/// Employers this model accepts, popup rows included.
+pub const FORM_1700_MAX_EMPLOYERS: usize = 100;
+/// Item 4's employer name once the popup holds its rows.
+pub const FORM_1700_OTHERS: &str = "OTHERS";
 /// `init()` fixes Item 3.
 pub const FORM_1700_ATC: &str = "II011";
 
@@ -486,7 +502,7 @@ impl Form1700Draft {
         }
         let regular_open = self.regular_column_open();
         let flat_open = self.flat_column_open();
-        self.employers.truncate(FORM_1700_EMPLOYER_ROWS);
+        self.employers.truncate(FORM_1700_MAX_EMPLOYERS);
         for row in &mut self.employers {
             if !regular_open {
                 row.regular = 0.0;
@@ -543,6 +559,30 @@ impl Form1700Draft {
         self.spouse_column.compute(year, sp_type, true);
         self.aggregate_amount_payable =
             cents(self.taxpayer.total_amount_payable + self.spouse_column.total_amount_payable);
+    }
+
+    /// More than four employers: the fourth and later ones are popup rows.
+    pub fn schedule_is_folded(&self) -> bool {
+        self.employers.len() > FORM_1700_EMPLOYER_ROWS
+    }
+
+    /// The popup rows (`4_1`, `4_2`, …), empty unless folded.
+    pub fn popup_rows(&self) -> &[Form1700Employer] {
+        if self.schedule_is_folded() {
+            &self.employers[FORM_1700_EMPLOYER_ROWS - 1..]
+        } else {
+            &[]
+        }
+    }
+
+    /// `computeSubTotal`: the popup's c, d and e subtotals (`formatCurrency`).
+    pub fn popup_subtotals(&self) -> [f64; 3] {
+        let rows = self.popup_rows();
+        [
+            cents(rows.iter().map(|row| row.regular).sum()),
+            cents(rows.iter().map(|row| row.flat).sum()),
+            cents(rows.iter().map(|row| row.withheld).sum()),
+        ]
     }
 
     /// Texts typed before a later `capital()` trigger in form order are
@@ -776,7 +816,21 @@ impl Form1700Draft {
 
         for index in 0..FORM_1700_EMPLOYER_ROWS {
             let n = index + 1;
-            let row = self.employers.get(index).cloned().unwrap_or_default();
+            let mut row = self.employers.get(index).cloned().unwrap_or_default();
+            if n == FORM_1700_EMPLOYER_ROWS && self.schedule_is_folded() {
+                // setUpSchedule1TableModal + computeSched1I5: Item 4 keeps
+                // its tick, reads OTHERS and carries the popup subtotal.
+                let [regular, flat, withheld] = self.popup_subtotals();
+                row = Form1700Employer {
+                    for_spouse: row.for_spouse,
+                    name: FORM_1700_OTHERS.to_string(),
+                    name2: String::new(),
+                    tin: String::new(),
+                    regular,
+                    flat,
+                    withheld,
+                };
+            }
             let used = row != Form1700Employer::default();
             put(
                 &format!("rdoPg2I{n}PartVIEmployeeT"),
@@ -816,6 +870,12 @@ impl Form1700Draft {
                 &format!("txtPg2ISched1e_5{suffix}TW"),
                 money(self.schedule_totals[who][2]),
             );
+        }
+        if self.schedule_is_folded() {
+            let [c, d, e] = self.popup_subtotals();
+            put("txtPg2Pt6I4SubtotalC", money(c));
+            put("txtPg2Pt6I4SubtotalD", money(d));
+            put("txtPg2Pt6I4SubtotalE", money(e));
         }
         // The submit loop writes "1" for the current page.
         put("txtCurrentPage", "1".to_string());
@@ -938,8 +998,21 @@ impl Form1700Draft {
                 None => err("spouse_has_income", "Please choose Yes or No on Item 16"),
             }
         }
+        if self.employers.len() > FORM_1700_MAX_EMPLOYERS {
+            err(
+                "employers",
+                "Schedule 1 holds at most 100 employers per return in this editor.",
+            );
+        }
+        let folded = self.schedule_is_folded();
         for (index, row) in self.employers.iter().enumerate() {
-            let n = index + 1;
+            // validateSched1More ('4_<n>') when the popup is saved; validate()
+            // skips Item 4 once the popup holds its rows.
+            let n = if folded && index + 1 >= FORM_1700_EMPLOYER_ROWS {
+                format!("4_{}", index + 2 - FORM_1700_EMPLOYER_ROWS)
+            } else {
+                (index + 1).to_string()
+            };
             if *row == Form1700Employer::default() {
                 continue;
             }
@@ -1496,6 +1569,99 @@ mod tests {
         d.recompute();
         assert_eq!(d.employers.len(), 1);
         assert_eq!(d.spouse_column, Form1700Column::default());
+    }
+
+    fn employer(name: &str, tin: &str, regular: f64, withheld: f64) -> Form1700Employer {
+        Form1700Employer {
+            for_spouse: false,
+            name: name.to_string(),
+            name2: String::new(),
+            tin: tin.to_string(),
+            regular,
+            flat: 0.0,
+            withheld,
+        }
+    }
+
+    /// Rows 1 and 4 on the page, then two more through the popup: Item 4 reads
+    /// OTHERS with the popup subtotal (values from the official page).
+    fn folded() -> Form1700Draft {
+        let mut d = sample();
+        d.employers.resize_with(3, Form1700Employer::default);
+        d.employers.push(employer(
+            "Fourth Employer Corp",
+            "12345678800000",
+            100_000.25,
+            5_000.0,
+        ));
+        d.employers.push(employer(
+            "Fifth Employer Corp",
+            "12345678800000",
+            50_000.4,
+            2_500.1,
+        ));
+        d.employers.push(employer(
+            "Sixth Employer",
+            "12345678800001",
+            25_000.0,
+            1_000.0,
+        ));
+        d.recompute();
+        d
+    }
+
+    #[test]
+    fn add_more_popup_folds_item_4_into_others() {
+        let d = folded();
+        assert!(d.schedule_is_folded());
+        assert_eq!(d.popup_rows().len(), 3);
+        assert_eq!(d.popup_subtotals(), [175_000.65, 0.0, 8_500.1]);
+        assert_eq!(d.schedule_totals[0], [775_001.0, 0.0, 48_500.0]);
+        assert!(messages(&d).is_empty(), "{:?}", messages(&d));
+        let f = d.to_bir_field_map();
+        for (key, value) in [
+            ("rdoPg2I4PartVIEmployeeT", "true"),
+            ("txtPg2I4PartVIEmployerName1", "OTHERS"),
+            ("txtPg2I4PartVIEmployerTIN1", ""),
+            ("txtPg2I4PartVIEmployerBranchCode", ""),
+            ("txtPg2ISched1c_4REG", "175,000.65"),
+            ("txtPg2ISched1d_4CIFR", "0.00"),
+            ("txtPg2ISched1e_4TW", "8,500.10"),
+            ("txtPg2Pt6I4SubtotalC", "175,000.65"),
+            ("txtPg2Pt6I4SubtotalD", "0.00"),
+            ("txtPg2Pt6I4SubtotalE", "8,500.10"),
+            ("txtPg2ISched1c_5AREG", "775,001.00"),
+            ("txtPg2ISched1e_5ATW", "48,500.00"),
+            ("txtPg2I42A", "775,001.00"),
+            ("txtPg2I47A", "81,500.00"),
+            ("txtPg2I59A", "32,900.00"),
+        ] {
+            assert_eq!(f[&format!("frm1700:{key}")], value, "{key}");
+        }
+        // Not folded: the popup subtotals keep the page default.
+        assert!(
+            !sample()
+                .to_bir_field_map()
+                .contains_key("frm1700:txtPg2Pt6I4SubtotalC")
+        );
+    }
+
+    #[test]
+    fn popup_rows_carry_their_own_alerts() {
+        let mut d = folded();
+        d.employers[5].tin = String::new();
+        d.employers[4].regular = 0.0;
+        d.recompute();
+        let m = messages(&d);
+        assert!(m.contains(&"Please enter Employer's TIN on Part VI Item 4_3B".to_string()));
+        assert!(m.contains(&"Page 2 Item 4_2 Compensation Income should not be zero.".to_string()));
+        let mut d = folded();
+        d.employers[3].name.clear();
+        d.recompute();
+        assert!(
+            messages(&d)
+                .contains(&"Please enter Employer's name on Part VI Item 4_1A ".to_string())
+        );
     }
 
     #[test]
