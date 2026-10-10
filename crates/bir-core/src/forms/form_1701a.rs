@@ -16,6 +16,19 @@
 //! map reproduces the state of a filer who answers the radio items in form
 //! order (Items 2, 3, 6, 7, 13, 16–18, then the spouse items) before typing
 //! amounts; see [`Form1701ADraft::to_bir_field_map`].
+//!
+//! Items 42 and 51 take more rows through the official "(add more...)"
+//! modals (`modalPartIVA` / `modalPartIVB`, both inside `frmMain`). Saving
+//! two or more rows copies them into `tblmodalPartIV<A|B>Repository`, so the
+//! upload loop (`saveEncryptedProfile`) writes every row's description and
+//! two amounts just ahead of `txtmodalPartIV<A|B>_C1`; Item 42/51 then reads
+//! `OTHERS` with the modal's whole-peso subtotals. See
+//! [`Form1701AMoreRow`] and [`Form1701ADraft::official_payload`].
+//!
+//! The modal copies its table with jQuery `.html()`. Under the HTA's legacy
+//! IE engine `innerHTML` serializes an input's live value; jsdom serializes
+//! only the `value` attribute, so the parity samples copy each typed value
+//! into its attribute right before SAVE AND CLOSE (that is the only shim).
 
 use std::collections::BTreeMap;
 
@@ -29,6 +42,9 @@ use crate::profile::TaxpayerProfile;
 
 /// Rule-package id of the official layout.
 pub const FORM_1701A_FORM_ID: &str = "1701a-v2018";
+
+/// Item 42/51 once the modal holds two or more rows (`disableParentInput`).
+const OTHERS: &str = "OTHERS";
 
 const ITEM_53_ALERT: &str = "Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.";
 
@@ -162,6 +178,23 @@ pub struct Form1701AColumn {
     pub total_amount_payable: f64,
 }
 
+/// Rows the Part IV.A / IV.B "(add more...)" modal accepts.
+pub const FORM_1701A_MAX_MORE_ROWS: usize = 100;
+
+/// One row of the Part IV.A (Item 42) or Part IV.B (Item 51)
+/// "(add more...)" modal: `txtmodalPartIV<A|B>Desc_<n>C1`, `_<n>C2`
+/// (taxpayer) and `_<n>C3` (spouse).
+///
+/// Row 1 is the Item 42/51 entry the link transfers into the modal; the
+/// filer confirms its description there (`capitalize`).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Form1701AMoreRow {
+    pub description: String,
+    pub taxpayer: f64,
+    pub spouse: f64,
+}
+
 /// Part V — background information on the spouse.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -240,6 +273,15 @@ pub struct Form1701ADraft {
     #[serde(default)]
     pub other_credits_description: String,
 
+    /// Part IV.A "(add more...)" rows (Item 42.1, 42.2, …). Two or more rows
+    /// fold Item 42 into `OTHERS` with the modal subtotals; none leaves
+    /// Item 42 as typed.
+    #[serde(default)]
+    pub other_income_more: Vec<Form1701AMoreRow>,
+    /// Part IV.B "(add more...)" rows (Item 51.1, 51.2, …), same rules.
+    #[serde(default)]
+    pub eight_other_income_more: Vec<Form1701AMoreRow>,
+
     /// Item 30.
     #[serde(default)]
     pub aggregate_amount_payable: f64,
@@ -260,6 +302,13 @@ fn fixed0(value: f64) -> f64 {
     } else {
         0.0
     }
+}
+
+/// `computePartIV<A|B>Modal`: each step adds the next row and keeps
+/// `formatCurrency(... .toFixed(0))`, so the running total is whole pesos.
+fn modal_subtotal(rows: &[Form1701AMoreRow], column: impl Fn(&Form1701AMoreRow) -> f64) -> f64 {
+    rows.iter()
+        .fold(0.0, |total, row| fixed0(total + column(row)))
 }
 
 /// `round(this,2)`: the value an entry holds.
@@ -499,6 +548,8 @@ impl Form1701ADraft {
             eight_other_income_50_description: String::new(),
             eight_other_income_51_description: String::new(),
             other_credits_description: String::new(),
+            other_income_more: Vec::new(),
+            eight_other_income_more: Vec::new(),
             aggregate_amount_payable: 0.0,
             overpayment: Form1701AOverpayment::None,
             number_of_attachments: 0,
@@ -531,6 +582,16 @@ impl Form1701ADraft {
     /// Items 50/51 apply while either column uses the 8% rate.
     pub fn part_ivb_descriptions_open(&self) -> bool {
         self.atc.is_eight_percent() || self.spouse_atc().is_eight_percent()
+    }
+
+    /// Part IV.A's modal holds two or more saved rows.
+    pub fn other_income_is_folded(&self) -> bool {
+        self.other_income_more.len() >= 2
+    }
+
+    /// Part IV.B's modal holds two or more saved rows.
+    pub fn eight_other_income_is_folded(&self) -> bool {
+        self.eight_other_income_more.len() >= 2
     }
 
     /// The overpayment boxes are open only while Item 30 is negative.
@@ -593,6 +654,41 @@ impl Form1701ADraft {
         if !self.part_ivb_descriptions_open() {
             self.eight_other_income_50_description.clear();
             self.eight_other_income_51_description.clear();
+            self.eight_other_income_more.clear();
+        }
+        if !self.part_iva_descriptions_open() {
+            self.other_income_more.clear();
+        }
+        // Modal rows: round(this,2) on each amount; a column the return does
+        // not use for that part keeps zero.
+        let iva = (atc.is_graduated(), spouse_atc.is_graduated());
+        let ivb = (atc.is_eight_percent(), spouse_atc.is_eight_percent());
+        for (rows, (taxpayer_open, spouse_open)) in [
+            (&mut self.other_income_more, iva),
+            (&mut self.eight_other_income_more, ivb),
+        ] {
+            for row in rows.iter_mut() {
+                row.taxpayer = if taxpayer_open {
+                    cents(row.taxpayer)
+                } else {
+                    0.0
+                };
+                row.spouse = if spouse_open { cents(row.spouse) } else { 0.0 };
+            }
+        }
+        // Two or more saved rows: Item 42/51 reads OTHERS with the subtotals
+        // (disableParentInput, computePartIV<A|B>Modal(false)).
+        if self.other_income_is_folded() {
+            let rows = &self.other_income_more;
+            self.other_income_42_description = OTHERS.to_string();
+            self.taxpayer.other_income_42 = modal_subtotal(rows, |row| row.taxpayer);
+            self.spouse_column.other_income_42 = modal_subtotal(rows, |row| row.spouse);
+        }
+        if self.eight_other_income_is_folded() {
+            let rows = &self.eight_other_income_more;
+            self.eight_other_income_51_description = OTHERS.to_string();
+            self.taxpayer.eight_other_income_51 = modal_subtotal(rows, |row| row.taxpayer);
+            self.spouse_column.eight_other_income_51 = modal_subtotal(rows, |row| row.spouse);
         }
         self.taxpayer.round_inputs();
         self.spouse_column.round_inputs();
@@ -618,31 +714,159 @@ impl Form1701ADraft {
                 .all(|(a, b)| (!taxpayer_checked || *a > 0.0) && (!spouse_checked || *b > 0.0))
     }
 
+    /// Whether the "(add more...)" link was enabled when the filer opened it:
+    /// Items 41 and row 1 (the Item 42/51 entry) complete.
+    fn more_link_opens(&self, part_b: bool) -> bool {
+        let tp = &self.taxpayer;
+        let sp = &self.spouse_column;
+        let (rows, first) = if part_b {
+            (
+                &self.eight_other_income_more,
+                (
+                    &self.eight_other_income_50_description,
+                    tp.eight_other_income_50,
+                    sp.eight_other_income_50,
+                ),
+            )
+        } else {
+            (
+                &self.other_income_more,
+                (
+                    &self.other_income_41_description,
+                    tp.other_income_41,
+                    sp.other_income_41,
+                ),
+            )
+        };
+        let Some(row) = rows.first() else {
+            return false;
+        };
+        self.more_link_enabled(
+            first.0,
+            &row.description,
+            [(first.1, first.2), (row.taxpayer, row.spouse)],
+        )
+    }
+
+    /// Row 1's amount cells: the Item 42/51 text the link transfers
+    /// (`value.split(",")`). When that text holds a comma the split shifts
+    /// the cells, so the filer retypes them and `round(this,2)` formats them.
+    fn first_row_cells(&self, part_b: bool, row: &Form1701AMoreRow) -> (String, String) {
+        let spouse_atc = self.spouse_atc();
+        // The bare 0 a disable handler left in Item 42/51 (see the field map).
+        let cleared = if part_b {
+            (true, spouse_atc.is_graduated())
+        } else {
+            (true, spouse_atc.is_eight_percent())
+        };
+        let entry = |value: f64, cleared: bool| {
+            if value == 0.0 && cleared {
+                "0".to_string()
+            } else {
+                official_amount(value)
+            }
+        };
+        let taxpayer = entry(row.taxpayer, cleared.0);
+        let spouse = entry(row.spouse, cleared.1);
+        if row.description.contains(',') || taxpayer.contains(',') || spouse.contains(',') {
+            (official_amount(row.taxpayer), official_amount(row.spouse))
+        } else {
+            (taxpayer, spouse)
+        }
+    }
+
+    /// The modal's repository rows in DOM order, keyed by element id.
+    fn more_rows(&self, part_b: bool) -> Vec<(String, String)> {
+        let (rows, folded, part) = if part_b {
+            (
+                &self.eight_other_income_more,
+                self.eight_other_income_is_folded(),
+                "B",
+            )
+        } else {
+            (&self.other_income_more, self.other_income_is_folded(), "A")
+        };
+        if !folded {
+            return Vec::new();
+        }
+        let mut controls = Vec::new();
+        for (index, row) in rows.iter().enumerate() {
+            let n = index + 1;
+            let (taxpayer, spouse) = if index == 0 {
+                self.first_row_cells(part_b, row)
+            } else {
+                (official_amount(row.taxpayer), official_amount(row.spouse))
+            };
+            controls.push((
+                format!("frm1701A:txtmodalPartIV{part}Desc_{n}C1"),
+                row.description.trim().to_uppercase(),
+            ));
+            controls.push((format!("frm1701A:txtmodalPartIV{part}_{n}C2"), taxpayer));
+            controls.push((format!("frm1701A:txtmodalPartIV{part}_{n}C3"), spouse));
+        }
+        controls
+    }
+
+    /// The generated layout with each "(add more...)" modal's saved rows
+    /// spliced in ahead of the subtotal box `txtmodalPartIV<A|B>_C1`, the
+    /// order [`QueueableForm::official_payload`] writes them in.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use crate::official_xml::Entry;
+        let base = crate::official_xml::layout(FORM_1701A_FORM_ID).map_err(|e| e.to_string())?;
+        let key_of = |entry: &Entry| match entry {
+            Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+        };
+        let mut insertions = Vec::new();
+        for (part_b, part) in [(false, "A"), (true, "B")] {
+            let rows = self.more_rows(part_b);
+            if rows.is_empty() {
+                continue;
+            }
+            let subtotal = format!("frm1701A:txtmodalPartIV{part}_C1");
+            let at = base
+                .entries
+                .iter()
+                .position(|entry| key_of(entry) == subtotal)
+                .filter(|&at| at > 0)
+                .ok_or_else(|| format!("no entry ahead of {subtotal}"))?;
+            insertions.push(crate::forms::official_inputs::RowInsertion {
+                after: key_of(&base.entries[at - 1]),
+                copies: rows
+                    .into_iter()
+                    .map(|(id, _)| (subtotal.clone(), id))
+                    .collect(),
+            });
+        }
+        crate::forms::official_inputs::extend_layout(base, &insertions)
+    }
+
     fn enabled_links(&self) -> String {
         let tp = &self.taxpayer;
         let sp = &self.spouse_column;
         let mut links = String::new();
-        if self.part_iva_descriptions_open()
-            && self.more_link_enabled(
-                &self.other_income_41_description,
-                &self.other_income_42_description,
-                [
-                    (tp.other_income_41, sp.other_income_41),
-                    (tp.other_income_42, sp.other_income_42),
-                ],
-            )
+        if self.other_income_is_folded()
+            || self.part_iva_descriptions_open()
+                && self.more_link_enabled(
+                    &self.other_income_41_description,
+                    &self.other_income_42_description,
+                    [
+                        (tp.other_income_41, sp.other_income_41),
+                        (tp.other_income_42, sp.other_income_42),
+                    ],
+                )
         {
             links.push_str(",frm1701A:lnkPartIVAMore");
         }
-        if self.part_ivb_descriptions_open()
-            && self.more_link_enabled(
-                &self.eight_other_income_50_description,
-                &self.eight_other_income_51_description,
-                [
-                    (tp.eight_other_income_50, sp.eight_other_income_50),
-                    (tp.eight_other_income_51, sp.eight_other_income_51),
-                ],
-            )
+        if self.eight_other_income_is_folded()
+            || self.part_ivb_descriptions_open()
+                && self.more_link_enabled(
+                    &self.eight_other_income_50_description,
+                    &self.eight_other_income_51_description,
+                    [
+                        (tp.eight_other_income_50, sp.eight_other_income_50),
+                        (tp.eight_other_income_51, sp.eight_other_income_51),
+                    ],
+                )
         {
             links.push_str(",frm1701A:lnkPartIVBMore");
         }
@@ -659,7 +883,18 @@ impl Form1701ADraft {
     /// - Item 16 runs `disableSpouse`, clearing Items 23, 25–27, 57–60 and
     ///   63 of column B; a spouse ATC clears the other part of column B.
     /// - Items 44 and 52 are recomputed only when one of their rows is typed.
+    ///
+    /// With two or more modal rows the map also holds the rows
+    /// ([`Self::official_payload`] places them where the page has them).
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.layout_fields();
+        fields.extend(self.more_rows(false));
+        fields.extend(self.more_rows(true));
+        fields
+    }
+
+    /// The controls of the fixed official layout.
+    fn layout_fields(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {
             fields.insert(format!("frm1701A:{key}"), value);
@@ -793,14 +1028,25 @@ impl Form1701ADraft {
             item("39", money(column.osd));
             item("40", money(column.net_income));
             item("41", entry(column.other_income_41, iva_cleared));
-            item("42", entry(column.other_income_42, iva_cleared));
+            // A folded Item 42 holds the modal subtotal (formatCurrency).
+            let iva_folded = self.other_income_is_folded();
+            let ivb_folded = self.eight_other_income_is_folded();
+            item(
+                "42",
+                if iva_folded {
+                    money(column.other_income_42)
+                } else {
+                    entry(column.other_income_42, iva_cleared)
+                },
+            );
             item("43", entry(column.gpp_share, iva_cleared));
             let typed_44 = column.other_income_41 != 0.0
                 || column.other_income_42 != 0.0
                 || column.gpp_share != 0.0;
             item(
                 "44",
-                if iva_cleared && !(atc.is_graduated() && typed_44) {
+                // computePartIVAModal(false) recomputes both columns.
+                if iva_cleared && !(atc.is_graduated() && typed_44) && !iva_folded {
                     "0".to_string()
                 } else {
                     money(column.total_other_income)
@@ -812,12 +1058,19 @@ impl Form1701ADraft {
             item("48", entry(column.eight_sales_returns, ivb_cleared));
             item("49", money(column.eight_net_sales));
             item("50", entry(column.eight_other_income_50, ivb_cleared));
-            item("51", entry(column.eight_other_income_51, ivb_cleared));
+            item(
+                "51",
+                if ivb_folded {
+                    money(column.eight_other_income_51)
+                } else {
+                    entry(column.eight_other_income_51, ivb_cleared)
+                },
+            );
             let typed_52 =
                 column.eight_other_income_50 != 0.0 || column.eight_other_income_51 != 0.0;
             item(
                 "52",
-                if ivb_cleared && !(atc.is_eight_percent() && typed_52) {
+                if ivb_cleared && !(atc.is_eight_percent() && typed_52) && !ivb_folded {
                     "0".to_string()
                 } else {
                     money(column.eight_total_other_income)
@@ -923,6 +1176,46 @@ impl Form1701ADraft {
         put("txtEnabledLinks", self.enabled_links());
         // capital() also upper-cases the page's own state controls.
         put("txtIsTaxFilerDisabled", typed("false"));
+        // init() sets the pager to page 1; the upload loop writes it.
+        put("txtCurrentPage", "1".to_string());
+        // saveChanges: the row counter, the parent inputs disableParentInput
+        // turned into OTHERS, and the modal's own subtotal boxes.
+        let mut disabled = String::new();
+        for (folded, part, item, rows, (a, b)) in [
+            (
+                self.other_income_is_folded(),
+                "A",
+                "42",
+                self.other_income_more.len(),
+                (
+                    self.taxpayer.other_income_42,
+                    self.spouse_column.other_income_42,
+                ),
+            ),
+            (
+                self.eight_other_income_is_folded(),
+                "B",
+                "51",
+                self.eight_other_income_more.len(),
+                (
+                    self.taxpayer.eight_other_income_51,
+                    self.spouse_column.eight_other_income_51,
+                ),
+            ),
+        ] {
+            if !folded {
+                continue;
+            }
+            put(&format!("txtCtrmodalPartIV{part}"), rows.to_string());
+            disabled.push_str(&format!(
+                "+frm1701A:txt{item}Desc,frm1701A:txt{item}A,frm1701A:txt{item}B"
+            ));
+            put(&format!("txtmodalPartIV{part}_C1"), money(a));
+            put(&format!("txtmodalPartIV{part}_C2"), money(b));
+        }
+        if !disabled.is_empty() {
+            put("txtDisabledInputs", disabled);
+        }
 
         fields.insert("txtEmail".to_string(), self.email.trim().to_string());
         fields
@@ -1268,6 +1561,60 @@ impl Form1701ADraft {
             err("number_of_attachments", "Item 31 holds at most two digits.");
         }
 
+        // The "(add more...)" modals (validateModal on SAVE).
+        for (part_b, field, item, rows) in [
+            (false, "other_income_more", "42", &self.other_income_more),
+            (
+                true,
+                "eight_other_income_more",
+                "51",
+                &self.eight_other_income_more,
+            ),
+        ] {
+            if rows.is_empty() {
+                continue;
+            }
+            if rows.len() == 1 {
+                err(
+                    field,
+                    &format!(
+                        "The (add more...) list needs two or more rows; enter a single row on Item {item}."
+                    ),
+                );
+            }
+            if rows.len() > FORM_1701A_MAX_MORE_ROWS {
+                err(field, &format!("At most {FORM_1701A_MAX_MORE_ROWS} rows."));
+            }
+            if !self.more_link_opens(part_b) {
+                err(
+                    field,
+                    &format!(
+                        "The (add more...) link of Item {item} stays disabled until Item {} and Item {item} are complete.",
+                        if part_b { "50" } else { "41" }
+                    ),
+                );
+            }
+            // Only the description check can fire: the amount check reads
+            // maxLength 25 and the modal amounts are 12 wide.
+            for (index, row) in rows.iter().enumerate() {
+                if row.description.trim().is_empty() {
+                    err(
+                        &format!("{field}[{index}]"),
+                        "Please enter a valid Description",
+                    );
+                    break;
+                }
+            }
+            for (index, row) in rows.iter().enumerate() {
+                if row.description.trim().chars().count() > 30 {
+                    err(&format!("{field}[{index}]"), "At most 30 characters.");
+                }
+                if row.taxpayer < 0.0 || row.spouse < 0.0 {
+                    err(&format!("{field}[{index}]"), "Enter a non-negative amount.");
+                }
+            }
+        }
+
         // Derived items must be what the official compute chain produces.
         let mut expected = self.clone();
         expected.recompute();
@@ -1336,6 +1683,39 @@ impl QueueableForm for Form1701ADraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+
+    /// The fixed layout, with each "(add more...)" modal's saved rows where
+    /// the page's DOM has them: in `tblmodalPartIV<A|B>Repository`, just
+    /// ahead of the modal's subtotal box `txtmodalPartIV<A|B>_C1`.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as QueueableForm>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let xml_error = |error: String| vec![("xml".to_string(), error)];
+        let layout = crate::official_xml::layout(Self::LAYOUT_ID)
+            .map_err(|error| xml_error(error.to_string()))?;
+        let mut payload = crate::official_xml::write(layout, &self.layout_fields())
+            .map_err(|error| xml_error(error.to_string()))?;
+        for (part_b, part) in [(false, "A"), (true, "B")] {
+            let rows = self.more_rows(part_b);
+            if rows.is_empty() {
+                continue;
+            }
+            let anchor = format!("<div>frm1701A:txtmodalPartIV{part}_C1=");
+            let at = payload
+                .find(&anchor)
+                .ok_or_else(|| xml_error("the modal subtotal is missing from the layout".into()))?;
+            // Every control on this page is followed by the same separator.
+            let separator = &layout.lead;
+            let text: String = rows
+                .iter()
+                .map(|(id, value)| format!("<div>{id}={value}{id}=</div>{separator}"))
+                .collect();
+            payload.insert_str(at, &text);
+        }
+        Ok(payload)
+    }
 }
 
 #[cfg(test)]
@@ -1390,6 +1770,8 @@ mod tests {
             eight_other_income_50_description: String::new(),
             eight_other_income_51_description: String::new(),
             other_credits_description: "Sample credit".to_string(),
+            other_income_more: Vec::new(),
+            eight_other_income_more: Vec::new(),
             aggregate_amount_payable: 0.0,
             overpayment: Form1701AOverpayment::None,
             number_of_attachments: 0,
