@@ -121,6 +121,10 @@ gio = "0.18.4"
 glib = "0.18.5"
 gtk = "0.18.2"
 webkit2gtk = "2.0.1"
+# cor_ocr stores the Gemini API key with keyring directly. Without a backend
+# feature keyring 3.x silently uses an in-memory mock on Linux, so name the
+# Secret Service store explicitly (same features as bir-core).
+keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] }
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
