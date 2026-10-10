@@ -18,6 +18,7 @@
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
 use bir_core::forms::form_2551q::{Form2551QDraft, Item13Election};
+use bir_core::forms::form_2553::{FORM_2553_ATC_OPTIONS, Form2553Draft, Form2553TaxTreaty};
 use bir_core::official_xml;
 use bir_core::profile::TaxpayerProfile;
 use sha2::{Digest, Sha256};
@@ -27,7 +28,7 @@ use std::path::PathBuf;
 /// `Encrypt.exe` (sha256 `429337f4…4d2c`, unchanged from 7.9.6.0 through
 /// 7.9.6.2.1), run under emulation. Our `compress_and_encrypt` must match
 /// it byte for byte; regenerating samples can never change these.
-const OFFICIAL_ENCRYPT_EXE_SHA256: [(&str, &str); 2] = [
+const OFFICIAL_ENCRYPT_EXE_SHA256: [(&str, &str); 3] = [
     (
         "1601C-062025",
         "74731b2485fc21e3ced644988515019ed271a4f7e7b0ac5e9b07a5c82011f16d",
@@ -35,6 +36,10 @@ const OFFICIAL_ENCRYPT_EXE_SHA256: [(&str, &str); 2] = [
     (
         "2551Q-122025Q1",
         "fa902b122f7a6dafca86314914279491aeceea8a46c23815178dd7403e820bb9",
+    ),
+    (
+        "2553-122025Q1",
+        "4e7a1727b080bc0e3ca7e9b0c52443825ecd83f49889097b32e3bbdfff80428c",
     ),
 ];
 
@@ -102,6 +107,23 @@ fn sample_2551q() -> Form2551QDraft {
     draft.schedule_1[0].taxable_amount = 180_000.0;
     draft.creditable_tax_withheld = 500.0;
     draft.recompute(None);
+    draft
+}
+
+fn sample_2553() -> Form2553Draft {
+    let mut draft = Form2553Draft::new_from_profile(&dummy_profile("2553", "Corporation"), 2025, 1);
+    draft.tax_treaty = Form2553TaxTreaty::SpecialRate;
+    draft.set_atc(0, &FORM_2553_ATC_OPTIONS[0]).unwrap();
+    draft.set_atc(1, &FORM_2553_ATC_OPTIONS[1]).unwrap();
+    draft.set_atc(2, &FORM_2553_ATC_OPTIONS[3]).unwrap();
+    draft.schedule[0].taxable_amount = 123_456.789;
+    draft.schedule[1].taxable_amount = 2_500_000.0;
+    draft.schedule[1].tax_rate = 3.5;
+    draft.schedule[2].taxable_amount = 999.995;
+    draft.creditable_tax_withheld = 1_000.0;
+    draft.surcharge = 25.5;
+    draft.interest = 10.0;
+    draft.recompute();
     draft
 }
 
@@ -189,4 +211,13 @@ fn form_2551q_sample_payload_is_current() {
         .to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 2551Q must validate: {errors:?}"));
     check_sample("2551Q-122025Q1", "2551q-v2018", &payload);
+}
+
+#[test]
+fn form_2553_sample_payload_is_current() {
+    let draft = sample_2553();
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 2553 must validate: {errors:?}"));
+    check_sample("2553-122025Q1", "2553-v1999", &payload);
 }

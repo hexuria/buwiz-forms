@@ -29,6 +29,7 @@ pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
 pub const PAGE_FORM_1701: &str = "page-form-1701";
 pub const PAGE_FORM_1702RT: &str = "page-form-1702rt";
 pub const PAGE_FORM_1702MX: &str = "page-form-1702mx";
+pub const PAGE_FORM_2553: &str = "page-form-2553";
 
 pub const NAV_GLOBAL_DASHBOARD: &str = "global_dashboard_btn";
 pub const NAV_NEW_PROFILE: &str = "add_profile_mini_btn";
@@ -167,6 +168,9 @@ pub const FORM_1702RT_SUBMIT: &str = "1702rt_submit";
 pub const FORM_1702MX_BACK: &str = "1702mx_back";
 pub const FORM_1702MX_SAVE: &str = "1702mx_save";
 pub const FORM_1702MX_SUBMIT: &str = "1702mx_submit";
+pub const FORM_2553_BACK: &str = "2553_back";
+pub const FORM_2553_SAVE: &str = "2553_save";
+pub const FORM_2553_SUBMIT: &str = "2553_submit";
 
 pub const DUES_LIST: &str = "dues-list";
 pub const JOBS_LIST: &str = "jobs-list";
@@ -359,6 +363,7 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => PAGE_FORM_1701,
         ActiveView::Form1702RT => PAGE_FORM_1702RT,
         ActiveView::Form1702MX => PAGE_FORM_1702MX,
+        ActiveView::Form2553 => PAGE_FORM_2553,
     }
 }
 
@@ -382,6 +387,7 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => "form-1701",
         ActiveView::Form1702RT => "form-1702rt",
         ActiveView::Form1702MX => "form-1702mx",
+        ActiveView::Form2553 => "form-2553",
     }
 }
 
@@ -405,6 +411,7 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "form-1701" | "1701" => Some(ActiveView::Form1701),
         "form-1702rt" | "1702rt" => Some(ActiveView::Form1702RT),
         "form-1702mx" | "1702mx" => Some(ActiveView::Form1702MX),
+        "form-2553" | "2553" => Some(ActiveView::Form2553),
         _ => None,
     }
 }
@@ -429,6 +436,7 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Form1701,
     ActiveView::Form1702RT,
     ActiveView::Form1702MX,
+    ActiveView::Form2553,
 ];
 
 pub struct FormChrome {
@@ -509,6 +517,13 @@ pub const FORM_CHROME: &[FormChrome] = &[
         back: FORM_1702MX_BACK,
         save: FORM_1702MX_SAVE,
         submit: FORM_1702MX_SUBMIT,
+    },
+    FormChrome {
+        view: ActiveView::Form2553,
+        code: "2553",
+        back: FORM_2553_BACK,
+        save: FORM_2553_SAVE,
+        submit: FORM_2553_SUBMIT,
     },
 ];
 

@@ -710,6 +710,7 @@ impl BirAgentHost {
                 | ActiveView::Form1701
                 | ActiveView::Form1702RT
                 | ActiveView::Form1702MX
+                | ActiveView::Form2553
         ) && self.selected_tin.is_none()
             && target == ActiveView::Dashboard
         {
@@ -4161,6 +4162,7 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => "Form 1701",
         ActiveView::Form1702RT => "Form 1702RT",
         ActiveView::Form1702MX => "Form 1702MX",
+        ActiveView::Form2553 => "Form 2553",
     }
 }
 

@@ -393,6 +393,7 @@ pub fn period_column(period: &FilingPeriod) -> i64 {
 /// lookups and its arm in [`crate::with_queueable_kind`] when a form joins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueueableKind {
+    Form2553,
     #[cfg(test)]
     Test,
 }
@@ -401,6 +402,7 @@ impl QueueableKind {
     /// From `form_drafts.form_code`, e.g. `"2550Q"`.
     pub fn from_form_code(code: &str) -> Option<Self> {
         match code {
+            "2553" => Some(Self::Form2553),
             #[cfg(test)]
             test_support::TestForm::CODE => Some(Self::Test),
             _ => None,
@@ -410,6 +412,7 @@ impl QueueableKind {
     /// From a receipt's official form type, e.g. `"2550Qv2024"`.
     pub fn from_form_type(form_type: &str) -> Option<Self> {
         match form_type {
+            "2553" => Some(Self::Form2553),
             #[cfg(test)]
             test_support::TestForm::TYPE => Some(Self::Test),
             _ => None,
@@ -422,6 +425,10 @@ impl QueueableKind {
 macro_rules! with_queueable_kind {
     ($kind:expr, $ty:ident => $body:expr) => {
         match $kind {
+            $crate::forms::queueable::QueueableKind::Form2553 => {
+                type $ty = $crate::forms::form_2553::Form2553Draft;
+                $body
+            }
             #[cfg(test)]
             $crate::forms::queueable::QueueableKind::Test => {
                 type $ty = $crate::forms::queueable::test_support::TestForm;
@@ -504,17 +511,32 @@ pub(crate) mod test_support {
         }
         fn validate(&self) -> Vec<(String, String)> {
             if self.amount < 0.0 {
-                vec![("amount".to_string(), "Amount must not be negative".to_string())]
+                vec![(
+                    "amount".to_string(),
+                    "Amount must not be negative".to_string(),
+                )]
             } else {
                 Vec::new()
             }
         }
         fn field_map(&self) -> BTreeMap<String, String> {
             BTreeMap::from([
-                ("frm1601c:txtMonth".to_string(), format!("{:02}", self.month)),
-                ("frm1601c:txtYear".to_string(), self.taxable_year.to_string()),
-                ("frm1601c:txtTax14".to_string(), format!("{:.2}", self.amount)),
-                ("frm1601c:txtTax22".to_string(), format!("{:.2}", self.doubled)),
+                (
+                    "frm1601c:txtMonth".to_string(),
+                    format!("{:02}", self.month),
+                ),
+                (
+                    "frm1601c:txtYear".to_string(),
+                    self.taxable_year.to_string(),
+                ),
+                (
+                    "frm1601c:txtTax14".to_string(),
+                    format!("{:.2}", self.amount),
+                ),
+                (
+                    "frm1601c:txtTax22".to_string(),
+                    format!("{:.2}", self.doubled),
+                ),
             ])
         }
     }
@@ -528,7 +550,13 @@ mod tests {
     #[test]
     fn lifecycle_flattens_to_the_same_json_keys_as_1601c() {
         let json = serde_json::to_value(TestForm::new(6, 10.0)).unwrap();
-        for key in ["status", "created_at", "updated_at", "submission_attempts", "tin"] {
+        for key in [
+            "status",
+            "created_at",
+            "updated_at",
+            "submission_attempts",
+            "tin",
+        ] {
             assert!(json.get(key).is_some(), "{key}");
         }
         assert!(json.get("lifecycle").is_none());
@@ -545,7 +573,11 @@ mod tests {
 
         form.amount = 11.0;
         let errors = form.revalidate_queued_before_submission().unwrap_err();
-        assert!(errors.iter().any(|(field, _)| field == "queued_submission_fingerprint"));
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "queued_submission_fingerprint")
+        );
         assert_eq!(form.lifecycle.status, FilingStatus::Draft);
     }
 
@@ -571,10 +603,12 @@ mod tests {
         let mut form = TestForm::new(6, 10.0);
         form.queue(QueueAuthSource::Gui).unwrap();
         for attempt in 1..=4 {
-            form.lifecycle.record_submission_failure(format!("try {attempt}"));
+            form.lifecycle
+                .record_submission_failure(format!("try {attempt}"));
             assert_eq!(form.lifecycle.status, FilingStatus::Queued);
         }
-        form.lifecycle.record_submission_failure("try 5".to_string());
+        form.lifecycle
+            .record_submission_failure("try 5".to_string());
         assert_eq!(form.lifecycle.status, FilingStatus::Draft);
         assert!(form.lifecycle.queue_authorization.is_none());
     }

@@ -17,8 +17,14 @@ use crate::forms::queueable::QueueableForm;
 
 /// Result of claiming one exact queued generation before PUT.
 pub enum ClaimQueueableResult<F> {
-    Claimed { draft: F, token: String },
-    Rejected { draft: F, errors: Vec<(String, String)> },
+    Claimed {
+        draft: F,
+        token: String,
+    },
+    Rejected {
+        draft: F,
+        errors: Vec<(String, String)>,
+    },
     Superseded,
 }
 
@@ -544,7 +550,8 @@ impl Database {
                 F::FORM_CODE
             )));
         }
-        if draft.lifecycle().queued_submission_fingerprint != lifecycle.queued_submission_fingerprint
+        if draft.lifecycle().queued_submission_fingerprint
+            != lifecycle.queued_submission_fingerprint
             || draft.field_map() != existing.field_map()
         {
             return Err(DbError::Other(format!(
@@ -667,7 +674,9 @@ impl Database {
         let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
         let receipt_naive = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
             .map_err(|error| {
-            DbError::Other(format!("Receipt has an invalid received timestamp: {error}"))
+            DbError::Other(format!(
+                "Receipt has an invalid received timestamp: {error}"
+            ))
         })?;
         let offset = chrono::FixedOffset::east_opt(8 * 3600)
             .ok_or_else(|| DbError::Other("UTC+08:00 offset is unavailable".to_string()))?;
