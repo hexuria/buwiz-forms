@@ -192,3 +192,77 @@ mod tests {
         assert!(!numbers_only("1,2"));
     }
 }
+
+/// Rows a page adds at run time (1801 "Add row", the 1707 / 1707A pop-ups)
+/// are written by the same `saveXMLsubmit` loop in DOM order, so their
+/// layout is the generated one with copies of a template row's entries
+/// spliced in. Each insertion copies `template` entries under new keys
+/// (`template` key → new key, same kind, codec, default and trailing text)
+/// and places them right after the entry keyed `after`.
+pub struct RowInsertion {
+    pub after: String,
+    pub copies: Vec<(String, String)>,
+}
+
+/// The generated layout extended with run-time rows. Insertions apply in
+/// order; a later insertion may anchor on a key an earlier one added.
+pub fn extend_layout(
+    base: &crate::official_xml::OfficialLayout,
+    insertions: &[RowInsertion],
+) -> Result<crate::official_xml::OfficialLayout, String> {
+    use crate::official_xml::{Entry, Part};
+    let key_of = |entry: &Entry| match entry {
+        Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+    };
+    let mut layout = base.clone();
+    for insertion in insertions {
+        let mut new_entries = Vec::new();
+        for (template, new_key) in &insertion.copies {
+            let source = layout
+                .entries
+                .iter()
+                .find(|entry| key_of(entry) == *template)
+                .ok_or_else(|| format!("no template entry {template}"))?;
+            let copy = match source.clone() {
+                Entry::Bool { default, after, .. } => Entry::Bool {
+                    key: new_key.clone(),
+                    default,
+                    after,
+                },
+                Entry::Value {
+                    parts,
+                    default,
+                    after,
+                    ..
+                } => Entry::Value {
+                    key: new_key.clone(),
+                    parts: parts
+                        .into_iter()
+                        .map(|part| match part {
+                            Part::Source {
+                                source,
+                                codec,
+                                uppercase,
+                            } if source == *template => Part::Source {
+                                source: new_key.clone(),
+                                codec,
+                                uppercase,
+                            },
+                            other => other,
+                        })
+                        .collect(),
+                    default,
+                    after,
+                },
+            };
+            new_entries.push(copy);
+        }
+        let at = layout
+            .entries
+            .iter()
+            .position(|entry| key_of(entry) == insertion.after)
+            .ok_or_else(|| format!("no anchor entry {}", insertion.after))?;
+        layout.entries.splice(at + 1..at + 1, new_entries);
+    }
+    Ok(layout)
+}

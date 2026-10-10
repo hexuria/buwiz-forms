@@ -94,6 +94,68 @@ fn form_1801_sample_payload_is_current() {
         "1801-06052025",
         "1801-v2018",
         &payload,
-        "a4c75411bcd1c0ededce0507e3b07f163f820f4964a3b81e629ac4d3397fbd37",
+        "a8c7a11e49feab4b9d1fb9da51f52f6cdb2930ed8e2f0cf08381c18dd0eca585",
+    );
+}
+
+/// A return with tax due and rows added with "Add row": its layout is the
+/// generated one extended by `Form1801Draft::official_layout`, so the shared
+/// `check_sample` (fixed layout) is replaced by the same checks against it.
+fn sample_1801_with_tax_and_added_rows() -> Form1801Draft {
+    let mut d = sample_1801();
+    d.death_month = 9;
+    d.death_day = 15;
+    d.death_year = 2025;
+    d.real_properties.push(Form1801RealProperty {
+        title_number: "T-22222".into(),
+        tax_declaration_number: "TD-003".into(),
+        location: "Cebu City".into(),
+        lot_or_improvement: "Improvement".into(),
+        area: "80".into(),
+        classification: "CR".into(),
+        fmv_per_tax_declaration: "2500000".into(),
+        fmv_per_zonal_value: "3000000".into(),
+        value: split(3_000_000.0, 0.0),
+    });
+    d.real_properties.push(Form1801RealProperty {
+        title_number: "T-33333".into(),
+        tax_declaration_number: "TD-004".into(),
+        location: "Davao City".into(),
+        lot_or_improvement: "Lot".into(),
+        area: "500".into(),
+        classification: "A".into(),
+        fmv_per_tax_declaration: "1500000".into(),
+        fmv_per_zonal_value: "1750000.50".into(),
+        value: split(0.0, 1_750_000.505),
+    });
+    d.other_personal.push(Form1801Particular {
+        particulars: "Paintings".into(),
+        value: split(120_000.0, 0.0),
+    });
+    d.business_interests.push(Form1801Business {
+        name: "Second Sample Shop".into(),
+        address: "Taguig City".into(),
+        rdo_code: "044".into(),
+        value: split(0.0, 60_000.0),
+    });
+    d.surcharge = 1_000.0;
+    d.interest = 250.25;
+    d.recompute();
+    d
+}
+
+#[test]
+fn form_1801_sample_with_tax_due_and_added_rows_is_current() {
+    let draft = sample_1801_with_tax_and_added_rows();
+    assert!(draft.estate_tax_due() > 0.0);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1801 must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1801-09152025",
+        &layout,
+        &payload,
+        "91634c49f9f9dd46db29cdc38b6581a3ee1c249f419540546df75be21e8f4fe1",
     );
 }

@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
 use bir_core::forms::form_1801::{
-    FORM_1801_SCHEDULE_ROWS, Form1801Business, Form1801Draft, Form1801Frequency,
-    Form1801Particular, Form1801RealProperty, Form1801Shares, Form1801Split,
+    Form1801Business, Form1801Draft, Form1801Frequency, Form1801Particular, Form1801RealProperty,
+    Form1801Shares, Form1801Split,
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
@@ -105,6 +105,10 @@ const SHARES: [(&str, &str); 5] = [
     ("per", "FMV / book value per share"),
 ];
 
+/// Rows offered per Part V schedule (the page opens with two; "Add row"
+/// appends more).
+const SCHEDULE_UI_ROWS: usize = 6;
+
 fn k(schedule: &str, row: usize, part: &str) -> String {
     format!("{schedule}_{row}_{part}")
 }
@@ -140,7 +144,7 @@ impl Form1801View {
 
     fn row_texts(d: &Form1801Draft) -> Vec<(String, String)> {
         let mut out = Vec::new();
-        for row in 0..FORM_1801_SCHEDULE_ROWS {
+        for row in 0..SCHEDULE_UI_ROWS {
             for (schedule, rows) in [("s1", &d.real_properties), ("s1a", &d.family_homes)] {
                 let r = rows.get(row).cloned().unwrap_or_default();
                 for (part, value) in [
@@ -438,7 +442,7 @@ impl Form1801View {
             ("s1a", "Schedule 1A — Family home", "sched1A"),
         ] {
             children.push(kit::label(title).into_any_element());
-            for row in 0..FORM_1801_SCHEDULE_ROWS {
+            for row in 0..SCHEDULE_UI_ROWS {
                 let mut cells: Vec<AnyElement> = REAL
                     .iter()
                     .filter(|(part, _)| schedule == "s1" || *part != "lot")
@@ -465,7 +469,7 @@ impl Form1801View {
             children.push(totals(total_name, "Total exclusive / conjugal"));
         }
         children.push(kit::label("Schedule 2 — Shares of stock").into_any_element());
-        for row in 0..FORM_1801_SCHEDULE_ROWS {
+        for row in 0..SCHEDULE_UI_ROWS {
             let mut cells: Vec<AnyElement> = SHARES
                 .iter()
                 .map(|(part, caption)| {
@@ -494,7 +498,7 @@ impl Form1801View {
             ("s3", "Schedule 3 — Taxable transfers", "sched3"),
         ] {
             children.push(kit::label(title).into_any_element());
-            for row in 0..FORM_1801_SCHEDULE_ROWS {
+            for row in 0..SCHEDULE_UI_ROWS {
                 children.push(grid(
                     layout,
                     vec![
@@ -519,7 +523,7 @@ impl Form1801View {
             children.push(totals(total_name, "Total exclusive / conjugal"));
         }
         children.push(kit::label("Schedule 4 — Business interest").into_any_element());
-        for row in 0..FORM_1801_SCHEDULE_ROWS {
+        for row in 0..SCHEDULE_UI_ROWS {
             let cells = [
                 ("name", "Trade / business name"),
                 ("addr", "Registered address"),
@@ -574,13 +578,7 @@ impl Form1801View {
             )
         };
         let (payable, first, total) = d.payables();
-        let shown = |v: f64| {
-            if v.is_nan() {
-                "NaN (refused)".to_string()
-            } else {
-                bir_core::official_xml::official_amount(v)
-            }
-        };
+        let shown = bir_core::official_xml::official_amount;
         let children = vec![
             cols("29 — Real properties (A / B / C)", d.real_property),
             cols("30 — Family home", d.family_home),
@@ -605,7 +603,7 @@ impl Form1801View {
             computed("38 — Net estate", d.net_estate, cx),
             computed("39 — Share of surviving spouse", d.spouse_share, cx),
             computed("40 / 16 — Net taxable estate", d.net_taxable_estate, cx),
-            kit::computed_text("18 — Estate tax due", shown(d.estate_tax_due()), cx),
+            kit::computed_text("18 — Estate tax due (6%)", shown(d.estate_tax_due()), cx),
             self.f("foreign", layout, false),
             self.f("prev", layout, !d.is_amended),
             computed("19C — Total credits", d.total_credits, cx),
@@ -713,7 +711,7 @@ impl KitView for Form1801View {
         let mut other = Vec::new();
         let mut transfers = Vec::new();
         let mut business = Vec::new();
-        for row in 0..FORM_1801_SCHEDULE_ROWS {
+        for row in 0..SCHEDULE_UI_ROWS {
             for (schedule, list) in [("s1", &mut real), ("s1a", &mut family)] {
                 list.push(Form1801RealProperty {
                     title_number: r.text(&k(schedule, row, "oct")),

@@ -9,9 +9,8 @@
 //! `sleeptime()` fill it.
 //!
 //! The page starts every schedule with two rows; this model covers exactly
-//! those rows. Item 17 reads its rate from `xml/taxRate.xml`, which does not
-//! parse (a comment precedes the XML declaration), so the page computes
-//! `NaN` for any positive net taxable estate; such returns are refused here.
+//! those rows. Item 17's rate (6%) comes from `xml/taxRate.xml` through
+//! `js/tax-rate-helper.js`; `init()` shows it as `6.0%`.
 
 use std::collections::BTreeMap;
 
@@ -19,8 +18,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use super::official_inputs::{
-    cents, digits_only, group_thousands, has_cent_precision, split_tin, tin_is_well_formed,
-    to_fixed_2, to_fixed_text, within_round_limit,
+    RowInsertion, cents, digits_only, extend_layout, group_thousands, has_cent_precision,
+    split_tin, tin_is_well_formed, to_fixed_2, to_fixed_text, within_round_limit,
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
@@ -31,6 +30,60 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1801_FORM_ID: &str = "1801-v2018";
 /// Rows the page creates for every Part V schedule.
 pub const FORM_1801_SCHEDULE_ROWS: usize = 2;
+/// Rows a schedule may hold here ("Add row" has no limit on the page).
+pub const FORM_1801_MAX_SCHEDULE_ROWS: usize = 20;
+
+/// Column keys of each Part V table, in page order, with `{}` for the row
+/// number (`addRow_*` builds `<select id= frm1801v2018:sched1Class_N'`, so
+/// the classification ids really end in an apostrophe).
+const SCHEDULE_TABLES: [&[&str]; 7] = [
+    &[
+        "sched1Oct_{}",
+        "sched1Td_{}",
+        "sched1Loc_{}",
+        "sched1Lot_{}",
+        "sched1Area_{}",
+        "sched1Class_{}'",
+    ],
+    &[
+        "sched1Fmv_{}",
+        "sched1Zonal_{}",
+        "sched1Exc_{}",
+        "sched1Conj_{}",
+    ],
+    &[
+        "sched1AOct_{}",
+        "sched1ATd_{}",
+        "sched1ALoc_{}",
+        "sched1AArea_{}",
+        "sched1AClass_{}'",
+        "sched1AFmv_{}",
+        "sched1AZonal_{}",
+        "sched1AExc_{}",
+        "sched1AConj_{}",
+    ],
+    &[
+        "sched2Corp_{}",
+        "sched2Class_{}",
+        "sched2Stock_{}",
+        "sched2Shares_{}",
+        "sched2FmvPerShare_{}",
+        "sched2Exc_{}",
+        "sched2Conj_{}",
+    ],
+    &["sched2AParticulars_{}", "sched2AExc_{}", "sched2AConj_{}"],
+    &["sched3Particulars_{}", "sched3Exc_{}", "sched3Conj_{}"],
+    &[
+        "sched4Name_{}",
+        "sched4Address_{}",
+        "sched4Rdo_{}",
+        "sched4Exc_{}",
+        "sched4Conj_{}",
+    ],
+];
+/// Item 17, percent: `xml/taxRate.xml` holds `0.06`, which `init()` shows as
+/// `6.0%` and `computeNo18` reads back as 6.
+pub const FORM_1801_TAX_RATE_PERCENT: f64 = 6.0;
 
 /// Item 15D frequency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -486,11 +539,11 @@ impl Form1801Draft {
         self.total_penalties = fc(self.surcharge + self.interest + self.compromise);
     }
 
-    /// Item 18 as `computeNo18` leaves it: `NaN` for any positive estate
-    /// (the Item 17 rate never loads), `0.00` otherwise.
+    /// Item 18 (`computeNo18`): Item 16 × Item 17 for a positive estate,
+    /// `0.00` otherwise.
     pub fn estate_tax_due(&self) -> f64 {
         if self.net_taxable_estate > 0.0 {
-            f64::NAN
+            fc(self.net_taxable_estate * (FORM_1801_TAX_RATE_PERCENT / 100.0))
         } else {
             0.0
         }
@@ -609,7 +662,7 @@ impl Form1801Draft {
 
         let (payable, first, total) = self.payables();
         put("txtTaxableEstate", amount(self.net_taxable_estate));
-        put("txtTaxRate", "NAN%".to_string());
+        put("txtTaxRate", "6.0%".to_string());
         put("txtEstTaxDue", amount(self.estate_tax_due()));
         put("txtCredits_ForeignEst", typed(self.foreign_estate_tax));
         put("txtCredits_TaxPrev", typed(self.tax_paid_previous));
@@ -653,55 +706,73 @@ impl Form1801Draft {
         put("txtShareSpouse_C", amount(self.spouse_share));
         put("txtNetTaxEst_C", amount(self.net_taxable_estate));
 
-        for index in 0..FORM_1801_SCHEDULE_ROWS {
+        let rows = self.table_rows();
+        let most = rows
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(FORM_1801_SCHEDULE_ROWS);
+        for index in 0..most {
             let n = index + 1;
+            let mut put = |table: usize, key: &str, value: String| {
+                if index < rows[table] {
+                    put(key, value);
+                }
+            };
             let r = Self::row(&self.real_properties, index);
-            put(&format!("sched1Oct_{n}"), up(&r.title_number));
-            put(&format!("sched1Td_{n}"), up(&r.tax_declaration_number));
-            put(&format!("sched1Loc_{n}"), up(&r.location));
-            put(&format!("sched1Lot_{n}"), up(&r.lot_or_improvement));
-            put(&format!("sched1Area_{n}"), up(&r.area));
+            put(0, &format!("sched1Oct_{n}"), up(&r.title_number));
+            put(0, &format!("sched1Td_{n}"), up(&r.tax_declaration_number));
+            put(0, &format!("sched1Loc_{n}"), up(&r.location));
+            put(0, &format!("sched1Lot_{n}"), up(&r.lot_or_improvement));
+            put(0, &format!("sched1Area_{n}"), up(&r.area));
             put(
+                0,
                 &format!("sched1Class_{n}'"),
                 r.classification.trim().to_string(),
             );
-            put(&format!("sched1Fmv_{n}"), up(&r.fmv_per_tax_declaration));
-            put(&format!("sched1Zonal_{n}"), up(&r.fmv_per_zonal_value));
-            put(&format!("sched1Exc_{n}"), typed(r.value.exclusive));
-            put(&format!("sched1Conj_{n}"), typed(r.value.conjugal));
+            put(1, &format!("sched1Fmv_{n}"), up(&r.fmv_per_tax_declaration));
+            put(1, &format!("sched1Zonal_{n}"), up(&r.fmv_per_zonal_value));
+            put(1, &format!("sched1Exc_{n}"), typed(r.value.exclusive));
+            put(1, &format!("sched1Conj_{n}"), typed(r.value.conjugal));
             let f = Self::row(&self.family_homes, index);
-            put(&format!("sched1AOct_{n}"), up(&f.title_number));
-            put(&format!("sched1ATd_{n}"), up(&f.tax_declaration_number));
-            put(&format!("sched1ALoc_{n}"), up(&f.location));
-            put(&format!("sched1AArea_{n}"), up(&f.area));
+            put(2, &format!("sched1AOct_{n}"), up(&f.title_number));
+            put(2, &format!("sched1ATd_{n}"), up(&f.tax_declaration_number));
+            put(2, &format!("sched1ALoc_{n}"), up(&f.location));
+            put(2, &format!("sched1AArea_{n}"), up(&f.area));
             put(
+                2,
                 &format!("sched1AClass_{n}'"),
                 f.classification.trim().to_string(),
             );
-            put(&format!("sched1AFmv_{n}"), up(&f.fmv_per_tax_declaration));
-            put(&format!("sched1AZonal_{n}"), up(&f.fmv_per_zonal_value));
-            put(&format!("sched1AExc_{n}"), typed(f.value.exclusive));
-            put(&format!("sched1AConj_{n}"), typed(f.value.conjugal));
-            let s = Self::row(&self.shares, index);
-            put(&format!("sched2Corp_{n}"), up(&s.corporation));
-            put(&format!("sched2Class_{n}"), s.listing.trim().to_string());
-            put(&format!("sched2Stock_{n}"), up(&s.certificate_number));
-            put(&format!("sched2Shares_{n}"), up(&s.number_of_shares));
-            put(&format!("sched2FmvPerShare_{n}"), up(&s.value_per_share));
-            put(&format!("sched2Exc_{n}"), typed(s.value.exclusive));
-            put(&format!("sched2Conj_{n}"), typed(s.value.conjugal));
-            let o = Self::row(&self.other_personal, index);
-            put(&format!("sched2AParticulars_{n}"), up(&o.particulars));
-            put(&format!("sched2AExc_{n}"), typed(o.value.exclusive));
-            put(&format!("sched2AConj_{n}"), typed(o.value.conjugal));
-            let t = Self::row(&self.taxable_transfers, index);
-            put(&format!("sched3Particulars_{n}"), up(&t.particulars));
-            put(&format!("sched3Exc_{n}"), typed(t.value.exclusive));
-            put(&format!("sched3Conj_{n}"), typed(t.value.conjugal));
-            let b = Self::row(&self.business_interests, index);
-            put(&format!("sched4Name_{n}"), up(&b.name));
-            put(&format!("sched4Address_{n}"), up(&b.address));
             put(
+                2,
+                &format!("sched1AFmv_{n}"),
+                up(&f.fmv_per_tax_declaration),
+            );
+            put(2, &format!("sched1AZonal_{n}"), up(&f.fmv_per_zonal_value));
+            put(2, &format!("sched1AExc_{n}"), typed(f.value.exclusive));
+            put(2, &format!("sched1AConj_{n}"), typed(f.value.conjugal));
+            let s = Self::row(&self.shares, index);
+            put(3, &format!("sched2Corp_{n}"), up(&s.corporation));
+            put(3, &format!("sched2Class_{n}"), s.listing.trim().to_string());
+            put(3, &format!("sched2Stock_{n}"), up(&s.certificate_number));
+            put(3, &format!("sched2Shares_{n}"), up(&s.number_of_shares));
+            put(3, &format!("sched2FmvPerShare_{n}"), up(&s.value_per_share));
+            put(3, &format!("sched2Exc_{n}"), typed(s.value.exclusive));
+            put(3, &format!("sched2Conj_{n}"), typed(s.value.conjugal));
+            let o = Self::row(&self.other_personal, index);
+            put(4, &format!("sched2AParticulars_{n}"), up(&o.particulars));
+            put(4, &format!("sched2AExc_{n}"), typed(o.value.exclusive));
+            put(4, &format!("sched2AConj_{n}"), typed(o.value.conjugal));
+            let t = Self::row(&self.taxable_transfers, index);
+            put(5, &format!("sched3Particulars_{n}"), up(&t.particulars));
+            put(5, &format!("sched3Exc_{n}"), typed(t.value.exclusive));
+            put(5, &format!("sched3Conj_{n}"), typed(t.value.conjugal));
+            let b = Self::row(&self.business_interests, index);
+            put(6, &format!("sched4Name_{n}"), up(&b.name));
+            put(6, &format!("sched4Address_{n}"), up(&b.address));
+            put(
+                6,
                 &format!("sched4Rdo_{n}"),
                 if b.rdo_code.trim().is_empty() {
                     "000".to_string()
@@ -709,8 +780,8 @@ impl Form1801Draft {
                     b.rdo_code.trim().to_string()
                 },
             );
-            put(&format!("sched4Exc_{n}"), typed(b.value.exclusive));
-            put(&format!("sched4Conj_{n}"), typed(b.value.conjugal));
+            put(6, &format!("sched4Exc_{n}"), typed(b.value.exclusive));
+            put(6, &format!("sched4Conj_{n}"), typed(b.value.conjugal));
         }
         for name in [
             "sched1", "sched1A", "sched2", "sched2A", "sched3", "sched4", "sched5",
@@ -734,6 +805,45 @@ impl Form1801Draft {
         }
         put("sched5Others_Specify", up(&ded.others_description));
         fields
+    }
+
+    /// Rows each Part V table writes: the page opens with two and "Add row"
+    /// appends more.
+    fn table_rows(&self) -> [usize; 7] {
+        let rows = |n: usize| n.max(FORM_1801_SCHEDULE_ROWS);
+        let real = rows(self.real_properties.len());
+        [
+            real,
+            real,
+            rows(self.family_homes.len()),
+            rows(self.shares.len()),
+            rows(self.other_personal.len()),
+            rows(self.taxable_transfers.len()),
+            rows(self.business_interests.len()),
+        ]
+    }
+
+    /// The generated layout (two rows per table) with the rows "Add row"
+    /// appends spliced in after the last row of their table.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        let base = crate::official_xml::layout(FORM_1801_FORM_ID).map_err(|e| e.to_string())?;
+        let rows = self.table_rows();
+        let mut insertions = Vec::new();
+        for (table, columns) in SCHEDULE_TABLES.iter().enumerate() {
+            for n in (FORM_1801_SCHEDULE_ROWS + 1)..=rows[table] {
+                let key = |column: &str, row: usize| {
+                    format!("frm1801v2018:{}", column.replace("{}", &row.to_string()))
+                };
+                insertions.push(RowInsertion {
+                    after: key(columns[columns.len() - 1], n - 1),
+                    copies: columns
+                        .iter()
+                        .map(|column| (key(column, FORM_1801_SCHEDULE_ROWS), key(column, n)))
+                        .collect(),
+                });
+            }
+        }
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -997,13 +1107,6 @@ impl Form1801Draft {
             }
         }
 
-        // Official defect, refused rather than filed.
-        if self.net_taxable_estate > 0.0 {
-            err(
-                "net_taxable_estate",
-                "The official 1801 page cannot compute Item 18 for a positive net taxable estate (its Item 17 rate does not load); file this return manually.",
-            );
-        }
         // A capital() blur happens on Item 10; the uppercase rule relies on it.
         if self.administrator_name.trim().is_empty() {
             err(
@@ -1026,10 +1129,12 @@ impl Form1801Draft {
             self.taxable_transfers.len(),
             self.business_interests.len(),
         ];
-        if lists.iter().any(|n| *n > FORM_1801_SCHEDULE_ROWS) {
+        if lists.iter().any(|n| *n > FORM_1801_MAX_SCHEDULE_ROWS) {
             err(
                 "schedules",
-                "Each Part V schedule holds the two rows the official page opens with.",
+                &format!(
+                    "Each Part V schedule holds at most {FORM_1801_MAX_SCHEDULE_ROWS} rows here."
+                ),
             );
         }
         for value in self
@@ -1173,6 +1278,19 @@ impl QueueableForm for Form1801Draft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+    /// The page grows its tables at run time, so the plaintext follows
+    /// [`Form1801Draft::official_layout`] rather than the fixed layout.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
+    }
 }
 
 #[cfg(test)]
@@ -1238,18 +1356,25 @@ mod tests {
         let fields = d.to_bir_field_map();
         assert_eq!(fields["frm1801v2018:txtNetTaxEst_C"], "-3,849,999.99");
         assert_eq!(fields["frm1801v2018:txtEstTaxDue"], "0.00");
-        assert_eq!(fields["frm1801v2018:txtTaxRate"], "NAN%");
+        assert_eq!(fields["frm1801v2018:txtTaxRate"], "6.0%");
         assert!(messages(&d).is_empty(), "{:?}", messages(&d));
     }
 
     #[test]
-    fn a_positive_estate_is_refused() {
+    fn a_positive_estate_pays_six_percent() {
         let mut d = sample();
         d.standard_deduction = 0.0;
+        d.surcharge = 10.0;
         d.recompute();
-        assert!(d.estate_tax_due().is_nan());
-        assert_eq!(d.to_bir_field_map()["frm1801v2018:txtEstTaxDue"], "NaN");
-        assert!(messages(&d).iter().any(|m| m.contains("Item 18")));
+        assert_eq!(d.net_taxable_estate, 1_150_000.01);
+        assert_eq!(d.estate_tax_due(), 69_000.0);
+        let (payable, first, total) = d.payables();
+        assert_eq!((payable, first, total), (69_000.0, 69_000.0, 69_010.0));
+        assert_eq!(
+            d.to_bir_field_map()["frm1801v2018:txtEstTaxDue"],
+            "69,000.00"
+        );
+        assert!(messages(&d).is_empty(), "{:?}", messages(&d));
     }
 
     #[test]
