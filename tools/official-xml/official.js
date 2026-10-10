@@ -66,7 +66,11 @@ function functionSource(name, texts) {
   return null;
 }
 
+// The package directory of the HTA last loaded, for data files prepare() reads.
+let packageDir = null;
+
 function load(htaPath) {
+  packageDir = path.join(path.dirname(htaPath), '..');
   const raw = fs.readFileSync(htaPath);
   let html = raw.toString('utf8');
   if (html.startsWith(BOM)) html = html.slice(1);
@@ -92,17 +96,33 @@ function prepare(html) {
   const form = doc.getElementById('frmMain');
   const first = form.querySelector('[id*=":"]');
   const prefix = first ? first.id.split(':')[0] : '';
-  // getRdo() injects the RDO select into td#rdoSelect at load.
+  // getRdo() injects the RDO select into td#rdoSelect at load. Its id is the
+  // one in getRdo()'s markup (2550M: frm2550m:txtRDOCode, although the
+  // first control is frm2550M:…), else <prefix>:txtRDOCode.
+  const injected = /function\s+getRdo\s*\([^)]*\)\s*\{[^}]*?<select[^>]*?\bid='([^']+)'/.exec(html);
   const rdoCell = doc.getElementById('rdoSelect');
-  if (rdoCell && prefix && !doc.getElementById(prefix + ':txtRDOCode')) {
-    rdoCell.innerHTML = `<select id='${prefix}:txtRDOCode' name='${prefix}:txtRDOCode' size='1'><option value='000'> </option></select>`;
+  const rdoId = injected ? injected[1] : prefix + ':txtRDOCode';
+  if (rdoCell && prefix && !doc.getElementById(rdoId)) {
+    rdoCell.innerHTML = `<select id='${rdoId}' name='${rdoId}' size='1'><option value='000'> </option></select>`;
   }
   // Other forms' getRdo() injects its own <select id='…'> into div#rdoContainer
   // (2552v2018: frm2552:rdoPg1Pt1I5RDO); the submit loop writes it too.
   const rdoContainer = doc.getElementById('rdoContainer');
-  const injected = /function\s+getRdo\s*\([^)]*\)\s*\{[^}]*?<select id='([^']+)'/.exec(html);
   if (rdoContainer && injected && !doc.getElementById(injected[1])) {
     rdoContainer.innerHTML = `<select id='${injected[1]}' name='${injected[1]}' size='1'><option value='000'>000</option></select>`;
+  }
+  // init() runs ATCList(), one checkbox AtcCode<i> per ATC whose
+  // xml/atcCodes.xml entry names the form (loadATC; 2550M: 36 of them).
+  const atcTable = doc.getElementById('tbllistAtcCode');
+  const atcTag = /function\s+loadATC\s*\(\)[\s\S]*?atcStr\.indexOf\('([^']+)'\)/.exec(html);
+  const atcXml = packageDir && path.join(packageDir, 'xml', 'atcCodes.xml');
+  const init = functionSource('init', [html]) || '';
+  const initListsAtcs = /\bATCList\(\)/.test(init.replace(/\/\/.*$/gm, ''));
+  if (atcTable && atcTag && initListsAtcs && atcXml && fs.existsSync(atcXml)) {
+    const entries = [...fs.readFileSync(atcXml, 'utf8').matchAll(/atc(\d+):([\s\S]*?)atc\1:/g)]
+      .filter((m) => m[2].includes(atcTag[1]));
+    atcTable.innerHTML = entries.map((m, i) =>
+      `<tr><td><input id='AtcCode${i + 1}' name='AtcCode' type='checkbox' value='${m[2].split('~')[0]}' /></td></tr>`).join('');
   }
   // getDrives() (js/string-util.js) fills every drive select with a "0"
   // placeholder, selected, ahead of the machine's drive letters.

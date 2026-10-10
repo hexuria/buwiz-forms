@@ -216,6 +216,22 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "2550M",
+        revision: "2007",
+        // Official formType and PROD SFTP folder. Schedules 2, 3, 6, 7 and 8
+        // are not modelled; their items stay 0.00.
+        form_id: "2550M",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
         form_id: "0619Ev2018",
@@ -489,6 +505,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
         assert!(can_queue_for_submission("2552"));
         assert_eq!(queue_authorized_form_type_id("2552"), Some("2552v2018"));
+        assert!(can_queue_for_submission("2550M"));
+        assert_eq!(queue_authorized_form_type_id("2550M"), Some("2550M"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
