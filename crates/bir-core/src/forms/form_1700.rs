@@ -20,9 +20,11 @@
 //! `validateSched1('4_<n>')` with its own alert texts. Checked on the official
 //! page (runtime oracle, with IE's implicit `<tbody>` in the popup's empty
 //! tables): the popup rows are form controls inside `frmMain`, so they are
-//! part of what the page saves; [`Form1700Draft::to_bir_field_map`] carries
-//! Item 4's `OTHERS` row and the popup subtotal, while the popup controls
-//! themselves are left to the central serializer.
+//! written by the upload loop (`saveEncryptedProfile`) where the DOM has
+//! them: every row's employer cells, then every row's amounts, between
+//! `ebirOnlineSecret` and `txtPg2Pt6I4SubtotalC`
+//! ([`Form1700Draft::official_layout`]). Sample `1700-2025-others` is
+//! byte-identical to the official page.
 
 use std::collections::BTreeMap;
 
@@ -893,11 +895,80 @@ impl Form1700Draft {
             put("txtPg2Pt6I4SubtotalC", money(c));
             put("txtPg2Pt6I4SubtotalD", money(d));
             put("txtPg2Pt6I4SubtotalE", money(e));
+            // The popup's own rows (`4_1` is the original Item 4), written
+            // where the page keeps them (see [`Form1700Draft::official_layout`]).
+            for (index, row) in self.popup_rows().iter().enumerate() {
+                let n = format!("4_{}", index + 1);
+                put(&format!("rdoPg2I{n}PartVIEmployeeT"), flag(!row.for_spouse));
+                put(&format!("rdoPg2I{n}PartVIEmployeeS"), flag(row.for_spouse));
+                put(
+                    &format!("txtPg2I{n}PartVIEmployerName1"),
+                    row.name.trim().to_uppercase(),
+                );
+                put(
+                    &format!("txtPg2I{n}PartVIEmployerName2"),
+                    row.name2.trim().to_uppercase(),
+                );
+                let (e1, e2, e3, eb) = split_tin(&row.tin);
+                put(&format!("txtPg2I{n}PartVIEmployerTIN1"), e1);
+                put(&format!("txtPg2I{n}PartVIEmployerTIN2"), e2);
+                put(&format!("txtPg2I{n}PartVIEmployerTIN3"), e3);
+                put(&format!("txtPg2I{n}PartVIEmployerBranchCode"), eb);
+                put(&format!("txtPg2ISched1c_{n}REG"), money(row.regular));
+                put(&format!("txtPg2ISched1d_{n}CIFR"), money(row.flat));
+                put(&format!("txtPg2ISched1e_{n}TW"), money(row.withheld));
+            }
         }
         // The submit loop writes "1" for the current page.
         put("txtCurrentPage", "1".to_string());
         put("txtLOB", self.line_of_business.trim().to_uppercase());
         fields
+    }
+
+    /// The generated layout with the add-more popup's rows spliced in where
+    /// the page keeps them (`addRow_schedule1` inside `frmMain`): every row's
+    /// employer cells (`4_1`, `4_2`, …), then every row's amounts, between
+    /// `ebirOnlineSecret` and `txtPg2Pt6I4SubtotalC`.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        let base = crate::official_xml::layout(FORM_1700_FORM_ID).map_err(|e| e.to_string())?;
+        let rows = self.popup_rows().len();
+        if rows == 0 {
+            return Ok(base.clone());
+        }
+        let key =
+            |n: usize, field: &str| format!("frm1700:{}", field.replace("{n}", &format!("4_{n}")));
+        let template = |field: &str| format!("frm1700:{}", field.replace("{n}", "4"));
+        let mut copies = Vec::new();
+        for n in 1..=rows {
+            for field in [
+                "rdoPg2I{n}PartVIEmployeeT",
+                "rdoPg2I{n}PartVIEmployeeS",
+                "txtPg2I{n}PartVIEmployerName1",
+                "txtPg2I{n}PartVIEmployerName2",
+                "txtPg2I{n}PartVIEmployerTIN1",
+                "txtPg2I{n}PartVIEmployerTIN2",
+                "txtPg2I{n}PartVIEmployerTIN3",
+                "txtPg2I{n}PartVIEmployerBranchCode",
+            ] {
+                copies.push((template(field), key(n, field)));
+            }
+        }
+        for n in 1..=rows {
+            for field in [
+                "txtPg2ISched1c_{n}REG",
+                "txtPg2ISched1d_{n}CIFR",
+                "txtPg2ISched1e_{n}TW",
+            ] {
+                copies.push((template(field), key(n, field)));
+            }
+        }
+        super::official_inputs::extend_layout(
+            base,
+            &[super::official_inputs::RowInsertion {
+                after: "ebirOnlineSecret".into(),
+                copies,
+            }],
+        )
     }
 
     /// The field map plus the `derived:` values the printed January 2018
@@ -1410,6 +1481,19 @@ impl QueueableForm for Form1700Draft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
+    }
+    /// The add-more popup adds rows at run time, so the plaintext follows
+    /// [`Form1700Draft::official_layout`] rather than the fixed layout.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
 

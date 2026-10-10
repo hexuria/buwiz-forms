@@ -66,3 +66,74 @@ fn form_1702ex_sample_payload_is_current() {
         "739058ef4704ddd829bc7c411ea3eea8a18e4ec4b2e8088614d1799784e2e8f9",
     );
 }
+
+/// Every "(more...)" popup in use, driven through the official popups:
+/// Item 17I plus two popup rows, Schedule 2 Item 4 plus one, Schedule 3
+/// Item 3 plus two (a `maxLength` 12 box: no commas), Items 6 and 8 plus
+/// one each. Popup amounts lose their centavos.
+fn sample_1702ex_popups() -> Form1702ExDraft {
+    let mut draft = sample_1702ex();
+    let row = |description: &str, amount: f64| Form1702ExRow {
+        description: description.to_string(),
+        amount,
+    };
+    let special = |description: &str, legal_basis: &str, amount: f64| Form1702ExSpecialRow {
+        description: description.to_string(),
+        legal_basis: legal_basis.to_string(),
+        amount,
+    };
+    draft.net_income_per_books = 996_933.0;
+    draft.other_deductions = vec![
+        row("Sample expense", 5_000.0),
+        row("Rent expense", 6_000.0),
+        row("Utilities", 7_000.0),
+        row("Supplies", 8_000.0),
+        row("Repairs", 9_000.0),
+        row("Transport", 3_000.6),
+        row("Courier", 2_500.75),
+        row("Printing", 1_200.0),
+    ];
+    draft.special_rows = vec![
+        special("Sample deduction", "RA 0000", 15_000.0),
+        special("Deduction two", "RA 0002", 2_000.0),
+        special("Deduction three", "RA 0003", 3_000.0),
+        special("Deduction four", "RA 0004", 4_000.4),
+        special("Deduction five", "RA 0005", 5_000.99),
+    ];
+    draft.non_deductible = vec![
+        row("Nondeductible expense", 120_001.0),
+        row("Entertainment", 30_000.3),
+        row("Penalties", 1_234_567.89),
+        row("Donations", 800.0),
+    ];
+    draft.non_taxable_income = vec![
+        row("Row 5", 1_500.0),
+        row("Dividends", 6_000.0),
+        row("Royalties", 7_000.7),
+    ];
+    draft.special_deductions_s3 = vec![
+        row("Row 7", 1_500.0),
+        row("Special one", 8_000.0),
+        row("Special two", 9_000.1),
+    ];
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1702ex_popups_sample_payload_is_current() {
+    let draft = sample_1702ex_popups();
+    assert_eq!(draft.net_taxable_income, 2_349_301.0);
+    assert_eq!(draft.reconciled_taxable_income, 2_349_301.0);
+    assert_eq!(draft.popup_len_of("S1I17"), 3);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1702EX popups must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1702EX-122025-popups",
+        &layout,
+        &payload,
+        "5657b14478055287bc4c100df36a852f123a678c663b71423f2a981f87370745",
+    );
+}
