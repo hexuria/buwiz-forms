@@ -639,15 +639,60 @@ impl Database {
     }
 
     /// Confirm a Submitted return from a matching BIR receipt.
+    /// The Submitted draft whose uploaded filename is the receipt's (the
+    /// `#email#` part and case are ignored; BIR echoes the base name).
+    fn find_submitted_queueable_by_filename<F: QueueableForm>(
+        &self,
+        receipt_filename: &str,
+    ) -> Result<Option<F>, DbError> {
+        fn base(name: &str) -> String {
+            let name = name.rsplit(['/', '\\']).next().unwrap_or(name);
+            let name = name.split('#').next().unwrap_or(name);
+            name.trim_end_matches(".xml").to_ascii_lowercase()
+        }
+        let wanted = base(receipt_filename);
+        if wanted.is_empty() {
+            return Ok(None);
+        }
+        let mut stmt = self.conn.prepare(
+            "SELECT data_json FROM form_drafts WHERE form_code = ?1 AND status IN ('Submitted', 'Filed')",
+        )?;
+        let rows = stmt.query_map(params![F::FORM_CODE], |row| row.get::<_, String>(0))?;
+        for raw in rows {
+            let draft: F = serde_json::from_str(&raw?)?;
+            if draft
+                .lifecycle()
+                .submission_filename
+                .as_deref()
+                .is_some_and(|name| base(name) == wanted)
+            {
+                return Ok(Some(draft));
+            }
+        }
+        Ok(None)
+    }
+
     pub fn confirm_queueable_from_receipt<F: QueueableForm>(
         &self,
         receipt: &SubmissionReceipt,
     ) -> Result<ReceiptConfirmationOutcome, DbError> {
-        let Some((year, period)) = F::parse_period_code(&receipt.period) else {
-            return Ok(ReceiptConfirmationOutcome::Ignored);
+        let by_period = match F::parse_period_code(&receipt.period) {
+            Some((year, period)) => {
+                let column = crate::forms::queueable::period_column(&period);
+                self.get_queueable_draft::<F>(&receipt.tin, year, column)?
+                    .filter(|draft| matches!(draft.lifecycle().status, FilingStatus::Submitted))
+            }
+            None => None,
         };
-        let column = crate::forms::queueable::period_column(&period);
-        let Some(mut draft) = self.get_queueable_draft::<F>(&receipt.tin, year, column)? else {
+        // Event-based forms (1706, 1800, …) key drafts by the dashboard's
+        // open-ended slot while the official filename carries a date (and a
+        // TCT number), so the period alone can't find them. Match the exact
+        // filename the worker uploaded instead.
+        let draft = match by_period {
+            Some(draft) => Some(draft),
+            None => self.find_submitted_queueable_by_filename::<F>(&receipt.filename)?,
+        };
+        let Some(mut draft) = draft else {
             return Ok(ReceiptConfirmationOutcome::Ignored);
         };
         if !matches!(draft.lifecycle().status, FilingStatus::Submitted) {
