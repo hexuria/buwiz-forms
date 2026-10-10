@@ -97,6 +97,13 @@ function prepare(html) {
   if (rdoCell && prefix && !doc.getElementById(prefix + ':txtRDOCode')) {
     rdoCell.innerHTML = `<select id='${prefix}:txtRDOCode' name='${prefix}:txtRDOCode' size='1'><option value='000'> </option></select>`;
   }
+  // Other forms' getRdo() injects its own <select id='…'> into div#rdoContainer
+  // (2552v2018: frm2552:rdoPg1Pt1I5RDO); the submit loop writes it too.
+  const rdoContainer = doc.getElementById('rdoContainer');
+  const injected = /function\s+getRdo\s*\([^)]*\)\s*\{[^}]*?<select id='([^']+)'/.exec(html);
+  if (rdoContainer && injected && !doc.getElementById(injected[1])) {
+    rdoContainer.innerHTML = `<select id='${injected[1]}' name='${injected[1]}' size='1'><option value='000'>000</option></select>`;
+  }
   // getDrives() (js/string-util.js) fills every drive select with a "0"
   // placeholder, selected, ahead of the machine's drive letters.
   for (const sel of doc.querySelectorAll('select.driveSelect')) {

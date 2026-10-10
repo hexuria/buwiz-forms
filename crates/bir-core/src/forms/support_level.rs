@@ -326,6 +326,29 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         },
         release_ready: false,
     },
+    FormCapabilityRecord {
+        code: "2200M",
+        revision: "2018",
+        // `form_id` is the official formType (filename segment). PROD
+        // `ftpTargetFolder` has no `2200Mv2018` key; see form_2200m.
+        form_id: "2200Mv2018",
+        // The desktop editor is views::form_2200m_view; print preview fills the
+        // two-page frozen 2200m-2018 sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
 ];
 
 /// Whether the app can actually draft/file a given form.
@@ -478,6 +501,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
         assert!(can_queue_for_submission("2553"));
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
+        assert!(can_queue_for_submission("2200M"));
+        assert_eq!(queue_authorized_form_type_id("2200M"), Some("2200Mv2018"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",

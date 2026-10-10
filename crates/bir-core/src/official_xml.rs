@@ -94,7 +94,8 @@ macro_rules! layouts {
 
 /// Layouts of the forms the app serializes today. Add a form here when its
 /// field map moves to [`write`].
-const LAYOUTS: &[(&str, &str)] = layouts!["1601c-v2018", "2551q-v2018", "2553-v1999"];
+const LAYOUTS: &[(&str, &str)] =
+    layouts!["1601c-v2018", "2551q-v2018", "2553-v1999", "2200m-v2018"];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
 pub fn layout(form_id: &str) -> Result<&'static OfficialLayout, OfficialXmlError> {
@@ -445,8 +446,12 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // The trailer year is per form (2012, 2014, ...).
+            let year = after
+                .rsplit_once("All Rights Reserved BIR ")
+                .map(|(_, tail)| tail);
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                year.is_some_and(|y| y.len() == 6 && y.ends_with(".0")),
                 "{id}: {after:?}"
             );
         }
