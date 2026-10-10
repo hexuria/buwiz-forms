@@ -51,6 +51,6 @@ fn form_2200c_sample_payload_is_current() {
         "2200C-06302025",
         "2200c-v2018",
         &payload,
-        "e12e5155cf3179f10e4abcf12d032a37e957d1e663e3aa1687030b9a3c417fdc",
+        "71c985b171d1b0c4a0e1e34a213deb0428882ab572fbec4b554c29ac1c425826",
     );
 }

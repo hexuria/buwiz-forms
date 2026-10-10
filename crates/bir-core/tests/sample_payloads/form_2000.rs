@@ -25,6 +25,17 @@ fn sample_2000() -> Form2000Draft {
     draft.schedule1[0].tax_base = 123_456.789;
     draft.schedule1[1].tax_base = 999.995;
     draft.schedule1[2].tax_base = 2_500_000.0;
+    // A fourth Schedule 1 row and two more Schedule 2 rows ("Add").
+    draft
+        .set_atc(
+            3,
+            pick(
+                "DS104",
+                "CERTIFICATE OF PROFITS OR INTEREST IN PROPERTY OR ACCUMULATIONS",
+            ),
+        )
+        .unwrap();
+    draft.schedule1[3].tax_base = 40_000.004;
     draft.ds106_term_under_a_year = Some(true);
     draft.ds106_term_days = 90;
     draft.schedule2 = vec![
@@ -37,6 +48,16 @@ fn sample_2000() -> Form2000Draft {
             date: "06/20/2025".into(),
             receipt_number: "Rcpt1002".into(),
             amount: 2_000.005,
+        },
+        Form2000PaymentRow {
+            date: "06/21/2025".into(),
+            receipt_number: "Rcpt1003".into(),
+            amount: 300.0,
+        },
+        Form2000PaymentRow {
+            date: "06/22/2025".into(),
+            receipt_number: "Rcpt1004".into(),
+            amount: 400.25,
         },
     ];
     draft.schedule4 = vec![Form2000RemittanceRow {
@@ -59,19 +80,26 @@ fn form_2000_sample_payload_is_current() {
     let payload = draft
         .to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 2000 must validate: {errors:?}"));
-    check_sample_with_mod_labels(
+    check_sample_with_layout(
         "2000-062025",
+        &draft.official_layout().expect("layout"),
         &payload,
-        "9f3340aa0de65ee6dfdcd95912d2538aaeedb93f190045c5e9c84d14611687dd",
+        "3c5dce91bef0a65596313240079aec0e6898b0aabbafd2e1694f2dd9c53a7649",
     );
 }
 
-/// `check_sample` for this page. It has four read-only `frm2000:modLabel`
-/// boxes with different texts under one id, which `official_xml::read`
-/// rejects as one control written twice with different values; the layout
-/// check runs on a copy with those four values equalized, and everything
-/// else (official parity, IAF crypto, committed files) is unchanged.
-fn check_sample_with_mod_labels(stem: &str, plaintext: &str, official_encrypt_sha256: &str) {
+/// `check_sample` over a return's own layout (schedules with added rows).
+/// The 2000 page also has four read-only `frm2000:modLabel` boxes with
+/// different texts under one id, which `official_xml::read` rejects as one
+/// control written twice with different values; the layout check runs on a
+/// copy with those values equalized. Official parity, IAF crypto and the
+/// committed files are checked unchanged.
+pub(crate) fn check_sample_with_layout(
+    stem: &str,
+    layout: &bir_core::official_xml::OfficialLayout,
+    plaintext: &str,
+    official_encrypt_sha256: &str,
+) {
     use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt};
     use sha2::{Digest, Sha256};
 
@@ -86,7 +114,6 @@ fn check_sample_with_mod_labels(stem: &str, plaintext: &str, official_encrypt_sh
         rest = &rest[end..];
     }
     normalized.push_str(rest);
-    let layout = bir_core::official_xml::layout("2000-v2018").expect("official layout");
     bir_core::official_xml::read(layout, &normalized).expect("sample follows the official layout");
 
     let dir = crate::samples_dir();

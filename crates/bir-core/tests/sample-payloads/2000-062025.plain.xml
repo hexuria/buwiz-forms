@@ -24,17 +24,17 @@
             <div>frm2000:optMode_1=falsefrm2000:optMode_1=</div>    
             <div>frm2000:optMode_2=truefrm2000:optMode_2=</div>    
             <div>frm2000:optMode_3=falsefrm2000:optMode_3=</div>    
-            <div>frm2000:txtTax14=5,859.86frm2000:txtTax14=</div>    
+            <div>frm2000:txtTax14=6,059.86frm2000:txtTax14=</div>    
             <div>frm2000:txtTax15A=0.00frm2000:txtTax15A=</div>    
-            <div>frm2000:txtTax15B=3,000.51frm2000:txtTax15B=</div>    
+            <div>frm2000:txtTax15B=3,700.76frm2000:txtTax15B=</div>    
             <div>frm2000:txtTax15C=0.00frm2000:txtTax15C=</div>    
-            <div>frm2000:txtTax15D=3,000.51frm2000:txtTax15D=</div>    
-            <div>frm2000:txtTax16=2,859.35frm2000:txtTax16=</div>    
+            <div>frm2000:txtTax15D=3,700.76frm2000:txtTax15D=</div>    
+            <div>frm2000:txtTax16=2,359.10frm2000:txtTax16=</div>    
             <div>frm2000:txtTax17A=25.50frm2000:txtTax17A=</div>    
             <div>frm2000:txtTax17B=10.00frm2000:txtTax17B=</div>    
             <div>frm2000:txtTax17C=0.00frm2000:txtTax17C=</div>    
             <div>frm2000:txtTax17D=35.50frm2000:txtTax17D=</div>    
-            <div>frm2000:txtTax18=2,894.85frm2000:txtTax18=</div>    
+            <div>frm2000:txtTax18=2,394.60frm2000:txtTax18=</div>    
             <div>frm2000:txtTax19=5,000.00frm2000:txtTax19=</div>    
             <div>txtTaxAgentNo=txtTaxAgentNo=</div>    
             <div>txtDateIssue=txtDateIssue=</div>    
@@ -76,7 +76,12 @@
             <div>frm2000:sched1:txtTaxBase2=2,500,000.00frm2000:sched1:txtTaxBase2=</div>    
             <div>frm2000:sched1:txtTaxRate2=P1.5/200 * 90/365 DAYSfrm2000:sched1:txtTaxRate2=</div>    
             <div>frm2000:sched1:txtTaxDue2=4,623.29frm2000:sched1:txtTaxDue2=</div>    
-            <div>frm2000:sched1:txtTotalDue1=5,859.86frm2000:sched1:txtTotalDue1=</div>    
+            <div>chkSchedule1Delete3=falsechkSchedule1Delete3=</div>    
+            <div>drpATCCode3=DS104drpATCCode3=</div>    
+            <div>frm2000:sched1:txtTaxBase3=40,000.00frm2000:sched1:txtTaxBase3=</div>    
+            <div>frm2000:sched1:txtTaxRate3=P1.00/P200frm2000:sched1:txtTaxRate3=</div>    
+            <div>frm2000:sched1:txtTaxDue3=200.00frm2000:sched1:txtTaxDue3=</div>    
+            <div>frm2000:sched1:txtTotalDue1=6,059.86frm2000:sched1:txtTotalDue1=</div>    
             <div>chkSchedule2Delete0=falsechkSchedule2Delete0=</div>    
             <div>frm2000:sched2:txtPaymentDate0=06/05/2025frm2000:sched2:txtPaymentDate0=</div>    
             <div>frm2000:sched2:txtReceipt0=RCPT1001frm2000:sched2:txtReceipt0=</div>    
@@ -86,10 +91,14 @@
             <div>frm2000:sched2:txtReceipt1=RCPT1002frm2000:sched2:txtReceipt1=</div>    
             <div>frm2000:sched2:txtAmountPaid1=2,000.01frm2000:sched2:txtAmountPaid1=</div>    
             <div>chkSchedule2Delete2=falsechkSchedule2Delete2=</div>    
-            <div>frm2000:sched2:txtPaymentDate2=frm2000:sched2:txtPaymentDate2=</div>    
-            <div>frm2000:sched2:txtReceipt2=frm2000:sched2:txtReceipt2=</div>    
-            <div>frm2000:sched2:txtAmountPaid2=0.00frm2000:sched2:txtAmountPaid2=</div>    
-            <div>frm2000:sched2:txtTotalPayment1=3,000.51frm2000:sched2:txtTotalPayment1=</div>    
+            <div>frm2000:sched2:txtPaymentDate2=06/21/2025frm2000:sched2:txtPaymentDate2=</div>    
+            <div>frm2000:sched2:txtReceipt2=RCPT1003frm2000:sched2:txtReceipt2=</div>    
+            <div>frm2000:sched2:txtAmountPaid2=300.00frm2000:sched2:txtAmountPaid2=</div>    
+            <div>chkSchedule2Delete3=falsechkSchedule2Delete3=</div>    
+            <div>frm2000:sched2:txtPaymentDate3=06/22/2025frm2000:sched2:txtPaymentDate3=</div>    
+            <div>frm2000:sched2:txtReceipt3=RCPT1004frm2000:sched2:txtReceipt3=</div>    
+            <div>frm2000:sched2:txtAmountPaid3=400.25frm2000:sched2:txtAmountPaid3=</div>    
+            <div>frm2000:sched2:txtTotalPayment1=3,700.76frm2000:sched2:txtTotalPayment1=</div>    
             <div>chkSchedule3Delete0=falsechkSchedule3Delete0=</div>    
             <div>frm2000:sched3:txtPaymentDate0=frm2000:sched3:txtPaymentDate0=</div>    
             <div>frm2000:sched3:txtReceipt0=frm2000:sched3:txtReceipt0=</div>    
@@ -125,7 +134,7 @@
             <div>frm2000:sched4:txtNumberFrom2=frm2000:sched4:txtNumberFrom2=</div>    
             <div>frm2000:sched4:txtNumberTo2=frm2000:sched4:txtNumberTo2=</div>    
             <div>frm2000:sched4:txtTotalRemittance1=5,000.00frm2000:sched4:txtTotalRemittance1=</div>    
-            <div>frm2000:txtCurrentPage=frm2000:txtCurrentPage=</div>    
+            <div>frm2000:txtCurrentPage=1frm2000:txtCurrentPage=</div>    
             <div>frm2000:txtMaxPage=2frm2000:txtMaxPage=</div>    
             <div>frm2000:modLabel=IS THE TERM OF DEBT INSTRUMENT LESS THAN A YEAR?frm2000:modLabel=</div>    
             <div>ds106modYes=trueds106modYes=</div>    

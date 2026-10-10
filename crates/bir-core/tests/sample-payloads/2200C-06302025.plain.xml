@@ -12,8 +12,8 @@
             <div>frm2200C:txtPg1TIN4=00000frm2200C:txtPg1TIN4=</div>    
             <div>frm2200C:txtPg1I6RDO=039frm2200C:txtPg1I6RDO=</div>    
             <div>frm2200C:rdoPg1Pt1I6RDO=039frm2200C:rdoPg1Pt1I6RDO=</div>    
-            <div>frm2200C:txtPg1Pt1I7RegisteredName=SAMPLE%20DUMMY%20TAXPAYERfrm2200C:txtPg1Pt1I7RegisteredName=</div>    
-            <div>frm2200C:txtPg1Pt1I8RegisteredAddress=123%20Sample%20Street%2C%20Barangay%20Example%2C%20Quezon%20Cityfrm2200C:txtPg1Pt1I8RegisteredAddress=</div>    
+            <div>frm2200C:txtPg1Pt1I7RegisteredName=SAMPLE DUMMY TAXPAYERfrm2200C:txtPg1Pt1I7RegisteredName=</div>    
+            <div>frm2200C:txtPg1Pt1I8RegisteredAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm2200C:txtPg1Pt1I8RegisteredAddress=</div>    
             <div>frm2200C:txtPg1Pt1I8RegisteredAddress2=frm2200C:txtPg1Pt1I8RegisteredAddress2=</div>    
             <div>frm2200C:txPg1I8ZipCode=1100frm2200C:txPg1I8ZipCode=</div>    
             <div>frm2200C:txtPg1Pt1I9ContactNumber=09170000000frm2200C:txtPg1Pt1I9ContactNumber=</div>    
@@ -171,7 +171,7 @@
             <div>frm2200C:ACvat10=0.00frm2200C:ACvat10=</div>    
             <div>frm2200C:ACtotAmountBill10=0.00frm2200C:ACtotAmountBill10=</div>    
             <div>frm2200C:ACexciseTotal=3,508.00frm2200C:ACexciseTotal=</div>    
-            <div>frm2200C:txtLOB=Sample Consulting Servicesfrm2200C:txtLOB=</div>    
+            <div>frm2200C:txtLOB=SAMPLE CONSULTING SERVICESfrm2200C:txtLOB=</div>    
             <div>frm2200C:txtCurrentPage=1frm2200C:txtCurrentPage=</div>    
             <div>frm2200C:txtMaxPage=2frm2200C:txtMaxPage=</div>    
             <div>driveSelectTPExport=0driveSelectTPExport=</div>    

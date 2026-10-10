@@ -7,8 +7,9 @@
 //! `computeTotalAmtPayable`), `validate()` with its exact alert texts and
 //! `saveXMLsubmit` through [`crate::official_xml`].
 //!
-//! The official page starts with three rows per schedule; the plaintext
-//! layout records that shape, so each schedule holds at most three rows.
+//! The official page starts with three rows per schedule; each "Add" button
+//! re-renders the table with one more row, so the upload carries every DOM
+//! row in order. Rows beyond the third extend the layout the same way.
 //!
 //! ATCs the official page offers but cannot compute reliably are not offered
 //! here: DS125 (`computeSched1TaxDue` throws a ReferenceError on a stray `S`,
@@ -27,8 +28,11 @@ use crate::profile::TaxpayerProfile;
 
 /// Rule-package id of the official layout.
 pub const FORM_2000_FORM_ID: &str = "2000-v2018";
-/// Rows per schedule on the official page (and in its plaintext layout).
+/// Rows each schedule starts with on the official page (and in its layout).
+/// "Add" appends DOM rows after them ([`Form2000Draft::official_layout`]).
 pub const FORM_2000_ROWS: usize = 3;
+/// Rows a schedule may hold here (the page itself has no limit).
+pub const FORM_2000_MAX_ROWS: usize = 50;
 
 /// One Schedule 1 ATC from the official dropdown (`loadATCDropDown`).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -272,6 +276,76 @@ pub(crate) fn check_mmddyyyy(value: &str, current_year: i32) -> Result<(), bool>
         return Err(false);
     }
     Ok(())
+}
+
+/// One "Add"-able table: the id prefixes of a row's controls (each id is
+/// prefix + row index), the rows the page starts with, and the rows wanted.
+pub(crate) struct RowGroup<'a> {
+    pub prefixes: &'a [&'a str],
+    pub base_rows: usize,
+    pub rows: usize,
+}
+
+/// The official layout with the rows an "Add" button writes into the DOM:
+/// each extra row repeats the last built-in row's controls (ids renumbered)
+/// right after it, which is where the upload loop meets them.
+pub(crate) fn layout_with_rows(
+    layout: &crate::official_xml::OfficialLayout,
+    groups: &[RowGroup<'_>],
+) -> crate::official_xml::OfficialLayout {
+    use crate::official_xml::{Entry, Part};
+    let mut out = layout.clone();
+    for group in groups {
+        if group.rows <= group.base_rows || group.base_rows == 0 {
+            continue;
+        }
+        let last = group.base_rows - 1;
+        let renumber = |key: &str, row: usize| -> Option<String> {
+            group
+                .prefixes
+                .iter()
+                .find(|prefix| key == format!("{prefix}{last}"))
+                .map(|prefix| format!("{prefix}{row}"))
+        };
+        let positions: Vec<usize> = out
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                let key = match entry {
+                    Entry::Bool { key, .. } | Entry::Value { key, .. } => key,
+                };
+                renumber(key, last).is_some()
+            })
+            .map(|(index, _)| index)
+            .collect();
+        let Some(&end) = positions.last() else {
+            continue;
+        };
+        let template: Vec<Entry> = positions.iter().map(|&i| out.entries[i].clone()).collect();
+        let mut added = Vec::new();
+        for row in group.base_rows..group.rows {
+            for entry in &template {
+                let mut entry = entry.clone();
+                match &mut entry {
+                    Entry::Bool { key, .. } => *key = renumber(key, row).unwrap_or_default(),
+                    Entry::Value { key, parts, .. } => {
+                        *key = renumber(key, row).unwrap_or_default();
+                        for part in parts {
+                            if let Part::Source { source, .. } = part
+                                && let Some(renamed) = renumber(source, row)
+                            {
+                                *source = renamed;
+                            }
+                        }
+                    }
+                }
+                added.push(entry);
+            }
+        }
+        out.entries.splice(end + 1..end + 1, added);
+    }
+    out
 }
 
 pub(crate) fn current_year() -> i32 {
@@ -543,8 +617,8 @@ impl Form2000Draft {
 
     /// Pick an ATC for a Schedule 1 row from the official dropdown.
     pub fn set_atc(&mut self, row: usize, option: &Form2000AtcOption) -> Result<(), String> {
-        if row >= FORM_2000_ROWS {
-            return Err(format!("Schedule 1 has {FORM_2000_ROWS} rows."));
+        if row >= FORM_2000_MAX_ROWS {
+            return Err(format!("Schedule 1 holds up to {FORM_2000_MAX_ROWS} rows."));
         }
         if option.code == "DS106"
             && self
@@ -809,6 +883,8 @@ impl Form2000Draft {
         put("txtZipCode", self.zip_code.trim().to_string());
         put("txtTelNum", self.contact_number.trim().to_string());
         put("txtLineBus", text(&self.line_of_business));
+        // The page the filer is on; the return is validated from page 1.
+        put("txtCurrentPage", "1".to_string());
         put(
             "optParty_1",
             flag(self.other_party == Form2000OtherParty::Creditor),
@@ -853,7 +929,7 @@ impl Form2000Draft {
         put("txtTax18", official_amount(self.total_amount_payable));
         put("txtTax19", official_amount(self.stamps_sold));
 
-        for index in 0..FORM_2000_ROWS {
+        for index in 0..self.schedule1.len().max(FORM_2000_ROWS) {
             let row = self.schedule1.get(index).cloned().unwrap_or_default();
             let code = if row.is_empty() {
                 "-".to_string()
@@ -880,7 +956,7 @@ impl Form2000Draft {
             ),
             ("sched3", &self.schedule3, self.advance_payments),
         ] {
-            for index in 0..FORM_2000_ROWS {
+            for index in 0..rows.len().max(FORM_2000_ROWS) {
                 let row = rows.get(index).cloned().unwrap_or_default();
                 let mut put = |key: &str, value: String| {
                     fields.insert(format!("frm2000:{sched}:{key}{index}"), value);
@@ -894,7 +970,7 @@ impl Form2000Draft {
                 official_amount(total),
             );
         }
-        for index in 0..FORM_2000_ROWS {
+        for index in 0..self.schedule4.len().max(FORM_2000_ROWS) {
             let row = self.schedule4.get(index).cloned().unwrap_or_default();
             let mut put = |key: &str, value: String| {
                 fields.insert(format!("frm2000:sched4:{key}{index}"), value);
@@ -927,6 +1003,62 @@ impl Form2000Draft {
 
         fields.insert("txtEmail".to_string(), self.email.trim().to_string());
         fields
+    }
+
+    /// The official layout with this return's added schedule rows.
+    pub fn official_layout(
+        &self,
+    ) -> Result<crate::official_xml::OfficialLayout, Vec<(String, String)>> {
+        let base = crate::official_xml::layout(FORM_2000_FORM_ID)
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
+        let payment = |n: u8| {
+            [
+                format!("chkSchedule{n}Delete"),
+                format!("frm2000:sched{n}:txtPaymentDate"),
+                format!("frm2000:sched{n}:txtReceipt"),
+                format!("frm2000:sched{n}:txtAmountPaid"),
+            ]
+        };
+        let (p2, p3) = (payment(2), payment(3));
+        let p2: Vec<&str> = p2.iter().map(String::as_str).collect();
+        let p3: Vec<&str> = p3.iter().map(String::as_str).collect();
+        let groups = [
+            RowGroup {
+                prefixes: &[
+                    "chkSchedule1Delete",
+                    "drpATCCode",
+                    "frm2000:sched1:txtTaxBase",
+                    "frm2000:sched1:txtTaxRate",
+                    "frm2000:sched1:txtTaxDue",
+                ],
+                base_rows: FORM_2000_ROWS,
+                rows: self.schedule1.len(),
+            },
+            RowGroup {
+                prefixes: &p2,
+                base_rows: FORM_2000_ROWS,
+                rows: self.schedule2.len(),
+            },
+            RowGroup {
+                prefixes: &p3,
+                base_rows: FORM_2000_ROWS,
+                rows: self.schedule3.len(),
+            },
+            RowGroup {
+                prefixes: &[
+                    "chkSchedule4Delete",
+                    "frm2000:sched4:txtRCOCode",
+                    "frm2000:sched4:txtRemittanceDate",
+                    "frm2000:sched4:txtBank",
+                    "frm2000:sched4:txtAmountRemitted",
+                    "frm2000:sched4:txtNumberFrom",
+                    "frm2000:sched4:txtNumberTo",
+                ],
+                base_rows: FORM_2000_ROWS,
+                rows: self.schedule4.len(),
+            },
+        ];
+        Ok(layout_with_rows(base, &groups))
     }
 
     /// The exact official submit plaintext.
@@ -1073,14 +1205,11 @@ impl FormValidator for Form2000Draft {
                 "Item 3 holds at most two digits.",
             );
         }
-        if self.schedule1.len() > FORM_2000_ROWS {
-            err(
-                "schedule1",
-                "Schedule 1 holds at most 3 rows on the official form.",
-            );
+        if self.schedule1.len() > FORM_2000_MAX_ROWS {
+            err("schedule1", "Schedule 1 holds up to 50 rows here.");
         }
         let mut ds106_rows = 0;
-        for (index, row) in self.schedule1.iter().enumerate().take(FORM_2000_ROWS) {
+        for (index, row) in self.schedule1.iter().enumerate() {
             let label = index + 1;
             if row.is_empty() {
                 if row.tax_base != 0.0 {
@@ -1146,10 +1275,10 @@ impl FormValidator for Form2000Draft {
             }
         }
         for (schedule, rows) in [(2u8, &self.schedule2), (3u8, &self.schedule3)] {
-            if rows.len() > FORM_2000_ROWS {
+            if rows.len() > FORM_2000_MAX_ROWS {
                 err(
                     &format!("schedule{schedule}"),
-                    &format!("Schedule {schedule} holds at most 3 rows on the official form."),
+                    &format!("Schedule {schedule} holds up to 50 rows here."),
                 );
             }
             for (index, row) in rows.iter().enumerate() {
@@ -1182,11 +1311,8 @@ impl FormValidator for Form2000Draft {
                 }
             }
         }
-        if self.schedule4.len() > FORM_2000_ROWS {
-            err(
-                "schedule4",
-                "Schedule 4 holds at most 3 rows on the official form.",
-            );
+        if self.schedule4.len() > FORM_2000_MAX_ROWS {
+            err("schedule4", "Schedule 4 holds up to 50 rows here.");
         }
         for (index, row) in self.schedule4.iter().enumerate() {
             let label = index + 1;
@@ -1316,9 +1442,8 @@ impl QueueableForm for Form2000Draft {
         if !errors.is_empty() {
             return Err(errors);
         }
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID)
-            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
-        let mut text = crate::official_xml::write(layout, &self.field_map())
+        let layout = self.official_layout()?;
+        let mut text = crate::official_xml::write(&layout, &self.field_map())
             .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
         if self.capital_applies() {
             for label in MOD_LABELS {
