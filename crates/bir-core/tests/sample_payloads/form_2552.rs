@@ -1,7 +1,10 @@
-use crate::{check_sample, dummy_profile};
+use crate::{check_sample, dummy_profile, samples_dir};
+use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_2552::{
     Form2552Draft, Form2552ExemptRow, Form2552NonTaxableRow, Form2552ShareRow, Form2552Transaction,
 };
+use bir_core::official_xml;
+use sha2::{Digest, Sha256};
 
 fn share(date: &str, seller: &str, buyer: &str, shares: f64, base: f64) -> Form2552ShareRow {
     Form2552ShareRow {
@@ -83,4 +86,90 @@ fn form_2552_sample_payload_is_current() {
         &payload,
         "c2a5de6e9b0c9b3d3a82ee0045770ecb4a84194f90cefc798dda28cea654e1f3",
     );
+}
+
+/// A primary offering with seven transactions: rows 5–7 go through the
+/// official "(Add More...)" popup and row 5 shows OTHERS.
+fn sample_2552_add_more() -> Form2552Draft {
+    let mut draft =
+        Form2552Draft::new_from_profile(&dummy_profile("2552", "Corporation"), 2025, 3, 12);
+    draft.set_transaction(Form2552Transaction::PrimaryOffering);
+    draft.shares_sold = "1000000".to_string();
+    draft.outstanding_shares = "5000000".to_string();
+    let rows = [
+        ("03/10/2025", "Issuer One", 1_000.0, 250_000.75, 4.0),
+        ("03/10/2025", "Issuer Two", 2_000.0, 500_000.0, 2.0),
+        ("03/11/2025", "Issuer Three", 300.5, 75_000.25, 1.0),
+        ("03/11/2025", "Issuer Four", 400.0, 999.99, 4.0),
+        ("03/12/2025", "Issuer Five", 50.0, 12_345.67, 2.5),
+        ("03/12/2025", "Issuer Six", 60.9, 23_456.78, 4.5),
+        ("03/12/2025", "Issuer Seven", 70.0, 888.88, 1.0),
+    ];
+    for (date, seller, shares, base, rate) in rows {
+        draft.schedule.push(Form2552ShareRow {
+            date: date.to_string(),
+            seller: seller.to_string(),
+            buyer: "Sample Public Buyer".to_string(),
+            issuing_corporation: "Sample Listed Corp".to_string(),
+            number_of_shares: shares,
+            tax_base: base,
+            tax_rate: rate,
+            ..Default::default()
+        });
+    }
+    draft.creditable_tax_withheld = 500.0;
+    draft.recompute();
+    draft
+}
+
+/// `check_sample` for a plaintext with popup rows: they are not part of the
+/// fixed layout, so the layout is checked with them taken out.
+#[test]
+fn form_2552_add_more_sample_payload_is_current() {
+    let stem = "2552-03122025";
+    let plaintext = sample_2552_add_more()
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 2552 must validate: {errors:?}"));
+    let layout = official_xml::layout("2552-v2018").unwrap();
+    let mut fixed = String::new();
+    let mut rest = plaintext.as_str();
+    while let Some(start) = rest.find("<div>frm2552:txtPg2Pt5Sch2_") {
+        fixed.push_str(&rest[..start]);
+        let end = start + rest[start..].find("</div>").unwrap() + "</div>".len();
+        rest = &rest[end + layout.lead.len()..];
+    }
+    fixed.push_str(rest);
+    assert_ne!(fixed, plaintext, "the sample has popup rows");
+    official_xml::read(layout, &fixed).expect("the rest follows the official layout");
+
+    let encrypted = compress_and_encrypt(plaintext.as_bytes(), BIR_IAF_PASSPHRASE).unwrap();
+    assert_eq!(
+        decrypt_and_decompress(&encrypted, BIR_IAF_PASSPHRASE).unwrap(),
+        plaintext.as_bytes()
+    );
+    let dir = samples_dir();
+    let plain_path = dir.join(format!("{stem}.plain.xml"));
+    let iaf_path = dir.join(format!("{stem}.iaf.xml"));
+    let updating = std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some();
+    if updating {
+        std::fs::write(&plain_path, &plaintext).unwrap();
+        std::fs::write(&iaf_path, &encrypted).unwrap();
+    }
+    let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
+    assert_eq!(
+        plaintext, official,
+        "{stem}: our plaintext differs from the official saveXMLsubmit() output"
+    );
+    let digest: String = Sha256::digest(&encrypted)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(
+        digest, "02bab05f8215410a5edf9d52179441b64dad453c73c75e62e648aa223c2d80ce",
+        "{stem}: compress_and_encrypt no longer matches the official Encrypt.exe output"
+    );
+    if !updating {
+        assert_eq!(std::fs::read_to_string(&plain_path).unwrap(), plaintext);
+        assert_eq!(std::fs::read(&iaf_path).unwrap(), encrypted);
+    }
 }

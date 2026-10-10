@@ -11,8 +11,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_2552::{
-    FORM_2552_LSE_RATE_TEXT, FORM_2552_ROWS, Form2552Draft, Form2552ExemptRow,
-    Form2552NonTaxableRow, Form2552Overpayment, Form2552ShareRow, Form2552Transaction,
+    FORM_2552_LSE_RATE_TEXT, FORM_2552_MAX_SCHEDULE_ROWS, FORM_2552_ROWS, Form2552Draft,
+    Form2552ExemptRow, Form2552NonTaxableRow, Form2552Overpayment, Form2552ShareRow,
+    Form2552Transaction,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -206,7 +207,8 @@ impl Form2552View {
         }
     }
 
-    fn all_keys() -> Vec<(String, String)> {
+    /// Every editor key for a draft with `share_rows` Part V rows.
+    fn all_keys(share_rows: usize) -> Vec<(String, String)> {
         let mut keys: Vec<(String, String)> = SINGLE_INPUTS
             .iter()
             .map(|(key, _, placeholder)| (key.to_string(), placeholder.to_string()))
@@ -217,16 +219,46 @@ impl Form2552View {
         for row in 0..FORM_2552_ROWS {
             keys.push((row_key("exempt", row, "class"), String::new()));
             keys.push((row_key("exempt", row, "amount"), "0.00".into()));
-            for (column, _, numeric) in SHARE_COLUMNS {
-                let placeholder = if *numeric { "0.00" } else { "" };
-                keys.push((row_key("share", row, column), placeholder.into()));
-            }
             for (column, _, numeric) in NON_TAXABLE_COLUMNS {
                 let placeholder = if *numeric { "0.00" } else { "" };
                 keys.push((row_key("free", row, column), placeholder.into()));
             }
         }
+        for row in 0..share_rows.max(FORM_2552_ROWS) {
+            for (column, _, numeric) in SHARE_COLUMNS {
+                let placeholder = if *numeric { "0.00" } else { "" };
+                keys.push((row_key("share", row, column), placeholder.into()));
+            }
+        }
         keys
+    }
+
+    /// Create the editors a key list needs that do not exist yet.
+    fn ensure_inputs(
+        inputs: &mut BTreeMap<String, Entity<InputState>>,
+        subscriptions: &mut Vec<Subscription>,
+        draft: &Form2552Draft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for (key, placeholder) in Self::all_keys(draft.schedule.len()) {
+            if inputs.contains_key(&key) {
+                continue;
+            }
+            let value = Self::initial(draft, &key);
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+            inputs.insert(key, input);
+        }
     }
 
     fn input_text(&self, key: &str, cx: &App) -> String {
@@ -308,7 +340,7 @@ impl Form2552View {
                 draft.exempt_transactions[row].amount = value;
             }
         }
-        for row in 0..draft.schedule.len().min(FORM_2552_ROWS) {
+        for row in 0..draft.schedule.len().min(FORM_2552_MAX_SCHEDULE_ROWS) {
             let text = |column: &str| self.input_text(&row_key("share", row, column), cx);
             let entry = &mut draft.schedule[row];
             entry.date = text("date").trim().to_string();
@@ -372,6 +404,15 @@ impl Form2552View {
         self.sync_from_inputs(cx);
         change(&mut self.draft);
         self.draft.recompute();
+        let mut inputs = std::mem::take(&mut self.inputs);
+        Self::ensure_inputs(
+            &mut inputs,
+            &mut self._subscriptions,
+            &self.draft,
+            window,
+            cx,
+        );
+        self.inputs = inputs;
         self.reload_inputs(window, cx);
         self.validation_errors = self.draft.validate();
         self.status_message = None;
@@ -819,7 +860,12 @@ impl Form2552View {
         cx: &Context<Self>,
     ) -> Option<AnyElement> {
         let editable = self.draft.lifecycle.is_editable();
-        (editable && count < FORM_2552_ROWS).then(|| {
+        let limit = if table == "share" {
+            FORM_2552_MAX_SCHEDULE_ROWS
+        } else {
+            FORM_2552_ROWS
+        };
+        (editable && count < limit).then(|| {
             Button::new(SharedString::from(format!("2552_add_{table}")))
                 .label(label.to_string())
                 .outline()
@@ -853,7 +899,7 @@ impl Form2552View {
         };
         let lse = d.transaction == Form2552Transaction::LocalStockExchange;
         let mut children: Vec<AnyElement> = Vec::new();
-        for row in 0..d.schedule.len().min(FORM_2552_ROWS) {
+        for row in 0..d.schedule.len().min(FORM_2552_MAX_SCHEDULE_ROWS) {
             let columns: Vec<(&'static str, String)> = SHARE_COLUMNS
                 .iter()
                 .filter(|(column, _, _)| !(lse && *column == "rate"))
@@ -882,6 +928,18 @@ impl Form2552View {
                 layout,
                 cx,
             ));
+        }
+        if d.schedule_is_folded() {
+            children.push(
+                div()
+                    .text_sm()
+                    .child(format!(
+                        "Rows 5 to {} go to the official \"(Add More...)\" popup: row 5 prints OTHERS with their subtotal {}, and amounts typed for rows 6 and later keep whole pesos only, as the popup does.",
+                        d.schedule.len(),
+                        official_amount(d.popup_subtotal())
+                    ))
+                    .into_any_element(),
+            );
         }
         if let Some(add) = self.add_row_button("share", "Add a transaction", d.schedule.len(), cx) {
             children.push(add);
@@ -1043,21 +1101,7 @@ impl QueueableFormView for Form2552View {
     ) -> Self {
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
-        for (key, placeholder) in Self::all_keys() {
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
-            inputs.insert(key, input);
-        }
+        Self::ensure_inputs(&mut inputs, &mut subscriptions, &draft, window, cx);
         let validation_errors = draft.validate();
         Self {
             draft,

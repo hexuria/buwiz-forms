@@ -13,9 +13,11 @@
 //! `formatCurrency`, so tax due and every total is a whole peso while the
 //! filer's inputs keep centavos.
 //!
-//! The official "(Add More...)" popup that folds a sixth and later Part V row
-//! into row 5 as `OTHERS` writes extra page controls that are not part of the
-//! fixed layout; this model files at most five rows per part.
+//! Part V takes more than five transactions the way the official
+//! "(Add More...)" popup does: the fifth and later rows go to the popup
+//! (`Pg2Pt5Sch<n>PopTable1st/2nd`), row 5 shows `OTHERS` with the popup
+//! subtotal, and [`Form2552Draft::official_payload`] splices the popup's
+//! controls in ahead of `Pg2Pt5Sch<n>SubTotal`, where the page writes them.
 
 use std::collections::BTreeMap;
 
@@ -30,6 +32,10 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_2552_FORM_ID: &str = "2552-v2018";
 /// Rows in Part IV, each Part V schedule and Part VI.
 pub const FORM_2552_ROWS: usize = 5;
+/// Part V transactions this model accepts, popup rows included.
+pub const FORM_2552_MAX_SCHEDULE_ROWS: usize = 100;
+/// Row 5's text once the popup holds two or more rows.
+const OTHERS: &str = "OTHERS";
 /// Schedule 1 (LSE) rate text and rate: `6/10 of 1%`.
 pub const FORM_2552_LSE_RATE_TEXT: &str = "6/10 of 1%";
 pub const FORM_2552_LSE_RATE: f64 = 0.6;
@@ -405,16 +411,32 @@ impl Form2552Draft {
 
         // pageTwoComputation + totTaxDueComp.
         let lse = self.transaction == Form2552Transaction::LocalStockExchange;
+        let folded = self.schedule_is_folded();
         let mut total = 0.0;
-        for row in &mut self.schedule {
-            row.number_of_shares = cents(row.number_of_shares);
-            row.tax_base = cents(row.tax_base);
+        for (index, row) in self.schedule.iter_mut().enumerate() {
+            // Popup rows typed in the popup pass toComma(), which drops the
+            // centavos before round() (`FormatValue`).
+            let typed_in_popup = folded && index >= FORM_2552_ROWS;
+            let whole = |value: f64| if typed_in_popup { value.trunc() } else { value };
+            row.number_of_shares = cents(whole(row.number_of_shares));
+            row.tax_base = cents(whole(row.tax_base));
             row.tax_rate = if lse {
                 FORM_2552_LSE_RATE
             } else {
-                cents(row.tax_rate)
+                cents(whole(row.tax_rate))
             };
-            row.tax_due = pesos(row.tax_base * row.tax_rate / 100.0);
+            row.tax_due = if folded && index >= FORM_2552_ROWS - 1 {
+                // Sum_Pg2Pt5AddMore reads the base with removeCommaParenthesis:
+                // parseInt once the text has a thousands comma.
+                let base = if row.tax_base >= 1000.0 {
+                    row.tax_base.trunc()
+                } else {
+                    row.tax_base
+                };
+                pesos(base * row.tax_rate / 100.0)
+            } else {
+                pesos(row.tax_base * row.tax_rate / 100.0)
+            };
             total = pesos(total + row.tax_due);
         }
         self.schedule_total = total;
@@ -453,6 +475,60 @@ impl Form2552Draft {
         }
     }
 
+    /// More than five Part V rows: the fifth and later ones are popup rows.
+    pub fn schedule_is_folded(&self) -> bool {
+        self.schedule.len() > FORM_2552_ROWS
+    }
+
+    /// The popup subtotal row 5 shows (`Pg2Pt5Sch<n>SubTotal`).
+    pub fn popup_subtotal(&self) -> f64 {
+        if !self.schedule_is_folded() {
+            return 0.0;
+        }
+        pesos(
+            self.schedule[FORM_2552_ROWS - 1..]
+                .iter()
+                .map(|row| row.tax_due)
+                .sum::<f64>(),
+        )
+    }
+
+    /// The popup's controls in page order: every row's columns 1–3
+    /// (`PopTable1st`), then every row's columns 4–8 (`PopTable2nd`).
+    fn popup_controls(&self) -> Vec<(String, String)> {
+        let Some(schedule) = self.transaction.schedule() else {
+            return Vec::new();
+        };
+        if !self.schedule_is_folded() {
+            return Vec::new();
+        }
+        let rows = &self.schedule[FORM_2552_ROWS - 1..];
+        let key = |n: usize, col: u8| format!("frm2552:txtPg2Pt5Sch{schedule}_{n}Col{col}");
+        let mut controls = Vec::new();
+        for (index, row) in rows.iter().enumerate() {
+            let n = index + 1;
+            controls.push((key(n, 1), row.date.trim().to_string()));
+            controls.push((key(n, 2), caps(&row.seller)));
+            controls.push((key(n, 3), caps(&row.buyer)));
+        }
+        for (index, row) in rows.iter().enumerate() {
+            let n = index + 1;
+            controls.push((key(n, 4), caps(&row.issuing_corporation)));
+            controls.push((key(n, 5), official_amount(row.number_of_shares)));
+            controls.push((key(n, 6), official_amount(row.tax_base)));
+            controls.push((
+                key(n, 7),
+                if schedule == 1 {
+                    FORM_2552_LSE_RATE_TEXT.to_string()
+                } else {
+                    official_amount(row.tax_rate)
+                },
+            ));
+            controls.push((key(n, 8), official_amount(row.tax_due)));
+        }
+        controls
+    }
+
     /// Item 1 as the filename and Item 1 controls write it.
     fn date_parts(&self) -> (String, String, String) {
         (
@@ -474,8 +550,16 @@ impl Form2552Draft {
         (first, second)
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
+    /// The official field values `saveXMLsubmit` reads, keyed by element id,
+    /// popup rows included.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.layout_fields();
+        fields.extend(self.popup_controls());
+        fields
+    }
+
+    /// The controls of the fixed official layout.
+    fn layout_fields(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {
             fields.insert(format!("frm2552:{key}"), value);
@@ -601,6 +685,26 @@ impl Form2552Draft {
                     Form2552ShareRow::default()
                 };
                 let key = |column: &str| format!("txtPg2Pt5Sch{schedule}{column}{n}");
+                if active == Some(schedule)
+                    && index == FORM_2552_ROWS - 1
+                    && self.schedule_is_folded()
+                {
+                    // Save_Pg2Pt5AddMorePopTable with two or more popup rows.
+                    for column in ["Date", "Seller", "Buyer", "Corp", "NumShares", "TaxBase"] {
+                        put(&key(column), OTHERS.to_string());
+                    }
+                    put(
+                        &key("TaxRate"),
+                        if schedule == 1 {
+                            FORM_2552_LSE_RATE_TEXT
+                        } else {
+                            OTHERS
+                        }
+                        .to_string(),
+                    );
+                    put(&key("TaxDue"), official_amount(self.popup_subtotal()));
+                    continue;
+                }
                 put(&key("Date"), row.date.trim().to_string());
                 put(&key("Seller"), caps(&row.seller));
                 put(&key("Buyer"), caps(&row.buyer));
@@ -648,6 +752,18 @@ impl Form2552Draft {
         put("txtLOB", self.line_of_business.trim().to_string());
         // init() sets the pager to page 1.
         put("txtCurrentPage", "1".to_string());
+        if let Some(schedule) = self.transaction.schedule()
+            && self.schedule_is_folded()
+        {
+            fields.insert(
+                format!("Pg2Pt5Sch{schedule}SubTotal"),
+                official_amount(self.popup_subtotal()),
+            );
+            fields.insert(
+                format!("Pg2Pt5Sch{schedule}PopLength"),
+                (self.schedule.len() - (FORM_2552_ROWS - 1)).to_string(),
+            );
+        }
         fields
     }
 
@@ -845,13 +961,20 @@ impl Form2552Draft {
 
         // checkPartVSchFields for the schedule in use (the others are blank).
         if let Some(schedule) = self.transaction.schedule() {
-            if self.schedule.len() > FORM_2552_ROWS {
+            if self.schedule.len() > FORM_2552_MAX_SCHEDULE_ROWS {
                 err(
                     "schedule",
-                    "Part V holds 5 rows per schedule; the Add More popup is not supported.",
+                    "Part V holds at most 100 transactions per return in this editor.",
                 );
             }
-            for (index, row) in self.schedule.iter().enumerate().take(FORM_2552_ROWS) {
+            let folded = self.schedule_is_folded();
+            // Row 5 shows OTHERS once folded (NaN amounts pass the check).
+            let main_rows = if folded {
+                FORM_2552_ROWS - 1
+            } else {
+                FORM_2552_ROWS
+            };
+            for (index, row) in self.schedule.iter().enumerate().take(main_rows) {
                 let n = index + 1;
                 let numbers_zero = if schedule == 1 {
                     row.number_of_shares == 0.0 || row.tax_base == 0.0
@@ -867,6 +990,25 @@ impl Form2552Draft {
                     err(
                         &format!("schedule[{index}]"),
                         &format!("Please complete Item #{n} in Page 2 Part V Schedule {schedule}."),
+                    );
+                    break;
+                }
+            }
+        }
+
+        // CheckEmptyDesc when the popup is saved.
+        if self.schedule_is_folded() {
+            let lse = self.transaction == Form2552Transaction::LocalStockExchange;
+            for (index, row) in self.schedule.iter().enumerate().skip(FORM_2552_ROWS - 1) {
+                let popup_row = index - (FORM_2552_ROWS - 2);
+                if !row.text_complete()
+                    || row.number_of_shares <= 0.0
+                    || row.tax_base <= 0.0
+                    || (!lse && row.tax_rate <= 0.0)
+                {
+                    err(
+                        &format!("schedule[{index}]"),
+                        &format!("Cannot save. You have an empty data in 5.{popup_row}"),
                     );
                     break;
                 }
@@ -1080,6 +1222,37 @@ impl QueueableForm for Form2552Draft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+
+    /// The fixed layout, with the Add More popup's controls where the page's
+    /// submit loop writes them: ahead of `Pg2Pt5Sch<n>SubTotal`.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as QueueableForm>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let xml_error = |error: String| vec![("xml".to_string(), error)];
+        let layout = crate::official_xml::layout(Self::LAYOUT_ID)
+            .map_err(|error| xml_error(error.to_string()))?;
+        let mut payload = crate::official_xml::write(layout, &self.layout_fields())
+            .map_err(|error| xml_error(error.to_string()))?;
+        let controls = self.popup_controls();
+        if let Some(schedule) = self.transaction.schedule()
+            && !controls.is_empty()
+        {
+            let anchor = format!("<div>Pg2Pt5Sch{schedule}SubTotal=");
+            let at = payload
+                .find(&anchor)
+                .ok_or_else(|| xml_error("the popup subtotal is missing from the layout".into()))?;
+            // Every control on this page is followed by the same separator.
+            let separator = &layout.lead;
+            let rows: String = controls
+                .iter()
+                .map(|(id, value)| format!("<div>{id}={value}{id}=</div>{separator}"))
+                .collect();
+            payload.insert_str(at, &rows);
+        }
+        Ok(payload)
+    }
 }
 
 #[cfg(test)]
@@ -1268,6 +1441,52 @@ mod tests {
             "12345678800000-2552v2018-03142025#Sample.Taxpayer@example.com#.xml"
         );
         assert!(draft.to_bir_xml_payload().is_ok());
+    }
+
+    #[test]
+    fn rows_past_five_fold_into_the_add_more_popup() {
+        // Same entries as the official page run (runtime.js, Add More saved).
+        let mut d = sample();
+        d.schedule.clear();
+        for i in 1..=5 {
+            d.schedule.push(Form2552ShareRow {
+                date: "03/14/2025".into(),
+                seller: format!("Seller {i}"),
+                buyer: format!("Buyer {i}"),
+                issuing_corporation: "Listed Corp".into(),
+                number_of_shares: 100.0 * i as f64,
+                tax_base: 10_000.5 * i as f64,
+                ..Default::default()
+            });
+        }
+        for (shares, base) in [(600.0, 12_345.67), (70.0, 999.99)] {
+            d.schedule.push(Form2552ShareRow {
+                date: "03/13/2025".into(),
+                seller: "Seller".into(),
+                buyer: "Buyer".into(),
+                issuing_corporation: "Other Corp".into(),
+                number_of_shares: shares,
+                tax_base: base,
+                ..Default::default()
+            });
+        }
+        d.recompute();
+        assert_eq!(d.schedule[5].tax_base, 12_345.0);
+        assert_eq!(d.schedule[6].tax_base, 999.0);
+        assert_eq!(d.popup_subtotal(), 380.0);
+        assert_eq!(d.schedule_total, 980.0);
+        let fields = d.to_bir_field_map();
+        assert_eq!(fields["frm2552:txtPg2Pt5Sch1TaxBase5"], "OTHERS");
+        assert_eq!(fields["frm2552:txtPg2Pt5Sch1TaxDue5"], "380.00");
+        assert_eq!(fields["frm2552:txtPg2Pt5Sch1_1Col6"], "50,002.50");
+        assert_eq!(fields["frm2552:txtPg2Pt5Sch1_2Col8"], "74.00");
+        assert_eq!(fields["Pg2Pt5Sch1PopLength"], "3");
+        d.schedule[6].buyer.clear();
+        assert!(
+            messages(&d)
+                .iter()
+                .any(|m| m == "Cannot save. You have an empty data in 5.3")
+        );
     }
 
     #[test]
