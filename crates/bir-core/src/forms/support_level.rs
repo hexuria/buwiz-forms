@@ -213,12 +213,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // official layout (radios, check boxes and the name) replayed through
         // the full page runtime; queueing uses the generic path.
         form_id: "1701MS",
+        // The desktop editor is views::form_1701ms_view; print preview fills the
+        // frozen 1701ms-2024 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -230,12 +237,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // official layout replayed through the full page runtime; queueing
         // uses the generic path.
         form_id: "1702Qv2018C",
+        // The desktop editor is views::form_1702q_view; print preview fills the
+        // frozen 1702q-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -247,12 +261,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // official layout replayed through the full page runtime; queueing
         // uses the generic path.
         form_id: "1701A",
+        // The desktop editor is views::form_1701a_view; print preview fills the
+        // frozen 1701a-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -264,12 +285,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // official layout replayed through the full page runtime; queueing
         // uses the generic path.
         form_id: "1700v2018",
+        // The desktop editor is views::form_1700_view; print preview fills the
+        // frozen 1700-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -281,12 +309,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // official layout replayed through the full page runtime; queueing
         // uses the generic path.
         form_id: "1702EXv2018C",
+        // The desktop editor is views::form_1702ex_view; print preview fills the
+        // frozen 1702ex-2018 sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -589,7 +624,8 @@ mod tests {
     fn certification_draft_gate_does_not_claim_release_readiness() {
         assert!(can_open_certification_draft("2551Q"));
         for code in [
-            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "2553",
+            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
+            "2553", "1701MS", "1702Q", "1701A", "1700", "1702EX",
         ] {
             assert!(
                 can_open_certification_draft(code),
