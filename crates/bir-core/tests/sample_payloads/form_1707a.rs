@@ -55,3 +55,42 @@ fn form_1707a_sample_payload_is_current() {
         "2bf77639d5416e8bdabb63900b0eafc19afef5e2a6ff421971cf1ec4a2fbdc30",
     );
 }
+
+/// Schedules 1 and 2 past row 4: the "More" pop-ups. The layout is the generated one
+/// extended by `Form1707ADraft::official_layout`.
+fn sample_1707a_with_popup() -> Form1707ADraft {
+    let mut draft = sample_1707a();
+    draft.year_end_year = 2024;
+    for row in draft.gains.iter_mut().chain(draft.losses.iter_mut()) {
+        row.date = row.date.replace("/2025", "/2024");
+    }
+    draft.gains.extend([
+        row("07/01/2024", "Third Co", 1_000.0, 500.0, 0.0),
+        row("08/01/2024", "Fourth Co", 20_000.509, 15_000.0, 100.0),
+        row("09/01/2024", "Fifth Co", 3_000.25, 1_000.0, 50.0),
+        row("10/01/2024", "Sixth Co", 1_234_567.891, 1_000_000.0, 0.0),
+    ]);
+    draft.losses.extend([
+        row("10/05/2024", "Loss Two", 10_000.0, 12_000.0, 0.0),
+        row("11/01/2024", "Loss Three", 5_000.0, 5_000.5, 0.0),
+        row("11/15/2024", "Loss Four", 1_000.0, 1_500.0, 0.0),
+        row("12/01/2024", "Loss Five", 200.0, 300.25, 0.0),
+    ]);
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1707a_sample_with_popup_is_current() {
+    let draft = sample_1707a_with_popup();
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1707A must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1707A-12312024",
+        &layout,
+        &payload,
+        "f24976694df75213070167d976401433831e8e36a1dcae5a523d57cc3a51c13e",
+    );
+}

@@ -8,9 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
-use bir_core::forms::form_1707a::{
-    FORM_1707A_SCHEDULE_ROWS, Form1707AAtc, Form1707ADraft, Form1707ARow,
-};
+use bir_core::forms::form_1707a::{Form1707AAtc, Form1707ADraft, Form1707ARow};
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
 
@@ -57,6 +55,10 @@ const ROW_FIELDS: [(&str, &str, bool); 5] = [
     ("paid", "Capital gains tax paid", true),
 ];
 
+/// Rows offered per schedule: 1–4, then the official "More" list once a
+/// schedule passes four rows.
+const SCHEDULE_UI_ROWS: usize = 10;
+
 fn row_key(schedule: u8, row: usize, part: &str) -> String {
     format!("s{schedule}_{row}_{part}")
 }
@@ -90,7 +92,7 @@ impl Form1707AView {
             "compromise" => money_text(d.compromise),
             _ => {
                 for (schedule, rows) in [(1u8, &d.gains), (2u8, &d.losses)] {
-                    for index in 0..FORM_1707A_SCHEDULE_ROWS {
+                    for index in 0..SCHEDULE_UI_ROWS {
                         let row = rows.get(index).cloned().unwrap_or_default();
                         for (part, value) in [
                             ("date", row.date.clone()),
@@ -121,7 +123,7 @@ impl Form1707AView {
                 .map(|(k, _)| (k.to_string(), "0.00".to_string())),
         );
         for schedule in [1u8, 2u8] {
-            for index in 0..FORM_1707A_SCHEDULE_ROWS {
+            for index in 0..SCHEDULE_UI_ROWS {
                 for (part, _, gains_only) in ROW_FIELDS {
                     if gains_only && schedule == 2 {
                         continue;
@@ -282,7 +284,7 @@ impl Form1707AView {
         let d = &self.draft;
         let rows = if schedule == 1 { &d.gains } else { &d.losses };
         let mut children = Vec::new();
-        for index in 0..FORM_1707A_SCHEDULE_ROWS {
+        for index in 0..SCHEDULE_UI_ROWS {
             let mut cells: Vec<AnyElement> = ROW_FIELDS
                 .iter()
                 .filter(|(_, _, gains_only)| !gains_only || schedule == 1)
@@ -433,7 +435,7 @@ impl KitView for Form1707AView {
         }
         for schedule in [1u8, 2u8] {
             let mut rows = Vec::new();
-            for index in 0..FORM_1707A_SCHEDULE_ROWS {
+            for index in 0..SCHEDULE_UI_ROWS {
                 let label = format!("Schedule {schedule} row {}", index + 1);
                 let selling = r
                     .amount(&row_key(schedule, index, "sell"), &label)

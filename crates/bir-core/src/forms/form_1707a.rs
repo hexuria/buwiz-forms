@@ -11,15 +11,19 @@
 //! Background information comes from the taxpayer profile the way
 //! `loadBGData()` fills it (including its page-2 TIN3 = TIN2 slip).
 //!
-//! Schedules 1 and 2 hold four rows each on the page; the "More" pop-ups are
-//! not covered.
+//! Schedules 1 and 2 show four rows; past that the "More" pop-up takes row 4
+//! and the rest, row 4 then reads "OTHERS" with the pop-up totals, and the
+//! pop-up rows are written where the page keeps them (see
+//! [`Form1707ADraft::official_layout`]).
 
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
-use super::official_inputs::{digits_only, split_tin, tin_is_well_formed};
+use super::official_inputs::{
+    RowInsertion, digits_only, extend_layout, split_tin, tin_is_well_formed,
+};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::profile::TaxpayerProfile;
@@ -28,6 +32,8 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1707A_FORM_ID: &str = "1707a-v2021";
 /// Rows 1–4 of Schedules 1 and 2.
 pub const FORM_1707A_SCHEDULE_ROWS: usize = 4;
+/// Rows a schedule may hold here (the pop-up has no limit).
+pub const FORM_1707A_MAX_SCHEDULE_ROWS: usize = 40;
 /// Item 16 applicable tax rate (`txtI16ApplicableTaxRate`).
 pub const FORM_1707A_TAX_RATE: f64 = 15.0;
 
@@ -103,6 +109,12 @@ pub struct Form1707ADraft {
     pub gains: Vec<Form1707ARow>,
     #[serde(default)]
     pub losses: Vec<Form1707ARow>,
+    /// Pop-up totals (selling, cost, gain/loss, tax paid) when a schedule has
+    /// more than four rows (`txtS1ModalTotal*` / `txtS2ModalTotal*`).
+    #[serde(default)]
+    pub s1_modal_totals: [f64; 4],
+    #[serde(default)]
+    pub s2_modal_totals: [f64; 4],
     #[serde(default)]
     pub s1_total_selling_price: f64,
     #[serde(default)]
@@ -292,6 +304,8 @@ impl Form1707ADraft {
             tax_relief: None,
             gains: Vec::new(),
             losses: Vec::new(),
+            s1_modal_totals: [0.0; 4],
+            s2_modal_totals: [0.0; 4],
             s1_total_selling_price: 0.0,
             s1_total_cost: 0.0,
             s1_total_gains: 0.0,
@@ -367,20 +381,45 @@ impl Form1707ADraft {
             row.tax_paid = 0.0;
             row.gain_or_loss = shown(precise(row.cost - row.selling_price));
         }
+        // modalSched1Subtotal / modalSched2Subtotal over rows 4 onwards.
+        let modal = |rows: &[Form1707ARow]| -> [f64; 4] {
+            let mut sums = [0.0; 4];
+            if rows.len() > FORM_1707A_SCHEDULE_ROWS {
+                for row in &rows[FORM_1707A_SCHEDULE_ROWS - 1..] {
+                    for (sum, value) in sums.iter_mut().zip([
+                        row.selling_price,
+                        row.cost,
+                        row.gain_or_loss,
+                        row.tax_paid,
+                    ]) {
+                        *sum = precise(*sum + value);
+                    }
+                }
+            }
+            sums.map(shown)
+        };
+        self.s1_modal_totals = modal(&self.gains);
+        self.s2_modal_totals = modal(&self.losses);
+        let gains: Vec<Form1707ARow> = (0..self.gains.len().min(FORM_1707A_SCHEDULE_ROWS))
+            .map(|i| self.main_row(true, i))
+            .collect();
+        let losses: Vec<Form1707ARow> = (0..self.losses.len().min(FORM_1707A_SCHEDULE_ROWS))
+            .map(|i| self.main_row(false, i))
+            .collect();
         let total = |rows: &[Form1707ARow], pick: fn(&Form1707ARow) -> f64| {
             let mut sum = 0.0;
-            for row in rows.iter().take(FORM_1707A_SCHEDULE_ROWS) {
+            for row in rows {
                 sum = precise(sum + pick(row));
             }
             shown(sum)
         };
-        self.s1_total_selling_price = total(&self.gains, |r| r.selling_price);
-        self.s1_total_cost = total(&self.gains, |r| r.cost);
-        self.s1_total_gains = total(&self.gains, |r| r.gain_or_loss);
-        self.s1_total_tax_paid = total(&self.gains, |r| r.tax_paid);
-        self.s2_total_selling_price = total(&self.losses, |r| r.selling_price);
-        self.s2_total_cost = total(&self.losses, |r| r.cost);
-        self.s2_total_loss = total(&self.losses, |r| r.gain_or_loss);
+        self.s1_total_selling_price = total(&gains, |r| r.selling_price);
+        self.s1_total_cost = total(&gains, |r| r.cost);
+        self.s1_total_gains = total(&gains, |r| r.gain_or_loss);
+        self.s1_total_tax_paid = total(&gains, |r| r.tax_paid);
+        self.s2_total_selling_price = total(&losses, |r| r.selling_price);
+        self.s2_total_cost = total(&losses, |r| r.cost);
+        self.s2_total_loss = total(&losses, |r| r.gain_or_loss);
 
         self.net_capital_gain = shown(precise(self.s1_total_gains - self.s2_total_loss));
         let tax_due = precise(self.net_capital_gain * (FORM_1707A_TAX_RATE / 100.0));
@@ -408,8 +447,82 @@ impl Form1707ADraft {
         )
     }
 
-    fn row(rows: &[Form1707ARow], index: usize) -> Form1707ARow {
+    fn popup(rows: &[Form1707ARow]) -> bool {
+        rows.len() > FORM_1707A_SCHEDULE_ROWS
+    }
+
+    /// Main-table row `index` (0..4) as the page shows it: row 4 reads
+    /// "OTHERS" with the pop-up totals once the pop-up holds the rest.
+    fn main_row(&self, gains: bool, index: usize) -> Form1707ARow {
+        let (rows, totals) = if gains {
+            (&self.gains, self.s1_modal_totals)
+        } else {
+            (&self.losses, self.s2_modal_totals)
+        };
+        if index == FORM_1707A_SCHEDULE_ROWS - 1 && Self::popup(rows) {
+            return Form1707ARow {
+                date: String::new(),
+                corporation: "OTHERS".into(),
+                selling_price: totals[0],
+                cost: totals[1],
+                gain_or_loss: totals[2],
+                tax_paid: if gains { totals[3] } else { 0.0 },
+            };
+        }
         rows.get(index).cloned().unwrap_or_default()
+    }
+
+    /// The generated layout with the "More" pop-up rows spliced in where the
+    /// page keeps them: Schedule 1's rows after `ModalSched2Length`,
+    /// Schedule 2's after `txtS1ModalTotalTaxPaid`.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        let base = crate::official_xml::layout(FORM_1707A_FORM_ID).map_err(|e| e.to_string())?;
+        let mut insertions = Vec::new();
+        for (rows, after, columns) in [
+            (
+                &self.gains,
+                "ModalSched2Length",
+                &[
+                    "txtS1C1DateOfTransaction_",
+                    "txtS1C2NameOfCorporateStock_",
+                    "txtS1C3SellingPrice_",
+                    "txtS1C4Cost_",
+                    "txtS1C5CapitalGains_",
+                    "txtS1C6TaxPaid_",
+                ][..],
+            ),
+            (
+                &self.losses,
+                "frm1707Av2021:txtS1ModalTotalTaxPaid",
+                &[
+                    "txtS2C1DateOfTransaction_",
+                    "txtS2C2NameOfCorporateStock_",
+                    "txtS2C3SellingPrice_",
+                    "txtS2C4Cost_",
+                    "txtS2C5CapitalLoss_",
+                ][..],
+            ),
+        ] {
+            if !Self::popup(rows) {
+                continue;
+            }
+            let count = rows.len() - FORM_1707A_SCHEDULE_ROWS + 1;
+            let copies = (1..=count)
+                .flat_map(|k| {
+                    columns.iter().map(move |column| {
+                        (
+                            "ModalSched2Length".to_string(),
+                            format!("frm1707Av2021:{column}{k}"),
+                        )
+                    })
+                })
+                .collect();
+            insertions.push(RowInsertion {
+                after: after.to_string(),
+                copies,
+            });
+        }
+        extend_layout(base, &insertions)
     }
 
     /// The official field values `saveXMLsubmit` writes, keyed by element id.
@@ -500,7 +613,7 @@ impl Form1707ADraft {
 
         for index in 0..FORM_1707A_SCHEDULE_ROWS {
             let n = index + 1;
-            let gain = Self::row(&self.gains, index);
+            let gain = self.main_row(true, index);
             put(
                 &format!("txtS1C1DateOfTransactionI{n}"),
                 gain.date.trim().to_string(),
@@ -519,7 +632,7 @@ impl Form1707ADraft {
                 amount(gain.gain_or_loss),
             );
             put(&format!("txtS1C6TaxPaidI{n}"), amount(gain.tax_paid));
-            let loss = Self::row(&self.losses, index);
+            let loss = self.main_row(false, index);
             put(
                 &format!("txtS2C1DateOfTransactionI{n}"),
                 loss.date.trim().to_string(),
@@ -551,6 +664,63 @@ impl Form1707ADraft {
         );
         put("txtS2I21TotalCost", amount(self.s2_total_cost));
         put("txtS2I21TotalCapitalLoss", amount(self.s2_total_loss));
+        for (prefix, rows, totals, names) in [
+            (
+                "S1",
+                &self.gains,
+                self.s1_modal_totals,
+                &["SellingPrice", "Cost", "CapitalGains", "TaxPaid"][..],
+            ),
+            (
+                "S2",
+                &self.losses,
+                self.s2_modal_totals,
+                &["SellingPrice", "Cost", "CapitalLoss"][..],
+            ),
+        ] {
+            if !Self::popup(rows) {
+                continue;
+            }
+            for (name, total) in names.iter().zip(totals) {
+                put(&format!("txt{prefix}ModalTotal{name}"), amount(total));
+            }
+            for (k, row) in rows[FORM_1707A_SCHEDULE_ROWS - 1..].iter().enumerate() {
+                let k = k + 1;
+                put(
+                    &format!("txt{prefix}C1DateOfTransaction_{k}"),
+                    row.date.trim().to_string(),
+                );
+                put(
+                    &format!("txt{prefix}C2NameOfCorporateStock_{k}"),
+                    row.corporation.trim().to_uppercase(),
+                );
+                put(
+                    &format!("txt{prefix}C3SellingPrice_{k}"),
+                    amount(row.selling_price),
+                );
+                put(&format!("txt{prefix}C4Cost_{k}"), amount(row.cost));
+                if prefix == "S1" {
+                    put(
+                        &format!("txtS1C5CapitalGains_{k}"),
+                        amount(row.gain_or_loss),
+                    );
+                    put(&format!("txtS1C6TaxPaid_{k}"), amount(row.tax_paid));
+                } else {
+                    put(&format!("txtS2C5CapitalLoss_{k}"), amount(row.gain_or_loss));
+                }
+            }
+        }
+        for (key, rows) in [
+            ("ModalSched1Length", &self.gains),
+            ("ModalSched2Length", &self.losses),
+        ] {
+            if Self::popup(rows) {
+                fields.insert(
+                    key.to_string(),
+                    (rows.len() - FORM_1707A_SCHEDULE_ROWS + 1).to_string(),
+                );
+            }
+        }
         fields
     }
 
@@ -657,15 +827,52 @@ impl Form1707ADraft {
         // validateSchedules for Schedule 1, then Schedule 2.
         let year_end = self.year_end();
         let year_from = year_end.and_then(|d| d.with_year(d.year() - 1));
-        for (schedule, field, rows, is_sched1) in [
-            (" Schedule 1", "gains", &self.gains, true),
-            (" Schedule 2", "losses", &self.losses, false),
-        ] {
-            if rows.len() > FORM_1707A_SCHEDULE_ROWS {
-                err(field, &format!("{} holds rows 1 to 4.", schedule.trim()));
+        let main = |rows: &Vec<Form1707ARow>| {
+            if Self::popup(rows) {
+                rows[..FORM_1707A_SCHEDULE_ROWS - 1].to_vec()
+            } else {
+                rows.clone()
             }
-            for (index, row) in rows.iter().enumerate().take(FORM_1707A_SCHEDULE_ROWS) {
+        };
+        let modal = |rows: &Vec<Form1707ARow>| {
+            if Self::popup(rows) {
+                rows[FORM_1707A_SCHEDULE_ROWS - 1..].to_vec()
+            } else {
+                Vec::new()
+            }
+        };
+        for (schedule, field, rows, is_sched1, is_modal, offset) in [
+            (" Schedule 1", "gains", main(&self.gains), true, false, 0),
+            (" Schedule 2", "losses", main(&self.losses), false, false, 0),
+            (
+                " Schedule 1 Additional Items",
+                "gains",
+                modal(&self.gains),
+                true,
+                true,
+                FORM_1707A_SCHEDULE_ROWS - 1,
+            ),
+            (
+                " Schedule 2 Additional Items",
+                "losses",
+                modal(&self.losses),
+                false,
+                true,
+                FORM_1707A_SCHEDULE_ROWS - 1,
+            ),
+        ] {
+            if !is_modal && rows.len() > FORM_1707A_MAX_SCHEDULE_ROWS {
+                err(
+                    field,
+                    &format!(
+                        "{} holds at most {FORM_1707A_MAX_SCHEDULE_ROWS} rows here.",
+                        schedule.trim()
+                    ),
+                );
+            }
+            for (index, row) in rows.iter().enumerate() {
                 let n = index + 1;
+                let index = index + offset;
                 let key = format!("{field}[{index}]");
                 let mut empty = 0;
                 if row.date_blank() {
@@ -739,12 +946,14 @@ impl Form1707ADraft {
                 }
                 if is_sched1 {
                     if row.tax_paid != 0.0 && empty > 0 {
-                        err(
-                            &key,
-                            &format!(
+                        let message = if is_modal {
+                            format!(" Please fill in all items in row {n}{schedule}")
+                        } else {
+                            format!(
                                 "There is an empty item on {schedule}. Please fill in all items in row {n}"
-                            ),
-                        );
+                            )
+                        };
+                        err(&key, &message);
                         continue;
                     }
                     if row.gain_or_loss < 0.0 {
@@ -763,8 +972,16 @@ impl Form1707ADraft {
                         ),
                     );
                 }
-                // `.txtCorporate` keeps 17 of [a-zA-Z 0-9.,#@'()_-].
-                if corporation.chars().count() > 17
+                if is_modal && empty != 0 {
+                    err(
+                        &key,
+                        &format!(
+                            "Row {n} is empty. Please remove row or fill in all items first in{schedule}"
+                        ),
+                    );
+                }
+                // `.txtCorporate` keeps 17 (pop-up: 15) of [a-zA-Z 0-9.,#@'()_-].
+                if corporation.chars().count() > if is_modal { 15 } else { 17 }
                     || !corporation
                         .chars()
                         .all(|c| c.is_ascii_alphanumeric() || " .,#@'()_-".contains(c))
@@ -895,6 +1112,19 @@ impl QueueableForm for Form1707ADraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+    /// The "More" pop-ups add rows at run time, so the plaintext follows
+    /// [`Form1707ADraft::official_layout`] rather than the fixed layout.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
+    }
 }
 
 #[cfg(test)]
@@ -954,6 +1184,8 @@ mod tests {
                 ),
             ],
             losses: vec![row("09/01/2025", "Loss Co", 50_000.0, 80_000.55, 0.0)],
+            s1_modal_totals: [0.0; 4],
+            s2_modal_totals: [0.0; 4],
             s1_total_selling_price: 0.0,
             s1_total_cost: 0.0,
             s1_total_gains: 0.0,
