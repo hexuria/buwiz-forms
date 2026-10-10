@@ -178,6 +178,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1700-2018" => Some(include_str!(
             "../../../html-frozen/1700-2018/writer-cells.json"
         )),
+        "1701-2018" => Some(include_str!(
+            "../../../html-frozen/1701-2018/writer-cells.json"
+        )),
         "1701a-2018" => Some(include_str!(
             "../../../html-frozen/1701a-2018/writer-cells.json"
         )),
