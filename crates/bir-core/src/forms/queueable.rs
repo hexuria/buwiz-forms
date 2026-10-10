@@ -395,6 +395,7 @@ pub fn period_column(period: &FilingPeriod) -> i64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QueueableKind {
     Form2553,
+    Form2200C,
     Form2200S,
     Form2000OT,
     Form2000,
@@ -409,6 +410,7 @@ impl QueueableKind {
         QueueableKind::Form2000,
         QueueableKind::Form2000OT,
         QueueableKind::Form2200S,
+        QueueableKind::Form2200C,
     ];
 
     fn candidates() -> impl Iterator<Item = QueueableKind> {
@@ -458,6 +460,10 @@ macro_rules! with_queueable_kind {
             }
             $crate::forms::queueable::QueueableKind::Form2200S => {
                 type $ty = $crate::forms::form_2200s::Form2200SDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200C => {
+                type $ty = $crate::forms::form_2200c::Form2200CDraft;
                 $body
             }
             #[cfg(test)]
