@@ -451,8 +451,11 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // Most pages close with "BIR 2012.0"; 1700, 1701A and 1702EX
+            // with "BIR 2014.0".
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                after.ends_with("All Rights Reserved BIR 2012.0")
+                    || after.ends_with("All Rights Reserved BIR 2014.0"),
                 "{id}: {after:?}"
             );
         }

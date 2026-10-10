@@ -214,6 +214,18 @@
       "after": "    \n            "
     },
     {
+      "key": "frm1702EX:rdoPg1Pt1I7RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1702EX:rdoPg1Pt1I7RDO",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "    \n            "
+    },
+    {
       "key": "frm1702EX:txtPg1Pt1I8RegisteredName",
       "kind": "value",
       "parts": [
