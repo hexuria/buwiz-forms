@@ -492,36 +492,123 @@ impl QueueableKind {
 macro_rules! with_queueable_kind {
     ($kind:expr, $ty:ident => $body:expr) => {
         match $kind {
-            $crate::forms::queueable::QueueableKind::Form2553 => { type $ty = $crate::forms::form_2553::Form2553Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form1604F => { type $ty = $crate::forms::form_1604f::Form1604fDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1604C => { type $ty = $crate::forms::form_1604c::Form1604cDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1604E => { type $ty = $crate::forms::form_1604e::Form1604eDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1606 => { type $ty = $crate::forms::form_1606::Form1606Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form1600VT => { type $ty = $crate::forms::form_1600vt::Form1600VtDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1600PT => { type $ty = $crate::forms::form_1600pt::Form1600PtDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1600WP => { type $ty = $crate::forms::form_1600wp::Form1600WpDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1601EQ => { type $ty = $crate::forms::form_1601eq::Form1601EqDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1601FQ => { type $ty = $crate::forms::form_1601fq::Form1601FqDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1603Q => { type $ty = $crate::forms::form_1603q::Form1603QDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1602Q => { type $ty = $crate::forms::form_1602q::Form1602QDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2552 => { type $ty = $crate::forms::form_2552::Form2552Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form2550M => { type $ty = $crate::forms::form_2550m::Form2550MDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1706 => { type $ty = $crate::forms::form_1706::Form1706Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form1707 => { type $ty = $crate::forms::form_1707::Form1707Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form1707A => { type $ty = $crate::forms::form_1707a::Form1707ADraft; $body }
-            $crate::forms::queueable::QueueableKind::Form1800 => { type $ty = $crate::forms::form_1800::Form1800Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form1801 => { type $ty = $crate::forms::form_1801::Form1801Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form2000 => { type $ty = $crate::forms::form_2000::Form2000Draft; $body }
-            $crate::forms::queueable::QueueableKind::Form2000OT => { type $ty = $crate::forms::form_2000ot::Form2000OTDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200S => { type $ty = $crate::forms::form_2200s::Form2200SDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200C => { type $ty = $crate::forms::form_2200c::Form2200CDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200AN => { type $ty = $crate::forms::form_2200an::Form2200ANDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200M => { type $ty = $crate::forms::form_2200m::Form2200MDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200T => { type $ty = $crate::forms::form_2200t::Form2200TDraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200A => { type $ty = $crate::forms::form_2200a::Form2200ADraft; $body }
-            $crate::forms::queueable::QueueableKind::Form2200P => { type $ty = $crate::forms::form_2200p::Form2200PDraft; $body }
+            $crate::forms::queueable::QueueableKind::Form2553 => {
+                type $ty = $crate::forms::form_2553::Form2553Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1604F => {
+                type $ty = $crate::forms::form_1604f::Form1604fDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1604C => {
+                type $ty = $crate::forms::form_1604c::Form1604cDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1604E => {
+                type $ty = $crate::forms::form_1604e::Form1604eDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1606 => {
+                type $ty = $crate::forms::form_1606::Form1606Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1600VT => {
+                type $ty = $crate::forms::form_1600vt::Form1600VtDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1600PT => {
+                type $ty = $crate::forms::form_1600pt::Form1600PtDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1600WP => {
+                type $ty = $crate::forms::form_1600wp::Form1600WpDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1601EQ => {
+                type $ty = $crate::forms::form_1601eq::Form1601EqDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1601FQ => {
+                type $ty = $crate::forms::form_1601fq::Form1601FqDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1603Q => {
+                type $ty = $crate::forms::form_1603q::Form1603QDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1602Q => {
+                type $ty = $crate::forms::form_1602q::Form1602QDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2552 => {
+                type $ty = $crate::forms::form_2552::Form2552Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2550M => {
+                type $ty = $crate::forms::form_2550m::Form2550MDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1706 => {
+                type $ty = $crate::forms::form_1706::Form1706Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1707 => {
+                type $ty = $crate::forms::form_1707::Form1707Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1707A => {
+                type $ty = $crate::forms::form_1707a::Form1707ADraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1800 => {
+                type $ty = $crate::forms::form_1800::Form1800Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1801 => {
+                type $ty = $crate::forms::form_1801::Form1801Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2000 => {
+                type $ty = $crate::forms::form_2000::Form2000Draft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2000OT => {
+                type $ty = $crate::forms::form_2000ot::Form2000OTDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200S => {
+                type $ty = $crate::forms::form_2200s::Form2200SDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200C => {
+                type $ty = $crate::forms::form_2200c::Form2200CDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200AN => {
+                type $ty = $crate::forms::form_2200an::Form2200ANDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200M => {
+                type $ty = $crate::forms::form_2200m::Form2200MDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200T => {
+                type $ty = $crate::forms::form_2200t::Form2200TDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200A => {
+                type $ty = $crate::forms::form_2200a::Form2200ADraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200P => {
+                type $ty = $crate::forms::form_2200p::Form2200PDraft;
+                $body
+            }
             #[cfg(test)]
-            $crate::forms::queueable::QueueableKind::Test => { type $ty = $crate::forms::queueable::test_support::TestForm; $body }
+            $crate::forms::queueable::QueueableKind::Test => {
+                type $ty = $crate::forms::queueable::test_support::TestForm;
+                $body
+            }
         }
     };
 }
