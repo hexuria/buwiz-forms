@@ -233,6 +233,10 @@ pub struct AppState {
     pub(crate) agent_token: Option<String>,
     #[cfg(feature = "agent")]
     pub(crate) agent_shutdown: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Keeps this window's gpui-agent discovery record on disk; dropping it
+    /// deletes the record, so it must live as long as the window.
+    #[cfg(feature = "agent")]
+    pub(crate) agent_discovery: Option<std::sync::Arc<gpui_agent::discovery::PublishedHost>>,
     #[cfg(feature = "agent")]
     pub(crate) agent_refresh: Option<Task<()>>,
     /// Semantic submit reached the existing confirmation gate without queuing.
@@ -945,6 +949,8 @@ impl AppState {
             agent_token: None,
             #[cfg(feature = "agent")]
             agent_shutdown: None,
+            #[cfg(feature = "agent")]
+            agent_discovery: None,
             #[cfg(feature = "agent")]
             agent_refresh: None,
             #[cfg(feature = "agent")]
