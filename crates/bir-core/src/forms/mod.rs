@@ -12,6 +12,7 @@ pub mod form_1702rt;
 pub mod form_2307;
 pub mod form_2550q;
 pub mod form_2551q;
+pub mod form_2552;
 pub mod form_2553;
 pub mod forms_set;
 pub mod queueable;
