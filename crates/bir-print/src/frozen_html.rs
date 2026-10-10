@@ -148,6 +148,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1701a-2018" => Some(include_str!(
             "../../../html-frozen/1701a-2018/writer-cells.json"
         )),
+        "1701ms-2024" => Some(include_str!(
+            "../../../html-frozen/1701ms-2024/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1698,6 +1701,88 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1701ms_fills_both_columns_amounts_and_boxes() {
+        use bir_core::forms::form_1701ms::{
+            Form1701MsCivilStatus, Form1701MsColumn, Form1701MsDeduction, Form1701MsDraft,
+            Form1701MsFiling, Form1701MsSource, Form1701MsSpouseInfo, Form1701MsTaxOption,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Dummy Taxpayer", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Retail", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1701MS", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1701MsDraft::new_from_profile(&profile, 2025);
+        draft.civil_status = Form1701MsCivilStatus::Married;
+        draft.filing = Form1701MsFiling::Jointly;
+        draft.spouse_info = Form1701MsSpouseInfo {
+            tin: "12345678800000".to_string(),
+            rdo_code: "039".to_string(),
+            name: "Sample Dummy Spouse".to_string(),
+            email: "spouse@example.com".to_string(),
+            contact_number: "09170000001".to_string(),
+        };
+        draft.taxpayer = Form1701MsColumn {
+            source: Form1701MsSource::Mixed,
+            tax_option: Form1701MsTaxOption::Graduated,
+            deduction: Form1701MsDeduction::Osd,
+            gross_compensation: 900_000.0,
+            non_taxable_compensation: 90_000.0,
+            sales: 1_500_000.0,
+            sales_returns: 10_000.0,
+            quarterly_payments: 50_000.0,
+            cwt_2316: 80_000.0,
+            ..Form1701MsColumn::default()
+        };
+        draft.spouse = Form1701MsColumn {
+            source: Form1701MsSource::Compensation,
+            gross_compensation: 600_000.0,
+            non_taxable_compensation: 90_000.0,
+            cwt_2316: 44_500.0,
+            ..Form1701MsColumn::default()
+        };
+        draft.perjury_agreed = true;
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let html = filled_document("1701ms-2024", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert_eq!(comb_text(&html, "p1c23"), "123-456-788-00000");
+        assert_eq!(comb_text(&html, "p1c29"), "SAMPLE DUMMY TAXPAYER");
+        assert_eq!(comb_text(&html, "p1c30"), "SAMPLE DUMMY SPOUSE");
+        assert_eq!(comb_text(&html, "p1c85"), "II013");
+        assert_eq!(comb_text(&html, "p1c90"), "II011");
+        // Whole-peso 9-slot combs, right-aligned digits without separators.
+        assert_eq!(named_values(&html, "p2c13").len(), 9);
+        assert_eq!(comb_text(&html, "p2c13"), "   900000");
+        assert_eq!(comb_text(&html, "p2c14"), "   600000");
+        assert_eq!(comb_text(&html, "p2c27"), "  1500000");
+        assert_eq!(comb_text(&html, "p2c126"), "    80000");
+        let aggregate = format!("{:>9}", draft.aggregate_amount_payable as i64);
+        assert_eq!(comb_text(&html, "p1c141"), aggregate);
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "SAMPLE DUMMY TAXPAYER");
+        for x in [
+            "p1c9", "p1c11", "p1c15", "p1c44", "p1c46", "p1c52", "p1c81", "p1c153",
+        ] {
+            assert_eq!(named_values(&html, x), vec!["X".to_string()], "{x}");
+        }
+        for blank in ["p1c8", "p1c10", "p1c43", "p1c79", "p1c144"] {
+            assert_eq!(named_values(&html, blank), vec!["".to_string()], "{blank}");
+        }
+        assert!(!html.contains("name=\"frm1701MS:"));
+        // A separate return prints no spouse column.
+        draft.filing = Form1701MsFiling::Separately;
+        draft.recompute();
+        let html = filled_document("1701ms-2024", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c24"), "");
+        assert_eq!(comb_text(&html, "p2c14"), "");
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // 2553 (1999) prints each amount in one text cell and 1702Q (2018) in
         // one 12-slot comb, not peso + cent combs.
@@ -1710,6 +1795,7 @@ mod tests {
             ("1700-2018", false),
             // 1701A (2018) prints whole pesos in one 8-slot comb per column.
             ("1701a-2018", false),
+            ("1701ms-2024", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();

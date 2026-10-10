@@ -13,6 +13,13 @@
 //! amount is computed and validated here exactly like the page, but none of
 //! them is part of the submitted plaintext.
 //!
+//! The "View Details" / "(Add more...)" popups (Schedule IV 10A/10B, 13A/13B,
+//! 20A/20B, Part V Item 9) sit after `</form>`, outside `frmMain`, so their
+//! rows reach neither `saveXMLsubmit` nor `saveEncryptedProfile`; only the
+//! totals they write back into the page do (and Item 9's description, which
+//! `closeModalSched5No9` sets to `VARIOUS` for two or more rows). Holding
+//! the popup totals as plain amounts is therefore exact.
+//!
 //! Every amount entry on this form passes through `removeDecimal()`
 //! (`Math.round`) or a `Math.round` in the compute chain, so the model holds
 //! whole pesos; only the Item 31 amounts keep centavos (`round(this,2)`).
@@ -292,7 +299,118 @@ fn parse_us_date(value: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").ok()
 }
 
+/// Width of the printed sheet's amount combs.
+const PRINT_AMOUNT_SLOTS: usize = 9;
+
+/// Right-aligns `text` in a printed amount comb.
+fn print_right_aligned(text: String) -> String {
+    format!("{text:>PRINT_AMOUNT_SLOTS$}")
+}
+
+/// A whole-peso amount as the printed comb shows it: digits only, an
+/// overpayment in parentheses.
+fn print_whole_amount(value: f64) -> String {
+    let whole = js_round(value.abs()) as u64;
+    if value < 0.0 && whole != 0 {
+        print_right_aligned(format!("({whole})"))
+    } else {
+        print_right_aligned(whole.to_string())
+    }
+}
+
+/// An Item 31 amount (centavos kept), without thousands separators.
+fn print_cents_amount(value: f64) -> String {
+    print_right_aligned(official_amount(value.abs()).replace(',', ""))
+}
+
+/// Item 16 as the sheet prints it: whole percent in the 2-slot comb, the
+/// decimals (if any) in the box after the printed point.
+fn print_rate(rate: f64) -> (String, String) {
+    let text = official_amount(rate).replace(',', "");
+    let (whole, fraction) = text.split_once('.').unwrap_or((text.as_str(), ""));
+    let fraction = fraction.trim_end_matches('0');
+    (
+        whole.to_string(),
+        if fraction.is_empty() { "0" } else { fraction }.to_string(),
+    )
+}
+
+/// The Item 18 select's option text after the code.
+pub fn form_1701ms_atc_description(atc: &str) -> &'static str {
+    match atc {
+        "II011" => "Compensation Income",
+        "II012" => "Business Income- Graduated IT Rates",
+        "II013" => "Mixed Income- Graduated IT Rates",
+        "II014" => "Income from Profession- Graduated IT Rates",
+        "II015" => "Business Income- 8% IT Rate",
+        "II016" => "Mixed Income-8% IT Rate",
+        "II017" => "Income from Profession - 8% IT Rate",
+        _ => "",
+    }
+}
+
 impl Form1701MsColumn {
+    /// Every amount the printed sheet shows for this column, keyed by the
+    /// print item (`p2_*` Part II, `p4_*` Part IV, `p5_*` Part V, `p6_*`
+    /// Part VI).
+    fn print_amounts(&self) -> Vec<(&'static str, f64)> {
+        vec![
+            ("p2_19", self.income_tax_due),
+            ("p2_20", self.share_of_other_agencies),
+            ("p2_21", self.net_special_tax),
+            ("p2_22", self.regular_income_tax),
+            ("p2_23", self.total_income_tax_due),
+            ("p2_24", self.tax_credits),
+            ("p2_25", self.tax_payable),
+            ("p2_26", self.second_installment),
+            ("p2_27", self.amount_payable),
+            ("p2_28a", self.surcharge),
+            ("p2_28b", self.interest),
+            ("p2_28c", self.compromise),
+            ("p2_28d", self.total_penalties),
+            ("p2_29", self.total_amount_payable),
+            ("p4_1", self.gross_compensation),
+            ("p4_2", self.non_taxable_compensation),
+            ("p4_3", self.taxable_compensation),
+            ("p4_4", self.tax_on_compensation),
+            ("p4_5", self.sales),
+            ("p4_6", self.sales_returns),
+            ("p4_7", self.net_sales),
+            ("p4_8", self.cost_of_sales),
+            ("p4_9", self.gross_income),
+            ("p4_10a", self.itemized_deductions),
+            ("p4_10b", self.special_allowable_deductions),
+            ("p4_10c", self.nolco),
+            ("p4_10d", self.total_deductions),
+            ("p4_11", self.osd),
+            ("p4_12", self.net_income),
+            ("p4_13", self.non_operating_income),
+            ("p4_14", self.taxable_business_income),
+            ("p4_15", self.taxable_income),
+            ("p4_17", self.special_tax_due),
+            ("p4_18a", self.tax_due_18a),
+            ("p4_18b", self.tax_due_18b),
+            ("p4_19", self.eight_sales),
+            ("p4_20", self.eight_other_income),
+            ("p4_21", self.eight_total_income),
+            ("p4_22", self.eight_exemption),
+            ("p4_23", self.eight_taxable_income),
+            ("p4_24", self.eight_tax_due),
+            ("p4_25", self.eight_total_tax_due),
+            ("p5_1", self.prior_year_excess),
+            ("p5_2", self.quarterly_payments),
+            ("p5_3", self.cwt_q1_q3),
+            ("p5_4", self.cwt_q4),
+            ("p5_5", self.cwt_2316),
+            ("p5_6", self.previously_filed),
+            ("p5_7", self.foreign_tax_credits),
+            ("p5_8", self.special_tax_credits),
+            ("p5_9", self.other_credits),
+            ("p5_10", self.total_credits),
+            ("p6_1", self.tax_relief),
+        ]
+    }
+
     /// The ATC `checkButtons` / `checkButtonsSP` select for this column.
     pub fn atc(&self) -> Option<&'static str> {
         use Form1701MsSource as S;
@@ -820,6 +938,103 @@ impl Form1701MsDraft {
             "frm1701MS:txtTaxpayerNo8a".to_string(),
             self.taxpayer_name.trim().to_uppercase(),
         );
+        fields
+    }
+
+    /// The field map plus the `derived:` values the printed 1701-MS sheet
+    /// shows (`html-frozen/1701ms-2024/writer-cells.json`): identity, Items
+    /// 13–18, every Part II, IV, V and VI amount in both columns and the
+    /// Item 31 amounts. Print only; none of the `derived:` keys is submitted.
+    ///
+    /// The sheet's amount boxes are 9-slot whole-peso combs, so amounts print
+    /// as digits without thousands separators, right-aligned (left-padded
+    /// with blanks to the comb width); an overpayment prints in parentheses.
+    /// The spouse column prints only on a joint return.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut put = |key: &str, value: String| {
+            if !value.is_empty() {
+                fields.insert(format!("derived:{key}"), value);
+            }
+        };
+        put("month", format!("{:02}", self.month));
+        put("year", self.taxable_year.to_string());
+        put(
+            "civil_status",
+            self.civil_status.label().to_ascii_uppercase(),
+        );
+        let (a, b, c, branch) = split_tin(&self.tin);
+        // Page 2's TIN comb has nine inputs; the branch `00000` is preprinted.
+        put("tin_digits", format!("{a}{b}{c}"));
+        put("page2_name", self.taxpayer_name.trim().to_uppercase());
+        put("tp_tin", format!("{a}-{b}-{c}-{branch}"));
+        put("tp_rdo", self.rdo_code.trim().to_string());
+        put("tp_email", self.email.trim().to_string());
+        put("tp_contact", self.contact_number.trim().to_string());
+        if self.is_joint() {
+            let spouse = &self.spouse_info;
+            let (a, b, c, branch) = split_tin(&spouse.tin);
+            put("sp_tin", format!("{a}-{b}-{c}-{branch}"));
+            put("sp_rdo", spouse.rdo_code.trim().to_string());
+            put("sp_name", spouse.name.trim().to_uppercase());
+            put("sp_email", spouse.email.trim().to_string());
+            put("sp_contact", spouse.contact_number.trim().to_string());
+        }
+        let columns: &[(&str, &Form1701MsColumn)] = if self.is_joint() {
+            &[("tp", &self.taxpayer), ("sp", &self.spouse)]
+        } else {
+            &[("tp", &self.taxpayer)]
+        };
+        for &(side, column) in columns {
+            let mut col = |key: &str, value: String| put(&format!("{side}_{key}"), value);
+            col("legal_basis", column.legal_basis.trim().to_string());
+            col("agency", column.promotion_agency.trim().to_string());
+            col("activity", column.registered_activity.trim().to_string());
+            col(
+                "effectivity_from",
+                column.effectivity_from.trim().to_string(),
+            );
+            col("effectivity_to", column.effectivity_to.trim().to_string());
+            if let Some(atc) = column.atc() {
+                col("atc", atc.to_string());
+                col(
+                    "atc_description",
+                    form_1701ms_atc_description(atc).to_string(),
+                );
+            }
+            if column.tax_option.is_exempt_or_special() {
+                let (whole, fraction) = print_rate(column.special_rate);
+                col("rate_whole", whole);
+                col("rate_fraction", fraction);
+            }
+            for (key, value) in column.print_amounts() {
+                col(key, print_whole_amount(value));
+            }
+        }
+        put(
+            "aggregate",
+            print_whole_amount(self.aggregate_amount_payable),
+        );
+        put(
+            "foreign_tax_credits_description",
+            self.foreign_tax_credits_description.trim().to_string(),
+        );
+        put(
+            "other_credits_description",
+            self.other_credits_description.trim().to_string(),
+        );
+        if self.to_be_refunded {
+            put("refund_amount", print_cents_amount(self.refund_amount));
+        }
+        if self.to_be_issued_tcc {
+            put("tcc_amount", print_cents_amount(self.tcc_amount));
+        }
+        if self.to_be_carried_over {
+            put(
+                "carry_over_amount",
+                print_cents_amount(self.carry_over_amount),
+            );
+        }
         fields
     }
 
@@ -1726,6 +1941,54 @@ mod tests {
             },
             EIGHT_PERCENT_THRESHOLD_ALERT,
         );
+    }
+
+    #[test]
+    fn print_map_adds_derived_values_and_never_touches_the_submit_map() {
+        let draft = sample();
+        let submit = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        for (key, value) in &submit {
+            assert_eq!(print.get(key), Some(value), "{key}");
+        }
+        assert!(
+            print
+                .keys()
+                .filter(|key| !submit.contains_key(*key))
+                .all(|key| key.starts_with("derived:"))
+        );
+        assert_eq!(print["derived:tp_tin"], "123-456-788-00000");
+        assert_eq!(print["derived:tin_digits"], "123456788");
+        assert_eq!(print["derived:sp_name"], "SAMPLE DUMMY SPOUSE");
+        assert_eq!(print["derived:tp_atc"], "II013");
+        assert_eq!(
+            print["derived:tp_atc_description"],
+            "Mixed Income- Graduated IT Rates"
+        );
+        assert_eq!(print["derived:tp_p4_1"], "   900001");
+        assert_eq!(print["derived:sp_p4_1"], "   600000");
+        assert_eq!(print["derived:tp_p4_5"], "  1500000");
+        assert!(!print.contains_key("derived:tp_rate_whole"));
+    }
+
+    #[test]
+    fn print_amounts_right_align_digits_and_bracket_overpayments() {
+        assert_eq!(print_whole_amount(0.0), "        0");
+        assert_eq!(print_whole_amount(123_456_789.0), "123456789");
+        assert_eq!(print_whole_amount(-4_500.0), "   (4500)");
+        assert_eq!(print_cents_amount(-1_234.5), "  1234.50");
+        assert_eq!(print_rate(5.0), ("5".to_string(), "0".to_string()));
+        assert_eq!(print_rate(7.5), ("7".to_string(), "5".to_string()));
+    }
+
+    #[test]
+    fn print_map_omits_the_spouse_column_on_a_separate_return() {
+        let mut draft = sample();
+        draft.filing = Form1701MsFiling::Separately;
+        draft.recompute();
+        let print = draft.to_print_field_map();
+        assert!(!print.keys().any(|key| key.starts_with("derived:sp_")));
+        assert!(print.contains_key("derived:tp_p2_29"));
     }
 
     #[test]
