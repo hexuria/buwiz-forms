@@ -223,6 +223,10 @@ pub enum Form1606Overremittance {
 pub struct Form1606Draft {
     #[serde(default)]
     pub id: Option<i64>,
+    /// Dashboard year the return is filed under (the draft key's year).
+    pub filing_year: u16,
+    /// The dashboard's open-ended slot: one draft per transaction.
+    pub open_ended_key: u32,
 
     // Items 1–4
     pub transaction_month: u8,
@@ -428,11 +432,22 @@ fn tct_for_filename(tct: &str) -> String {
 impl Form1606Draft {
     pub const FORM_CODE: &'static str = "1606";
 
-    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+    /// A new transaction in the dashboard's `year` and open-ended slot,
+    /// dated today when `year` is the current year, else January 1.
+    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
+        use chrono::Datelike;
+        let today = chrono::Local::now().date_naive();
+        let (month, day) = if i32::from(year) == today.year() {
+            (today.month() as u8, today.day() as u8)
+        } else {
+            (1, 1)
+        };
         let mut draft = Self {
             id: None,
-            transaction_month: month.clamp(1, 12),
-            transaction_day: 1,
+            filing_year: year,
+            open_ended_key: open_ended_key.max(1),
+            transaction_month: month,
+            transaction_day: day,
             transaction_year: year,
             is_amended: false,
             number_of_attached_sheets: 0,
@@ -822,6 +837,57 @@ impl Form1606Draft {
         );
 
         fields.insert("txtEmail".to_string(), self.email.trim().to_string());
+        fields
+    }
+
+    /// The field map plus print-only values the frozen 2018 sheet needs
+    /// (`derived:` keys, never submitted): whole TINs, the ATC box for the
+    /// seller type and rate, the rate digits and Schedule 3 Item 1A.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let dashed = |tin: &str| {
+            let (a, b, c, d) = split_tin(tin);
+            format!("{a}-{b}-{c}-{d}")
+        };
+        let (a, b, c, d) = split_tin(&self.tin);
+        let mut put = |key: &str, value: String| {
+            fields.insert(format!("derived:{key}"), value);
+        };
+        put("buyer_tin", dashed(&self.tin));
+        put("seller_tin", dashed(&self.seller_tin));
+        put("buyer_tin_digits", format!("{a}{b}{c}{d}"));
+        put("buyer_name", self.buyer_name.trim().to_uppercase());
+        if let Some(rate) = self.tax_rate {
+            let tenths = (rate.percent() * 10.0).round() as u32;
+            put("rate_whole", (tenths / 10).to_string());
+            put("rate_tenths", (tenths % 10).to_string());
+        }
+        for (kind, label) in [
+            (Form1606SellerType::Individual, "individual"),
+            (Form1606SellerType::Corporation, "corporate"),
+        ] {
+            for rate in [
+                Form1606TaxRate::OnePointFive,
+                Form1606TaxRate::Three,
+                Form1606TaxRate::Five,
+                Form1606TaxRate::Six,
+            ] {
+                put(
+                    &format!("atc_{label}_{}", rate.value()),
+                    (self.seller_type == Some(kind) && self.tax_rate == Some(rate)).to_string(),
+                );
+            }
+        }
+        // Schedule 3 Item 1A: gross selling price, or the bid price on a
+        // foreclosure sale.
+        put(
+            "sched3_1a",
+            if self.transaction == Some(Form1606Transaction::ForeclosureSale) {
+                official_amount(self.bid_price)
+            } else {
+                official_amount(self.gross_selling_price)
+            },
+        );
         fields
     }
 
@@ -1222,11 +1288,11 @@ impl QueueableForm for Form1606Draft {
         &self.tin
     }
     fn taxable_year(&self) -> u16 {
-        self.transaction_year
+        self.filing_year
     }
-    /// One return per transaction; drafts are keyed by the transaction month.
+    /// One return per transaction, keyed by the dashboard's open-ended slot.
     fn filing_period(&self) -> FilingPeriod {
-        FilingPeriod::OpenEnded(u32::from(self.transaction_month))
+        FilingPeriod::OpenEnded(self.open_ended_key)
     }
     /// `MM + DD + YYYY + "_" + TCT` (dashes removed), as in `createXMLFileName`.
     fn period_code(&self) -> String {
@@ -1236,16 +1302,11 @@ impl QueueableForm for Form1606Draft {
             tct_for_filename(&self.tct_number)
         )
     }
-    fn parse_period_code(code: &str) -> Option<(u16, FilingPeriod)> {
-        let (date, _tct) = code.split_once('_')?;
-        if date.len() != 8 || !digits_only(date) {
-            return None;
-        }
-        let month: u8 = date.get(..2)?.parse().ok()?;
-        let day: u8 = date.get(2..4)?.parse().ok()?;
-        let year: u16 = date.get(4..)?.parse().ok()?;
-        ((1..=12).contains(&month) && (1..=31).contains(&day))
-            .then_some((year, FilingPeriod::OpenEnded(u32::from(month))))
+    /// The filename names the transaction (date and TCT), not the
+    /// dashboard slot, so a receipt cannot be mapped back by period; the
+    /// queue confirms it by the uploaded filename instead.
+    fn parse_period_code(_code: &str) -> Option<(u16, FilingPeriod)> {
+        None
     }
     fn submission_email(&self) -> &str {
         self.email.trim()
@@ -1280,7 +1341,8 @@ mod tests {
             "taxpayer_type": "Corporation"
         }))
         .unwrap();
-        let mut draft = Form1606Draft::new_from_profile(&profile, 2025, 6);
+        let mut draft = Form1606Draft::new_from_profile(&profile, 2025, 1);
+        draft.transaction_month = 6;
         draft.transaction_day = 15;
         draft.seller_tin = "98765432100000".into();
         draft.seller_rdo_code = "040".into();
@@ -1383,16 +1445,33 @@ mod tests {
     }
 
     #[test]
-    fn period_codes_round_trip() {
+    fn period_codes_name_the_transaction_not_the_slot() {
         let draft = sample();
         assert_eq!(draft.period_code(), "06152025_T12345");
-        assert_eq!(
-            Form1606Draft::parse_period_code("06152025_T12345"),
-            Some((2025, FilingPeriod::OpenEnded(6)))
-        );
-        assert_eq!(Form1606Draft::parse_period_code("13152025_T1"), None);
-        assert_eq!(Form1606Draft::parse_period_code("06152025"), None);
-        assert_eq!(Form1606Draft::parse_period_code("122025Q1"), None);
+        assert_eq!(draft.filing_period(), FilingPeriod::OpenEnded(1));
+        assert_eq!(draft.taxable_year(), 2025);
+        assert_eq!(Form1606Draft::parse_period_code("06152025_T12345"), None);
+    }
+
+    #[test]
+    fn two_transactions_in_one_month_persist_separately() {
+        let db = crate::db::Database::open_in_memory_for_tests().unwrap();
+        let first = sample();
+        let mut second = sample();
+        second.open_ended_key = 2;
+        second.transaction_day = 20;
+        second.tct_number = "T-67890".into();
+        second.recompute();
+        db.save_queueable_draft(&first).unwrap();
+        db.save_queueable_draft(&second).unwrap();
+        let load = |key: i64| {
+            db.get_queueable_draft::<Form1606Draft>(&first.tin, 2025, key)
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(load(1).tct_number, "T-12345");
+        assert_eq!(load(2).tct_number, "T-67890");
+        assert_eq!(load(2).transaction_month, load(1).transaction_month);
     }
 
     #[test]

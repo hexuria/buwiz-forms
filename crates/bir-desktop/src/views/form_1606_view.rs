@@ -382,7 +382,7 @@ impl Form1606View {
             Ok(db) => db
                 .release_abandoned_claimed_queueable::<Form1606Draft>(
                     &draft.tin,
-                    draft.transaction_year,
+                    draft.filing_year,
                     period_column(&draft.filing_period()),
                     ABANDONED_CLAIM_RELEASE_REASON,
                 )
@@ -1089,38 +1089,9 @@ impl QueueableFormView for Form1606View {
         }
     }
 
+    /// 1606 is event-based: each dashboard open-ended slot is one transaction.
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1606Draft {
-        let month = if (1..=12).contains(&period) {
-            period
-        } else {
-            chrono::Datelike::month(&chrono::Local::now().date_naive()) as u8
-        };
-        Form1606Draft::new_from_profile(profile, year, month)
-    }
-
-    /// 1606 is filed per transaction; drafts are keyed by the transaction
-    /// month. Open that month's draft, or this year's latest one.
-    fn load_draft(
-        db: &Database,
-        profile: &TaxpayerProfile,
-        year: u16,
-        period: u8,
-    ) -> Form1606Draft {
-        let tin = profile.tin.full();
-        let months: Vec<i64> = if (1..=12).contains(&period) {
-            vec![i64::from(period)]
-        } else {
-            (1..=12).collect()
-        };
-        months
-            .into_iter()
-            .filter_map(|m| {
-                db.get_queueable_draft::<Form1606Draft>(&tin, year, m)
-                    .ok()
-                    .flatten()
-            })
-            .max_by(|a, b| a.lifecycle.updated_at.cmp(&b.lifecycle.updated_at))
-            .unwrap_or_else(|| Self::new_draft(profile, year, period))
+        Form1606Draft::new_from_profile(profile, year, u32::from(period.max(1)))
     }
 }
 
@@ -1276,7 +1247,7 @@ impl FormViewTrait for Form1606View {
                 if let Ok(db) = self.db.lock()
                     && let Ok(Some(current)) = db.get_queueable_draft::<Form1606Draft>(
                         &queued.tin,
-                        queued.transaction_year,
+                        queued.filing_year,
                         period_column(&queued.filing_period()),
                     )
                 {
@@ -1303,7 +1274,7 @@ impl FormViewTrait for Form1606View {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1606-2018",
             &fields,

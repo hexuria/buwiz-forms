@@ -1149,7 +1149,7 @@ impl FormViewTrait for Form1600PtView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1600-pt-2018",
             &fields,
