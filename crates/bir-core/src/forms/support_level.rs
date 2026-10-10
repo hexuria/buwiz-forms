@@ -212,12 +212,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; queued through the generic
         // `QueueableForm` path with the official layout replayed exactly.
         form_id: "2552v2018",
+        // Editor: views::form_2552_view; print preview fills the
+        // frozen sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -228,12 +235,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // Official formType and PROD SFTP folder; every schedule (1–8) is
         // modelled and replayed byte for byte.
         form_id: "2550M",
+        // Editor: views::form_2550m_view; print preview fills the
+        // frozen sheet through its writer-cells map.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -527,7 +541,8 @@ mod tests {
     fn certification_draft_gate_does_not_claim_release_readiness() {
         assert!(can_open_certification_draft("2551Q"));
         for code in [
-            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "2553",
+            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
+            "2553", "2552", "2550M",
         ] {
             assert!(
                 can_open_certification_draft(code),
