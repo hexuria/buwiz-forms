@@ -141,6 +141,18 @@
       "after": "    \n            "
     },
     {
+      "key": "frm2200C:rdoPg1Pt1I6RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200C:rdoPg1Pt1I6RDO",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "    \n            "
+    },
+    {
       "key": "frm2200C:txtPg1Pt1I7RegisteredName",
       "kind": "value",
       "parts": [

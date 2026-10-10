@@ -118,6 +118,11 @@ form_view_specs! {
     Form1707A, super::form_1707a_view::Form1707AView, "1707A", "1707a";
     Form1800, super::form_1800_view::Form1800View, "1800", "1800";
     Form1801, super::form_1801_view::Form1801View, "1801", "1801";
+    Form2000, super::form_2000_view::Form2000View, "2000", "2000";
+    Form2000OT, super::form_2000ot_view::Form2000OTView, "2000OT", "2000ot";
+    Form2200S, super::form_2200s_view::Form2200SView, "2200S", "2200s";
+    Form2200C, super::form_2200c_view::Form2200CView, "2200C", "2200c";
+    Form2200AN, super::form_2200an_view::Form2200ANView, "2200AN", "2200an";
 }
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {

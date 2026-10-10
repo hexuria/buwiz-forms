@@ -623,6 +623,88 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         },
         release_ready: false,
     },
+    FormCapabilityRecord {
+        code: "2000",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2000v2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2000OT",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2000OTv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200S",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2200S",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200C",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2200Cv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200AN",
+        revision: "2018",
+        // `form_id` is the official formType. Queueing stays off:
+        // ftpTargetFolder.PROD has no '2200ANv2018' folder (getFtpFolder
+        // returns undefined), so the SFTP target is unconfirmed.
+        form_id: "2200ANv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: false,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
 ];
 
 /// Whether the app can actually draft/file a given form.
@@ -811,6 +893,17 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1707A"), Some("1707Av2021"));
         assert!(can_queue_for_submission("1707"));
         assert_eq!(queue_authorized_form_type_id("1707"), Some("1707v2021"));
+        // No PROD SFTP folder for 2200ANv2018: modeled, not queueable.
+        assert!(!can_queue_for_submission("2200AN"));
+        assert_eq!(queue_authorized_form_type_id("2200AN"), None);
+        assert!(can_queue_for_submission("2200C"));
+        assert_eq!(queue_authorized_form_type_id("2200C"), Some("2200Cv2018"));
+        assert!(can_queue_for_submission("2200S"));
+        assert_eq!(queue_authorized_form_type_id("2200S"), Some("2200S"));
+        assert!(can_queue_for_submission("2000OT"));
+        assert_eq!(queue_authorized_form_type_id("2000OT"), Some("2000OTv2018"));
+        assert!(can_queue_for_submission("2000"));
+        assert_eq!(queue_authorized_form_type_id("2000"), Some("2000v2018"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
