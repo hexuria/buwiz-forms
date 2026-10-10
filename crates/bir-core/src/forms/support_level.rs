@@ -239,8 +239,12 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "0605",
         revision: "1999",
-        form_id: "0605v1999",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official layout plus the Item 6/8
+        // popup radios the page adds.
+        form_id: "0605",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
@@ -478,9 +482,11 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
         assert!(can_queue_for_submission("2553"));
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
+        assert!(can_queue_for_submission("0605"));
+        assert_eq!(queue_authorized_form_type_id("0605"), Some("0605"));
 
         for code in [
-            "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
+            "0619E", "0619F", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
         ] {
             assert!(!can_queue_for_submission(code), "{code} must fail closed");
             assert_eq!(queue_authorized_form_type_id(code), None);
@@ -524,7 +530,7 @@ mod tests {
     fn payment_form_uses_canonical_1999_identity() {
         let form = find_form_capability("0605").expect("0605 inventory record");
         assert_eq!(form.revision, "1999");
-        assert_eq!(form.form_id, "0605v1999");
+        assert_eq!(form.form_id, "0605");
         assert!(find_form_capability_by_id("0605v2018").is_none());
     }
 }

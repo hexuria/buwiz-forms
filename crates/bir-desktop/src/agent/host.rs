@@ -705,7 +705,6 @@ impl BirAgentHost {
                 | ActiveView::Form1601C
                 | ActiveView::Form0619E
                 | ActiveView::Form0619F
-                | ActiveView::Form0605
                 | ActiveView::Form2550Q
                 | ActiveView::Form1701
                 | ActiveView::Form1702RT
@@ -4157,7 +4156,6 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Form1601C => "Form 1601C",
         ActiveView::Form0619E => "Form 0619E",
         ActiveView::Form0619F => "Form 0619F",
-        ActiveView::Form0605 => "Form 0605",
         ActiveView::Form2550Q => "Form 2550Q",
         ActiveView::Form1701 => "Form 1701",
         ActiveView::Form1702RT => "Form 1702RT",

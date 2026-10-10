@@ -2,6 +2,7 @@
 
 pub mod atc;
 pub mod form_0605;
+pub mod form_0605_official;
 pub mod form_0619e;
 pub mod form_0619f;
 pub mod form_1601c;
@@ -312,7 +313,7 @@ impl FormDraft {
         match self {
             Self::Form2551Q(f) => &f.status,
             Self::Form1601C(f) => &f.status,
-            Self::Form0605(f) => &f.status,
+            Self::Form0605(f) => &f.lifecycle.status,
             Self::Form0619E(f) => &f.status,
             Self::Form0619F(f) => &f.status,
             Self::Form1701(f) => &f.status,

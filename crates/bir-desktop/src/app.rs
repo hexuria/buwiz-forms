@@ -1,6 +1,5 @@
 use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
-use crate::views::form_0605_view::{Form0605Event, Form0605View};
 use crate::views::form_0619e_view::{Form0619EEvent, Form0619EView};
 use crate::views::form_0619f_view::{Form0619FEvent, Form0619FView};
 use crate::views::form_1601c_view::{Form1601CEvent, Form1601CView};
@@ -56,7 +55,6 @@ pub enum ActiveView {
     Form1601C,
     Form0619E,
     Form0619F,
-    Form0605,
     Form2550Q,
     Form1701,
     Form1702RT,
@@ -162,8 +160,6 @@ pub struct AppState {
     pub(crate) pending_form_0619e_draft: Option<bir_core::forms::form_0619e::Form0619EDraft>,
     pub(crate) form_0619f_view: Option<Entity<Form0619FView>>,
     pub(crate) pending_form_0619f_draft: Option<bir_core::forms::form_0619f::Form0619FDraft>,
-    pub(crate) form_0605_view: Option<Entity<Form0605View>>,
-    pub(crate) pending_form_0605_draft: Option<bir_core::forms::form_0605::Form0605Draft>,
     pub(crate) form_2550q_view: Option<Entity<Form2550QV2View>>,
     pub(crate) pending_form_2550q_draft: Option<bir_core::forms::form_2550q::Form2550QDraft>,
     pub(crate) form_1701_view: Option<Entity<Form1701View>>,
@@ -895,8 +891,6 @@ impl AppState {
             pending_form_0619e_draft: None,
             form_0619f_view: None,
             pending_form_0619f_draft: None,
-            form_0605_view: None,
-            pending_form_0605_draft: None,
             form_2550q_view: None,
             pending_form_2550q_draft: None,
             form_1701_view: None,
@@ -1563,14 +1557,6 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-            ActiveView::Form0605 => {
-                if let Some(view) = &self.form_0605_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
             ActiveView::Form2550Q => {
                 if let Some(view) = &self.form_2550q_view {
                     view.clone().into_any_element()
@@ -1912,30 +1898,6 @@ impl AppState {
             };
             self.pending_form_0619f_draft = Some(draft);
             self.active_view = ActiveView::Form0619F;
-            cx.notify();
-        } else if form_code == "0605"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_0605::Form0605Draft>(
-                    tin,
-                    "0605",
-                    year,
-                    Some(quarter),
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0605::Form0605Draft::new_from_profile(
-                        profile, year, quarter,
-                    )
-                })
-            } else {
-                bir_core::forms::form_0605::Form0605Draft::new_from_profile(profile, year, quarter)
-            };
-            self.pending_form_0605_draft = Some(draft);
-            self.active_view = ActiveView::Form0605;
             cx.notify();
         } else if form_code == "2550Q"
             && let Some(tin) = &self.active_profile_tin
@@ -2293,31 +2255,6 @@ impl Render for AppState {
             .detach();
 
             self.form_0619f_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_0605_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form0605View::new(draft, db_for_view, window, cx));
-
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form0605Event, window, cx| match event {
-                    Form0605Event::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form0605Event::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form0605Event::Saved | Form0605Event::Submitted | Form0605Event::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-
-            self.form_0605_view = Some(form_view);
         }
 
         if let Some(draft) = self.pending_form_2550q_draft.take() {

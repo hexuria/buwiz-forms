@@ -3894,7 +3894,10 @@ mod tests {
         let db = test_db();
         let profile = test_profile();
         let mut draft = Form0605Draft::new_from_profile(&profile, 2025, 1);
-        draft.filing_basis = Form0605FilingBasis::Fiscal;
+        // The official TIN check digit must hold for a valid return.
+        draft.tin = "123-456-788-00000".to_string();
+        // A December year end is a calendar year on the official page.
+        draft.filing_basis = Form0605FilingBasis::Calendar;
         draft.quarter = 1;
         draft.year_end_month = 12;
         draft.due_date = Some(Form0605Date::new(2025, 12, 31).unwrap());
@@ -3917,14 +3920,18 @@ mod tests {
         draft.payment_details.check.date = "12/31/2025".to_string();
         draft.payment_details.check.amount = Some(2_030.0);
         draft.recompute();
-        assert!(draft.validate().is_empty(), "test draft must be valid");
+        assert!(
+            draft.validate().is_empty(),
+            "test draft must be valid: {:?}",
+            draft.validate()
+        );
 
         db.save_form_draft(
             &draft.tin,
             "0605",
             draft.taxable_year,
             Some(draft.month),
-            &draft.status,
+            &draft.lifecycle.status,
             &draft,
         )
         .expect("0605 draft should save");
