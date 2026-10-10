@@ -29,6 +29,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::agent::ProfileEditor;
+use crate::agent::assist::{self, AssistState, BoxSource};
 use crate::agent::html_demo::{self, DueRow, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
@@ -118,6 +119,20 @@ struct Form1601CState {
     validation_errors: Vec<(String, String)>,
     validated: bool,
     saved: bool,
+    /// Per-box sources, unsaved-edit flags and the one-form lock.
+    assist: AssistState,
+}
+
+impl Form1601CState {
+    fn fresh(draft: Form1601CDraft) -> Self {
+        Self {
+            draft,
+            validation_errors: Vec::new(),
+            validated: false,
+            saved: false,
+            assist: AssistState::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +141,20 @@ struct Form2551QState {
     validation_errors: Vec<(String, String)>,
     validated: bool,
     saved: bool,
+    /// Per-box sources, unsaved-edit flags and the one-form lock.
+    assist: AssistState,
+}
+
+impl Form2551QState {
+    fn fresh(draft: Form2551QDraft) -> Self {
+        Self {
+            draft,
+            validation_errors: Vec::new(),
+            validated: false,
+            saved: false,
+            assist: AssistState::default(),
+        }
+    }
 }
 
 /// Painted bounds (logical px, window coordinates) of the tree's landmarks.
@@ -173,6 +202,8 @@ pub struct BirAgentHost {
     dues: Vec<DueItem>,
     form_1601c: Option<Form1601CState>,
     form_2551q: Option<Form2551QState>,
+    /// Set by `form.dismiss` so the desktop drain closes the matching view.
+    dismissed_form: Option<&'static str>,
     submit_confirmation_visible: bool,
     form_loaded: bool,
     db: Option<Arc<Mutex<Database>>>,
@@ -211,6 +242,7 @@ impl BirAgentHost {
             dues: Vec::new(),
             form_1601c: None,
             form_2551q: None,
+            dismissed_form: None,
             submit_confirmation_visible: false,
             form_loaded: false,
             db: None,
@@ -456,6 +488,7 @@ impl BirAgentHost {
             validation_errors,
             validated,
             saved,
+            assist: AssistState::default(),
         });
     }
 
@@ -472,6 +505,7 @@ impl BirAgentHost {
             validation_errors,
             validated,
             saved,
+            assist: AssistState::default(),
         });
     }
 
@@ -626,6 +660,83 @@ impl BirAgentHost {
 
     pub fn form_2551q_draft(&self) -> Option<&Form2551QDraft> {
         self.form_2551q.as_ref().map(|form| &form.draft)
+    }
+
+    pub fn form_1601c_assist(&self) -> Option<&AssistState> {
+        self.form_1601c.as_ref().map(|form| &form.assist)
+    }
+
+    pub fn form_2551q_assist(&self) -> Option<&AssistState> {
+        self.form_2551q.as_ref().map(|form| &form.assist)
+    }
+
+    /// Copy the view's per-box sources and unsaved-edit flags in (desktop drain).
+    pub fn set_form_1601c_assist(&mut self, assist: AssistState) {
+        if let Some(form) = self.form_1601c.as_mut() {
+            form.assist = assist;
+        }
+    }
+
+    pub fn set_form_2551q_assist(&mut self, assist: AssistState) {
+        if let Some(form) = self.form_2551q.as_mut() {
+            form.assist = assist;
+        }
+    }
+
+    /// The form `form.dismiss` closed in this request (one-shot).
+    pub fn take_dismissed_form(&mut self) -> Option<&'static str> {
+        self.dismissed_form.take()
+    }
+
+    /// The open form holding the one-form lock: `(code, year, period, tin)`.
+    /// A form saved with nothing changed since does not hold it.
+    fn form_lock_holder(&self) -> Option<(&'static str, u16, u8, &str)> {
+        if let Some(form) = &self.form_1601c
+            && !form.assist.lock_released
+        {
+            return Some((
+                "1601C",
+                form.draft.taxable_year,
+                form.draft.month,
+                &form.draft.tin,
+            ));
+        }
+        if let Some(form) = &self.form_2551q
+            && !form.assist.lock_released
+        {
+            return Some((
+                "2551Q",
+                form.draft.taxable_year,
+                form.draft.quarter,
+                &form.draft.tin,
+            ));
+        }
+        None
+    }
+
+    /// One form at a time. `Ok(true)` when the requested return is the very
+    /// one already open (re-opening it keeps its unsaved state).
+    fn gate_form_lock(
+        &self,
+        code: &str,
+        year: u16,
+        period: u8,
+        tin: Option<&str>,
+    ) -> Result<bool, String> {
+        let Some((open_code, open_year, open_period, open_tin)) = self.form_lock_holder() else {
+            return Ok(false);
+        };
+        let tin = tin.or(self.selected_tin.as_deref());
+        if open_code.eq_ignore_ascii_case(code)
+            && open_year == year
+            && open_period == clamp_form_period(open_code, period)
+            && tin.is_none_or(|tin| tin == open_tin)
+        {
+            return Ok(true);
+        }
+        Err(format!(
+            "form already open: {open_code} {open_year} period {open_period}; save it (form.save_draft) or dismiss it (form.dismiss) before opening another form"
+        ))
     }
 
     fn reload_from_db(&mut self, db: &Arc<Mutex<Database>>) {
@@ -1582,6 +1693,17 @@ impl BirAgentHost {
             }
             _ => return Err(format!("`{target}` is not editable")),
         }
+        // A UI-level edit of a form box is the user typing: mark it `user`
+        // so agent fills skip it and `form.dismiss` cannot discard it.
+        if let Some(key) = assist::canonical_1601c_key(target)
+            && let Some(form) = self.form_1601c.as_mut()
+        {
+            form.assist.note_user_edits([key]);
+        } else if let Some(key) = assist::canonical_2551q_key(target)
+            && let Some(form) = self.form_2551q.as_mut()
+        {
+            form.assist.note_user_edits([key]);
+        }
         Ok(DispatchResult::json(serde_json::json!({ "value": value })))
     }
 
@@ -1696,12 +1818,7 @@ impl BirAgentHost {
                 {
                     draft = existing;
                 }
-                self.form_1601c = Some(Form1601CState {
-                    draft,
-                    validation_errors: Vec::new(),
-                    validated: false,
-                    saved: false,
-                });
+                self.form_1601c = Some(Form1601CState::fresh(draft));
                 self.form_2551q = None;
             }
             "2551Q" => {
@@ -1731,12 +1848,7 @@ impl BirAgentHost {
         {
             draft = existing;
         }
-        self.form_2551q = Some(Form2551QState {
-            draft,
-            validation_errors: Vec::new(),
-            validated: false,
-            saved: false,
-        });
+        self.form_2551q = Some(Form2551QState::fresh(draft));
         self.form_1601c = None;
         Ok(())
     }
@@ -1750,6 +1862,19 @@ impl BirAgentHost {
             return Err(format!("unknown form `{code}`"));
         };
         self.gate_dirty(chrome.view)?;
+        if self.gate_form_lock(chrome.code, year, period, None)? {
+            // The return already open: show it, keep its unsaved state.
+            self.form_loaded = true;
+            self.submit_confirmation_visible = false;
+            self.active_view = chrome.view;
+            return Ok(DispatchResult::json(serde_json::json!({
+                "form": chrome.code,
+                "page": ids::page_root(chrome.view),
+                "year": year,
+                "period": period,
+                "already_open": true,
+            })));
+        }
         if chrome.code == "1601C" {
             let tin = self
                 .selected_tin
@@ -1764,12 +1889,7 @@ impl BirAgentHost {
             {
                 draft = existing;
             }
-            self.form_1601c = Some(Form1601CState {
-                draft,
-                validation_errors: Vec::new(),
-                validated: false,
-                saved: false,
-            });
+            self.form_1601c = Some(Form1601CState::fresh(draft));
             self.form_2551q = None;
         } else if chrome.code == "2551Q" {
             self.open_2551q_draft(Some(year), Some(period.clamp(1, 4)))?;
@@ -1834,6 +1954,7 @@ impl BirAgentHost {
                         .map_err(|err| err.to_string())?;
                 }
                 form.saved = true;
+                form.assist.note_saved();
                 Ok(DispatchResult::json(json!({
                     "status": format!("{:?}", form.draft.status),
                     "saved": true,
@@ -1854,6 +1975,7 @@ impl BirAgentHost {
                         .map_err(|err| err.to_string())?;
                 }
                 form.saved = true;
+                form.assist.note_saved();
                 Ok(DispatchResult::json(json!({
                     "status": format!("{:?}", form.draft.status),
                     "saved": true,
@@ -1865,6 +1987,66 @@ impl BirAgentHost {
                 ids::view_slug(other)
             )),
         }
+    }
+
+    /// `form.dismiss`: close the open form without saving. Refused while the
+    /// user has unsaved edits in it — only the user may discard those, with
+    /// the Dismiss button (which asks first).
+    fn form_dismiss(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let open_1601c = self
+            .form_1601c
+            .as_ref()
+            .map(|form| !form.assist.lock_released);
+        let open_2551q = self
+            .form_2551q
+            .as_ref()
+            .map(|form| !form.assist.lock_released);
+        let code = match (self.active_view, open_1601c, open_2551q) {
+            (ActiveView::Form1601C, Some(_), _) => "1601C",
+            (ActiveView::Form2551Q, _, Some(_)) => "2551Q",
+            (_, Some(true), _) => "1601C",
+            (_, _, Some(true)) => "2551Q",
+            (_, Some(false), _) => "1601C",
+            (_, _, Some(false)) => "2551Q",
+            _ => return Err("no form is open to dismiss".into()),
+        };
+        let user_edits = match code {
+            "1601C" => self
+                .form_1601c
+                .as_ref()
+                .is_some_and(|form| form.assist.unsaved_user_edits),
+            _ => self
+                .form_2551q
+                .as_ref()
+                .is_some_and(|form| form.assist.unsaved_user_edits),
+        };
+        if user_edits {
+            return Err(format!(
+                "form {code} has unsaved edits the user typed; the agent cannot discard them. Ask the user to press Dismiss in the form (it confirms first) or save the draft"
+            ));
+        }
+        let view = if code == "1601C" {
+            self.form_1601c = None;
+            ActiveView::Form1601C
+        } else {
+            self.form_2551q = None;
+            ActiveView::Form2551Q
+        };
+        self.dismissed_form = Some(code);
+        self.submit_confirmation_visible = false;
+        if self.active_view == view {
+            self.form_loaded = false;
+            self.active_view = if self.selected_tin.is_some() {
+                ActiveView::Dashboard
+            } else {
+                ActiveView::GlobalDashboard
+            };
+        }
+        Ok(DispatchResult::json(json!({
+            "dismissed": true,
+            "form": code,
+        })))
     }
 
     fn request_submit_confirm(&mut self) -> Result<DispatchResult, String> {
@@ -2025,6 +2207,7 @@ impl BirAgentHost {
             ));
         }
         form.saved = true;
+        form.assist.note_saved();
         self.submit_confirmation_visible = false;
         bir_core::background_cron::wake();
         Ok(DispatchResult::json(json!({
@@ -2067,6 +2250,7 @@ impl BirAgentHost {
             ));
         }
         form.saved = true;
+        form.assist.note_saved();
         self.submit_confirmation_visible = false;
         bir_core::background_cron::wake();
         Ok(DispatchResult::json(json!({
@@ -2090,6 +2274,8 @@ impl BirAgentHost {
         form.draft.any_taxes_withheld = !form.draft.any_taxes_withheld;
         form.draft.compute();
         form.validated = false;
+        form.assist
+            .note_user_edits(["any_taxes_withheld".to_string()]);
         Ok(DispatchResult::json(json!({
             "form": "1601C",
             "any_taxes_withheld": form.draft.any_taxes_withheld,
@@ -2114,6 +2300,8 @@ impl BirAgentHost {
         };
         form.draft.compute();
         form.validated = false;
+        form.assist
+            .note_user_edits(["category_of_agent".to_string()]);
         Ok(DispatchResult::json(json!({
             "form": "1601C",
             "category_of_agent": category_snapshot_value(&form.draft.category_of_agent),
@@ -2170,6 +2358,9 @@ impl BirAgentHost {
             let applied: Vec<String> = fields.keys().cloned().collect();
             for (key, value) in &fields {
                 apply_1601c_fill(&mut form.draft, key, value)?;
+                if let Some(key) = assist::canonical_1601c_key(key) {
+                    form.assist.note_agent_fill(&key, BoxSource::Ai);
+                }
             }
             form.draft.compute();
             form.validated = false;
@@ -2191,6 +2382,9 @@ impl BirAgentHost {
             let applied: Vec<String> = fields.keys().cloned().collect();
             for (key, value) in &fields {
                 apply_2551q_fill(&mut form.draft, key, value)?;
+                if let Some(key) = assist::canonical_2551q_key(key) {
+                    form.assist.note_agent_fill(&key, BoxSource::Ai);
+                }
             }
             form.draft.recompute(None);
             form.validated = false;
@@ -2302,7 +2496,7 @@ impl BirAgentHost {
                         |draft| draft.status.clone(),
                     )
                 };
-                let _ = self.open_form("1601C", year, period)?;
+                let _ = self.reload_open_form("1601C", year, period)?;
                 return Ok(DispatchResult::json(payload));
             }
             let db = self.db.as_ref().ok_or("agent host has no database")?;
@@ -2353,7 +2547,7 @@ impl BirAgentHost {
                         |draft| draft.status.clone(),
                     )
                 };
-                let _ = self.open_form("2551Q", year, period)?;
+                let _ = self.reload_open_form("2551Q", year, period)?;
                 return Ok(DispatchResult::json(payload));
             }
             let db = self.db.as_ref().ok_or("agent host has no database")?;
@@ -2390,6 +2584,8 @@ impl BirAgentHost {
         let tin = self.selected_tin.clone().ok_or(
             "form.release_abandoned_claim requires args.tin or args.q, or a selected profile",
         )?;
+        // Refuse before touching the database when another form is open.
+        self.gate_form_lock(form, year, period, Some(&tin))?;
         let payload = {
             let db = self.db.as_ref().ok_or("agent host has no database")?;
             let guard = db.lock().map_err(|err| err.to_string())?;
@@ -2427,8 +2623,24 @@ impl BirAgentHost {
                 )
             }
         };
-        let _ = self.open_form(form, year, period)?;
+        let _ = self.reload_open_form(form, year, period)?;
         Ok(DispatchResult::json(payload))
+    }
+
+    /// Re-read `code` from the database after a status change, replacing the
+    /// open copy of that same return (the one-form lock only guards others).
+    fn reload_open_form(
+        &mut self,
+        code: &str,
+        year: u16,
+        period: u8,
+    ) -> Result<DispatchResult, String> {
+        if code.eq_ignore_ascii_case("1601C") {
+            self.form_1601c = None;
+        } else if code.eq_ignore_ascii_case("2551Q") {
+            self.form_2551q = None;
+        }
+        self.open_form(code, year, period)
     }
 
     /// Returns Some(not_found/ambiguous JSON) when tin/q does not uniquely
@@ -2792,8 +3004,8 @@ impl BirAgentHost {
                     .get("period")
                     .and_then(|value| value.as_u64())
                     .unwrap_or(1) as u8;
-                match self.resolve_tin_or_q(args)? {
-                    TinQuery::Missing => {}
+                let tin = match self.resolve_tin_or_q(args)? {
+                    TinQuery::Missing => None,
                     TinQuery::NotFound { query } => {
                         return Err(format!("filing.start taxpayer not found for {query}"));
                     }
@@ -2802,14 +3014,22 @@ impl BirAgentHost {
                             "filing.start taxpayer {query} is ambiguous; use args.tin as 14 digits"
                         ));
                     }
-                    TinQuery::One { tin, .. } => {
-                        self.select_profile_view(&tin, ActiveView::Dashboard)?;
-                    }
+                    TinQuery::One { tin, .. } => Some(tin),
+                };
+                // Refuse before selecting the taxpayer: selecting one closes
+                // the open form, which is exactly what the lock prevents.
+                self.gate_locked()?;
+                let already_open = self.gate_form_lock(code, year, period, tin.as_deref())?;
+                if let Some(tin) = tin
+                    && !already_open
+                {
+                    self.select_profile_view(&tin, ActiveView::Dashboard)?;
                 }
                 self.open_form(code, year, period)
             }
             "filing.validate" | "form.validate" => self.validate_form(),
             "form.save_draft" => self.save_form_draft(),
+            "form.dismiss" => self.form_dismiss(),
             "filing.submit" => self.request_submit_confirm(),
             "form.queue" | "filing.queue" | "form.submit" => self.queue_open_return(args, name),
             "form.file" | "form.submit_external" | "filing.file" => Err(format!(
@@ -3479,6 +3699,17 @@ fn parse_dashboard_forms(raw: Option<&Value>) -> Result<Option<Vec<String>>, Str
     }
 }
 
+/// The period `form.open` actually opens for `code` (1601C months, 2551Q quarters).
+fn clamp_form_period(code: &str, period: u8) -> u8 {
+    if code.eq_ignore_ascii_case("1601C") {
+        period.clamp(1, 12)
+    } else if code.eq_ignore_ascii_case("2551Q") {
+        period.clamp(1, 4)
+    } else {
+        period
+    }
+}
+
 fn parse_optional_year(args: &Value) -> u16 {
     args.get("year")
         .and_then(Value::as_u64)
@@ -3851,7 +4082,7 @@ fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, S
     }
     if let Some(object) = args.as_object() {
         for (key, value) in object {
-            if key != "fields" {
+            if key != "fields" && key != "source" {
                 fields.insert(key.clone(), value.clone());
             }
         }
@@ -7482,5 +7713,223 @@ mod tests {
             "{:?}",
             raw.error
         );
+    }
+
+    // ------------------------------------------------------------ /file-tax
+
+    /// Dummy test taxpayer: TIN 111111114 (passes the official check digit),
+    /// branch 00000. Saved straight to an ephemeral DB, so a test can leave a
+    /// profile box empty on purpose.
+    const FILE_TAX_TIN: &str = "11111111400000";
+
+    fn file_tax_host(edit: impl FnOnce(&mut TaxpayerProfile)) -> BirAgentHost {
+        let db = Database::open_ephemeral().expect("ephemeral db");
+        let mut profile = fixture_profile();
+        profile.tin = parse_tin(FILE_TAX_TIN).expect("test TIN");
+        profile.full_name = "File Tax Test Taxpayer".into();
+        edit(&mut profile);
+        db.save_profile(profile).expect("test profile");
+        let mut host =
+            BirAgentHost::new(PlatformKind::Headless).with_database(Arc::new(Mutex::new(db)));
+        host.select_profile(FILE_TAX_TIN)
+            .expect("select test taxpayer");
+        host
+    }
+
+    fn call(host: &mut BirAgentHost, name: &str, args: Value) -> gpui_agent::protocol::Response {
+        handle_request(
+            host,
+            req(Op::Invoke {
+                name: name.into(),
+                args,
+            }),
+            None,
+            None,
+        )
+    }
+
+    /// A quarter/month of last year: always a period that has started.
+    fn last_year() -> u16 {
+        chrono::Local::now().year() as u16 - 1
+    }
+
+    #[test]
+    fn one_form_lock_refuses_second_open() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        for (name, args) in [
+            (
+                "form.open",
+                json!({ "code": "1601C", "year": year, "period": 12 }),
+            ),
+            (
+                "filing.start",
+                json!({ "code": "1601C", "year": year, "period": 12, "tin": FILE_TAX_TIN }),
+            ),
+            (
+                "form.open",
+                json!({ "code": "2551Q", "year": year, "period": 3 }),
+            ),
+        ] {
+            let refused = call(&mut host, name, args.clone());
+            assert!(!refused.ok, "{name} {args} must be refused");
+            assert!(
+                refused
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("form already open")),
+                "{:?}",
+                refused.error
+            );
+        }
+        // The refusal left the open form exactly where it was.
+        assert_eq!(host.active_view(), ActiveView::Form2551Q);
+        assert_eq!(host.form_2551q_draft().map(|draft| draft.quarter), Some(4));
+
+        // Re-opening the very same return is not a second form.
+        let again = call(
+            &mut host,
+            "filing.start",
+            json!({ "code": "2551Q", "year": year, "period": 4, "tin": FILE_TAX_TIN }),
+        );
+        assert!(again.ok, "{:?}", again.error);
+        assert_eq!(again.result.as_ref().unwrap()["already_open"], true);
+
+        // Saving releases the lock.
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let next = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(next.ok, "{:?}", next.error);
+        assert_eq!(next.result.as_ref().unwrap()["form"], "1601C");
+
+        // An edit after saving takes the lock back.
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_14": "1000" } }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_25": "100" } }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let refused = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(!refused.ok);
+    }
+
+    #[test]
+    fn dismiss_clean_form_closes_it() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let none = call(&mut host, "form.dismiss", json!({}));
+        assert!(!none.ok, "nothing open to dismiss");
+
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        assert_eq!(
+            dismissed.result.as_ref().unwrap(),
+            &json!({ "dismissed": true, "form": "2551Q" })
+        );
+        assert!(host.form_2551q_draft().is_none());
+        assert_eq!(host.active_view(), ActiveView::Dashboard);
+        assert_eq!(host.take_dismissed_form(), Some("2551Q"));
+        assert!(!call(&mut host, "form.fields", json!({})).ok);
+
+        // The agent's own unsaved fills are its to discard.
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_14": "1000" }, "source": "document" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        assert_eq!(dismissed.result.as_ref().unwrap()["form"], "1601C");
+        // Nothing was saved.
+        let stored = host
+            .db
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .get_1601c_draft(FILE_TAX_TIN, year, 12)
+            .unwrap();
+        assert!(stored.is_none(), "dismiss must not save");
+
+        let reopened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(reopened.ok, "{:?}", reopened.error);
+    }
+
+    #[test]
+    fn agent_dismiss_with_unsaved_edits_is_refused() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        // The user types into a box (UI-level input, not form.fill).
+        let typed = handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::FORM_2551Q_CREDITABLE.into(),
+                value: "250.00".into(),
+            }),
+            None,
+            None,
+        );
+        assert!(typed.ok, "{:?}", typed.error);
+
+        let refused = call(&mut host, "form.dismiss", json!({}));
+        assert!(!refused.ok);
+        let error = refused.error.unwrap_or_default();
+        assert!(error.contains("unsaved edits"), "{error}");
+        assert!(error.contains("Dismiss"), "{error}");
+        assert_eq!(host.form_2551q_creditable(), Some(250.0));
+        assert_eq!(host.active_view(), ActiveView::Form2551Q);
+        assert_eq!(host.take_dismissed_form(), None);
+
+        // Once saved there is nothing of the user's left to lose.
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
     }
 }
