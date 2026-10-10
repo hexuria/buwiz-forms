@@ -91,12 +91,32 @@ macro_rules! form_view_spec {
     };
 }
 
-pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[form_view_spec!(
-    Form2553,
-    super::form_2553_view::Form2553View,
-    "2553",
-    "2553"
-)];
+pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[
+    form_view_spec!(
+        Form2553,
+        super::form_2553_view::Form2553View,
+        "2553",
+        "2553"
+    ),
+    form_view_spec!(
+        Form1604F,
+        super::form_1604f_view::Form1604fView,
+        "1604F",
+        "1604f"
+    ),
+    form_view_spec!(
+        Form1604C,
+        super::form_1604c_view::Form1604cView,
+        "1604C",
+        "1604c"
+    ),
+    form_view_spec!(
+        Form1604E,
+        super::form_1604e_view::Form1604eView,
+        "1604E",
+        "1604e"
+    ),
+];
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {
     FORM_VIEW_SPECS.iter().find(|spec| spec.kind == kind)

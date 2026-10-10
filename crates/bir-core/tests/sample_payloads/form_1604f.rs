@@ -1,0 +1,40 @@
+use crate::{check_sample, dummy_profile};
+use bir_core::forms::form_1604f::{Form1604fAgentCategory, Form1604fDraft, Form1604fRemittance};
+
+fn remittance(date: &str, reference: &str, tax: f64, penalty: f64) -> Form1604fRemittance {
+    Form1604fRemittance {
+        date: date.to_string(),
+        reference: reference.to_string(),
+        taxes_withheld: tax,
+        penalties: penalty,
+        total_remitted: 0.0,
+    }
+}
+
+fn sample_1604f() -> Form1604fDraft {
+    let mut draft = Form1604fDraft::new_from_profile(&dummy_profile("1604F", "Corporation"), 2025);
+    draft.agent_category = Form1604fAgentCategory::Private;
+    draft.tax_relief = true;
+    draft.tax_relief_details = "Rp-us treaty".to_string();
+    draft.schedules[0][0] = remittance("04/25/2025", "tra-0001", 12_345.675, 100.005);
+    draft.schedules[0][1] = remittance("07/25/2025", "eror 0002", 999.995, 0.0);
+    draft.schedules[0][3] = remittance("01/26/2026", "Tra-0004", 250_000.0, 1_234.5);
+    draft.schedules[1][3] = remittance("01/30/2026", "ear-4", 5_000.0, 0.0);
+    draft.schedules[2][2] = remittance("10/30/2025", "x3", 1.5, 2.25);
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1604f_sample_payload_is_current() {
+    let draft = sample_1604f();
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1604F must validate: {errors:?}"));
+    check_sample(
+        "1604F-2025",
+        "1604f-v2018",
+        &payload,
+        "d050fb9c3a327a2b56801e8328d9e043690071c75805d498d24056625a622507",
+    );
+}
