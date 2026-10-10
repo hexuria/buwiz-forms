@@ -139,6 +139,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2553-1999" => Some(include_str!(
             "../../../html-frozen/2553-1999/writer-cells.json"
         )),
+        "1702q-2018" => Some(include_str!(
+            "../../../html-frozen/1702q-2018/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1463,12 +1466,87 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1702q_fills_identity_amounts_rates_and_boxes() {
+        use bir_core::forms::form_1702q::{
+            Form1702qDeduction, Form1702qDraft, Form1702qOtherCredit, Form1702qSchedule1Column,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Dummy Corporation", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "sample@example.com",
+                "default_form_type": "1702Q", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1702qDraft::new_from_profile(&profile, 2025, 2);
+        draft.atc_mcit = true;
+        draft.atc = "IC010_25%".to_string();
+        draft.deduction = Form1702qDeduction::Itemized;
+        draft.special = Form1702qSchedule1Column {
+            sales: 800_000.5,
+            cost_of_sales: 300_000.0,
+            rate: 10.0,
+            ..Form1702qSchedule1Column::default()
+        };
+        draft.sales = 5_000_000.5;
+        draft.cost_of_sales = 1_200_000.0;
+        draft.mcit_gross_income_q2 = 3_800_000.5;
+        draft.other_credits = vec![Form1702qOtherCredit {
+            description: "Sample credit".to_string(),
+            amount: 1_234.0,
+        }];
+        draft.recompute();
+        let html = filled_document("1702q-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c7"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c13"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c16"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c19"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c49"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c54"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["1".to_string()]);
+        assert_eq!(named_values(&html, "p1c23"), vec!["5".to_string()]);
+        assert_eq!(named_values(&html, "p1c17"), vec!["IC 010".to_string()]);
+        assert_eq!(comb_text(&html, "p1c26"), "123");
+        assert_eq!(comb_text(&html, "p1c34"), "039");
+        assert_eq!(comb_text(&html, "p1c37"), "SAMPLE DUMMY CORPORATION");
+        assert_eq!(
+            comb_text(&html, "p1c40"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
+        );
+        assert_eq!(comb_text(&html, "p1c41"), "UEZON CITY");
+        assert_eq!(comb_text(&html, "p1c47"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c55"), "5,000,001.00");
+        assert_eq!(comb_text(&html, "p2c57"), "1,200,000.00");
+        assert_eq!(comb_text(&html, "p2c13"), "  800,001.00");
+        assert_eq!(comb_text(&html, "p2c42"), "10");
+        assert_eq!(comb_text(&html, "p2c44"), "0");
+        assert_eq!(comb_text(&html, "p2c73"), "25");
+        assert_eq!(comb_text(&html, "p2c110"), "SAMPLE CREDIT");
+        assert_eq!(comb_text(&html, "p2c112"), "    1,234.00");
+        assert_eq!(
+            comb_text(&html, "p1c57"),
+            format!(
+                "{:>12}",
+                bir_core::official_xml::official_amount(draft.income_tax_due)
+            )
+        );
+        assert!(!html.contains("name=\"frm1702q:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
-        // 2553 (1999) prints each amount in one text cell, not peso + cent combs.
+        // 2553 (1999) prints each amount in one text cell and 1702Q (2018) in
+        // one 12-slot comb, not peso + cent combs.
         for (slug, split_money) in [
             ("1601c-2018", true),
             ("2551q-2018", true),
             ("2553-1999", false),
+            ("1702q-2018", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
