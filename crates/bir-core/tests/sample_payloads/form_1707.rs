@@ -39,7 +39,7 @@ fn sample_1707() -> Form1707Draft {
         },
         Form1707Shares {
             corporation: "Example Mining Inc".into(),
-            number_of_shares: Some(12_345.6785),
+            number_of_shares: Some(12_345.678_5),
             certificate_number: "2002".into(),
             selling_price: 1_234_567.89,
         },

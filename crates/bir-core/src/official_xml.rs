@@ -454,8 +454,16 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // 1707v2021 and 1707Av2021 close with "BIR 2014.0"; the rest with "BIR 2012.0".
+            let trailer = after
+                .rsplit("All Rights Reserved BIR ")
+                .next()
+                .unwrap_or("");
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                after.contains("All Rights Reserved BIR ")
+                    && trailer.len() == 6
+                    && trailer.ends_with(".0")
+                    && trailer[..4].bytes().all(|b| b.is_ascii_digit()),
                 "{id}: {after:?}"
             );
         }
