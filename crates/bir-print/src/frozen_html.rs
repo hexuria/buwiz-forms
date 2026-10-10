@@ -273,10 +273,18 @@ struct XboxJoin {
     html_id: String,
 }
 
+/// A peso comb with no centavo comb beside it ("Do not enter centavos"):
+/// the amount prints rounded to whole pesos, 50 centavos and up rounding up.
+struct PesoJoin {
+    writer_key: String,
+    html_id: String,
+}
+
 struct WriterCells {
     joins: BTreeMap<String, String>,
     money_joins: Vec<MoneyJoin>,
     xbox_joins: Vec<XboxJoin>,
+    peso_joins: Vec<PesoJoin>,
 }
 
 fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
@@ -397,6 +405,40 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         }
     }
 
+    let mut peso_joins: Vec<PesoJoin> = Vec::new();
+    if let Some(rows) = payload.get("peso_joins").and_then(|value| value.as_array()) {
+        for join in rows {
+            let key = join
+                .get("writer_key")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "writer-cells.json peso_join missing writer_key".to_string())?;
+            let html_id = join
+                .get("html_id")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
+            if html_id.starts_with("frm") {
+                return Err(format!(
+                    "writer-cells.json {key} must target a cell id, not {html_id}"
+                ));
+            }
+            if cells.contains_key(key)
+                || money_joins.iter().any(|row| row.writer_key == key)
+                || xbox_joins.iter().any(|row| row.writer_key == key)
+                || peso_joins.iter().any(|row| row.writer_key == key)
+            {
+                return Err(format!(
+                    "writer-cells.json duplicate writer_key {key} across joins"
+                ));
+            }
+            peso_joins.push(PesoJoin {
+                writer_key: key.to_string(),
+                html_id: html_id.to_string(),
+            });
+        }
+    }
+
     {
         let mut used_cells: BTreeSet<&str> = cells.values().map(|id| id.as_str()).collect();
         for join in &money_joins {
@@ -421,12 +463,21 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
                 ));
             }
         }
+        for join in &peso_joins {
+            if !used_cells.insert(&join.html_id) {
+                return Err(format!(
+                    "writer-cells.json {} peso cell {} is already a fill target",
+                    join.writer_key, join.html_id
+                ));
+            }
+        }
     }
 
     Ok(WriterCells {
         joins: cells,
         money_joins,
         xbox_joins,
+        peso_joins,
     })
 }
 
@@ -437,6 +488,7 @@ fn writer_cells(slug: &str) -> Result<WriterCells, String> {
             joins: BTreeMap::new(),
             money_joins: Vec::new(),
             xbox_joins: Vec::new(),
+            peso_joins: Vec::new(),
         }),
     }
 }
@@ -541,6 +593,72 @@ fn fill_money_joins(
                 tags[index].start,
                 tags[index].end,
                 set_value(tags[index].tag, &ch, None),
+            ));
+        }
+    }
+    apply_replacements(html, replacements)
+}
+
+/// `1234.49` -> `1234`, `1234.50` -> `1235`: the sheets' "49 centavos or
+/// less drop down; 50 or more round up".
+fn whole_pesos(value: &str) -> Option<String> {
+    let (peso, cents) = split_writer_money(value)?;
+    let peso = peso.trim_start_matches('0');
+    let mut digits: Vec<u8> = if peso.is_empty() {
+        b"0".to_vec()
+    } else {
+        peso.bytes().collect()
+    };
+    if cents.as_str() >= "50" {
+        let mut index = digits.len();
+        loop {
+            if index == 0 {
+                digits.insert(0, b'1');
+                break;
+            }
+            index -= 1;
+            if digits[index] == b'9' {
+                digits[index] = b'0';
+            } else {
+                digits[index] += 1;
+                break;
+            }
+        }
+    }
+    String::from_utf8(digits).ok()
+}
+
+fn fill_peso_joins(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    peso_joins: &[PesoJoin],
+) -> String {
+    if peso_joins.is_empty() {
+        return html.to_string();
+    }
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for join in peso_joins {
+        let Some(value) = fields.get(&join.writer_key) else {
+            continue;
+        };
+        let Some(pesos) = whole_pesos(value) else {
+            continue;
+        };
+        let Some(indices) = grouped.get(join.html_id.as_str()) else {
+            continue;
+        };
+        let ordered = ordered_comb_indices(&tags, indices);
+        let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) else {
+            continue;
+        };
+        for (offset, index) in ordered.into_iter().enumerate() {
+            let writer = (offset == 0).then_some(value.as_str());
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, &values[offset], writer),
             ));
         }
     }
@@ -679,6 +797,27 @@ fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<
             ));
         }
     }
+    for join in &cells.peso_joins {
+        if !present.contains(join.html_id.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells peso html_id {} for {} is not an input name=",
+                join.html_id, join.writer_key
+            ));
+        }
+        if present.contains(join.writer_key.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells {} is already a stamped name=; remove the peso join",
+                join.writer_key
+            ));
+        }
+        let slots = grouped.get(join.html_id.as_str()).map_or(0, Vec::len);
+        if slots < 3 {
+            return Err(format!(
+                "{slug}: writer-cells {} peso comb {} must have at least 3 slots",
+                join.writer_key, join.html_id
+            ));
+        }
+    }
     for join in &cells.xbox_joins {
         if !present.contains(join.html_id.as_str()) {
             return Err(format!(
@@ -721,6 +860,7 @@ fn fill_bundle(
     validate_writer_cells(html, slug, &cells)?;
     let filled = fill_by_name_with_cells(html, fields, &cells.joins);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
+    let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     Ok(fill_xbox_joins(&filled, fields, &cells.xbox_joins))
 }
 
@@ -1017,7 +1157,10 @@ mod tests {
                 continue;
             }
             let slug = dir.file_name().unwrap().to_str().unwrap();
-            assert!(super::writer_cells_json(slug).is_some(), "{slug}: not registered");
+            assert!(
+                super::writer_cells_json(slug).is_some(),
+                "{slug}: not registered"
+            );
             let cells = super::writer_cells(slug).unwrap_or_else(|e| panic!("{slug}: {e}"));
             let mut fields = BTreeMap::new();
             for key in cells.joins.keys() {
@@ -1029,10 +1172,23 @@ mod tests {
             for join in &cells.xbox_joins {
                 fields.insert(join.writer_key.clone(), "true".to_string());
             }
+            for join in &cells.peso_joins {
+                fields.insert(join.writer_key.clone(), "1234.56".to_string());
+            }
             super::filled_document(slug, &fields).unwrap_or_else(|e| panic!("{slug}: {e}"));
             checked += 1;
         }
         assert!(checked >= 30, "only {checked} print maps found");
+    }
+
+    #[test]
+    fn peso_only_combs_round_to_whole_pesos() {
+        assert_eq!(super::whole_pesos("1,234.49").as_deref(), Some("1234"));
+        assert_eq!(super::whole_pesos("1234.50").as_deref(), Some("1235"));
+        assert_eq!(super::whole_pesos("999.5").as_deref(), Some("1000"));
+        assert_eq!(super::whole_pesos("0.49").as_deref(), Some("0"));
+        assert_eq!(super::whole_pesos("12").as_deref(), Some("12"));
+        assert_eq!(super::whole_pesos("-5.00"), None);
     }
 
     #[test]
