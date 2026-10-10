@@ -382,6 +382,9 @@ impl Form0619EView {
                 div()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
+                    .max_w_full()
+                    .min_w_0()
+                    .pr_2()
                     .child(title.to_string()),
             )
             .children(buttons)

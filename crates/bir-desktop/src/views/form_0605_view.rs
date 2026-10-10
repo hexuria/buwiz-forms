@@ -640,25 +640,28 @@ impl Form0605View {
                 .map(|(c, description)| format!("{c} — {description}"))
                 .unwrap_or_else(|| "Not selected".to_string())
         };
-        let mut tax_picks = div().flex().flex_wrap().gap_2();
+        let mut tax_picks = div().flex().flex_wrap().gap_2().w_full().min_w_0();
         let tax_matches = matching(FORM_0605_TAX_TYPES, &self.input_text("tax_filter", cx));
         let tax_count = tax_matches.len();
         for (index, code, description) in tax_matches.into_iter().take(PICKER_LIMIT) {
+            // Wrapper keeps a long chip inside the card (clipped, never wider).
             tax_picks = tax_picks.child(
-                Self::choice(
-                    ("0605_tax", index),
-                    format!("{code} — {description}"),
-                    tax_code.as_deref() == Some(code),
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.edit(cx, |d| {
-                        // getTaxTypeCode() clears the ATC.
-                        d.tax_type = form_0605_tax_type(code);
-                        d.atc = None;
-                    })
-                })),
+                div().max_w_full().min_w_0().overflow_hidden().child(
+                    Self::choice(
+                        ("0605_tax", index),
+                        format!("{code} — {description}"),
+                        tax_code.as_deref() == Some(code),
+                        !editable,
+                    )
+                    .small()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.edit(cx, |d| {
+                            // getTaxTypeCode() clears the ATC.
+                            d.tax_type = form_0605_tax_type(code);
+                            d.atc = None;
+                        })
+                    })),
+                ),
             );
         }
         let mut atc_picks = div().flex().flex_wrap().gap_2();
@@ -729,10 +732,17 @@ impl Form0605View {
             self.field("lob", layout, false),
             self.field("name", layout, false),
             self.field("phone", layout, false),
-            self.field("address", layout, false),
             self.field("zip", layout, false),
-            self.field("email", layout, false),
         ];
+        // Address and email need the full row width at Desktop.
+        let wide_fields = div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .w_full()
+            .child(self.field("address", layout, false))
+            .child(self.field("email", layout, false))
+            .into_any_element();
         let rows = vec![
             Self::choice_row(
                 "Item 11 — Taxpayer classification",
@@ -758,6 +768,7 @@ impl Form0605View {
                 ],
             ),
             self.grid(layout, fields),
+            wide_fields,
         ];
         self.section("Part I — Background Information", rows, cx)
     }
