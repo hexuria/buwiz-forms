@@ -94,8 +94,14 @@ macro_rules! layouts {
 
 /// Layouts of the forms the app serializes today. Add a form here when its
 /// field map moves to [`write`].
-const LAYOUTS: &[(&str, &str)] =
-    layouts!["1601c-v2018", "2551q-v2018", "2553-v1999", "1606-v2018",];
+const LAYOUTS: &[(&str, &str)] = layouts![
+    "1601c-v2018",
+    "2551q-v2018",
+    "2553-v1999",
+    "1606-v2018",
+    "1600vt-v2018-private",
+    "1600vt-v2018-government",
+];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
 pub fn layout(form_id: &str) -> Result<&'static OfficialLayout, OfficialXmlError> {
@@ -446,8 +452,11 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // Most pages close with "BIR 2012"; the 2018 1600-VT/PT pages
+            // with "BIR 2014".
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                after.ends_with("All Rights Reserved BIR 2012.0")
+                    || after.ends_with("All Rights Reserved BIR 2014.0"),
                 "{id}: {after:?}"
             );
         }

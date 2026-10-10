@@ -84,6 +84,11 @@ function load(htaPath) {
   };
 }
 
+// A load-time helper's source, or null when absent or not parseable here.
+function optionalFunctionSource(name, html) {
+  try { return functionSource(name, [html]); } catch (e) { return null; }
+}
+
 // Build the DOM the way the page looks after its load handlers ran.
 function prepare(html) {
   const virtualConsole = new VirtualConsole(); // ignore jsdom CSS parse warnings
@@ -97,20 +102,33 @@ function prepare(html) {
   if (rdoCell && prefix && !doc.getElementById(prefix + ':txtRDOCode')) {
     rdoCell.innerHTML = `<select id='${prefix}:txtRDOCode' name='${prefix}:txtRDOCode' size='1'><option value='000'> </option></select>`;
   }
-  // Some getRdo() bodies (1606: seller and Item 16A) also fill td#rdoSelect2,
-  // td#rdoSelect3 … with `$('#rdoSelectN').html(dataN)`; inject those selects
-  // with the ids the page gives them.
-  const getRdo = functionSource('getRdo', [html]);
+  // Other getRdo() bodies fill more cells with `$('#cell').html(data)`: 1606
+  // (seller, Item 16A in td#rdoSelect2/3), 1600VT/PT (td#rdoContainer).
+  // Inject those selects with the ids the page gives them.
+  const getRdo = optionalFunctionSource('getRdo', html);
   if (getRdo) {
     const selectIds = {};
     for (const m of getRdo.matchAll(/var\s+(\w+)\s*=\s*"<select[^"]*?id='([^']+)'/g)) selectIds[m[1]] = m[2];
-    for (const m of getRdo.matchAll(/\$\('#(rdoSelect\d+)'\)\.html\((\w+)\)/g)) {
+    for (const m of getRdo.matchAll(/\$\('#(\w+)'\)\.html\((\w+)\)/g)) {
       const cell = doc.getElementById(m[1]);
       const id = selectIds[m[2]];
       if (cell && id && !doc.getElementById(id)) {
         cell.innerHTML = `<select id='${id}' name='${id}' size='1'><option value='000'> </option></select>`;
       }
     }
+  }
+  // populateAtcPart2() (1600VT/PT) draws the five empty Part II ATC rows at
+  // load; run the page's own function with a minimal `$(...).html()`.
+  const populate = optionalFunctionSource('populateAtcPart2', html);
+  if (populate) {
+    const w = dom.window;
+    w.d = doc;
+    w.$ = (sel) => {
+      const el = doc.getElementById(String(sel).replace(/^#/, ''));
+      return { html: (h) => (h === undefined ? el.innerHTML : (el.innerHTML = h)) };
+    };
+    w.eval(populate + '\npopulateAtcPart2();');
+    delete w.$;
   }
   // getDrives() (js/string-util.js) fills every drive select with a "0"
   // placeholder, selected, ahead of the machine's drive letters.

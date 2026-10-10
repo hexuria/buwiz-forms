@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "form_id": "1600vt-v2018",
+  "form_id": "1600vt-v2018-government",
   "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
   "official_hta": "BIR-Form1600VTv2018.hta",
   "official_hta_sha256": "4bd3ad3d6f5ff2ae3b8e9fa8802a826b01730dd29d3b5f6991c7cef09895a3bb",
@@ -1435,6 +1435,78 @@
         }
       ],
       "default": "2",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode1",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode2",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode3",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode4",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode5",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode6",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode7",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode8",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode9",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode10",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode11",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode12",
+      "kind": "bool",
+      "default": "false",
       "after": "    \n            "
     },
     {
