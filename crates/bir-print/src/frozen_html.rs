@@ -1490,10 +1490,6 @@ mod tests {
             "line_of_business": "Brokerage", "registered_address": "1 Fixture St",
             "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
             "default_form_type": form, "taxpayer_type": "Corporation"
-    fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {
-            "id": null, "full_name": "Withholding Fixture Inc", "tin": {"segment1": "123",
-            "line_of_business": "Fixture", "registered_address": "1 Fixture St",
-            "default_form_type": code, "taxpayer_type": "Corporation"
         }))
         .unwrap()
     }
@@ -1600,6 +1596,20 @@ mod tests {
         assert_eq!(named_values(&html, "p1c12"), vec!["".to_string()]);
         assert_eq!(named_values(&html, "p1c59"), vec!["X".to_string()]);
         assert!(!html.contains("name=\"frm2200M:"));
+    }
+
+    fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Withholding Fixture Inc", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Fixture", "registered_address": "1 Fixture St",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": code, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
     fn filled_document_1606_fills_parties_atc_box_amounts_and_schedules() {
         use bir_core::forms::form_1606::{
             Form1606Draft, Form1606SellerType, Form1606TaxRate, Form1606Transaction,
@@ -1616,6 +1626,7 @@ mod tests {
         draft.gross_selling_price = 5_000_000.0;
         draft.installment_collected = 250_000.0;
         draft.tax_rate = Some(Form1606TaxRate::OnePointFive);
+        draft.recompute();
         let html = filled_document("1606-2018", &draft.to_print_field_map()).unwrap();
         assert_eq!(comb_text(&html, "p1c4"), "06");
         assert_eq!(comb_text(&html, "p1c6"), "2025");
@@ -1638,6 +1649,9 @@ mod tests {
         assert_eq!(comb_text(&html, "p2c13"), "T-1");
         assert!(!html.contains("name=\"frm1606:"));
         assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
     fn filled_document_1600vt_and_1600pt_fill_identity_part_ii_and_schedule() {
         use bir_core::forms::form_1600pt::{Form1600PtAgentCategory, Form1600PtDraft};
         use bir_core::forms::form_1600vt::{
@@ -1655,10 +1669,13 @@ mod tests {
             income_payment: 10_000.0,
             tax_rate: 12.0,
             tax_withheld: 0.0,
+        });
         vt.recompute();
         let html = filled_document("1600-vt-2018", &vt.to_print_field_map()).unwrap();
         assert_eq!(comb_text(&html, "p1c4"), "06");
         assert_eq!(comb_text(&html, "p1c5"), "25");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c22"), "00000");
         assert_eq!(named_values(&html, "p1c35"), vec!["X".to_string()]);
         assert_eq!(comb_text(&html, "p1c50"), "WV110");
         assert_eq!(comb_text(&html, "p1c51"), "10000");
@@ -1669,6 +1686,7 @@ mod tests {
         assert_eq!(comb_text(&html, "p2c17"), "PAYEE FIXTURE");
         assert_eq!(comb_text(&html, "p2c21"), "1,200.00");
         assert!(!html.contains("name=\"frm1600VT:"));
+
         let mut pt = Form1600PtDraft::new_from_profile(&withholding_profile("1600PT"), 2025, 6);
         pt.set_agent_category(Form1600PtAgentCategory::Government);
         pt.set_taxes_withheld(true);
@@ -1682,6 +1700,9 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c50"), "WB200");
         assert_eq!(comb_text(&html, "p1c54"), ".6");
         assert_eq!(comb_text(&html, "p1c56"), "60");
+    }
+
+    #[test]
     fn filled_document_1600wp_fills_part_ii_by_atc_row_and_schedule() {
         use bir_core::forms::form_1600wp::{
             Form1600WpAgentCategory, Form1600WpDraft, Form1600WpScheduleRow,
@@ -1698,6 +1719,8 @@ mod tests {
             atc_code: "WB194".into(),
             amount: 2_500.0,
             tax_withheld: 0.0,
+        });
+        draft.recompute();
         let html = filled_document("1600wp-2010", &draft.to_print_field_map()).unwrap();
         assert_eq!(comb_text(&html, "p1c1"), "06152025");
         assert_eq!(comb_text(&html, "p1c4"), "2025");
@@ -1715,7 +1738,7 @@ mod tests {
 
     #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
-        // 2553 (1999) prints each amount in one text cell, not peso + cent combs.
+        // Sheets that print amounts in one text cell, not peso + cent combs, say false.
         for (slug, split_money) in [
             ("1601c-2018", true),
             ("2551q-2018", true),
