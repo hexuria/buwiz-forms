@@ -22,8 +22,9 @@
             <div>frm1701:rdoPg1I7ATC_II015=falsefrm1701:rdoPg1I7ATC_II015=</div>	
             <div>frm1701:rdoPg1I7ATC_II017=truefrm1701:rdoPg1I7ATC_II017=</div>	
             <div>frm1701:rdoPg1I7ATC_II016=falsefrm1701:rdoPg1I7ATC_II016=</div>	
-            <div>frm1701:txtPg1I8TaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm1701:txtPg1I8TaxpayerName=</div>	
-            <div>frm1701:txtPg1I9Address=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1701:txtPg1I9Address=</div>	
+            <div>frm1701:txtPg1I8TaxpayerName=SAMPLE DUMMY TAXPAYERfrm1701:txtPg1I8TaxpayerName=</div>	
+            <div>frm1701:txtPg1I9Address=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1701:txtPg1I9Address=</div>	
+            <div>frm1701:txtPg1I9Address2=frm1701:txtPg1I9Address2=</div>	
             <div>frm1701:txtPg1I9AZipCode=1100frm1701:txtPg1I9AZipCode=</div>	
             <div>frm1701:txtPg1I10BirthDate=03/01/1975frm1701:txtPg1I10BirthDate=</div>	
             <div>txtEmail=sample.taxpayer@example.comtxtEmail=</div>	
@@ -834,7 +835,7 @@
             <div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>	
             <div>ebirOnlineUsername=ebirOnlineUsername=</div>	
             <div>ebirOnlineSecret=ebirOnlineSecret=</div>	
-            <div>frm1701:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm1701:txtLineBus=</div>	
+            <div>frm1701:txtLineBus=SAMPLE CONSULTING SERVICESfrm1701:txtLineBus=</div>	
             <div>driveSelectTPExport=0driveSelectTPExport=</div>	
             	
             All Rights Reserved BIR 2012.0

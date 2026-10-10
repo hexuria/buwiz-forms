@@ -16,11 +16,9 @@
 //! pages are only used with exempt/special-rate income, so they keep the
 //! page's defaults; such a return does not validate here.
 //!
-//! The generated `1701-v2018` layout names the taxpayer RDO select
-//! `frm1701:txtRDOCode` and has no spouse RDO select: the layout generator
-//! injects a stand-in for `getRdo()`, while the page itself creates
-//! `frm1701:txtPg1I5RDOCode` and `frm1701:txtPg2I2SpouseRDOCode`.
-//! [`QueueableForm::official_payload`] writes what the page writes.
+//! The submission is the `saveEncryptedProfile` loop over the page's
+//! controls, including the two RDO selects `getRdo()` creates
+//! (`txtPg1I5RDOCode`, `txtPg2I2SpouseRDOCode`).
 
 use std::collections::BTreeMap;
 
@@ -31,7 +29,7 @@ use super::form_1701::{
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
-use crate::official_xml::{OfficialXmlError, official_amount, parse_official_amount};
+use crate::official_xml::{official_amount, parse_official_amount};
 
 pub const FORM_1701_LAYOUT_ID: &str = "1701-v2018";
 /// Official `formType` and PROD SFTP folder (`ftpTargetFolder.PROD['1701v2018']`).
@@ -1117,7 +1115,8 @@ impl Form1701Draft {
         ] {
             put(&mut f, &format!("{page}TaxpayerName"), short_name.clone());
         }
-        put(&mut f, "txtRDOCode", self.rdo_code.trim().to_string());
+        put(&mut f, "txtPg1I5RDOCode", self.rdo_code.trim().to_string());
+        put(&mut f, "txtPg2I2SpouseRDOCode", self.spouse_rdo_value());
         use super::form_1701::Form1701TaxpayerType as T;
         let mixed = self.taxpayer_also_compensation_earner
             && matches!(
@@ -1698,31 +1697,7 @@ impl QueueableForm for Form1701Draft {
         <Self as FormValidator>::validate(self)
     }
     fn field_map(&self) -> BTreeMap<String, String> {
-        let mut fields = self.to_official_field_map();
-        fields.insert(
-            "frm1701:txtPg2I2SpouseRDOCode".to_string(),
-            self.spouse_rdo_value(),
-        );
-        fields
-    }
-
-    /// The layout replayed over the field map, with the two RDO selects as
-    /// the page's own `getRdo()` creates them.
-    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
-        let errors = <Self as QueueableForm>::validate(self);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-        let xml_error = |error: OfficialXmlError| vec![("xml".to_string(), error.to_string())];
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID).map_err(xml_error)?;
-        let text =
-            crate::official_xml::write(layout, &self.to_official_field_map()).map_err(xml_error)?;
-        patch_rdo_selects(&text, &self.spouse_rdo_value()).ok_or_else(|| {
-            vec![(
-                "xml".to_string(),
-                "1701 layout lacks the RDO anchors".to_string(),
-            )]
-        })
+        self.to_official_field_map()
     }
 }
 
@@ -1735,27 +1710,6 @@ impl Form1701Draft {
             "000".to_string()
         }
     }
-}
-
-/// Rename the layout's `txtRDOCode` to the page's `txtPg1I5RDOCode` and add
-/// `txtPg2I2SpouseRDOCode` after the spouse branch code, as `getRdo()` does.
-fn patch_rdo_selects(text: &str, spouse_rdo: &str) -> Option<String> {
-    let old = "frm1701:txtRDOCode=";
-    if text.matches(old).count() != 2 {
-        return None;
-    }
-    let renamed = text.replace(old, "frm1701:txtPg1I5RDOCode=");
-    let anchor = "frm1701:txtPg2I1BranchCode=</div>";
-    let at = renamed.find(anchor)? + anchor.len();
-    let after_end = renamed[at..].find("<div>")? + at;
-    let after = &renamed[at..after_end];
-    let key = "frm1701:txtPg2I2SpouseRDOCode";
-    let mut out = renamed.clone();
-    out.insert_str(
-        after_end,
-        &format!("<div>{key}={spouse_rdo}{key}=</div>{after}"),
-    );
-    Some(out)
 }
 
 #[cfg(test)]
@@ -2053,16 +2007,6 @@ pub(crate) mod tests {
         d.recompute();
         assert_eq!(d.amount(PartIi, 22, tp), d.amount(Schedule2, 7, tp));
         assert_eq!(d.amount(Schedule3, 32, tp), Some(0.0));
-    }
-
-    #[test]
-    fn rdo_selects_are_patched_like_get_rdo() {
-        let text = "<div>frm1701:txtRDOCode=039frm1701:txtRDOCode=</div>\t\n  <div>frm1701:txtPg2I1BranchCode=frm1701:txtPg2I1BranchCode=</div>\t\n  <div>x=x=</div>";
-        let out = patch_rdo_selects(text, "000").unwrap();
-        assert_eq!(
-            out,
-            "<div>frm1701:txtPg1I5RDOCode=039frm1701:txtPg1I5RDOCode=</div>\t\n  <div>frm1701:txtPg2I1BranchCode=frm1701:txtPg2I1BranchCode=</div>\t\n  <div>frm1701:txtPg2I2SpouseRDOCode=000frm1701:txtPg2I2SpouseRDOCode=</div>\t\n  <div>x=x=</div>"
-        );
     }
 
     #[test]

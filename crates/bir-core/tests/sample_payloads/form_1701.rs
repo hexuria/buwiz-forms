@@ -156,7 +156,7 @@ fn form_1701_sample_payload_matches_the_official_page() {
         .map(|b| format!("{b:02x}"))
         .collect();
     assert_eq!(
-        digest, "0953e778c2c6ab377591e7a4ddd2d966e4a623f3904d92dfe7677d90a994d50f",
+        digest, "09dc705424c7359b08bf32b77f3eb9fe68443920ac98db2bd24b48b63725cf9a",
         "{stem}: Encrypt.exe hash"
     );
     assert_eq!(

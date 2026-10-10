@@ -58,21 +58,15 @@ fn sample_1701q() -> Form1701QDraft {
     draft
 }
 
-/// The page builds the spouse RDO dropdown at load, so its plaintext has one
-/// `<div>` the generated layout lacks; `check_sample` would reject it. This
-/// test does the same checks with that `<div>` taken out for the layout read.
+/// Checks the 1701Q sample against the official upload.
 #[test]
 fn form_1701q_sample_payload_is_current() {
     const STEM: &str = "1701Q-2025Q2";
-    const SPOUSE_RDO: &str =
-        "<div>frm1701q:txtSpouseRDOCode=040frm1701q:txtSpouseRDOCode=</div>\t\n            ";
     let payload = sample_1701q()
         .to_official_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 1701Q must validate: {errors:?}"));
-    assert_eq!(payload.matches(SPOUSE_RDO).count(), 1);
     let layout = official_xml::layout("1701q-v2018").unwrap();
-    official_xml::read(layout, &payload.replacen(SPOUSE_RDO, "", 1))
-        .expect("the rest follows the official layout");
+    official_xml::read(layout, &payload).expect("the sample follows the official layout");
 
     let encrypted = compress_and_encrypt(payload.as_bytes(), BIR_IAF_PASSPHRASE).unwrap();
     let dir = samples_dir();
@@ -90,7 +84,7 @@ fn form_1701q_sample_payload_is_current() {
         .map(|b| format!("{b:02x}"))
         .collect();
     assert_eq!(
-        digest, "dbdb37f5e3e8278489847788608566757a7b6e8811cdd72120be71f9357062b5",
+        digest, "7a1baccf54e3c9e98b9e8ce172fc47f8e71deb7ed9a8d0e58fb48dcc8dee7a12",
         "{STEM}: official Encrypt.exe hash"
     );
     assert_eq!(

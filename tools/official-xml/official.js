@@ -195,10 +195,11 @@ function prepare(html) {
     rdoContainer.innerHTML = `<select id='${injected[1]}' name='${injected[1]}' size='1'><option value='000'>000</option></select>`;
   }
   // getRdo() also fills td#rdoSpouseSelect / td#spouseRdoSelect (1700, 1701A)
-  // and div#rdoContainer (1702EX) with RDO selects at load.
+  // and div#rdoContainer (1702EX) with RDO selects at load, unless the
+  // page's own getRdo() select is already there (1702RT drpPg1Pt1I7RDOCode).
   for (const [cell, suffix] of [['rdoSpouseSelect', 'txtSpouseRDOCode'], ['spouseRdoSelect', 'txtSpouseRDOCode'], ['rdoContainer', 'rdoPg1Pt1I7RDO']]) {
     const el = doc.getElementById(cell);
-    if (el && prefix && !doc.getElementById(prefix + ':' + suffix)) {
+    if (el && prefix && !el.querySelector('select') && !doc.getElementById(prefix + ':' + suffix)) {
       el.innerHTML = `<select id='${prefix}:${suffix}' name='${prefix}:${suffix}' size='1'><option value='000'>${suffix === 'rdoPg1Pt1I7RDO' ? '000' : ' '}</option></select>`;
     }
   }
