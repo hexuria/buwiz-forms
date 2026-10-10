@@ -117,13 +117,23 @@ fn form_1701_joint_sample_matches_the_official_page() {
         .unwrap_or_else(|errors| panic!("dummy joint 1701 must validate: {errors:?}"));
     let dir = samples_dir();
     let stem = "1701-122025-joint";
+    let encrypted = compress_and_encrypt(payload.as_bytes(), BIR_IAF_PASSPHRASE).unwrap();
     if std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some() {
         std::fs::write(dir.join(format!("{stem}.plain.xml")), &payload).unwrap();
+        std::fs::write(dir.join(format!("{stem}.iaf.xml")), &encrypted).unwrap();
     }
     let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
     assert_eq!(
         payload, official,
-        "{stem}: differs from the official saveXMLsubmit() output"
+        "{stem}: differs from the official saveEncryptedProfile() output"
+    );
+    let digest: String = Sha256::digest(&encrypted)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(
+        digest, "3c5a13146fee709de65020aa6f25c6670aa8e419ed6d850a5fe404f6551d1eeb",
+        "{stem}: Encrypt.exe hash"
     );
     assert_eq!(
         std::fs::read_to_string(dir.join(format!("{stem}.plain.xml"))).unwrap(),
@@ -149,7 +159,7 @@ fn form_1701_sample_payload_matches_the_official_page() {
     let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
     assert_eq!(
         payload, official,
-        "{stem}: differs from the official saveXMLsubmit() output"
+        "{stem}: differs from the official saveEncryptedProfile() output"
     );
     let digest: String = Sha256::digest(&encrypted)
         .iter()
