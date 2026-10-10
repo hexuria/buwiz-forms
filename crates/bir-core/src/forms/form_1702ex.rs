@@ -9,6 +9,16 @@
 //! `validateAll()` with its exact alert texts, and `saveXMLsubmit` through
 //! [`crate::official_xml`].
 //!
+//! Five "(more...)" popups extend the last line of a schedule: Schedule 1
+//! Item 17I, Schedule 2 Item 4 and Schedule 3 Items 3, 6 and 8. Their rows
+//! are text boxes inside `frmMain` (`frm1702EX:txtPg3Pt6<popup>_<n>Col<k>`),
+//! so the upload loop writes them where the DOM has them: ahead of
+//! `Pg3Pt6<popup>SubTotal`. Once the popup holds two or more rows the fixed
+//! line reads `OTHERS` with the popup subtotal, `Pg3Pt6<popup>PopLength`
+//! holds the row count, and every popup amount is whole pesos (`toComma`
+//! drops the centavos). A row list longer than its fixed lines is filed
+//! that way: the last fixed line and every later row are popup rows.
+//!
 //! Amount entries keep centavos (`round(this)`); computed items are
 //! `toFixed(0)` whole pesos. The submit loop strips commas from (and turns
 //! parentheses into a minus sign in) controls with `maxLength` 12 or 15; on
@@ -32,6 +42,79 @@ pub const FORM_1702EX_FORM_ID: &str = "1702ex-v2018c";
 pub const FORM_1702EX_OTHER_DEDUCTION_ROWS: usize = 6;
 /// Schedule 2 Items 1–4.
 pub const FORM_1702EX_SPECIAL_DEDUCTION_ROWS: usize = 4;
+/// Schedule 3 lines per group (Items 2–3, 5–6, 7–8).
+pub const FORM_1702EX_RECONCILIATION_ROWS: usize = 2;
+/// Rows this model accepts per list, popup rows included.
+pub const FORM_1702EX_MAX_ROWS: usize = 100;
+/// The fixed line's text once its popup holds two or more rows.
+const OTHERS: &str = "OTHERS";
+
+/// One "(more...)" popup: the `Pg3Pt6<id>` controls, the item prefix of
+/// its row numbers (`CheckEmptyDesc`), the fixed lines of its list and
+/// whether its amount boxes have `maxLength` 12 (the upload loop strips
+/// their commas).
+struct Popup {
+    id: &'static str,
+    number: &'static str,
+    fixed: usize,
+    plain_amounts: bool,
+}
+
+const POPUP_S1I17: Popup = Popup {
+    id: "S1I17",
+    number: "17.",
+    fixed: FORM_1702EX_OTHER_DEDUCTION_ROWS,
+    plain_amounts: false,
+};
+const POPUP_S2I4: Popup = Popup {
+    id: "S2I4",
+    number: "4.",
+    fixed: FORM_1702EX_SPECIAL_DEDUCTION_ROWS,
+    plain_amounts: false,
+};
+const POPUP_S3I3: Popup = Popup {
+    id: "S3I3",
+    number: "3.",
+    fixed: FORM_1702EX_RECONCILIATION_ROWS,
+    plain_amounts: true,
+};
+const POPUP_S3I6: Popup = Popup {
+    id: "S3I6",
+    number: "6.",
+    fixed: FORM_1702EX_RECONCILIATION_ROWS,
+    plain_amounts: false,
+};
+const POPUP_S3I8: Popup = Popup {
+    id: "S3I8",
+    number: "8.",
+    fixed: FORM_1702EX_RECONCILIATION_ROWS,
+    plain_amounts: false,
+};
+
+/// The rows a popup holds: the last fixed line and every later row, once
+/// the list is longer than its fixed lines.
+fn popup_slice<T>(rows: &[T], fixed: usize) -> &[T] {
+    if rows.len() > fixed {
+        &rows[fixed - 1..]
+    } else {
+        &[]
+    }
+}
+
+/// The rows on fixed lines before the popup line (all rows when unfolded).
+fn fixed_slice<T>(rows: &[T], fixed: usize) -> &[T] {
+    if rows.len() > fixed {
+        &rows[..fixed - 1]
+    } else {
+        rows
+    }
+}
+
+/// A popup amount as `toComma` leaves it: centavos dropped, a negative
+/// entry becomes 0.
+fn popup_amount(amount: f64) -> f64 {
+    if amount < 0.0 { 0.0 } else { amount.trunc() }
+}
 
 /// Item 5.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -452,6 +535,15 @@ fn trim_rows(rows: &mut Vec<Form1702ExRow>, limit: usize) {
     }
 }
 
+/// Popup rows keep whole pesos (`FormatValue` on load, `toComma` on entry).
+fn whole_popup_rows(rows: &mut [Form1702ExRow], fixed: usize) {
+    if rows.len() > fixed {
+        for row in &mut rows[fixed - 1..] {
+            row.amount = popup_amount(row.amount);
+        }
+    }
+}
+
 impl Form1702ExDraft {
     pub const FORM_CODE: &'static str = "1702EX";
 
@@ -589,12 +681,22 @@ impl Form1702ExDraft {
             *value = cents(*value);
         }
         trim_rows(&mut self.other_credits, 2);
-        trim_rows(&mut self.other_deductions, FORM_1702EX_OTHER_DEDUCTION_ROWS);
-        trim_rows(&mut self.non_deductible, 2);
-        trim_rows(&mut self.non_taxable_income, 2);
-        trim_rows(&mut self.special_deductions_s3, 2);
-        self.special_rows
-            .truncate(FORM_1702EX_SPECIAL_DEDUCTION_ROWS);
+        for (rows, fixed) in [
+            (&mut self.other_deductions, FORM_1702EX_OTHER_DEDUCTION_ROWS),
+            (&mut self.non_deductible, FORM_1702EX_RECONCILIATION_ROWS),
+            (
+                &mut self.non_taxable_income,
+                FORM_1702EX_RECONCILIATION_ROWS,
+            ),
+            (
+                &mut self.special_deductions_s3,
+                FORM_1702EX_RECONCILIATION_ROWS,
+            ),
+        ] {
+            trim_rows(rows, FORM_1702EX_MAX_ROWS);
+            whole_popup_rows(rows, fixed);
+        }
+        self.special_rows.truncate(FORM_1702EX_MAX_ROWS);
         for row in &mut self.special_rows {
             row.description = capitalize(&row.description);
             row.legal_basis = capitalize(&row.legal_basis);
@@ -604,6 +706,11 @@ impl Form1702ExDraft {
             row.description.is_empty() && row.legal_basis.is_empty() && row.amount == 0.0
         }) {
             self.special_rows.pop();
+        }
+        if self.special_rows.len() > FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
+            for row in &mut self.special_rows[FORM_1702EX_SPECIAL_DEDUCTION_ROWS - 1..] {
+                row.amount = popup_amount(row.amount);
+            }
         }
         if !self.itemized_open() {
             // disableForOSD resets Schedules 1 and 2.
@@ -686,8 +793,53 @@ impl Form1702ExDraft {
             fixed0(self.reconciliation_total - self.reconciliation_less);
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
+    /// The official field values the upload loop reads, keyed by element
+    /// id, popup rows included.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.layout_fields();
+        for popup in Self::POPUPS {
+            fields.extend(self.popup_controls(popup));
+        }
+        fields
+    }
+
+    /// The generated layout with each popup's row controls spliced in where
+    /// the DOM has them: ahead of `Pg3Pt6<id>SubTotal`.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        use crate::official_xml::Entry;
+        let base = crate::official_xml::layout(FORM_1702EX_FORM_ID).map_err(|e| e.to_string())?;
+        let key_of = |entry: &Entry| match entry {
+            Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+        };
+        // A plain upper-cased text control with the page's separator.
+        let template = "frm1702EX:txtMaxPage".to_string();
+        let mut insertions = Vec::new();
+        for popup in Self::POPUPS {
+            let controls = self.popup_controls(popup);
+            if controls.is_empty() {
+                continue;
+            }
+            let anchor = format!("Pg3Pt6{}SubTotal", popup.id);
+            let at = base
+                .entries
+                .iter()
+                .position(|entry| key_of(entry) == anchor)
+                .filter(|at| *at > 0)
+                .ok_or_else(|| format!("no anchor entry {anchor}"))?;
+            insertions.push(RowInsertion {
+                after: key_of(&base.entries[at - 1]),
+                copies: controls
+                    .into_iter()
+                    .map(|(key, _)| (template.clone(), key))
+                    .collect(),
+            });
+        }
+        extend_layout(base, &insertions)
+    }
+
+    /// The controls of the fixed official layout.
+    fn layout_fields(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {
             fields.insert(format!("frm1702EX:{key}"), value);
@@ -887,12 +1039,20 @@ impl Form1702ExDraft {
         for ((key, _), value) in FORM_1702EX_ORDINARY_ITEMS.iter().zip(self.ordinary_items) {
             put(key, money(value));
         }
+        let s1_folded = self.other_deductions.len() > FORM_1702EX_OTHER_DEDUCTION_ROWS;
         for (index, letter) in ["D", "E", "F", "G", "H", "I"].iter().enumerate() {
-            let row = self
+            let mut row = self
                 .other_deductions
                 .get(index)
                 .cloned()
                 .unwrap_or_default();
+            if s1_folded && index == FORM_1702EX_OTHER_DEDUCTION_ROWS - 1 {
+                // Save_Pg3Pt6S1I17PopTable with two or more rows.
+                row = Form1702ExRow {
+                    description: OTHERS.to_string(),
+                    amount: self.popup_subtotal(&POPUP_S1I17),
+                };
+            }
             put(&format!("txtPg3Pt6I17Others{letter}Desc"), row.description);
             put(&format!("txtPg3Pt6I17Others{letter}Amt"), money(row.amount));
         }
@@ -903,9 +1063,15 @@ impl Form1702ExDraft {
                     + self.other_deductions.iter().map(|r| r.amount).sum::<f64>(),
             )),
         );
+        let s2_folded = self.special_rows.len() > FORM_1702EX_SPECIAL_DEDUCTION_ROWS;
         for index in 0..FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
             let n = index + 1;
-            let row = self.special_rows.get(index).cloned().unwrap_or_default();
+            let mut row = self.special_rows.get(index).cloned().unwrap_or_default();
+            if s2_folded && n == FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
+                // Save_Pg3Pt6S2I4PopTable keeps the line's legal basis.
+                row.description = OTHERS.to_string();
+                row.amount = self.popup_subtotal(&POPUP_S2I4);
+            }
             put(&format!("txtPg3Pt6S2I{n}Description"), row.description);
             put(&format!("txtPg3Pt6S2I{n}LegalBasis"), row.legal_basis);
             put(&format!("txtPg3Pt6S2I{n}Amount"), money(row.amount));
@@ -933,8 +1099,21 @@ impl Form1702ExDraft {
             ),
             (&self.special_deductions_s3, ["7", "8"], "SpecialDeduct"),
         ] {
+            let folded = rows.len() > FORM_1702EX_RECONCILIATION_ROWS;
+            let subtotal = fixed0(
+                popup_slice(rows, FORM_1702EX_RECONCILIATION_ROWS)
+                    .iter()
+                    .map(|r| r.amount)
+                    .sum::<f64>(),
+            );
             for (index, item) in items.iter().enumerate() {
-                let row = rows.get(index).cloned().unwrap_or_default();
+                let mut row = rows.get(index).cloned().unwrap_or_default();
+                if folded && index == FORM_1702EX_RECONCILIATION_ROWS - 1 {
+                    row = Form1702ExRow {
+                        description: OTHERS.to_string(),
+                        amount: subtotal,
+                    };
+                }
                 put(&format!("txtPg3Pt6S3I{item}{stem}Desc"), row.description);
                 put(&format!("txtPg3Pt6S3I{item}{stem}Amt"), money(row.amount));
             }
@@ -947,7 +1126,105 @@ impl Form1702ExDraft {
         );
         put("txtLOB", self.line_of_business.trim().to_uppercase());
         put("txtCurrentPage", "1".to_string());
+        for popup in Self::POPUPS {
+            let count = self.popup_len(popup);
+            if count > 0 {
+                fields.insert(
+                    format!("Pg3Pt6{}SubTotal", popup.id),
+                    money(self.popup_subtotal(popup)),
+                );
+                fields.insert(format!("Pg3Pt6{}PopLength", popup.id), count.to_string());
+            }
+        }
         fields
+    }
+
+    const POPUPS: [&'static Popup; 5] = [
+        &POPUP_S1I17,
+        &POPUP_S2I4,
+        &POPUP_S3I3,
+        &POPUP_S3I6,
+        &POPUP_S3I8,
+    ];
+
+    /// A plain-row popup's list.
+    fn popup_list(&self, popup: &Popup) -> &[Form1702ExRow] {
+        match popup.id {
+            "S1I17" => &self.other_deductions,
+            "S3I3" => &self.non_deductible,
+            "S3I6" => &self.non_taxable_income,
+            "S3I8" => &self.special_deductions_s3,
+            _ => &[],
+        }
+    }
+
+    /// Rows the popup holds (0 when the list fits its fixed lines).
+    pub fn popup_len_of(&self, list: &str) -> usize {
+        Self::POPUPS
+            .iter()
+            .find(|popup| popup.id == list)
+            .map_or(0, |popup| self.popup_len(popup))
+    }
+
+    fn popup_len(&self, popup: &Popup) -> usize {
+        if popup.id == "S2I4" {
+            popup_slice(&self.special_rows, popup.fixed).len()
+        } else {
+            popup_slice(self.popup_list(popup), popup.fixed).len()
+        }
+    }
+
+    /// `Pg3Pt6<id>SubTotal`: the popup's whole-peso amounts.
+    fn popup_subtotal(&self, popup: &Popup) -> f64 {
+        let amounts: Vec<f64> = if popup.id == "S2I4" {
+            popup_slice(&self.special_rows, popup.fixed)
+                .iter()
+                .map(|r| r.amount)
+                .collect()
+        } else {
+            popup_slice(self.popup_list(popup), popup.fixed)
+                .iter()
+                .map(|r| r.amount)
+                .collect()
+        };
+        fixed0(amounts.iter().sum())
+    }
+
+    /// The popup's row controls in DOM order, as `Load_Pg3Pt6<id>PopTable`
+    /// leaves them: upper-case text and `formatCurrency` whole pesos (no
+    /// commas in a `maxLength` 12 box).
+    fn popup_controls(&self, popup: &Popup) -> Vec<(String, String)> {
+        let amount = |value: f64| {
+            let text = official_amount(value);
+            if popup.plain_amounts {
+                text.replace(',', "")
+            } else {
+                text
+            }
+        };
+        let key = |n: usize, col: u8| format!("frm1702EX:txtPg3Pt6{}_{n}Col{col}", popup.id);
+        let mut controls = Vec::new();
+        if popup.id == "S2I4" {
+            for (index, row) in popup_slice(&self.special_rows, popup.fixed)
+                .iter()
+                .enumerate()
+            {
+                let n = index + 1;
+                controls.push((key(n, 1), capitalize(&row.description)));
+                controls.push((key(n, 2), capitalize(&row.legal_basis)));
+                controls.push((key(n, 3), amount(row.amount)));
+            }
+        } else {
+            for (index, row) in popup_slice(self.popup_list(popup), popup.fixed)
+                .iter()
+                .enumerate()
+            {
+                let n = index + 1;
+                controls.push((key(n, 1), capitalize(&row.description)));
+                controls.push((key(n, 2), amount(row.amount)));
+            }
+        }
+        controls
     }
 
     /// The exact official submit plaintext.
@@ -1024,6 +1301,88 @@ impl Form1702ExDraft {
         }
         fields.extend(derived);
         fields
+    }
+
+    /// The "(more...)" popups: the button opens only once every fixed line
+    /// before it is complete (`Check_Pg3Pt6<id>`), and `CheckEmptyDesc`
+    /// guards each save with its alerts.
+    fn validate_popups(&self, err: &mut dyn FnMut(&str, &str)) {
+        let lists: [(&Popup, &str, &str); 5] = [
+            (
+                &POPUP_S1I17,
+                "other_deductions",
+                "Schedule 1 Items 17D to 17H",
+            ),
+            (&POPUP_S2I4, "special_rows", "Schedule 2 Items 1 to 3"),
+            (&POPUP_S3I3, "non_deductible", "Schedule 3 Item 2"),
+            (&POPUP_S3I6, "non_taxable_income", "Schedule 3 Item 5"),
+            (&POPUP_S3I8, "special_deductions_s3", "Schedule 3 Item 7"),
+        ];
+        for (popup, field, lines) in lists {
+            if self.popup_len(popup) == 0 {
+                continue;
+            }
+            let fixed_complete = if popup.id == "S2I4" {
+                fixed_slice(&self.special_rows, popup.fixed)
+                    .iter()
+                    .all(|row| {
+                        !row.description.trim().is_empty()
+                            && !row.legal_basis.trim().is_empty()
+                            && row.amount != 0.0
+                    })
+            } else {
+                fixed_slice(self.popup_list(popup), popup.fixed)
+                    .iter()
+                    .all(|row| !row.description.trim().is_empty() && row.amount != 0.0)
+            };
+            if !fixed_complete {
+                err(
+                    field,
+                    &format!(
+                        "Complete Page 3 Part VI {lines} before adding rows: the (more...) button stays disabled until then."
+                    ),
+                );
+                continue;
+            }
+            // CheckEmptyDesc(table, number, "save"), first failing row only.
+            let first = popup.fixed - 1;
+            let rows: Vec<(String, String, f64)> = if popup.id == "S2I4" {
+                popup_slice(&self.special_rows, popup.fixed)
+                    .iter()
+                    .map(|r| (r.description.clone(), r.legal_basis.clone(), r.amount))
+                    .collect()
+            } else {
+                popup_slice(self.popup_list(popup), popup.fixed)
+                    .iter()
+                    .map(|r| (r.description.clone(), String::new(), r.amount))
+                    .collect()
+            };
+            for (x, (description, legal_basis, amount)) in rows.iter().enumerate() {
+                let item = format!("{}{}", popup.number, x + 1);
+                let at = format!("{field}[{}]", first + x);
+                if description.trim().is_empty() {
+                    err(
+                        &at,
+                        &format!("Cannot save. You have an empty description on item {item}"),
+                    );
+                    break;
+                }
+                if popup.id == "S2I4" && legal_basis.trim().is_empty() {
+                    err(
+                        &at,
+                        &format!("Cannot save. Your legal basis is empty on item {item}"),
+                    );
+                    break;
+                }
+                if *amount == 0.0 {
+                    err(
+                        &at,
+                        &format!("Cannot save.  Amount should not be zero on item {item}"),
+                    );
+                    break;
+                }
+            }
+        }
     }
 
     fn validate_on(&self, today: NaiveDate) -> Vec<(String, String)> {
@@ -1296,9 +1655,16 @@ impl Form1702ExDraft {
             let label = format!("Page 2 Part 4 Item {}", 48 + index);
             described(std::slice::from_ref(row), &label, &mut err);
         }
-        described(&self.other_deductions, "Page 3 Part 6 Item 17", &mut err);
+        described(
+            fixed_slice(&self.other_deductions, FORM_1702EX_OTHER_DEDUCTION_ROWS),
+            "Page 3 Part 6 Item 17",
+            &mut err,
+        );
         // validateAmountDescription_pt2.
-        for (index, row) in self.special_rows.iter().enumerate() {
+        for (index, row) in fixed_slice(&self.special_rows, FORM_1702EX_SPECIAL_DEDUCTION_ROWS)
+            .iter()
+            .enumerate()
+        {
             let n = index + 1;
             let desc = !row.description.is_empty();
             let basis = !row.legal_basis.is_empty();
@@ -1322,7 +1688,10 @@ impl Form1702ExDraft {
             (&self.non_taxable_income, [5, 6], "non_taxable_income"),
             (&self.special_deductions_s3, [7, 8], "special_deductions_s3"),
         ] {
-            for (index, row) in rows.iter().enumerate() {
+            for (index, row) in fixed_slice(rows, FORM_1702EX_RECONCILIATION_ROWS)
+                .iter()
+                .enumerate()
+            {
                 let item = items[index];
                 if row.description.is_empty() && row.amount > 0.01 {
                     err(
@@ -1341,6 +1710,7 @@ impl Form1702ExDraft {
                 }
             }
         }
+        self.validate_popups(&mut err);
         if self.special_deductions > 0.0 && self.special_allowable_relief == 0.0 {
             err(
                 "special_allowable_relief",
@@ -1470,6 +1840,20 @@ impl QueueableForm for Form1702ExDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
+    }
+
+    /// Written through [`Form1702ExDraft::official_layout`], so popup rows
+    /// land where the DOM has them.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as QueueableForm>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.to_bir_field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
 
@@ -1663,6 +2047,125 @@ mod tests {
             "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
         );
         assert_eq!(get("address_line2"), "UEZON CITY");
+    }
+
+    fn popup_rows(d: &mut Form1702ExDraft) {
+        let row = |description: &str, amount: f64| Form1702ExRow {
+            description: description.to_string(),
+            amount,
+        };
+        d.other_deductions = vec![
+            row("A", 1_000.0),
+            row("B", 1_000.0),
+            row("C", 1_000.0),
+            row("D", 1_000.0),
+            row("E", 1_000.0),
+            row("Transport", 3_000.6),
+            row("Courier", 2_500.75),
+        ];
+        d.non_deductible = vec![
+            row("Nondeductible", 120_001.0),
+            row("Entertainment", 30_000.3),
+            row("Penalties", 1_234_567.89),
+        ];
+        d.recompute();
+    }
+
+    #[test]
+    fn popup_rows_fold_into_others_with_whole_peso_subtotals() {
+        let mut d = sample();
+        popup_rows(&mut d);
+        let map = d.to_bir_field_map();
+        let get = |key: &str| map[key].clone();
+        // Save_Pg3Pt6S1I17PopTable: OTHERS and the whole-peso subtotal.
+        assert_eq!(get("frm1702EX:txtPg3Pt6I17OthersIDesc"), "OTHERS");
+        assert_eq!(get("frm1702EX:txtPg3Pt6I17OthersIAmt"), "5,500.00");
+        assert_eq!(get("Pg3Pt6S1I17SubTotal"), "5,500.00");
+        assert_eq!(get("Pg3Pt6S1I17PopLength"), "2");
+        assert_eq!(get("frm1702EX:txtPg3Pt6S1I17_1Col1"), "TRANSPORT");
+        assert_eq!(get("frm1702EX:txtPg3Pt6S1I17_1Col2"), "3,000.00");
+        assert_eq!(get("frm1702EX:txtPg3Pt6S1I17_2Col2"), "2,500.00");
+        // The Schedule 3 Item 3 popup boxes have maxLength 12: no commas.
+        assert_eq!(get("frm1702EX:txtPg3Pt6S3I3_2Col2"), "1234567.00");
+        assert_eq!(
+            get("frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt"),
+            "1,264,567.00"
+        );
+        // Totals add the subtotal, not the typed centavos.
+        assert_eq!(
+            d.ordinary_deductions,
+            d.ordinary_items.iter().sum::<f64>() + 5_000.0 + 5_500.0
+        );
+        // Unused popups stay at their defaults.
+        assert!(!map.contains_key("Pg3Pt6S2I4PopLength"));
+        // The rows sit ahead of the subtotal, where the DOM has them.
+        let layout = d.official_layout().unwrap();
+        let keys: Vec<String> = layout
+            .entries
+            .iter()
+            .map(|entry| match entry {
+                crate::official_xml::Entry::Bool { key, .. }
+                | crate::official_xml::Entry::Value { key, .. } => key.clone(),
+            })
+            .collect();
+        let at = |key: &str| keys.iter().position(|k| k == key).unwrap();
+        assert_eq!(
+            at("frm1702EX:txtPg3Pt6S1I17_2Col2") + 1,
+            at("Pg3Pt6S1I17SubTotal")
+        );
+        assert_eq!(
+            at("frm1702EX:txtPg3Pt6S3I3_2Col2") + 1,
+            at("Pg3Pt6S3I3SubTotal")
+        );
+        // The fixed line prints OTHERS with the subtotal.
+        let print = d.to_print_field_map();
+        assert_eq!(print["frm1702EX:txtPg3Pt6I17OthersIDesc"], "OTHERS");
+        assert_eq!(
+            print["derived:amount:txtPg3Pt6I17OthersIAmt"],
+            "        5500"
+        );
+    }
+
+    #[test]
+    fn popup_rows_take_the_check_empty_desc_alerts() {
+        let mut d = sample();
+        popup_rows(&mut d);
+        d.other_deductions[6].description.clear();
+        assert!(
+            messages(&d)
+                .contains(&"Cannot save. You have an empty description on item 17.2".to_string())
+        );
+        popup_rows(&mut d);
+        d.other_deductions[6].amount = 0.4;
+        d.recompute();
+        assert!(
+            messages(&d)
+                .contains(&"Cannot save.  Amount should not be zero on item 17.2".to_string())
+        );
+        let mut d = sample();
+        let special = |legal_basis: &str| Form1702ExSpecialRow {
+            description: "Deduction".to_string(),
+            legal_basis: legal_basis.to_string(),
+            amount: 1_000.0,
+        };
+        d.special_rows = vec![
+            special("RA 1"),
+            special("RA 2"),
+            special("RA 3"),
+            special("RA 4"),
+            special(""),
+        ];
+        d.recompute();
+        assert!(
+            messages(&d)
+                .contains(&"Cannot save. Your legal basis is empty on item 4.2".to_string())
+        );
+        // The (more...) button needs every fixed line before the popup line.
+        let mut d = sample();
+        popup_rows(&mut d);
+        d.other_deductions[2].amount = 0.0;
+        d.recompute();
+        assert!(messages(&d).iter().any(|m| m.contains("(more...)")));
     }
 
     #[test]

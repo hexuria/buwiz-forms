@@ -91,3 +91,47 @@ fn form_1700_joint_sample_payload_is_current() {
         "6500d6fc3bf03e09f26b54091e6497b6dad663b62602f496807479fc852e07f4",
     );
 }
+
+/// Six employers: rows 1 and 4 on the page, then rows `4_2` and `4_3` through
+/// the "(add more...)" popup (Save, then Close). Item 4 reads OTHERS with the
+/// popup subtotal; the popup's rows are written where `addRow_schedule1`
+/// leaves them in `frmMain`. The steps first give the popup's empty tables
+/// the `<tbody>` IE inserts implicitly (jsdom does not), which the page's
+/// `$("#tbl… tbody").append(...)` needs.
+#[test]
+fn form_1700_sample_with_popup_rows_is_current() {
+    let mut draft = sample_1700();
+    draft.employers.resize_with(3, Form1700Employer::default);
+    for (name, tin, regular, withheld) in [
+        (
+            "Fourth Employer Corp",
+            "12345678800000",
+            100_000.25,
+            5_000.0,
+        ),
+        ("Fifth Employer Corp", "12345678800000", 50_000.4, 2_500.1),
+        ("Sixth Employer", "12345678800001", 25_000.0, 1_000.0),
+    ] {
+        draft.employers.push(Form1700Employer {
+            for_spouse: false,
+            name: name.to_string(),
+            name2: String::new(),
+            tin: tin.to_string(),
+            regular,
+            flat: 0.0,
+            withheld,
+        });
+    }
+    draft.recompute();
+    assert!(draft.schedule_is_folded());
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1700 with popup rows must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1700-2025-others",
+        &layout,
+        &payload,
+        "bf9ca8160cedfdb509fbc16145f5b755da2a299f0232ca4c7644939b0c00c93f",
+    );
+}
