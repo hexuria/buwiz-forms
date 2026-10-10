@@ -1,7 +1,7 @@
 {
  "form_id": "1701-v2018",
  "html_slug": "1701-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Text cells and combs: caption beside or above the cell, or the column header of the NOLCO and Schedule 5 tables. Booleans: X in the box immediately left of the printed option (Yes/No, civil status, filing status, taxpayer type, ATC, tax rate and deduction method, overpayment). Amounts: every amount is a 9-slot comb with no centavo comb, and the writer value is formatted 1,234.00, so no money_joins and the amounts stay blank. The item 1 sheet has only a YYYY comb. Stamped TIN cells keep their catalog name=. Split date combs, the email, the attachment-count boxes and the signature block stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Text cells and combs: caption beside or above the cell, or the column header of the NOLCO and Schedule 5 tables. Booleans: X in the box immediately left of the printed option (Yes/No, civil status, filing status, taxpayer type, ATC, tax rate and deduction method, overpayment). Amounts: every amount is a 9-slot whole-peso comb with no centavo comb, so they are peso_joins: the writer value (1,234.00) is parsed, rounded to whole pesos (50 centavos up) and right-aligned. No money_joins exist on this sheet. The Part VI summary (page 4) stays blank because its key family does not name Part VI. The item 1 sheet has only a YYYY comb. Stamped TIN cells keep their catalog name=. Split date combs, the email, the attachment-count boxes and the signature block stay blank.",
  "joins": [
   {
    "writer_key": "frm1701:txtPg1I1Year",
@@ -238,10 +238,46 @@
    "reason": "Current Year (D) column of the total row"
   },
   {
-   "writer_key": "frm1701:txtPg4IPart7_9Specify",
+   "writer_key": "frm1701:txtPg4IPart9_2Particulars",
+   "html_id": "p4c137",
+   "printed": "2 Add: Non-Deductible Expenses/Taxable Other Income (particulars)",
+   "reason": "particulars cell on the item 2 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_3Particulars",
+   "html_id": "p4c142",
+   "printed": "3 Add: Non-Deductible Expenses/Taxable Other Income (particulars)",
+   "reason": "particulars cell on the item 3 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_4Particulars",
+   "html_id": "p4c147",
+   "printed": "4 Add: Non-Deductible Expenses/Taxable Other Income (particulars)",
+   "reason": "particulars cell on the item 4 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_6Particulars",
+   "html_id": "p4c156",
+   "printed": "6 Less: A) Non-Taxable Income and Income Subjected to Final Tax (particulars)",
+   "reason": "particulars cell on the item 6 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_7Particulars",
+   "html_id": "p4c161",
+   "printed": "7 (particulars)",
+   "reason": "particulars cell on the item 7 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_8Particulars",
+   "html_id": "p4c167",
+   "printed": "8 B) Special/Other Allowable Deductions (particulars)",
+   "reason": "particulars cell on the item 8 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_9Particulars",
    "html_id": "p4c172",
-   "printed": "9 (specify below)",
-   "reason": "specify cell on the item 9 row"
+   "printed": "9 (particulars)",
+   "reason": "particulars cell on the item 9 row"
   },
   {
    "writer_key": "frm1701:txtPg3IShed6_4Year",
@@ -865,6 +901,1250 @@
    "reason": "box immediately left of the printed option; X when the writer value is true"
   }
  ],
+ "peso_joins": [
+  {
+   "writer_key": "frm1701:txtPg1I22ATaxDue",
+   "html_id": "p1c87",
+   "printed": "22 Tax Due (From Part VI Item 5), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I22BTaxDue",
+   "html_id": "p1c88",
+   "printed": "22 Tax Due (From Part VI Item 5), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I23A",
+   "html_id": "p1c90",
+   "printed": "23 Less: Total Tax Credits/Payments (From Part VII Item 10), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I23B",
+   "html_id": "p1c91",
+   "printed": "23 Less: Total Tax Credits/Payments (From Part VII Item 10), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I24ATaxPayable",
+   "html_id": "p1c93",
+   "printed": "24 Tax Payable/(Overpayment) (Item 22 Less Item 23), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I24BTaxPayable",
+   "html_id": "p1c94",
+   "printed": "24 Tax Payable/(Overpayment) (Item 22 Less Item 23), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I25A",
+   "html_id": "p1c96",
+   "printed": "25 Less: Portion of Tax Payable Allowed for 2nd Installment, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I25B",
+   "html_id": "p1c97",
+   "printed": "25 Less: Portion of Tax Payable Allowed for 2nd Installment, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I26A",
+   "html_id": "p1c99",
+   "printed": "26 Amount of Tax Payable/(Overpayment) (Item 24 Less Item 25), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I26B",
+   "html_id": "p1c100",
+   "printed": "26 Amount of Tax Payable/(Overpayment) (Item 24 Less Item 25), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I27A",
+   "html_id": "p1c102",
+   "printed": "27 Interest, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I27B",
+   "html_id": "p1c103",
+   "printed": "27 Interest, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I28A",
+   "html_id": "p1c105",
+   "printed": "28 Surcharge, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I28B",
+   "html_id": "p1c106",
+   "printed": "28 Surcharge, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I29A",
+   "html_id": "p1c108",
+   "printed": "29 Compromise, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I29B",
+   "html_id": "p1c109",
+   "printed": "29 Compromise, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I30A",
+   "html_id": "p1c111",
+   "printed": "30 Total Penalties (Sum of Items 27 to 29), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I30B",
+   "html_id": "p1c112",
+   "printed": "30 Total Penalties (Sum of Items 27 to 29), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I31ATotalAmtPyble",
+   "html_id": "p1c114",
+   "printed": "31 Total Amount Payable/(Overpayment) (Sum of Items 26 and 30), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I31BTotalAmtPyble",
+   "html_id": "p1c115",
+   "printed": "31 Total Amount Payable/(Overpayment) (Sum of Items 26 and 30), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I32AggregateAmtPyble",
+   "html_id": "p1c117",
+   "printed": "32 Aggregate Amount Payable/(Overpayment) (Sum of Items 31A and 31B)",
+   "reason": "single column total row"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I34Amount",
+   "html_id": "p1c142",
+   "printed": "34 Cash/Bank Debit Memo, Amount",
+   "reason": "Amount column of the Part III row"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I35Amount",
+   "html_id": "p1c149",
+   "printed": "35 Check, Amount",
+   "reason": "Amount column of the Part III row"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I36Amount",
+   "html_id": "p1c155",
+   "printed": "36 Tax Debit Memo, Amount",
+   "reason": "Amount column of the Part III row"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I37Amount",
+   "html_id": "p1c163",
+   "printed": "37 Others, Amount",
+   "reason": "Amount column of the Part III row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_1CI",
+   "html_id": "p2c68",
+   "printed": "1 Gross Compensation Income",
+   "reason": "Compensation Income column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_1TW",
+   "html_id": "p2c69",
+   "printed": "1 Total Tax Withheld",
+   "reason": "Tax Withheld column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_2CI",
+   "html_id": "p2c71",
+   "printed": "2 Gross Compensation Income",
+   "reason": "Compensation Income column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_2TW",
+   "html_id": "p2c72",
+   "printed": "2 Total Tax Withheld",
+   "reason": "Tax Withheld column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_3ACI",
+   "html_id": "p2c74",
+   "printed": "3A Gross Compensation Income",
+   "reason": "Compensation Income column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_3ATW",
+   "html_id": "p2c75",
+   "printed": "3A Total Tax Withheld",
+   "reason": "Tax Withheld column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_3BCI",
+   "html_id": "p2c77",
+   "printed": "3B Gross Compensation Income",
+   "reason": "Compensation Income column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed1c_3BTW",
+   "html_id": "p2c78",
+   "printed": "3B Total Tax Withheld",
+   "reason": "Tax Withheld column of the item row"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_4A",
+   "html_id": "p2c84",
+   "printed": "4 Gross Compensation Income (From Part V Schedule 1 Item 3Ac/3Bc), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_4B",
+   "html_id": "p2c85",
+   "printed": "4 Gross Compensation Income (From Part V Schedule 1 Item 3Ac/3Bc), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_5A",
+   "html_id": "p2c87",
+   "printed": "5 Less: Non-Taxable/Exempt Compensation, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_5B",
+   "html_id": "p2c88",
+   "printed": "5 Less: Non-Taxable/Exempt Compensation, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_6A",
+   "html_id": "p2c90",
+   "printed": "6 Taxable Compensation Income (Item 4 Less Item 5), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_6B",
+   "html_id": "p2c91",
+   "printed": "6 Taxable Compensation Income (Item 4 Less Item 5), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_7A",
+   "html_id": "p2c93",
+   "printed": "7 Tax Due-Compensation Income (Item 6 x applicable rate), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed2_7B",
+   "html_id": "p2c94",
+   "printed": "7 Tax Due-Compensation Income (Item 6 x applicable rate), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_8A",
+   "html_id": "p2c98",
+   "printed": "8 Sales/Revenues/Receipts/Fees, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_8B",
+   "html_id": "p2c99",
+   "printed": "8 Sales/Revenues/Receipts/Fees, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_9A",
+   "html_id": "p2c101",
+   "printed": "9 Less: Sales Returns, Allowances and Discounts, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_9B",
+   "html_id": "p2c102",
+   "printed": "9 Less: Sales Returns, Allowances and Discounts, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_10A",
+   "html_id": "p2c104",
+   "printed": "10 Net Sales/Revenues/Receipts/Fees (Item 8 Less Item 9), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_10B",
+   "html_id": "p2c105",
+   "printed": "10 Net Sales/Revenues/Receipts/Fees (Item 8 Less Item 9), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_11A",
+   "html_id": "p2c107",
+   "printed": "11 Less: Cost of Sales/Services, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_11B",
+   "html_id": "p2c108",
+   "printed": "11 Less: Cost of Sales/Services, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_12A",
+   "html_id": "p2c110",
+   "printed": "12 Gross Income/(Loss) from Operation (Item 10 Less Item 11), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_12B",
+   "html_id": "p2c111",
+   "printed": "12 Gross Income/(Loss) from Operation (Item 10 Less Item 11), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_13A",
+   "html_id": "p2c114",
+   "printed": "13 Ordinary Allowable Itemized Deductions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_13B",
+   "html_id": "p2c115",
+   "printed": "13 Ordinary Allowable Itemized Deductions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_14A",
+   "html_id": "p2c117",
+   "printed": "14 Special Allowable Itemized Deductions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_14B",
+   "html_id": "p2c118",
+   "printed": "14 Special Allowable Itemized Deductions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_15A",
+   "html_id": "p2c120",
+   "printed": "15 Allowance for Net Operating Loss Carry Over (NOLCO), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_15B",
+   "html_id": "p2c121",
+   "printed": "15 Allowance for Net Operating Loss Carry Over (NOLCO), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_16A",
+   "html_id": "p2c123",
+   "printed": "16 Total Allowable Itemized Deductions (Sum of Items 13 to 15), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_16B",
+   "html_id": "p2c124",
+   "printed": "16 Total Allowable Itemized Deductions (Sum of Items 13 to 15), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_17A",
+   "html_id": "p2c127",
+   "printed": "17 Optional Standard Deduction (OSD) (40% of Item 10), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_17B",
+   "html_id": "p2c128",
+   "printed": "17 Optional Standard Deduction (OSD) (40% of Item 10), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_18A",
+   "html_id": "p2c130",
+   "printed": "18 Taxable Income (Item 12 Less Item 16, or Item 10 Less Item 17), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_18B",
+   "html_id": "p2c131",
+   "printed": "18 Taxable Income (Item 12 Less Item 16, or Item 10 Less Item 17), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_19A",
+   "html_id": "p2c136",
+   "printed": "19 Other Non-Operating Income, item 19, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_19B",
+   "html_id": "p2c137",
+   "printed": "19 Other Non-Operating Income, item 19, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_20A",
+   "html_id": "p2c141",
+   "printed": "20 Other Non-Operating Income, item 20, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_20B",
+   "html_id": "p2c142",
+   "printed": "20 Other Non-Operating Income, item 20, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_21A",
+   "html_id": "p2c144",
+   "printed": "21 Share in Income by a Partner from General Professional Partnership, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_21B",
+   "html_id": "p2c145",
+   "printed": "21 Share in Income by a Partner from General Professional Partnership, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_22A",
+   "html_id": "p2c147",
+   "printed": "22 Total Other Non-Operating Income (Sum of Items 19 to 21), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_22B",
+   "html_id": "p2c148",
+   "printed": "22 Total Other Non-Operating Income (Sum of Items 19 to 21), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_23A",
+   "html_id": "p2c150",
+   "printed": "23 Taxable Income-Business (Sum of Items 18 and 22), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_23B",
+   "html_id": "p2c151",
+   "printed": "23 Taxable Income-Business (Sum of Items 18 and 22), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_24A",
+   "html_id": "p2c153",
+   "printed": "24 Total Taxable Income - Compensation & Business, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_24B",
+   "html_id": "p2c154",
+   "printed": "24 Total Taxable Income - Compensation & Business, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_25A",
+   "html_id": "p2c156",
+   "printed": "25 Tax Due-Compensation and Business Income (under graduated rates), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg2IShed3_25B",
+   "html_id": "p2c157",
+   "printed": "25 Tax Due-Compensation and Business Income (under graduated rates), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_26A",
+   "html_id": "p3c12",
+   "printed": "26 Sales/Revenues/Receipts/Fees (net of sales returns, allowances and discounts), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_26B",
+   "html_id": "p3c13",
+   "printed": "26 Sales/Revenues/Receipts/Fees (net of sales returns, allowances and discounts), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_27A",
+   "html_id": "p3c18",
+   "printed": "27 Add: Other Non-Operating Income (specify below), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_27B",
+   "html_id": "p3c19",
+   "printed": "27 Add: Other Non-Operating Income (specify below), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_28A",
+   "html_id": "p3c21",
+   "printed": "28 Total Income (Sum of Items 26 and 27), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_28B",
+   "html_id": "p3c22",
+   "printed": "28 Total Income (Sum of Items 26 and 27), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_29A",
+   "html_id": "p3c24",
+   "printed": "29 Less: Allowable reduction from gross sales/receipts and other non-operating income, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_29B",
+   "html_id": "p3c25",
+   "printed": "29 Less: Allowable reduction from gross sales/receipts and other non-operating income, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_30A",
+   "html_id": "p3c27",
+   "printed": "30 Item 28 Less Item 29, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_30B",
+   "html_id": "p3c28",
+   "printed": "30 Item 28 Less Item 29, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_31A",
+   "html_id": "p3c30",
+   "printed": "31 Tax Due-Business Income (Item 30 x 8% Flat Income Tax Rate), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_31B",
+   "html_id": "p3c31",
+   "printed": "31 Tax Due-Business Income (Item 30 x 8% Flat Income Tax Rate), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_32A",
+   "html_id": "p3c33",
+   "printed": "32 Sum of Items 7 and 31 (To Part VI Item 1), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed3_32B",
+   "html_id": "p3c34",
+   "printed": "32 Sum of Items 7 and 31 (To Part VI Item 1), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_1A",
+   "html_id": "p3c37",
+   "printed": "1 Amortizations, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_1B",
+   "html_id": "p3c38",
+   "printed": "1 Amortizations, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_2A",
+   "html_id": "p3c40",
+   "printed": "2 Bad Debts, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_2B",
+   "html_id": "p3c41",
+   "printed": "2 Bad Debts, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_3A",
+   "html_id": "p3c43",
+   "printed": "3 Charitable and Other Contributions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_3B",
+   "html_id": "p3c44",
+   "printed": "3 Charitable and Other Contributions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_4A",
+   "html_id": "p3c46",
+   "printed": "4 Depletion, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_4B",
+   "html_id": "p3c47",
+   "printed": "4 Depletion, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_5A",
+   "html_id": "p3c49",
+   "printed": "5 Depreciation, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_5B",
+   "html_id": "p3c50",
+   "printed": "5 Depreciation, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_6A",
+   "html_id": "p3c52",
+   "printed": "6 Entertainment, Amusement and Recreation, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_6B",
+   "html_id": "p3c53",
+   "printed": "6 Entertainment, Amusement and Recreation, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_7A",
+   "html_id": "p3c55",
+   "printed": "7 Fringe Benefits, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_7B",
+   "html_id": "p3c56",
+   "printed": "7 Fringe Benefits, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_8A",
+   "html_id": "p3c58",
+   "printed": "8 Interest, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_8B",
+   "html_id": "p3c59",
+   "printed": "8 Interest, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_9A",
+   "html_id": "p3c61",
+   "printed": "9 Losses, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_9B",
+   "html_id": "p3c62",
+   "printed": "9 Losses, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_10A",
+   "html_id": "p3c64",
+   "printed": "10 Pension Trusts, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_10B",
+   "html_id": "p3c65",
+   "printed": "10 Pension Trusts, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_11A",
+   "html_id": "p3c67",
+   "printed": "11 Rental, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_11B",
+   "html_id": "p3c68",
+   "printed": "11 Rental, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_12A",
+   "html_id": "p3c70",
+   "printed": "12 Research and Development, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_12B",
+   "html_id": "p3c71",
+   "printed": "12 Research and Development, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_13A",
+   "html_id": "p3c73",
+   "printed": "13 Salaries, Wages and Allowances, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_13B",
+   "html_id": "p3c74",
+   "printed": "13 Salaries, Wages and Allowances, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_14A",
+   "html_id": "p3c76",
+   "printed": "14 SSS, GSIS, Philhealth, HDMF and Other Contributions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_14B",
+   "html_id": "p3c77",
+   "printed": "14 SSS, GSIS, Philhealth, HDMF and Other Contributions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_15A",
+   "html_id": "p3c79",
+   "printed": "15 Taxes and Licenses, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_15B",
+   "html_id": "p3c80",
+   "printed": "15 Taxes and Licenses, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_16A",
+   "html_id": "p3c82",
+   "printed": "16 Transportation and Travel, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_16B",
+   "html_id": "p3c83",
+   "printed": "16 Transportation and Travel, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_18A",
+   "html_id": "p3c103",
+   "printed": "18 Total Ordinary Allowable Itemized Deductions (Sum of Items 1 to 17d), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_18B",
+   "html_id": "p3c104",
+   "printed": "18 Total Ordinary Allowable Itemized Deductions (Sum of Items 1 to 17d), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17aA",
+   "html_id": "p3c87",
+   "printed": "17a (Schedule 4), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17aB",
+   "html_id": "p3c88",
+   "printed": "17a (Schedule 4), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17bA",
+   "html_id": "p3c91",
+   "printed": "17b (Schedule 4), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17bB",
+   "html_id": "p3c92",
+   "printed": "17b (Schedule 4), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17cA",
+   "html_id": "p3c95",
+   "printed": "17c (Schedule 4), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17cB",
+   "html_id": "p3c96",
+   "printed": "17c (Schedule 4), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17dA",
+   "html_id": "p3c100",
+   "printed": "17d (Schedule 4), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed4_17dB",
+   "html_id": "p3c101",
+   "printed": "17d (Schedule 4), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_1Amt",
+   "html_id": "p3c113",
+   "printed": "Schedule 5 1 Amount",
+   "reason": "Amount column of the Schedule 5 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_2Amt",
+   "html_id": "p3c118",
+   "printed": "Schedule 5 2 Amount",
+   "reason": "Amount column of the Schedule 5 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_3",
+   "html_id": "p3c120",
+   "printed": "Schedule 5 3 Sum of Items 1 and 2",
+   "reason": "Amount column of the Schedule 5 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_4Amt",
+   "html_id": "p3c126",
+   "printed": "Schedule 5 4 Amount",
+   "reason": "Amount column of the Schedule 5 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_5Amt",
+   "html_id": "p3c131",
+   "printed": "Schedule 5 5 Amount",
+   "reason": "Amount column of the Schedule 5 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed5_6",
+   "html_id": "p3c133",
+   "printed": "Schedule 5 6 Sum of Items 4 and 5",
+   "reason": "Amount column of the Schedule 5 row"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_1A",
+   "html_id": "p3c140",
+   "printed": "1 Gross Income, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_1B",
+   "html_id": "p3c141",
+   "printed": "1 Gross Income, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_2A",
+   "html_id": "p3c143",
+   "printed": "2 Less: Ordinary Allowable Itemized Deductions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_2B",
+   "html_id": "p3c144",
+   "printed": "2 Less: Ordinary Allowable Itemized Deductions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_3A",
+   "html_id": "p3c146",
+   "printed": "3 Net Operating Loss (Item 1 Less Item 2), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg3IShed6_3B",
+   "html_id": "p3c147",
+   "printed": "3 Net Operating Loss (Item 1 Less Item 2), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_1A",
+   "html_id": "p4c66",
+   "printed": "1 Prior Year's Excess Credits, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_1B",
+   "html_id": "p4c67",
+   "printed": "1 Prior Year's Excess Credits, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_2A",
+   "html_id": "p4c69",
+   "printed": "2 Tax Payments for the First Three (3) Quarters, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_2B",
+   "html_id": "p4c70",
+   "printed": "2 Tax Payments for the First Three (3) Quarters, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_3A",
+   "html_id": "p4c72",
+   "printed": "3 Creditable Tax Withheld for the First Three (3) Quarters, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_3B",
+   "html_id": "p4c73",
+   "printed": "3 Creditable Tax Withheld for the First Three (3) Quarters, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_4A",
+   "html_id": "p4c75",
+   "printed": "4 Creditable Tax Withheld for the 4th Quarter, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_4B",
+   "html_id": "p4c76",
+   "printed": "4 Creditable Tax Withheld for the 4th Quarter, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_5A",
+   "html_id": "p4c78",
+   "printed": "5 Creditable Tax Withheld per BIR Form No. 2316, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_5B",
+   "html_id": "p4c79",
+   "printed": "5 Creditable Tax Withheld per BIR Form No. 2316, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_6A",
+   "html_id": "p4c81",
+   "printed": "6 Tax Paid in Return Previously Filed, if Amended, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_6B",
+   "html_id": "p4c82",
+   "printed": "6 Tax Paid in Return Previously Filed, if Amended, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_7A",
+   "html_id": "p4c84",
+   "printed": "7 Foreign Tax Credits, if applicable, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_7B",
+   "html_id": "p4c85",
+   "printed": "7 Foreign Tax Credits, if applicable, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_8A",
+   "html_id": "p4c87",
+   "printed": "8 Special Tax Credits, if applicable (To Part VIII Item 6), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_8B",
+   "html_id": "p4c88",
+   "printed": "8 Special Tax Credits, if applicable (To Part VIII Item 6), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_9A",
+   "html_id": "p4c90",
+   "printed": "9 Other Tax Credits/Payments (specify), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_9B",
+   "html_id": "p4c91",
+   "printed": "9 Other Tax Credits/Payments (specify), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_10A",
+   "html_id": "p4c93",
+   "printed": "10 Total Tax Credits/Payments (Sum of Items 1 to 9), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_10B",
+   "html_id": "p4c94",
+   "printed": "10 Total Tax Credits/Payments (Sum of Items 1 to 9), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_1A",
+   "html_id": "p4c98",
+   "printed": "1 Regular Income Tax Otherwise Due (special rate), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_1B",
+   "html_id": "p4c99",
+   "printed": "1 Regular Income Tax Otherwise Due (special rate), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_2A",
+   "html_id": "p4c101",
+   "printed": "2 Tax Relief on Special Allowable Itemized Deductions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_2B",
+   "html_id": "p4c102",
+   "printed": "2 Tax Relief on Special Allowable Itemized Deductions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_3A",
+   "html_id": "p4c104",
+   "printed": "3 Sub-Total - Tax Relief (Sum of Items 1 and 2), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_3B",
+   "html_id": "p4c105",
+   "printed": "3 Sub-Total - Tax Relief (Sum of Items 1 and 2), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_4A",
+   "html_id": "p4c107",
+   "printed": "4 Less: Income Tax Due, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_4B",
+   "html_id": "p4c108",
+   "printed": "4 Less: Income Tax Due, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_5A",
+   "html_id": "p4c110",
+   "printed": "5 Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_5B",
+   "html_id": "p4c111",
+   "printed": "5 Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_6A",
+   "html_id": "p4c113",
+   "printed": "6 Add: Special Tax Credit, if any, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_6B",
+   "html_id": "p4c114",
+   "printed": "6 Add: Special Tax Credit, if any, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_7A",
+   "html_id": "p4c116",
+   "printed": "7 Total Tax Relief Availment - SPECIAL, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_7B",
+   "html_id": "p4c117",
+   "printed": "7 Total Tax Relief Availment - SPECIAL, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_8A",
+   "html_id": "p4c120",
+   "printed": "8 Regular Income Tax Otherwise Due (exempt), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_8B",
+   "html_id": "p4c121",
+   "printed": "8 Regular Income Tax Otherwise Due (exempt), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_9A",
+   "html_id": "p4c123",
+   "printed": "9 Tax Relief on Special Allowable Itemized Deductions (exempt), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_9B",
+   "html_id": "p4c124",
+   "printed": "9 Tax Relief on Special Allowable Itemized Deductions (exempt), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_10A",
+   "html_id": "p4c126",
+   "printed": "10 Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart8_10B",
+   "html_id": "p4c127",
+   "printed": "10 Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_1A",
+   "html_id": "p4c133",
+   "printed": "1 Net Income/(Loss) per Books, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_1B",
+   "html_id": "p4c134",
+   "printed": "1 Net Income/(Loss) per Books, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_2A",
+   "html_id": "p4c139",
+   "printed": "2 Add: Non-Deductible Expenses/Taxable Other Income, item 2, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_2B",
+   "html_id": "p4c140",
+   "printed": "2 Add: Non-Deductible Expenses/Taxable Other Income, item 2, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_3A",
+   "html_id": "p4c144",
+   "printed": "3 Add: Non-Deductible Expenses/Taxable Other Income, item 3, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_3B",
+   "html_id": "p4c145",
+   "printed": "3 Add: Non-Deductible Expenses/Taxable Other Income, item 3, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_4A",
+   "html_id": "p4c149",
+   "printed": "4 Add: Non-Deductible Expenses/Taxable Other Income, item 4, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_4B",
+   "html_id": "p4c150",
+   "printed": "4 Add: Non-Deductible Expenses/Taxable Other Income, item 4, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_5A",
+   "html_id": "p4c152",
+   "printed": "5 Total (Sum of Items 1 to 4), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_5B",
+   "html_id": "p4c153",
+   "printed": "5 Total (Sum of Items 1 to 4), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_6A",
+   "html_id": "p4c158",
+   "printed": "6 Less: A) Non-Taxable Income and Income Subjected to Final Tax, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_6B",
+   "html_id": "p4c159",
+   "printed": "6 Less: A) Non-Taxable Income and Income Subjected to Final Tax, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_7A",
+   "html_id": "p4c163",
+   "printed": "7 Less: item 7, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_7B",
+   "html_id": "p4c164",
+   "printed": "7 Less: item 7, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_8A",
+   "html_id": "p4c169",
+   "printed": "8 B) Special/Other Allowable Deductions, A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_8B",
+   "html_id": "p4c170",
+   "printed": "8 B) Special/Other Allowable Deductions, B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_9A",
+   "html_id": "p4c174",
+   "printed": "9 Other allowable deduction (specify), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_9B",
+   "html_id": "p4c175",
+   "printed": "9 Other allowable deduction (specify), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_10A",
+   "html_id": "p4c177",
+   "printed": "10 Total (Sum of Items 6 to 9), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_10B",
+   "html_id": "p4c178",
+   "printed": "10 Total (Sum of Items 6 to 9), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_11A",
+   "html_id": "p4c180",
+   "printed": "11 Net Taxable Income/(Loss) (Item 5 Less Item 10), A. Taxpayer/Filer",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart9_11B",
+   "html_id": "p4c181",
+   "printed": "11 Net Taxable Income/(Loss) (Item 5 Less Item 10), B. Spouse",
+   "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  }
+ ],
  "left_out": [
   {
    "html_id": "p1c45",
@@ -881,90 +2161,6 @@
   {
    "html_id": "p1c48",
    "reason": "Item 11 email: not joined; the print path uppercases joined values but the official capital() skips txtEmail"
-  },
-  {
-   "html_id": "p1c87",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c88",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c90",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c91",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c93",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c94",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c96",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c97",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c99",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c100",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c102",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c103",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c105",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c106",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c108",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c109",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c111",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c112",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c114",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c115",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p1c117",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
   },
   {
    "html_id": "p1c125",
@@ -991,10 +2187,6 @@
    "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
   },
   {
-   "html_id": "p1c142",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
    "html_id": "p1c146",
    "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
   },
@@ -1005,10 +2197,6 @@
   {
    "html_id": "p1c148",
    "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c149",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
   },
   {
    "html_id": "p1c152",
@@ -1023,10 +2211,6 @@
    "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
   },
   {
-   "html_id": "p1c155",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
    "html_id": "p1c160",
    "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
   },
@@ -1037,10 +2221,6 @@
   {
    "html_id": "p1c162",
    "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c163",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
   },
   {
    "html_id": "p2c55",
@@ -1067,796 +2247,44 @@
    "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
   },
   {
-   "html_id": "p2c68",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c69",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c71",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c72",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c74",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c75",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c77",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c78",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c84",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c85",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c87",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c88",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c90",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c91",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c93",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c94",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c98",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c99",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c101",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c102",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c104",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c105",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c107",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c108",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c110",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c111",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c114",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c115",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c117",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c118",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c120",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c121",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c123",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c124",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c127",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c128",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c130",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c131",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c136",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c137",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c141",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c142",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c144",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c145",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c147",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c148",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c150",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c151",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c153",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c154",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c156",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p2c157",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c12",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c13",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c18",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c19",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c21",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c22",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c24",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c25",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c27",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c28",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c30",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c31",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c33",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c34",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c37",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c38",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c40",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c41",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c43",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c44",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c46",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c47",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c49",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c50",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c52",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c53",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c55",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c56",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c58",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c59",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c61",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c62",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c64",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c65",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c67",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c68",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c70",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c71",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c73",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c74",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c76",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c77",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c79",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c80",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c82",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c83",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c87",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c88",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c91",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c92",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c95",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c96",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c100",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c101",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c103",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c104",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c113",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c118",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c120",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c126",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c131",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c133",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c140",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c141",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c143",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c144",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c146",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p3c147",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
    "html_id": "p4c50",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c51",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c53",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c54",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c56",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c57",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c59",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c60",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c62",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   },
   {
    "html_id": "p4c63",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c66",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c67",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c69",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c70",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c72",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c73",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c75",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c76",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c78",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c79",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c81",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c82",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c84",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c85",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c87",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c88",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c90",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c91",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c93",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c94",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c98",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c99",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c101",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c102",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c104",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c105",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c107",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c108",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c110",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c111",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c113",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c114",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c116",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c117",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c120",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c121",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c123",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c124",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c126",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c127",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c133",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c134",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c137",
-   "reason": "Part VII item 2-4 description cell: no layout key"
-  },
-  {
-   "html_id": "p4c139",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c140",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c142",
-   "reason": "Part VII item 2-4 description cell: no layout key"
-  },
-  {
-   "html_id": "p4c144",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c145",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c147",
-   "reason": "Part VII item 2-4 description cell: no layout key"
-  },
-  {
-   "html_id": "p4c149",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c150",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c152",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c153",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c156",
-   "reason": "Part VII item 6-8 description cell: no layout key"
-  },
-  {
-   "html_id": "p4c158",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c159",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c161",
-   "reason": "Part VII item 6-8 description cell: no layout key"
-  },
-  {
-   "html_id": "p4c163",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c164",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c167",
-   "reason": "Part VII item 6-8 description cell: no layout key"
-  },
-  {
-   "html_id": "p4c169",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c170",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c174",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c175",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c177",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c178",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c180",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
-  },
-  {
-   "html_id": "p4c181",
-   "reason": "amount comb (9 slots) with no 2-slot centavo comb; the writer amount is formatted 1,234.00, so a plain join would print the comma and dot in the whole-peso comb and no money_joins pair exists"
+   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   }
  ]
 }
