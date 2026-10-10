@@ -221,7 +221,7 @@ mod tests {
             };
             write_record(&live).unwrap();
             let dead = InstanceRecord {
-                pid: 999_999_9,
+                pid: 9_999_999,
                 app: "bir-desktop".into(),
                 ..live.clone()
             };
@@ -233,7 +233,7 @@ mod tests {
             write_record(&other).unwrap();
             assert_eq!(list(Some("bir-desktop")), vec![live.clone()]);
             assert_eq!(list(None).len(), 2);
-            assert!(!record_path("bir-desktop", 999_999_9).exists());
+            assert!(!record_path("bir-desktop", 9_999_999).exists());
             remove_record("bir-desktop", me);
             assert_eq!(list(Some("bir-desktop")), vec![]);
         });
