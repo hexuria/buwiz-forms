@@ -448,35 +448,22 @@ impl QueueableKind {
 }
 
 /// Run `$body` with `$ty` bound to the draft type of a [`QueueableKind`].
+// One line per form, kept unformatted so merges of new forms stay line-wise.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! with_queueable_kind {
     ($kind:expr, $ty:ident => $body:expr) => {
         match $kind {
-            $crate::forms::queueable::QueueableKind::Form2553 => {
-                type $ty = $crate::forms::form_2553::Form2553Draft;
-                $body
-            }
-            $crate::forms::queueable::QueueableKind::Form1604F => {
-                type $ty = $crate::forms::form_1604f::Form1604fDraft;
-                $body
-            }
-            $crate::forms::queueable::QueueableKind::Form1604C => {
-                type $ty = $crate::forms::form_1604c::Form1604cDraft;
-                $body
-            }
-            $crate::forms::queueable::QueueableKind::Form1604E => {
-                type $ty = $crate::forms::form_1604e::Form1604eDraft;
-                $body
-            }
+            $crate::forms::queueable::QueueableKind::Form2553 => { type $ty = $crate::forms::form_2553::Form2553Draft; $body }
+            $crate::forms::queueable::QueueableKind::Form1604F => { type $ty = $crate::forms::form_1604f::Form1604fDraft; $body }
+            $crate::forms::queueable::QueueableKind::Form1604C => { type $ty = $crate::forms::form_1604c::Form1604cDraft; $body }
+            $crate::forms::queueable::QueueableKind::Form1604E => { type $ty = $crate::forms::form_1604e::Form1604eDraft; $body }
             $crate::forms::queueable::QueueableKind::Form1606 => { type $ty = $crate::forms::form_1606::Form1606Draft; $body }
             $crate::forms::queueable::QueueableKind::Form1600VT => { type $ty = $crate::forms::form_1600vt::Form1600VtDraft; $body }
             $crate::forms::queueable::QueueableKind::Form1600PT => { type $ty = $crate::forms::form_1600pt::Form1600PtDraft; $body }
             $crate::forms::queueable::QueueableKind::Form1600WP => { type $ty = $crate::forms::form_1600wp::Form1600WpDraft; $body }
             #[cfg(test)]
-            $crate::forms::queueable::QueueableKind::Test => {
-                type $ty = $crate::forms::queueable::test_support::TestForm;
-                $body
-            }
+            $crate::forms::queueable::QueueableKind::Test => { type $ty = $crate::forms::queueable::test_support::TestForm; $body }
         }
     };
 }
