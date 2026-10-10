@@ -331,6 +331,111 @@ fn parse_form_date(text: &str) -> Option<NaiveDate> {
     (date.year() >= 1800).then_some(date)
 }
 
+/// Split `text` over the sheet's comb lines of the given widths.
+fn print_lines(text: &str, widths: &[usize]) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut from = 0;
+    widths
+        .iter()
+        .map(|width| {
+            let to = (from + width).min(chars.len());
+            let line: String = chars[from.min(chars.len())..to].iter().collect();
+            from = to;
+            line
+        })
+        .collect()
+}
+
+/// A whole-peso amount (50 centavos or more round up) right-aligned in a
+/// 12-slot comb; a negative amount prints in parentheses.
+fn print_whole_pesos(amount: f64) -> String {
+    let pesos = (amount.abs() + 0.5 + 1e-9).floor();
+    let text = if amount < 0.0 && pesos > 0.0 {
+        format!("({pesos:.0})")
+    } else {
+        format!("{pesos:.0}")
+    };
+    format!("{text:>12}")
+}
+
+/// The amount controls the frozen sheet prints, each with the description
+/// control of its row (a row with neither prints blank). Items 18 and 41 are
+/// left out: the freeze preprints `000` in the last three slots of both.
+fn print_amount_keys() -> Vec<(String, Option<String>)> {
+    let fixed = [
+        "txtPg1Pt2I19TotalTaxCrPmt",
+        "txtPg1Pt2I20TotalOverpmt",
+        "txtPg1Pt2I21PenaltyCompromise",
+        "txtPg1Pt2I22TotalAmtPayable",
+        "txtPg2Pt4I28SalesReceiptsRevFees",
+        "txtPg2Pt4I29SalesRetAllowanceDisc",
+        "txtPg2Pt4I30NetSalesReceiptsRevFees",
+        "txtPg2Pt4I31CostOfSalesServ",
+        "txtPg2Pt4I32GrossIncomeFromOper",
+        "txtPg2Pt4I33AddOther",
+        "txtPg2Pt4I34TotalGross",
+        "txtPg2Pt4I35OrdinaryAllowable",
+        "txtPg2Pt4I36SpecialAllowable",
+        "txtPg2Pt4I37TotalItemized",
+        "txtPg2Pt4I38OptionalStandardDeduc",
+        "txtPg2Pt4I39NetTaxable",
+        "txtPg2Pt4I42PriorYearExcessCr",
+        "txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
+        "txtPg2Pt4I44CreditableTaxWithheldFromPrevQrt",
+        "txtPg2Pt4I45CreditableTaxWithheldFor4thQrt",
+        "txtPg2Pt4I46ForeignTaxCr",
+        "txtPg2Pt4I47TaxPaidInReturnPrevFiled",
+        "txtPg2Pt4I50TotalTaxCrPmt",
+        "txtPg2Pt4I51TotalOverpayment",
+        "txtPg2Pt5I52RegularIncomeOtherwiseDue",
+        "txtPg2Pt5I53SpecialAllowableItemizedDeduc",
+        "txtPg2Pt5I54TotalTaxReliefAvailment",
+        "txtPg3Pt6S1I18TotOrdinaryAllowableItemDeduc",
+        "txtPg3Pt6S2I5TotSpecialAllowedItemDeduc",
+        "txtPg3Pt6S3I1NetIncomePerBook",
+        "txtPg3Pt6S3I4Total",
+        "txtPg3Pt6S3I9Total",
+        "txtPg3Pt6S3I10NetTaxableIncome",
+    ];
+    let mut keys: Vec<(String, Option<String>)> = fixed
+        .iter()
+        .chain(FORM_1702EX_ORDINARY_ITEMS.iter().map(|(key, _)| key))
+        .map(|key| (key.to_string(), None))
+        .collect();
+    for item in ["48", "49"] {
+        keys.push((
+            format!("txtPg2Pt4I{item}OtherTaxCrPmtAmt"),
+            Some(format!("txtPg2Pt4I{item}OtherTaxCrPmtDesc")),
+        ));
+    }
+    for letter in ["D", "E", "F", "G", "H", "I"] {
+        keys.push((
+            format!("txtPg3Pt6I17Others{letter}Amt"),
+            Some(format!("txtPg3Pt6I17Others{letter}Desc")),
+        ));
+    }
+    for n in 1..=FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
+        keys.push((
+            format!("txtPg3Pt6S2I{n}Amount"),
+            Some(format!("txtPg3Pt6S2I{n}Description")),
+        ));
+    }
+    for (item, stem) in [
+        (2, "NonDeductExpenseOtherIncome"),
+        (3, "NonDeductExpenseOtherIncome"),
+        (5, "NonTaxIncomeAndIncomeSubjectToFinTax"),
+        (6, "NonTaxIncomeAndIncomeSubjectToFinTax"),
+        (7, "SpecialDeduct"),
+        (8, "SpecialDeduct"),
+    ] {
+        keys.push((
+            format!("txtPg3Pt6S3I{item}{stem}Amt"),
+            Some(format!("txtPg3Pt6S3I{item}{stem}Desc")),
+        ));
+    }
+    keys
+}
+
 /// `true` when a row has content.
 fn row_used(row: &Form1702ExRow) -> bool {
     !row.description.trim().is_empty() || row.amount != 0.0
@@ -848,6 +953,77 @@ impl Form1702ExDraft {
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
+    }
+
+    /// The field map plus print-only values the frozen 2018 sheet needs
+    /// (`derived:` keys, never submitted): every amount in whole pesos
+    /// right-aligned in its 12-slot comb (`derived:amount:<control>`; rows
+    /// nobody filled stay blank), the Item 2 and date digits, the name and
+    /// address over the sheet's 38-slot lines, the attachment count and the
+    /// nine TIN digits for the page 2 and 3 headers (the sheet preprints the
+    /// branch code as 00000).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut derived = BTreeMap::new();
+        let mut put = |key: &str, value: String| {
+            derived.insert(format!("derived:{key}"), value);
+        };
+        let month = format!("{:02}", self.year_end_month);
+        let year = format!("{:02}", self.taxable_year % 100);
+        for (key, value) in [
+            ("year_end_mm1", &month[..1]),
+            ("year_end_mm2", &month[1..2]),
+            ("year_end_yy1", &year[..1]),
+            ("year_end_yy2", &year[1..2]),
+        ] {
+            put(key, value.to_string());
+        }
+        let name = self.registered_name.trim().to_uppercase();
+        for (index, line) in print_lines(&name, &[38, 38, 38]).into_iter().enumerate() {
+            put(&format!("name_line{}", index + 1), line);
+        }
+        let address = self.registered_address.trim().to_uppercase();
+        for (index, line) in print_lines(&address, &[38, 38, 30]).into_iter().enumerate() {
+            put(&format!("address_line{}", index + 1), line);
+        }
+        for (stem, date) in [
+            ("incorporation", &self.date_of_incorporation),
+            ("effectivity_from", &self.effectivity_from),
+            ("effectivity_to", &self.effectivity_to),
+        ] {
+            let parts: Vec<&str> = date.trim().split('/').collect();
+            let [mm, dd, yyyy] = match parts.as_slice() {
+                [mm, dd, yyyy] => [*mm, *dd, *yyyy],
+                _ => ["", "", ""],
+            };
+            put(&format!("{stem}_mm"), mm.to_string());
+            put(&format!("{stem}_dd"), dd.to_string());
+            put(&format!("{stem}_yyyy"), yyyy.to_string());
+        }
+        put("attachments", format!("{:>3}", self.number_of_attachments));
+        // Pages 2 and 3 have nine TIN boxes; the branch prints as 00000.
+        let (a, b, c, _) = split_tin(&self.tin);
+        put("tin_digits", format!("{a}{b}{c}"));
+        put("tin_digits_p3", format!("{a}{b}{c}"));
+        for (amount_key, description_key) in print_amount_keys() {
+            let key = format!("frm1702EX:{amount_key}");
+            let value = fields.get(&key).cloned().unwrap_or_default();
+            let amount = parse_official_amount(&value).unwrap_or(0.0);
+            let unused_row = description_key.is_some_and(|description| {
+                fields
+                    .get(&format!("frm1702EX:{description}"))
+                    .is_none_or(|text| text.trim().is_empty())
+                    && amount == 0.0
+            });
+            let text = if unused_row {
+                String::new()
+            } else {
+                print_whole_pesos(amount)
+            };
+            put(&format!("amount:{amount_key}"), text);
+        }
+        fields.extend(derived);
+        fields
     }
 
     fn validate_on(&self, today: NaiveDate) -> Vec<(String, String)> {
@@ -1442,6 +1618,51 @@ mod tests {
             "12345678800000-1702EXv2018C-122025#sample.taxpayer@example.com#.xml"
         );
         assert!(d.to_bir_xml_payload().is_ok());
+    }
+
+    #[test]
+    fn print_map_adds_whole_peso_and_layout_values_without_touching_the_submit_map() {
+        let d = sample();
+        let print = d.to_print_field_map();
+        let submit = d.to_bir_field_map();
+        for (key, value) in &submit {
+            assert_eq!(print.get(key), Some(value), "{key}");
+        }
+        assert!(
+            print
+                .keys()
+                .filter(|k| !submit.contains_key(*k))
+                .all(|k| k.starts_with("derived:"))
+        );
+        let get = |key: &str| print[&format!("derived:{key}")].clone();
+        // 5,000,000.50 rounds up to whole pesos; right-aligned in 12 slots.
+        assert_eq!(
+            get("amount:txtPg2Pt4I28SalesReceiptsRevFees"),
+            "     5000001"
+        );
+        assert_eq!(get("amount:txtPg1Pt2I22TotalAmtPayable"), "      (1000)");
+        assert_eq!(
+            get("amount:txtPg2Pt4I38OptionalStandardDeduc"),
+            "           0"
+        );
+        // Unused description rows print blank.
+        assert_eq!(get("amount:txtPg3Pt6I17OthersEAmt"), "");
+        assert_eq!(get("amount:txtPg3Pt6I17OthersDAmt"), "        5000");
+        assert_eq!(get("year_end_mm1"), "1");
+        assert_eq!(get("year_end_mm2"), "2");
+        assert_eq!(get("year_end_yy1"), "2");
+        assert_eq!(get("year_end_yy2"), "5");
+        assert_eq!(get("incorporation_yyyy"), "2010");
+        assert_eq!(get("effectivity_to_mm"), "12");
+        assert_eq!(get("tin_digits"), "123456788");
+        assert_eq!(get("attachments"), "  0");
+        assert_eq!(get("name_line1"), "SAMPLE DUMMY FOUNDATION INC");
+        assert_eq!(get("name_line2"), "");
+        assert_eq!(
+            get("address_line1"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
+        );
+        assert_eq!(get("address_line2"), "UEZON CITY");
     }
 
     #[test]

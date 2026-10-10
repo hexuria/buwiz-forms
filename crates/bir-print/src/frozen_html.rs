@@ -145,6 +145,21 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1606-2018" => Some(include_str!(
             "../../../html-frozen/1606-2018/writer-cells.json"
         )),
+        "1700-2018" => Some(include_str!(
+            "../../../html-frozen/1700-2018/writer-cells.json"
+        )),
+        "1701a-2018" => Some(include_str!(
+            "../../../html-frozen/1701a-2018/writer-cells.json"
+        )),
+        "1701ms-2024" => Some(include_str!(
+            "../../../html-frozen/1701ms-2024/writer-cells.json"
+        )),
+        "1702ex-2018" => Some(include_str!(
+            "../../../html-frozen/1702ex-2018/writer-cells.json"
+        )),
+        "1702q-2018" => Some(include_str!(
+            "../../../html-frozen/1702q-2018/writer-cells.json"
+        )),
         "2200m-2018" => Some(include_str!(
             "../../../html-frozen/2200m-2018/writer-cells.json"
         )),
@@ -1450,6 +1465,85 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1700_fills_identity_whole_peso_combs_and_boxes() {
+        use bir_core::forms::form_1700::{
+            Form1700CivilStatus, Form1700Column, Form1700Draft, Form1700Employer,
+            Form1700TaxpayerType,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Fixture, Sample Employee", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Employee", "registered_address":
+                "123 Sample Street, Barangay Example, Quezon City Metro Manila",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1700", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1700Draft::new_from_profile(&profile, 2025);
+        draft.taxpayer_type = Form1700TaxpayerType::Employee;
+        draft.birth_date = "01/15/1980".into();
+        draft.citizenship = "Filipino".into();
+        draft.foreign_tax_credits = Some(false);
+        draft.civil_status = Form1700CivilStatus::Single;
+        draft.number_of_attachments = 2;
+        draft.taxpayer = Form1700Column {
+            non_taxable: 90_000.0,
+            surcharge: 1_000.0,
+            ..Form1700Column::default()
+        };
+        let employer = |name: &str, regular: f64, withheld: f64| Form1700Employer {
+            for_spouse: false,
+            name: name.into(),
+            name2: String::new(),
+            tin: "12345678800000".into(),
+            regular,
+            flat: 0.0,
+            withheld,
+        };
+        draft.employers = vec![employer("Sample Employer Inc", 600_000.5, 40_000.0)];
+        draft.recompute();
+        let html = filled_document("1700-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(comb_text(&html, "p1c14"), "123");
+        assert_eq!(comb_text(&html, "p1c21"), "039");
+        assert!(html.contains("FIXTURE, SAMPLE EMPLOYEE"));
+        assert_eq!(
+            comb_text(&html, "p1c25"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c26"), "QUEZON CITY METRO MANILA");
+        assert_eq!(comb_text(&html, "p1c31"), "01");
+        assert_eq!(comb_text(&html, "p1c33"), "1980");
+        assert_eq!(comb_text(&html, "p1c118"), "02");
+        // Whole pesos, right-aligned: Item 42A 600,001 in the 8-slot comb.
+        let item_42a = named_values(&html, "p2c13");
+        assert_eq!(item_42a.len(), 8);
+        assert_eq!(item_42a.concat().trim(), "600001");
+        assert_eq!(item_42a[7], "1");
+        assert_eq!(comb_text(&html, "p2c16").trim(), "90000");
+        // Item 31 Surcharge on the sheet; Item 32 Interest stays blank.
+        assert_eq!(comb_text(&html, "p1c98").trim(), "1000");
+        assert_eq!(comb_text(&html, "p1c101").trim(), "");
+        // Column B of a non-joint return stays blank.
+        assert_eq!(comb_text(&html, "p1c84").trim(), "");
+        // Schedule 1 Item 1 and the 7-slot tax withheld comb.
+        assert!(comb_text(&html, "p2c73").starts_with("SAMPLE EMPLOYER INC"));
+        assert_eq!(comb_text(&html, "p2c76"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c99").trim(), "40000");
+        assert_eq!(named_values(&html, "p2c99").len(), 7);
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "FIXTURE");
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c42"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c47"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c55"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1700:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
     fn filled_document_2553_fills_identity_rows_totals_and_boxes() {
         use bir_core::forms::form_2553::{Form2553Draft, FORM_2553_ATC_OPTIONS};
         let profile: bir_core::profile::TaxpayerProfile =
@@ -1737,8 +1831,323 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1702q_fills_identity_amounts_rates_and_boxes() {
+        use bir_core::forms::form_1702q::{
+            Form1702qDeduction, Form1702qDraft, Form1702qOtherCredit, Form1702qSchedule1Column,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Dummy Corporation", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "sample@example.com",
+                "default_form_type": "1702Q", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1702qDraft::new_from_profile(&profile, 2025, 2);
+        draft.atc_mcit = true;
+        draft.atc = "IC010_25%".to_string();
+        draft.deduction = Form1702qDeduction::Itemized;
+        draft.special = Form1702qSchedule1Column {
+            sales: 800_000.5,
+            cost_of_sales: 300_000.0,
+            rate: 10.0,
+            ..Form1702qSchedule1Column::default()
+        };
+        draft.sales = 5_000_000.5;
+        draft.cost_of_sales = 1_200_000.0;
+        draft.mcit_gross_income_q2 = 3_800_000.5;
+        draft.other_credits = vec![Form1702qOtherCredit {
+            description: "Sample credit".to_string(),
+            amount: 1_234.0,
+        }];
+        draft.recompute();
+        let html = filled_document("1702q-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c7"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c13"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c16"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c19"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c49"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c54"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["1".to_string()]);
+        assert_eq!(named_values(&html, "p1c23"), vec!["5".to_string()]);
+        assert_eq!(named_values(&html, "p1c17"), vec!["IC 010".to_string()]);
+        assert_eq!(comb_text(&html, "p1c26"), "123");
+        assert_eq!(comb_text(&html, "p1c34"), "039");
+        assert_eq!(comb_text(&html, "p1c37"), "SAMPLE DUMMY CORPORATION");
+        assert_eq!(
+            comb_text(&html, "p1c40"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
+        );
+        assert_eq!(comb_text(&html, "p1c41"), "UEZON CITY");
+        assert_eq!(comb_text(&html, "p1c47"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c55"), "5,000,001.00");
+        assert_eq!(comb_text(&html, "p2c57"), "1,200,000.00");
+        assert_eq!(comb_text(&html, "p2c13"), "  800,001.00");
+        assert_eq!(comb_text(&html, "p2c42"), "10");
+        assert_eq!(comb_text(&html, "p2c44"), "0");
+        assert_eq!(comb_text(&html, "p2c73"), "25");
+        assert_eq!(comb_text(&html, "p2c110"), "SAMPLE CREDIT");
+        assert_eq!(comb_text(&html, "p2c112"), "    1,234.00");
+        assert_eq!(
+            comb_text(&html, "p1c57"),
+            format!(
+                "{:>12}",
+                bir_core::official_xml::official_amount(draft.income_tax_due)
+            )
+        );
+        assert!(!html.contains("name=\"frm1702q:"));
+    }
+
+    #[test]
+    fn filled_document_1701a_fills_identity_whole_peso_combs_and_boxes() {
+        use bir_core::forms::form_1701a::{
+            Form1701AAtc, Form1701ACivilStatus, Form1701AColumn, Form1701ADraft, Form1701AFilerType,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Dummy, Sample Taxpayer", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "sample@example.com",
+                "default_form_type": "1701A", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1701ADraft::new_from_profile(&profile, 2025);
+        draft.filer_type = Form1701AFilerType::SingleProprietor;
+        draft.atc = Form1701AAtc::II012;
+        draft.civil_status = Form1701ACivilStatus::Single;
+        draft.birth_date = "01/15/1980".to_string();
+        draft.citizenship = "Filipino".to_string();
+        draft.other_income_41_description = "Interest income".to_string();
+        draft.taxpayer = Form1701AColumn {
+            sales: 1_234_567.89,
+            sales_returns: 10_000.5,
+            other_income_41: 5_000.55,
+            gpp_share: 20_000.0,
+            quarterly_payments: 30_000.0,
+            surcharge: 1_000.0,
+            ..Form1701AColumn::default()
+        };
+        draft.recompute();
+        let html = filled_document("1701a-2018", &draft.to_print_field_map()).unwrap();
+        // Header and identity.
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c20"), "788");
+        assert_eq!(comb_text(&html, "p1c23"), "039");
+        assert_eq!(comb_text(&html, "p1c32"), "DUMMY, SAMPLE TAXPAYER");
+        assert_eq!(
+            comb_text(&html, "p1c34"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c35"), "QUEZON CITY");
+        assert_eq!(comb_text(&html, "p1c40"), "01");
+        assert_eq!(comb_text(&html, "p1c42"), "1980");
+        assert_eq!(comb_text(&html, "p1c43"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p1c47"), "FILIPINO");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "DUMMY");
+        assert!(html.contains("INTEREST INCOME"));
+        // Whole pesos, right-aligned in the 8-slot comb; no decimal glyph.
+        assert_eq!(comb_text(&html, "p2c13"), " 1234568");
+        assert_eq!(comb_text(&html, "p2c48"), "   94448");
+        assert_eq!(comb_text(&html, "p1c74"), "   94448");
+        assert_eq!(comb_text(&html, "p1c89"), "    1000");
+        assert!(!comb_text(&html, "p1c74").contains('.'));
+        // Zero and column B (not joint) stay blank.
+        assert_eq!(comb_text(&html, "p2c52").trim(), "");
+        assert_eq!(comb_text(&html, "p1c75").trim(), "");
+        // X boxes.
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c163"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c24"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c27"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c195"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c56"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c67"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p2c126"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1701A:"));
+    }
+
+    #[test]
+    fn filled_document_1701ms_fills_both_columns_amounts_and_boxes() {
+        use bir_core::forms::form_1701ms::{
+            Form1701MsCivilStatus, Form1701MsColumn, Form1701MsDeduction, Form1701MsDraft,
+            Form1701MsFiling, Form1701MsSource, Form1701MsSpouseInfo, Form1701MsTaxOption,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Dummy Taxpayer", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Retail", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1701MS", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1701MsDraft::new_from_profile(&profile, 2025);
+        draft.civil_status = Form1701MsCivilStatus::Married;
+        draft.filing = Form1701MsFiling::Jointly;
+        draft.spouse_info = Form1701MsSpouseInfo {
+            tin: "12345678800000".to_string(),
+            rdo_code: "039".to_string(),
+            name: "Sample Dummy Spouse".to_string(),
+            email: "spouse@example.com".to_string(),
+            contact_number: "09170000001".to_string(),
+        };
+        draft.taxpayer = Form1701MsColumn {
+            source: Form1701MsSource::Mixed,
+            tax_option: Form1701MsTaxOption::Graduated,
+            deduction: Form1701MsDeduction::Osd,
+            gross_compensation: 900_000.0,
+            non_taxable_compensation: 90_000.0,
+            sales: 1_500_000.0,
+            sales_returns: 10_000.0,
+            quarterly_payments: 50_000.0,
+            cwt_2316: 80_000.0,
+            ..Form1701MsColumn::default()
+        };
+        draft.spouse = Form1701MsColumn {
+            source: Form1701MsSource::Compensation,
+            gross_compensation: 600_000.0,
+            non_taxable_compensation: 90_000.0,
+            cwt_2316: 44_500.0,
+            ..Form1701MsColumn::default()
+        };
+        draft.perjury_agreed = true;
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let html = filled_document("1701ms-2024", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert_eq!(comb_text(&html, "p1c23"), "123-456-788-00000");
+        assert_eq!(comb_text(&html, "p1c29"), "SAMPLE DUMMY TAXPAYER");
+        assert_eq!(comb_text(&html, "p1c30"), "SAMPLE DUMMY SPOUSE");
+        assert_eq!(comb_text(&html, "p1c85"), "II013");
+        assert_eq!(comb_text(&html, "p1c90"), "II011");
+        // Whole-peso 9-slot combs, right-aligned digits without separators.
+        assert_eq!(named_values(&html, "p2c13").len(), 9);
+        assert_eq!(comb_text(&html, "p2c13"), "   900000");
+        assert_eq!(comb_text(&html, "p2c14"), "   600000");
+        assert_eq!(comb_text(&html, "p2c27"), "  1500000");
+        assert_eq!(comb_text(&html, "p2c126"), "    80000");
+        let aggregate = format!("{:>9}", draft.aggregate_amount_payable as i64);
+        assert_eq!(comb_text(&html, "p1c141"), aggregate);
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "SAMPLE DUMMY TAXPAYER");
+        for x in [
+            "p1c9", "p1c11", "p1c15", "p1c44", "p1c46", "p1c52", "p1c81", "p1c153",
+        ] {
+            assert_eq!(named_values(&html, x), vec!["X".to_string()], "{x}");
+        }
+        for blank in ["p1c8", "p1c10", "p1c43", "p1c79", "p1c144"] {
+            assert_eq!(named_values(&html, blank), vec!["".to_string()], "{blank}");
+        }
+        assert!(!html.contains("name=\"frm1701MS:"));
+        // A separate return prints no spouse column.
+        draft.filing = Form1701MsFiling::Separately;
+        draft.recompute();
+        let html = filled_document("1701ms-2024", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c24"), "");
+        assert_eq!(comb_text(&html, "p2c14"), "");
+    }
+
+    #[test]
+    fn filled_document_1702ex_fills_identity_whole_pesos_schedules_and_boxes() {
+        use bir_core::forms::form_1702ex::{
+            Form1702ExAtc, Form1702ExDeduction, Form1702ExDraft, Form1702ExOverpayment,
+            Form1702ExRow, Form1702ExSpecialRow,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Exempt Fixture Foundation Inc", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Charity", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1702EX", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1702ExDraft::new_from_profile(&profile, 2025);
+        draft.atc = Form1702ExAtc::IC011;
+        draft.deduction = Form1702ExDeduction::Itemized;
+        draft.date_of_incorporation = "03/01/2010".to_string();
+        draft.sales = 1_234_567.5;
+        draft.ordinary_items[1] = 10_000.0;
+        draft.other_deductions = vec![Form1702ExRow {
+            description: "Sample expense".to_string(),
+            amount: 5_000.0,
+        }];
+        draft.special_rows = vec![Form1702ExSpecialRow {
+            description: "Sample deduction".to_string(),
+            legal_basis: "RA 0000".to_string(),
+            amount: 15_000.0,
+        }];
+        draft.cwt_q4 = 1_000.0;
+        draft.overpayment = Form1702ExOverpayment::Refund;
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let cells = writer_cells("1702ex-2018").unwrap();
+        for key in cells
+            .joins
+            .keys()
+            .chain(cells.xbox_joins.iter().map(|join| &join.writer_key))
+        {
+            assert!(fields.contains_key(key), "print map lacks {key}");
+        }
+        let html = filled_document("1702ex-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c25"), "123");
+        assert_eq!(comb_text(&html, "p1c33"), "039");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p3c5"), "123456788");
+        assert!(comb_text(&html, "p1c36").starts_with("EXEMPT FIXTURE FOUNDATION INC"));
+        assert!(comb_text(&html, "p2c6").starts_with("EXEMPT FIXTURE FOUNDATIO"));
+        assert_eq!(comb_text(&html, "p1c50"), "2010");
+        assert_eq!(named_values(&html, "p1c19"), vec!["1".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["2".to_string()]);
+        assert_eq!(named_values(&html, "p1c22"), vec!["5".to_string()]);
+        // Whole pesos, right-aligned in the 12-slot comb.
+        assert_eq!(comb_text(&html, "p2c9"), "     1234568");
+        assert_eq!(comb_text(&html, "p3c12"), "       10000");
+        assert_eq!(comb_text(&html, "p3c52"), "SAMPLE EXPENSE");
+        assert_eq!(comb_text(&html, "p3c54"), "        5000");
+        assert_eq!(comb_text(&html, "p3c58"), "");
+        assert_eq!(comb_text(&html, "p3c81"), "SAMPLE DEDUCTIO");
+        assert_eq!(comb_text(&html, "p3c87"), "");
+        assert_eq!(comb_text(&html, "p2c47"), "        1000");
+        assert_eq!(comb_text(&html, "p1c83"), "      (1000)");
+        for checked in ["p1c7", "p1c13", "p1c15", "p1c11", "p1c56", "p1c86"] {
+            assert_eq!(
+                named_values(&html, checked),
+                vec!["X".to_string()],
+                "{checked}"
+            );
+        }
+        for unchecked in ["p1c8", "p1c12", "p1c18", "p1c57", "p1c87", "p1c88"] {
+            assert_eq!(
+                named_values(&html, unchecked),
+                vec!["".to_string()],
+                "{unchecked}"
+            );
+        }
+        // Items 18 and 41 (freeze preprints 000), signatory and Part III stay blank.
+        assert_eq!(comb_text(&html, "p1c75"), "");
+        assert_eq!(comb_text(&html, "p2c38"), "");
+        assert_eq!(comb_text(&html, "p1c116"), "");
+        assert!(!html.contains("name=\"frm1702EX:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // Sheets that print amounts in one text cell, not peso + cent combs, say false.
+        // 2553 (1999) prints each amount in one text cell and 1702Q (2018) in
+        // one 12-slot comb, not peso + cent combs.
         for (slug, split_money) in [
             ("1601c-2018", true),
             ("2551q-2018", true),
@@ -1750,6 +2159,13 @@ mod tests {
             ("1600-vt-2018", true),
             ("1600-pt-2018", true),
             ("1600wp-2010", false),
+            ("1702q-2018", false),
+            // 1700 (2018) prints whole pesos in one comb per column.
+            ("1700-2018", false),
+            // 1701A (2018) prints whole pesos in one 8-slot comb per column.
+            ("1701a-2018", false),
+            ("1701ms-2024", false),
+            ("1702ex-2018", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();

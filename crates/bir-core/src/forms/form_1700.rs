@@ -11,6 +11,18 @@
 //!
 //! Amount entries keep centavos (`round(this,2)`); computed items are
 //! `toFixed(0)` whole pesos.
+//!
+//! Schedule 1 takes more than four employers the way the official
+//! "(add more...)" popup (`modalPage2Part6`) does: the fourth and later rows
+//! are popup rows `4_1`, `4_2`, … (`saveSched1Items`), Item 4 then shows
+//! `OTHERS` with no TIN and the popup subtotal (`setUpSchedule1TableModal`,
+//! `computeSubTotal`, `computeSched1I5`), and each popup row is checked by
+//! `validateSched1('4_<n>')` with its own alert texts. Checked on the official
+//! page (runtime oracle, with IE's implicit `<tbody>` in the popup's empty
+//! tables): the popup rows are form controls inside `frmMain`, so they are
+//! part of what the page saves; [`Form1700Draft::to_bir_field_map`] carries
+//! Item 4's `OTHERS` row and the popup subtotal, while the popup controls
+//! themselves are left to the central serializer.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +38,10 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1700_FORM_ID: &str = "1700-v2013";
 /// Schedule 1 employer rows (Items 1–4).
 pub const FORM_1700_EMPLOYER_ROWS: usize = 4;
+/// Employers this model accepts, popup rows included.
+pub const FORM_1700_MAX_EMPLOYERS: usize = 100;
+/// Item 4's employer name once the popup holds its rows.
+pub const FORM_1700_OTHERS: &str = "OTHERS";
 /// `init()` fixes Item 3.
 pub const FORM_1700_ATC: &str = "II011";
 
@@ -248,6 +264,23 @@ fn check_digit_ok(tin: &str) -> bool {
     let (a, b, c, _) = split_tin(tin);
     crate::validation::relaxed_dev_mode()
         || crate::validation::official_tin_check_code(&format!("{a}{b}{c}")) == 0
+}
+
+/// `text` over two print combs: the first `width` characters, cut back to
+/// the last word break, then the rest.
+fn split_print_line(text: &str, width: usize) -> (String, String) {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= width {
+        return (text.to_string(), String::new());
+    }
+    let cut = chars[..=width]
+        .iter()
+        .rposition(|ch| *ch == ' ')
+        .filter(|at| *at > 0)
+        .unwrap_or(width);
+    let first: String = chars[..cut].iter().collect();
+    let rest: String = chars[cut..].iter().collect();
+    (first.trim_end().to_string(), rest.trim_start().to_string())
 }
 
 /// `computeTaxDue`: the table for the taxable year, `toFixed(2)` then the
@@ -486,7 +519,7 @@ impl Form1700Draft {
         }
         let regular_open = self.regular_column_open();
         let flat_open = self.flat_column_open();
-        self.employers.truncate(FORM_1700_EMPLOYER_ROWS);
+        self.employers.truncate(FORM_1700_MAX_EMPLOYERS);
         for row in &mut self.employers {
             if !regular_open {
                 row.regular = 0.0;
@@ -543,6 +576,30 @@ impl Form1700Draft {
         self.spouse_column.compute(year, sp_type, true);
         self.aggregate_amount_payable =
             cents(self.taxpayer.total_amount_payable + self.spouse_column.total_amount_payable);
+    }
+
+    /// More than four employers: the fourth and later ones are popup rows.
+    pub fn schedule_is_folded(&self) -> bool {
+        self.employers.len() > FORM_1700_EMPLOYER_ROWS
+    }
+
+    /// The popup rows (`4_1`, `4_2`, …), empty unless folded.
+    pub fn popup_rows(&self) -> &[Form1700Employer] {
+        if self.schedule_is_folded() {
+            &self.employers[FORM_1700_EMPLOYER_ROWS - 1..]
+        } else {
+            &[]
+        }
+    }
+
+    /// `computeSubTotal`: the popup's c, d and e subtotals (`formatCurrency`).
+    pub fn popup_subtotals(&self) -> [f64; 3] {
+        let rows = self.popup_rows();
+        [
+            cents(rows.iter().map(|row| row.regular).sum()),
+            cents(rows.iter().map(|row| row.flat).sum()),
+            cents(rows.iter().map(|row| row.withheld).sum()),
+        ]
     }
 
     /// Texts typed before a later `capital()` trigger in form order are
@@ -776,7 +833,21 @@ impl Form1700Draft {
 
         for index in 0..FORM_1700_EMPLOYER_ROWS {
             let n = index + 1;
-            let row = self.employers.get(index).cloned().unwrap_or_default();
+            let mut row = self.employers.get(index).cloned().unwrap_or_default();
+            if n == FORM_1700_EMPLOYER_ROWS && self.schedule_is_folded() {
+                // setUpSchedule1TableModal + computeSched1I5: Item 4 keeps
+                // its tick, reads OTHERS and carries the popup subtotal.
+                let [regular, flat, withheld] = self.popup_subtotals();
+                row = Form1700Employer {
+                    for_spouse: row.for_spouse,
+                    name: FORM_1700_OTHERS.to_string(),
+                    name2: String::new(),
+                    tin: String::new(),
+                    regular,
+                    flat,
+                    withheld,
+                };
+            }
             let used = row != Form1700Employer::default();
             put(
                 &format!("rdoPg2I{n}PartVIEmployeeT"),
@@ -817,9 +888,176 @@ impl Form1700Draft {
                 money(self.schedule_totals[who][2]),
             );
         }
+        if self.schedule_is_folded() {
+            let [c, d, e] = self.popup_subtotals();
+            put("txtPg2Pt6I4SubtotalC", money(c));
+            put("txtPg2Pt6I4SubtotalD", money(d));
+            put("txtPg2Pt6I4SubtotalE", money(e));
+        }
         // The submit loop writes "1" for the current page.
         put("txtCurrentPage", "1".to_string());
         put("txtLOB", self.line_of_business.trim().to_uppercase());
+        fields
+    }
+
+    /// The field map plus the `derived:` values the printed January 2018
+    /// sheet needs (`html-frozen/1700-2018/writer-cells.json`). Print only;
+    /// never submitted.
+    ///
+    /// - `derived:amount_<item><A|B>` / `derived:amount_36` /
+    ///   `derived:amount_sched1_<row><c|d|e>`: whole pesos (`toFixed(0)`; the
+    ///   sheet says "DO NOT enter Centavos"), right-aligned in the sheet's
+    ///   comb; an overpayment prints in parentheses. Zero, column B of a
+    ///   non-joint return, and amounts wider than the comb stay blank. The
+    ///   sheet prints Item 31 Surcharge and Item 32 Interest (the page's own
+    ///   controls are the other way round).
+    /// - `derived:address_line1/2`: the address over the 40- and 32-slot
+    ///   combs, split at a word break.
+    /// - `derived:birth_mm/dd/yyyy`, `derived:tin_digits` (page 2's nine
+    ///   TIN slots),
+    ///   `derived:employer<n>_tin`, `derived:attachments`,
+    ///   `derived:spouse_rdo` (joint only).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        const AMOUNT_SLOTS: usize = 8;
+        const WITHHELD_SLOTS: usize = 7;
+        let mut fields = self.to_bir_field_map();
+        let mut derived = BTreeMap::new();
+        let whole = |value: f64, slots: usize| -> Option<String> {
+            let value = fixed0(value);
+            if value == 0.0 {
+                return None;
+            }
+            let digits = format!("{:.0}", value.abs());
+            let printed = if value < 0.0 {
+                format!("({digits})")
+            } else {
+                digits
+            };
+            (printed.len() <= slots).then(|| format!("{printed:>slots$}"))
+        };
+        let mut columns = vec![("A", &self.taxpayer)];
+        if self.is_joint() {
+            columns.push(("B", &self.spouse_column));
+        }
+        for (suffix, c) in columns {
+            for (item, value) in [
+                (26, c.tax_due),
+                (27, c.total_credits),
+                (28, c.net_payable),
+                (29, c.second_installment),
+                (30, c.amount_payable),
+                (31, c.surcharge),
+                (32, c.interest),
+                (33, c.compromise),
+                (34, c.total_penalties),
+                (35, c.total_amount_payable),
+                (42, c.gross_compensation),
+                (43, c.non_taxable),
+                (44, c.taxable_compensation),
+                (45, c.other_income),
+                (46, c.taxable_income),
+                (47, c.graduated_tax_due),
+                (48, c.flat_gross_compensation),
+                (49, c.flat_non_taxable),
+                (50, c.flat_taxable_compensation),
+                (51, c.flat_other_income),
+                (52, c.flat_taxable_income),
+                (53, c.flat_tax_due),
+                (54, c.tax_withheld),
+                (55, c.previously_filed),
+                (56, c.foreign_tax_credits),
+                (57, c.other_credits),
+                (58, c.total_credits),
+                (59, c.net_payable),
+            ] {
+                if let Some(printed) = whole(value, AMOUNT_SLOTS) {
+                    derived.insert(format!("amount_{item}{suffix}"), printed);
+                }
+            }
+        }
+        if let Some(printed) = whole(self.aggregate_amount_payable, AMOUNT_SLOTS) {
+            derived.insert("amount_36".to_string(), printed);
+        }
+
+        // Schedule 1 rows 1-4 as the return files them (Item 4 folded into
+        // OTHERS when the popup holds rows), then 5A/5B.
+        let mut schedule = Vec::new();
+        for n in 1..=FORM_1700_EMPLOYER_ROWS {
+            let amount = |column: &str| {
+                fields
+                    .get(&format!("frm1700:txtPg2ISched1{column}"))
+                    .and_then(|text| parse_official_amount(text))
+                    .unwrap_or(0.0)
+            };
+            schedule.push((
+                n.to_string(),
+                [
+                    amount(&format!("c_{n}REG")),
+                    amount(&format!("d_{n}CIFR")),
+                    amount(&format!("e_{n}TW")),
+                ],
+            ));
+            let tin = [
+                format!("frm1700:txtPg2I{n}PartVIEmployerTIN1"),
+                format!("frm1700:txtPg2I{n}PartVIEmployerTIN2"),
+                format!("frm1700:txtPg2I{n}PartVIEmployerTIN3"),
+                format!("frm1700:txtPg2I{n}PartVIEmployerBranchCode"),
+            ]
+            .iter()
+            .filter_map(|key| fields.get(key))
+            .cloned()
+            .collect::<String>();
+            if !tin.is_empty() {
+                derived.insert(format!("employer{n}_tin"), tin);
+            }
+        }
+        schedule.push(("5A".to_string(), self.schedule_totals[0]));
+        if self.is_joint() {
+            schedule.push(("5B".to_string(), self.schedule_totals[1]));
+        }
+        for (row, values) in schedule {
+            for (column, value, slots) in [
+                ("c", values[0], AMOUNT_SLOTS),
+                ("d", values[1], AMOUNT_SLOTS),
+                ("e", values[2], WITHHELD_SLOTS),
+            ] {
+                if let Some(printed) = whole(value, slots) {
+                    derived.insert(format!("amount_sched1_{row}{column}"), printed);
+                }
+            }
+        }
+
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = split_print_line(&address, 40);
+        derived.insert("address_line1".to_string(), line1);
+        derived.insert("address_line2".to_string(), line2);
+        let mut parts = self.birth_date.trim().split('/');
+        if let (Some(mm), Some(dd), Some(yyyy), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        {
+            derived.insert("birth_mm".to_string(), mm.to_string());
+            derived.insert("birth_dd".to_string(), dd.to_string());
+            derived.insert("birth_yyyy".to_string(), yyyy.to_string());
+        }
+        let (t1, t2, t3, _) = split_tin(&self.tin);
+        derived.insert("tin_digits".to_string(), format!("{t1}{t2}{t3}"));
+        if self.number_of_attachments > 0 {
+            derived.insert(
+                "attachments".to_string(),
+                format!("{:02}", self.number_of_attachments % 100),
+            );
+        }
+        if self.is_joint() {
+            derived.insert(
+                "spouse_rdo".to_string(),
+                self.spouse.rdo_code.trim().to_string(),
+            );
+        }
+        fields.extend(
+            derived
+                .into_iter()
+                .map(|(key, value)| (format!("derived:{key}"), value)),
+        );
         fields
     }
 
@@ -938,8 +1176,21 @@ impl Form1700Draft {
                 None => err("spouse_has_income", "Please choose Yes or No on Item 16"),
             }
         }
+        if self.employers.len() > FORM_1700_MAX_EMPLOYERS {
+            err(
+                "employers",
+                "Schedule 1 holds at most 100 employers per return in this editor.",
+            );
+        }
+        let folded = self.schedule_is_folded();
         for (index, row) in self.employers.iter().enumerate() {
-            let n = index + 1;
+            // validateSched1More ('4_<n>') when the popup is saved; validate()
+            // skips Item 4 once the popup holds its rows.
+            let n = if folded && index + 1 >= FORM_1700_EMPLOYER_ROWS {
+                format!("4_{}", index + 2 - FORM_1700_EMPLOYER_ROWS)
+            } else {
+                (index + 1).to_string()
+            };
             if *row == Form1700Employer::default() {
                 continue;
             }
@@ -1496,6 +1747,122 @@ mod tests {
         d.recompute();
         assert_eq!(d.employers.len(), 1);
         assert_eq!(d.spouse_column, Form1700Column::default());
+    }
+
+    fn employer(name: &str, tin: &str, regular: f64, withheld: f64) -> Form1700Employer {
+        Form1700Employer {
+            for_spouse: false,
+            name: name.to_string(),
+            name2: String::new(),
+            tin: tin.to_string(),
+            regular,
+            flat: 0.0,
+            withheld,
+        }
+    }
+
+    /// Rows 1 and 4 on the page, then two more through the popup: Item 4 reads
+    /// OTHERS with the popup subtotal (values from the official page).
+    fn folded() -> Form1700Draft {
+        let mut d = sample();
+        d.employers.resize_with(3, Form1700Employer::default);
+        d.employers.push(employer(
+            "Fourth Employer Corp",
+            "12345678800000",
+            100_000.25,
+            5_000.0,
+        ));
+        d.employers.push(employer(
+            "Fifth Employer Corp",
+            "12345678800000",
+            50_000.4,
+            2_500.1,
+        ));
+        d.employers.push(employer(
+            "Sixth Employer",
+            "12345678800001",
+            25_000.0,
+            1_000.0,
+        ));
+        d.recompute();
+        d
+    }
+
+    #[test]
+    fn add_more_popup_folds_item_4_into_others() {
+        let d = folded();
+        assert!(d.schedule_is_folded());
+        assert_eq!(d.popup_rows().len(), 3);
+        assert_eq!(d.popup_subtotals(), [175_000.65, 0.0, 8_500.1]);
+        assert_eq!(d.schedule_totals[0], [775_001.0, 0.0, 48_500.0]);
+        assert!(messages(&d).is_empty(), "{:?}", messages(&d));
+        let f = d.to_bir_field_map();
+        for (key, value) in [
+            ("rdoPg2I4PartVIEmployeeT", "true"),
+            ("txtPg2I4PartVIEmployerName1", "OTHERS"),
+            ("txtPg2I4PartVIEmployerTIN1", ""),
+            ("txtPg2I4PartVIEmployerBranchCode", ""),
+            ("txtPg2ISched1c_4REG", "175,000.65"),
+            ("txtPg2ISched1d_4CIFR", "0.00"),
+            ("txtPg2ISched1e_4TW", "8,500.10"),
+            ("txtPg2Pt6I4SubtotalC", "175,000.65"),
+            ("txtPg2Pt6I4SubtotalD", "0.00"),
+            ("txtPg2Pt6I4SubtotalE", "8,500.10"),
+            ("txtPg2ISched1c_5AREG", "775,001.00"),
+            ("txtPg2ISched1e_5ATW", "48,500.00"),
+            ("txtPg2I42A", "775,001.00"),
+            ("txtPg2I47A", "81,500.00"),
+            ("txtPg2I59A", "32,900.00"),
+        ] {
+            assert_eq!(f[&format!("frm1700:{key}")], value, "{key}");
+        }
+        // Not folded: the popup subtotals keep the page default.
+        assert!(
+            !sample()
+                .to_bir_field_map()
+                .contains_key("frm1700:txtPg2Pt6I4SubtotalC")
+        );
+    }
+
+    #[test]
+    fn popup_rows_carry_their_own_alerts() {
+        let mut d = folded();
+        d.employers[5].tin = String::new();
+        d.employers[4].regular = 0.0;
+        d.recompute();
+        let m = messages(&d);
+        assert!(m.contains(&"Please enter Employer's TIN on Part VI Item 4_3B".to_string()));
+        assert!(m.contains(&"Page 2 Item 4_2 Compensation Income should not be zero.".to_string()));
+        let mut d = folded();
+        d.employers[3].name.clear();
+        d.recompute();
+        assert!(
+            messages(&d)
+                .contains(&"Please enter Employer's name on Part VI Item 4_1A ".to_string())
+        );
+    }
+
+    #[test]
+    fn print_map_derives_whole_peso_combs() {
+        let d = folded();
+        let p = d.to_print_field_map();
+        // 26A: graduated tax due; 32 Interest / 31 Surcharge follow the sheet.
+        assert_eq!(p["derived:amount_42A"], "  775001");
+        assert_eq!(p["derived:amount_31A"], "    1000");
+        assert!(!p.contains_key("derived:amount_32A"));
+        assert!(!p.contains_key("derived:amount_42B"));
+        assert_eq!(p["derived:amount_sched1_1c"], "  600001");
+        assert_eq!(p["derived:amount_sched1_4c"], "  175001");
+        assert_eq!(p["derived:amount_sched1_4e"], "   8500");
+        assert_eq!(p["derived:amount_sched1_5Ae"], "  48500");
+        assert_eq!(p["derived:employer1_tin"], "12345678800000");
+        assert!(!p.contains_key("derived:employer4_tin"));
+        assert_eq!(p["derived:tin_digits"], "123456788");
+        assert_eq!(p["derived:birth_yyyy"], "1980");
+        assert_eq!(p["frm1700:txtPg2I4PartVIEmployerName1"], "OTHERS");
+        assert!(!p.contains_key("derived:spouse_rdo"));
+        let fields = d.to_bir_field_map();
+        assert!(fields.keys().all(|key| !key.starts_with("derived:")));
     }
 
     #[test]

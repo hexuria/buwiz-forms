@@ -279,6 +279,23 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
     (part(0..3), part(3..6), part(6..9), format!("{branch:0>5}"))
 }
 
+/// `text` over a first comb of `width` slots and the next one, broken at
+/// the last space that fits (or hard at `width` when none does).
+fn split_print_line(text: &str, width: usize) -> (String, String) {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= width {
+        return (text.to_string(), String::new());
+    }
+    let cut = chars[..=width]
+        .iter()
+        .rposition(|ch| *ch == ' ')
+        .filter(|at| *at > 0)
+        .unwrap_or(width);
+    let first: String = chars[..cut].iter().collect();
+    let rest: String = chars[cut..].iter().collect();
+    (first.trim_end().to_string(), rest.trim_start().to_string())
+}
+
 /// `computeTxt46`: the graduated table for the taxable year.
 pub fn form_1701a_graduated_tax(year: u16, income: f64) -> f64 {
     let x = income;
@@ -914,6 +931,99 @@ impl Form1701ADraft {
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
+    }
+
+    /// The field map plus the `derived:` values the printed January 2018
+    /// sheet needs (`html-frozen/1701a-2018/writer-cells.json`). Print only;
+    /// never submitted.
+    ///
+    /// - `derived:amount_<item><A|B>` / `derived:amount_30`: the submitted
+    ///   amount as whole pesos (`toFixed(0)`), right-aligned in the sheet's
+    ///   8-slot comb; an overpayment prints in parentheses. Zero, column B of
+    ///   a non-joint return, and amounts wider than the comb stay blank.
+    /// - `derived:address_line1/2`: the address over the 40- and 31-slot
+    ///   combs, split at a word break.
+    /// - `derived:birth_mm/dd/yyyy`, `derived:tin_digits` (page 2, nine
+    ///   digits),
+    ///   `derived:attachments_tens/units`, `derived:spouse_rdo` (joint only).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        const AMOUNT_SLOTS: usize = 8;
+        let mut fields = self.to_bir_field_map();
+        let mut derived = BTreeMap::new();
+
+        let whole = |text: &str| -> Option<String> {
+            let value = fixed0(parse_official_amount(text)?);
+            if value == 0.0 {
+                return None;
+            }
+            let digits = format!("{:.0}", value.abs());
+            let printed = if value < 0.0 {
+                format!("({digits})")
+            } else {
+                digits
+            };
+            (printed.len() <= AMOUNT_SLOTS).then(|| format!("{printed:>AMOUNT_SLOTS$}"))
+        };
+        let mut columns = vec!["A"];
+        if self.is_joint() {
+            columns.push("B");
+        }
+        for item in (20..=29).chain(36..=65) {
+            for column in &columns {
+                let key = format!("frm1701A:txt{item}{column}");
+                if let Some(printed) = fields.get(&key).and_then(|text| whole(text)) {
+                    derived.insert(format!("amount_{item}{column}"), printed);
+                }
+            }
+        }
+        if let Some(printed) = fields.get("frm1701A:txt30").and_then(|text| whole(text)) {
+            derived.insert("amount_30".to_string(), printed);
+        }
+
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = split_print_line(&address, 40);
+        derived.insert("address_line1".to_string(), line1);
+        derived.insert("address_line2".to_string(), line2);
+
+        let birth = self.birth_date.trim();
+        let mut parts = birth.split('/');
+        if let (Some(mm), Some(dd), Some(yyyy), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        {
+            derived.insert("birth_mm".to_string(), mm.to_string());
+            derived.insert("birth_dd".to_string(), dd.to_string());
+            derived.insert("birth_yyyy".to_string(), yyyy.to_string());
+        }
+
+        // Page 2's TIN comb takes nine digits; its branch slots are preprinted.
+        let (tin1, tin2, tin3, _) = split_tin(&self.tin);
+        derived.insert("tin_digits".to_string(), format!("{tin1}{tin2}{tin3}"));
+        let attachments = self.number_of_attachments;
+        derived.insert(
+            "attachments_tens".to_string(),
+            if attachments >= 10 {
+                (attachments / 10 % 10).to_string()
+            } else {
+                String::new()
+            },
+        );
+        derived.insert(
+            "attachments_units".to_string(),
+            (attachments % 10).to_string(),
+        );
+        if self.is_joint() {
+            derived.insert(
+                "spouse_rdo".to_string(),
+                self.spouse.rdo_code.trim().to_string(),
+            );
+        }
+
+        fields.extend(
+            derived
+                .into_iter()
+                .map(|(key, value)| (format!("derived:{key}"), value)),
+        );
+        fields
     }
 
     fn validate_on(&self, today: NaiveDate) -> Vec<(String, String)> {
@@ -1574,6 +1684,96 @@ mod tests {
         d.recompute();
         assert_eq!(d.spouse, Form1701ASpouse::default());
         assert_eq!(d.spouse_column, Form1701AColumn::default());
+    }
+
+    #[test]
+    fn print_map_derives_whole_peso_combs_and_identity() {
+        let d = sample();
+        let submitted = d.to_bir_field_map();
+        let p = d.to_print_field_map();
+        // Print adds derived: keys only; the submitted keys are unchanged.
+        for (key, value) in &submitted {
+            assert_eq!(&p[key], value, "{key}");
+        }
+        assert!(
+            p.keys()
+                .filter(|key| !submitted.contains_key(*key))
+                .all(|key| key.starts_with("derived:"))
+        );
+        assert_eq!(p["derived:amount_20A"], "   94448");
+        assert_eq!(p["derived:amount_36A"], " 1234568");
+        assert_eq!(p["derived:amount_29A"], "   56848");
+        assert_eq!(p["derived:amount_30"], "   56848");
+        assert!(!p.contains_key("derived:amount_47A"), "zero stays blank");
+        assert!(
+            !p.contains_key("derived:amount_20B"),
+            "column B only when joint"
+        );
+        assert_eq!(p["derived:tin_digits"], "123456788");
+        assert_eq!(p["derived:birth_mm"], "01");
+        assert_eq!(p["derived:birth_dd"], "15");
+        assert_eq!(p["derived:birth_yyyy"], "1980");
+        assert_eq!(
+            p["derived:address_line1"],
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(p["derived:address_line2"], "QUEZON CITY");
+        assert_eq!(p["derived:attachments_tens"], "");
+        assert_eq!(p["derived:attachments_units"], "0");
+        assert!(!p.contains_key("derived:spouse_rdo"));
+
+        let mut over = sample();
+        over.taxpayer.quarterly_payments = 200_000.0;
+        over.recompute();
+        let p = over.to_print_field_map();
+        assert_eq!(p["derived:amount_22A"], "(114152)");
+        over.taxpayer.quarterly_payments = 200_000_000.0;
+        over.recompute();
+        assert!(!over.to_print_field_map().contains_key("derived:amount_22A"));
+    }
+
+    #[test]
+    fn print_map_fills_column_b_on_a_joint_return() {
+        let mut d = sample();
+        d.civil_status = Form1701ACivilStatus::Married;
+        d.spouse_has_income = Some(true);
+        d.filing_status = Form1701AFilingStatus::Joint;
+        d.spouse = Form1701ASpouse {
+            tin: "12345678800000".into(),
+            rdo_code: "039".into(),
+            filer_type: Form1701AFilerType::Professional,
+            atc: Form1701AAtc::II017,
+            name: "Dummy, Sample Spouse".into(),
+            foreign_tax_credits: Some(false),
+            ..Form1701ASpouse::default()
+        };
+        d.spouse_column.eight_sales = 900_000.0;
+        d.spouse_column.eight_reduction = 250_000.0;
+        d.number_of_attachments = 12;
+        d.recompute();
+        let p = d.to_print_field_map();
+        assert_eq!(p["derived:amount_47B"], "  900000");
+        assert_eq!(p["derived:amount_56B"], "   52000");
+        assert_eq!(p["derived:amount_30"], "  108848");
+        assert_eq!(p["derived:spouse_rdo"], "039");
+        assert_eq!(p["derived:attachments_tens"], "1");
+        assert_eq!(p["derived:attachments_units"], "2");
+    }
+
+    #[test]
+    fn print_lines_break_at_a_word() {
+        assert_eq!(
+            split_print_line("SHORT", 40),
+            ("SHORT".into(), String::new())
+        );
+        assert_eq!(
+            split_print_line("ABCDEFGHIJ", 4),
+            ("ABCD".into(), "EFGHIJ".into())
+        );
+        assert_eq!(
+            split_print_line("AB CD EF", 5),
+            ("AB CD".into(), "EF".into())
+        );
     }
 
     #[test]

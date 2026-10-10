@@ -478,6 +478,9 @@ const EMPLOYER_FIELDS: &[(&str, &str)] = &[
     ("withheld", "e — Tax withheld"),
 ];
 
+/// Employer rows the editor offers: Items 1–4 and the add-more popup rows.
+const EDITOR_EMPLOYER_ROWS: usize = 12;
+
 fn employer_key(row: usize, field: &str) -> String {
     format!("emp{row}:{field}")
 }
@@ -511,6 +514,20 @@ pub struct Form1700View {
 }
 
 impl Form1700View {
+    /// "Employer 2", or "Item 4 popup row 4.2" once the popup holds rows.
+    fn employer_title(draft: &Form1700Draft, row: usize) -> String {
+        if row + 1 >= FORM_1700_EMPLOYER_ROWS
+            && (draft.schedule_is_folded() || row + 1 > FORM_1700_EMPLOYER_ROWS)
+        {
+            format!(
+                "Item 4 add-more popup row 4.{}",
+                row + 2 - FORM_1700_EMPLOYER_ROWS
+            )
+        } else {
+            format!("Employer {}", row + 1)
+        }
+    }
+
     fn money_text(value: f64) -> String {
         if value == 0.0 {
             String::new()
@@ -530,7 +547,7 @@ impl Form1700View {
                 .map(|m| Self::money_text((m.get)(who.column(draft))))
                 .unwrap_or_default();
         }
-        for row in 0..FORM_1700_EMPLOYER_ROWS {
+        for row in 0..EDITOR_EMPLOYER_ROWS {
             let Some(field) = key.strip_prefix(&format!("emp{row}:")) else {
                 continue;
             };
@@ -561,7 +578,7 @@ impl Form1700View {
                 keys.push((money_key(who, money.id), "0.00".to_string()));
             }
         }
-        for row in 0..FORM_1700_EMPLOYER_ROWS {
+        for row in 0..EDITOR_EMPLOYER_ROWS {
             for (field, _) in EMPLOYER_FIELDS {
                 keys.push((employer_key(row, field), String::new()));
             }
@@ -600,7 +617,7 @@ impl Form1700View {
                 }
             }
         }
-        for row in 0..FORM_1700_EMPLOYER_ROWS {
+        for row in 0..EDITOR_EMPLOYER_ROWS {
             let mut entry = draft.employers.get(row).cloned().unwrap_or_default();
             entry.name = self.input_text(&employer_key(row, "name"), cx);
             entry.name2 = self.input_text(&employer_key(row, "name2"), cx);
@@ -1206,7 +1223,10 @@ impl Form1700View {
         let employee = d.regular_column_open();
         let flat = d.flat_column_open();
         let mut rows = Vec::new();
-        for row in 0..FORM_1700_EMPLOYER_ROWS {
+        // Item 1–4 always; one empty row past the last employer, up to the
+        // editor's limit (rows past Item 4 go through the add-more popup).
+        let shown = (d.employers.len() + 1).clamp(FORM_1700_EMPLOYER_ROWS, EDITOR_EMPLOYER_ROWS);
+        for row in 0..shown {
             let entry = d.employers.get(row).cloned().unwrap_or_default();
             let used = entry != Form1700Employer::default();
             let owners = vec![
@@ -1275,10 +1295,22 @@ impl Form1700View {
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .child(self.choice_row(&format!("Employer {}", row + 1), owners))
+                    .child(self.choice_row(&Self::employer_title(d, row), owners))
                     .child(self.grid(layout, fields))
                     .into_any_element(),
             );
+        }
+        if d.schedule_is_folded() {
+            // Item 4 on the return reads OTHERS with these subtotals.
+            let [c, dd, e] = d.popup_subtotals();
+            rows.push(self.grid(
+                layout,
+                vec![
+                    self.computed("Item 4 (OTHERS) c — popup subtotal", c, cx),
+                    self.computed("Item 4 (OTHERS) d — popup subtotal", dd, cx),
+                    self.computed("Item 4 (OTHERS) e — popup subtotal", e, cx),
+                ],
+            ));
         }
         let totals = &d.schedule_totals;
         rows.push(self.grid(
@@ -1611,7 +1643,7 @@ impl FormViewTrait for Form1700View {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1700-2018",
             &fields,

@@ -533,6 +533,70 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
     (part(0..3), part(3..6), part(6..9), format!("{branch:0>5}"))
 }
 
+/// `"IC 010 Domestic Corporation in General - 25%"` as the sheet's code
+/// cell (`IC 010`) and description cell.
+fn print_atc_parts(label: &str) -> (String, String) {
+    let mut words = label.splitn(3, ' ');
+    let prefix = words.next().unwrap_or("");
+    let number = words.next().unwrap_or("");
+    let rest = words.next().unwrap_or("");
+    (format!("{prefix} {number}"), rest.trim().to_string())
+}
+
+/// A comb text split over two printed lines of `width` slots.
+fn print_lines(text: &str, width: usize) -> (String, String) {
+    let chars: Vec<char> = text.trim().chars().collect();
+    let first: String = chars.iter().take(width).collect();
+    let second: String = chars
+        .iter()
+        .skip(width)
+        .collect::<String>()
+        .trim()
+        .to_string();
+    (first.trim_end().to_string(), second)
+}
+
+/// An official amount right-aligned in a `slots`-wide comb. Commas go first
+/// when it does not fit; `None` (blank on print) when it still does not.
+fn print_amount(text: &str, slots: usize) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let fitted = if text.chars().count() <= slots {
+        text.to_string()
+    } else {
+        let bare: String = text.chars().filter(|ch| *ch != ',').collect();
+        if bare.chars().count() > slots {
+            return None;
+        }
+        bare
+    };
+    Some(format!("{fitted:>slots$}"))
+}
+
+/// A whole-number rate right-aligned in a 2-slot box; `None` when the rate
+/// has a fraction the box cannot show.
+fn print_whole_rate(text: &str) -> Option<String> {
+    let rate: f64 = text.trim().parse().ok()?;
+    if rate.fract() != 0.0 || !(0.0..100.0).contains(&rate) {
+        return None;
+    }
+    Some(format!("{:>2}", rate as u32))
+}
+
+/// A rate as the 2-slot whole box and the 1-slot tenths box after the
+/// printed decimal point; `None` when it needs more than tenths.
+fn print_tenths_rate(text: &str) -> Option<(String, String)> {
+    let rate: f64 = text.trim().parse().ok()?;
+    let tenths = (rate * 10.0).round();
+    if (rate * 10.0 - tenths).abs() > 1e-9 || !(0.0..1000.0).contains(&tenths) {
+        return None;
+    }
+    let tenths = tenths as u32;
+    Some((format!("{:>2}", tenths / 10), (tenths % 10).to_string()))
+}
+
 /// `setDecimal`'s pattern for typed rates.
 fn rate_text_is_valid(text: &str) -> bool {
     let mut parts = text.splitn(2, '.');
@@ -1039,6 +1103,92 @@ impl Form1702qDraft {
         // This page never calls getDrives(), so its export drive select has
         // no options and submits an empty value.
         fields.insert("driveSelectTPExport".to_string(), String::new());
+        fields
+    }
+
+    /// The field map plus print-only values the frozen January 2018 sheet
+    /// needs (`derived:` keys, never submitted): Item 2 digit boxes, the
+    /// Item 5 ATC code and description, name/address lines, the page 2 TIN
+    /// digits,
+    /// amounts right-aligned in their 12-slot combs, and rate boxes.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut derived = BTreeMap::new();
+        let value = |key: &str| {
+            fields
+                .get(&format!("frm1702q:{key}"))
+                .cloned()
+                .unwrap_or_default()
+        };
+
+        let month = value("rbYrEndMonth");
+        let year = value("txtYrEndYear");
+        for (name, text) in [("year_end_mm", &month), ("year_end_yy", &year)] {
+            for (index, ch) in text.chars().take(2).enumerate() {
+                derived.insert(format!("{name}{}", index + 1), ch.to_string());
+            }
+        }
+        if let Some(option) = self.atc_option() {
+            let (code, description) = print_atc_parts(option.label);
+            derived.insert("atc_code".to_string(), code);
+            derived.insert("atc_description".to_string(), description);
+        }
+        let (name1, name2) = print_lines(&value("txtTaxpayerName1"), 38);
+        derived.insert("name_line1".to_string(), name1);
+        derived.insert("name_line2".to_string(), name2);
+        let (address1, address2) = print_lines(&value("txtAddress"), 38);
+        derived.insert("address_line1".to_string(), address1);
+        derived.insert("address_line2".to_string(), address2);
+        // Page 2's TIN comb preprints the 00000 branch; only nine digits fill.
+        derived.insert("tin_digits".to_string(), {
+            let (a, b, c, _) = split_tin(&self.tin);
+            format!("{a}{b}{c}")
+        });
+
+        let mut amount_keys: Vec<String> = (14..=25).map(|n| format!("txtTax{n}")).collect();
+        for n in (1..=9).chain([11]) {
+            amount_keys.push(format!("Sched1:txtTax{n}A"));
+            amount_keys.push(format!("Sched1:txtTax{n}B"));
+        }
+        amount_keys.push("Sched1:txtTax12B".to_string());
+        amount_keys.push("Sched1:txtTax13B".to_string());
+        for n in (1..=9).chain([11, 12, 13]) {
+            amount_keys.push(format!("Sched2:txtTax{n}"));
+        }
+        for n in [1, 2, 3, 4, 6] {
+            amount_keys.push(format!("Sched3:txtTax{n}"));
+        }
+        for n in 1..=7 {
+            amount_keys.push(format!("Sched4:txtTax{n}"));
+        }
+        for index in 0..FORM_1702Q_OTHER_CREDIT_ROWS {
+            amount_keys.push(format!("Sched4:txtOthrTxCrdtAmnt{index}"));
+        }
+        for key in amount_keys {
+            if let Some(text) = print_amount(&value(&key), 12) {
+                derived.insert(key, text);
+            }
+        }
+
+        if let Some(rate) = print_whole_rate(&value("Sched1:txtTax10A")) {
+            derived.insert("sched1_rate_a".to_string(), rate);
+        }
+        if let Some((whole, tenths)) = print_tenths_rate(&value("Sched1:txtTax10B")) {
+            derived.insert("sched1_rate_b_whole".to_string(), whole);
+            derived.insert("sched1_rate_b_tenths".to_string(), tenths);
+        }
+        if let Some(rate) = print_whole_rate(&value("Sched2:txtTax10")) {
+            derived.insert("sched2_rate".to_string(), rate);
+        }
+        if self.mcit_open()
+            && let Some(rate) = print_whole_rate(&value("Sched3:txtTax5"))
+        {
+            derived.insert("sched3_rate".to_string(), rate);
+        }
+
+        for (key, text) in derived {
+            fields.insert(format!("derived:{key}"), text);
+        }
         fields
     }
 
@@ -1678,5 +1828,69 @@ mod tests {
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
         assert!(d.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn print_field_map_adds_only_derived_keys() {
+        let draft = sample();
+        let submitted = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        for (key, value) in &submitted {
+            assert_eq!(print.get(key), Some(value), "{key}");
+        }
+        assert!(
+            print
+                .keys()
+                .filter(|key| !submitted.contains_key(*key))
+                .all(|key| key.starts_with("derived:"))
+        );
+        let get = |key: &str| {
+            print
+                .get(&format!("derived:{key}"))
+                .cloned()
+                .unwrap_or_default()
+        };
+        assert_eq!(get("year_end_mm1"), "1");
+        assert_eq!(get("year_end_mm2"), "2");
+        assert_eq!(get("year_end_yy1"), "2");
+        assert_eq!(get("year_end_yy2"), "5");
+        assert_eq!(get("atc_code"), "IC 010");
+        assert_eq!(
+            get("atc_description"),
+            "Domestic Corporation in General - 25%"
+        );
+        assert_eq!(get("name_line1"), "SAMPLE DUMMY CORPORATION");
+        assert_eq!(get("name_line2"), "");
+        assert_eq!(
+            get("address_line1"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
+        );
+        assert_eq!(get("address_line2"), "UEZON CITY");
+        assert_eq!(get("tin_digits"), "123456788");
+        assert_eq!(get("txtTax25"), "  739,265.00");
+        assert_eq!(get("Sched2:txtTax1"), "5,000,001.00");
+        assert_eq!(get("Sched1:txtTax1B"), "  800,001.00");
+        assert_eq!(get("sched1_rate_a"), " 0");
+        assert_eq!(get("sched1_rate_b_whole"), "10");
+        assert_eq!(get("sched1_rate_b_tenths"), "0");
+        assert_eq!(get("sched2_rate"), "25");
+        assert_eq!(get("sched3_rate"), " 2");
+    }
+
+    #[test]
+    fn print_amounts_fit_the_comb_or_stay_blank() {
+        assert_eq!(
+            print_amount("1,234.00", 12).as_deref(),
+            Some("    1,234.00")
+        );
+        assert_eq!(
+            print_amount("12,345,678.90", 12).as_deref(),
+            Some(" 12345678.90")
+        );
+        assert_eq!(print_amount("1,234,567,890,123.00", 12), None);
+        assert_eq!(print_amount("", 12), None);
+        assert_eq!(print_whole_rate("2.5"), None);
+        assert_eq!(print_tenths_rate("2.5"), Some((" 2".into(), "5".into())));
+        assert_eq!(print_tenths_rate("2.25"), None);
     }
 }
