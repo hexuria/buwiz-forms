@@ -510,17 +510,22 @@ fn ordered_comb_indices(tags: &[InputTag<'_>], indices: &[usize]) -> Vec<usize> 
     ordered
 }
 
-fn split_writer_money(value: &str) -> Option<(String, String)> {
+/// Splits a writer amount into `(negative, peso digits, two cent digits)`.
+fn split_writer_money(value: &str) -> Option<(bool, String, String)> {
     let cleaned: String = value
         .chars()
         .filter(|ch| *ch != ',' && !ch.is_whitespace())
         .collect();
-    if cleaned.is_empty() || cleaned.starts_with('-') {
+    let (negative, cleaned) = match cleaned.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, cleaned.as_str()),
+    };
+    if cleaned.is_empty() {
         return None;
     }
     let (peso, cents) = match cleaned.split_once('.') {
         Some((peso, cents)) => (peso, cents),
-        None => (cleaned.as_str(), "00"),
+        None => (cleaned, "00"),
     };
     if peso.chars().any(|ch| !ch.is_ascii_digit()) {
         return None;
@@ -528,7 +533,18 @@ fn split_writer_money(value: &str) -> Option<(String, String)> {
     if cents.is_empty() || cents.len() > 2 || cents.chars().any(|ch| !ch.is_ascii_digit()) {
         return None;
     }
-    Some((peso.to_string(), format!("{cents:0<2}")))
+    Some((negative, peso.to_string(), format!("{cents:0<2}")))
+}
+
+/// Puts the minus sign immediately left of the peso digits; a zero amount
+/// (`-0`, `-0.00`) prints unsigned.
+fn signed_digits(negative: bool, digits: &str, cents: &str) -> String {
+    let zero = digits.chars().chain(cents.chars()).all(|ch| ch == '0');
+    if negative && !zero {
+        format!("-{digits}")
+    } else {
+        digits.to_string()
+    }
 }
 
 fn right_aligned_slot_values(slots: usize, digits: &str) -> Option<Vec<String>> {
@@ -561,9 +577,10 @@ fn fill_money_joins(
         if value.is_empty() {
             continue;
         }
-        let Some((peso, cents)) = split_writer_money(value) else {
+        let Some((negative, peso, cents)) = split_writer_money(value) else {
             continue;
         };
+        let peso = signed_digits(negative, &peso, &cents);
         let Some(peso_indices) = grouped.get(join.peso_html_id.as_str()) else {
             continue;
         };
@@ -603,9 +620,10 @@ fn fill_money_joins(
 }
 
 /// `1234.49` -> `1234`, `1234.50` -> `1235`: the sheets' "49 centavos or
-/// less drop down; 50 or more round up".
+/// less drop down; 50 or more round up". Negatives round the absolute value
+/// and keep the sign (`-1234.50` -> `-1235`); `-0` prints as `0`.
 fn whole_pesos(value: &str) -> Option<String> {
-    let (peso, cents) = split_writer_money(value)?;
+    let (negative, peso, cents) = split_writer_money(value)?;
     let peso = peso.trim_start_matches('0');
     let mut digits: Vec<u8> = if peso.is_empty() {
         b"0".to_vec()
@@ -628,7 +646,8 @@ fn whole_pesos(value: &str) -> Option<String> {
             }
         }
     }
-    String::from_utf8(digits).ok()
+    let digits = String::from_utf8(digits).ok()?;
+    Some(signed_digits(negative, &digits, ""))
 }
 
 fn fill_peso_joins(
@@ -742,7 +761,11 @@ fn with_class(tag: &str, class: &str) -> String {
 }
 
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
-    if cells.joins.is_empty() && cells.money_joins.is_empty() && cells.xbox_joins.is_empty() {
+    if cells.joins.is_empty()
+        && cells.money_joins.is_empty()
+        && cells.xbox_joins.is_empty()
+        && cells.peso_joins.is_empty()
+    {
         return Ok(());
     }
     let tags = input_tags(html);
@@ -1178,7 +1201,17 @@ mod tests {
             for join in &cells.peso_joins {
                 fields.insert(join.writer_key.clone(), "1234.56".to_string());
             }
-            super::filled_document(slug, &fields).unwrap_or_else(|e| panic!("{slug}: {e}"));
+            let filled =
+                super::filled_document(slug, &fields).unwrap_or_else(|e| panic!("{slug}: {e}"));
+            let has_join = !cells.joins.is_empty()
+                || !cells.money_joins.is_empty()
+                || !cells.xbox_joins.is_empty()
+                || !cells.peso_joins.is_empty();
+            if has_join {
+                let empty = super::filled_document(slug, &BTreeMap::new())
+                    .unwrap_or_else(|e| panic!("{slug}: {e}"));
+                assert_ne!(filled, empty, "{slug}: fill joins changed nothing");
+            }
             checked += 1;
         }
         assert!(checked >= 30, "only {checked} print maps found");
@@ -1191,7 +1224,63 @@ mod tests {
         assert_eq!(super::whole_pesos("999.5").as_deref(), Some("1000"));
         assert_eq!(super::whole_pesos("0.49").as_deref(), Some("0"));
         assert_eq!(super::whole_pesos("12").as_deref(), Some("12"));
-        assert_eq!(super::whole_pesos("-5.00"), None);
+        assert_eq!(super::whole_pesos("-5.00").as_deref(), Some("-5"));
+        assert_eq!(super::whole_pesos("-1,234.50").as_deref(), Some("-1235"));
+        assert_eq!(super::whole_pesos("-0.49").as_deref(), Some("0"));
+    }
+
+    fn comb(name: &str, slots: usize) -> String {
+        (0..slots)
+            .map(|i| format!("<input name=\"{name}\" data-slot-index=\"{i}\" value=\"\">"))
+            .collect()
+    }
+
+    fn comb_values(doc: &str, name: &str) -> Vec<String> {
+        super::input_tags(doc)
+            .iter()
+            .filter(|tag| tag.name == name)
+            .map(|tag| super::attr(tag.tag, "value").unwrap_or("").to_string())
+            .collect()
+    }
+
+    #[test]
+    fn negative_money_join_puts_minus_left_of_pesos() {
+        use std::collections::BTreeMap;
+        let html = format!("{}{}", comb("p", 8), comb("c", 2));
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "-122,500.25".to_string());
+        let joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            peso_html_id: "p".into(),
+            cent_html_id: "c".into(),
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "-", "1", "2", "2", "5", "0", "0"]
+        );
+        assert_eq!(comb_values(&doc, "c"), ["2", "5"]);
+        fields.insert("k".to_string(), "-12,345,678.00".to_string());
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            vec![String::new(); 8],
+            "no room for '-'"
+        );
+    }
+
+    #[test]
+    fn negative_peso_join_puts_minus_left_of_pesos() {
+        use std::collections::BTreeMap;
+        let html = comb("p", 5);
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "-122.50".to_string());
+        let joins = [super::PesoJoin {
+            writer_key: "k".into(),
+            html_id: "p".into(),
+        }];
+        let doc = super::fill_peso_joins(&html, &fields, &joins);
+        assert_eq!(comb_values(&doc, "p"), ["", "-", "1", "2", "3"]);
     }
 
     #[test]

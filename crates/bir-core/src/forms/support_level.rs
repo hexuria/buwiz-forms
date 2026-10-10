@@ -516,10 +516,6 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -537,10 +533,6 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -579,10 +571,6 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,

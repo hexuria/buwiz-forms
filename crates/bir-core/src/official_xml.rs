@@ -361,6 +361,24 @@ pub fn read(
             Entry::Bool { key, after, .. } | Entry::Value { key, after, .. } => (key, after),
         };
         let open = format!("<div>{key}=");
+        if let Entry::Value {
+            parts,
+            number: Some(NumberRule::OmitZero),
+            ..
+        } = entry
+        {
+            // `write` drops a zero amount and its separator; read it as "0",
+            // which writes back the same way.
+            if !plaintext[at..].starts_with(&open) {
+                if let Some(Part::Source { source, .. }) = parts
+                    .iter()
+                    .find(|part| matches!(part, Part::Source { .. }))
+                {
+                    store(&mut values, source, "0".to_string())?;
+                }
+                continue;
+            }
+        }
         expect(plaintext, &mut at, &open)?;
         let close = format!("{key}=</div>");
         let Some(len) = plaintext[at..].find(&close) else {
@@ -646,6 +664,25 @@ mod tests {
         assert_eq!(back["frm1702MX:txtPg1Pt2I14TotalIncome"], "1234.50");
         assert_eq!(back["frm1702MX:txtPg1Pt2I16NetTaxPayable"], "0");
         assert_eq!(official_number_text("(1,234.50)"), "-1234.50");
+    }
+
+    #[test]
+    fn read_accepts_an_omitted_zero_amount() {
+        let layout: OfficialLayout = serde_json::from_str(
+            r#"{"form_id":"t","official_hta":"","official_hta_sha256":"","header":"H","lead":"","entries":[
+                {"kind":"value","key":"a","parts":[{"source":"a","codec":"raw"}],"default":"0","number":"omit-zero","after":"|"},
+                {"kind":"value","key":"b","parts":[{"source":"b","codec":"raw"}],"default":"","after":""}]}"#,
+        )
+        .unwrap();
+        let values: BTreeMap<String, String> = [("a", "0.00"), ("b", "x")]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let plain = write(&layout, &values).unwrap();
+        assert_eq!(plain, "H<div>b=xb=</div>");
+        let back = read(&layout, &plain).unwrap();
+        assert_eq!(back["a"], "0");
+        assert_eq!(write(&layout, &back).unwrap(), plain);
     }
 
     #[test]
