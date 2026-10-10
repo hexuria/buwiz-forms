@@ -198,6 +198,8 @@ function prepare(html) {
   // and div#rdoContainer (1702EX) with RDO selects at load.
   for (const [cell, suffix] of [['rdoSpouseSelect', 'txtSpouseRDOCode'], ['spouseRdoSelect', 'txtSpouseRDOCode'], ['rdoContainer', 'rdoPg1Pt1I7RDO']]) {
     const el = doc.getElementById(cell);
+    // Keep a select an earlier getRdo() hook already put there (2200C).
+    if (el && el.querySelector('select')) continue;
     if (el && prefix && !doc.getElementById(prefix + ':' + suffix)) {
       el.innerHTML = `<select id='${prefix}:${suffix}' name='${prefix}:${suffix}' size='1'><option value='000'>${suffix === 'rdoPg1Pt1I7RDO' ? '000' : ' '}</option></select>`;
     }

@@ -57,6 +57,17 @@
   "value": "2500000"
  },
  {
+  "call": "addSchedule1()"
+ },
+ {
+  "set": "drpATCCode3",
+  "value": "DS104"
+ },
+ {
+  "set": "frm2000:sched1:txtTaxBase3",
+  "value": "40000.004"
+ },
+ {
   "set": "frm2000:sched2:txtPaymentDate0",
   "value": "06/05/2025"
  },
@@ -79,6 +90,33 @@
  {
   "set": "frm2000:sched2:txtAmountPaid1",
   "value": "2000.005"
+ },
+ {
+  "call": "addSchedule2()"
+ },
+ {
+  "set": "frm2000:sched2:txtPaymentDate2",
+  "value": "06/21/2025"
+ },
+ {
+  "set": "frm2000:sched2:txtReceipt2",
+  "value": "Rcpt1003"
+ },
+ {
+  "set": "frm2000:sched2:txtAmountPaid2",
+  "value": "300"
+ },
+ {
+  "set": "frm2000:sched2:txtPaymentDate3",
+  "value": "06/22/2025"
+ },
+ {
+  "set": "frm2000:sched2:txtReceipt3",
+  "value": "Rcpt1004"
+ },
+ {
+  "set": "frm2000:sched2:txtAmountPaid3",
+  "value": "400.25"
  },
  {
   "set": "frm2000:sched4:txtRCOCode0",

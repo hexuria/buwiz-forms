@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::form_2000::{
-    amount_in_official_range, cents, digits_only, email_is_plausible, fixed_cents,
-    has_cent_precision, split_tin, tin_error,
+    RowGroup, amount_in_official_range, cents, digits_only, email_is_plausible, fixed_cents,
+    has_cent_precision, layout_with_rows, split_tin, tin_error,
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
@@ -26,10 +26,13 @@ use crate::profile::TaxpayerProfile;
 
 /// Rule-package id of the official layout.
 pub const FORM_2000OT_FORM_ID: &str = "2000ot-v2018";
-/// Rows of Schedule 1.A (and its continuation) on the official page.
+/// Rows Schedule 1.A (and its continuation) starts with on the official
+/// page; "Add" appends a row to both tables.
 pub const FORM_2000OT_REAL_PROPERTY_ROWS: usize = 5;
-/// Rows of Schedule 1.B on the official page.
+/// Rows Schedule 1.B starts with on the official page.
 pub const FORM_2000OT_SHARE_ROWS: usize = 3;
+/// Rows a schedule may hold here (the page itself has no limit).
+pub const FORM_2000OT_MAX_ROWS: usize = 50;
 
 /// Item 3 — ATC.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -455,6 +458,8 @@ impl Form2000OTDraft {
         put("txtZipCode", self.zip_code.trim().to_string());
         put("txtTelNum", self.contact_number.trim().to_string());
         put("txtLineBus", text(&self.line_of_business));
+        // The page the filer is on; the return is validated from page 1.
+        put("txtCurrentPage", "1".to_string());
         put(
             "optParty_1",
             flag(self.other_party == Form2000OTOtherParty::Creditor),
@@ -492,7 +497,7 @@ impl Form2000OTDraft {
         put("txtTax20D", official_amount(self.total_penalties));
         put("txtTax21", official_amount(self.total_amount_payable));
 
-        for index in 0..FORM_2000OT_REAL_PROPERTY_ROWS {
+        for index in 0..self.properties.len().max(FORM_2000OT_REAL_PROPERTY_ROWS) {
             let row = self.properties.get(index).cloned().unwrap_or_default();
             let mut put = |key: &str, value: String| {
                 fields.insert(format!("frm2000OT:sched1A:{key}{index}"), value);
@@ -511,7 +516,7 @@ impl Form2000OTDraft {
             "frm2000OT:sched1A:txtFMVTotal".to_string(),
             official_amount(self.total_fair_market_value),
         );
-        for index in 0..FORM_2000OT_SHARE_ROWS {
+        for index in 0..self.shares.len().max(FORM_2000OT_SHARE_ROWS) {
             let row = self.shares.get(index).cloned().unwrap_or_default();
             let mut put = |key: &str, value: String| {
                 fields.insert(format!("frm2000OT:sched1B:{key}{index}"), value);
@@ -547,6 +552,52 @@ impl Form2000OTDraft {
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
+    }
+
+    /// The official layout with this return's added schedule rows.
+    pub fn official_layout(
+        &self,
+    ) -> Result<crate::official_xml::OfficialLayout, Vec<(String, String)>> {
+        let base = crate::official_xml::layout(FORM_2000OT_FORM_ID)
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
+        let groups = [
+            RowGroup {
+                prefixes: &[
+                    "chkSchedule1ADelete",
+                    "frm2000OT:sched1A:txtOCTNo",
+                    "frm2000OT:sched1A:txtTaxDecNo",
+                    "frm2000OT:sched1A:txtLoc",
+                ],
+                base_rows: FORM_2000OT_REAL_PROPERTY_ROWS,
+                rows: self.properties.len(),
+            },
+            RowGroup {
+                prefixes: &[
+                    "chkSchedule1A1Delete",
+                    "frm2000OT:sched1A:txtLot",
+                    "frm2000OT:sched1A:txtClassification",
+                    "frm2000OT:sched1A:txtArea",
+                    "frm2000OT:sched1A:txtFMVCol1",
+                    "frm2000OT:sched1A:txtFMVCol2",
+                    "frm2000OT:sched1A:txtFMVSubTot",
+                ],
+                base_rows: FORM_2000OT_REAL_PROPERTY_ROWS,
+                rows: self.properties.len(),
+            },
+            RowGroup {
+                prefixes: &[
+                    "chkSchedule1BDelete",
+                    "frm2000OT:sched1B:txtNameOfCorpStock",
+                    "frm2000OT:sched1B:txtNoOfSharesSold",
+                    "frm2000OT:sched1B:txtStockCertNo",
+                    "frm2000OT:sched1B:txtParValOfShares",
+                    "frm2000OT:sched1B:txtDSTPaid",
+                ],
+                base_rows: FORM_2000OT_SHARE_ROWS,
+                rows: self.shares.len(),
+            },
+        ];
+        Ok(layout_with_rows(base, &groups))
     }
 }
 
@@ -666,17 +717,11 @@ impl FormValidator for Form2000OTDraft {
                 "Item 4 holds at most two digits.",
             );
         }
-        if self.properties.len() > FORM_2000OT_REAL_PROPERTY_ROWS {
-            err(
-                "properties",
-                "Schedule 1.A holds at most 5 rows on the official form.",
-            );
+        if self.properties.len() > FORM_2000OT_MAX_ROWS {
+            err("properties", "Schedule 1.A holds up to 50 rows here.");
         }
-        if self.shares.len() > FORM_2000OT_SHARE_ROWS {
-            err(
-                "shares",
-                "Schedule 1.B holds at most 3 rows on the official form.",
-            );
+        if self.shares.len() > FORM_2000OT_MAX_ROWS {
+            err("shares", "Schedule 1.B holds up to 50 rows here.");
         }
         let long = |value: &str, max: usize| value.trim().chars().count() > max;
         for (index, row) in self.properties.iter().enumerate() {
@@ -849,6 +894,17 @@ impl QueueableForm for Form2000OTDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
+    }
+
+    /// The layout writer over the layout with any added schedule rows.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as QueueableForm>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self.official_layout()?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
 
