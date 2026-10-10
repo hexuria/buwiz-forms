@@ -1,32 +1,32 @@
 {
   "schema_version": "1.0.0",
-  "form_id": "1600pt-v2018",
+  "form_id": "1600vt-v2018-private",
   "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
-  "official_hta": "BIR-Form1600PTv2018.hta",
-  "official_hta_sha256": "2f0f2d7e58763f0a57b4b62fbe830a39656e92e03916cb8e058e0805c981af22",
+  "official_hta": "BIR-Form1600VTv2018.hta",
+  "official_hta_sha256": "4bd3ad3d6f5ff2ae3b8e9fa8802a826b01730dd29d3b5f6991c7cef09895a3bb",
   "header": "<?xml version='1.0'?>",
   "lead": "    \n            ",
   "value_rules": [
     {
       "probe": "1,234.50",
-      "key": "frm1600PT:Pg2Sc1TIN5",
+      "key": "frm1600VT:Pg2Sc1TIN5",
       "expected": "1,234.50",
       "official": "1234.50"
     },
     {
       "probe": "(5.00)",
-      "key": "frm1600PT:Pg2Sc1TIN5",
+      "key": "frm1600VT:Pg2Sc1TIN5",
       "expected": "(5.00)",
       "official": "-5.00"
     }
   ],
   "entries": [
     {
-      "key": "frm1600PT:txtPg1I1Month",
+      "key": "frm1600VT:txtPg1I1Month",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1I1Month",
+          "source": "frm1600VT:txtPg1I1Month",
           "codec": "raw"
         }
       ],
@@ -34,11 +34,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1I1Year",
+      "key": "frm1600VT:txtPg1I1Year",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1I1Year",
+          "source": "frm1600VT:txtPg1I1Year",
           "codec": "raw"
         }
       ],
@@ -46,35 +46,35 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I2AmendedYes",
+      "key": "frm1600VT:rdoPg1I2AmendedYes",
       "kind": "bool",
       "default": "false",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I2AmendedNo",
+      "key": "frm1600VT:rdoPg1I2AmendedNo",
       "kind": "bool",
       "default": "true",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I3TaxWithheldYes",
+      "key": "frm1600VT:rdoPg1I3TaxWithheldYes",
       "kind": "bool",
       "default": "false",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I3TaxWithheldNo",
+      "key": "frm1600VT:rdoPg1I3TaxWithheldNo",
       "kind": "bool",
       "default": "true",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1I4NoOfSheets",
+      "key": "frm1600VT:txtPg1I4NoOfSheets",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1I4NoOfSheets",
+          "source": "frm1600VT:txtPg1I4NoOfSheets",
           "codec": "raw"
         }
       ],
@@ -82,11 +82,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1TIN1",
+      "key": "frm1600VT:txtPg1TIN1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1TIN1",
+          "source": "frm1600VT:txtPg1TIN1",
           "codec": "raw"
         }
       ],
@@ -94,11 +94,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1TIN2",
+      "key": "frm1600VT:txtPg1TIN2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1TIN2",
+          "source": "frm1600VT:txtPg1TIN2",
           "codec": "raw"
         }
       ],
@@ -106,11 +106,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1TIN3",
+      "key": "frm1600VT:txtPg1TIN3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1TIN3",
+          "source": "frm1600VT:txtPg1TIN3",
           "codec": "raw"
         }
       ],
@@ -118,11 +118,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1TIN4",
+      "key": "frm1600VT:txtPg1TIN4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1TIN4",
+          "source": "frm1600VT:txtPg1TIN4",
           "codec": "raw"
         }
       ],
@@ -130,11 +130,23 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1I6RDO",
+      "key": "BranchMask",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1I6RDO",
+          "source": "BranchMask",
+          "codec": "raw"
+        }
+      ],
+      "default": "00000",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1I6RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1I6RDO",
           "codec": "raw"
         }
       ],
@@ -142,11 +154,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1Pt1I6RDO",
+      "key": "frm1600VT:rdoPg1Pt1I6RDO",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:rdoPg1Pt1I6RDO",
+          "source": "frm1600VT:rdoPg1Pt1I6RDO",
           "codec": "raw"
         }
       ],
@@ -154,11 +166,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt1I7WithholdingAgentsName",
+      "key": "frm1600VT:txtPg1Pt1I7WithholdingAgentsName",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt1I7WithholdingAgentsName",
+          "source": "frm1600VT:txtPg1Pt1I7WithholdingAgentsName",
           "codec": "js-escape"
         }
       ],
@@ -166,11 +178,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt1I8RegisteredAddress",
+      "key": "frm1600VT:txtPg1Pt1I8RegisteredAddress",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt1I8RegisteredAddress",
+          "source": "frm1600VT:txtPg1Pt1I8RegisteredAddress",
           "codec": "js-escape"
         }
       ],
@@ -178,11 +190,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt1I8RegisteredAddress2",
+      "key": "frm1600VT:txtPg1Pt1I8RegisteredAddress2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt1I8RegisteredAddress2",
+          "source": "frm1600VT:txtPg1Pt1I8RegisteredAddress2",
           "codec": "raw"
         }
       ],
@@ -190,11 +202,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txPg1I8ZipCode",
+      "key": "frm1600VT:txPg1I8ZipCode",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txPg1I8ZipCode",
+          "source": "frm1600VT:txPg1I8ZipCode",
           "codec": "raw"
         }
       ],
@@ -202,11 +214,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt1I9ContactNumber",
+      "key": "frm1600VT:txtPg1Pt1I9ContactNumber",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt1I9ContactNumber",
+          "source": "frm1600VT:txtPg1Pt1I9ContactNumber",
           "codec": "raw"
         }
       ],
@@ -214,23 +226,23 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I10CategoryofWthholdAgentPriv",
+      "key": "frm1600VT:rdoPg1I10CategoryofWthholdAgentPriv",
       "kind": "bool",
       "default": "false",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I10CategoryofWthholdAgentGovt",
+      "key": "frm1600VT:rdoPg1I10CategoryofWthholdAgentGovt",
       "kind": "bool",
       "default": "false",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt1I11Email",
+      "key": "frm1600VT:txtPg1Pt1I11Email",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt1I11Email",
+          "source": "frm1600VT:txtPg1Pt1I11Email",
           "codec": "raw"
         }
       ],
@@ -238,23 +250,23 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I12TaxReliefYes",
+      "key": "frm1600VT:rdoPg1I12TaxReliefYes",
       "kind": "bool",
       "default": "false",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:rdoPg1I12TaxReliefNo",
+      "key": "frm1600VT:rdoPg1I12TaxReliefNo",
       "kind": "bool",
       "default": "true",
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt1I12TaxReliefSpec",
+      "key": "frm1600VT:txtPg1Pt1I12TaxReliefSpec",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt1I12TaxReliefSpec",
+          "source": "frm1600VT:txtPg1Pt1I12TaxReliefSpec",
           "codec": "raw"
         }
       ],
@@ -262,11 +274,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtAtcCd1",
+      "key": "frm1600VT:txtAtcCd1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtAtcCd1",
+          "source": "frm1600VT:txtAtcCd1",
           "codec": "raw"
         }
       ],
@@ -274,11 +286,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxBase1",
+      "key": "frm1600VT:txtPg1P2TaxBase1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxBase1",
+          "source": "frm1600VT:txtPg1P2TaxBase1",
           "codec": "raw"
         }
       ],
@@ -286,11 +298,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxRate1",
+      "key": "frm1600VT:txtPg1P2TaxRate1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxRate1",
+          "source": "frm1600VT:txtPg1P2TaxRate1",
           "codec": "raw"
         }
       ],
@@ -298,11 +310,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxWithheld1",
+      "key": "frm1600VT:txtPg1P2TaxWithheld1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxWithheld1",
+          "source": "frm1600VT:txtPg1P2TaxWithheld1",
           "codec": "raw"
         }
       ],
@@ -310,11 +322,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtAtcCd2",
+      "key": "frm1600VT:txtAtcCd2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtAtcCd2",
+          "source": "frm1600VT:txtAtcCd2",
           "codec": "raw"
         }
       ],
@@ -322,11 +334,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxBase2",
+      "key": "frm1600VT:txtPg1P2TaxBase2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxBase2",
+          "source": "frm1600VT:txtPg1P2TaxBase2",
           "codec": "raw"
         }
       ],
@@ -334,11 +346,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxRate2",
+      "key": "frm1600VT:txtPg1P2TaxRate2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxRate2",
+          "source": "frm1600VT:txtPg1P2TaxRate2",
           "codec": "raw"
         }
       ],
@@ -346,11 +358,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxWithheld2",
+      "key": "frm1600VT:txtPg1P2TaxWithheld2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxWithheld2",
+          "source": "frm1600VT:txtPg1P2TaxWithheld2",
           "codec": "raw"
         }
       ],
@@ -358,11 +370,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtAtcCd3",
+      "key": "frm1600VT:txtAtcCd3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtAtcCd3",
+          "source": "frm1600VT:txtAtcCd3",
           "codec": "raw"
         }
       ],
@@ -370,11 +382,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxBase3",
+      "key": "frm1600VT:txtPg1P2TaxBase3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxBase3",
+          "source": "frm1600VT:txtPg1P2TaxBase3",
           "codec": "raw"
         }
       ],
@@ -382,11 +394,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxRate3",
+      "key": "frm1600VT:txtPg1P2TaxRate3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxRate3",
+          "source": "frm1600VT:txtPg1P2TaxRate3",
           "codec": "raw"
         }
       ],
@@ -394,11 +406,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxWithheld3",
+      "key": "frm1600VT:txtPg1P2TaxWithheld3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxWithheld3",
+          "source": "frm1600VT:txtPg1P2TaxWithheld3",
           "codec": "raw"
         }
       ],
@@ -406,11 +418,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtAtcCd4",
+      "key": "frm1600VT:txtAtcCd4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtAtcCd4",
+          "source": "frm1600VT:txtAtcCd4",
           "codec": "raw"
         }
       ],
@@ -418,11 +430,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxBase4",
+      "key": "frm1600VT:txtPg1P2TaxBase4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxBase4",
+          "source": "frm1600VT:txtPg1P2TaxBase4",
           "codec": "raw"
         }
       ],
@@ -430,11 +442,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxRate4",
+      "key": "frm1600VT:txtPg1P2TaxRate4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxRate4",
+          "source": "frm1600VT:txtPg1P2TaxRate4",
           "codec": "raw"
         }
       ],
@@ -442,11 +454,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxWithheld4",
+      "key": "frm1600VT:txtPg1P2TaxWithheld4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxWithheld4",
+          "source": "frm1600VT:txtPg1P2TaxWithheld4",
           "codec": "raw"
         }
       ],
@@ -454,11 +466,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtAtcCd5",
+      "key": "frm1600VT:txtAtcCd5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtAtcCd5",
+          "source": "frm1600VT:txtAtcCd5",
           "codec": "raw"
         }
       ],
@@ -466,11 +478,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxBase5",
+      "key": "frm1600VT:txtPg1P2TaxBase5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxBase5",
+          "source": "frm1600VT:txtPg1P2TaxBase5",
           "codec": "raw"
         }
       ],
@@ -478,11 +490,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxRate5",
+      "key": "frm1600VT:txtPg1P2TaxRate5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxRate5",
+          "source": "frm1600VT:txtPg1P2TaxRate5",
           "codec": "raw"
         }
       ],
@@ -490,11 +502,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2TaxWithheld5",
+      "key": "frm1600VT:txtPg1P2TaxWithheld5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2TaxWithheld5",
+          "source": "frm1600VT:txtPg1P2TaxWithheld5",
           "codec": "raw"
         }
       ],
@@ -502,11 +514,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtTotalOtherTax",
+      "key": "frm1600VT:txtTotalOtherTax",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtTotalOtherTax",
+          "source": "frm1600VT:txtTotalOtherTax",
           "codec": "raw"
         }
       ],
@@ -514,11 +526,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I18TotTaxWithheld",
+      "key": "frm1600VT:txtPg1P2I18TotTaxWithheld",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I18TotTaxWithheld",
+          "source": "frm1600VT:txtPg1P2I18TotTaxWithheld",
           "codec": "raw"
         }
       ],
@@ -526,11 +538,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
+      "key": "frm1600VT:txtPg1P2I19TaxRemittedInRtrn",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
+          "source": "frm1600VT:txtPg1P2I19TaxRemittedInRtrn",
           "codec": "raw"
         }
       ],
@@ -538,11 +550,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I20OthrPymntsMade",
+      "key": "frm1600VT:txtPg1P2I20OthrPymntsMade",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I20OthrPymntsMade",
+          "source": "frm1600VT:txtPg1P2I20OthrPymntsMade",
           "codec": "raw"
         }
       ],
@@ -550,11 +562,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I21TotTaxPymntsMade",
+      "key": "frm1600VT:txtPg1P2I21TotTaxPymntsMade",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I21TotTaxPymntsMade",
+          "source": "frm1600VT:txtPg1P2I21TotTaxPymntsMade",
           "codec": "raw"
         }
       ],
@@ -562,11 +574,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I22TaxStillDueOverremit",
+      "key": "frm1600VT:txtPg1P2I22TaxStillDueOverremit",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I22TaxStillDueOverremit",
+          "source": "frm1600VT:txtPg1P2I22TaxStillDueOverremit",
           "codec": "raw"
         }
       ],
@@ -574,11 +586,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I23Surcharge",
+      "key": "frm1600VT:txtPg1P2I23Surcharge",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I23Surcharge",
+          "source": "frm1600VT:txtPg1P2I23Surcharge",
           "codec": "raw"
         }
       ],
@@ -586,11 +598,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I24Interest",
+      "key": "frm1600VT:txtPg1P2I24Interest",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I24Interest",
+          "source": "frm1600VT:txtPg1P2I24Interest",
           "codec": "raw"
         }
       ],
@@ -598,11 +610,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I25Compromise",
+      "key": "frm1600VT:txtPg1P2I25Compromise",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I25Compromise",
+          "source": "frm1600VT:txtPg1P2I25Compromise",
           "codec": "raw"
         }
       ],
@@ -610,11 +622,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I26TotPenalties",
+      "key": "frm1600VT:txtPg1P2I26TotPenalties",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I26TotPenalties",
+          "source": "frm1600VT:txtPg1P2I26TotPenalties",
           "codec": "raw"
         }
       ],
@@ -622,11 +634,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1P2I27TotAmtStillDueOverremit",
+      "key": "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1P2I27TotAmtStillDueOverremit",
+          "source": "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit",
           "codec": "raw"
         }
       ],
@@ -634,11 +646,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt4Indiv",
+      "key": "frm1600VT:txtPg1Pt4Indiv",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt4Indiv",
+          "source": "frm1600VT:txtPg1Pt4Indiv",
           "codec": "raw"
         }
       ],
@@ -646,11 +658,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt4NonIndiv",
+      "key": "frm1600VT:txtPg1Pt4NonIndiv",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt4NonIndiv",
+          "source": "frm1600VT:txtPg1Pt4NonIndiv",
           "codec": "raw"
         }
       ],
@@ -658,11 +670,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt4TaxAcredNo",
+      "key": "frm1600VT:txtPg1Pt4TaxAcredNo",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt4TaxAcredNo",
+          "source": "frm1600VT:txtPg1Pt4TaxAcredNo",
           "codec": "raw"
         }
       ],
@@ -670,11 +682,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt4DateOfIssue",
+      "key": "frm1600VT:txtPg1Pt4DateOfIssue",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt4DateOfIssue",
+          "source": "frm1600VT:txtPg1Pt4DateOfIssue",
           "codec": "raw"
         }
       ],
@@ -682,11 +694,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt4DateOfExpiry",
+      "key": "frm1600VT:txtPg1Pt4DateOfExpiry",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt4DateOfExpiry",
+          "source": "frm1600VT:txtPg1Pt4DateOfExpiry",
           "codec": "raw"
         }
       ],
@@ -694,11 +706,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I28CashC1",
+      "key": "frm1600VT:txtPg1Pt3I28CashC1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I28CashC1",
+          "source": "frm1600VT:txtPg1Pt3I28CashC1",
           "codec": "raw"
         }
       ],
@@ -706,11 +718,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I28CashC2",
+      "key": "frm1600VT:txtPg1Pt3I28CashC2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I28CashC2",
+          "source": "frm1600VT:txtPg1Pt3I28CashC2",
           "codec": "raw"
         }
       ],
@@ -718,11 +730,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I28Date",
+      "key": "frm1600VT:txtPg1Pt3I28Date",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I28Date",
+          "source": "frm1600VT:txtPg1Pt3I28Date",
           "codec": "raw"
         }
       ],
@@ -730,11 +742,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I28CashC3",
+      "key": "frm1600VT:txtPg1Pt3I28CashC3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I28CashC3",
+          "source": "frm1600VT:txtPg1Pt3I28CashC3",
           "codec": "raw"
         }
       ],
@@ -742,11 +754,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I29CheckC1",
+      "key": "frm1600VT:txtPg1Pt3I29CheckC1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I29CheckC1",
+          "source": "frm1600VT:txtPg1Pt3I29CheckC1",
           "codec": "raw"
         }
       ],
@@ -754,11 +766,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I29CheckC2",
+      "key": "frm1600VT:txtPg1Pt3I29CheckC2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I29CheckC2",
+          "source": "frm1600VT:txtPg1Pt3I29CheckC2",
           "codec": "raw"
         }
       ],
@@ -766,11 +778,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I29Date",
+      "key": "frm1600VT:txtPg1Pt3I29Date",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I29Date",
+          "source": "frm1600VT:txtPg1Pt3I29Date",
           "codec": "raw"
         }
       ],
@@ -778,11 +790,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I29CheckC3",
+      "key": "frm1600VT:txtPg1Pt3I29CheckC3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I29CheckC3",
+          "source": "frm1600VT:txtPg1Pt3I29CheckC3",
           "codec": "raw"
         }
       ],
@@ -790,11 +802,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I30TaxDebitC2",
+      "key": "frm1600VT:txtPg1Pt3I30TaxDebitC2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I30TaxDebitC2",
+          "source": "frm1600VT:txtPg1Pt3I30TaxDebitC2",
           "codec": "raw"
         }
       ],
@@ -802,11 +814,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I30Date",
+      "key": "frm1600VT:txtPg1Pt3I30Date",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I30Date",
+          "source": "frm1600VT:txtPg1Pt3I30Date",
           "codec": "raw"
         }
       ],
@@ -814,11 +826,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I30TaxDebitC3",
+      "key": "frm1600VT:txtPg1Pt3I30TaxDebitC3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I30TaxDebitC3",
+          "source": "frm1600VT:txtPg1Pt3I30TaxDebitC3",
           "codec": "raw"
         }
       ],
@@ -826,11 +838,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I31OthersC1",
+      "key": "frm1600VT:txtPg1Pt3I31OthersC1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I31OthersC1",
+          "source": "frm1600VT:txtPg1Pt3I31OthersC1",
           "codec": "raw"
         }
       ],
@@ -838,11 +850,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I31OthersC2",
+      "key": "frm1600VT:txtPg1Pt3I31OthersC2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I31OthersC2",
+          "source": "frm1600VT:txtPg1Pt3I31OthersC2",
           "codec": "raw"
         }
       ],
@@ -850,11 +862,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I31OthersC3",
+      "key": "frm1600VT:txtPg1Pt3I31OthersC3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I31OthersC3",
+          "source": "frm1600VT:txtPg1Pt3I31OthersC3",
           "codec": "raw"
         }
       ],
@@ -862,11 +874,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I31Date",
+      "key": "frm1600VT:txtPg1Pt3I31Date",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I31Date",
+          "source": "frm1600VT:txtPg1Pt3I31Date",
           "codec": "raw"
         }
       ],
@@ -874,11 +886,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg1Pt3I31OthersC4",
+      "key": "frm1600VT:txtPg1Pt3I31OthersC4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg1Pt3I31OthersC4",
+          "source": "frm1600VT:txtPg1Pt3I31OthersC4",
           "codec": "raw"
         }
       ],
@@ -886,11 +898,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg2TinC1",
+      "key": "frm1600VT:txtPg2TinC1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg2TinC1",
+          "source": "frm1600VT:txtPg2TinC1",
           "codec": "raw"
         }
       ],
@@ -898,11 +910,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg2TinC2",
+      "key": "frm1600VT:txtPg2TinC2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg2TinC2",
+          "source": "frm1600VT:txtPg2TinC2",
           "codec": "raw"
         }
       ],
@@ -910,11 +922,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg2TinC3",
+      "key": "frm1600VT:txtPg2TinC3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg2TinC3",
+          "source": "frm1600VT:txtPg2TinC3",
           "codec": "raw"
         }
       ],
@@ -922,11 +934,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg2TinC4",
+      "key": "frm1600VT:txtPg2TinC4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg2TinC4",
+          "source": "frm1600VT:txtPg2TinC4",
           "codec": "raw"
         }
       ],
@@ -934,11 +946,23 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtPg2RegisteredName",
+      "key": "BrachMask2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtPg2RegisteredName",
+          "source": "BrachMask2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0000",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg2RegisteredName",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg2RegisteredName",
           "codec": "raw"
         }
       ],
@@ -946,11 +970,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1SeqNo1",
+      "key": "frm1600VT:Pg2Sc1SeqNo1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1SeqNo1",
+          "source": "frm1600VT:Pg2Sc1SeqNo1",
           "codec": "raw"
         }
       ],
@@ -958,11 +982,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TIN1",
+      "key": "frm1600VT:Pg2Sc1TIN1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TIN1",
+          "source": "frm1600VT:Pg2Sc1TIN1",
           "codec": "raw"
         }
       ],
@@ -970,11 +994,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1Name1",
+      "key": "frm1600VT:Pg2Sc1Name1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1Name1",
+          "source": "frm1600VT:Pg2Sc1Name1",
           "codec": "raw"
         }
       ],
@@ -982,11 +1006,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1ATC1",
+      "key": "frm1600VT:Pg2Sc1ATC1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1ATC1",
+          "source": "frm1600VT:Pg2Sc1ATC1",
           "codec": "raw"
         }
       ],
@@ -994,11 +1018,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfIncPmt1",
+      "key": "frm1600VT:Pg2Sc1AmtOfIncPmt1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfIncPmt1",
+          "source": "frm1600VT:Pg2Sc1AmtOfIncPmt1",
           "codec": "raw"
         }
       ],
@@ -1006,11 +1030,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TaxRate1",
+      "key": "frm1600VT:Pg2Sc1TaxRate1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TaxRate1",
+          "source": "frm1600VT:Pg2Sc1TaxRate1",
           "codec": "raw"
         }
       ],
@@ -1018,11 +1042,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfTxWthhld1",
+      "key": "frm1600VT:Pg2Sc1AmtOfTxWthhld1",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld1",
+          "source": "frm1600VT:Pg2Sc1AmtOfTxWthhld1",
           "codec": "raw"
         }
       ],
@@ -1030,11 +1054,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1SeqNo2",
+      "key": "frm1600VT:Pg2Sc1SeqNo2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1SeqNo2",
+          "source": "frm1600VT:Pg2Sc1SeqNo2",
           "codec": "raw"
         }
       ],
@@ -1042,11 +1066,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TIN2",
+      "key": "frm1600VT:Pg2Sc1TIN2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TIN2",
+          "source": "frm1600VT:Pg2Sc1TIN2",
           "codec": "raw"
         }
       ],
@@ -1054,11 +1078,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1Name2",
+      "key": "frm1600VT:Pg2Sc1Name2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1Name2",
+          "source": "frm1600VT:Pg2Sc1Name2",
           "codec": "raw"
         }
       ],
@@ -1066,11 +1090,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1ATC2",
+      "key": "frm1600VT:Pg2Sc1ATC2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1ATC2",
+          "source": "frm1600VT:Pg2Sc1ATC2",
           "codec": "raw"
         }
       ],
@@ -1078,11 +1102,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfIncPmt2",
+      "key": "frm1600VT:Pg2Sc1AmtOfIncPmt2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfIncPmt2",
+          "source": "frm1600VT:Pg2Sc1AmtOfIncPmt2",
           "codec": "raw"
         }
       ],
@@ -1090,11 +1114,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TaxRate2",
+      "key": "frm1600VT:Pg2Sc1TaxRate2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TaxRate2",
+          "source": "frm1600VT:Pg2Sc1TaxRate2",
           "codec": "raw"
         }
       ],
@@ -1102,11 +1126,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfTxWthhld2",
+      "key": "frm1600VT:Pg2Sc1AmtOfTxWthhld2",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld2",
+          "source": "frm1600VT:Pg2Sc1AmtOfTxWthhld2",
           "codec": "raw"
         }
       ],
@@ -1114,11 +1138,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1SeqNo3",
+      "key": "frm1600VT:Pg2Sc1SeqNo3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1SeqNo3",
+          "source": "frm1600VT:Pg2Sc1SeqNo3",
           "codec": "raw"
         }
       ],
@@ -1126,11 +1150,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TIN3",
+      "key": "frm1600VT:Pg2Sc1TIN3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TIN3",
+          "source": "frm1600VT:Pg2Sc1TIN3",
           "codec": "raw"
         }
       ],
@@ -1138,11 +1162,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1Name3",
+      "key": "frm1600VT:Pg2Sc1Name3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1Name3",
+          "source": "frm1600VT:Pg2Sc1Name3",
           "codec": "raw"
         }
       ],
@@ -1150,11 +1174,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1ATC3",
+      "key": "frm1600VT:Pg2Sc1ATC3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1ATC3",
+          "source": "frm1600VT:Pg2Sc1ATC3",
           "codec": "raw"
         }
       ],
@@ -1162,11 +1186,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfIncPmt3",
+      "key": "frm1600VT:Pg2Sc1AmtOfIncPmt3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfIncPmt3",
+          "source": "frm1600VT:Pg2Sc1AmtOfIncPmt3",
           "codec": "raw"
         }
       ],
@@ -1174,11 +1198,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TaxRate3",
+      "key": "frm1600VT:Pg2Sc1TaxRate3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TaxRate3",
+          "source": "frm1600VT:Pg2Sc1TaxRate3",
           "codec": "raw"
         }
       ],
@@ -1186,11 +1210,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfTxWthhld3",
+      "key": "frm1600VT:Pg2Sc1AmtOfTxWthhld3",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld3",
+          "source": "frm1600VT:Pg2Sc1AmtOfTxWthhld3",
           "codec": "raw"
         }
       ],
@@ -1198,11 +1222,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1SeqNo4",
+      "key": "frm1600VT:Pg2Sc1SeqNo4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1SeqNo4",
+          "source": "frm1600VT:Pg2Sc1SeqNo4",
           "codec": "raw"
         }
       ],
@@ -1210,11 +1234,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TIN4",
+      "key": "frm1600VT:Pg2Sc1TIN4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TIN4",
+          "source": "frm1600VT:Pg2Sc1TIN4",
           "codec": "raw"
         }
       ],
@@ -1222,11 +1246,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1Name4",
+      "key": "frm1600VT:Pg2Sc1Name4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1Name4",
+          "source": "frm1600VT:Pg2Sc1Name4",
           "codec": "raw"
         }
       ],
@@ -1234,11 +1258,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1ATC4",
+      "key": "frm1600VT:Pg2Sc1ATC4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1ATC4",
+          "source": "frm1600VT:Pg2Sc1ATC4",
           "codec": "raw"
         }
       ],
@@ -1246,11 +1270,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfIncPmt4",
+      "key": "frm1600VT:Pg2Sc1AmtOfIncPmt4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfIncPmt4",
+          "source": "frm1600VT:Pg2Sc1AmtOfIncPmt4",
           "codec": "raw"
         }
       ],
@@ -1258,11 +1282,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TaxRate4",
+      "key": "frm1600VT:Pg2Sc1TaxRate4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TaxRate4",
+          "source": "frm1600VT:Pg2Sc1TaxRate4",
           "codec": "raw"
         }
       ],
@@ -1270,11 +1294,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfTxWthhld4",
+      "key": "frm1600VT:Pg2Sc1AmtOfTxWthhld4",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld4",
+          "source": "frm1600VT:Pg2Sc1AmtOfTxWthhld4",
           "codec": "raw"
         }
       ],
@@ -1282,11 +1306,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1SeqNo5",
+      "key": "frm1600VT:Pg2Sc1SeqNo5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1SeqNo5",
+          "source": "frm1600VT:Pg2Sc1SeqNo5",
           "codec": "raw"
         }
       ],
@@ -1294,11 +1318,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TIN5",
+      "key": "frm1600VT:Pg2Sc1TIN5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TIN5",
+          "source": "frm1600VT:Pg2Sc1TIN5",
           "codec": "raw"
         }
       ],
@@ -1306,11 +1330,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1Name5",
+      "key": "frm1600VT:Pg2Sc1Name5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1Name5",
+          "source": "frm1600VT:Pg2Sc1Name5",
           "codec": "raw"
         }
       ],
@@ -1318,11 +1342,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1ATC5",
+      "key": "frm1600VT:Pg2Sc1ATC5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1ATC5",
+          "source": "frm1600VT:Pg2Sc1ATC5",
           "codec": "raw"
         }
       ],
@@ -1330,11 +1354,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfIncPmt5",
+      "key": "frm1600VT:Pg2Sc1AmtOfIncPmt5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfIncPmt5",
+          "source": "frm1600VT:Pg2Sc1AmtOfIncPmt5",
           "codec": "raw"
         }
       ],
@@ -1342,11 +1366,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TaxRate5",
+      "key": "frm1600VT:Pg2Sc1TaxRate5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TaxRate5",
+          "source": "frm1600VT:Pg2Sc1TaxRate5",
           "codec": "raw"
         }
       ],
@@ -1354,11 +1378,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1AmtOfTxWthhld5",
+      "key": "frm1600VT:Pg2Sc1AmtOfTxWthhld5",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1AmtOfTxWthhld5",
+          "source": "frm1600VT:Pg2Sc1AmtOfTxWthhld5",
           "codec": "raw"
         }
       ],
@@ -1366,11 +1390,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:Pg2Sc1TotTxWthhldAndRmtted",
+      "key": "frm1600VT:Pg2Sc1TotTxWthhldAndRmtted",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:Pg2Sc1TotTxWthhldAndRmtted",
+          "source": "frm1600VT:Pg2Sc1TotTxWthhldAndRmtted",
           "codec": "raw"
         }
       ],
@@ -1378,11 +1402,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtLOB",
+      "key": "frm1600VT:txtLOB",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtLOB",
+          "source": "frm1600VT:txtLOB",
           "codec": "raw"
         }
       ],
@@ -1390,11 +1414,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtCurrentPage",
+      "key": "frm1600VT:txtCurrentPage",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtCurrentPage",
+          "source": "frm1600VT:txtCurrentPage",
           "codec": "raw"
         }
       ],
@@ -1402,15 +1426,75 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1600PT:txtMaxPage",
+      "key": "frm1600VT:txtMaxPage",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1600PT:txtMaxPage",
+          "source": "frm1600VT:txtMaxPage",
           "codec": "raw"
         }
       ],
       "default": "2",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode1",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode2",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode3",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode4",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode5",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode6",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode7",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode8",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode9",
+      "kind": "bool",
+      "default": "false",
+      "after": "    \n            "
+    },
+    {
+      "key": "AtcCode10",
+      "kind": "bool",
+      "default": "false",
       "after": "    \n            "
     },
     {

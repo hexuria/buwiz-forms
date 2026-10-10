@@ -91,32 +91,23 @@ macro_rules! form_view_spec {
     };
 }
 
-pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[
-    form_view_spec!(
-        Form2553,
-        super::form_2553_view::Form2553View,
-        "2553",
-        "2553"
-    ),
-    form_view_spec!(
-        Form1604F,
-        super::form_1604f_view::Form1604fView,
-        "1604F",
-        "1604f"
-    ),
-    form_view_spec!(
-        Form1604C,
-        super::form_1604c_view::Form1604cView,
-        "1604C",
-        "1604c"
-    ),
-    form_view_spec!(
-        Form1604E,
-        super::form_1604e_view::Form1604eView,
-        "1604E",
-        "1604e"
-    ),
-];
+/// One line per form: `Variant, view type, "CODE", "slug";`.
+macro_rules! form_view_specs {
+    ($($variant:ident, $view:ty, $code:literal, $slug:literal;)*) => {
+        pub const FORM_VIEW_SPECS: &[FormViewSpec] = &[$(form_view_spec!($variant, $view, $code, $slug),)*];
+    };
+}
+
+form_view_specs! {
+    Form2553, super::form_2553_view::Form2553View, "2553", "2553";
+    Form1604F, super::form_1604f_view::Form1604fView, "1604F", "1604f";
+    Form1604C, super::form_1604c_view::Form1604cView, "1604C", "1604c";
+    Form1604E, super::form_1604e_view::Form1604eView, "1604E", "1604e";
+    Form1606, super::form_1606_view::Form1606View, "1606", "1606";
+    Form1600VT, super::form_1600vt_view::Form1600VtView, "1600VT", "1600vt";
+    Form1600PT, super::form_1600pt_view::Form1600PtView, "1600PT", "1600pt";
+    Form1600WP, super::form_1600wp_view::Form1600WpView, "1600WP", "1600wp";
+}
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {
     FORM_VIEW_SPECS.iter().find(|spec| spec.kind == kind)

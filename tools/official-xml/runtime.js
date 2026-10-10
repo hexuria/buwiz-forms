@@ -6,7 +6,8 @@
 // inputs.json is an ordered list of steps:
 //   [{"set": "frm2553:txt14C", "value": "1234.5"},   // type, then blur/change
 //    {"click": "frm2553:optQtr:_1"},                  // radio / checkbox
-//    {"call": "computeTaxDue('frm2553:txt14C','frm2553:txt14D','frm2553:txt14E')"}]
+//    {"call": "computeTaxDue('frm2553:txt14C','frm2553:txt14D','frm2553:txt14E')"},
+//    {"wait": 300}]                                   // let page timers run
 // The official event handlers compute and format every derived value. Windows-only
 // pieces (ActiveX, VBScript, file dialogs) are stubbed; alert() texts are reported
 // on stderr so validation messages can be compared too.
@@ -147,6 +148,7 @@ dom.window.addEventListener('load', async () => {
   for (const step of steps) {
     try {
       if (step.call) { w.eval(step.call); continue; }
+      if (step.wait) { await sleep(Number(step.wait)); continue; }
       const el = doc.getElementById(step.set || step.click);
       if (!el) { process.stderr.write('no control: ' + (step.set || step.click) + '\n'); continue; }
       if (step.click) { el.checked = true; el.click(); fire(el, 'change'); continue; }

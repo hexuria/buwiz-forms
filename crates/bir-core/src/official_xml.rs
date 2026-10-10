@@ -126,10 +126,18 @@ macro_rules! layouts {
 /// Layouts of the forms the app serializes today. Add a form here when its
 /// field map moves to [`write`].
 const LAYOUTS: &[(&str, &str)] = layouts![
+    "1600pt-v2018-government",
+    "1600pt-v2018-private",
+    "1600vt-v2018-government",
+    "1600vt-v2018-private",
+    "1600wp-v2010-atc0",
+    "1600wp-v2010-atc1",
+    "1600wp-v2010-atc2",
     "1601c-v2018",
     "1604c-v2018",
     "1604e-v2018",
     "1604f-v2018",
+    "1606-v2018",
     "1702mx-v2018c",
     "2551q-v2018",
     "2553-v1999",
@@ -507,7 +515,7 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
-            // The year in the trailer is per form (2012; 1702MX says 2014).
+            // The year in the trailer is per form (2012; 2014 on newer pages).
             let year = after
                 .rsplit("All Rights Reserved BIR ")
                 .next()

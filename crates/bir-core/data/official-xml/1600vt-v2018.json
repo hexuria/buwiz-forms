@@ -154,6 +154,18 @@
       "after": "    \n            "
     },
     {
+      "key": "frm1600VT:rdoPg1Pt1I6RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:rdoPg1Pt1I6RDO",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "    \n            "
+    },
+    {
       "key": "frm1600VT:txtPg1Pt1I7WithholdingAgentsName",
       "kind": "value",
       "parts": [
@@ -259,6 +271,246 @@
         }
       ],
       "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtAtcCd1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtAtcCd1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxBase1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxBase1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxRate1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxRate1",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxWithheld1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxWithheld1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtAtcCd2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtAtcCd2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxBase2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxBase2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxRate2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxRate2",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxWithheld2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxWithheld2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtAtcCd3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtAtcCd3",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxBase3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxBase3",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxRate3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxRate3",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxWithheld3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxWithheld3",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtAtcCd4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtAtcCd4",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxBase4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxBase4",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxRate4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxRate4",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxWithheld4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxWithheld4",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtAtcCd5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtAtcCd5",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxBase5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxBase5",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxRate5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxRate5",
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1600VT:txtPg1P2TaxWithheld5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1600VT:txtPg1P2TaxWithheld5",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
       "after": "    \n            "
     },
     {
