@@ -1,9 +1,9 @@
 //! Evidence-safe editor for exact form `2550Qv2024`.
 //!
 //! The supplied official PDF and reviewed 160-field editable-save pair prove
-//! draft persistence and the form's arithmetic. They do not prove an online
-//! submission transport, so this view saves local drafts but never queues or
-//! submits them.
+//! draft persistence and the form's arithmetic. This view saves local drafts
+//! and, once a draft is ready, queues it for background submission through the
+//! generic queue.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
@@ -700,7 +700,7 @@ impl Form2550QV2View {
                 "2550Q editor is locked because persisted control identity could not be validated. No positional fallback was used. {error}"
             )
         }).or_else(|| migrated_legacy_draft.then(|| {
-            "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before filing externally."
+            "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before queuing it for submission."
                 .to_string()
         }));
         let mut view = Self {
@@ -1645,7 +1645,7 @@ impl FormViewTrait for Form2550QV2View {
             Ok(id) => {
                 self.draft.id = Some(id);
                 self.status_message = Some(if !has_unresolved_issues {
-                    "Draft saved locally for preservation. Filing and submission remain manual/external."
+                    "Draft saved. Queue it for submission when ready."
                         .to_string()
                 } else {
                     "Draft saved locally for preservation with unresolved issues, including any malformed visible text shown below. Filing and submission remain disabled."
@@ -1757,7 +1757,7 @@ impl FormViewTrait for Form2550QV2View {
 
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.status_message = Some(
-            "Payment status cannot advance automatically for a manual/external 2550Q filing."
+            "2550Q payment status needs a verified confirmation workflow."
                 .to_string(),
         );
         cx.notify();
@@ -1835,7 +1835,7 @@ impl FormViewTrait for Form2550QV2View {
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(format!(
-                    "{} Preview is available for review; filing remains manual/external.",
+                    "{} Preview is for review only; it does not queue or submit the return.",
                     launch_kind.status_message()
                 ));
                 launch_kind.observe_close(cx, |this, cx| {
