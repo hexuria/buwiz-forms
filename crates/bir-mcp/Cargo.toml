@@ -14,16 +14,11 @@ name = "bir-mcp"
 path = "src/main.rs"
 
 [dependencies]
-bir-core = { path = "../bir-core" }
-serde = { workspace = true }
 serde_json = { workspace = true }
-# Same rev as bir-desktop's `agent` feature, so both sides speak one protocol.
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4" }
+# Workspace pin shared with bir-desktop's `agent` feature.
+gpui-agent = { workspace = true }
 # `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
 tiny_http = { version = "0.12", default-features = false }
-
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

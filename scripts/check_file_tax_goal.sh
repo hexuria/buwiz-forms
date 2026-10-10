@@ -7,8 +7,9 @@
 #   2. each named feature test exists and passes;
 #   3. the bir-mcp tests pass, including the one asserting tools/list has no
 #      submit/queue/file/pay tool;
-#   4. an end-to-end smoke: bir-headless serve (temp DB + temp registry), then
-#      bir-mcp over stdio (scripts/file_tax_smoke.py);
+#   4. an end-to-end smoke: bir-headless serve (temp DB + temp gpui-agent
+#      runtime dir), then bir_list_apps -> bir_connect -> the draft flow over
+#      bir-mcp stdio (scripts/file_tax_smoke.py);
 #   5. integrations/opengrok/file-tax/ holds the skill and the MCP config.
 #
 # Test outcomes are read from cargo's own output (`test ... ok|FAILED` and

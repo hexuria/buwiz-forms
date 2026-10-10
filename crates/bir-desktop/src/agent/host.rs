@@ -957,6 +957,24 @@ impl BirAgentHost {
         }
     }
 
+    /// Read-only identity for a client choosing between running BIR apps:
+    /// which kind of host this is, whether its database is a test one, and
+    /// whose taxpayers it holds.
+    fn app_info(&self) -> DispatchResult {
+        let profiles: Vec<Value> = self
+            .profiles
+            .iter()
+            .filter(|profile| !profile.archived)
+            .map(|profile| json!({ "tin": profile.tin, "name": profile.name }))
+            .collect();
+        DispatchResult::json(json!({
+            "app": crate::agent::instance::APP,
+            "mode": self.platform.as_str(),
+            "database": crate::agent::instance::database_kind(),
+            "profiles": profiles,
+        }))
+    }
+
     fn profile_list(&self) -> Result<DispatchResult, String> {
         Ok(DispatchResult::json(json!(self.listed_hits())))
     }
@@ -3204,6 +3222,7 @@ impl BirAgentHost {
             }
             "profile.create" | "profile.new" => self.new_profile_editor(),
             "profile.save" => self.save_profile(),
+            "app.info" => Ok(self.app_info()),
             "profile.list" => self.profile_list(),
             "profile.search" => self.profile_search(args),
             "profile.set" => self.profile_set(args),
@@ -3715,6 +3734,10 @@ impl AgentHost for BirAgentHost {
             // and the TCP mailbox path stamp it via
             // `HelloAuth::from_token_configured`.
             auth: Default::default(),
+            // Filled from this process (executable, bundle id or
+            // `GPUI_AGENT_CONNECT_ID`) by upstream `fill_hello_identity`.
+            bundle_id: None,
+            executable: None,
         }
     }
 
@@ -5413,6 +5436,17 @@ mod tests {
 
     #[test]
     fn headless_tcp_host_serves_hello_and_nav() {
+        // `spawn_host` publishes a discovery record; keep it out of the
+        // user's real runtime directory.
+        let runtime = tempfile::tempdir().expect("runtime dir");
+        temp_env::with_var(
+            gpui_agent::discovery::RUNTIME_DIR_ENV,
+            Some(runtime.path()),
+            headless_tcp_host_serves_hello_and_nav_body,
+        );
+    }
+
+    fn headless_tcp_host_serves_hello_and_nav_body() {
         use std::sync::{Arc, Mutex};
         use std::time::Duration;
 
@@ -6484,6 +6518,56 @@ mod tests {
         );
         assert!(ranked.ok, "{:?}", ranked.error);
         assert!(host.tree().find(ids::OVERLAY_COMMAND_PALETTE).is_none());
+    }
+
+    #[test]
+    fn app_info_reports_mode_test_database_and_taxpayers() {
+        temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+            let mut host = fixture_host();
+            let info = handle_request(
+                &mut host,
+                req(Op::Invoke {
+                    name: "app.info".into(),
+                    args: json!({}),
+                }),
+                None,
+                None,
+            );
+            assert!(info.ok, "{:?}", info.error);
+            let info = info.result.unwrap();
+            assert_eq!(info["app"], "bir-desktop");
+            assert_eq!(info["mode"], "headless");
+            assert_eq!(info["database"], "test");
+            let profiles = info["profiles"].as_array().unwrap();
+            assert_eq!(profiles.len(), 1, "{info}");
+            assert_eq!(profiles[0]["name"], FIXTURE_NAME);
+            assert!(
+                profiles[0]["tin"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("123456789"),
+                "{info}"
+            );
+            assert_eq!(
+                profiles[0].as_object().unwrap().len(),
+                2,
+                "only tin and name: {info}"
+            );
+
+            let mut desktop = BirAgentHost::new(PlatformKind::Desktop);
+            let info = handle_request(
+                &mut desktop,
+                req(Op::Invoke {
+                    name: "app.info".into(),
+                    args: json!({}),
+                }),
+                None,
+                None,
+            );
+            assert!(info.ok, "{:?}", info.error);
+            assert_eq!(info.result.as_ref().unwrap()["mode"], "desktop");
+            assert_eq!(info.result.as_ref().unwrap()["profiles"], json!([]));
+        });
     }
 
     #[test]

@@ -932,10 +932,7 @@ dependencies = [
 name = "bir-mcp"
 version = "0.1.0"
 dependencies = [
- "bir-core",
  "gpui-agent",
- "libc",
- "serde",
  "serde_json",
  "tempfile",
  "tiny_http",
@@ -3683,7 +3680,7 @@ dependencies = [
 [[package]]
 name = "gpui-agent"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/gpui-agent?rev=1edec4dbf49755bf91ffbbc23359698ea5b867f4#1edec4dbf49755bf91ffbbc23359698ea5b867f4"
+source = "git+https://github.com/hexuria/gpui-agent?rev=83630daf97a42997ee167182f299087c6d4c23ae#83630daf97a42997ee167182f299087c6d4c23ae"
 dependencies = [
  "hmac 0.12.1",
  "png 0.17.16",
@@ -10013,7 +10010,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

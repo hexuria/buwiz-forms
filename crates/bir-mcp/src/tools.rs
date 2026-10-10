@@ -1,12 +1,12 @@
-//! The closed tool table. Each MCP tool maps to exactly one BIR host call,
-//! and nothing outside this table can be reached: tool arguments are rebuilt
-//! from known keys only, and the host op name always comes from here.
+//! The closed tool table. Each MCP tool maps to one fixed [`Action`], and
+//! nothing outside this table can be reached: tool arguments are rebuilt
+//! from known keys only, and every host op name comes from here.
 //!
 //! Draft-only by construction: there is no submit, queue, file or payment
 //! tool, and `tools_list_has_no_submit_queue_file_or_pay_tool` keeps it that way.
 use serde_json::{Map, Value, json};
 
-/// What a tool reaches on the BIR host.
+/// What a tool reaches on a BIR host.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HostCall {
     /// gpui-agent `hello` (connection + host identity).
@@ -24,9 +24,37 @@ impl HostCall {
     }
 }
 
+/// Read-only app identity (`{app, mode, database, profiles}`), used to list
+/// and to connect.
+pub const APP_INFO: HostCall = HostCall::Invoke("app.info");
+
+/// What a tool does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Action {
+    /// List running BIR apps; `app.info` on each one with a known token.
+    ListApps,
+    /// Select one app for this `bir-mcp` process, after `app.info`.
+    Connect,
+    /// Report the selection; `hello` on the selected app.
+    Status,
+    /// One host op on the selected app. Refused until an app is selected.
+    Host(HostCall),
+}
+
+impl Action {
+    /// Every host op this action can reach.
+    pub fn ops(self) -> Vec<&'static str> {
+        match self {
+            Action::ListApps | Action::Connect => vec![APP_INFO.op_name()],
+            Action::Status => vec![HostCall::Hello.op_name()],
+            Action::Host(call) => vec![call.op_name()],
+        }
+    }
+}
+
 pub struct Tool {
     pub name: &'static str,
-    pub call: HostCall,
+    pub action: Action,
     pub description: &'static str,
     schema: fn() -> Value,
     build_args: fn(&Map<String, Value>) -> Result<Value, String>,
@@ -60,78 +88,92 @@ pub const FILL_SOURCES: [&str; 4] = ["profile", "past_return", "document", "ai"]
 
 pub static TOOLS: &[Tool] = &[
     Tool {
+        name: "bir_list_apps",
+        action: Action::ListApps,
+        description: "List every running BIR app (desktop windows and headless daemons): its id, pid, address, mode, whether bir-mcp holds its agent token, and, when it does, whether it uses a test or the REAL taxpayer database and which taxpayers it holds. Call this first. Show the list to the user and ask which app to use; never pick one yourself, even when only one is listed.",
+        schema: empty_schema,
+        build_args: no_args,
+    },
+    Tool {
+        name: "bir_connect",
+        action: Action::Connect,
+        description: "Select the BIR app the user chose, by `id` exactly as bir_list_apps returned it. Every other bir_* tool works only on the selected app. An app using the REAL taxpayer database is refused unless `confirm_real` is true: set it only after the user has explicitly confirmed, in this chat, that they want to work on real taxpayer data. A failed bir_connect leaves no app selected.",
+        schema: connect_schema,
+        build_args: connect_args,
+    },
+    Tool {
         name: "bir_status",
-        call: HostCall::Hello,
-        description: "Check that the BIR app is running and reachable. Returns which BIR instance was found (desktop window or headless daemon), its address, and host info. Call this first; if it fails, ask the user to open the BIR desktop app with the agent enabled.",
+        action: Action::Status,
+        description: "Report which BIR app is selected (id, mode, test or real database) and check it is still reachable. With no app selected it says so; then call bir_list_apps, ask the user which app, and bir_connect.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_profiles_list",
-        call: HostCall::Invoke("profile.list"),
+        action: Action::Host(HostCall::Invoke("profile.list")),
         description: "List the taxpayer profiles saved in BIR (TIN, branch, registered name, RDO). Use this to let the user pick which taxpayer the return is for; pass the chosen `tin` exactly as returned to bir_form_open.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_dues_list",
-        call: HostCall::Invoke("dues.list"),
+        action: Action::Host(HostCall::Invoke("dues.list")),
         description: "List tax returns that are due, according to BIR's filing calendar. Useful to suggest which form and period to prepare. `filter`: upcoming (default), overdue, or all. `scope`: profile (the currently selected taxpayer) or global (every taxpayer).",
         schema: dues_schema,
         build_args: dues_args,
     },
     Tool {
         name: "bir_form_open",
-        call: HostCall::Invoke("form.open"),
+        action: Action::Host(HostCall::Invoke("form.open")),
         description: "Open a draft return in BIR for one taxpayer and period. Supported forms: 2551Q (quarterly percentage tax; period = quarter 1-4) and 1601C (monthly withholding on compensation; period = month 1-12). Loads the existing draft if one was saved. Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first.",
         schema: open_schema,
         build_args: open_args,
     },
     Tool {
         name: "bir_form_fields",
-        call: HostCall::Invoke("form.fields"),
+        action: Action::Host(HostCall::Invoke("form.fields")),
         description: "Read every box of the open form: key, label, current value, whether it is computed, and where each value came from (profile, past_return, document, user, ai). Use the keys returned here when calling bir_form_fill.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_context",
-        call: HostCall::Invoke("form.context"),
+        action: Action::Host(HostCall::Invoke("form.context")),
         description: "Read what BIR knows that can ground the open form: the taxpayer profile (COR facts), tax elections the user has stored (e.g. 8% option) - these are never inferred, past returns for this TIN, and uploaded documents (OCR) for the period. Fill only what this context supports.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_fill",
-        call: HostCall::Invoke("form.fill"),
+        action: Action::Host(HostCall::Invoke("form.fill")),
         description: "Fill boxes of the open form. `fields` maps box keys (from bir_form_fields) to values. `source` says where the values came from: profile, past_return, document, or ai (default; use ai only for values you derived yourself). Call once per source. Boxes the user typed are never overwritten: they come back in `kept_user_boxes`. Never fill a tax election (such as the 8% option) unless bir_form_context shows it stored. Computed boxes cannot be filled.",
         schema: fill_schema,
         build_args: fill_args,
     },
     Tool {
         name: "bir_form_needs_you",
-        call: HostCall::Invoke("form.needs_you"),
+        action: Action::Host(HostCall::Invoke("form.needs_you")),
         description: "List the required boxes of the open form that are still empty (\"needs you\"). Ask the user for each one in chat, or let them type it directly in BIR.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_validate",
-        call: HostCall::Invoke("form.validate"),
+        action: Action::Host(HostCall::Invoke("form.validate")),
         description: "Validate the open form with BIR's rules. Returns `ok`, an error count, and `field_errors`: a list of {field, message} per box. Explain each field error to the user in plain words.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_save_draft",
-        call: HostCall::Invoke("form.save_draft"),
+        action: Action::Host(HostCall::Invoke("form.save_draft")),
         description: "Save the open form as a draft in BIR. This never submits, queues, files or pays anything; the user reviews and files from BIR themselves.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_dismiss",
-        call: HostCall::Invoke("form.dismiss"),
+        action: Action::Host(HostCall::Invoke("form.dismiss")),
         description: "Close the open form without saving. BIR refuses with \"unsaved edits\" when the form has changes; in that case tell the user to press Dismiss in BIR (which asks them to confirm) or save the draft first. Never try to work around that refusal.",
         schema: empty_schema,
         build_args: no_args,
@@ -148,6 +190,25 @@ pub fn list() -> Value {
 
 fn empty_schema() -> Value {
     json!({ "type": "object", "properties": {}, "additionalProperties": false })
+}
+
+fn connect_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": {
+                "type": "string",
+                "description": "App id exactly as bir_list_apps returned it (a connect id such as `bir-demo`, or `pid:<pid>`)."
+            },
+            "confirm_real": {
+                "type": "boolean",
+                "default": false,
+                "description": "Required true for an app on the REAL taxpayer database. Only after the user explicitly confirmed it in this chat."
+            }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+    })
 }
 
 fn dues_schema() -> Value {
@@ -255,6 +316,26 @@ fn optional_enum(
     }
 }
 
+fn connect_args(args: &Map<String, Value>) -> Result<Value, String> {
+    reject_unknown(args, &["id", "confirm_real"])?;
+    let id = args
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .ok_or("`id` is required: pick it with the user from bir_list_apps")?;
+    let confirm_real = match args.get("confirm_real") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(confirm)) => *confirm,
+        Some(other) => {
+            return Err(format!(
+                "`confirm_real` must be true or false (got {other})"
+            ));
+        }
+    };
+    Ok(json!({ "id": id, "confirm_real": confirm_real }))
+}
+
 fn dues_args(args: &Map<String, Value>) -> Result<Value, String> {
     reject_unknown(args, &["filter", "scope"])?;
     let mut out = Map::new();
@@ -336,8 +417,9 @@ mod tests {
 
     /// Op names this adapter may ever reach. Changing this list is a
     /// deliberate, reviewed act.
-    const ALLOWED_OPS: [&str; 11] = [
+    const ALLOWED_OPS: [&str; 12] = [
         "hello",
+        "app.info",
         "profile.list",
         "dues.list",
         "form.open",
@@ -367,9 +449,24 @@ mod tests {
             .map(|tool| tool["name"].as_str().unwrap())
             .collect();
         assert_eq!(names.len(), TOOLS.len());
-        let ops: Vec<&str> = TOOLS.iter().map(|tool| tool.call.op_name()).collect();
+        // The app-selection tools are listed and checked like every other.
+        for selection_tool in ["bir_list_apps", "bir_connect", "bir_status"] {
+            assert!(
+                names.contains(&selection_tool),
+                "{selection_tool} not listed"
+            );
+        }
+        let ops: Vec<&str> = TOOLS.iter().flat_map(|tool| tool.action.ops()).collect();
+        assert!(ops.contains(&"app.info"), "{ops:?}");
         for name in names.iter().chain(ops.iter()) {
             assert_eq!(banned(name), None, "`{name}`");
+        }
+        // Argument names of every tool, too (e.g. `confirm_real`).
+        for tool in TOOLS {
+            let schema = tool.input_schema();
+            for key in schema["properties"].as_object().unwrap().keys() {
+                assert_eq!(banned(key), None, "{}.{key}", tool.name);
+            }
         }
         // The checker itself is not vacuous.
         for bad in [
@@ -404,7 +501,7 @@ mod tests {
 
     #[test]
     fn tool_ops_are_a_closed_allow_list() {
-        let ops: HashSet<&str> = TOOLS.iter().map(|tool| tool.call.op_name()).collect();
+        let ops: HashSet<&str> = TOOLS.iter().flat_map(|tool| tool.action.ops()).collect();
         let allowed: HashSet<&str> = ALLOWED_OPS.into_iter().collect();
         assert_eq!(ops, allowed);
         let names: HashSet<&str> = TOOLS.iter().map(|tool| tool.name).collect();
@@ -444,6 +541,32 @@ mod tests {
             json!({"code": "1601C", "year": 2026, "period": 1, "tin": "1", "confirm": true}),
         ] {
             assert!(open.host_args(&obj(bad.clone())).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn connect_args_need_an_id_and_a_boolean_confirm_real() {
+        let connect = find("bir_connect").unwrap();
+        assert_eq!(
+            connect
+                .host_args(&obj(json!({"id": " bir-demo "})))
+                .unwrap(),
+            json!({"id": "bir-demo", "confirm_real": false})
+        );
+        assert_eq!(
+            connect
+                .host_args(&obj(json!({"id": "pid:42", "confirm_real": true})))
+                .unwrap(),
+            json!({"id": "pid:42", "confirm_real": true})
+        );
+        for bad in [
+            json!({}),
+            json!({"id": ""}),
+            json!({"id": 42}),
+            json!({"id": "bir-demo", "confirm_real": "yes"}),
+            json!({"id": "bir-demo", "token": "x"}),
+        ] {
+            assert!(connect.host_args(&obj(bad.clone())).is_err(), "{bad}");
         }
     }
 

@@ -1,9 +1,9 @@
 //! `bir-mcp`: MCP server for drafting BIR returns, over stdio or (with
 //! `--http`) Streamable HTTP on loopback.
 //!
-//! Environment: `GPUI_AGENT_TOKEN` (the BIR app's agent token),
-//! `GPUI_AGENT_ADDR` (explicit address, overrides discovery),
-//! `GPUI_AGENT_REGISTRY` (discovery directory override),
+//! Environment: `BIR_MCP_TOKENS` (0600 JSON file of per-app agent tokens),
+//! `GPUI_AGENT_TOKEN` (fallback agent token for any app),
+//! `GPUI_AGENT_RUNTIME_DIR` (upstream discovery directory override),
 //! `BIR_MCP_HTTP_TOKEN` (bearer token, required with `--http`).
 use bir_mcp::client::AgentBirHost;
 use bir_mcp::http;
@@ -18,11 +18,14 @@ Usage: bir-mcp                       speak MCP (JSON-RPC 2.0, one message per li
        bir-mcp --version
        bir-mcp --help
 
+Tools work on one BIR app at a time, chosen by the user: bir_list_apps lists every
+running BIR app, bir_connect selects one. Nothing is selected at startup.
+
 Environment:
-  GPUI_AGENT_TOKEN     agent token of the running BIR app (required when the app requires one)
-  GPUI_AGENT_ADDR      connect to this address instead of using discovery
-  GPUI_AGENT_REGISTRY  discovery record directory (default: BIR data dir/agent-instances)
-  BIR_MCP_HTTP_TOKEN   with --http: every request must send `Authorization: Bearer <this>`";
+  BIR_MCP_TOKENS          JSON file {\"<connect id or pid>\": \"<agent token>\"}; must be mode 0600
+  GPUI_AGENT_TOKEN        fallback agent token for any app without an entry in BIR_MCP_TOKENS
+  GPUI_AGENT_RUNTIME_DIR  gpui-agent discovery directory (default: gpui-agent's per-user runtime dir)
+  BIR_MCP_HTTP_TOKEN      with --http: every request must send `Authorization: Bearer <this>`";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

@@ -2,13 +2,18 @@
 """End-to-end smoke for the /file-tax goal (called by check_file_tax_goal.sh).
 
 1. Starts `bir-headless serve` on a temp BIR_DATABASE_PATH + temp
-   GPUI_AGENT_REGISTRY (EBIR_TEST_ENV=1; never the live database).
+   GPUI_AGENT_RUNTIME_DIR (upstream gpui-agent discovery records), named
+   with GPUI_AGENT_CONNECT_ID (EBIR_TEST_ENV=1; never the live database).
 2. Seeds the dummy test taxpayer (TIN 111111114, branch 00000) through the
-   gpui-agent protocol, the same way the app's own profile editor does.
-3. Starts `bir-mcp` over stdio with no GPUI_AGENT_ADDR, so it has to find
-   BIR through the discovery records, and drives:
-   initialize -> tools/list -> open 2551Q -> fill one box with a source ->
-   needs-you non-empty -> validate returns field-level errors ->
+   gpui-agent protocol, the same way the app's own profile editor does, and
+   checks `bir-headless status` finds the daemon through its record.
+3. Starts `bir-mcp` over stdio with no GPUI_AGENT_ADDR and no
+   GPUI_AGENT_TOKEN: the app's token comes from a 0600 BIR_MCP_TOKENS file,
+   and the app from the discovery records. Drives:
+   initialize -> tools/list -> a form tool refuses before any app is
+   selected -> bir_list_apps shows the app (token known, test database,
+   test taxpayer) -> bir_connect -> open 2551Q -> fill one box with a source
+   -> needs-you non-empty -> validate returns field-level errors ->
    opening 1601C is refused -> dismiss -> opening 1601C succeeds -> shutdown.
 
 Exits non-zero on the first broken step. Draft-only: nothing is saved,
@@ -33,6 +38,8 @@ import time
 from pathlib import Path
 
 TEST_TIN = "11111111400000"  # 111111114 (official check digit) + branch 00000
+CONNECT_ID = "file-tax-smoke"
+NOT_SELECTED = "no BIR app selected"
 FORBIDDEN_TOOL_WORDS = {"submit", "queue", "file", "pay", "paid", "payment"}
 FILL_KEY = "schedule_1.0.taxable_amount"
 
@@ -202,6 +209,20 @@ def expect_ok(label: str, outcome: tuple[bool, object, str]) -> object:
     return payload
 
 
+def expect_app_result(label: str, outcome: tuple[bool, object, str]) -> object:
+    """A form/profile/dues tool result: `{app: {id, mode, database}, result}`."""
+    payload = expect_ok(label, outcome)
+    app = payload.get("app")
+    if not isinstance(app, dict) or app.get("id") != CONNECT_ID:
+        raise SmokeError(f"{label} result does not name the connected app: {payload}")
+    if app.get("database") != "test":
+        raise SmokeError(f"{label} result is not labelled as the test database: {payload}")
+    result = payload.get("result")
+    if not isinstance(result, dict):
+        raise SmokeError(f"{label} result has no JSON object `result`: {payload}")
+    return result
+
+
 def wait_ready(addr: str, token: str, proc: subprocess.Popen, log: Path) -> None:
     deadline = time.monotonic() + 60
     last_error = ""
@@ -253,20 +274,23 @@ def seed_profile(addr: str, token: str) -> None:
 def run(args: argparse.Namespace) -> None:
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
-    registry = work / "registry"
-    registry.mkdir(exist_ok=True)
+    runtime = work / "gpui-agent-runtime"
+    runtime.mkdir(exist_ok=True)
     db_path = work / "bir_data.db"
     log = work / "logs" / "bir-headless.log"
     token = secrets.token_hex(16)
     addr = f"127.0.0.1:{free_port()}"
 
-    base_env = {k: v for k, v in os.environ.items() if not k.startswith("GPUI_AGENT")}
+    base_env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("GPUI_AGENT") and k != "BIR_MCP_TOKENS"
+    }
     base_env.update(
         {
             "BIR_DATABASE_PATH": str(db_path),
             "EBIR_TEST_ENV": "1",
-            "GPUI_AGENT_REGISTRY": str(registry),
-            "GPUI_AGENT_TOKEN": token,
+            "GPUI_AGENT_RUNTIME_DIR": str(runtime),
         }
     )
     headless_env = dict(base_env)
@@ -274,12 +298,22 @@ def run(args: argparse.Namespace) -> None:
         {
             "GPUI_AGENT": "1",
             "GPUI_AGENT_ADDR": addr,
+            "GPUI_AGENT_TOKEN": token,
+            "GPUI_AGENT_CONNECT_ID": CONNECT_ID,
             "BIR_HEADLESS_LOG": str(log),
             "BIR_HEADLESS_PID": str(work / "bir-headless.pid"),
         }
     )
+    # bir-mcp gets the token only through a 0600 BIR_MCP_TOKENS file.
+    tokens_file = work / "bir-mcp-tokens.json"
+    fd = os.open(tokens_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        json.dump({CONNECT_ID: token}, handle)
+    os.chmod(tokens_file, 0o600)
+    mcp_env = dict(base_env)
+    mcp_env["BIR_MCP_TOKENS"] = str(tokens_file)
 
-    step(f"bir-headless serve on {addr} (db {db_path}, registry {registry})")
+    step(f"bir-headless serve on {addr} (db {db_path}, runtime {runtime})")
     headless = subprocess.Popen(
         [args.headless, "serve"],
         env=headless_env,
@@ -289,13 +323,27 @@ def run(args: argparse.Namespace) -> None:
     mcp: McpClient | None = None
     try:
         wait_ready(addr, token, headless, log)
-        if not any(registry.glob("*.json")):
-            raise SmokeError(f"bir-headless wrote no discovery record in {registry}")
+        records = list((runtime / "hosts").glob("*.json"))
+        if not records:
+            raise SmokeError(f"bir-headless wrote no discovery record in {runtime}/hosts")
+        if not any(json.loads(r.read_text()).get("connect_id") == CONNECT_ID for r in records):
+            raise SmokeError(f"no discovery record carries connect_id {CONNECT_ID}: {records}")
         seed_profile(addr, token)
         step("seeded test taxpayer")
 
-        # No GPUI_AGENT_ADDR: bir-mcp must find BIR via the discovery records.
-        mcp = McpClient([args.mcp], dict(base_env))
+        # `bir-headless status` without GPUI_AGENT_ADDR finds the daemon
+        # through its upstream discovery record (by GPUI_AGENT_CONNECT_ID).
+        status_env = {k: v for k, v in headless_env.items() if k != "GPUI_AGENT_ADDR"}
+        status = subprocess.run(
+            [args.headless, "status"], env=status_env, capture_output=True, text=True, timeout=30
+        )
+        if status.returncode != 0 or '"ok":true' not in status.stdout.replace(" ", ""):
+            raise SmokeError(f"bir-headless status via discovery failed: {status.stdout}{status.stderr}")
+        step("bir-headless status found the daemon through discovery")
+
+        # No GPUI_AGENT_ADDR, no GPUI_AGENT_TOKEN: bir-mcp finds BIR via the
+        # discovery records and its token via BIR_MCP_TOKENS.
+        mcp = McpClient([args.mcp], mcp_env)
         init = mcp.call(
             "initialize",
             {
@@ -325,11 +373,39 @@ def run(args: argparse.Namespace) -> None:
         needs_tool = find_tool(tools, ("form_needs_you", "needs_you"))
         validate_tool = find_tool(tools, ("form_validate", "validate_form"))
         dismiss_tool = find_tool(tools, ("form_dismiss", "dismiss_form"))
+        list_tool = find_tool(tools, ("list_apps",))
+        connect_tool = find_tool(tools, ("connect",))
+        profiles_tool = find_tool(tools, ("profiles_list",))
         step(f"tools/list ok ({len(tools)} tools, none submit/queue/file/pay)")
+
+        ok, _, text = call_tool(mcp, profiles_tool, {})
+        if ok or NOT_SELECTED not in text:
+            raise SmokeError(f"{profiles_tool} was not refused before bir_connect: {text}")
+        step("form/profile tools refuse until an app is selected")
+
+        listed = expect_ok("list apps", call_tool(mcp, list_tool, {}))
+        apps = listed.get("apps")
+        if not isinstance(apps, list) or len(apps) != 1:
+            raise SmokeError(f"expected exactly one BIR app listed: {listed}")
+        app = apps[0]
+        if app.get("id") != CONNECT_ID or app.get("token") != "known":
+            raise SmokeError(f"listed app is not {CONNECT_ID} with a known token: {app}")
+        if app.get("mode") != "headless" or app.get("database") != "test":
+            raise SmokeError(f"listed app is not a headless test-database app: {app}")
+        if not any(p.get("tin") == TEST_TIN for p in app.get("taxpayers") or []):
+            raise SmokeError(f"listed app does not show the test taxpayer: {app}")
+        if listed.get("selected") is not None:
+            raise SmokeError(f"listing selected an app by itself: {listed}")
+        step(f"bir_list_apps shows {CONNECT_ID} (headless, test database, token known)")
+
+        connected = expect_ok("connect", call_tool(mcp, connect_tool, {"id": CONNECT_ID}))
+        if connected.get("connected") is not True or connected.get("app", {}).get("database") != "test":
+            raise SmokeError(f"bir_connect returned {connected}")
+        step(f"bir_connect {CONNECT_ID} ok")
 
         # A quarter that has already started, so the period itself is valid.
         year = _dt.date.today().year - 1
-        opened = expect_ok(
+        opened = expect_app_result(
             "open 2551Q",
             call_tool(mcp, open_tool, {"code": "2551Q", "year": year, "period": 4, "tin": TEST_TIN}),
         )
@@ -337,7 +413,7 @@ def run(args: argparse.Namespace) -> None:
             raise SmokeError(f"open 2551Q returned {opened}")
         step("open 2551Q ok")
 
-        filled = expect_ok(
+        filled = expect_app_result(
             "fill",
             call_tool(mcp, fill_tool, {"fields": {FILL_KEY: "1000.00"}, "source": "document"}),
         )
@@ -347,7 +423,7 @@ def run(args: argparse.Namespace) -> None:
             raise SmokeError(f"fill result lacks kept_user_boxes: {filled}")
         step("fill one box with source=document ok")
 
-        needs = expect_ok("needs_you", call_tool(mcp, needs_tool, {}))
+        needs = expect_app_result("needs_you", call_tool(mcp, needs_tool, {}))
         boxes = needs.get("boxes")
         if not isinstance(boxes, list) or not boxes:
             raise SmokeError(f"needs-you list is empty: {needs}")
@@ -355,7 +431,7 @@ def run(args: argparse.Namespace) -> None:
             raise SmokeError(f"needs-you boxes lack field/label: {boxes}")
         step(f"needs-you lists {len(boxes)} boxes")
 
-        validated = expect_ok("validate", call_tool(mcp, validate_tool, {}))
+        validated = expect_app_result("validate", call_tool(mcp, validate_tool, {}))
         field_errors = validated.get("field_errors")
         if not isinstance(field_errors, list) or not field_errors:
             raise SmokeError(f"validate returned no field_errors: {validated}")
@@ -374,12 +450,12 @@ def run(args: argparse.Namespace) -> None:
             raise SmokeError(f"opening 1601C while 2551Q is open was not refused: {text}")
         step("open 1601C refused while 2551Q is open")
 
-        dismissed = expect_ok("dismiss", call_tool(mcp, dismiss_tool, {}))
+        dismissed = expect_app_result("dismiss", call_tool(mcp, dismiss_tool, {}))
         if dismissed.get("dismissed") is not True or dismissed.get("form") != "2551Q":
             raise SmokeError(f"dismiss returned {dismissed}")
         step("dismiss 2551Q ok")
 
-        reopened = expect_ok(
+        reopened = expect_app_result(
             "open 1601C after dismiss",
             call_tool(mcp, open_tool, {"code": "1601C", "year": year, "period": 12, "tin": TEST_TIN}),
         )

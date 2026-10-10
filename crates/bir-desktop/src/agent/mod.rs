@@ -5,7 +5,6 @@
 //! drain live behind `--features agent`.
 
 pub mod assist;
-pub mod discovery;
 mod headless_daemon;
 pub mod ids;
 pub mod search;
@@ -34,6 +33,8 @@ pub mod headless;
 mod host;
 #[cfg(feature = "agent")]
 mod html_demo;
+#[cfg(feature = "agent")]
+pub mod instance;
 #[cfg(feature = "agent")]
 pub(crate) mod keybindings;
 #[cfg(feature = "agent")]

@@ -291,6 +291,7 @@ fn is_loopback_origin(origin: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::AppRecord;
     use crate::tools::HostCall;
     use serde_json::json;
     use std::io::Write;
@@ -299,11 +300,28 @@ mod tests {
 
     const TOKEN: &str = "test-token-not-a-secret";
 
-    /// Stands in for BIR. Never reaches a real app.
+    /// Stands in for BIR. Never reaches a real app; no app is running.
     struct MockHost;
 
     impl BirHost for MockHost {
-        fn call(&mut self, call: HostCall, _args: Value) -> Result<Value, String> {
+        fn apps(&mut self) -> Result<Vec<AppRecord>, String> {
+            Ok(Vec::new())
+        }
+
+        fn resolve(&mut self, id: &str) -> Result<AppRecord, String> {
+            Err(format!("no AgentHost is running for '{id}'"))
+        }
+
+        fn alive(&mut self, _app: &AppRecord) -> bool {
+            false
+        }
+
+        fn call(
+            &mut self,
+            _app: &AppRecord,
+            call: HostCall,
+            _args: Value,
+        ) -> Result<Value, String> {
             Ok(json!({"mock": format!("{call:?}")}))
         }
     }
@@ -443,6 +461,25 @@ mod tests {
         assert_eq!(status, 200);
         let reply: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(reply["result"]["isError"], false, "{reply}");
+        assert!(
+            reply["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("\"connected\": false"),
+            "{reply}"
+        );
+
+        // Over HTTP too, form tools refuse until an app is selected.
+        let open = json!({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                          "params": {"name": "bir_profiles_list", "arguments": {}}});
+        let (status, _, body) = running.post(&open, &[]);
+        assert_eq!(status, 200);
+        let reply: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(reply["result"]["isError"], true, "{reply}");
+        assert_eq!(
+            reply["result"]["content"][0]["text"],
+            crate::server::NOT_SELECTED
+        );
 
         let submit = json!({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
                             "params": {"name": "bir_form_submit", "arguments": {}}});

@@ -50,6 +50,10 @@ rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 
 
 
+# gpui-agent control plane. One rev for bir-desktop (`agent` feature) and
+# bir-mcp, so both sides speak one protocol and one discovery format.
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "83630daf97a42997ee167182f299087c6d4c23ae" }
+
 # Error handling
 thiserror = "2"
 anyhow = "1"
