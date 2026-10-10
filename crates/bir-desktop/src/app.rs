@@ -1421,6 +1421,30 @@ impl AppState {
         .detach();
     }
 
+    /// Close a 2551Q/1601C form without saving (its Dismiss button or the
+    /// agent's `form.dismiss`) and return to the taxpayer's dashboard.
+    pub(crate) fn dismiss_form_view(&mut self, view: ActiveView, cx: &mut Context<Self>) {
+        match view {
+            ActiveView::Form2551Q => self.form_2551q_view = None,
+            ActiveView::Form1601C => self.form_1601c_view = None,
+            _ => return,
+        }
+        if self.active_view == view {
+            if let Some(tin) = &self.active_profile_tin
+                && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+            {
+                let profile = profile.clone();
+                self.dashboard_view.update(cx, |dashboard, cx| {
+                    dashboard.set_profile(profile, cx);
+                });
+                self.active_view = ActiveView::Dashboard;
+            } else {
+                self.active_view = ActiveView::GlobalDashboard;
+            }
+        }
+        cx.notify();
+    }
+
     pub(crate) fn open_named_form(
         &mut self,
         form_code: &str,
@@ -2137,6 +2161,9 @@ impl Render for AppState {
                         }
                         cx.notify();
                     }
+                    Form2551QEvent::Dismissed => {
+                        this.dismiss_form_view(ActiveView::Form2551Q, cx);
+                    }
                     Form2551QEvent::PushNotification(level, title, message) => {
                         push_notification(level, title, message, window, cx);
                     }
@@ -2196,6 +2223,9 @@ impl Render for AppState {
                     Form1601CEvent::BackToDashboard => {
                         this.active_view = ActiveView::Dashboard;
                         cx.notify();
+                    }
+                    Form1601CEvent::Dismissed => {
+                        this.dismiss_form_view(ActiveView::Form1601C, cx);
                     }
                     Form1601CEvent::PushNotification(level, title, message) => {
                         push_notification(level, title, message, window, cx);

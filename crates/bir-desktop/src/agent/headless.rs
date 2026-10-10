@@ -299,7 +299,12 @@ impl Drop for ServePidGuard {
 }
 
 fn serve(wait: bool) -> Result<(), ExitCode> {
-    let config = load_serve_config()?;
+    let mut config = load_serve_config()?;
+    // `--wait` exists to wait for the port (restart handoff), so it must not
+    // fall back to an ephemeral port while the old server still holds it.
+    if !wait {
+        config.addr = super::discovery::resolve_addr(config.addr);
+    }
     let token_set = config.token.is_some();
 
     loop {
@@ -362,6 +367,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             eprintln!("pid file: {error}");
         }
         let _pid_guard = ServePidGuard;
+        let _discovery_guard = super::discovery::register("bir-desktop", addr, "headless");
 
         eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
         eprintln!(
@@ -426,13 +432,17 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 }
 
 fn connect_running() -> Result<AgentClient, ExitCode> {
-    let addr = match std::env::var("GPUI_AGENT_ADDR") {
-        Ok(raw) => raw.parse::<SocketAddr>().map_err(|error| {
-            eprintln!("invalid GPUI_AGENT_ADDR: {error}");
-            ExitCode::from(2)
-        })?,
-        Err(_) => DEFAULT_ADDR_STR.parse().expect("default addr"),
-    };
+    let explicit = std::env::var(super::discovery::ADDR_ENV).ok();
+    let records = super::discovery::list(Some("bir-desktop"));
+    let addr = super::discovery::client_addr(
+        explicit.as_deref(),
+        &records,
+        DEFAULT_ADDR_STR.parse().expect("default addr"),
+    )
+    .map_err(|error| {
+        eprintln!("{error}");
+        ExitCode::from(2)
+    })?;
     let token = std::env::var("GPUI_AGENT_TOKEN")
         .ok()
         .filter(|value| !value.is_empty());
@@ -814,7 +824,7 @@ mod tests {
             ));
             {
                 let mut host = BirAgentHost::new(PlatformKind::Headless).with_database(db.clone());
-                fill_profile_editor(&mut host, "00000000000002", "Headless Live TIN");
+                fill_profile_editor(&mut host, "11111111400000", "Headless Live TIN");
                 let saved = handle_request(
                     &mut host,
                     req(Op::Invoke {
@@ -844,7 +854,7 @@ mod tests {
                         .unwrap()
                         .iter()
                         .any(|row| {
-                            row["tin"] == "00000000000002" && row["name"] == "Headless Live TIN"
+                            row["tin"] == "11111111400000" && row["name"] == "Headless Live TIN"
                         }),
                     "{:?}",
                     listed.result
@@ -862,7 +872,7 @@ mod tests {
             assert!(
                 listed
                     .iter()
-                    .any(|profile| profile.tin.full() == "00000000000002"
+                    .any(|profile| profile.tin.full() == "11111111400000"
                         && profile.full_name == "Headless Live TIN"),
                 "{listed:?}"
             );
@@ -886,7 +896,7 @@ mod tests {
                 .invoke("profile.create", json!({}))
                 .expect("create editor");
             for (target, value) in [
-                (ids::PROFILE_TIN, "00000000000002"),
+                (ids::PROFILE_TIN, "11111111400000"),
                 (ids::PROFILE_NAME, "Headless Tcp TIN"),
                 (ids::PROFILE_RDO, "018"),
                 (ids::PROFILE_LOB, "Retail"),
@@ -924,7 +934,7 @@ mod tests {
             assert!(
                 listed
                     .iter()
-                    .any(|profile| profile.tin.full() == "00000000000002"),
+                    .any(|profile| profile.tin.full() == "11111111400000"),
                 "{listed:?}"
             );
         });

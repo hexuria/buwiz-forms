@@ -4,6 +4,8 @@
 //! without pulling `gpui-agent`. The mailbox, semantic host, and UI-thread
 //! drain live behind `--features agent`.
 
+pub mod assist;
+pub mod discovery;
 mod headless_daemon;
 pub mod ids;
 pub mod search;

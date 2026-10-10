@@ -180,6 +180,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
             false,
             form.agent_validation_errors(),
         );
+        host.set_form_1601c_assist(form.agent_assist().clone());
     }
     if let Some(view) = &app.form_2551q_view {
         let form = view.read(cx);
@@ -189,6 +190,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
             false,
             form.agent_validation_errors(),
         );
+        host.set_form_2551q_assist(form.agent_assist().clone());
     }
     host.reconcile_open_forms_from_db();
     // Jobs and submissions are only read back out of the host by `jobs.list` /
@@ -227,6 +229,14 @@ fn apply_host(
 
     if let Some(list) = app.db.lock().ok().and_then(|db| db.list_profiles().ok()) {
         app.profiles = list;
+    }
+
+    // `form.dismiss` closed a form: drop its view so the next request does
+    // not rebuild the host state from it.
+    match host.take_dismissed_form() {
+        Some("2551Q") => app.dismiss_form_view(ActiveView::Form2551Q, cx),
+        Some("1601C") => app.dismiss_form_view(ActiveView::Form1601C, cx),
+        _ => {}
     }
 
     if host.active_view() != app.active_view {
@@ -288,6 +298,14 @@ fn apply_host(
         && let Some(view) = &app.form_1601c_view
     {
         view.update(cx, |form, cx| {
+            // A fill of any box reaches the form: sources first, then the
+            // whole draft when its fillable boxes differ from the form's.
+            if let Some(assist) = host.form_1601c_assist() {
+                form.agent_set_assist(assist.clone(), cx);
+            }
+            if let Some(draft) = host.form_1601c_draft() {
+                form.agent_apply_draft(draft, window, cx);
+            }
             form.agent_apply_from_host(host.form_1601c_host_patch(), window, cx);
             if let Some(draft) = host.form_1601c_draft() {
                 form.agent_sync_filing_snapshot(draft, cx);
@@ -303,6 +321,12 @@ fn apply_host(
         && let Some(view) = &app.form_2551q_view
     {
         view.update(cx, |form, cx| {
+            if let Some(assist) = host.form_2551q_assist() {
+                form.agent_set_assist(assist.clone(), cx);
+            }
+            if let Some(draft) = host.form_2551q_draft() {
+                form.agent_apply_draft(draft, window, cx);
+            }
             form.agent_apply_from_host(
                 crate::views::form_2551q_view::Agent2551QHostPatch {
                     creditable_tax_withheld: host.form_2551q_creditable(),
