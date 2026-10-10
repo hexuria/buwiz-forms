@@ -117,11 +117,11 @@
       "after": "\n\t\t\t\t\t"
     },
     {
-      "key": "frm2200Av2020:txtRDOCode",
+      "key": "frm2200Av2020:rdoCode",
       "kind": "value",
       "parts": [
         {
-          "source": "frm2200Av2020:txtRDOCode",
+          "source": "frm2200Av2020:rdoCode",
           "codec": "raw"
         }
       ],
