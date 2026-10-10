@@ -1463,14 +1463,14 @@ impl Form2551QView {
         };
 
         let draft = self.draft.clone();
-        let options = WindowOptions {
+        let options = crate::window_identity::identified(WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1000.), px(800.)), cx)),
             titlebar: Some(TitlebarOptions {
                 title: Some("Email Confirmation".into()),
                 ..Default::default()
             }),
             ..Default::default()
-        };
+        });
 
         if let Err(err) = cx.open_window(options, move |_window, cx| {
             cx.new(|_cx| EmailConfirmationView::new(receipt, draft, _cx))

@@ -374,7 +374,7 @@ pub fn run_gui() {
                 None => (None, None, None, None),
             };
 
-            let options = WindowOptions {
+            let options = crate::window_identity::identified(WindowOptions {
                 titlebar: Some(TitlebarOptions {
                     title: Some("e-BIRForms".into()),
                     ..Default::default()
@@ -382,7 +382,7 @@ pub fn run_gui() {
                 window_bounds: Some(WindowBounds::Maximized(bounds)),
                 window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
                 ..Default::default()
-            };
+            });
 
             let _ = cx.open_window(options, move |window, cx| {
                 window.on_window_should_close(cx, |_, _cx| {

@@ -28,6 +28,7 @@ mod quit_guard;
 mod sidebar;
 mod theme;
 mod views;
+mod window_identity;
 
 pub mod global_actions {
     gpui_kit::actions!(

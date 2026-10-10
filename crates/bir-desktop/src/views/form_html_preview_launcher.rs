@@ -179,14 +179,14 @@ fn write_frozen_html_document(html: &str) -> Result<std::path::PathBuf, String> 
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 fn frozen_preview_window_options<T: 'static>(title: &str, cx: &mut Context<T>) -> WindowOptions {
-    WindowOptions {
+    crate::window_identity::identified(WindowOptions {
         window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),
         titlebar: Some(TitlebarOptions {
             title: Some(title.to_string().into()),
             ..Default::default()
         }),
         ..Default::default()
-    }
+    })
 }
 
 #[cfg(test)]

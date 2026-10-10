@@ -806,7 +806,7 @@ impl Render for CronTasksView {
                                                     // A real title bar: with a transparent one the
                                                     // view's heading sat under the traffic lights and
                                                     // a long job name ran off the window edge.
-                                                    let options = WindowOptions {
+                                                    let options = crate::window_identity::identified(WindowOptions {
                                                         titlebar: Some(TitlebarOptions {
                                                             title: Some("Debug Log".into()),
                                                             ..Default::default()
@@ -816,7 +816,7 @@ impl Render for CronTasksView {
                                                             size: size(px(800.), px(600.)),
                                                         })),
                                                         ..Default::default()
-                                                    };
+                                                    });
                                                     let _ = cx.open_window(options, move |window, cx| {
                                                         cx.new(|cx| crate::views::debug_log_viewer::DebugLogViewerView::new(jname.clone(), log.clone(), window, cx))
                                                     });
