@@ -145,6 +145,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1700-2018" => Some(include_str!(
             "../../../html-frozen/1700-2018/writer-cells.json"
         )),
+        "1701a-2018" => Some(include_str!(
+            "../../../html-frozen/1701a-2018/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1621,6 +1624,80 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1701a_fills_identity_whole_peso_combs_and_boxes() {
+        use bir_core::forms::form_1701a::{
+            Form1701AAtc, Form1701ACivilStatus, Form1701AColumn, Form1701ADraft, Form1701AFilerType,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Dummy, Sample Taxpayer", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "sample@example.com",
+                "default_form_type": "1701A", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1701ADraft::new_from_profile(&profile, 2025);
+        draft.filer_type = Form1701AFilerType::SingleProprietor;
+        draft.atc = Form1701AAtc::II012;
+        draft.civil_status = Form1701ACivilStatus::Single;
+        draft.birth_date = "01/15/1980".to_string();
+        draft.citizenship = "Filipino".to_string();
+        draft.other_income_41_description = "Interest income".to_string();
+        draft.taxpayer = Form1701AColumn {
+            sales: 1_234_567.89,
+            sales_returns: 10_000.5,
+            other_income_41: 5_000.55,
+            gpp_share: 20_000.0,
+            quarterly_payments: 30_000.0,
+            surcharge: 1_000.0,
+            ..Form1701AColumn::default()
+        };
+        draft.recompute();
+        let html = filled_document("1701a-2018", &draft.to_print_field_map()).unwrap();
+        // Header and identity.
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c20"), "788");
+        assert_eq!(comb_text(&html, "p1c23"), "039");
+        assert_eq!(comb_text(&html, "p1c32"), "DUMMY, SAMPLE TAXPAYER");
+        assert_eq!(
+            comb_text(&html, "p1c34"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c35"), "QUEZON CITY");
+        assert_eq!(comb_text(&html, "p1c40"), "01");
+        assert_eq!(comb_text(&html, "p1c42"), "1980");
+        assert_eq!(comb_text(&html, "p1c43"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p1c47"), "FILIPINO");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "DUMMY");
+        assert!(html.contains("INTEREST INCOME"));
+        // Whole pesos, right-aligned in the 8-slot comb; no decimal glyph.
+        assert_eq!(comb_text(&html, "p2c13"), " 1234568");
+        assert_eq!(comb_text(&html, "p2c48"), "   94448");
+        assert_eq!(comb_text(&html, "p1c74"), "   94448");
+        assert_eq!(comb_text(&html, "p1c89"), "    1000");
+        assert!(!comb_text(&html, "p1c74").contains('.'));
+        // Zero and column B (not joint) stay blank.
+        assert_eq!(comb_text(&html, "p2c52").trim(), "");
+        assert_eq!(comb_text(&html, "p1c75").trim(), "");
+        // X boxes.
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c163"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c24"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c27"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c195"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c56"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c67"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p2c126"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1701A:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // 2553 (1999) prints each amount in one text cell and 1702Q (2018) in
         // one 12-slot comb, not peso + cent combs.
@@ -1631,6 +1708,8 @@ mod tests {
             ("1702q-2018", false),
             // 1700 (2018) prints whole pesos in one comb per column.
             ("1700-2018", false),
+            // 1701A (2018) prints whole pesos in one 8-slot comb per column.
+            ("1701a-2018", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
