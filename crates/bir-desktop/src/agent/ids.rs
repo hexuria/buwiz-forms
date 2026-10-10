@@ -22,7 +22,6 @@ pub const PAGE_ADMIN_CALENDAR: &str = "page-admin-calendar";
 pub const PAGE_FORM_2551Q: &str = "page-form-2551q";
 pub const PAGE_FORM_1601C: &str = "page-form-1601c";
 pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
-pub const PAGE_FORM_1701: &str = "page-form-1701";
 pub const PAGE_FORM_1702MX: &str = "page-form-1702mx";
 
 pub const NAV_GLOBAL_DASHBOARD: &str = "global_dashboard_btn";
@@ -141,9 +140,6 @@ pub const FORM_2551Q_SUBMIT: &str = "submit_btn";
 pub const FORM_2550Q_BACK: &str = "2550q_back";
 pub const FORM_2550Q_SAVE: &str = "2550q_save";
 pub const FORM_2550Q_SUBMIT: &str = "2550q_manual";
-pub const FORM_1701_BACK: &str = "1701_back";
-pub const FORM_1701_SAVE: &str = "1701_save";
-pub const FORM_1701_SUBMIT: &str = "1701_manual";
 pub const FORM_1702MX_BACK: &str = "1702mx_back";
 pub const FORM_1702MX_SAVE: &str = "1702mx_save";
 pub const FORM_1702MX_SUBMIT: &str = "1702mx_submit";
@@ -332,7 +328,6 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Form2551Q => PAGE_FORM_2551Q,
         ActiveView::Form1601C => PAGE_FORM_1601C,
         ActiveView::Form2550Q => PAGE_FORM_2550Q,
-        ActiveView::Form1701 => PAGE_FORM_1701,
         ActiveView::Form1702MX => PAGE_FORM_1702MX,
         ActiveView::Queueable(kind) => queueable_spec(kind).page_id,
     }
@@ -351,7 +346,6 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Form2551Q => "form-2551q",
         ActiveView::Form1601C => "form-1601c",
         ActiveView::Form2550Q => "form-2550q",
-        ActiveView::Form1701 => "form-1701",
         ActiveView::Form1702MX => "form-1702mx",
         ActiveView::Queueable(kind) => queueable_spec(kind).slug,
     }
@@ -370,7 +364,6 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "form-2551q" | "2551q" => Some(ActiveView::Form2551Q),
         "form-1601c" | "1601c" => Some(ActiveView::Form1601C),
         "form-2550q" | "2550q" => Some(ActiveView::Form2550Q),
-        "form-1701" | "1701" => Some(ActiveView::Form1701),
         "form-1702mx" | "1702mx" => Some(ActiveView::Form1702MX),
         other => crate::views::queueable_forms::spec_for_slug(other)
             .map(|spec| ActiveView::Queueable(spec.kind)),
@@ -390,7 +383,6 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Form2551Q,
     ActiveView::Form1601C,
     ActiveView::Form2550Q,
-    ActiveView::Form1701,
     ActiveView::Form1702MX,
 ];
 
@@ -445,13 +437,6 @@ pub const FORM_CHROME: &[FormChrome] = &[
         submit: FORM_2550Q_SUBMIT,
     },
     FormChrome {
-        view: ActiveView::Form1701,
-        code: "1701",
-        back: FORM_1701_BACK,
-        save: FORM_1701_SAVE,
-        submit: FORM_1701_SUBMIT,
-    },
-    FormChrome {
         view: ActiveView::Form1702MX,
         code: "1702MX",
         back: FORM_1702MX_BACK,
@@ -491,7 +476,7 @@ mod tests {
             assert!(seen.insert(id), "duplicate page root {id}");
             assert_eq!(view_from_slug(view_slug(view)), Some(view));
         }
-        assert_eq!(ALL_VIEWS.len(), 13);
+        assert_eq!(ALL_VIEWS.len(), 12);
     }
 
     #[test]

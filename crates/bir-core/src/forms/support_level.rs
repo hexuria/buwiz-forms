@@ -297,8 +297,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1701",
         revision: "2018",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official submit layout.
         form_id: "1701v2018",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
@@ -507,8 +510,10 @@ mod tests {
             queue_authorized_form_type_id("1702RT"),
             Some("1702RTv2018C")
         );
+        assert!(can_queue_for_submission("1701"));
+        assert_eq!(queue_authorized_form_type_id("1701"), Some("1701v2018"));
 
-        for code in ["2550Q", "1701", "1702MX", "1700", "9999"] {
+        for code in ["2550Q", "1702MX", "1700", "9999"] {
             assert!(!can_queue_for_submission(code), "{code} must fail closed");
             assert_eq!(queue_authorized_form_type_id(code), None);
         }
