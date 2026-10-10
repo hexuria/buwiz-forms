@@ -61,6 +61,8 @@ pub enum ActiveView {
     Form1701,
     Form1702RT,
     Form1702MX,
+    /// A form on the generic submission path (`views::queueable_forms`).
+    Queueable(bir_core::forms::queueable::QueueableKind),
     ProfileManager,
     CronTasks,
     Notifications,
@@ -170,6 +172,10 @@ pub struct AppState {
     pub(crate) pending_form_1702rt_draft: Option<bir_core::forms::form_1702rt::Form1702RTDraft>,
     pub(crate) form_1702mx_view: Option<Entity<Form1702MXView>>,
     pub(crate) pending_form_1702mx_draft: Option<bir_core::forms::form_1702mx::Form1702MXDraft>,
+    /// Editor of the open generic-queue form.
+    pub(crate) queueable_view: Option<AnyView>,
+    /// (form, year, period) to open on the next render, which has a `Window`.
+    pub(crate) pending_queueable: Option<(bir_core::forms::queueable::QueueableKind, u16, u8)>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -899,6 +905,8 @@ impl AppState {
             pending_form_1702rt_draft: None,
             form_1702mx_view: None,
             pending_form_1702mx_draft: None,
+            queueable_view: None,
+            pending_queueable: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -1587,6 +1595,14 @@ impl AppState {
                     root.into_any_element()
                 }
             }
+            ActiveView::Queueable(_) => {
+                if let Some(view) = &self.queueable_view {
+                    view.clone().into_any_element()
+                } else {
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
+                }
+            }
             ActiveView::Form1702MX => {
                 if let Some(view) = &self.form_1702mx_view {
                     view.clone().into_any_element()
@@ -2052,12 +2068,25 @@ impl AppState {
             self.pending_form_1702mx_draft = Some(draft);
             self.active_view = ActiveView::Form1702MX;
             cx.notify();
+        } else if let Some(spec) = crate::views::queueable_forms::spec_for_code(form_code)
+            && self.active_profile_tin.is_some()
+        {
+            self.pending_queueable = Some((spec.kind, year, quarter));
+            self.queueable_view = None;
+            self.active_view = ActiveView::Queueable(spec.kind);
+            cx.notify();
         }
     }
 }
 
 /// Push a typed notification to the GPUI window overlay.
-fn push_notification(level: &str, title: &str, message: &str, window: &mut Window, cx: &mut App) {
+pub(crate) fn push_notification(
+    level: &str,
+    title: &str,
+    message: &str,
+    window: &mut Window,
+    cx: &mut App,
+) {
     use gpui_component::WindowExt;
     use gpui_component::notification::Notification;
     let notification = match level {
@@ -2362,6 +2391,15 @@ impl Render for AppState {
             )
             .detach();
             self.form_1702rt_view = Some(form_view);
+        }
+
+        if let Some((kind, year, period)) = self.pending_queueable.take()
+            && let Some(spec) = crate::views::queueable_forms::spec_for_kind(kind)
+            && let Some(tin) = self.active_profile_tin.clone()
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == tin).cloned()
+        {
+            let db = Arc::clone(&self.db);
+            self.queueable_view = Some((spec.open)(&profile, year, period, db, window, cx));
         }
 
         if let Some(draft) = self.pending_form_1702mx_draft.take() {

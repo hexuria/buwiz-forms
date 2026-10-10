@@ -183,6 +183,30 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "2553",
+        revision: "1999",
+        // `form_id` is the official formType and PROD SFTP folder. The submit
+        // plaintext is the official layout replayed through the full page
+        // runtime; queueing goes through the generic `QueueableForm` path.
+        form_id: "2553",
+        // The desktop editor is views::form_2553_view; print preview fills the
+        // one-page frozen 2553-1999 sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
         form_id: "0619Ev2018",
@@ -452,6 +476,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2551Q"), Some("2551Qv2018"));
         assert!(can_queue_for_submission("1601C"));
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
+        assert!(can_queue_for_submission("2553"));
+        assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
@@ -465,7 +491,7 @@ mod tests {
     fn certification_draft_gate_does_not_claim_release_readiness() {
         assert!(can_open_certification_draft("2551Q"));
         for code in [
-            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
+            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "2553",
         ] {
             assert!(
                 can_open_certification_draft(code),

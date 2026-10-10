@@ -359,6 +359,7 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => PAGE_FORM_1701,
         ActiveView::Form1702RT => PAGE_FORM_1702RT,
         ActiveView::Form1702MX => PAGE_FORM_1702MX,
+        ActiveView::Queueable(kind) => queueable_spec(kind).page_id,
     }
 }
 
@@ -382,6 +383,7 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Form1701 => "form-1701",
         ActiveView::Form1702RT => "form-1702rt",
         ActiveView::Form1702MX => "form-1702mx",
+        ActiveView::Queueable(kind) => queueable_spec(kind).slug,
     }
 }
 
@@ -405,7 +407,8 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "form-1701" | "1701" => Some(ActiveView::Form1701),
         "form-1702rt" | "1702rt" => Some(ActiveView::Form1702RT),
         "form-1702mx" | "1702mx" => Some(ActiveView::Form1702MX),
-        _ => None,
+        other => crate::views::queueable_forms::spec_for_slug(other)
+            .map(|spec| ActiveView::Queueable(spec.kind)),
     }
 }
 
@@ -430,6 +433,26 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Form1702RT,
     ActiveView::Form1702MX,
 ];
+
+/// [`ALL_VIEWS`] plus every generic-queue form editor.
+pub fn all_views() -> Vec<ActiveView> {
+    ALL_VIEWS
+        .iter()
+        .copied()
+        .chain(
+            crate::views::queueable_forms::FORM_VIEW_SPECS
+                .iter()
+                .map(|spec| ActiveView::Queueable(spec.kind)),
+        )
+        .collect()
+}
+
+fn queueable_spec(
+    kind: bir_core::forms::queueable::QueueableKind,
+) -> &'static crate::views::queueable_forms::FormViewSpec {
+    crate::views::queueable_forms::spec_for_kind(kind)
+        .expect("every QueueableKind has a desktop view spec")
+}
 
 pub struct FormChrome {
     pub view: ActiveView,
@@ -513,13 +536,20 @@ pub const FORM_CHROME: &[FormChrome] = &[
 ];
 
 pub fn form_chrome(view: ActiveView) -> Option<&'static FormChrome> {
-    FORM_CHROME.iter().find(|chrome| chrome.view == view)
+    FORM_CHROME
+        .iter()
+        .find(|chrome| chrome.view == view)
+        .or_else(|| crate::views::queueable_forms::spec_for_view(view).map(|spec| &spec.chrome))
 }
 
 /// Submit / confirm controls that would queue or file if the real widget ran.
 /// Semantic dispatch exposes confirmation only; virtual clicks must not hit these.
 pub fn is_filing_submit_control(id: &str) -> bool {
-    id == FORM_1601C_SUBMIT_CONFIRM || FORM_CHROME.iter().any(|chrome| chrome.submit == id)
+    id == FORM_1601C_SUBMIT_CONFIRM
+        || FORM_CHROME.iter().any(|chrome| chrome.submit == id)
+        || crate::views::queueable_forms::FORM_VIEW_SPECS
+            .iter()
+            .any(|spec| spec.chrome.submit == id)
 }
 
 #[cfg(test)]
@@ -530,11 +560,11 @@ mod tests {
     #[test]
     fn page_roots_are_unique_and_stable() {
         let mut seen = HashSet::new();
-        for view in ALL_VIEWS {
-            let id = page_root(*view);
+        for view in all_views() {
+            let id = page_root(view);
             assert!(id.starts_with("page-"), "{id}");
             assert!(seen.insert(id), "duplicate page root {id}");
-            assert_eq!(view_from_slug(view_slug(*view)), Some(*view));
+            assert_eq!(view_from_slug(view_slug(view)), Some(view));
         }
         assert_eq!(ALL_VIEWS.len(), 18);
     }
