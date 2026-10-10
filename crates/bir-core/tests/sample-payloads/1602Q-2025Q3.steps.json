@@ -3,9 +3,6 @@
   "call": "window.xmlFileName = '';"
  },
  {
-  "call": "document.getElementById('frm1602Q:fntSched1TaxRate1').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate2').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate3').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate4').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate5').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate6').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate7').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate8').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate9').value = '20'; document.getElementById('frm1602Q:fntSched1TaxRate10').value = '12'; document.getElementById('frm1602Q:fntSched1TaxRate11').value = '5'; document.getElementById('frm1602Q:fntSched1TaxRate12').value = '20'"
- },
- {
   "call": "document.getElementById('frm1602Q:txtYear').value = '2025'; changeYear();"
  },
  {
@@ -65,6 +62,9 @@
  {
   "set": "frm1602Q:lstSpecialTax",
   "value": "2"
+ },
+ {
+  "call": "for (var n = 1; n <= 12; n++) { var f = document.getElementById('frm1602Q:fntSched1TaxRate' + n); f.value = f.getAttribute('value'); }"
  },
  {
   "set": "frm1602Q:txtSched1Amount1",

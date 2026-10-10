@@ -1,8 +1,5 @@
 [
  {
-  "call": "document.getElementById('frm1603Q:Sched1:txtDivisor1').value = '65%'; document.getElementById('frm1603Q:Sched1:txtTaxRate1').value = '35%'; document.getElementById('frm1603Q:Sched1:txtDivisor2').value = '75%'; document.getElementById('frm1603Q:Sched1:txtTaxRate2').value = '25%';"
- },
- {
   "call": "document.getElementById('frm1603Q:txtYear').value = '2025';"
  },
  {
