@@ -5,7 +5,7 @@
 //! Part II), the NOLCO and MCIT schedules the page fills on its own, the
 //! ATC / date-of-incorporation rules, `validate()` with its alert texts, and
 //! `saveXMLsubmit` through [`crate::official_xml`] (numbertext amounts with
-//! the official omit-zero rule).
+//! the official numbertext normalization).
 //!
 //! Every amount is a whole peso, as on the official page. Only the four base
 //! pages are supported: the mandatory attachments (Instruction B, one copy
@@ -1037,8 +1037,8 @@ impl Form1702MXDraft {
             .any(|cell| v(cell) < 0)
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
-    /// Amounts are given as numbers; the layout's omit-zero rule drops zeros.
+    /// The official field values the saveEncryptedProfile loop reads, keyed by
+    /// element id. Amounts are given as numbers; the layout normalizes them.
     pub fn to_official_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         macro_rules! put {
@@ -1074,6 +1074,12 @@ impl Form1702MXDraft {
             }
         }
         put!("txtPg1Pt1I7RDO", self.rdo_code.trim().to_string());
+        put!("drpPg1Pt1I7RDO", self.rdo_code.trim().to_string());
+        put!(
+            "drpPg3Sc1I11CB",
+            self.special_rate_option()
+                .unwrap_or_else(|| "0".to_string())
+        );
         put!(
             "txtPg1Pt1I9RegisteredName",
             self.taxpayer_name.trim().to_string()
@@ -1492,50 +1498,6 @@ impl QueueableForm for Form1702MXDraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
     }
-
-    /// The layout replayed over the field map, plus the two selects the page
-    /// builds at run time: the RDO list (`getRdo`, always) and the Schedule 1
-    /// Item 11 special-rate list (`changeSpecialTaxRate`, once a special
-    /// rate or another ATC is entered).
-    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
-        let errors = <Self as QueueableForm>::validate(self);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-        let xml_error = |error: crate::official_xml::OfficialXmlError| {
-            vec![("xml".to_string(), error.to_string())]
-        };
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID).map_err(xml_error)?;
-        let mut text = crate::official_xml::write(layout, &self.field_map()).map_err(xml_error)?;
-        let mut insert_after =
-            |anchor: &str, key: &str, value: &str| -> Result<(), Vec<(String, String)>> {
-                let open = format!("<div>frm1702MX:{anchor}=");
-                let close = format!("frm1702MX:{anchor}=</div>");
-                let start = text.find(&open).ok_or_else(|| {
-                    vec![(
-                        "xml".to_string(),
-                        format!("{anchor} is missing from the layout"),
-                    )]
-                })?;
-                let end = start
-                    + text[start..].find(&close).ok_or_else(|| {
-                        vec![("xml".to_string(), format!("{anchor} is not terminated"))]
-                    })?
-                    + close.len();
-                // Every 1702-MX entry is followed by the same separator.
-                let separator = "\t\n            ";
-                text.insert_str(
-                    end + separator.len(),
-                    &format!("<div>frm1702MX:{key}={value}frm1702MX:{key}=</div>{separator}"),
-                );
-                Ok(())
-            };
-        insert_after("txtPg1Pt1I7RDO", "drpPg1Pt1I7RDO", self.rdo_code.trim())?;
-        if let Some(rate) = self.special_rate_option() {
-            insert_after("txtPg3RegisteredName", "drpPg3Sc1I11CB", &rate)?;
-        }
-        Ok(text)
-    }
 }
 
 /// Item 5 ATCs and the rates `atcCodes.xml` lists for them under 1702MX.
@@ -1741,7 +1703,7 @@ mod tests {
         assert!(
             payload.contains("<div>frm1702MX:drpPg3Sc1I11CB=0.05frm1702MX:drpPg3Sc1I11CB=</div>")
         );
-        assert!(!payload.contains("<div>frm1702MX:txtPg2Sc2Itm4A="));
+        assert!(payload.contains("<div>frm1702MX:txtPg2Sc2Itm4A=0frm1702MX:txtPg2Sc2Itm4A=</div>"));
     }
 
     #[test]

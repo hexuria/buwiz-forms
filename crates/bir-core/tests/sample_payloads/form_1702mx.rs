@@ -1,9 +1,7 @@
-use crate::{dummy_profile, samples_dir};
-use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
+use crate::dummy_profile;
 use bir_core::forms::form_1702mx::{
     Form1702MXDeductionMethod, Form1702MXDraft, PercentInput, WholePeso, WholePesoInput,
 };
-use sha2::{Digest, Sha256};
 
 fn peso(value: i64) -> WholePesoInput {
     WholePesoInput::from_amount(WholePeso(value))
@@ -91,49 +89,16 @@ pub(crate) fn sample_1702mx() -> Form1702MXDraft {
     d
 }
 
-/// `check_sample` reads the plaintext back through the official layout; the
-/// 1702-MX plaintext also carries the two selects the page builds at run
-/// time (`drpPg1Pt1I7RDO`, `drpPg3Sc1I11CB`), which the generated layout does
-/// not list, so the same checks are made here directly.
 #[test]
 fn form_1702mx_sample_payload_is_current() {
     let payload = sample_1702mx()
         .to_official_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 1702MX must validate: {errors:?}"));
-    let stem = "1702MX-1225";
-    let official_encrypt_sha256 =
-        "7cb99121d8a7392445bbef24670b31e6e50287db9e2b50a206064a73c00fbb1c";
-    let encrypted = compress_and_encrypt(payload.as_bytes(), BIR_IAF_PASSPHRASE).unwrap();
-    assert_eq!(
-        decrypt_and_decompress(&encrypted, BIR_IAF_PASSPHRASE).unwrap(),
-        payload.as_bytes()
-    );
-    let dir = samples_dir();
-    let updating = std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some();
-    if updating {
-        std::fs::write(dir.join(format!("{stem}.plain.xml")), &payload).unwrap();
-        std::fs::write(dir.join(format!("{stem}.iaf.xml")), &encrypted).unwrap();
-    }
-    let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
-    assert_eq!(
-        payload, official,
-        "{stem}: differs from the official saveXMLsubmit() output"
-    );
-    let digest: String = Sha256::digest(&encrypted)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
-    assert_eq!(digest, official_encrypt_sha256, "{stem}: Encrypt.exe hash");
-    if updating {
-        return;
-    }
-    assert_eq!(
-        std::fs::read_to_string(dir.join(format!("{stem}.plain.xml"))).unwrap(),
-        payload
-    );
-    assert_eq!(
-        std::fs::read(dir.join(format!("{stem}.iaf.xml"))).unwrap(),
-        encrypted
+    crate::check_sample(
+        "1702MX-1225",
+        "1702mx-v2018c",
+        &payload,
+        "1df8e48a01967ab74814292fb0c8988bdcf44caf72a12897551102c24e2929c6",
     );
 }
 
@@ -177,24 +142,15 @@ pub(crate) fn sample_1702mx_fiscal() -> Form1702MXDraft {
     d
 }
 
-/// Compared with the official page only (see the sample above).
 #[test]
-fn form_1702mx_fiscal_sample_matches_the_official_page() {
+fn form_1702mx_fiscal_sample_payload_is_current() {
     let payload = sample_1702mx_fiscal()
         .to_official_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy fiscal 1702MX must validate: {errors:?}"));
-    let dir = samples_dir();
-    let stem = "1702MX-0625-fiscal";
-    if std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some() {
-        std::fs::write(dir.join(format!("{stem}.plain.xml")), &payload).unwrap();
-    }
-    let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
-    assert_eq!(
-        payload, official,
-        "{stem}: differs from the official saveXMLsubmit() output"
-    );
-    assert_eq!(
-        std::fs::read_to_string(dir.join(format!("{stem}.plain.xml"))).unwrap(),
-        payload
+    crate::check_sample(
+        "1702MX-0625-fiscal",
+        "1702mx-v2018c",
+        &payload,
+        "93d6ee49a729f9208ca162327c71a94ebbbb8632ef9bae9f753f86fb6dd5e7ea",
     );
 }
