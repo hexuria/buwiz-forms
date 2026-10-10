@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "Draft-only MCP (stdio) adapter that drives a running BIR app through gpui-agent."
+description = "Draft-only MCP (stdio or loopback Streamable HTTP) adapter that drives a running BIR app through gpui-agent."
 
 [lib]
 doctest = false
@@ -19,6 +19,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # Same rev as bir-desktop's `agent` feature, so both sides speak one protocol.
 gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4" }
+# `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
+tiny_http = { version = "0.12", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

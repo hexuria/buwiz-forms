@@ -1,10 +1,11 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
-    "bir": {
-      "command": "bir-mcp",
-      "args": [],
-      "env": {
-        "GPUI_AGENT_TOKEN": "${GPUI_AGENT_TOKEN}"
+    "bir-mcp": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8765/mcp",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_BIR_MCP_HTTP_TOKEN"
       }
     }
   }
