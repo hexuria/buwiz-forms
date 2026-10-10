@@ -837,6 +837,366 @@
       "after": "\t\n            "
     },
     {
+      "key": "frm2200S:txtSalesValue0",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue0",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals0",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals0",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue0",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue0",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue1",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue2",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue2",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue3",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals3",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue3",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue3",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue4",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals4",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue4",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue4",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue5",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals5",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue5",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue5",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue6",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals6",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue6",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue6",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue7",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue7",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals7",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals7",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue7",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue7",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue8",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue8",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals8",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals8",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue8",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue8",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtSalesValue9",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtSalesValue9",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtVolumeRemovals9",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtVolumeRemovals9",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm2200S:txtBasicTaxDue9",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2200S:txtBasicTaxDue9",
+          "codec": "raw"
+        }
+      ],
+      "default": "0.00",
+      "after": "\t\n            "
+    },
+    {
       "key": "frm2200S:sched1Chk0",
       "kind": "bool",
       "default": "false",

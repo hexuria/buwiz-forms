@@ -99,7 +99,8 @@ const LAYOUTS: &[(&str, &str)] = layouts![
     "2551q-v2018",
     "2553-v1999",
     "2000-v2018",
-    "2000ot-v2018"
+    "2000ot-v2018",
+    "2200s-v2018"
 ];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
@@ -451,8 +452,10 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // 2014-series pages (2200S) close with "BIR 2014".
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                after.ends_with("All Rights Reserved BIR 2012.0")
+                    || after.ends_with("All Rights Reserved BIR 2014.0"),
                 "{id}: {after:?}"
             );
         }

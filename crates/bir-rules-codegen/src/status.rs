@@ -1052,12 +1052,13 @@ fn check_impl_method_inventory(
 }
 
 fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut Vec<String>) {
-    const EXPECTED: [(&str, &str, &str, u16, bool); 13] = [
+    const EXPECTED: [(&str, &str, &str, u16, bool); 14] = [
         ("2551Q", "2018", "2551Qv2018", 1023, false),
         ("1601C", "2018", "1601Cv2018", 1023, false),
         ("2553", "1999", "2553", 1023, false),
         ("2000", "2018", "2000v2018", 63, false),
         ("2000OT", "2018", "2000OTv2018", 63, false),
+        ("2200S", "2018", "2200S", 63, false),
         ("0619E", "2018", "0619Ev2018", 1007, false),
         ("0619F", "2018", "0619Fv2018", 1007, false),
         ("0605", "1999", "0605v1999", 1007, false),

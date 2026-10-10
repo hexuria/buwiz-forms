@@ -1,6 +1,7 @@
 //! BIR form data models, ATC tables, form registry, and typed form traits.
 
 pub mod atc;
+pub mod excise_places;
 pub mod form_0605;
 pub mod form_0619e;
 pub mod form_0619f;
@@ -11,6 +12,7 @@ pub mod form_1702mx;
 pub mod form_1702rt;
 pub mod form_2000;
 pub mod form_2000ot;
+pub mod form_2200s;
 pub mod form_2307;
 pub mod form_2550q;
 pub mod form_2551q;

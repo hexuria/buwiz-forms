@@ -97,6 +97,26 @@ function prepare(html) {
   if (rdoCell && prefix && !doc.getElementById(prefix + ':txtRDOCode')) {
     rdoCell.innerHTML = `<select id='${prefix}:txtRDOCode' name='${prefix}:txtRDOCode' size='1'><option value='000'> </option></select>`;
   }
+  // Other forms' getRdo() writes its own RDO select into div#rdoContainer
+  // (2200C: frm2200C:rdoPg1Pt1I6RDO). Take the id from the page's getRdo().
+  const rdoContainer = doc.getElementById('rdoContainer');
+  const rdoSelect = /function\s+getRdo\s*\([^]*?<select id='([^']+)'[^]*?\$\('#rdoContainer'\)/.exec(html);
+  if (rdoContainer && rdoSelect && !doc.getElementById(rdoSelect[1])) {
+    rdoContainer.innerHTML = `<select id='${rdoSelect[1]}' name='${rdoSelect[1]}' size='1'><option value='000'>000</option></select>`;
+  }
+  // 2200S: createStaticFieldForSched1() fills tbody#frm2200SBeverages with ten
+  // beverage rows (sales value, volume of removals, basic tax due) at init.
+  const beverages = doc.getElementById('frm2200SBeverages');
+  if (beverages && !beverages.querySelector('input')) {
+    let rows = '';
+    for (let x = 0; x < 10; x++) {
+      rows += `<tr><td><input type='hidden' id='frm2200S:hideProAppRate${x}' value='0'></td>` +
+        `<td><input type='text' id='frm2200S:txtSalesValue${x}' value='0.00'></td>` +
+        `<td><input type='text' id='frm2200S:txtVolumeRemovals${x}' value='0.00'></td>` +
+        `<td><input type='text' id='frm2200S:txtBasicTaxDue${x}' value='0.00' disabled></td></tr>`;
+    }
+    beverages.innerHTML = rows;
+  }
   // getDrives() (js/string-util.js) fills every drive select with a "0"
   // placeholder, selected, ahead of the machine's drive letters.
   for (const sel of doc.querySelectorAll('select.driveSelect')) {
