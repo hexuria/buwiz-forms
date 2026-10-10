@@ -24,6 +24,8 @@ pub struct StartedAgent {
     /// Stops `serve_mailbox` so the TCP bind is released on quit, not only
     /// after process death. Hide-to-dock is not quit.
     pub shutdown: Arc<AtomicBool>,
+    /// Removes the discovery record when the last clone drops.
+    pub discovery: Option<Arc<super::discovery::RecordGuard>>,
 }
 
 /// Start the localhost control plane when `GPUI_AGENT=1`.
@@ -46,7 +48,7 @@ pub fn maybe_start() -> Option<StartedAgent> {
             let token = config.token.clone();
             let auth = auth_banner(token.is_some());
             match spawn_mailbox(
-                config.addr,
+                super::discovery::resolve_addr(config.addr),
                 config.token,
                 mailbox.clone(),
                 Duration::from_secs(8),
@@ -56,10 +58,13 @@ pub fn maybe_start() -> Option<StartedAgent> {
                         %addr,
                         "{auth}; platform=desktop app=bir-desktop; loopback default via from_env; protocol v2 HMAC; GPUI_AGENT_TOKEN required to bind unless GPUI_AGENT_INSECURE_NO_TOKEN=1; delivery=semantic (virtual returns virtual_unavailable; no OS HID); screenshot=macOS mailbox drain screencapture -l (relative .png under screenshot dir), else screenshot_unavailable"
                     );
+                    let discovery =
+                        super::discovery::register("bir-desktop", addr, "desktop").map(Arc::new);
                     Some(StartedAgent {
                         mailbox,
                         token,
                         shutdown,
+                        discovery,
                     })
                 }
                 Err(err) => {

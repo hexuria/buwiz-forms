@@ -5,6 +5,7 @@
 //! drain live behind `--features agent`.
 
 mod headless_daemon;
+pub mod discovery;
 pub mod ids;
 pub mod search;
 
