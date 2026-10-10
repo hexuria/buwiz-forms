@@ -923,6 +923,8 @@ impl Form1701ADraft {
         put("txtEnabledLinks", self.enabled_links());
         // capital() also upper-cases the page's own state controls.
         put("txtIsTaxFilerDisabled", typed("false"));
+        // init() sets the pager to page 1; the upload loop writes it.
+        put("txtCurrentPage", "1".to_string());
 
         fields.insert("txtEmail".to_string(), self.email.trim().to_string());
         fields
