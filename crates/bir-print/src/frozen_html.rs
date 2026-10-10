@@ -139,6 +139,12 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2553-1999" => Some(include_str!(
             "../../../html-frozen/2553-1999/writer-cells.json"
         )),
+        "2552-2018" => Some(include_str!(
+            "../../../html-frozen/2552-2018/writer-cells.json"
+        )),
+        "2550m-2007" => Some(include_str!(
+            "../../../html-frozen/2550m-2007/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1462,6 +1468,77 @@ mod tests {
         assert!(!html.contains("name=\"frm2553:"));
     }
 
+    fn fixture_profile(form: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Print Fixture Corp", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Brokerage", "registered_address": "1 Fixture St",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": form, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filled_document_2552_fills_identity_money_schedules_and_boxes() {
+        use bir_core::forms::form_2552::{Form2552Draft, Form2552ShareRow, Form2552Transaction};
+        let mut draft = Form2552Draft::new_from_profile(&fixture_profile("2552"), 2025, 3, 14);
+        draft.set_transaction(Form2552Transaction::LocalStockExchange);
+        draft.schedule.push(Form2552ShareRow {
+            date: "03/14/2025".into(),
+            seller: "Seller One".into(),
+            buyer: "Buyer One".into(),
+            issuing_corporation: "Listed Corp".into(),
+            number_of_shares: 1_000.0,
+            tax_base: 1_234_567.89,
+            ..Default::default()
+        });
+        draft.recompute();
+        let html = filled_document("2552-2018", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c6"), "03");
+        assert_eq!(comb_text(&html, "p1c8"), "2025");
+        assert_eq!(comb_text(&html, "p1c14"), "123");
+        assert_eq!(comb_text(&html, "p1c20"), "00000");
+        assert_eq!(comb_text(&html, "p1c22"), "039");
+        assert!(
+            html.contains("PRINT FIXTURE CORP") || comb_text(&html, "p1c24").starts_with("PRINT")
+        );
+        // Item 13: 7,407.00 splits into the peso and centavo combs.
+        assert_eq!(comb_text(&html, "p1c51").trim(), "7407");
+        assert_eq!(comb_text(&html, "p1c53"), "00");
+        assert_eq!(named_values(&html, "p1c41"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert!(html.contains("1,234,567.89"));
+        assert!(html.contains("SELLER ONE"));
+        assert!(!html.contains("name=\"frm2552:"));
+    }
+
+    #[test]
+    fn filled_document_2550m_fills_items_and_schedules() {
+        use bir_core::forms::form_2550m::{Form2550MDraft, Form2550MWithholdingRow};
+        let mut draft = Form2550MDraft::new_from_profile(&fixture_profile("2550M"), 2022, 6);
+        draft.add_sales_atc("VB010").unwrap();
+        draft.sales_schedule[0].amount = 100_000.0;
+        draft.schedule_6.push(Form2550MWithholdingRow {
+            period_covered: "06/30/2022".into(),
+            withholding_agent: "Agent Corp".into(),
+            income_payment: 1_000.0,
+            total_withheld: 50.0,
+            applied_current_month: 40.0,
+        });
+        draft.recompute();
+        let html = filled_document("2550m-2007", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c1"), "06");
+        assert_eq!(comb_text(&html, "p1c2"), "2022");
+        assert!(html.contains("PRINT FIXTURE CORP"));
+        assert!(html.contains("100,000.00"));
+        assert!(html.contains("12,000.00"));
+        assert!(html.contains("VB010"));
+        assert!(html.contains("AGENT CORP"));
+        assert_eq!(named_values(&html, "p1c5"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c25"), vec!["X".to_string()]);
+    }
+
     #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // 2553 (1999) prints each amount in one text cell, not peso + cent combs.
@@ -1469,6 +1546,8 @@ mod tests {
             ("1601c-2018", true),
             ("2551q-2018", true),
             ("2553-1999", false),
+            ("2552-2018", true),
+            ("2550m-2007", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();

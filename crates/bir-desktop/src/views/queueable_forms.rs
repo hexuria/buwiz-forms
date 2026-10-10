@@ -111,6 +111,8 @@ form_view_specs! {
     Form1601FQ, super::form_1601fq_view::Form1601FqView, "1601FQ", "1601fq";
     Form1603Q, super::form_1603q_view::Form1603QView, "1603Q", "1603q";
     Form1602Q, super::form_1602q_view::Form1602QView, "1602Q", "1602q";
+    Form2552, super::form_2552_view::Form2552View, "2552", "2552";
+    Form2550M, super::form_2550m_view::Form2550MView, "2550M", "2550m";
 }
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {

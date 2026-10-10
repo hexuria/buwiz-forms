@@ -129,6 +129,18 @@
       "after": "    \n            "
     },
     {
+      "key": "frm2552:rdoPg1Pt1I5RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm2552:rdoPg1Pt1I5RDO",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "    \n            "
+    },
+    {
       "key": "frm2552:txtPg1Pt1I6Name",
       "kind": "value",
       "parts": [
