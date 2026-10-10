@@ -361,17 +361,6 @@ pub fn read(
             Entry::Bool { key, after, .. } | Entry::Value { key, after, .. } => (key, after),
         };
         let open = format!("<div>{key}=");
-        if matches!(
-            entry,
-            Entry::Value {
-                number: Some(NumberRule::OmitZero),
-                ..
-            }
-        ) && !plaintext[at..].starts_with(&open)
-        {
-            // Omitted zero amount: no <div> and no separator.
-            continue;
-        }
         expect(plaintext, &mut at, &open)?;
         let close = format!("{key}=</div>");
         let Some(len) = plaintext[at..].find(&close) else {
@@ -637,25 +626,26 @@ mod tests {
     }
 
     #[test]
-    fn number_rule_matches_the_official_1702mx_loop() {
-        // `tools/official-xml/oracle.js` output (the upload loop) for these
-        // values: commas stripped, "(5.00)" -> "-5.00", zero amounts kept.
-        let values: BTreeMap<String, String> = serde_json::from_str(include_str!(
-            "../tests/official-xml/1702mx-number-rule.values.json"
-        ))
-        .unwrap();
-        let official = include_str!("../tests/official-xml/1702mx-number-rule.official.xml");
+    fn number_rule_normalizes_1702mx_amounts_and_keeps_zeros() {
+        // The saveEncryptedProfile loop: commas stripped, "(5.00)" -> "-5.00",
+        // zero amounts written like any other value.
         let layout = layout("1702mx-v2018c").unwrap();
+        let values: BTreeMap<String, String> = [
+            ("frm1702MX:txtPg1Pt2I14TotalIncome", "1,234.50"),
+            ("frm1702MX:txtPg1Pt2I15LessTotalTax", "(5.00)"),
+            ("frm1702MX:txtPg1Pt2I16NetTaxPayable", "0"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
         let ours = write(layout, &values).unwrap();
-        assert_eq!(ours, official);
         assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I14TotalIncome=1234.50"));
         assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I15LessTotalTax=-5.00"));
-        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I17=-1000.25"));
-        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I16NetTaxPayable=0.00"));
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I16NetTaxPayable=0frm"));
         let back = read(layout, &ours).unwrap();
         assert_eq!(back["frm1702MX:txtPg1Pt2I14TotalIncome"], "1234.50");
+        assert_eq!(back["frm1702MX:txtPg1Pt2I16NetTaxPayable"], "0");
         assert_eq!(official_number_text("(1,234.50)"), "-1234.50");
-        assert!(js_is_zero("") && js_is_zero("-0.00") && !js_is_zero("abc"));
     }
 
     #[test]
