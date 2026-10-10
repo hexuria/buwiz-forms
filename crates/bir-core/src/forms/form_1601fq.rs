@@ -5,18 +5,15 @@
 //! ATC popup (`changedrpATCList` / `getATCCode`), Schedule 1 (treaty rates,
 //! `getATCdrpTaxRate` / `getReqWithheldCompute`), the compute chain
 //! (`computeofTotalWithheldTax`), `validate()` with its exact alert texts,
-//! and `saveXMLsubmit`.
+//! and the uploaded file `saveEncryptedProfile` writes (every `frmMain`
+//! control in DOM order).
 //!
-//! The page draws part of what it submits at run time, so the generated
-//! layout (`data/official-xml/1601fq-v2018.json`, from the static page) lacks
-//! it. [`Form1601FqDraft::official_layout`] adds those controls where the page
-//! puts them in `frmMain`:
-//! - Items 14–19 (`txtAtcCode1..6`, `txtTaxBase`, `txtTaxRate`,
-//!   `txtTaxbeWithHeld`), drawn by `populateAtcPart2()` at load and redrawn by
-//!   `getATCCode()`, right after `drpSpecialTax`;
-//! - the popup's ATC checkboxes (`AtcCd1..n`, plus the "N/A" special-law row
-//!   `enableSelTreaty()` appends when Item 13 is "Yes") and the "Other Selected
-//!   ATC" rows 7+, right before `txtFinalFlag`.
+//! The generated layout (`data/official-xml/1601fq-v2018.json`) already has
+//! Items 14–19, which `populateAtcPart2()` draws at load. What the page adds
+//! later, [`Form1601FqDraft::official_layout`] adds where the DOM has it: the
+//! popup's ATC checkboxes (`AtcCd1..n`, plus the "N/A" special-law row
+//! `enableSelTreaty()` appends when Item 13 is "Yes") and the "Other Selected
+//! ATC" rows 7+, right before `txtFinalFlag`.
 
 use std::collections::BTreeMap;
 
@@ -1103,6 +1100,8 @@ impl Form1601FqDraft {
             );
         }
         put(&p("txtLineBus"), text(&self.line_of_business));
+        // init() shows page 1; the page is validated and submitted from it.
+        put(&p("txtCurrentPage"), "1".to_string());
         fields
     }
 
@@ -1145,10 +1144,6 @@ impl Form1601FqDraft {
             .map(value)
             .collect::<Vec<_>>()
         };
-        layout.entries.splice(
-            relief + 1..relief + 1,
-            row_entries(1..FORM_1601FQ_MAIN_ROWS + 1),
-        );
 
         let final_flag =
             position(&layout, "txtFinalFlag").ok_or_else(|| missing("txtFinalFlag"))?;

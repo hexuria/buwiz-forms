@@ -17,51 +17,10 @@
   "value": "0"
  },
  {
-  "set": "frm1601EQ:txtTIN1",
-  "value": "123"
- },
- {
-  "set": "frm1601EQ:txtTIN2",
-  "value": "456"
- },
- {
-  "set": "frm1601EQ:txtTIN3",
-  "value": "788"
- },
- {
-  "set": "frm1601EQ:txtBranchCode",
-  "value": "00000"
- },
- {
-  "set": "frm1601EQ:txtRDOCode",
-  "value": "039"
- },
- {
-  "set": "frm1601EQ:txtTaxpayerName",
-  "value": "Sample Dummy Taxpayer"
- },
- {
-  "set": "frm1601EQ:txtLineBus",
-  "value": "Sample Consulting Services"
- },
- {
-  "set": "frm1601EQ:txtAddress",
-  "value": "123 Sample Street, Barangay Example, Quezon City"
- },
- {
-  "set": "frm1601EQ:txtZipCode",
-  "value": "1100"
- },
- {
-  "set": "frm1601EQ:txtTelNum",
-  "value": "09170000000"
+  "call": "// loadBGData(): profile fields, no blur events.\nvar d = document; d.getElementById('frm1601EQ:txtTIN1').value = '123'; d.getElementById('frm1601EQ:txtTIN2').value = '456'; d.getElementById('frm1601EQ:txtTIN3').value = '788'; d.getElementById('frm1601EQ:txtBranchCode').value = '00000'; d.getElementById('frm1601EQ:txtRDOCode').value = '039'; d.getElementById('frm1601EQ:txtTaxpayerName').value = unescape(escape('Sample Dummy Taxpayer')).toUpperCase(); d.getElementById('frm1601EQ:txtLineBus').value = escape('Sample Consulting Services'); d.getElementById('frm1601EQ:txtAddress').value = unescape(escape('123 Sample Street, Barangay Example, Quezon City').toUpperCase()); d.getElementById('frm1601EQ:txtAddress2').value = ''; d.getElementById('frm1601EQ:txtZipCode').value = '1100'; d.getElementById('frm1601EQ:txtTelNum').value = '09170000000'; d.getElementById('txtEmail').value = 'sample.taxpayer@example.com'; globalEmail = 'sample.taxpayer@example.com';"
  },
  {
   "click": "frm1601EQ:optCategory:P"
- },
- {
-  "set": "txtEmail",
-  "value": "sample.taxpayer@example.com"
  },
  {
   "click": "btnAddATCPartII"

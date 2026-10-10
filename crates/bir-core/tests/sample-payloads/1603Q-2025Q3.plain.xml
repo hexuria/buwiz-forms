@@ -14,8 +14,9 @@
             <div>frm1603Q:txtTIN3=788frm1603Q:txtTIN3=</div>	
             <div>frm1603Q:txtBranchCode=00000frm1603Q:txtBranchCode=</div>	
             <div>frm1603Q:rdoCode=039frm1603Q:rdoCode=</div>	
-            <div>frm1603Q:txtTaxpayerName=SAMPLE%20DUMMY%20TAXPAYERfrm1603Q:txtTaxpayerName=</div>	
-            <div>frm1603Q:txtAddress=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1603Q:txtAddress=</div>	
+            <div>frm1603Q:txtTaxpayerName=SAMPLE DUMMY TAXPAYERfrm1603Q:txtTaxpayerName=</div>	
+            <div>frm1603Q:txtAddress=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1603Q:txtAddress=</div>	
+            <div>frm1603Q:txtAddress2=frm1603Q:txtAddress2=</div>	
             <div>frm1603Q:txtZipCode=1100frm1603Q:txtZipCode=</div>	
             <div>frm1603Q:txtTelNum=09170000000frm1603Q:txtTelNum=</div>	
             <div>frm1603Q:CatAgent_P=falsefrm1603Q:CatAgent_P=</div>	
@@ -74,6 +75,6 @@
             <div>frm1603Q:Sched1:txtTotalTax=71,953.19frm1603Q:Sched1:txtTotalTax=</div>	
             <div>frm1603Q:txtCurrentPage=1frm1603Q:txtCurrentPage=</div>	
             <div>frm1603Q:txtMaxPage=2frm1603Q:txtMaxPage=</div>	
-            <div>frm1603Q:txtLineBus=SAMPLE%20CONSULTING%20SERVICESfrm1603Q:txtLineBus=</div>	
+            <div>frm1603Q:txtLineBus=SAMPLE CONSULTING SERVICESfrm1603Q:txtLineBus=</div>	
             	
             All Rights Reserved BIR 2012.0

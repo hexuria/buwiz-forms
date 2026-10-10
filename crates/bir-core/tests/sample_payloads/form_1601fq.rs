@@ -1,5 +1,4 @@
 use crate::dummy_profile;
-use crate::sample_payloads::form_1601eq::check_runtime_sample;
 use bir_core::forms::form_1601fq::{Form1601FqCategory, Form1601FqDraft, Form1601FqTaxRelief};
 
 fn sample_1601fq() -> Form1601FqDraft {
@@ -41,10 +40,10 @@ fn form_1601fq_sample_payload_is_current() {
     let payload = draft
         .to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 1601FQ must validate: {errors:?}"));
-    check_runtime_sample(
+    crate::check_sample_with_layout(
         "1601FQ-2025Q2",
         &draft.official_layout().unwrap(),
         &payload,
-        "9be19d6281ad0a61f50f576e15f43834a31cce713b651db8aafcda0b4c9724fe",
+        "d94b93bb3037e91bf9528fc50b44e03baa174ca2fbc364fc39bad5af3bfc2d69",
     );
 }
