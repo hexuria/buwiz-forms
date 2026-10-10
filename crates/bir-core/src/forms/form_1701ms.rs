@@ -67,6 +67,17 @@ impl Form1701MsCivilStatus {
         Self::NotApplicable,
     ];
 
+    /// The `civilStatus` option value.
+    pub fn value(self) -> &'static str {
+        match self {
+            Self::Single => "Single",
+            Self::Married => "Married",
+            Self::Widowed => "Widowed",
+            Self::Separated => "Separated",
+            Self::NotApplicable => "Not Applicable",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Single => "Single",
@@ -299,6 +310,53 @@ fn parse_us_date(value: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").ok()
 }
 
+/// A whole-peso amount as the page's controls hold it: `toString()` with
+/// thousands commas (`formatCurrencyWithComma`, `removeDecimal`).
+fn page_amount(value: f64) -> String {
+    let text = if value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
+    };
+    let (sign, rest) = match text.strip_prefix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", text.as_str()),
+    };
+    let (int, frac) = match rest.split_once('.') {
+        Some((int, frac)) => (int, Some(frac)),
+        None => (rest, None),
+    };
+    let mut grouped = String::new();
+    for (index, ch) in int.chars().enumerate() {
+        if index > 0 && (int.len() - index) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    match frac {
+        Some(frac) => format!("{sign}{grouped}.{frac}"),
+        None => format!("{sign}{grouped}"),
+    }
+}
+
+/// Item 16's rate control: `0.0%` until a rate is typed, then the typed
+/// number with `appendPercentSymbol`'s `%`.
+fn page_rate(rate: f64) -> String {
+    if rate == 0.0 {
+        "0.0%".to_string()
+    } else {
+        format!("{}%", page_amount(rate).replace(',', ""))
+    }
+}
+
+/// The `select-one` controls, which `capital()` leaves alone.
+const SELECT_CONTROLS: [&str; 4] = [
+    "frm1701MS:txtMonthNo1",
+    "frm1701MS:civilStatus",
+    "taxCodeDropdown",
+    "taxCodeDropdownSpouse",
+];
+
 /// Width of the printed sheet's amount combs.
 const PRINT_AMOUNT_SLOTS: usize = 9;
 
@@ -408,6 +466,243 @@ impl Form1701MsColumn {
             ("p5_9", self.other_credits),
             ("p5_10", self.total_credits),
             ("p6_1", self.tax_relief),
+        ]
+    }
+
+    /// Every amount control of this column with its taxpayer and spouse
+    /// element ids.
+    fn page_amounts(&self) -> Vec<([&'static str; 2], f64)> {
+        vec![
+            (
+                ["txtIncomeTaxDueNo19a", "txtIncomeTaxDueNo19b"],
+                self.income_tax_due,
+            ),
+            (
+                ["txtShareOfOtherNo20a", "txtShareOfOtherNo20b"],
+                self.share_of_other_agencies,
+            ),
+            (
+                ["txtNetSpecialRateNo21a", "txtNetSpecialRateNo21b"],
+                self.net_special_tax,
+            ),
+            (
+                ["txtIncomeTaxRegularNo22a", "txtIncomeTaxRegularNo22b"],
+                self.regular_income_tax,
+            ),
+            (
+                ["txtTotalIncomeTaxDueNo23a", "txtTotalIncomeTaxDueNo23b"],
+                self.total_income_tax_due,
+            ),
+            (
+                [
+                    "txtTotalTaxCreditsPartIINo24a",
+                    "txtTotalTaxCreditsPartIINo24b",
+                ],
+                self.tax_credits,
+            ),
+            (
+                ["txtTaxPayableNo25a", "txtTaxPayableNo25b"],
+                self.tax_payable,
+            ),
+            (
+                ["txtTaxDueAllowedNo26a", "txtTaxDueAllowedNo26b"],
+                self.second_installment,
+            ),
+            (
+                ["txtAmountPayableNo27a", "txtAmountPayableNo27b"],
+                self.amount_payable,
+            ),
+            (["txtSurchangeNo28a", "txtSurchangeNo28b"], self.surcharge),
+            (["txtInterestNo28a", "txtInterestNo28b"], self.interest),
+            (["txtCompromise28a", "txtCompromise28b"], self.compromise),
+            (
+                ["txtTotalPenaltiesNo28a", "txtTotalPenaltiesNo28b"],
+                self.total_penalties,
+            ),
+            (
+                ["txtTotalAmountPayableNo29a", "txtTotalAmountPayableNo29b"],
+                self.total_amount_payable,
+            ),
+            (["txtGrossa", "txtGrossb"], self.gross_compensation),
+            (
+                ["txtLessNonTaxablea", "txtLessNonTaxableb"],
+                self.non_taxable_compensation,
+            ),
+            (
+                [
+                    "txtTaxableCompensationIncomea",
+                    "txtTaxableCompensationIncomeb",
+                ],
+                self.taxable_compensation,
+            ),
+            (
+                ["txtTaxpayerNo4a", "txtTaxpayerNo4b"],
+                self.tax_on_compensation,
+            ),
+            (["txtSalesRevenueNo5a", "txtSalesRevenueNo5b"], self.sales),
+            (
+                ["txtSalesReturnsNo6a", "txtSalesReturnsNo6b"],
+                self.sales_returns,
+            ),
+            (
+                [
+                    "txtTaxableCompensationIncomeNo7a",
+                    "txtTaxableCompensationIncomeNo7b",
+                ],
+                self.net_sales,
+            ),
+            (
+                ["txtCostofSalesNo8a", "txtCostofSalesNo8b"],
+                self.cost_of_sales,
+            ),
+            (
+                ["txtGrossIncomeNo9a", "txtGrossIncomeNo9b"],
+                self.gross_income,
+            ),
+            (
+                [
+                    "txtAllowableItemizedDeductionsNo10a",
+                    "txtAllowableItemizedDeductionsNo10aSpouse",
+                ],
+                self.itemized_deductions,
+            ),
+            (
+                ["txtSpecialAllowableNo10a", "txtSpecialAllowableNo10b"],
+                self.special_allowable_deductions,
+            ),
+            (
+                ["txtNetOperatingLossNo10a", "txtNetOperatingLossNo10b"],
+                self.nolco,
+            ),
+            (
+                [
+                    "txtTotalAllowableItemixedDeductionsNo10a",
+                    "txtTotalAllowableItemixedDeductionsNo10b",
+                ],
+                self.total_deductions,
+            ),
+            (
+                ["txtOptionalDeductionNo11a", "txtOptionalDeductionNo11b"],
+                self.osd,
+            ),
+            (
+                ["txtNetIncomeLossNo12a", "txtNetIncomeLossNo12b"],
+                self.net_income,
+            ),
+            (
+                ["txtNonOperatingIncomeNo13a", "txtNonOperatingIncomeNo13b"],
+                self.non_operating_income,
+            ),
+            (
+                [
+                    "txtTaxableIncomeBusinesNo14a",
+                    "txtTaxableIncomeBusinesNo14b",
+                ],
+                self.taxable_business_income,
+            ),
+            (
+                [
+                    "txtCompensationBusinessNo15a",
+                    "txtCompensationBusinessNo15b",
+                ],
+                self.taxable_income,
+            ),
+            (
+                ["txtTaxDueSpeciala", "txtTaxDueSpecialb"],
+                self.special_tax_due,
+            ),
+            (
+                ["TotalTaxDueCompensationATP", "TotalTaxDueCompensationASP"],
+                self.tax_due_18a,
+            ),
+            (
+                ["TotalTaxDueCompensationBTP", "TotalTaxDueCompensationBSP"],
+                self.tax_due_18b,
+            ),
+            (
+                ["txtSalesRevenuesFeesANo19a", "txtSalesRevenuesFeesANo19b"],
+                self.eight_sales,
+            ),
+            (
+                [
+                    "txtOtherNonOperatingIncomeNo20a",
+                    "txtOtherNonOperatingIncomeNo20b",
+                ],
+                self.eight_other_income,
+            ),
+            (
+                ["txtTotalIncomeNo21a", "txtTotalIncomeNo21b"],
+                self.eight_total_income,
+            ),
+            (["txtLess22A", "txtLess22B"], self.eight_exemption),
+            (
+                ["txtTaxableIncomeLoss23A", "txtTaxableIncomeLoss23B"],
+                self.eight_taxable_income,
+            ),
+            (
+                ["txtTaxDueBusinessIncome24A", "txtTaxDueBusinessIncome24B"],
+                self.eight_tax_due,
+            ),
+            (
+                [
+                    "txtCompensationBusinessNo25a",
+                    "txtCompensationBusinessNo25b",
+                ],
+                self.eight_total_tax_due,
+            ),
+            (
+                ["txtPriorYearsNo1a", "txtPriorYearsNo1b"],
+                self.prior_year_excess,
+            ),
+            (
+                ["txtTaxPaymentsNo2a", "txtTaxPaymentsNo2b"],
+                self.quarterly_payments,
+            ),
+            (
+                ["txtCreditableTaxNo3a", "txtCreditableTaxNo3b"],
+                self.cwt_q1_q3,
+            ),
+            (
+                [
+                    "txtCreditableFourthQuarterNo4a",
+                    "txtCreditableFourthQuarterNo4b",
+                ],
+                self.cwt_q4,
+            ),
+            (
+                ["txtCreditableForm2316No5a", "txtCreditableForm2316No5b"],
+                self.cwt_2316,
+            ),
+            (
+                [
+                    "txtTaxPaidPreviouslyFiledNo6a",
+                    "txtTaxPaidPreviouslyFiledNo6b",
+                ],
+                self.previously_filed,
+            ),
+            (
+                ["txtForeignTaxCreditsNo7a", "txtForeignTaxCreditsNo7b"],
+                self.foreign_tax_credits,
+            ),
+            (
+                ["txtSpecialTaxCreditsNo8a", "txtSpecialTaxCreditsNo8b"],
+                self.special_tax_credits,
+            ),
+            (
+                ["txtOtherCreditsPaymentsNo9a", "txtOtherCreditsPaymentsNo9b"],
+                self.other_credits,
+            ),
+            (
+                [
+                    "txtTotalTaxCreditsPaymentsPartVNo10a",
+                    "txtTotalTaxCreditsPaymentsPartVNo10b",
+                ],
+                self.total_credits,
+            ),
+            (
+                ["totalTaxReliefAvailmentA", "totalTaxReliefAvailmentB"],
+                self.tax_relief,
+            ),
         ]
     }
 
@@ -807,6 +1102,21 @@ impl Form1701MsDraft {
         draft
     }
 
+    /// Whether the filer typed into a Part V control whose `onblur` calls
+    /// `capital(this, event)` (Items 7 and 9: `addForeignTaxCredits`,
+    /// `txtForeignTaxCreditsNo7a/b`, `addOtherCreditsPayments`,
+    /// `txtOtherCreditsPaymentsNo9b`). The last `capital` definition in
+    /// string-util.js ignores its arguments and upper-cases every text
+    /// control of `frmMain`; the model assumes Part V is filled after Items
+    /// 6–16, as the page's order has it.
+    pub fn part_v_capitalizes(&self) -> bool {
+        !self.foreign_tax_credits_description.trim().is_empty()
+            || !self.other_credits_description.trim().is_empty()
+            || self.taxpayer.foreign_tax_credits != 0.0
+            || self.spouse.foreign_tax_credits != 0.0
+            || self.spouse.other_credits != 0.0
+    }
+
     /// Spouse columns are open only for a joint return (`marriedJointly`).
     pub fn is_joint(&self) -> bool {
         self.civil_status == Form1701MsCivilStatus::Married
@@ -879,11 +1189,158 @@ impl Form1701MsDraft {
         };
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
-    /// The submit loop writes only the radio buttons, the check boxes and the
-    /// taxpayer name.
+    /// The official field values `saveEncryptedProfile` reads, keyed by
+    /// element id: every `frmMain` control in page order.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
+        let mut text = |key: &str, value: String| {
+            fields.insert(format!("frm1701MS:{key}"), value);
+        };
+        let joint = self.is_joint();
+
+        // Items 1–10.
+        text("txtMonthNo1", format!("{:02}", self.month));
+        text("txtYearNo1", self.taxable_year.to_string());
+        text("civilStatus", self.civil_status.value().to_string());
+        let (a, b, c, branch) = split_tin(&self.tin);
+        // loadBGData copies the profile TIN to both pages.
+        for page in ["Pg1", "Pg2"] {
+            text(&format!("txt{page}TIN1"), a.clone());
+            text(&format!("txt{page}TIN2"), b.clone());
+            text(&format!("txt{page}TIN3"), c.clone());
+            text(&format!("txt{page}BranchCode"), branch.clone());
+        }
+        text("txtRDOCodea", self.rdo_code.trim().to_string());
+        let name = self.taxpayer_name.trim().to_uppercase();
+        // loadBGData: page 2 shows the name up to its first comma.
+        text(
+            "Pg2TaxPayer",
+            name.split(',').next().unwrap_or("").to_string(),
+        );
+        text("txtTaxpayerNo8a", name);
+        text("txtEmaila", self.email.trim().to_string());
+        text("txtTelNum10a", self.contact_number.trim().to_string());
+        let spouse = &self.spouse_info;
+        let (sa, sb, sc, sbranch) = if joint {
+            split_tin(&spouse.tin)
+        } else {
+            Default::default()
+        };
+        text("txtPg2TIN1Spouse", sa);
+        text("txtPg2TIN2Spouse", sb);
+        text("txtPg2TIN3Spouse", sc);
+        text("txtPg2BranchCodeSpouse", sbranch);
+        let spouse_text = |value: &str| {
+            if joint {
+                value.trim().to_string()
+            } else {
+                String::new()
+            }
+        };
+        text("txtRDOCodeb", spouse_text(&spouse.rdo_code));
+        // capitalize(this) on blur.
+        text("txtTaxpayerNo8b", spouse_text(&spouse.name).to_uppercase());
+        text("txtEmailb", spouse_text(&spouse.email));
+        text("txtTelNum10b", spouse_text(&spouse.contact_number));
+
+        // Items 13–16 (capitalize on blur; dates as typed).
+        for (suffix, column) in [("a", &self.taxpayer), ("b", &self.spouse)] {
+            text(
+                &format!("txtTaxpayerNo13{suffix}"),
+                column.legal_basis.trim().to_uppercase(),
+            );
+            text(
+                &format!("txtTaxpayerNo14{suffix}"),
+                column.promotion_agency.trim().to_uppercase(),
+            );
+            text(
+                &format!("txtTaxpayerNo15{suffix}"),
+                column.registered_activity.trim().to_uppercase(),
+            );
+            text(
+                &format!("txtTaxpayerNo16{suffix}"),
+                column.effectivity_from.trim().to_string(),
+            );
+            text(
+                &format!("txtTaxpayerNo16{suffix}1"),
+                column.effectivity_to.trim().to_string(),
+            );
+        }
+
+        // Part II, Part IV and Part V amounts, both columns.
+        let columns = [(&self.taxpayer, 0usize), (&self.spouse, 1usize)];
+        for (column, side) in columns {
+            for (keys, value) in column.page_amounts() {
+                text(keys[side], page_amount(value));
+            }
+            let rate = if side == 0 {
+                "txtTaxRatea"
+            } else {
+                "txtTaxRateb"
+            };
+            text(rate, page_rate(column.special_rate));
+        }
+        text(
+            "txtAggregateAmountPayable30a",
+            page_amount(self.aggregate_amount_payable),
+        );
+        // Item 31: an unchecked box clears its amount; round(this,2).
+        let item31 = |on: bool, value: f64| {
+            if on {
+                official_amount(value)
+            } else {
+                String::new()
+            }
+        };
+        text(
+            "txtToBeRefunded1",
+            item31(self.to_be_refunded, self.refund_amount),
+        );
+        text(
+            "txtToBeIssued1",
+            item31(self.to_be_issued_tcc, self.tcc_amount),
+        );
+        text(
+            "txtToBeCarried1",
+            item31(self.to_be_carried_over, self.carry_over_amount),
+        );
+        text(
+            "addForeignTaxCredits",
+            self.foreign_tax_credits_description.trim().to_uppercase(),
+        );
+        text(
+            "addOtherCreditsPayments",
+            self.other_credits_description.trim().to_uppercase(),
+        );
+        // Items 32–35 and the payment details are not modelled; they stay as
+        // the page leaves them.
+        text("txtPg1I33NumberOfAttachments", "00".to_string());
+        // init() opens page 1 of 2.
+        text("txtCurrentPage", "1".to_string());
+        text("txtMaxPage", "2".to_string());
+
+        // ATC selects (checkButtons / checkButtonsSP).
+        fields.insert(
+            "taxCodeDropdown".to_string(),
+            self.taxpayer.atc().unwrap_or("").to_string(),
+        );
+        fields.insert(
+            "taxCodeDropdownSpouse".to_string(),
+            if joint { self.spouse.atc() } else { None }
+                .unwrap_or("")
+                .to_string(),
+        );
+
+        // Part V Items 7 and 9 blur through string-util's `capital()`, which
+        // upper-cases every text control of the form (emails included).
+        if self.part_v_capitalizes() {
+            for (key, value) in fields.iter_mut() {
+                if !SELECT_CONTROLS.contains(&key.as_str()) {
+                    *value = value.to_uppercase();
+                }
+            }
+        }
+
         let mut put = |key: &str, on: bool| {
             fields.insert(format!("frm1701MS:{key}"), on.to_string());
         };
@@ -932,12 +1389,6 @@ impl Form1701MsDraft {
         put("txtToBeIssued", self.to_be_issued_tcc);
         put("txtToBeCarried", self.to_be_carried_over);
         put("perjuryClause", self.perjury_agreed);
-
-        // loadBGData fills Item 8 from the profile in capitals.
-        fields.insert(
-            "frm1701MS:txtTaxpayerNo8a".to_string(),
-            self.taxpayer_name.trim().to_uppercase(),
-        );
         fields
     }
 
@@ -1690,7 +2141,7 @@ mod tests {
         assert_eq!(fields["frm1701MS:txtTaxpayerNo17b"], "true");
         assert_eq!(fields["frm1701MS:txtSpouseNo17b"], "false");
         assert_eq!(fields["frm1701MS:perjuryClause"], "true");
-        assert_eq!(fields.len(), 31);
+        assert_eq!(fields.len(), 183);
         assert_eq!(
             d.submission_filename(),
             "12345678800000-1701MS-122025#sample.taxpayer@example.com#.xml"

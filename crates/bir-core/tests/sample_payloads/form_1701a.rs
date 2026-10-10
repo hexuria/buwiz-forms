@@ -5,7 +5,7 @@
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1701a::{
     Form1701AAtc, Form1701ACivilStatus, Form1701AColumn, Form1701ADraft, Form1701AFilerType,
-    Form1701AFilingStatus, Form1701ASpouse,
+    Form1701AFilingStatus, Form1701AMoreRow, Form1701ASpouse,
 };
 
 fn sample_1701a() -> Form1701ADraft {
@@ -51,8 +51,7 @@ fn form_1701a_sample_payload_is_current() {
 }
 
 /// Joint filing: the spouse uses the 8% rate as a professional.
-#[test]
-fn form_1701a_joint_sample_payload_is_current() {
+fn sample_1701a_joint() -> Form1701ADraft {
     let mut draft = sample_1701a();
     draft.civil_status = Form1701ACivilStatus::Married;
     draft.spouse_has_income = Some(true);
@@ -75,6 +74,12 @@ fn form_1701a_joint_sample_payload_is_current() {
         ..Form1701AColumn::default()
     };
     draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1701a_joint_sample_payload_is_current() {
+    let draft = sample_1701a_joint();
     assert_eq!(draft.aggregate_amount_payable, 104_347.0);
     let payload = draft
         .to_bir_xml_payload()
@@ -84,5 +89,75 @@ fn form_1701a_joint_sample_payload_is_current() {
         "1701a-v2018",
         &payload,
         "0c99ea1146e34bc57f1058bf57cd430a0f5679364f7e3b86451746be1cb2387e",
+    );
+}
+
+fn more_row(description: &str, taxpayer: f64, spouse: f64) -> Form1701AMoreRow {
+    Form1701AMoreRow {
+        description: description.to_string(),
+        taxpayer,
+        spouse,
+    }
+}
+
+/// Part IV.A "(add more...)" with three rows on the joint return: Item 42
+/// is typed, transferred into the modal as row 1, two rows are added, and
+/// SAVE AND CLOSE folds Item 42 into OTHERS with the whole-peso subtotal.
+#[test]
+fn form_1701a_joint_more_sample_payload_is_current() {
+    let mut draft = sample_1701a_joint();
+    draft.other_income_more = vec![
+        more_row("Rental income", 500.0, 0.0),
+        more_row("Royalty income", 12_000.4, 0.0),
+        more_row("Prize", 750.0, 0.0),
+    ];
+    draft.recompute();
+    assert_eq!(draft.other_income_42_description, "OTHERS");
+    assert_eq!(draft.taxpayer.other_income_42, 13_250.0);
+    assert_eq!(draft.aggregate_amount_payable, 106_997.0);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1701A must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1701A-122025-joint-more",
+        &layout,
+        &payload,
+        "b2763dd4b9e0fccd327f838b4c43fe366508eeb73d6ffede62548e1313fa51d5",
+    );
+}
+
+/// Part IV.B "(add more...)" on an 8% return: Items 50 and 51 typed, then
+/// a second row through the modal.
+#[test]
+fn form_1701a_more_sample_payload_is_current() {
+    let mut draft = sample_1701a();
+    draft.atc = Form1701AAtc::II015;
+    draft.taxpayer.sales = 0.0;
+    draft.taxpayer.sales_returns = 0.0;
+    draft.taxpayer.other_income_41 = 0.0;
+    draft.taxpayer.gpp_share = 0.0;
+    draft.other_income_41_description = String::new();
+    draft.taxpayer.eight_sales = 1_234_567.89;
+    draft.taxpayer.eight_sales_returns = 10_000.5;
+    draft.eight_other_income_50_description = "Interest income".to_string();
+    draft.taxpayer.eight_other_income_50 = 5_000.55;
+    draft.eight_other_income_more = vec![
+        more_row("Rental income", 500.0, 0.0),
+        more_row("Consulting", 1_500.25, 0.0),
+    ];
+    draft.recompute();
+    assert_eq!(draft.eight_other_income_51_description, "OTHERS");
+    assert_eq!(draft.taxpayer.eight_other_income_51, 2_000.0);
+    assert_eq!(draft.aggregate_amount_payable, 60_925.0);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1701A must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1701A-122025-more",
+        &layout,
+        &payload,
+        "2b2af4f60e43676fe32b8f0d508c3684018bdb0249095fa7a01734f9568ddb5d",
     );
 }

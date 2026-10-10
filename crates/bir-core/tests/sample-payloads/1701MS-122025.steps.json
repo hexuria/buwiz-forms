@@ -4,52 +4,7 @@
   "value": "2025"
  },
  {
-  "set": "frm1701MS:txtTaxpayerNo8a",
-  "value": "SAMPLE DUMMY TAXPAYER"
- },
- {
-  "set": "frm1701MS:txtPg1TIN1",
-  "value": "123"
- },
- {
-  "set": "frm1701MS:txtPg1TIN2",
-  "value": "456"
- },
- {
-  "set": "frm1701MS:txtPg1TIN3",
-  "value": "788"
- },
- {
-  "set": "frm1701MS:txtPg1BranchCode",
-  "value": "00000"
- },
- {
-  "set": "frm1701MS:txtPg2TIN1",
-  "value": "123"
- },
- {
-  "set": "frm1701MS:txtPg2TIN2",
-  "value": "456"
- },
- {
-  "set": "frm1701MS:txtPg2TIN3",
-  "value": "788"
- },
- {
-  "set": "frm1701MS:txtPg2BranchCode",
-  "value": "00000"
- },
- {
-  "set": "frm1701MS:txtRDOCodea",
-  "value": "039"
- },
- {
-  "set": "frm1701MS:txtEmaila",
-  "value": "sample.taxpayer@example.com"
- },
- {
-  "set": "frm1701MS:txtTelNum10a",
-  "value": "09170000000"
+  "call": "document.getElementById('frm1701MS:txtTaxpayerNo8a').value='SAMPLE DUMMY TAXPAYER';document.getElementById('frm1701MS:txtPg1TIN1').value='123';document.getElementById('frm1701MS:txtPg1TIN2').value='456';document.getElementById('frm1701MS:txtPg1TIN3').value='788';document.getElementById('frm1701MS:txtPg1BranchCode').value='00000';document.getElementById('frm1701MS:txtPg2TIN1').value='123';document.getElementById('frm1701MS:txtPg2TIN2').value='456';document.getElementById('frm1701MS:txtPg2TIN3').value='788';document.getElementById('frm1701MS:txtPg2BranchCode').value='00000';document.getElementById('frm1701MS:txtRDOCodea').value='039';document.getElementById('frm1701MS:txtEmaila').value='sample.taxpayer@example.com';document.getElementById('frm1701MS:txtTelNum10a').value='09170000000';document.getElementById('frm1701MS:Pg2TaxPayer').value='SAMPLE DUMMY TAXPAYER'"
  },
  {
   "set": "frm1701MS:civilStatus",
