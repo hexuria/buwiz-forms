@@ -52,19 +52,41 @@ ctl.forEach((el, n) => {
 });
 const marked = parseDivs(run(a.dom, loop, libs));
 
-// Run 2: page defaults.
+// Some loops (1702MX) normalize "numbertext" amounts (commas stripped,
+// "(5.00)" -> "-5.00") and skip the <div> when the amount is zero. Those
+// entries get `number: "omit-zero"`.
+const numberRule = /className\.indexOf\("numbertext"\)/.test(loop);
+const numberKeys = new Set(
+  numberRule ? ctl.filter((el) => /(^|\s)numbertext(\s|$)/.test(el.className || '')).map((el) => el.id) : []
+);
+
+// Run 2: page defaults. Omitted zero amounts are absent here, so align by key.
 const b = prepare(html);
 const defaults = parseDivs(run(b.dom, loop, libs));
-if (defaults.divs.length !== marked.divs.length) throw new Error('div count differs between runs');
-defaults.divs.forEach((d, n) => {
-  if (d.key !== marked.divs[n].key || d.after !== marked.divs[n].after) throw new Error('layout differs between runs at ' + n);
-});
+const defaultBody = [];
+{
+  let j = 0;
+  marked.divs.forEach((d, n) => {
+    const dd = defaults.divs[j];
+    if (dd && dd.key === d.key) {
+      if (dd.after !== d.after) throw new Error('layout differs between runs at ' + n);
+      defaultBody.push(dd.body);
+      j++;
+    } else if (numberKeys.has(d.key)) {
+      defaultBody.push(null); // omitted: the page default is a zero amount
+    } else {
+      throw new Error('div count differs between runs at ' + d.key);
+    }
+  });
+  if (j !== defaults.divs.length) throw new Error('div count differs between runs');
+}
+const controlDefault = new Map(controls(b.form).map((el) => [el.id, el.value]));
 
 const kindOf = new Map(ctl.map((el) => [el.id, (el.type || '').toLowerCase()]));
 const entries = marked.divs.map((d, n) => {
   const kind = kindOf.get(d.key);
   if (kind === 'radio' || kind === 'checkbox') {
-    return { key: d.key, kind: 'bool', default: defaults.divs[n].body, after: d.after };
+    return { key: d.key, kind: 'bool', default: defaultBody[n], after: d.after };
   }
   const parts = [];
   const re = /([mM])(\d+)([qQ])( |%20)([zZ])/g;
@@ -81,13 +103,30 @@ const entries = marked.divs.map((d, n) => {
     consumed = re.lastIndex;
   }
   if (consumed !== d.body.length) parts.push({ literal: d.body.slice(consumed) });
-  return { key: d.key, kind: 'value', parts, default: defaults.divs[n].body, after: d.after };
+  if (numberKeys.has(d.key)) {
+    const def = defaultBody[n] === null ? String(controlDefault.get(d.key) ?? '') : defaultBody[n];
+    return { key: d.key, kind: 'value', parts, default: def, number: 'omit-zero', after: d.after };
+  }
+  return { key: d.key, kind: 'value', parts, default: defaultBody[n], after: d.after };
 });
 
 // Probes for value-dependent rules (number formatting, zero omission).
 // Each must reproduce the recorded layout exactly, or the form is flagged.
+// The official numbertext normalization (NumWithParenthesis, then commas).
+function officialNumber(v) {
+  let out = v;
+  if (v.indexOf('(') > -1 && v.indexOf(')') > -1) {
+    out = out.replace('(', '-').replace(')', '');
+    if (v.indexOf(',') > -1) out = out.replace(/,/g, '');
+  } else if (v.indexOf(',') > -1) out = out.replace(/,/g, '');
+  return out;
+}
 function expected(entry, value, n) {
   if (entry.kind === 'bool') return marked.divs[n].body;
+  if (entry.number) {
+    const v = officialNumber(value);
+    return v * 1 !== 0 ? v : null;
+  }
   return entry.parts.map((p) => {
     if (p.literal !== undefined) return p.literal;
     let v = value;
@@ -104,13 +143,15 @@ for (const probe of ['1,234.50', '0.00', '(5.00)']) {
     else if (marker.has(String(n))) setValue(c.doc, el, probe);
   });
   const got = parseDivs(run(c.dom, loop, libs)).divs;
-  if (got.length !== entries.length) {
-    value_rules.push({ probe, issue: `div count ${got.length} vs ${entries.length}` });
+  const want = entries
+    .map((e, n) => ({ key: e.key, body: expected(e, probe, n) }))
+    .filter((w) => w.body !== null);
+  if (got.length !== want.length) {
+    value_rules.push({ probe, issue: `div count ${got.length} vs ${want.length}` });
     continue;
   }
   got.forEach((g, n) => {
-    const want = expected(entries[n], probe, n);
-    if (g.key !== entries[n].key || g.body !== want) value_rules.push({ probe, key: g.key, expected: want, official: g.body });
+    if (g.key !== want[n].key || g.body !== want[n].body) value_rules.push({ probe, key: g.key, expected: want[n].body, official: g.body });
   });
 }
 
