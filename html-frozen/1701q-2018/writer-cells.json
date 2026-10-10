@@ -1,0 +1,778 @@
+{
+ "form_id": "1701q-v2018",
+ "html_slug": "1701q-2018",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) names the item. Text cells and combs: caption left of or above the cell. Booleans: X in the box immediately left of the printed option (quarter, amended, type, ATC, foreign tax credit, tax rate, method, spouse options). ATC booleans follow the printed grid order, read row by row (Part I: II012, II014, II013 / II015, II017, II016; Part II first row: II012, II014, II013, II011, then II015, II017, II016). Part III and Part IV amounts and Part V (page 2) amounts are whole-peso 8-slot combs with no centavo comb and the print says not to enter centavos, so they stay blank rather than round. Part IV dates are three combs per row under one key. The page 2 TIN is one 14-slot comb for four keys. The item 5 and item 17 branch combs (p1c22, p1c72) are mixed cells with no input element, so they stay blank. TIN combs carry catalog name stamps and take no join. Layout keys with no printed cell (txtCurrentPage, txtMaxPage, txtLOB, txtTelno, txtFinalFlag, txtEnroll, ebirOnline*, driveSelectTPExport, Part V Desc keys) have no cell to fill.",
+ "joins": [
+  {
+   "writer_key": "frm1701q:txtYear",
+   "html_id": "p1c4",
+   "printed": "1 For the Year",
+   "reason": "4-slot comb right of \"1 For the Year\""
+  },
+  {
+   "writer_key": "frm1701q:txtSheets",
+   "html_id": "p1c8",
+   "printed": "4 Number of Sheet/s Attached",
+   "reason": "2-slot comb under \"Number of Sheet/s Attached\""
+  },
+  {
+   "writer_key": "frm1701q:txtRDOCode",
+   "html_id": "p1c24",
+   "printed": "6 RDO Code",
+   "reason": "3-slot comb under \"6 RDO Code\""
+  },
+  {
+   "writer_key": "frm1701q:txtTaxpayerName",
+   "html_id": "p1c39",
+   "printed": "9 Taxpayer/Filer's Name",
+   "reason": "40-slot name comb under \"9 Taxpayer/Filer's Name\""
+  },
+  {
+   "writer_key": "frm1701q:txtAddress",
+   "html_id": "p1c41",
+   "printed": "10 Registered Address",
+   "reason": "40-slot address comb under \"10 Registered Address\""
+  },
+  {
+   "writer_key": "frm1701q:txtAddress2",
+   "html_id": "p1c42",
+   "printed": "10 Registered Address (second line)",
+   "reason": "32-slot comb directly under the item 10 first line"
+  },
+  {
+   "writer_key": "frm1701q:txtZipCode",
+   "html_id": "p1c44",
+   "printed": "10A ZIP Code",
+   "reason": "4-slot comb right of \"10A ZIP Code\""
+  },
+  {
+   "writer_key": "frm1701q:txtBirthMonth",
+   "html_id": "p1c47",
+   "printed": "11 Date of Birth (MM)",
+   "reason": "2-slot MM comb under \"11 Date of Birth\""
+  },
+  {
+   "writer_key": "frm1701q:txtBirthDay",
+   "html_id": "p1c48",
+   "printed": "11 Date of Birth (DD)",
+   "reason": "2-slot DD comb after the MM comb"
+  },
+  {
+   "writer_key": "frm1701q:txtBirthYear",
+   "html_id": "p1c49",
+   "printed": "11 Date of Birth (YYYY)",
+   "reason": "4-slot YYYY comb after the DD comb"
+  },
+  {
+   "writer_key": "txtEmail",
+   "html_id": "p1c50",
+   "printed": "12 Email Address",
+   "reason": "32-slot comb under \"12 Email Address\""
+  },
+  {
+   "writer_key": "frm1701q:txtCitizenship",
+   "html_id": "p1c54",
+   "printed": "13 Citizenship",
+   "reason": "16-slot comb under \"13 Citizenship\""
+  },
+  {
+   "writer_key": "frm1701q:txtForeignTaxNumber",
+   "html_id": "p1c55",
+   "printed": "14 Foreign Tax Number",
+   "reason": "16-slot comb under \"14 Foreign Tax Number\""
+  },
+  {
+   "writer_key": "frm1701q:txtSpouseRDOCode",
+   "html_id": "p1c74",
+   "printed": "18 RDO Code (spouse)",
+   "reason": "3-slot comb under \"18 RDO Code\""
+  },
+  {
+   "writer_key": "frm1701q:txtSpouseName",
+   "html_id": "p1c89",
+   "printed": "21 Spouse's Name",
+   "reason": "40-slot name comb under \"21 Spouse's Name\""
+  },
+  {
+   "writer_key": "frm1701q:txtSpouseCitizenship",
+   "html_id": "p1c93",
+   "printed": "22 Citizenship (spouse)",
+   "reason": "16-slot comb under \"22 Citizenship\""
+  },
+  {
+   "writer_key": "frm1701q:txtSpouseForeignTaxNum",
+   "html_id": "p1c94",
+   "printed": "23 Foreign Tax Number (spouse)",
+   "reason": "16-slot comb under \"23 Foreign Tax Number\""
+  },
+  {
+   "writer_key": "frm1701q:txtPg2TaxpayerName",
+   "html_id": "p2c6",
+   "printed": "Page 2 Taxpayer/Filer's Last Name",
+   "reason": "26-slot comb under \"Taxpayer/Filer's Last Name\" on page 2"
+  },
+  {
+   "writer_key": "frm1701q:txtAgency32",
+   "html_id": "p1c134",
+   "printed": "32 Cash/Bank Debit Memo, Drawee Bank/Agency",
+   "reason": "6-slot comb under \"Drawee Bank/Agency\", row 32"
+  },
+  {
+   "writer_key": "frm1701q:txtNumber32",
+   "html_id": "p1c135",
+   "printed": "32 Cash/Bank Debit Memo, Number",
+   "reason": "11-slot comb under \"Number\", row 32"
+  },
+  {
+   "writer_key": "frm1701q:txtAgency33",
+   "html_id": "p1c141",
+   "printed": "33 Check, Drawee Bank/Agency",
+   "reason": "6-slot comb under \"Drawee Bank/Agency\", row 33"
+  },
+  {
+   "writer_key": "frm1701q:txtNumber33",
+   "html_id": "p1c142",
+   "printed": "33 Check, Number",
+   "reason": "11-slot comb under \"Number\", row 33"
+  },
+  {
+   "writer_key": "frm1701q:txtNumber34",
+   "html_id": "p1c148",
+   "printed": "34 Tax Debit Memo, Number",
+   "reason": "11-slot comb under \"Number\", row 34 (no Drawee Bank comb on this row)"
+  },
+  {
+   "writer_key": "frm1701q:txtParticular35",
+   "html_id": "p1c154",
+   "printed": "35 Others (specify)",
+   "reason": "7-slot comb under \"35 Others (specify)\""
+  },
+  {
+   "writer_key": "frm1701q:txtAgency35",
+   "html_id": "p1c155",
+   "printed": "35 Others, Drawee Bank/Agency",
+   "reason": "6-slot comb under the \"Drawee Bank/Agency\" column, row 35"
+  },
+  {
+   "writer_key": "frm1701q:txtNumber35",
+   "html_id": "p1c156",
+   "printed": "35 Others, Number",
+   "reason": "11-slot comb under the \"Number\" column, row 35"
+  }
+ ],
+ "money_joins": [],
+ "xbox_joins": [
+  {
+   "writer_key": "frm1701q:DateQuarter_1",
+   "html_id": "p1c10",
+   "printed": "2 Quarter: First",
+   "reason": "box immediately left of \"First\""
+  },
+  {
+   "writer_key": "frm1701q:DateQuarter_2",
+   "html_id": "p1c11",
+   "printed": "2 Quarter: Second",
+   "reason": "box immediately left of \"Second\""
+  },
+  {
+   "writer_key": "frm1701q:DateQuarter_3",
+   "html_id": "p1c9",
+   "printed": "2 Quarter: Third",
+   "reason": "box immediately left of \"Third\""
+  },
+  {
+   "writer_key": "frm1701q:AmendedRtn_1",
+   "html_id": "p1c12",
+   "printed": "3 Amended Return? Yes",
+   "reason": "box immediately left of \"Yes\""
+  },
+  {
+   "writer_key": "frm1701q:AmendedRtn_2",
+   "html_id": "p1c13",
+   "printed": "3 Amended Return? No",
+   "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm1701q:optType_1",
+   "html_id": "p1c27",
+   "printed": "7 Taxpayer/Filer Type: Single Proprietor",
+   "reason": "box immediately left of \"Single Proprietor\""
+  },
+  {
+   "writer_key": "frm1701q:optType_2",
+   "html_id": "p1c28",
+   "printed": "7 Taxpayer/Filer Type: Professional",
+   "reason": "box immediately left of \"Professional\""
+  },
+  {
+   "writer_key": "frm1701q:optType_3",
+   "html_id": "p1c29",
+   "printed": "7 Taxpayer/Filer Type: Estate",
+   "reason": "box immediately left of \"Estate\""
+  },
+  {
+   "writer_key": "frm1701q:optType_4",
+   "html_id": "p1c30",
+   "printed": "7 Taxpayer/Filer Type: Trust",
+   "reason": "box immediately left of \"Trust\""
+  },
+  {
+   "writer_key": "frm1701q:optATC_1",
+   "html_id": "p1c33",
+   "printed": "8 ATC: II012 Business Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed ATC, row 1 col 1 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optATC_2",
+   "html_id": "p1c32",
+   "printed": "8 ATC: II014 Income from Profession-Graduated IT Rates",
+   "reason": "box immediately left of the printed ATC, row 1 col 2 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optATC_3",
+   "html_id": "p1c34",
+   "printed": "8 ATC: II013 Mixed Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed ATC, row 1 col 3 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optATC_4",
+   "html_id": "p1c36",
+   "printed": "8 ATC: II015 Business Income-8% IT Rate",
+   "reason": "box immediately left of the printed ATC, row 2 col 1 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optATC_5",
+   "html_id": "p1c35",
+   "printed": "8 ATC: II017 Income from Profession-8% IT Rate",
+   "reason": "box immediately left of the printed ATC, row 2 col 2 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optATC_6",
+   "html_id": "p1c37",
+   "printed": "8 ATC: II016 Mixed Income-8% IT Rate",
+   "reason": "box immediately left of the printed ATC, row 2 col 3 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optForeignTaxCredits_1",
+   "html_id": "p1c57",
+   "printed": "13/14 Claiming Foreign Tax Credits? Yes",
+   "reason": "box immediately left of \"Yes\""
+  },
+  {
+   "writer_key": "frm1701q:optForeignTaxCredits_2",
+   "html_id": "p1c58",
+   "printed": "13/14 Claiming Foreign Tax Credits? No",
+   "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm1701q:optTaxRate_1",
+   "html_id": "p1c62",
+   "printed": "16 Tax Rate: Graduated Rates",
+   "reason": "box immediately left of \"Graduated Rates\""
+  },
+  {
+   "writer_key": "frm1701q:optTaxRate_2",
+   "html_id": "p1c63",
+   "printed": "16 Tax Rate: 8%",
+   "reason": "box immediately left of \"8% on gross sales\""
+  },
+  {
+   "writer_key": "frm1701q:optMethodOfDeduction:_1",
+   "html_id": "p1c60",
+   "printed": "16A Method of Deduction: Itemized Deduction",
+   "reason": "box immediately left of \"Itemized Deduction\""
+  },
+  {
+   "writer_key": "frm1701q:optMethodOfDeduction:_2",
+   "html_id": "p1c61",
+   "printed": "16A Method of Deduction: Optional Standard Deduction",
+   "reason": "box immediately left of \"Optional Standard Deduction (OSD)\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseType_1",
+   "html_id": "p1c77",
+   "printed": "19 Filer's Spouse Type: Single Proprietor",
+   "reason": "box immediately left of \"Single Proprietor\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseType_2",
+   "html_id": "p1c78",
+   "printed": "19 Filer's Spouse Type: Professional",
+   "reason": "box immediately left of \"Professional\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseType_3",
+   "html_id": "p1c79",
+   "printed": "19 Filer's Spouse Type: Compensation Earner",
+   "reason": "box immediately left of \"Compensation Earner\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_1",
+   "html_id": "p1c82",
+   "printed": "20 ATC (spouse): II012 Business Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed ATC, row 1 col 1 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_2",
+   "html_id": "p1c83",
+   "printed": "20 ATC (spouse): II014 Income from Profession-Graduated IT Rates",
+   "reason": "box immediately left of the printed ATC, row 1 col 2 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_3",
+   "html_id": "p1c81",
+   "printed": "20 ATC (spouse): II013 Mixed Income-Graduated IT Rates",
+   "reason": "box immediately left of the printed ATC, row 1 col 3 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_4",
+   "html_id": "p1c84",
+   "printed": "20 ATC (spouse): II011 Compensation Income",
+   "reason": "box immediately left of \"II011 Compensation Income\", row 1 col 4 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_5",
+   "html_id": "p1c85",
+   "printed": "20 ATC (spouse): II015 Business Income-8% IT Rate",
+   "reason": "box immediately left of the printed ATC, row 2 col 1 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_6",
+   "html_id": "p1c86",
+   "printed": "20 ATC (spouse): II017 Income from Profession-8% IT Rate",
+   "reason": "box immediately left of the printed ATC, row 2 col 2 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseATC_7",
+   "html_id": "p1c87",
+   "printed": "20 ATC (spouse): II016 Mixed Income-8% IT Rate",
+   "reason": "box immediately left of the printed ATC, row 2 col 3 (printed order)"
+  },
+  {
+   "writer_key": "frm1701q:optSpouseForeignTaxCred_1",
+   "html_id": "p1c96",
+   "printed": "24 Claiming Foreign Tax Credits (spouse): Yes",
+   "reason": "box immediately left of \"Yes\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseForeignTaxCred_2",
+   "html_id": "p1c97",
+   "printed": "24 Claiming Foreign Tax Credits (spouse): No",
+   "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseMethod:_1",
+   "html_id": "p1c99",
+   "printed": "25A Method of Deduction (spouse): Itemized Deduction",
+   "reason": "box immediately left of \"Itemized Deduction\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseMethod:_2",
+   "html_id": "p1c100",
+   "printed": "25A Method of Deduction (spouse): Optional Standard Deduction",
+   "reason": "box immediately left of \"Optional Standard Deduction (OSD)\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseTaxRate_1",
+   "html_id": "p1c101",
+   "printed": "25 Tax Rate (spouse): Graduated Rates",
+   "reason": "box immediately left of \"Graduated Rates\""
+  },
+  {
+   "writer_key": "frm1701q:optSpouseTaxRate_2",
+   "html_id": "p1c102",
+   "printed": "25 Tax Rate (spouse): 8%",
+   "reason": "box immediately left of \"8% on gross sales\""
+  }
+ ],
+ "left_out": [
+  {
+   "html_id": "p1c259",
+   "reason": "Authorized Representative TIN text cell under the signature block: no layout key"
+  },
+  {
+   "html_id": "p1c22",
+   "reason": "branch comb (5 slots) under item 5 is a mixed cell with no input element in the frozen sheet, so the fill path cannot target it; left blank"
+  },
+  {
+   "html_id": "p1c72",
+   "reason": "spouse branch comb (5 slots) under item 17 is a mixed cell with no input element in the frozen sheet, so the fill path cannot target it; left blank"
+  },
+  {
+   "html_id": "p2c5",
+   "reason": "one 14-slot TIN comb under the page 2 \"TIN\" caption; four keys (txtPg2TIN1-3 and txtPg2BranchCode) cannot share one cell, so left blank"
+  },
+  {
+   "html_id": "p1c108",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c109",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c111",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c112",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c114",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c115",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c117",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c118",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c120",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c121",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c123",
+   "reason": "Part III amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c139",
+   "reason": "Part IV amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c146",
+   "reason": "Part IV amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c152",
+   "reason": "Part IV amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c160",
+   "reason": "Part IV amount: 8-slot peso comb with no centavo comb; the print says enter whole pesos (49 centavos or less drop, 50 or more round up), so a centavo layout value cannot be written without guessing the rounding"
+  },
+  {
+   "html_id": "p1c136",
+   "reason": "Part IV date for row 32: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c137",
+   "reason": "Part IV date for row 32: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c138",
+   "reason": "Part IV date for row 32: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c143",
+   "reason": "Part IV date for row 33: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c144",
+   "reason": "Part IV date for row 33: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c145",
+   "reason": "Part IV date for row 33: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c149",
+   "reason": "Part IV date for row 34: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c150",
+   "reason": "Part IV date for row 34: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c151",
+   "reason": "Part IV date for row 34: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c157",
+   "reason": "Part IV date for row 35: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c158",
+   "reason": "Part IV date for row 35: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c159",
+   "reason": "Part IV date for row 35: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p2c14",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c15",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c17",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c18",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c20",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c21",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c24",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c25",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c28",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c29",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c31",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c32",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c34",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c35",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c37",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c38",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c40",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c41",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c43",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c44",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c46",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c47",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c50",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c51",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c53",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c54",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c56",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c57",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c59",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c60",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c62",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c63",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c65",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c66",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c68",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c69",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c71",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c72",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c75",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c76",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c78",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c79",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c81",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c82",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c84",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c85",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c87",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c88",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c90",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c91",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c93",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c94",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c96",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c97",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c99",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c100",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c103",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c104",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c106",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c107",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c109",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c110",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c112",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c113",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c115",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  },
+  {
+   "html_id": "p2c116",
+   "reason": "Part V item (36-68) column A/B amount: 8-slot whole-peso comb with no centavo comb; the print says not to enter centavos, so it stays blank rather than round"
+  }
+ ]
+}
