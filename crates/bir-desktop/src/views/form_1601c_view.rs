@@ -1345,6 +1345,7 @@ impl Render for Form1601CView {
                                                 <div flex flex_wrap gap_2 items_center>
                                                     <div>{"Amended Return?"}</div>
                                                     {div()
+                                                            .when(layout == Layout::Phone, |d| d.w_full())
                                                             .id("amended_btn")
                                                             .p_2()
                                                             .border_1()
@@ -1383,6 +1384,7 @@ impl Render for Form1601CView {
                                                 <div flex flex_wrap gap_2 items_center>
                                                     <div>{"Any Taxes Withheld?"}</div>
                                                     {div()
+                                                            .when(layout == Layout::Phone, |d| d.w_full())
                                                             .id(crate::agent::ids::FORM_1601C_WITHHELD)
                                                             .p_2()
                                                             .border_1()
@@ -1736,7 +1738,7 @@ impl Form1601CView {
                 rounded_lg>
                 <div flex flex_col gap_4 p_4>
                     <div flex items_center justify_between flex_wrap gap_2>
-                        <div flex flex_col gap_1>
+                        <div flex flex_col gap_1 flex_1 min_w_0>
                             <div text_xl font_weight={FontWeight::BOLD}>
                                 {"Part IV - Schedule I"}
                             </div>

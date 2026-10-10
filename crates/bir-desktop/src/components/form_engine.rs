@@ -47,7 +47,14 @@ pub trait FormViewTrait: 'static + Sized {
         };
         let current_idx = step_order(&self.current_status());
 
-        let mut row = div().flex().items_center().w_full().justify_center();
+        let mut row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .w_full()
+            .min_w_0()
+            .gap_y_2()
+            .justify_center();
 
         for (i, (label, step_status, step_num)) in steps.iter().enumerate() {
             let idx = step_order(step_status);
@@ -60,6 +67,7 @@ pub trait FormViewTrait: 'static + Sized {
                     row = row.child(rsx! {
                         <div
                             flex_1
+                            min_w={px(8.)}
                             max_w={px(80.)}
                             h={px(2.)}
                             bg={cx.theme().success.opacity(0.5)}
@@ -69,6 +77,7 @@ pub trait FormViewTrait: 'static + Sized {
                     row = row.child(rsx! {
                         <div
                             flex_1
+                            min_w={px(8.)}
                             max_w={px(80.)}
                             border_t_2
                             border_dashed
