@@ -130,6 +130,9 @@ fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>)
 
 fn writer_cells_json(slug: &str) -> Option<&'static str> {
     match slug {
+        "0619e-2018" => Some(include_str!(
+            "../../../html-frozen/0619e-2018/writer-cells.json"
+        )),
         "1600-pt-2018" => Some(include_str!(
             "../../../html-frozen/1600-pt-2018/writer-cells.json"
         )),
@@ -202,11 +205,17 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2000-ot-2018" => Some(include_str!(
             "../../../html-frozen/2000-ot-2018/writer-cells.json"
         )),
+        "2200a-2020" => Some(include_str!(
+            "../../../html-frozen/2200a-2020/writer-cells.json"
+        )),
         "2200m-2018" => Some(include_str!(
             "../../../html-frozen/2200m-2018/writer-cells.json"
         )),
         "2200s-2018" => Some(include_str!(
             "../../../html-frozen/2200s-2018/writer-cells.json"
+        )),
+        "2200t-2022" => Some(include_str!(
+            "../../../html-frozen/2200t-2022/writer-cells.json"
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
