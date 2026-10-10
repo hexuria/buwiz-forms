@@ -396,13 +396,18 @@ pub fn period_column(period: &FilingPeriod) -> i64 {
 pub enum QueueableKind {
     Form2553,
     Form2200M,
+    Form2200T,
     #[cfg(test)]
     Test,
 }
 
 impl QueueableKind {
     /// Every production form on the generic path.
-    pub const ALL: &'static [QueueableKind] = &[QueueableKind::Form2553, QueueableKind::Form2200M];
+    pub const ALL: &'static [QueueableKind] = &[
+        QueueableKind::Form2553,
+        QueueableKind::Form2200M,
+        QueueableKind::Form2200T,
+    ];
 
     fn candidates() -> impl Iterator<Item = QueueableKind> {
         let all = Self::ALL.iter().copied();
@@ -443,6 +448,10 @@ macro_rules! with_queueable_kind {
             }
             $crate::forms::queueable::QueueableKind::Form2200M => {
                 type $ty = $crate::forms::form_2200m::Form2200MDraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form2200T => {
+                type $ty = $crate::forms::form_2200t::Form2200TDraft;
                 $body
             }
             #[cfg(test)]
