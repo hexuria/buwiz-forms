@@ -3,8 +3,9 @@
 Lets OpenGrok prepare a **draft** 2551Q or 1601C in the BIR desktop app while
 the user watches the form. Three pieces:
 
-- `bir-mcp` (`crates/bir-mcp`): an MCP server that finds the running BIR app
-  through its gpui-agent discovery records and exposes draft-only tools. It
+- `bir-mcp` (`crates/bir-mcp`): an MCP server that lists every running BIR
+  app through gpui-agent's discovery records, works only on the one the user
+  picks (`bir_list_apps` -> `bir_connect`), and exposes draft-only tools. It
   has no submit, queue, file or payment tool, and its tool-to-host-op map is a
   closed allow-list (`crates/bir-mcp/src/tools.rs`). It speaks stdio by
   default and MCP Streamable HTTP with `--http 127.0.0.1:PORT`; OpenGrok only
@@ -25,17 +26,56 @@ From the repository root:
 rtk cargo build --locked --release -p bir-mcp
 ```
 
-BIR itself must run with the agent control plane enabled and a token:
+BIR itself must run with the agent control plane enabled and a token. Give
+each instance a name with `GPUI_AGENT_CONNECT_ID`, so the user can tell them
+apart and pick one (otherwise it is listed as `pid:<pid>`):
 
 ```sh
 rtk cargo build --locked --release -p bir-desktop --features agent
-GPUI_AGENT=1 GPUI_AGENT_TOKEN='<your local agent token>' target/release/bir
+GPUI_AGENT=1 GPUI_AGENT_TOKEN='<agent token>' GPUI_AGENT_CONNECT_ID=bir target/release/bir
 ```
+
+A demo next to it, on a test database (`EBIR_TEST_ENV=1` and/or a
+`BIR_DATABASE_PATH` outside the BIR data directory both make `app.info`
+report `database: "test"`). When the default port `127.0.0.1:17421` is taken
+and `GPUI_AGENT_ADDR` is not set, the second app binds an ephemeral loopback
+port and publishes it in its discovery record:
+
+```sh
+EBIR_TEST_ENV=1 BIR_DATABASE_PATH=/tmp/bir-demo/bir_data.db \
+GPUI_AGENT=1 GPUI_AGENT_TOKEN='<demo agent token>' GPUI_AGENT_CONNECT_ID=bir-demo \
+  target/debug/bir
+```
+
+## Agent tokens: `BIR_MCP_TOKENS`
+
+`bir-mcp` needs the agent token of each app it may talk to. Put them in a
+JSON file that only you can read, keyed by connect id (or by pid, as `"12345"`
+or `"pid:12345"`):
+
+```sh
+umask 077
+cat > ~/.config/bir-mcp-tokens.json <<'JSON'
+{ "bir-demo": "<demo agent token>" }
+JSON
+chmod 600 ~/.config/bir-mcp-tokens.json
+export BIR_MCP_TOKENS=~/.config/bir-mcp-tokens.json
+```
+
+- On unix the file is refused unless no group/other permission bit is set
+  (`chmod 600`).
+- It is re-read on every call: add a token without restarting `bir-mcp`.
+- `GPUI_AGENT_TOKEN`, if set, is the fallback token for any app without an
+  entry. Leave it unset if `bir-mcp` should not be able to reach every app.
+- An app whose token is not known is still listed (`"token": "missing"`) but
+  cannot be selected.
+- Tokens are never logged, never returned by a tool, never written to the
+  discovery records, and never part of an error message.
 
 ## Run bir-mcp over HTTP
 
 ```sh
-export GPUI_AGENT_TOKEN='<your local agent token>'   # same value BIR was started with
+export BIR_MCP_TOKENS=~/.config/bir-mcp-tokens.json  # see above
 export BIR_MCP_HTTP_TOKEN="$(openssl rand -hex 32)"  # bearer token OpenGrok will send
 target/release/bir-mcp --http 127.0.0.1:8765
 # bir-mcp: serving MCP at http://127.0.0.1:8765/mcp
@@ -53,21 +93,41 @@ target/release/bir-mcp --http 127.0.0.1:8765
   notifications get `202 Accepted`. `GET` and `DELETE` get `405` (no SSE
   stream, no sessions; the server is stateless).
 
-Both tokens are local secrets you choose. Neither is written to the discovery
-records, neither is logged, and neither may be committed.
+All these tokens are local secrets you choose. None is written to the
+discovery records, none is logged, and none may be committed.
 
-## How bir-mcp finds BIR
+## How bir-mcp finds BIR, and which one it uses
 
-Each BIR host writes `<registry>/bir-desktop-<pid>.json` (`app`, `pid`, `addr`,
-`mode`, `protocol`). The registry is `GPUI_AGENT_REGISTRY` if set, otherwise
-`agent-instances/` under the BIR data directory. `bir-mcp` picks, in order:
+Discovery is gpui-agent's own (`gpui_agent::discovery`). Every BIR host, the
+desktop window and `bir-headless serve` alike, writes
+`<runtime dir>/hosts/<pid>-<port>.json` (`addr`, `pid`, `app: "bir-desktop"`,
+`executable`, and `connect_id` from `GPUI_AGENT_CONNECT_ID`; never a token)
+and removes it on exit. The runtime dir is `GPUI_AGENT_RUNTIME_DIR` if set,
+else `$XDG_RUNTIME_DIR/gpui-agent`, else `$TMPDIR/gpui-agent-<uid>`; BIR
+hosts and `bir-mcp` must agree on it.
 
-1. `GPUI_AGENT_ADDR` if set,
-2. a live `desktop` record (the window the user is watching),
-3. a live `headless` record (`bir-headless serve`),
-4. `127.0.0.1:17421`.
+`bir-mcp` never picks an app by itself, not even when only one is running,
+and it ignores `GPUI_AGENT_ADDR`:
 
-It re-resolves on every tool call, so starting BIR after `bir-mcp` is fine.
+1. `bir_list_apps` lists every live BIR record: `id` (the connect id, else
+   `pid:<pid>`), `pid`, `addr`, `mode` (desktop/headless), `token`
+   (`known`/`missing`) and, when the token is known, the app's own read-only
+   `app.info`: `database` (`test` or `real`) and its `taxpayers`.
+2. The model shows that list and asks the user which app to use.
+3. `bir_connect {id}` selects it for this `bir-mcp` process (one selection
+   per process, shared by every HTTP client of it). An app on the `real`
+   database is refused unless the call carries `confirm_real: true`, which
+   the skill sends only after the user confirmed in chat. A failed
+   `bir_connect` leaves no app selected.
+4. Until then every profile, dues and form tool answers `no BIR app selected
+   — call bir_list_apps, ask the user which one, then bir_connect`. After it,
+   every result names the app: `{"app": {"id", "mode", "database"},
+   "result": ...}` (errors end with `[BIR app: <id> (<mode>, <database>
+   database)]`). If the app exits, the selection is dropped.
+
+`bir-headless status` / `shutdown` find the daemon the same way: an explicit
+`GPUI_AGENT_ADDR`, else the instance named by `GPUI_AGENT_CONNECT_ID`, else
+the one running `bir-headless`, else `127.0.0.1:17421`.
 
 ## Load it in OpenGrok
 
@@ -105,8 +165,11 @@ makes OpenGrok drop the server instead of sending it. Never put the real token
 into the tracked `mcp.json`.
 
 Restart OpenGrok (operator plugins are read once at boot). The tools appear as
-`bir.bir-mcp.<tool>`, subject to the coworker's tool ceiling allowing the
-`bir` plugin.
+`bir.bir-mcp.<tool>`.
+
+Then turn the `bir` plugin on in the Bot's Tools settings: operator plugins
+are off in a Bot's tool ceiling until switched on there, and @mentions don't
+enable operator plugins.
 
 ### 2. The skill: `POST /skills`
 
@@ -114,21 +177,23 @@ The operator plugin loader reads only `plugin.json` and `mcp.json`, so upload
 the skill through the server's API: `POST /skills` with the whole `SKILL.md`
 (frontmatter included) as `body`. The frontmatter `name` (`file-tax`) and
 `description` are used when the request does not give them. An uploaded skill
-starts switched off; switch it on and attach it to the coworker that has the
-`bir` plugin. Then open a chat and type `/file-tax 2551Q`.
+is live as soon as it is created (`POST /skills` with `source: "uploaded"`
+answered `enabled: true, draft: false`); attach it to the Bot that has the
+`bir` plugin turned on. Then open a chat and type `/file-tax 2551Q`.
 
 ## Verify
 
 ```sh
-cargo test --locked -p bir-mcp              # protocol, allow-list, discovery, HTTP transport tests
+cargo test --locked -p bir-mcp              # protocol, allow-list, selection, tokens, discovery, HTTP tests
 scripts/check_file_tax_goal.sh              # full done-condition incl. end-to-end smoke
 ```
 
-A manual check of the HTTP transport (point `GPUI_AGENT_ADDR` at an unused
-port to exercise it without any BIR running):
+A manual check of the HTTP transport (with `GPUI_AGENT_RUNTIME_DIR` pointing
+at an empty directory, no BIR app is listed, so nothing is reached):
 
 ```sh
-BIR_MCP_HTTP_TOKEN=test target/release/bir-mcp --http 127.0.0.1:8765 &
+GPUI_AGENT_RUNTIME_DIR="$(mktemp -d)" BIR_MCP_HTTP_TOKEN=test \
+  target/release/bir-mcp --http 127.0.0.1:8765 &
 H=(-H 'Authorization: Bearer test' -H 'Content-Type: application/json'
    -H 'Accept: application/json, text/event-stream')
 curl -s "${H[@]}" http://127.0.0.1:8765/mcp \
@@ -138,11 +203,15 @@ curl -s -o /dev/null -w '%{http_code}\n' "${H[@]}" http://127.0.0.1:8765/mcp \
 curl -s "${H[@]}" http://127.0.0.1:8765/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 curl -s "${H[@]}" http://127.0.0.1:8765/mcp \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"bir_status","arguments":{}}}'
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"bir_list_apps","arguments":{}}}'
+curl -s "${H[@]}" http://127.0.0.1:8765/mcp \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"bir_profiles_list","arguments":{}}}'
 ```
 
-`tools/list` must show only the eleven `bir_*` tools; with BIR running,
-`bir_status` must report `"connected": true` and which instance it reached.
+`tools/list` must show only the thirteen `bir_*` tools; `bir_list_apps` must
+list no app, and `bir_profiles_list` must answer `no BIR app selected`. With a
+BIR app running (and the same runtime dir), `bir_list_apps` lists it and
+`bir_connect` selects it.
 The stdio mode is checked the same way by piping those JSON-RPC lines into
 `bir-mcp` with no arguments. Test with a temporary database
 (`BIR_DATABASE_PATH` + `EBIR_TEST_ENV=1`) and the test TIN, never with real
