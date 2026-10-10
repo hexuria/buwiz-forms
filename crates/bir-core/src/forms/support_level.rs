@@ -271,6 +271,24 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "2200AN",
+        revision: "2018",
+        // `form_id` is the official formType. Queueing stays off:
+        // ftpTargetFolder.PROD has no '2200ANv2018' folder (getFtpFolder
+        // returns undefined), so the SFTP target is unconfirmed.
+        form_id: "2200ANv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: false,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
         form_id: "0619Ev2018",
@@ -542,6 +560,9 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
         assert!(can_queue_for_submission("2553"));
         assert_eq!(queue_authorized_form_type_id("2553"), Some("2553"));
+        // No PROD SFTP folder for 2200ANv2018: modeled, not queueable.
+        assert!(!can_queue_for_submission("2200AN"));
+        assert_eq!(queue_authorized_form_type_id("2200AN"), None);
         assert!(can_queue_for_submission("2200C"));
         assert_eq!(queue_authorized_form_type_id("2200C"), Some("2200Cv2018"));
         assert!(can_queue_for_submission("2200S"));
