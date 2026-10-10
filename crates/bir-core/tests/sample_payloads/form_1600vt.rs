@@ -57,7 +57,7 @@ fn form_1600vt_sample_payload_is_current() {
         "1600VT-062025",
         "1600vt-v2018-government",
         &payload,
-        "f7fef6b11b770b6052e44f1b06a10fabfc5a232e1400b0f875c8fe58606188df",
+        "d596ad6dec862ff67d13315e03999782d3711becdfa4222b25d8a6fbfcc22d68",
     );
 }
 
@@ -89,6 +89,6 @@ fn form_1600vt_private_sample_payload_is_current() {
         "1600VT-072025",
         "1600vt-v2018-private",
         &payload,
-        "f44873c973e1287ce28c125ac7b8663c328e3ecbc7a2f324279d7c34718657c8",
+        "597795b4e6382a69401893c9385ad8b582d98e05e0ae775f5b6e13f9fdce5a37",
     );
 }

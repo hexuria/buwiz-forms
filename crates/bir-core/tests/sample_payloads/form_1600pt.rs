@@ -57,7 +57,7 @@ fn form_1600pt_sample_payload_is_current() {
         "1600PT-062025",
         "1600pt-v2018-government",
         &payload,
-        "e2e4da322d17c0332082f035d77d7e47e6f79edbe787d758ef63de7d89712541",
+        "ed181b39116b9cc2bda3bc54185e7a4d982f6ee8fe9a9fe3df80090c96c05eeb",
     );
 }
 
@@ -89,6 +89,6 @@ fn form_1600pt_private_sample_payload_is_current() {
         "1600PT-072025",
         "1600pt-v2018-private",
         &payload,
-        "b5d4dd5fabbdf264a73a9f75587df93ac64e5dfe0166d7a1ecb3d5a5689028e3",
+        "05a5d8404320cf7bcbdd1021e8dcb16173486a2a19cd1353130024cf2fac43d2",
     );
 }
