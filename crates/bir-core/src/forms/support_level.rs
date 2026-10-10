@@ -140,16 +140,16 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
-            editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             visual_parity: false,
             native_preview: false,
             native_print: false,
             pdf_export: false,
             packaged_offline: false,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
         },
         release_ready: false,
     },
@@ -169,16 +169,16 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
-            editor: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
             visual_parity: false,
             native_preview: false,
             native_print: false,
             pdf_export: false,
             packaged_offline: false,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
         },
         release_ready: false,
     },
@@ -218,6 +218,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -234,6 +239,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -250,6 +260,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -257,14 +272,14 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
-        form_id: "0619Ev2018",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
+        form_id: "0619E",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -272,14 +287,14 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "0619F",
         revision: "2018",
-        form_id: "0619Fv2018",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
+        form_id: "0619F",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -287,14 +302,15 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "0605",
         revision: "1999",
-        form_id: "0605v1999",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official layout plus the Item 6/8
+        // popup radios the page adds.
+        form_id: "0605",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -302,14 +318,14 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1701Q",
         revision: "2018",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
         form_id: "1701Qv2018",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -332,14 +348,14 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1701",
         revision: "2018",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official submit layout.
         form_id: "1701v2018",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -347,14 +363,14 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1702RT",
         revision: "2018C",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
         form_id: "1702RTv2018C",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -362,14 +378,15 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1702MX",
         revision: "2018C",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path (four base pages; the mandatory
+        // attachments are not supported).
         form_id: "1702MXv2018C",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
-            render_contract: true,
-            html_component: true,
-            html_spec: true,
-            pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -386,6 +403,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -402,6 +424,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -418,6 +445,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -434,6 +466,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -450,6 +487,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -466,6 +504,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -482,6 +521,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -498,6 +538,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -559,6 +600,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -574,6 +616,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -589,6 +632,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -604,6 +648,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -619,6 +664,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -792,6 +838,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -809,6 +860,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -826,6 +882,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -843,6 +904,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -860,6 +926,11 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             formula_evidence: true,
             persistence: true,
             queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -1044,26 +1115,33 @@ mod tests {
 
     #[test]
     fn certification_draft_gate_does_not_claim_release_readiness() {
-        assert!(can_open_certification_draft("2551Q"));
-        for code in [
-            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
-            "2553", "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT",
-            "1702MX", "2553", "2552", "2550M", "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q",
-            "1701", "1702RT", "1702MX", "2553", "2553", "1606", "1600VT", "1600PT", "1600WP",
-            "2553", "1701MS", "1702Q", "1701A", "1700", "1702EX", "1604F", "1604C", "1604E",
-        ] {
-            assert!(
-                can_open_certification_draft(code),
-                "{code} has a semantic HTML certification path"
+        // Every record that claims an editor and the HTML print path opens a
+        // certification draft; none of them claims release readiness.
+        let mut certifiable = 0;
+        for record in FORM_CAPABILITY_REGISTRY {
+            let c = record.capabilities;
+            let claims_html = c.typed_model
+                && c.formula_evidence
+                && c.persistence
+                && c.editor
+                && c.render_contract
+                && c.html_component
+                && c.html_spec
+                && c.pagination;
+            assert_eq!(
+                can_open_certification_draft(record.code),
+                claims_html && !record.release_ready,
+                "{}",
+                record.code
+            );
+            certifiable += usize::from(claims_html);
+            assert_eq!(
+                form_support_level(record.code),
+                FormSupportLevel::ScaffoldOnly
             );
         }
-        assert_eq!(form_support_level("2551Q"), FormSupportLevel::ScaffoldOnly);
-        assert_eq!(form_support_level("1601C"), FormSupportLevel::ScaffoldOnly);
-        assert_eq!(form_support_level("0619E"), FormSupportLevel::ScaffoldOnly);
-        assert_eq!(form_support_level("0619F"), FormSupportLevel::ScaffoldOnly);
-        assert_eq!(form_support_level("0605"), FormSupportLevel::ScaffoldOnly);
-        assert_eq!(form_support_level("1701Q"), FormSupportLevel::ScaffoldOnly);
-
+        assert!(certifiable >= 3);
+        assert!(can_open_certification_draft("2551Q"));
         assert!(!can_open_certification_draft("9999"));
     }
 
