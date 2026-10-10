@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1707a-v2021",
-  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
   "official_hta": "BIR-Form1707Av2021.hta",
   "official_hta_sha256": "cd1112c6c14bc338cdd81b19f405bdd788866e0c0164591b968c630feb1b07f1",
   "header": "<?xml version='1.0'?>",
@@ -714,7 +714,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "2021",
       "after": "    \n                "
     },
     {
@@ -850,6 +850,18 @@
       "after": "    \n                "
     },
     {
+      "key": "frm1707Av2021:rdoI6RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1707Av2021:rdoI6RDO",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "    \n                "
+    },
+    {
       "key": "frm1707Av2021:txtI8RegisteredName",
       "kind": "value",
       "parts": [
@@ -954,7 +966,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -966,7 +978,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -978,7 +990,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1002,7 +1014,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1014,7 +1026,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1026,7 +1038,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1038,7 +1050,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1050,7 +1062,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1062,7 +1074,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1074,7 +1086,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1086,7 +1098,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1098,7 +1110,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1110,7 +1122,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1482,7 +1494,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1518,7 +1530,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1554,7 +1566,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1590,7 +1602,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1602,7 +1614,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1614,7 +1626,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1626,7 +1638,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1638,7 +1650,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1650,7 +1662,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1662,7 +1674,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1674,7 +1686,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1686,7 +1698,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1698,7 +1710,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1710,7 +1722,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1722,7 +1734,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1734,7 +1746,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1746,7 +1758,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1758,7 +1770,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1770,7 +1782,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1782,7 +1794,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1890,7 +1902,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1902,7 +1914,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1914,7 +1926,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1926,7 +1938,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1938,7 +1950,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1950,7 +1962,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1962,7 +1974,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1974,7 +1986,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1986,7 +1998,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -1998,7 +2010,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2010,7 +2022,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2022,7 +2034,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2034,7 +2046,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2046,7 +2058,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2058,7 +2070,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2130,7 +2142,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2142,7 +2154,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2154,7 +2166,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2166,7 +2178,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2178,7 +2190,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2190,7 +2202,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2202,7 +2214,7 @@
           "codec": "raw"
         }
       ],
-      "default": "",
+      "default": "0.00",
       "after": "    \n                "
     },
     {
@@ -2270,7 +2282,7 @@
       "kind": "value",
       "parts": [
         {
-          "source": "frm1707Av2021:txtI11Email",
+          "source": "frm1707Av2021:txtI11Email#2",
           "codec": "raw"
         }
       ],

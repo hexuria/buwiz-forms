@@ -132,10 +132,20 @@ function parseDivs(text) {
   const a = await loadPage();
   const ctl = controls(a.form);
   const marker = new Map();
+  // Two controls can share an id (1707A txtI11Email: Item 11 and the e-mail
+  // dialog). getElementById only ever reaches the first, so a later twin is
+  // recorded under `<id>#<k>`: it keeps its page default unless a field map
+  // names that pseudo-source explicitly.
+  const seenIds = new Map();
   ctl.forEach((el, n) => {
     const t = (el.type || '').toLowerCase();
     if (t === 'radio' || t === 'checkbox') setValue(a.doc, el, 'true');
-    else if (el.id) { const m = `m${n}q z`; if (setValue(a.doc, el, m)) marker.set(String(n), el.id); }
+    else if (el.id) {
+      const k = (seenIds.get(el.id) || 0) + 1;
+      seenIds.set(el.id, k);
+      const m = `m${n}q z`;
+      if (setValue(a.doc, el, m)) marker.set(String(n), k === 1 ? el.id : `${el.id}#${k}`);
+    }
   });
   const marked = parseDivs(run(a.dom, loop, libs));
   a.dom.window.close();
