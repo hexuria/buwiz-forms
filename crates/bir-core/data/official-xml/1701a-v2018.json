@@ -1687,6 +1687,18 @@
       "after": "  \n            "
     },
     {
+      "key": "frm1701A:txtSpouseRDOCode",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1701A:txtSpouseRDOCode",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "  \n            "
+    },
+    {
       "key": "frm1701A:optSpouseTaxType_1",
       "kind": "bool",
       "default": "false",

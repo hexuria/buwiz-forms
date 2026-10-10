@@ -195,6 +195,14 @@ function prepare(html) {
   if (rdoContainer && injected && !doc.getElementById(injected[1])) {
     rdoContainer.innerHTML = `<select id='${injected[1]}' name='${injected[1]}' size='1'><option value='000'>000</option></select>`;
   }
+  // getRdo() also fills td#rdoSpouseSelect / td#spouseRdoSelect (1700, 1701A)
+  // and div#rdoContainer (1702EX) with RDO selects at load.
+  for (const [cell, suffix] of [['rdoSpouseSelect', 'txtSpouseRDOCode'], ['spouseRdoSelect', 'txtSpouseRDOCode'], ['rdoContainer', 'rdoPg1Pt1I7RDO']]) {
+    const el = doc.getElementById(cell);
+    if (el && prefix && !doc.getElementById(prefix + ':' + suffix)) {
+      el.innerHTML = `<select id='${prefix}:${suffix}' name='${prefix}:${suffix}' size='1'><option value='000'>${suffix === 'rdoPg1Pt1I7RDO' ? '000' : ' '}</option></select>`;
+    }
+  }
   // getDrives() (js/string-util.js) fills every drive select with a "0"
   // placeholder, selected, ahead of the machine's drive letters.
   for (const sel of doc.querySelectorAll('select.driveSelect')) {

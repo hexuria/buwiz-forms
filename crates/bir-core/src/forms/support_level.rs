@@ -779,6 +779,91 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         },
         release_ready: false,
     },
+    FormCapabilityRecord {
+        code: "1701MS",
+        revision: "2024",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout (radios, check boxes and the name) replayed through
+        // the full page runtime; queueing uses the generic path.
+        form_id: "1701MS",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1702Q",
+        revision: "2018C",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1702Qv2018C",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1701A",
+        revision: "2018",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1701A",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1700",
+        revision: "2018",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1700v2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1702EX",
+        revision: "2018C",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1702EXv2018C",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
 ];
 
 /// Whether the app can actually draft/file a given form.
@@ -986,9 +1071,22 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2200A"), Some("2200Av2020"));
         assert!(can_queue_for_submission("2200T"));
         assert_eq!(queue_authorized_form_type_id("2200T"), Some("2200Tv2020"));
+        assert!(can_queue_for_submission("1701MS"));
+        assert_eq!(queue_authorized_form_type_id("1701MS"), Some("1701MS"));
+        assert!(can_queue_for_submission("1702Q"));
+        assert_eq!(queue_authorized_form_type_id("1702Q"), Some("1702Qv2018C"));
+        assert!(can_queue_for_submission("1701A"));
+        assert_eq!(queue_authorized_form_type_id("1701A"), Some("1701A"));
+        assert!(can_queue_for_submission("1700"));
+        assert_eq!(queue_authorized_form_type_id("1700"), Some("1700v2018"));
+        assert!(can_queue_for_submission("1702EX"));
+        assert_eq!(
+            queue_authorized_form_type_id("1702EX"),
+            Some("1702EXv2018C")
+        );
 
         for code in [
-            "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
+            "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "9999",
         ] {
             assert!(!can_queue_for_submission(code), "{code} must fail closed");
             assert_eq!(queue_authorized_form_type_id(code), None);
@@ -1002,6 +1100,7 @@ mod tests {
             "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
             "2553", "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT",
             "1702MX", "2553", "2552", "2550M",
+            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "2553",
         ] {
             assert!(
                 can_open_certification_draft(code),

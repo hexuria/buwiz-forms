@@ -127,6 +127,11 @@ form_view_specs! {
     Form2200P, super::form_2200p_view::Form2200PView, "2200P", "2200p";
     Form2200A, super::form_2200a_view::Form2200AView, "2200A", "2200a";
     Form2200T, super::form_2200t_view::Form2200TView, "2200T", "2200t";
+    Form1701MS, super::form_1701ms_view::Form1701MsView, "1701MS", "1701ms";
+    Form1702Q, super::form_1702q_view::Form1702qView, "1702Q", "1702q";
+    Form1701A, super::form_1701a_view::Form1701AView, "1701A", "1701a";
+    Form1700, super::form_1700_view::Form1700View, "1700", "1700";
+    Form1702EX, super::form_1702ex_view::Form1702ExView, "1702EX", "1702ex";
 }
 
 pub fn spec_for_kind(kind: QueueableKind) -> Option<&'static FormViewSpec> {

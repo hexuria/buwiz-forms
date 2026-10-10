@@ -333,6 +333,18 @@
       "after": "    \n                "
     },
     {
+      "key": "frm1700:txtSpouseRDOCode",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1700:txtSpouseRDOCode",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "    \n                "
+    },
+    {
       "key": "frm1700:rdoPg1I20SpouseTaxpayerTypeE",
       "kind": "bool",
       "default": "false",
