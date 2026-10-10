@@ -194,7 +194,7 @@ mod tests {
 }
 
 /// Rows a page adds at run time (1801 "Add row", the 1707 / 1707A pop-ups)
-/// are written by the same `saveXMLsubmit` loop in DOM order, so their
+/// are written by the same upload loop (`saveEncryptedProfile`) in DOM order, so their
 /// layout is the generated one with copies of a template row's entries
 /// spliced in. Each insertion copies `template` entries under new keys
 /// (`template` key → new key, same kind, codec, default and trailing text)

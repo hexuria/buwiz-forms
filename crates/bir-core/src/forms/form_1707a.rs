@@ -7,7 +7,8 @@
 //! `preciseCompute`), the compute chain (`computeSched1*`, `computeSched2*`,
 //! `computePart2Item14GainLoss` … `computePart2Item19TotalPayable`),
 //! `validateAll()` / `validateSchedules()` with their exact alert texts, and
-//! `saveXMLsubmit`, which strips commas and turns `(5.00)` into `-5.00`.
+//! the uploaded file (`saveEncryptedProfile`), which carries the amounts as
+//! shown (`1,234.50`, losses `(5.00)`).
 //! Background information comes from the taxpayer profile the way
 //! `loadBGData()` fills it (including its page-2 TIN3 = TIN2 slip).
 //!
@@ -246,14 +247,10 @@ fn shown(value: f64) -> f64 {
     value_for_compute(&round_amount_text(&js_number_text(value)))
 }
 
-/// The submit text of a shown amount: commas stripped, `(x)` as `-x`.
+/// The text an amount control holds (and the uploaded file carries):
+/// `roundAmount` with thousands commas, losses as `(1,234.50)`.
 fn submit_text(value: f64) -> String {
-    let shown = round_amount_text(&js_number_text(value));
-    let plain: String = shown.chars().filter(|c| *c != ',').collect();
-    match plain.strip_prefix('(').and_then(|p| p.strip_suffix(')')) {
-        Some(inner) => format!("-{inner}"),
-        None => plain,
-    }
+    round_amount_text(&js_number_text(value))
 }
 
 /// `roundElement` on a typed amount (blank → `0.00`).
@@ -525,7 +522,7 @@ impl Form1707ADraft {
         extend_layout(base, &insertions)
     }
 
-    /// The official field values `saveXMLsubmit` writes, keyed by element id.
+    /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {
@@ -1225,8 +1222,8 @@ mod tests {
         assert_eq!(round_amount_text("-0.5"), "0.50");
         assert_eq!(round_amount_text(""), "0.00");
         assert_eq!(value_for_compute("(1,234.50)"), -1234.5);
-        assert_eq!(submit_text(-1234.5), "-1234.50");
-        assert_eq!(submit_text(1234.5), "1234.50");
+        assert_eq!(submit_text(-1234.5), "(1,234.50)");
+        assert_eq!(submit_text(1234.5), "1,234.50");
     }
 
     #[test]
@@ -1249,7 +1246,7 @@ mod tests {
     fn field_map_uses_official_formats() {
         let d = sample();
         let f = d.to_bir_field_map();
-        assert_eq!(f["frm1707Av2021:txtI12TotalCapitalGains"], "614567.79");
+        assert_eq!(f["frm1707Av2021:txtI12TotalCapitalGains"], "614,567.79");
         assert_eq!(f["frm1707Av2021:txtI5TIN3P2"], "456");
         assert_eq!(f["frm1707Av2021:txtI8RegisteredName"], "SAMPLE TAXPAYER");
         assert_eq!(f["frm1707Av2021:txtI8RegisteredNameP2"], "Sample Taxpayer");
@@ -1269,7 +1266,7 @@ mod tests {
         assert_eq!(d.total_amount_payable, 35.5);
         assert_eq!(
             d.to_bir_field_map()["frm1707Av2021:txtI17TaxStillPayable"],
-            "-27315.41"
+            "(27,315.41)"
         );
     }
 

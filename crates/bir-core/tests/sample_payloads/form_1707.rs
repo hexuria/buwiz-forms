@@ -76,7 +76,7 @@ fn form_1707_sample_payload_is_current() {
         "1707-06302025",
         "1707-v2021",
         &payload,
-        "cf07401fc8ee6a3060ee04059b3fcbc6c29c45cc26a94e80f9399583c201372d",
+        "faa33104afa6c1a4e57e7a566193839c4c7d8c82da875e9bde1d4a5ce45ab53f",
     );
 }
 
@@ -123,6 +123,6 @@ fn form_1707_sample_with_popups_is_current() {
         "1707-07152025",
         &layout,
         &payload,
-        "9fcf97016df335d3b114b0c52b6fe75d4065bffa6286b08d5aae63e64388d1b0",
+        "2f6c3b925d685656cb18ca41e064fb433cd5168e8abe29a2143a00b42ae394ef",
     );
 }

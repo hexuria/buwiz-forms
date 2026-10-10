@@ -94,7 +94,7 @@ fn form_1801_sample_payload_is_current() {
         "1801-06052025",
         "1801-v2018",
         &payload,
-        "a8c7a11e49feab4b9d1fb9da51f52f6cdb2930ed8e2f0cf08381c18dd0eca585",
+        "4e9ee1da726331f2be70c9e5734821fe0ef622f0b2369ff3c84c5adbddb780aa",
     );
 }
 
@@ -156,6 +156,6 @@ fn form_1801_sample_with_tax_due_and_added_rows_is_current() {
         "1801-09152025",
         &layout,
         &payload,
-        "91634c49f9f9dd46db29cdc38b6581a3ee1c249f419540546df75be21e8f4fe1",
+        "e053260aa0353fb3a9c35d87a78f719fdc520763947a2f054b02ce917359c6b3",
     );
 }

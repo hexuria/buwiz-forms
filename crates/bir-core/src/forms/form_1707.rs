@@ -5,7 +5,7 @@
 //! the transaction-type handlers (`transactionType`, `disableSched*`), the
 //! compute chain (`pageTwoSched2Comp`, `pageTwoSched3Comp`,
 //! `pageOneComputation`), `validateAll()` with its exact alert texts, and
-//! `saveXMLsubmit` through [`crate::official_xml`]. Background information
+//! the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`]. Background information
 //! (TIN, name, address, contact, e-mail) comes from the taxpayer profile the
 //! way `loadBGData()` fills it.
 //!
@@ -475,7 +475,7 @@ impl Form1707Draft {
         (first.to_uppercase(), second.to_uppercase())
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
+    /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {

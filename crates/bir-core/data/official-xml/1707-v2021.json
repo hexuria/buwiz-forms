@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1707-v2021",
-  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
   "official_hta": "BIR-Form1707v2021.hta",
   "official_hta_sha256": "a645463cf3bc7a80f0ec96a08796adde33c76ae65c617b3fefdb478e61496cd4",
   "header": "<?xml version='1.0'?>",
@@ -240,11 +240,11 @@
       "after": "    \n            "
     },
     {
-      "key": "frm1707:rdoPg1Pt1I7RDO",
+      "key": "frm1707:rdoPg1Pt1I5RDO",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1707:rdoPg1Pt1I7RDO",
+          "source": "frm1707:rdoPg1Pt1I5RDO",
           "codec": "raw",
           "uppercase": true
         }
@@ -1192,7 +1192,7 @@
           "uppercase": true
         }
       ],
-      "default": "0.00",
+      "default": "",
       "after": "    \n            "
     },
     {
@@ -1284,6 +1284,19 @@
         }
       ],
       "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1707:txtPg2P4Sch2NoOfShares1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1707:txtPg2P4Sch2NoOfShares1",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
       "after": "    \n            "
     },
     {
@@ -1582,7 +1595,7 @@
           "uppercase": true
         }
       ],
-      "default": "",
+      "default": "1",
       "after": "    \n            "
     },
     {
