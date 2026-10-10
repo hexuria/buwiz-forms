@@ -136,6 +136,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2551q-2018" => Some(include_str!(
             "../../../html-frozen/2551q-2018/writer-cells.json"
         )),
+        "2553-1999" => Some(include_str!(
+            "../../../html-frozen/2553-1999/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1426,12 +1429,55 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_2553_fills_identity_rows_totals_and_boxes() {
+        use bir_core::forms::form_2553::{Form2553Draft, FORM_2553_ATC_OPTIONS};
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Special Law Fixture Inc", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Gaming", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+                "default_form_type": "2553", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form2553Draft::new_from_profile(&profile, 2025, 2);
+        draft.set_atc(0, &FORM_2553_ATC_OPTIONS[0]).unwrap();
+        draft.schedule[0].taxable_amount = 123_456.79;
+        draft.creditable_tax_withheld = 50_000.0;
+        draft.recompute();
+        let html = filled_document("2553-1999", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c18"), "123");
+        assert_eq!(comb_text(&html, "p1c24"), "00000");
+        assert_eq!(comb_text(&html, "p1c16"), "039");
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert!(html.contains("SPECIAL LAW FIXTURE INC"));
+        assert!(html.contains("123,456.79"));
+        assert!(html.contains("6,172.84"));
+        assert_eq!(named_values(&html, "p1c2"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c3"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c12"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c34"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"frm2553:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
-        for slug in ["1601c-2018", "2551q-2018"] {
+        // 2553 (1999) prints each amount in one text cell, not peso + cent combs.
+        for (slug, split_money) in [
+            ("1601c-2018", true),
+            ("2551q-2018", true),
+            ("2553-1999", false),
+        ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
             assert!(!cells.joins.is_empty(), "{slug}");
-            assert!(!cells.money_joins.is_empty(), "{slug} money_joins");
+            assert_eq!(
+                !cells.money_joins.is_empty(),
+                split_money,
+                "{slug} money_joins"
+            );
             assert!(!cells.xbox_joins.is_empty(), "{slug} xbox_joins");
             let present: std::collections::BTreeSet<&str> =
                 input_tags(html).into_iter().map(|tag| tag.name).collect();
