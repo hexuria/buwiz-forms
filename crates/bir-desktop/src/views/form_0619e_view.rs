@@ -1,51 +1,98 @@
-//! Evidence-safe editor for exact form `0619Ev2018`.
-//!
-//! The editor persists drafts but deliberately does not queue or submit them.
-//! Due day and penalties are manual because the reviewed evidence does not
-//! prove universal deadline or automatic-penalty rules.
-#![allow(dead_code)]
+//! Editor for BIR Form 0619-E, Monthly Remittance Form of Creditable Income
+//! Taxes Withheld (Expanded), January 2018. Rust owns every calculation,
+//! validation and the official submit plaintext
+//! (`bir_core::forms::form_0619e_official`); this view only edits source
+//! values. The layout reflows for desktop, tablet and phone widths.
 
-use bir_core::db::Database;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
+use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_0619e::{
-    ATC_CODE, Form0619EDraft, Form0619EPaymentRow, TAX_TYPE_CODE, WithholdingAgentCategory,
+    ATC_CODE, Form0619EDraft, TAX_TYPE_CODE, WithholdingAgentCategory,
 };
-use bir_core::forms::{FilingStatus, FormValidator};
+use bir_core::forms::queueable::{QueueableForm, period_column};
+use bir_core::forms::{FilingStatus, can_queue_for_submission};
+use bir_core::official_xml::official_amount;
+use bir_core::profile::TaxpayerProfile;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::button::ButtonVariants;
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
-use std::sync::{Arc, Mutex};
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
-pub enum Form0619EEvent {
-    BackToDashboard,
-    Saved,
-    Submitted,
-    Confirmed,
-    PushNotification(String, String, String),
+impl EventEmitter<QueueableFormEvent> for Form0619EView {}
+
+/// Width classes the page lays out for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Phone,
+    Tablet,
+    Desktop,
 }
 
-impl EventEmitter<Form0619EEvent> for Form0619EView {}
-
-#[derive(Clone)]
-struct PaymentRowInputs {
-    agency: Entity<InputState>,
-    number: Entity<InputState>,
-    date: Entity<InputState>,
-    amount: Entity<InputState>,
+impl Layout {
+    fn for_width(width: Pixels) -> Self {
+        if width < px(700.) {
+            Self::Phone
+        } else if width < px(1100.) {
+            Self::Tablet
+        } else {
+            Self::Desktop
+        }
+    }
 }
 
-impl PaymentRowInputs {
-    fn all(&self) -> [Entity<InputState>; 4] {
-        [
-            self.agency.clone(),
-            self.number.clone(),
-            self.date.clone(),
-            self.amount.clone(),
-        ]
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Text inputs: (key, label).
+const TEXT_INPUTS: &[(&str, &str)] = &[
+    ("year", "Item 1 — Year"),
+    ("due_day", "Item 2 — Due day"),
+    ("name", "Item 9 — Withholding Agent's Name"),
+    ("lob", "Line of Business"),
+    ("address", "Item 10 — Registered Address"),
+    ("zip", "Item 10A — ZIP Code"),
+    ("phone", "Item 11 — Contact Number"),
+    ("email", "Item 13 — Email Address"),
+];
+
+/// Amount inputs: (key, label).
+const MONEY_INPUTS: &[(&str, &str)] = &[
+    ("i14", "14 — Amount of remittance"),
+    (
+        "i15",
+        "15 — Amount remitted from previously filed form (amended only)",
+    ),
+    ("i17a", "17A — Surcharge"),
+    ("i17b", "17B — Interest"),
+    ("i17c", "17C — Compromise"),
+];
+
+/// Accepts `1,234.56`, `1234.5`, blank (zero).
+fn parse_amount(value: &str) -> Option<f64> {
+    let cleaned: String = value
+        .chars()
+        .filter(|c| *c != ',' && !c.is_whitespace())
+        .collect();
+    if cleaned.is_empty() {
+        return Some(0.0);
+    }
+    cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
+fn money_text(value: f64) -> String {
+    if value == 0.0 {
+        String::new()
+    } else {
+        official_amount(value)
     }
 }
 
@@ -53,923 +100,864 @@ pub struct Form0619EView {
     draft: Form0619EDraft,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
-
-    input_errors: Vec<(String, String)>,
+    inputs: BTreeMap<String, Entity<InputState>>,
     validation_errors: Vec<(String, String)>,
+    parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
-
-    is_amended: bool,
-    any_taxes_withheld: bool,
-    is_category_government: bool,
-
-    due_day: Entity<InputState>,
-    line_of_business: Entity<InputState>,
-    registered_address_2: Entity<InputState>,
-
-    item_14_amount_of_remittance: Entity<InputState>,
-    item_15_amount_remitted_previously: Entity<InputState>,
-    item_17a_surcharge: Entity<InputState>,
-    item_17b_interest: Entity<InputState>,
-    item_17c_compromise: Entity<InputState>,
-
-    tax_agent_number: Entity<InputState>,
-    tax_agent_date_issue: Entity<InputState>,
-    tax_agent_date_expiry: Entity<InputState>,
-
-    payment_19: PaymentRowInputs,
-    payment_20: PaymentRowInputs,
-    payment_21: PaymentRowInputs,
-    payment_22: PaymentRowInputs,
-    payment_22_description: Entity<InputState>,
-
+    release_claim_confirm_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Form0619EView {
-    pub fn new(
-        draft: Form0619EDraft,
-        db: Arc<Mutex<Database>>,
-        window: &mut Window,
-        cx: &mut Context<'_, Self>,
-    ) -> Self {
-        let due_day = text_input(
-            cx,
-            draft
-                .due_day
-                .map(|day| day.to_string())
-                .as_deref()
-                .unwrap_or(""),
-            "Manual day (1-31)",
-            window,
-        );
-        let line_of_business = text_input(cx, &draft.line_of_business, "Line of business", window);
-        let registered_address_2 = text_input(
-            cx,
-            &draft.registered_address_2,
-            "Address line 2 (optional)",
-            window,
-        );
-
-        let item_14_amount_of_remittance =
-            money_input(cx, draft.item_14_amount_of_remittance, false, window);
-        let item_15_amount_remitted_previously =
-            money_input(cx, draft.item_15_amount_remitted_previously, false, window);
-        let item_17a_surcharge = money_input(cx, draft.item_17a_surcharge, false, window);
-        let item_17b_interest = money_input(cx, draft.item_17b_interest, false, window);
-        let item_17c_compromise = money_input(cx, draft.item_17c_compromise, false, window);
-
-        let tax_agent_number = text_input(
-            cx,
-            &draft.tax_agent_accreditation_number,
-            "Accreditation / attorney roll no.",
-            window,
-        );
-        let tax_agent_date_issue =
-            text_input(cx, &draft.tax_agent_date_of_issue, "MM/DD/YYYY", window);
-        let tax_agent_date_expiry =
-            text_input(cx, &draft.tax_agent_date_of_expiry, "MM/DD/YYYY", window);
-
-        let payment_19 = payment_inputs(cx, &draft.payment_details.cash_or_bank_debit_memo, window);
-        let payment_20 = payment_inputs(cx, &draft.payment_details.check, window);
-        let payment_21 = payment_inputs(cx, &draft.payment_details.tax_debit_memo, window);
-        let payment_22 = payment_inputs(cx, &draft.payment_details.others, window);
-        let payment_22_description = text_input(
-            cx,
-            &draft.payment_details.others_description,
-            "Describe other payment",
-            window,
-        );
-
-        let mut all_inputs = vec![
-            due_day.clone(),
-            line_of_business.clone(),
-            registered_address_2.clone(),
-            item_14_amount_of_remittance.clone(),
-            item_15_amount_remitted_previously.clone(),
-            item_17a_surcharge.clone(),
-            item_17b_interest.clone(),
-            item_17c_compromise.clone(),
-            tax_agent_number.clone(),
-            tax_agent_date_issue.clone(),
-            tax_agent_date_expiry.clone(),
-            payment_22_description.clone(),
-        ];
-        for row in [&payment_19, &payment_20, &payment_21, &payment_22] {
-            all_inputs.extend(row.all());
-        }
-
-        let mut subscriptions = Vec::new();
-        for input in all_inputs {
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if let InputEvent::Change = event {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
-        }
-
-        let validation_errors = draft.validate();
-        Self {
-            is_amended: draft.is_amended,
-            any_taxes_withheld: draft.any_taxes_withheld,
-            is_category_government: matches!(
-                draft.withholding_agent_category,
-                WithholdingAgentCategory::Government
-            ),
-            draft,
-            db,
-            scroll_handle: ScrollHandle::new(),
-            input_errors: Vec::new(),
-            validation_errors,
-            status_message: None,
-            due_day,
-            line_of_business,
-            registered_address_2,
-            item_14_amount_of_remittance,
-            item_15_amount_remitted_previously,
-            item_17a_surcharge,
-            item_17b_interest,
-            item_17c_compromise,
-            tax_agent_number,
-            tax_agent_date_issue,
-            tax_agent_date_expiry,
-            payment_19,
-            payment_20,
-            payment_21,
-            payment_22,
-            payment_22_description,
-            _subscriptions: subscriptions,
+    fn initial(draft: &Form0619EDraft, key: &str) -> String {
+        match key {
+            "year" => draft.taxable_year.to_string(),
+            "due_day" => draft.due_day.map(|d| d.to_string()).unwrap_or_default(),
+            "name" => draft.taxpayer_name.clone(),
+            "lob" => draft.line_of_business.clone(),
+            "address" => format!("{}{}", draft.registered_address, draft.registered_address_2),
+            "zip" => draft.zip_code.clone(),
+            "phone" => draft.contact_number.clone(),
+            "email" => draft.email.clone(),
+            "i14" => money_text(draft.item_14_amount_of_remittance),
+            "i15" => money_text(draft.item_15_amount_remitted_previously),
+            "i17a" => money_text(draft.item_17a_surcharge),
+            "i17b" => money_text(draft.item_17b_interest),
+            "i17c" => money_text(draft.item_17c_compromise),
+            _ => String::new(),
         }
     }
 
+    fn input_text(&self, key: &str, cx: &App) -> String {
+        self.inputs
+            .get(key)
+            .map(|input| input.read(cx).value().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Read every editor value into the draft, then recompute and validate.
+    /// A malformed number is reported instead of becoming zero.
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
-        self.input_errors.clear();
-        self.draft.is_amended = self.is_amended;
-        self.draft.any_taxes_withheld = self.any_taxes_withheld;
-        self.draft.withholding_agent_category = if self.is_category_government {
-            WithholdingAgentCategory::Government
-        } else {
-            WithholdingAgentCategory::Private
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let mut parse_errors = Vec::new();
+        let mut draft = self.draft.clone();
+        let mut number = |key: &str, label: &str, cx: &App| -> Option<f64> {
+            let text = self.input_text(key, cx);
+            let parsed = parse_amount(&text);
+            if parsed.is_none() {
+                parse_errors.push((
+                    key.to_string(),
+                    format!("{label}: \"{text}\" is not a number."),
+                ));
+            }
+            parsed
         };
+        if let Some(year) = number("year", "Item 1 year", cx) {
+            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
+                year as u16
+            } else {
+                0
+            };
+        }
+        let due = self.input_text("due_day", cx);
+        if due.trim().is_empty() {
+            draft.due_day = None;
+        } else if let Some(day) = number("due_day", "Item 2 day", cx) {
+            draft.due_day = Some(if (0.0..=99.0).contains(&day) {
+                day as u8
+            } else {
+                99
+            });
+        }
+        for (key, label) in MONEY_INPUTS {
+            if let Some(value) = number(key, label, cx) {
+                match *key {
+                    "i14" => draft.item_14_amount_of_remittance = value,
+                    "i15" => draft.item_15_amount_remitted_previously = value,
+                    "i17a" => draft.item_17a_surcharge = value,
+                    "i17b" => draft.item_17b_interest = value,
+                    _ => draft.item_17c_compromise = value,
+                }
+            }
+        }
+        draft.taxpayer_name = self.input_text("name", cx);
+        draft.line_of_business = self.input_text("lob", cx);
+        draft.registered_address = self.input_text("address", cx);
+        draft.registered_address_2 = String::new();
+        draft.zip_code = self.input_text("zip", cx).trim().to_string();
+        draft.contact_number = self.input_text("phone", cx).trim().to_string();
+        draft.email = self.input_text("email", cx).trim().to_string();
+        draft.recompute();
+        draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
+        self.validation_errors = draft.validate();
+        self.parse_errors = parse_errors;
+        self.draft = draft;
+        cx.notify();
+    }
 
-        self.draft.due_day =
-            parse_optional_u8(&self.due_day, "due_day", cx, &mut self.input_errors);
-        self.draft.line_of_business = input_text(&self.line_of_business, cx);
-        self.draft.registered_address_2 = input_text(&self.registered_address_2, cx);
-
-        assign_money(
-            &mut self.draft.item_14_amount_of_remittance,
-            &self.item_14_amount_of_remittance,
-            "item_14_amount_of_remittance",
-            cx,
-            &mut self.input_errors,
-        );
-        assign_money(
-            &mut self.draft.item_15_amount_remitted_previously,
-            &self.item_15_amount_remitted_previously,
-            "item_15_amount_remitted_previously",
-            cx,
-            &mut self.input_errors,
-        );
-        assign_money(
-            &mut self.draft.item_17a_surcharge,
-            &self.item_17a_surcharge,
-            "item_17a_surcharge",
-            cx,
-            &mut self.input_errors,
-        );
-        assign_money(
-            &mut self.draft.item_17b_interest,
-            &self.item_17b_interest,
-            "item_17b_interest",
-            cx,
-            &mut self.input_errors,
-        );
-        assign_money(
-            &mut self.draft.item_17c_compromise,
-            &self.item_17c_compromise,
-            "item_17c_compromise",
-            cx,
-            &mut self.input_errors,
-        );
-
-        self.draft.tax_agent_accreditation_number = input_text(&self.tax_agent_number, cx);
-        self.draft.tax_agent_date_of_issue = input_text(&self.tax_agent_date_issue, cx);
-        self.draft.tax_agent_date_of_expiry = input_text(&self.tax_agent_date_expiry, cx);
-
-        sync_payment_row(
-            &mut self.draft.payment_details.cash_or_bank_debit_memo,
-            &self.payment_19,
-            "payment_19_cash_or_bank_debit_memo",
-            cx,
-            &mut self.input_errors,
-        );
-        sync_payment_row(
-            &mut self.draft.payment_details.check,
-            &self.payment_20,
-            "payment_20_check",
-            cx,
-            &mut self.input_errors,
-        );
-        sync_payment_row(
-            &mut self.draft.payment_details.tax_debit_memo,
-            &self.payment_21,
-            "payment_21_tax_debit_memo",
-            cx,
-            &mut self.input_errors,
-        );
-        sync_payment_row(
-            &mut self.draft.payment_details.others,
-            &self.payment_22,
-            "payment_22_others",
-            cx,
-            &mut self.input_errors,
-        );
-        self.draft.payment_details.others_description =
-            input_text(&self.payment_22_description, cx);
-
+    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form0619EDraft)) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        change(&mut self.draft);
         self.draft.recompute();
-        self.validation_errors = self.input_errors.clone();
-        self.validation_errors.extend(self.draft.validate());
+        self.validation_errors = self.draft.validate();
+        self.status_message = None;
         cx.notify();
     }
 
     fn notify(
         &self,
+        kind: notification::NotificationType,
+        message: String,
         window: &mut Window,
         cx: &mut Context<Self>,
-        kind: gpui_component::notification::NotificationType,
-        message: impl Into<String>,
     ) {
-        use gpui_component::WindowExt;
         window.push_notification(
-            gpui_component::notification::Notification::new()
-                .message(message.into())
+            notification::Notification::new()
+                .message(message)
                 .with_type(kind)
                 .autohide(true),
             cx,
         );
     }
 
-    fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
-            return div().into_any_element();
-        }
-        let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
-            list = list.child(div().text_xs().child(format!("{field}: {message}")));
-        }
-        let root = rsx! {
-            <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
-                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
-                {list}
-            </div>
+    fn release_claim(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let draft = &self.draft;
+        let result = match self.db.lock() {
+            Ok(db) => db
+                .release_abandoned_claimed_queueable::<Form0619EDraft>(
+                    &draft.tin,
+                    draft.taxable_year,
+                    period_column(&draft.filing_period()),
+                    ABANDONED_CLAIM_RELEASE_REASON,
+                )
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
         };
-        root.into_any_element()
+        self.release_claim_confirm_open = false;
+        match result {
+            Ok(AbandonedClaimRelease::Released { draft, .. }) => {
+                self.draft = draft;
+                self.status_message = None;
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Ok(AbandonedClaimRelease::AlreadyClear { draft, .. }) => {
+                if let Some(draft) = draft {
+                    self.draft = draft;
+                }
+            }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Could not release the claim: {error}"),
+                window,
+                cx,
+            ),
+        }
+        self.validation_errors = self.draft.validate();
+        cx.notify();
     }
 
-    fn render_toggle(
-        &self,
-        id: &'static str,
-        label: &'static str,
+    // ── Rendering helpers ──
+
+    fn section(&self, title: &str, children: Vec<AnyElement>, cx: &Context<Self>) -> AnyElement {
+        rsx! {
+            <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+                <div text_lg font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+                {...children}
+            </div>
+        }
+        .into_any_element()
+    }
+
+    /// A labelled input. On phones the label sits above the field.
+    fn field(&self, key: &str, layout: Layout, disabled: bool) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let label = TEXT_INPUTS
+            .iter()
+            .chain(MONEY_INPUTS.iter())
+            .find(|(k, _)| *k == key)
+            .map(|(_, l)| *l)
+            .unwrap_or("");
+        let input = self
+            .inputs
+            .get(key)
+            .expect("editor input registry is complete");
+        let body = div().child(Input::new(input).disabled(!editable || disabled));
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(body.w_full()),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.5)))
+                .child(body.w(relative(0.5))),
+        }
+        .into_any_element()
+    }
+
+    /// Two columns on desktop, one otherwise.
+    fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
+        if layout == Layout::Desktop {
+            let mut rows = div().flex().flex_col().gap_3().w_full();
+            let mut iter = children.into_iter();
+            while let Some(left) = iter.next() {
+                let mut row = div()
+                    .flex()
+                    .gap_6()
+                    .w_full()
+                    .child(div().flex_1().child(left));
+                row = match iter.next() {
+                    Some(right) => row.child(div().flex_1().child(right)),
+                    None => row.child(div().flex_1()),
+                };
+                rows = rows.child(row);
+            }
+            rows.into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .w_full()
+                .children(children)
+                .into_any_element()
+        }
+    }
+
+    fn fixed(&self, label: &str, value: String, cx: &Context<Self>) -> AnyElement {
+        rsx! {
+            <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
+                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div text_right font_weight={FontWeight::BOLD}>{value}</div>
+            </div>
+        }
+        .into_any_element()
+    }
+
+    fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
+        self.fixed(label, official_amount(value), cx)
+    }
+
+    fn choice(
+        id: impl Into<ElementId>,
+        label: impl Into<SharedString>,
         selected: bool,
-        cx: &Context<Self>,
-        on_click: impl Fn(&mut Self) + 'static,
-    ) -> AnyElement {
-        let is_draft = self.draft.is_editable();
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div text_sm>{label}</div>
-                {div()
-                    .id(id)
-                    .px_3()
-                    .py_2()
-                    .border_1()
-                    .border_color(if selected {
-                        cx.theme().primary
-                    } else {
-                        cx.theme().border
-                    })
-                    .bg(if selected {
-                        cx.theme().primary.opacity(0.15)
-                    } else {
-                        cx.theme().background
-                    })
-                    .rounded_md()
-                    .when(is_draft, |element| element.cursor_pointer())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if this.draft.is_editable() {
-                            on_click(this);
-                            this.sync_from_inputs(cx);
-                        }
-                    }))
-                    .child(if selected { "Yes" } else { "No" })}
-            </div>
+        disabled: bool,
+    ) -> Button {
+        let label: SharedString = label.into();
+        let button = Button::new(id).label(if selected {
+            format!("✓ {label}")
+        } else {
+            label.to_string()
+        });
+        let button = if selected {
+            button.primary()
+        } else {
+            button.outline()
         };
-        root.into_any_element()
+        button.disabled(disabled)
     }
 
-    fn render_fixed_row(&self, label: &str, value: &str, cx: &Context<Self>) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div text_sm>{label.to_string()}</div>
-                <div w_1_2 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)} font_weight={FontWeight::BOLD}>
-                    {value.to_string()}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+    fn choice_row(title: &str, buttons: Vec<Button>) -> AnyElement {
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(title.to_string()),
+            )
+            .children(buttons)
+            .into_any_element()
     }
 
-    fn render_input_row(&self, label: &str, input: &Entity<InputState>) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>{Input::new(input).disabled(!self.draft.is_editable())}</div>
-            </div>
-        };
-        root.into_any_element()
+    fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        let months: Vec<Button> = MONTHS
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let month = index as u8 + 1;
+                Self::choice(("0619e_month", index), *name, d.month == month, !editable)
+                    .small()
+                    .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month)))
+            })
+            .collect();
+        let (due_month, due_year) = d.due_month_and_year();
+        let amended = d.is_amended;
+        let withheld = d.any_taxes_withheld;
+        let children = vec![
+            Self::choice_row("Item 1 — Month", months),
+            self.field("year", layout, false),
+            self.fixed(
+                "Item 2 — Due month / year",
+                format!("{due_month:02} / {due_year}"),
+                cx,
+            ),
+            self.field("due_day", layout, false),
+            Self::choice_row(
+                "Item 3 — Amended form?",
+                vec![
+                    Self::choice("0619e_amended_yes", "Yes", amended, !editable).on_click(
+                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
+                    ),
+                    Self::choice("0619e_amended_no", "No", !amended, !editable).on_click(
+                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
+                    ),
+                ],
+            ),
+            Self::choice_row(
+                "Item 4 — Any taxes withheld?",
+                vec![
+                    Self::choice("0619e_withheld_yes", "Yes", withheld, !editable).on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.any_taxes_withheld = true)
+                        }),
+                    ),
+                    Self::choice("0619e_withheld_no", "No", !withheld, !editable).on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.any_taxes_withheld = false)
+                        }),
+                    ),
+                ],
+            ),
+            self.fixed(
+                "Item 5 — ATC / Item 6 — Tax type",
+                format!("{ATC_CODE} / {TAX_TYPE_CODE}"),
+                cx,
+            ),
+        ];
+        self.section("Return period", vec![self.grid(layout, children)], cx)
     }
 
-    fn render_computed_row(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
-                <div text_sm font_weight={FontWeight::BOLD}>{label.to_string()}</div>
-                <div font_weight={FontWeight::BOLD}>{format!("₱ {value:.2}")}</div>
-            </div>
-        };
-        root.into_any_element()
+    fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        let government = d.withholding_agent_category == WithholdingAgentCategory::Government;
+        let fields = vec![
+            self.fixed("Item 7 — TIN", format_tin(&d.tin), cx),
+            self.fixed("Item 8 — RDO Code", d.rdo_code.clone(), cx),
+            self.field("name", layout, false),
+            self.field("lob", layout, false),
+            self.field("address", layout, false),
+            self.field("zip", layout, false),
+            self.field("phone", layout, false),
+            self.field("email", layout, false),
+        ];
+        let category = Self::choice_row(
+            "Item 12 — Category of withholding agent",
+            vec![
+                Self::choice("0619e_private", "Private", !government, !editable).on_click(
+                    cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| {
+                            d.withholding_agent_category = WithholdingAgentCategory::Private
+                        })
+                    }),
+                ),
+                Self::choice("0619e_government", "Government", government, !editable).on_click(
+                    cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| {
+                            d.withholding_agent_category = WithholdingAgentCategory::Government
+                        })
+                    }),
+                ),
+            ],
+        );
+        self.section(
+            "Part I — Background Information",
+            vec![self.grid(layout, fields), category],
+            cx,
+        )
     }
 
-    fn render_payment_row(
-        &self,
-        item: u8,
-        label: &str,
-        row: &PaymentRowInputs,
-        cx: &Context<Self>,
-    ) -> AnyElement {
-        let root = rsx! {
-            <div flex flex_col gap_2 p_3 border_1 border_color={cx.theme().border} rounded_md>
-                <div text_sm font_weight={FontWeight::BOLD}>{format!("{item} {label}")}</div>
-                <div flex gap_2>
-                    <div flex_1>{Input::new(&row.agency).disabled(!self.draft.is_editable())}</div>
-                    <div flex_1>{Input::new(&row.number).disabled(!self.draft.is_editable())}</div>
-                    <div flex_1>{Input::new(&row.date).disabled(!self.draft.is_editable())}</div>
-                    <div flex_1>{Input::new(&row.amount).disabled(!self.draft.is_editable())}</div>
-                </div>
-            </div>
-        };
-        root.into_any_element()
+    fn render_part_two(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let d = &self.draft;
+        let children = vec![
+            self.field("i14", layout, !d.any_taxes_withheld),
+            self.field("i15", layout, !d.is_amended),
+            self.computed(
+                "16 — Net amount of remittance",
+                d.item_16_net_amount_of_remittance,
+                cx,
+            ),
+            self.field("i17a", layout, false),
+            self.field("i17b", layout, false),
+            self.field("i17c", layout, false),
+            self.computed("17D — Total penalties", d.item_17d_total_penalties, cx),
+            self.computed(
+                "18 — Total amount of remittance",
+                d.item_18_total_amount_of_remittance,
+                cx,
+            ),
+        ];
+        self.section(
+            "Part II — Tax Remittance",
+            vec![self.grid(layout, children)],
+            cx,
+        )
     }
+}
+
+impl QueueableFormView for Form0619EView {
+    type Draft = Form0619EDraft;
+
+    fn new(
+        draft: Form0619EDraft,
+        db: Arc<Mutex<Database>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut inputs = BTreeMap::new();
+        let mut subscriptions = Vec::new();
+        for (key, _) in TEXT_INPUTS.iter().chain(MONEY_INPUTS.iter()) {
+            let placeholder = if key.starts_with('i') { "0.00" } else { "" };
+            let value = Self::initial(&draft, key);
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+            inputs.insert(key.to_string(), input);
+        }
+        let validation_errors = draft.validate();
+        Self {
+            draft,
+            db,
+            scroll_handle: ScrollHandle::new(),
+            inputs,
+            validation_errors,
+            parse_errors: Vec::new(),
+            status_message: None,
+            release_claim_confirm_open: false,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    /// The dashboard's period is the month (1–12).
+    fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form0619EDraft {
+        Form0619EDraft::new_from_profile(profile, year, period)
+    }
+}
+
+fn format_tin(tin: &str) -> String {
+    let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
+    if digits.len() < 9 {
+        return tin.to_string();
+    }
+    let branch = digits.get(9..).unwrap_or("");
+    format!(
+        "{}-{}-{}-{:0>5}",
+        &digits[0..3],
+        &digits[3..6],
+        &digits[6..9],
+        branch
+    )
 }
 
 impl FormViewTrait for Form0619EView {
     fn form_title(&self) -> &'static str {
         "BIR Form No. 0619-E"
     }
-
     fn form_subtitle(&self) -> &'static str {
         "Monthly Remittance Form of Creditable Income Taxes Withheld (Expanded)"
     }
-
     fn form_version(&self) -> &'static str {
         "January 2018 (ENCS)"
     }
-
     fn current_status(&self) -> FilingStatus {
-        self.draft.status.clone()
+        self.draft.lifecycle.status.clone()
     }
-
     fn submitted_at(&self) -> Option<&str> {
-        self.draft.submitted_at.as_deref()
+        self.draft.lifecycle.submitted_at.as_deref()
     }
-
     fn confirmed_at(&self) -> Option<&str> {
-        self.draft.confirmed_at.as_deref()
+        self.draft.lifecycle.confirmed_at.as_deref()
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if !self.input_errors.is_empty() {
-            self.status_message = Some(
-                "Draft was not saved because one or more numeric/date fields are invalid."
-                    .to_string(),
-            );
+        if !self.parse_errors.is_empty() {
             self.notify(
+                notification::NotificationType::Error,
+                "Fix the highlighted numbers before saving.".into(),
                 window,
                 cx,
-                gpui_component::notification::NotificationType::Error,
-                "Fix the highlighted 0619-E input errors before saving.",
             );
             return;
         }
-
-        let save_result = self
-            .db
-            .lock()
-            .map_err(|_| "Draft database lock is unavailable".to_string())
-            .and_then(|db| {
-                db.save_form_draft(
-                    &self.draft.tin,
-                    "0619E",
-                    self.draft.taxable_year,
-                    Some(self.draft.month),
-                    &self.draft.status,
-                    &self.draft,
-                )
-                .map(|_| ())
-                .map_err(|error| error.to_string())
-            });
-
-        match save_result {
-            Ok(()) => {
-                self.status_message = Some(if self.validation_errors.is_empty() {
-                    "Draft saved.".to_string()
-                } else {
-                    "Draft saved locally with unresolved review items; submission remains disabled."
-                        .to_string()
-                });
+        let result = match self.db.lock() {
+            Ok(db) => db
+                .save_queueable_draft(&self.draft)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match result {
+            Ok(id) => {
+                self.draft.id = Some(id);
                 self.notify(
+                    notification::NotificationType::Success,
+                    "0619-E draft saved.".into(),
                     window,
                     cx,
-                    gpui_component::notification::NotificationType::Success,
-                    "0619-E draft saved locally.",
                 );
-                cx.emit(Form0619EEvent::Saved);
+                cx.emit(QueueableFormEvent::Saved);
             }
-            Err(error) => {
-                self.status_message = Some(format!("Could not save draft: {error}"));
-                self.notify(
-                    window,
-                    cx,
-                    gpui_component::notification::NotificationType::Error,
-                    format!("Could not save 0619-E draft: {error}"),
-                );
-            }
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Save failed".into(),
+                error,
+            )),
         }
-        cx.notify();
     }
 
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "0619Ev2018 submission is manual/external until the due-day and transport contract are certified."
-                .to_string(),
-        );
-        cx.emit(Form0619EEvent::PushNotification(
-            "warning".to_string(),
-            "Manual / External Filing".to_string(),
-            "This draft cannot be queued or submitted by the app.".to_string(),
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !can_queue_for_submission(<Form0619EDraft as QueueableForm>::FORM_CODE) {
+            self.status_message =
+                Some("0619-E is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        let before = self.draft.clone();
+        if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
+            self.validation_errors = errors;
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        let saved = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_queueable(&self.draft)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        if let Err(error) = saved {
+            self.draft = before;
+            self.status_message = Some(format!(
+                "Could not queue Form 0619-E. No submission was started: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+        self.status_message = Some(format!(
+            "Queued for background submission as {}.",
+            self.draft.submission_filename()
         ));
+        self.notify(
+            notification::NotificationType::Success,
+            "Form 0619-E queued.".into(),
+            window,
+            cx,
+        );
+        cx.emit(QueueableFormEvent::Saved);
+        bir_core::background_cron::wake();
         cx.notify();
     }
 
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "Payment status cannot be advanced automatically for a manual/external 0619-E filing."
-                .to_string(),
-        );
+        self.status_message =
+            Some("0619-E payment status needs a verified confirmation workflow.".into());
         cx.notify();
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.draft.revert_to_draft() {
-            Ok(()) => self.save_draft(window, cx),
+        if !matches!(self.draft.lifecycle.status, FilingStatus::Queued) {
+            self.status_message =
+                Some("This return cannot be reverted after submission has started.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_unclaimed() {
+            self.release_claim_confirm_open = true;
+            self.status_message = Some(
+                "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
+            );
+            cx.notify();
+            return;
+        }
+        let queued = self.draft.clone();
+        let canceled = match self.db.lock() {
+            Ok(db) => db
+                .cancel_queued_queueable(&queued)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match canceled {
+            Ok(draft) => {
+                self.draft = draft;
+                self.status_message = None;
+                self.validation_errors = self.draft.validate();
+                cx.emit(QueueableFormEvent::Saved);
+            }
             Err(error) => {
-                self.status_message = Some(error.clone());
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form0619EDraft>(
+                        &queued.tin,
+                        queued.taxable_year,
+                        period_column(&queued.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
                 self.notify(
+                    notification::NotificationType::Warning,
+                    format!("The queued return was not canceled: {error}"),
                     window,
                     cx,
-                    gpui_component::notification::NotificationType::Error,
-                    error,
                 );
             }
         }
         cx.notify();
     }
 
-    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Freeze the latest editor values into one immutable renderer envelope.
-        // Preview never changes filing status or enables the submission queue.
+    fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        let render_draft = self.draft.clone();
+        if !self.parse_errors.is_empty() {
+            cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                "Fix the highlighted numbers first. No filing state was changed.".into(),
+            ));
+            return;
+        }
+        let fields = self.draft.to_bir_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "0619e-2018",
-            &render_draft.to_bir_field_map(),
+            &fields,
             "0619-E — Print Preview",
             cx,
         ) {
-            Ok(launch_kind) => {
-                self.status_message = Some(launch_kind.status_message().to_string());
-                launch_kind.observe_close(cx, |this, cx| {
-                    this.status_message = None;
-                    cx.notify();
-                });
-            }
-            Err(error) => {
-                let message = format!(
-                    "HTML print preview could not be opened: {error}. No filing state was changed."
-                );
-                self.status_message = Some(message.clone());
-                self.notify(
-                    window,
-                    cx,
-                    gpui_component::notification::NotificationType::Error,
-                    message,
-                );
-            }
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
+                "info".into(),
+                "Print preview".into(),
+                format!("{} No filing state was changed.", kind.status_message()),
+            )),
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                format!("{error}. No filing state was changed."),
+            )),
         }
-        cx.notify();
     }
 }
 
 impl Render for Form0619EView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (due_month, due_year) = self.draft.due_month_and_year();
-        let is_draft = self.draft.is_editable();
-        let status_message = self.status_message.clone();
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        let is_draft = self.draft.lifecycle.is_editable();
+        let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
+        let issues: Vec<AnyElement> = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter())
+            .take(20)
+            .map(|(_, message)| {
+                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
+                    .into_any_element()
+            })
+            .collect();
 
-        rsx! {
-            <div flex flex_col w_full h_full bg={cx.theme().background}>
-                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
-                    {gpui_component::button::Button::new("0619e_back")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form0619EEvent::BackToDashboard);
-                            }))}
-                    <div flex items_center gap_3>
-                        {gpui_component::button::Button::new("0619e_save")
-                                    .label("Save Draft")
+        let toolbar =
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .px(pad)
+                .py_3()
+                .border_b_1()
+                .border_color(cx.theme().border)
+                .child(Button::new("0619e_back").label("← Back").on_click(
+                    cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            Button::new("0619e_preview")
+                                .label("Print preview")
+                                .outline()
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                                ),
+                        )
+                        .child(
+                            Button::new("0619e_save")
+                                .label("Save draft")
+                                .outline()
+                                .disabled(!is_draft)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                                ),
+                        )
+                        .when(is_queued, |row| {
+                            row.child(
+                                Button::new("0619e_cancel")
+                                    .label("Cancel queue")
                                     .outline()
-                                    .disabled(!is_draft)
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_draft(window, cx);
-                                    }))}
-                        {gpui_component::button::Button::new("0619e_manual")
-                                    .label("Manual / External Filing")
-                                    .primary()
-                                    .disabled(true)}
-                    </div>
-                </div>
-                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
-                    {self.render_header(cx)}
-                    <div mt_6>{self.render_status_pipeline(cx)}</div>
-                </div>
-                <div id={"0619e_scroll"} flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
-                    {div()
-                            .max_w(px(1000.0))
-                            .mx_auto()
-                            .flex()
-                            .flex_col()
-                            .gap_6()
-                            .child(rsx! {
-                                <div p_4 rounded_lg border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)}>
-                                    <div font_weight={FontWeight::BOLD}>{"Evidence boundary"}</div>
-                                    <div mt_1 text_sm>
-                                        {"Due day and all penalties are manual. The app does not queue or submit 0619-E until those rules and the transport channel are certified."}
-                                    </div>
-                                </div>
-                            })
-                            .when_some(status_message, |element, message| {
-                                element.child(rsx! {
-                                    <div p_3 rounded_md bg={cx.theme().muted.opacity(0.5)}>{message}</div>
-                                })
-                            })
-                            .child(self.render_error_summary(cx))
-                            .child(
-                                section_card(cx, "PART I — BACKGROUND INFORMATION")
-                                    .child(rsx! {
-                                        <div text_lg font_weight={FontWeight::BOLD}>
-                                            {self.draft.taxpayer_name.clone()}
-                                        </div>
-                                    })
-                                    .child(rsx! {
-                                        <div text_sm>{format!(
-                                        "TIN: {} · RDO: {}",
-                                        self.draft.tin, self.draft.rdo_code
-                                    )}</div>
-                                    })
-                                    .child(rsx! {
-                                        <div text_sm>{format!(
-                                        "Address: {}",
-                                        self.draft.registered_address
-                                    )}</div>
-                                    })
-                                    .child(rsx! {
-                                        <div text_sm>{format!(
-                                        "ZIP: {} · Contact: {} · Email: {}",
-                                        self.draft.zip_code,
-                                        self.draft.contact_number,
-                                        self.draft.email
-                                    )}</div>
-                                    })
-                                    .child(
-                                        rsx! { <div mt_3 flex flex_col gap_3>
-                                            {self.render_toggle(
-                                                "0619e_amended",
-                                                "3 Amended Form?",
-                                                self.is_amended,
-                                                cx,
-                                                |this| this.is_amended = !this.is_amended,
-                                            )}
-                                            {self.render_toggle(
-                                                "0619e_withheld",
-                                                "4 Any Taxes Withheld?",
-                                                self.any_taxes_withheld,
-                                                cx,
-                                                |this| {
-                                                    this.any_taxes_withheld =
-                                                        !this.any_taxes_withheld
-                                                },
-                                            )}
-                                            {self.render_toggle(
-                                                "0619e_government",
-                                                "12 Government withholding agent?",
-                                                self.is_category_government,
-                                                cx,
-                                                |this| {
-                                                    this.is_category_government =
-                                                        !this.is_category_government
-                                                },
-                                            )}
-                                            {self.render_fixed_row(
-                                                "1 For the Month of (MM/YYYY)",
-                                                &format!(
-                                                    "{:02}/{}",
-                                                    self.draft.month, self.draft.taxable_year
-                                                ),
-                                                cx,
-                                            )}
-                                            {self.render_fixed_row(
-                                                "5 ATC",
-                                                ATC_CODE,
-                                                cx,
-                                            )}
-                                            {self.render_fixed_row(
-                                                "6 Tax Type Code",
-                                                TAX_TYPE_CODE,
-                                                cx,
-                                            )}
-                                            {self.render_input_row(
-                                                &format!(
-                                                    "2 Due date day (month/year fixed at {due_month:02}/{due_year})"
-                                                ),
-                                                &self.due_day,
-                                            )}
-                                            {self.render_input_row(
-                                                "Line of business (XML semantic value)",
-                                                &self.line_of_business,
-                                            )}
-                                            {self.render_input_row(
-                                                "10 Registered Address Line 2",
-                                                &self.registered_address_2,
-                                            )}
-                                        </div> },
-                                    ),
+                                        this.revert_to_draft(window, cx)
+                                    })),
                             )
-                            .child(
-                                section_card(cx, "PART II — TAX REMITTANCE")
-                                    .child(self.render_input_row(
-                                        "14 Amount of Remittance",
-                                        &self.item_14_amount_of_remittance,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "15 Less: Amount Remitted from Previously Filed Form",
-                                        &self.item_15_amount_remitted_previously,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "16 Net Amount of Remittance (14 − 15)",
-                                        self.draft.item_16_net_amount_of_remittance,
-                                        cx,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "17A Surcharge (manual)",
-                                        &self.item_17a_surcharge,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "17B Interest (manual)",
-                                        &self.item_17b_interest,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "17C Compromise (manual)",
-                                        &self.item_17c_compromise,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "17D Total Penalties (17A + 17B + 17C)",
-                                        self.draft.item_17d_total_penalties,
-                                        cx,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "18 Total Amount of Remittance (16 + 17D)",
-                                        self.draft.item_18_total_amount_of_remittance,
-                                        cx,
-                                    )),
-                            )
-                            .child(
-                                section_card(cx, "TAX AGENT / SIGNATURE DETAILS")
-                                    .child(self.render_input_row(
-                                        "Tax Agent Accreditation / Attorney Roll No.",
-                                        &self.tax_agent_number,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "Date of Issue",
-                                        &self.tax_agent_date_issue,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "Date of Expiry",
-                                        &self.tax_agent_date_expiry,
-                                    )),
-                            )
-                            .child(
-                                section_card(cx, "PART III — DETAILS OF PAYMENT")
-                                    .child(rsx! {
-                                        <div text_xs>
-                                            {"Columns: Drawee Bank/Agency · Number · Date (MM/DD/YYYY) · Amount"}
-                                        </div>
-                                    })
-                                    .child(self.render_payment_row(
-                                        19,
-                                        "Cash/Bank Debit Memo",
-                                        &self.payment_19,
-                                        cx,
-                                    ))
-                                    .child(self.render_payment_row(
-                                        20,
-                                        "Check",
-                                        &self.payment_20,
-                                        cx,
-                                    ))
-                                    .child(self.render_payment_row(
-                                        21,
-                                        "Tax Debit Memo",
-                                        &self.payment_21,
-                                        cx,
-                                    ))
-                                    .child(self.render_payment_row(
-                                        22,
-                                        "Others",
-                                        &self.payment_22,
-                                        cx,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "22 Others description",
-                                        &self.payment_22_description,
-                                    )),
-                            )}
-                </div>
-            </div>
+                        })
+                        .child(
+                            Button::new("0619e_submit")
+                                .label("Queue for submission")
+                                .primary()
+                                .disabled(
+                                    !is_draft
+                                        || !self.validation_errors.is_empty()
+                                        || !self.parse_errors.is_empty(),
+                                )
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.mark_submitted(window, cx)
+                                })),
+                        ),
+                );
+
+        let mut body = div()
+            .w_full()
+            .max_w(px(1180.))
+            .mx_auto()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .when_some(self.status_message.clone(), |col, message| {
+                col.child(
+                    div()
+                        .p_3()
+                        .rounded_md()
+                        .bg(cx.theme().muted)
+                        .text_sm()
+                        .child(message),
+                )
+            })
+            .when(self.release_claim_confirm_open, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            Button::new("0619e_release_confirm")
+                                .label("Nothing reached BIR — release")
+                                .danger()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.release_claim(window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("0619e_release_cancel")
+                                .label("Keep queued")
+                                .outline()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.release_claim_confirm_open = false;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            })
+            .child(self.render_header_items(layout, cx))
+            .child(self.render_part_one(layout, cx))
+            .child(self.render_part_two(layout, cx));
+        if !issues.is_empty() {
+            body = body.child(self.section("Needs review", issues, cx));
         }
+
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
+            .bg(cx.theme().background)
+            .child(toolbar)
+            .child(
+                div()
+                    .px(pad)
+                    .py_4()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(self.render_header(cx))
+                    .when(layout != Layout::Phone, |d| {
+                        d.child(div().mt_4().child(self.render_status_pipeline(cx)))
+                    }),
+            )
+            .child(
+                div()
+                    .id("0619e_scroll")
+                    .flex_1()
+                    .w_full()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll_handle)
+                    .p(pad)
+                    .child(body),
+            )
     }
 }
 
-fn section_card(cx: &Context<Form0619EView>, title: &str) -> Div {
-    rsx! {
-        <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
-            <div text_xl font_weight={FontWeight::BOLD}>{title.to_string()}</div>
-        </div>
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::{Layout, format_tin, parse_amount};
+    use gpui::px;
 
-fn text_input(
-    cx: &mut Context<Form0619EView>,
-    value: &str,
-    placeholder: &str,
-    window: &mut Window,
-) -> Entity<InputState> {
-    let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder.to_string()));
-    if !value.is_empty() {
-        input.update(cx, |state, cx| {
-            state.set_value(value.to_string(), window, cx)
-        });
+    #[test]
+    fn layout_breakpoints() {
+        assert!(Layout::for_width(px(390.)) == Layout::Phone);
+        assert!(Layout::for_width(px(820.)) == Layout::Tablet);
+        assert!(Layout::for_width(px(1280.)) == Layout::Desktop);
     }
-    input
-}
 
-fn money_input(
-    cx: &mut Context<Form0619EView>,
-    value: f64,
-    preserve_zero: bool,
-    window: &mut Window,
-) -> Entity<InputState> {
-    let input = text_input(cx, "", "0.00", window);
-    if value != 0.0 || preserve_zero {
-        input.update(cx, |state, cx| {
-            state.set_value(format!("{value:.2}"), window, cx)
-        });
-    }
-    input
-}
-
-fn optional_money_input(
-    cx: &mut Context<Form0619EView>,
-    value: Option<f64>,
-    window: &mut Window,
-) -> Entity<InputState> {
-    let input = text_input(cx, "", "Amount", window);
-    if let Some(value) = value {
-        input.update(cx, |state, cx| {
-            state.set_value(format!("{value:.2}"), window, cx)
-        });
-    }
-    input
-}
-
-fn payment_inputs(
-    cx: &mut Context<Form0619EView>,
-    row: &Form0619EPaymentRow,
-    window: &mut Window,
-) -> PaymentRowInputs {
-    PaymentRowInputs {
-        agency: text_input(cx, &row.drawee_bank_or_agency, "Drawee bank/agency", window),
-        number: text_input(cx, &row.number, "Number", window),
-        date: text_input(cx, &row.date, "MM/DD/YYYY", window),
-        amount: optional_money_input(cx, row.amount, window),
-    }
-}
-
-fn input_text(input: &Entity<InputState>, cx: &Context<Form0619EView>) -> String {
-    input.read(cx).value().to_string()
-}
-
-fn parse_optional_u8(
-    input: &Entity<InputState>,
-    field: &str,
-    cx: &Context<Form0619EView>,
-    errors: &mut Vec<(String, String)>,
-) -> Option<u8> {
-    let raw = input_text(input, cx);
-    if raw.trim().is_empty() {
-        return None;
-    }
-    match raw.trim().parse::<u8>() {
-        Ok(value) => Some(value),
-        Err(_) => {
-            errors.push((
-                field.to_string(),
-                "Enter a whole number from 1 to 31".to_string(),
-            ));
-            None
-        }
-    }
-}
-
-fn parse_money_text(
-    input: &Entity<InputState>,
-    field: &str,
-    blank_is_zero: bool,
-    cx: &Context<Form0619EView>,
-    errors: &mut Vec<(String, String)>,
-) -> Option<f64> {
-    let raw = input_text(input, cx);
-    if raw.trim().is_empty() {
-        return blank_is_zero.then_some(0.0);
-    }
-    match raw.trim().replace(',', "").parse::<f64>() {
-        Ok(value) if value.is_finite() => Some(value),
-        _ => {
-            errors.push((
-                field.to_string(),
-                format!("Enter a valid numeric amount; {raw:?} is not accepted"),
-            ));
-            None
-        }
-    }
-}
-
-fn assign_money(
-    target: &mut f64,
-    input: &Entity<InputState>,
-    field: &str,
-    cx: &Context<Form0619EView>,
-    errors: &mut Vec<(String, String)>,
-) {
-    if let Some(value) = parse_money_text(input, field, true, cx, errors) {
-        *target = value;
-    }
-}
-
-fn sync_payment_row(
-    target: &mut Form0619EPaymentRow,
-    inputs: &PaymentRowInputs,
-    field: &str,
-    cx: &Context<Form0619EView>,
-    errors: &mut Vec<(String, String)>,
-) {
-    target.drawee_bank_or_agency = input_text(&inputs.agency, cx);
-    target.number = input_text(&inputs.number, cx);
-    target.date = input_text(&inputs.date, cx);
-    let raw = input_text(&inputs.amount, cx);
-    if raw.trim().is_empty() {
-        target.amount = None;
-    } else if let Some(value) = parse_money_text(
-        &inputs.amount,
-        &format!("{field}.amount"),
-        false,
-        cx,
-        errors,
-    ) {
-        target.amount = Some(value);
+    #[test]
+    fn amounts_accept_official_formatting() {
+        assert_eq!(parse_amount("1,234.50"), Some(1234.5));
+        assert_eq!(parse_amount(""), Some(0.0));
+        assert_eq!(parse_amount("12a"), None);
+        assert_eq!(format_tin("12345678800000"), "123-456-788-00000");
     }
 }

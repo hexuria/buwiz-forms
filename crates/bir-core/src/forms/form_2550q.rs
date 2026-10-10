@@ -10,7 +10,9 @@ use std::fmt;
 use bir_rules::{RawValue, StableInstanceId};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::{FilingStatus, FormValidator};
+use super::queueable::SubmissionLifecycle;
+use super::{FilingPeriod, FilingStatus, FormValidator};
+use crate::filing_queue::QueueAuthSource;
 use crate::form_rules::validate_form_2550q_raw_bindings;
 use crate::profile::{EoptTier, TaxpayerProfile};
 use crate::validation::{validate_email, validate_ph_phone, validate_zip};
@@ -19,7 +21,7 @@ pub const FORM_CODE: &str = "2550Q";
 pub const FORM_REVISION: &str = "2024";
 pub const FORM_TYPE_ID: &str = "2550Qv2024";
 pub const FORM_VERSION_LABEL: &str = "April 2024 (ENCS)";
-pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+pub const QUEUE_SUBMISSION_SUPPORTED: bool = true;
 pub const OFFICIAL_FORM_SHA256: &str =
     "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25";
 pub const OFFICIAL_GUIDELINES_SHA256: &str =
@@ -897,36 +899,22 @@ pub struct Form2550QDraft {
     #[serde(default)]
     pub migration_review_items: Vec<String>,
 
+    /// Status, queue authorization, network claim and retry state, shared
+    /// with every form on the generic submission path. Declared before the
+    /// legacy catch-all so serde routes lifecycle keys here first.
+    #[serde(flatten)]
+    pub lifecycle: SubmissionLifecycle,
+
     /// Unknown top-level JSON properties are retained for forward
     /// compatibility. A scaffold-era `month` is migrated only when the full
     /// legacy fingerprint is present and the current nested model is empty;
     /// all other flattened values remain preserved.
     #[serde(default, flatten, skip_serializing_if = "BTreeMap::is_empty")]
     pub legacy_flat_draft_fields: BTreeMap<String, serde_json::Value>,
-
-    // Lifecycle.
-    pub status: FilingStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    #[serde(default)]
-    pub submitted_at: Option<String>,
-    #[serde(default)]
-    pub confirmed_at: Option<String>,
-    #[serde(default)]
-    pub submission_filename: Option<String>,
-    #[serde(default)]
-    pub receipt_id: Option<i64>,
-    #[serde(default)]
-    pub submission_attempts: u32,
-    #[serde(default)]
-    pub next_retry_at: Option<String>,
-    #[serde(default)]
-    pub last_error: Option<String>,
 }
 
 impl Form2550QDraft {
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
         let quarter = Form2550QQuarter::from_number(quarter);
         let (return_period_from, return_period_to) = default_calendar_period(year, quarter)
             .map_or((None, None), |(from, to)| (Some(from), Some(to)));
@@ -1007,16 +995,7 @@ impl Form2550QDraft {
             preserved_unmodeled_xml_fields: BTreeMap::new(),
             migration_review_items: Vec::new(),
             legacy_flat_draft_fields: BTreeMap::new(),
-            status: FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
-            last_error: None,
+            lifecycle: SubmissionLifecycle::default(),
         };
         draft
             .ensure_repeating_row_ids()
@@ -1438,6 +1417,18 @@ impl Form2550QDraft {
             p4.item_42b_other_input_tax,
         ]);
 
+        // Official compute44AB/45AB/46AB: the disabled Part IV input-tax
+        // controls are always 12% of their purchase amounts.
+        p4.item_44b_domestic_input_tax = p4
+            .item_44a_domestic_purchases
+            .map(|value| money(value * VAT_RATE));
+        p4.item_45b_nonresident_service_input_tax = p4
+            .item_45a_nonresident_services
+            .map(|value| money(value * VAT_RATE));
+        p4.item_46b_import_input_tax = p4
+            .item_46a_importations
+            .map(|value| money(value * VAT_RATE));
+
         p4.item_50a_total_current_purchases = sum_money(&[
             p4.item_44a_domestic_purchases,
             p4.item_45a_nonresident_services,
@@ -1458,6 +1449,8 @@ impl Form2550QDraft {
         ]);
         p4.item_52b_deferred_capital_goods_input_tax = schedule_1_next;
 
+        // Official computeVATExemptSale/computeTotalSales copy Part IV.
+        self.schedule_2.vat_exempt_sales = p4.item_33a_exempt_sales;
         self.schedule_2.total_sales = p4.item_34a_total_sales;
         self.schedule_2.ratable_input_tax = compute_ratable_input_tax(&self.schedule_2);
         self.schedule_2.total_input_tax_attributable_to_exempt_sales = sum_money(&[
@@ -1537,38 +1530,29 @@ impl Form2550QDraft {
             _ => None,
         };
 
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+        self.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
     pub fn is_editable(&self) -> bool {
-        matches!(self.status, FilingStatus::Draft)
+        self.lifecycle.is_editable()
     }
 
     pub fn quarter_number(&self) -> Option<u8> {
         self.quarter.number()
     }
 
+    /// Draft -> Queued through the generic submission lifecycle: recompute,
+    /// require the exact official upload payload, then freeze the reviewed
+    /// field map behind a fingerprint and a scoped GUI authorization.
     pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        Err(vec![(
-            "queue_submission".to_string(),
-            "2550Qv2024 has reviewed editable-save evidence only; electronic queue/submission is not certified"
-                .to_string(),
-        )])
+        super::queueable::QueueableForm::queue(self, QueueAuthSource::Gui)
     }
 
     pub fn revert_to_draft(&mut self) -> Result<(), String> {
-        if matches!(self.status, FilingStatus::Paid) {
+        if matches!(self.lifecycle.status, FilingStatus::Paid) {
             return Err("A paid 2550Q cannot be reverted to draft".to_string());
         }
-        self.status = FilingStatus::Draft;
-        self.submitted_at = None;
-        self.confirmed_at = None;
-        self.receipt_id = None;
-        self.submission_filename = None;
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+        self.lifecycle.revert_to_draft();
         Ok(())
     }
 
@@ -2496,6 +2480,91 @@ fn computed_money_fields(draft: &Form2550QDraft) -> Vec<(&'static str, Option<f6
     ]
 }
 
+/// Rule-package id of the official upload layout.
+pub const FORM_2550Q_LAYOUT_ID: &str = "2550q-v2024";
+
+impl super::queueable::QueueableForm for Form2550QDraft {
+    const FORM_CODE: &'static str = FORM_CODE;
+    /// Official `formType`, as `createXMLFileName()` writes it.
+    const FORM_TYPE: &'static str = FORM_TYPE_ID;
+    const LAYOUT_ID: &'static str = FORM_2550Q_LAYOUT_ID;
+
+    fn lifecycle(&self) -> &SubmissionLifecycle {
+        &self.lifecycle
+    }
+    fn lifecycle_mut(&mut self) -> &mut SubmissionLifecycle {
+        &mut self.lifecycle
+    }
+    fn tin(&self) -> &str {
+        &self.tin
+    }
+    fn taxable_year(&self) -> u16 {
+        self.taxable_year
+    }
+    /// An unresolved imported quarter maps to Q0, which never validates.
+    fn filing_period(&self) -> FilingPeriod {
+        FilingPeriod::Quarterly(self.quarter.number().unwrap_or(0))
+    }
+    /// `selectedMonthNo2 + txtYearNo2 + "Q" + n`, as in `createXMLFileName`.
+    fn period_code(&self) -> String {
+        format!(
+            "{:02}{}Q{}",
+            self.year_end_month,
+            self.taxable_year,
+            self.quarter.number().unwrap_or(0)
+        )
+    }
+    fn parse_period_code(code: &str) -> Option<(u16, FilingPeriod)> {
+        if code.len() != 8 || code.get(6..7)? != "Q" {
+            return None;
+        }
+        let month: u8 = code.get(..2)?.parse().ok()?;
+        let year: u16 = code.get(2..6)?.parse().ok()?;
+        let quarter: u8 = code.get(7..)?.parse().ok()?;
+        ((1..=12).contains(&month) && (1..=4).contains(&quarter))
+            .then_some((year, FilingPeriod::Quarterly(quarter)))
+    }
+    fn submission_email(&self) -> &str {
+        self.email.trim()
+    }
+    fn compute(&mut self) {
+        self.recompute();
+    }
+    /// Every form rule, including raw-buffer coherence for any raw value the
+    /// draft carries. A control without a raw buffer (a page-typed draft) is
+    /// written from its typed value, as the official page writes its controls.
+    fn validate(&self) -> Vec<(String, String)> {
+        <Self as FormValidator>::validate(self)
+    }
+    /// The official controls `saveEncryptedProfile` walks. `dateFiled` is not
+    /// a control: it is appended after the trailer by [`Self::official_payload`].
+    fn field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        fields.remove("dateFiled");
+        fields
+    }
+    /// `saveEncryptedProfile(true)`: the control loop, the trailer, then
+    /// `<dateFiled>yyyy/mm/dd</dateFiled>` and a newline.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = super::queueable::QueueableForm::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = crate::official_xml::layout(Self::LAYOUT_ID)
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
+        let mut payload = crate::official_xml::write(layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
+        let date_filed = self.date_filed.map_or_else(
+            || chrono::Local::now().format("%Y/%m/%d").to_string(),
+            Form2550QDate::to_filed_date,
+        );
+        payload.push_str("<dateFiled>");
+        payload.push_str(&date_filed);
+        payload.push_str("</dateFiled>\n");
+        Ok(payload)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3420,10 +3489,40 @@ mod tests {
     }
 
     #[test]
-    fn queue_transition_always_fails_closed() {
+    fn queue_transition_runs_the_generic_lifecycle_gate() {
+        assert!(QUEUE_SUBMISSION_SUPPORTED);
         let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.tin = "not-a-tin".to_string();
         let result = draft.transition_to_queued();
-        assert!(result.is_err());
-        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(result.is_err(), "an invalid draft must not queue");
+        assert_eq!(draft.lifecycle.status, FilingStatus::Draft);
+        assert!(draft.lifecycle.queued_submission_fingerprint.is_none());
+        assert!(draft.lifecycle.queue_authorization.is_none());
+    }
+
+    #[test]
+    fn stored_lifecycle_json_keeps_its_field_names() {
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let json = serde_json::to_value(&draft).expect("serializes");
+        let object = json.as_object().expect("object");
+        for key in ["status", "created_at", "updated_at", "submission_attempts"] {
+            assert!(object.contains_key(key), "{key} stays top-level");
+        }
+        assert!(!object.contains_key("lifecycle"));
+        let back: Form2550QDraft = serde_json::from_value(json).expect("deserializes");
+        assert_eq!(back.lifecycle, draft.lifecycle);
+        assert!(back.legacy_flat_draft_fields.is_empty());
+    }
+
+    #[test]
+    fn queueable_period_code_matches_create_xml_file_name() {
+        use crate::forms::queueable::QueueableForm;
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 2);
+        assert_eq!(draft.period_code(), "122026Q2");
+        assert_eq!(
+            Form2550QDraft::parse_period_code("122026Q2"),
+            Some((2026, FilingPeriod::Quarterly(2)))
+        );
+        assert!(Form2550QDraft::parse_period_code("122026Q5").is_none());
     }
 }

@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use super::FormValidator;
 use super::form_0619f::{
-    Form0619FDraft, Form0619FPaymentDetails, Form0619FPaymentRow, Form0619FXmlFinalFlag,
-    TAX_TYPE_CODE, WithholdingAgentCategory,
+    Form0619FDraft, Form0619FPaymentDetails, Form0619FPaymentRow, Form0619FTaxType,
+    Form0619FXmlFinalFlag, WithholdingAgentCategory,
 };
 
 const REVIEWED_NON_FILING_XML_STATE: [(&str, &str); 5] = [
@@ -80,7 +80,7 @@ impl Form0619FDraft {
             ),
         );
 
-        insert(&mut fields, "frm0619F:txtTaxTypeCode", TAX_TYPE_CODE);
+        insert(&mut fields, "frm0619F:txtTaxTypeCode", self.tax_type.code());
         insert(
             &mut fields,
             "frm0619F:txtMonth",
@@ -243,12 +243,16 @@ impl Form0619FDraft {
             &mut errors,
         );
 
-        verify_fixed_code(
-            fields,
-            "frm0619F:txtTaxTypeCode",
-            TAX_TYPE_CODE,
-            &mut errors,
-        );
+        let tax_type = Form0619FTaxType::from_code(field(fields, "frm0619F:txtTaxTypeCode").trim());
+        if tax_type.is_none() {
+            errors.push((
+                "frm0619F:txtTaxTypeCode".to_string(),
+                format!(
+                    "Item 5 tax type must be WB or WF, found {:?}",
+                    field(fields, "frm0619F:txtTaxTypeCode")
+                ),
+            ));
+        }
         validate_reviewed_non_filing_state(fields, &mut errors);
 
         let xml_final_flag = match field(fields, "txtFinalFlag") {
@@ -262,7 +266,6 @@ impl Form0619FDraft {
             return Err(errors);
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
         let mut draft = Form0619FDraft {
             id: None,
             tin: format!(
@@ -276,6 +279,7 @@ impl Form0619FDraft {
             month: month.unwrap_or_default(),
             is_amended: is_amended.unwrap_or(false),
             any_taxes_withheld: any_taxes_withheld.unwrap_or(false),
+            tax_type: tax_type.unwrap_or_default(),
             withholding_agent_category: if category_government.unwrap_or(false) {
                 WithholdingAgentCategory::Government
             } else {
@@ -337,16 +341,8 @@ impl Form0619FDraft {
                 .filter(|(key, _)| !is_modeled_xml_key(key))
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
-            status: super::FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
 
         if !errors.is_empty() {
@@ -397,7 +393,11 @@ impl Form0619FDraft {
             &mut errors,
         );
 
-        errors.extend(draft.validate());
+        // An imported save keeps its record even when its TIN fails the
+        // official check digit; that check still blocks queueing.
+        errors.extend(draft.validate().into_iter().filter(|(field, message)| {
+            !(field == "tin" && message == crate::validation::OFFICIAL_INVALID_TIN_MESSAGE)
+        }));
         if errors.is_empty() {
             Ok(draft)
         } else {
@@ -562,21 +562,6 @@ fn parse_payment_row(
         number: semantic_text(fields, &format!("txtNumber{item}")),
         date: semantic_text(fields, &format!("txtDate{item}")),
         amount: parse_money(fields, &format!("txtAmount{item}"), true, errors),
-    }
-}
-
-fn verify_fixed_code(
-    fields: &BTreeMap<String, String>,
-    key: &str,
-    expected: &str,
-    errors: &mut Vec<(String, String)>,
-) {
-    let actual = field(fields, key).trim();
-    if actual != expected {
-        errors.push((
-            key.to_string(),
-            format!("Exact 0619-F revision requires fixed {key}={expected}, found {actual:?}"),
-        ));
     }
 }
 
@@ -1016,9 +1001,11 @@ mod tests {
                 ["matches_locked_ciphertext"],
             false
         );
+        // Recorded before 0619-F moved to the generic queue (official
+        // layout replay + Encrypt.exe parity); the registry now owns the gate.
         assert_eq!(
             provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
-            super::super::form_0619f::QUEUE_SUBMISSION_SUPPORTED
+            false
         );
         assert_eq!(
             super::super::form_0619f::OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID

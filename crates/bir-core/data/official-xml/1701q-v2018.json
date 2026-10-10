@@ -188,7 +188,7 @@
       "parts": [
         {
           "source": "frm1701q:txtTaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -200,11 +200,19 @@
       "parts": [
         {
           "source": "frm1701q:txtAddress",
-          "codec": "js-escape"
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm1701q:txtAddress2",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1701q:txtAddress2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -376,6 +384,18 @@
         }
       ],
       "default": "",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm1701q:txtSpouseRDOCode",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1701q:txtSpouseRDOCode",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
       "after": "\t\n            "
     },
     {
@@ -1727,10 +1747,11 @@
       "kind": "value",
       "parts": [
         {
-          "literal": "1"
+          "source": "frm1701q:txtCurrentPage",
+          "codec": "raw"
         }
       ],
-      "default": "1",
+      "default": "",
       "after": "\t\n            "
     },
     {
@@ -1811,7 +1832,7 @@
       "parts": [
         {
           "source": "frm1701q:txtLOB",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

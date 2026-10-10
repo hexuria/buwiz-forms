@@ -1,6 +1,7 @@
 use crate::db::{Claim1601CSubmissionResult, Claim2551QSubmissionResult, Database};
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
+use crate::forms::queueable::{QueueableForm, QueueableKind};
 use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::job_display::{FilingJobLabel, known_job_email};
 use crate::profile::TaxpayerProfile;
@@ -757,6 +758,397 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     }
 }
 
+// ===== Generic queued submission for every `QueueableForm` =====
+
+/// The queue generation a worker loaded; every CAS names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QueueGeneration {
+    fingerprint: Option<String>,
+    next_retry_at: Option<String>,
+    submission_attempts: u32,
+}
+
+fn queue_generation<F: QueueableForm>(draft: &F) -> Option<QueueGeneration> {
+    let lifecycle = draft.lifecycle();
+    (matches!(lifecycle.status, FilingStatus::Queued) && lifecycle.is_unclaimed()).then(|| {
+        QueueGeneration {
+            fingerprint: lifecycle.queued_submission_fingerprint.clone(),
+            next_retry_at: lifecycle.next_retry_at.clone(),
+            submission_attempts: lifecycle.submission_attempts,
+        }
+    })
+}
+
+/// Persist an unclaimed generation update (retry state or a return to Draft).
+fn replace_queueable<F: QueueableForm>(
+    db: &Arc<Mutex<Database>>,
+    draft: &F,
+    generation: &QueueGeneration,
+) {
+    if let Ok(db_guard) = db.lock() {
+        match db_guard.replace_unclaimed_queued_queueable(
+            draft,
+            &generation.fingerprint,
+            &generation.next_retry_at,
+            generation.submission_attempts,
+        ) {
+            Ok(true) => {}
+            Ok(false) => info!(
+                "Cron: {} {} was canceled or superseded before its state persisted",
+                F::FORM_CODE,
+                draft.period_code()
+            ),
+            Err(error) => warn!(
+                "Cron: Failed to persist {} {} queue state: {}",
+                F::FORM_CODE,
+                draft.period_code(),
+                error
+            ),
+        }
+    }
+}
+
+fn fail_queueable<F: QueueableForm>(
+    draft: &mut F,
+    generation: &QueueGeneration,
+    db: &Arc<Mutex<Database>>,
+    error_message: String,
+) {
+    warn!(
+        "Cron: {} submission preparation failed for {}: {}",
+        F::FORM_CODE,
+        draft.period_code(),
+        error_message
+    );
+    draft
+        .lifecycle_mut()
+        .record_submission_failure(error_message);
+    replace_queueable(db, draft, generation);
+}
+
+/// Human-readable period for notices: `09/26`, `Q3/26` or `2026`.
+fn queueable_period_label<F: QueueableForm>(draft: &F) -> String {
+    match draft.filing_period() {
+        crate::forms::FilingPeriod::Monthly(month) => {
+            monthly_period_label(draft.taxable_year(), month)
+        }
+        crate::forms::FilingPeriod::Quarterly(quarter) => {
+            quarterly_period_label(draft.taxable_year(), quarter)
+        }
+        _ => draft.taxable_year().to_string(),
+    }
+}
+
+/// `authorized_form_type` is [`crate::forms::queue_authorized_form_type_id`]
+/// in production: no PUT happens unless the capability registry allows it.
+async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
+    summary: &FormDraftSummary,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+    transport: &T,
+    authorized_form_type: fn(&str) -> Option<&'static str>,
+) {
+    let period = i64::from(summary.month.or(summary.quarter).unwrap_or(0));
+    let load = |db: &Arc<Mutex<Database>>| -> Option<F> {
+        let db_guard = db.lock().ok()?;
+        db_guard
+            .get_queueable_draft::<F>(&summary.tin, summary.taxable_year, period)
+            .ok()
+            .flatten()
+    };
+    let Some(loaded) = load(&db) else {
+        return;
+    };
+
+    // A held claim is only recoverable when its lease expired before PUT.
+    let loaded = if !loaded.lifecycle().is_unclaimed() {
+        let recovered = db
+            .lock()
+            .ok()
+            .and_then(|db_guard| {
+                db_guard
+                    .recover_expired_unstarted_queueable_claim::<F>(
+                        &summary.tin,
+                        summary.taxable_year,
+                        period,
+                        Utc::now(),
+                    )
+                    .ok()
+            })
+            .unwrap_or(false);
+        if !recovered {
+            warn!(
+                "Cron: {} {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
+                F::FORM_CODE,
+                loaded.period_code()
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+        match load(&db) {
+            Some(draft) if draft.lifecycle().is_unclaimed() => draft,
+            _ => return,
+        }
+    } else {
+        loaded
+    };
+
+    let Some(generation) = queue_generation(&loaded) else {
+        return;
+    };
+    let mut draft = loaded;
+    if let Err(errors) = draft.revalidate_queued_before_submission() {
+        warn!(
+            "Cron: Refusing invalid queued {} {} before XML generation: {}",
+            F::FORM_CODE,
+            draft.period_code(),
+            validation_reason(&errors)
+        );
+        replace_queueable(&db, &draft, &generation);
+        crate::ipc::post_db_changed();
+        return;
+    }
+
+    match queued_retry_is_due(draft.lifecycle().next_retry_at.as_deref(), Utc::now()) {
+        Ok(false) => return,
+        Ok(true) => {}
+        Err(error) => {
+            warn!(
+                "Cron: Refusing queued {} {} because its retry timestamp is invalid: {}",
+                F::FORM_CODE,
+                draft.period_code(),
+                error
+            );
+            draft.lifecycle_mut().revert_to_draft();
+            draft.lifecycle_mut().submission_error = Some(
+                "Submission blocked because queued retry metadata is invalid; review and queue the return again"
+                    .to_string(),
+            );
+            replace_queueable(&db, &draft, &generation);
+            crate::ipc::post_db_changed();
+            return;
+        }
+    }
+
+    info!(
+        "Cron: Attempting to submit queued {} {} for {}",
+        F::FORM_CODE,
+        draft.period_code(),
+        draft.tin()
+    );
+    let filename = draft.submission_filename();
+    let payload = match draft.official_payload() {
+        Ok(payload) => payload,
+        Err(errors) => {
+            let reason = validation_reason(&errors);
+            draft.lifecycle_mut().revert_to_draft();
+            draft.lifecycle_mut().submission_error = Some(format!(
+                "Submission blocked at XML generation boundary: {reason}"
+            ));
+            replace_queueable(&db, &draft, &generation);
+            crate::ipc::post_db_changed();
+            return;
+        }
+    };
+    let encrypted = match crate::crypto::compress_and_encrypt(
+        payload.as_bytes(),
+        crate::crypto::BIR_IAF_PASSPHRASE,
+    ) {
+        Ok(encrypted) => encrypted,
+        Err(error) => {
+            fail_queueable(&mut draft, &generation, &db, error.to_string());
+            return;
+        }
+    };
+
+    let Some(form_type) = authorized_form_type(F::FORM_CODE) else {
+        warn!(
+            "Cron: Refusing to submit {} because {} is not authorized for queue submission",
+            draft.period_code(),
+            F::FORM_CODE
+        );
+        return;
+    };
+
+    let session = match transport.open_session(form_type, draft.tin()).await {
+        Ok(session) => session,
+        Err(error) => {
+            fail_queueable(
+                &mut draft,
+                &generation,
+                &db,
+                format!("BIR SFTP session failed before upload (no PUT attempted): {error}"),
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+    };
+
+    // Claim only after the session is open, immediately before PUT.
+    let claim = {
+        let Ok(db_guard) = db.lock() else {
+            return;
+        };
+        db_guard.claim_queued_queueable::<F>(
+            draft.tin(),
+            draft.taxable_year(),
+            draft.period_column(),
+            &generation.fingerprint,
+            &generation.next_retry_at,
+            generation.submission_attempts,
+        )
+    };
+    let claim_token = match claim {
+        Ok(crate::db::ClaimQueueableResult::Claimed {
+            draft: claimed,
+            token,
+        }) => {
+            draft = claimed;
+            crate::ipc::post_db_changed();
+            token
+        }
+        Ok(crate::db::ClaimQueueableResult::Rejected { draft, errors }) => {
+            warn!(
+                "Cron: {} submission claim rejected {}: {}",
+                F::FORM_CODE,
+                draft.period_code(),
+                validation_reason(&errors)
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+        Ok(crate::db::ClaimQueueableResult::Superseded) => {
+            info!(
+                "Cron: {} submission job for {} was canceled or superseded before PUT",
+                F::FORM_CODE,
+                draft.period_code()
+            );
+            return;
+        }
+        Err(error) => {
+            warn!(
+                "Cron: Could not claim queued {} {} because the database claim failed: {}",
+                F::FORM_CODE,
+                draft.period_code(),
+                error
+            );
+            return;
+        }
+    };
+
+    let skip_email_poll = transport.session_source(&session).is_dry_run();
+    let put_marked = db
+        .lock()
+        .ok()
+        .and_then(|db_guard| {
+            db_guard
+                .mark_claimed_queueable_put_started::<F>(
+                    draft.tin(),
+                    draft.taxable_year(),
+                    draft.period_column(),
+                    &claim_token,
+                )
+                .ok()
+        })
+        .unwrap_or(false);
+    if !put_marked {
+        warn!(
+            "Cron: {} {} claim disappeared before PUT start was recorded; skipping PUT",
+            F::FORM_CODE,
+            draft.period_code()
+        );
+        return;
+    }
+
+    match transport
+        .store_session(session, &filename, &encrypted)
+        .await
+    {
+        Ok(()) => {
+            info!(
+                "Cron: Successfully submitted queued {} {}",
+                F::FORM_CODE,
+                filename
+            );
+            let period_label = queueable_period_label(&draft);
+            let (notice_title, notice_body) =
+                submission_notice(profile, F::FORM_CODE, &period_label, &chrono::Local::now());
+            crate::notification::send_notification(&notice_title, &notice_body);
+            let submitted_file = filename.clone();
+            draft.lifecycle_mut().transition_to_submitted(filename);
+            if let Ok(db_guard) = db.lock() {
+                match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {
+                    Ok(_) => {
+                        record_submission_alert(
+                            &db_guard,
+                            profile,
+                            F::FORM_CODE,
+                            &period_label,
+                            &submitted_file,
+                            &notice_title,
+                            &notice_body,
+                        );
+                        if !skip_email_poll {
+                            let (month, quarter) = match draft.filing_period() {
+                                crate::forms::FilingPeriod::Monthly(month) => (Some(month), None),
+                                crate::forms::FilingPeriod::Quarterly(quarter) => {
+                                    (None, Some(quarter))
+                                }
+                                _ => (None, None),
+                            };
+                            schedule_email_poll(
+                                profile,
+                                F::FORM_CODE,
+                                draft.tin(),
+                                draft.taxable_year(),
+                                month,
+                                quarter,
+                                &db_guard,
+                            );
+                        }
+                    }
+                    Err(error) => warn!(
+                        "Cron: {} {} was transmitted but its submission claim could not be finalized: {}",
+                        F::FORM_CODE,
+                        draft.period_code(),
+                        error
+                    ),
+                }
+            }
+        }
+        Err(_) => {
+            warn!(
+                "Cron: {} PUT ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required",
+                F::FORM_CODE
+            );
+            crate::ipc::post_db_changed();
+        }
+    }
+}
+
+/// Run the generic worker for a queueable form code. `false` when the code
+/// is not a [`QueueableKind`].
+async fn process_queued_by_kind(
+    summary: &FormDraftSummary,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+) -> bool {
+    let Some(kind) = QueueableKind::from_form_code(&summary.form_code) else {
+        return false;
+    };
+    crate::with_queueable_kind!(kind, F => {
+        process_queued_queueable::<F, _>(
+            summary,
+            profile,
+            db,
+            &NetworkSubmissionTransport,
+            crate::forms::queue_authorized_form_type_id,
+        )
+        .await
+    });
+    true
+}
+
 #[cfg(test)]
 fn submission_queue_year_at<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> u16 {
     use chrono::Datelike;
@@ -1144,6 +1536,8 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 }
             } else if summary.form_code == "1601C" {
                 process_queued_1601c(&summary, &profile_clone, db_clone.clone()).await;
+            } else {
+                process_queued_by_kind(&summary, &profile_clone, db_clone.clone()).await;
             }
 
             crate::ipc::post_db_changed();
@@ -2274,6 +2668,245 @@ mod tests {
                 .expect("the email-poll job lookup should succeed")
                 .is_empty()
         );
+    }
+
+    // ----- Generic QueueableForm worker -----
+
+    use crate::forms::queueable::test_support::TestForm;
+
+    fn allow_test_form(code: &str) -> Option<&'static str> {
+        (code == TestForm::CODE).then_some(TestForm::TYPE)
+    }
+
+    fn queued_test_form(db: &Arc<Mutex<Database>>) -> (TestForm, FormDraftSummary) {
+        let mut form = TestForm::new(6, 10.0);
+        form.queue(crate::filing_queue::QueueAuthSource::Gui)
+            .expect("the test form should queue");
+        let id = db
+            .lock()
+            .unwrap()
+            .save_queued_queueable(&form)
+            .expect("the queued test form should persist");
+        let summary = FormDraftSummary {
+            id,
+            tin: form.tin.clone(),
+            form_code: TestForm::CODE.to_string(),
+            taxable_year: form.taxable_year,
+            quarter: None,
+            month: Some(form.month),
+            status: FilingStatus::Queued,
+            updated_at: form.lifecycle.updated_at.clone(),
+        };
+        (form, summary)
+    }
+
+    fn stored_test_form(db: &Arc<Mutex<Database>>, form: &TestForm) -> TestForm {
+        db.lock()
+            .unwrap()
+            .get_queueable_draft::<TestForm>(&form.tin, form.taxable_year, i64::from(form.month))
+            .unwrap()
+            .expect("the test form should stay persisted")
+    }
+
+    fn test_db() -> Arc<Mutex<Database>> {
+        Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()))
+    }
+
+    #[tokio::test]
+    async fn generic_worker_submits_the_exact_official_payload() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+
+        let calls = transport.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].form_type, TestForm::TYPE);
+        assert_eq!(calls[0].filename, queued.submission_filename());
+        let plain = crate::crypto::decrypt_and_decompress(
+            &calls[0].payload,
+            crate::crypto::BIR_IAF_PASSPHRASE,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(plain).unwrap(),
+            queued.official_payload().unwrap()
+        );
+        let submitted = stored_test_form(&db, &queued);
+        assert_eq!(submitted.lifecycle.status, FilingStatus::Submitted);
+        assert!(submitted.lifecycle.is_unclaimed());
+        assert_eq!(
+            submitted.lifecycle.submission_filename.as_deref(),
+            Some(queued.submission_filename().as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn generic_receipt_confirms_by_uploaded_filename_when_the_period_cannot_key_it() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+
+        // BIR echoes the base filename; an event-based form's period part
+        // (a date, a TCT) does not parse back to the draft's key.
+        let local_now =
+            chrono::Utc::now() + chrono::Duration::hours(8) + chrono::Duration::minutes(1);
+        let uploaded = queued.submission_filename();
+        let confirmation = crate::receipt::BirReceiptConfirmation {
+            filename: format!("{}.xml", uploaded.split('#').next().unwrap()),
+            date_received: local_now.date_naive(),
+            time_received: local_now.time(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let guard = db.lock().unwrap();
+        let (mut saved, _) = guard.save_submission_receipt(&confirmation).unwrap();
+        saved.period = "03152025_T123456".to_string();
+        assert_eq!(
+            guard
+                .confirm_queueable_from_receipt::<TestForm>(&saved)
+                .unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
+        );
+        drop(guard);
+        assert_eq!(
+            stored_test_form(&db, &queued).lifecycle.status,
+            FilingStatus::Confirmed
+        );
+    }
+
+    #[tokio::test]
+    async fn generic_worker_pre_store_failure_stays_unclaimed_and_backs_off() {
+        let profile = test_profile();
+        let db = test_db();
+        let (_queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::PreStore);
+
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+
+        assert!(transport.calls().is_empty());
+        let failed = stored_test_form(&db, &_queued);
+        assert_eq!(failed.lifecycle.status, FilingStatus::Queued);
+        assert_eq!(failed.lifecycle.submission_attempts, 1);
+        assert!(failed.lifecycle.is_unclaimed());
+        assert!(
+            failed
+                .lifecycle
+                .submission_error
+                .as_deref()
+                .is_some_and(|message| message.contains("no PUT attempted"))
+        );
+    }
+
+    #[tokio::test]
+    async fn generic_worker_unknown_outcome_stays_claimed_and_is_not_retried() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::UnknownIo);
+
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+        assert_eq!(transport.calls().len(), 1);
+        let claimed = stored_test_form(&db, &queued);
+        assert_eq!(claimed.lifecycle.status, FilingStatus::Queued);
+        assert!(claimed.lifecycle.submission_put_started_at.is_some());
+        assert!(!claimed.lifecycle.is_unclaimed());
+
+        // A second run must not PUT again: the outcome is unknown.
+        let retry = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &retry,
+            allow_test_form,
+        )
+        .await;
+        assert!(retry.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn generic_worker_refuses_a_form_the_registry_does_not_authorize() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            crate::forms::queue_authorized_form_type_id,
+        )
+        .await;
+
+        assert!(transport.calls().is_empty());
+        assert_eq!(
+            stored_test_form(&db, &queued).lifecycle.status,
+            FilingStatus::Queued
+        );
+    }
+
+    #[test]
+    fn generic_cancel_returns_to_draft_and_requeue_replaces_it() {
+        let db = test_db();
+        let (queued, _summary) = queued_test_form(&db);
+        let canceled = db.lock().unwrap().cancel_queued_queueable(&queued).unwrap();
+        assert_eq!(canceled.lifecycle.status, FilingStatus::Draft);
+        assert_eq!(
+            stored_test_form(&db, &queued).lifecycle.status,
+            FilingStatus::Draft
+        );
+
+        let mut edited = canceled;
+        edited.amount = 12.0;
+        db.lock().unwrap().save_queueable_draft(&edited).unwrap();
+        edited
+            .queue(crate::filing_queue::QueueAuthSource::Gui)
+            .unwrap();
+        db.lock().unwrap().save_queued_queueable(&edited).unwrap();
+        let requeued = stored_test_form(&db, &queued);
+        assert_eq!(requeued.lifecycle.status, FilingStatus::Queued);
+        assert_eq!(requeued.amount, 12.0);
+
+        // A queued snapshot cannot be overwritten by a draft save.
+        let mut stale = requeued.clone();
+        stale.lifecycle.revert_to_draft();
+        assert!(db.lock().unwrap().save_queueable_draft(&stale).is_err());
     }
 
     #[tokio::test]

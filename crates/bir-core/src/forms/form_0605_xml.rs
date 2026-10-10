@@ -364,7 +364,6 @@ impl Form0605Draft {
             return Err(errors);
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
         let mut draft = Form0605Draft {
             id: None,
             tin: format!(
@@ -413,16 +412,8 @@ impl Form0605Draft {
                 .filter(|(key, _)| !is_modeled_xml_key(key))
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
-            status: super::FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
 
         draft.recompute();
@@ -872,9 +863,9 @@ mod tests {
             ("itemQuarter_2", "false"),
             ("itemQuarter_3", "false"),
             ("itemQuarter_4", "false"),
-            ("frm0605:txtTIN1", "000"),
-            ("frm0605:txtTIN2", "000"),
-            ("frm0605:txtTIN3", "000"),
+            ("frm0605:txtTIN1", "123"),
+            ("frm0605:txtTIN2", "456"),
+            ("frm0605:txtTIN3", "788"),
             ("frm0605:txtBranchCode", "00000"),
             ("frm0605:txtRDOCode", "018"),
             ("frm0605:txtLineBus", "SOFTWARE DEVELOPMENT"),
@@ -1105,7 +1096,7 @@ mod tests {
 
         let draft = Form0605Draft::from_bir_field_map(&source).unwrap();
 
-        assert_eq!(draft.tin, "000000000000");
+        assert_eq!(draft.tin, "123456788000");
         assert_eq!(draft.to_bir_field_map(), source);
     }
 

@@ -8,12 +8,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use super::FormValidator;
 use super::form_1701q::{
     Form1701QAmounts, Form1701QAtc, Form1701QDeductionMethod, Form1701QDraft, Form1701QFilerType,
     Form1701QParty, Form1701QPaymentDetails, Form1701QPaymentRow, Form1701QSpouseType,
     Form1701QTaxRate, USER_ENTERED_AMOUNT_ITEMS,
 };
-use super::{FilingStatus, FormValidator};
 
 const EDITABLE_XML_CLOSE: &str = "All Rights Reserved BIR 2012.";
 const XML_FORMAT: &str = "\t\r\n            ";
@@ -833,7 +833,6 @@ impl Form1701QDraft {
             return Err(errors);
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
         let mut draft = Form1701QDraft {
             id: None,
             taxable_year: taxable_year.unwrap_or_default(),
@@ -886,16 +885,8 @@ impl Form1701QDraft {
             },
             total_tax_due: 0.0,
             total_amount_payable: 0.0,
-            status: FilingStatus::Draft,
-            created_at: Some(now.clone()),
-            updated_at: Some(now),
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
 
         for item in USER_ENTERED_AMOUNT_ITEMS {
@@ -1473,7 +1464,7 @@ mod tests {
         let mut draft = Form1701QDraft {
             taxable_year: 2021,
             quarter: 2,
-            tin: "12345678900000".to_string(),
+            tin: "12345678800000".to_string(),
             rdo_code: "018".to_string(),
             filer_type: Some(Form1701QFilerType::SingleProprietor),
             atc: Some(Form1701QAtc::Ii012),
@@ -1490,7 +1481,6 @@ mod tests {
             deduction_method: Some(Form1701QDeductionMethod::Osd),
             contact_number: "1234567".to_string(),
             line_of_business: "SOFTWARE / R&D".to_string(),
-            status: FilingStatus::Draft,
             ..Default::default()
         };
         draft.set_amount(36, Form1701QParty::Taxpayer, Some(1_000_000.0));
@@ -1542,7 +1532,6 @@ mod tests {
             registered_address: "OLONGAPO, ZAMBALES".to_string(),
             zip_code: "2200".to_string(),
             line_of_business: "RETAIL".to_string(),
-            status: FilingStatus::Draft,
             ..Default::default()
         }
     }
@@ -1570,8 +1559,7 @@ mod tests {
         assert_eq!(imported.claims_foreign_tax_credits, None);
         assert!(imported.date_of_birth.is_empty());
         assert!(imported.citizenship.is_empty());
-        assert_eq!(imported.status, FilingStatus::Draft);
-        assert!(!imported.can_queue_for_submission());
+        assert_eq!(imported.lifecycle.status, crate::forms::FilingStatus::Draft);
 
         let fields = imported.to_bir_field_map();
         assert_eq!(fields.len(), 172);
@@ -1602,11 +1590,7 @@ mod tests {
         let filing_errors = imported.validate();
         assert!(filing_errors.iter().any(|(field, _)| field == "filer_type"));
         assert!(filing_errors.iter().any(|(field, _)| field == "atc"));
-        assert!(
-            filing_errors
-                .iter()
-                .any(|(field, _)| field == "taxpayer_tax_rate")
-        );
+        assert!(filing_errors.iter().any(|(field, _)| field == "tax_rate"));
         assert!(imported.to_bir_field_map_checked().is_err());
     }
 
@@ -1691,8 +1675,7 @@ mod tests {
 
         assert!(xml.contains("frm1701q:txt43Desc=5% ADJUSTMENT"));
         assert_eq!(imported.to_bir_field_map(), original_fields);
-        assert_eq!(imported.status, FilingStatus::Draft);
-        assert!(!imported.can_queue_for_submission());
+        assert_eq!(imported.lifecycle.status, crate::forms::FilingStatus::Draft);
     }
 
     #[test]
@@ -1833,7 +1816,6 @@ mod tests {
         assert_eq!(imported.atc, None);
         assert_eq!(imported.tax_rate, None);
         assert_eq!(imported.to_bir_field_map(), source.to_bir_field_map());
-        assert!(!imported.can_queue_for_submission());
         imported
             .reject_unless_same_tin("000-000-000-00000")
             .expect("dashed dummy TIN matches");
@@ -1915,7 +1897,6 @@ mod tests {
 
         assert_eq!(imported.to_bir_field_map(), fields);
         assert_eq!(imported.payment_details.item_33_check.amount, Some(1_234.5));
-        assert!(!imported.can_queue_for_submission());
     }
 
     #[test]

@@ -6,7 +6,8 @@
 // inputs.json is an ordered list of steps:
 //   [{"set": "frm2553:txt14C", "value": "1234.5"},   // type, then blur/change
 //    {"click": "frm2553:optQtr:_1"},                  // radio / checkbox
-//    {"call": "computeTaxDue('frm2553:txt14C','frm2553:txt14D','frm2553:txt14E')"}]
+//    {"call": "computeTaxDue('frm2553:txt14C','frm2553:txt14D','frm2553:txt14E')"},
+//    {"wait": 300}]                                   // let page timers run
 // The official event handlers compute and format every derived value. Windows-only
 // pieces (ActiveX, VBScript, file dialogs) are stubbed; alert() texts are reported
 // on stderr so validation messages can be compared too.
@@ -14,12 +15,14 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { load, setValue } = require('./official');
+const { load, setValue, ieXmpText } = require('./official');
 
 const [htaPath, inputsPath] = process.argv.slice(2);
 const steps = JSON.parse(fs.readFileSync(inputsPath, 'utf8'));
 const { html, loop } = load(htaPath);
 const alerts = [];
+// Files the page writes (path -> content), to capture the upload file.
+const written = new Map();
 
 const virtualConsole = new VirtualConsole();
 virtualConsole.on('jsdomError', (e) => {
@@ -62,12 +65,51 @@ function fileSystemObject() {
       const file = resolvePackagePath(p);
       return textStream(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
     },
-    CreateTextFile: () => textStream(''),
+    CreateTextFile: (p) => {
+      const stream = textStream('');
+      const parts = [];
+      stream.Write = (t) => parts.push(String(t));
+      stream.WriteLine = (t) => parts.push(String(t) + '\r\n');
+      stream.Close = () => { written.set(String(p), parts.join('')); };
+      // COM members are case-insensitive in JScript (xmlFile.write/close).
+      stream.write = stream.Write; stream.writeLine = stream.WriteLine; stream.close = stream.Close;
+      return stream;
+    },
     GetAbsolutePathName: (p) => resolvePackagePath(p),
     GetFolder: () => inert(),
     DeleteFile: () => {}, CreateFolder: () => {}, MoveFile: () => {}, CopyFile: () => {},
     Drives: inert(),
   };
+}
+
+// Microsoft.XMLDOM over the package files (js/tax-rate-helper.js loads
+// xml/taxRate.xml this way). That file starts with a comment *before* its
+// XML declaration; we parse it as BIR clearly intends (the declaration is
+// dropped), so the official rates load. Whether IE's MSXML tolerates the
+// misplaced declaration can't be checked here; if it doesn't, the official
+// page keeps its "0%" defaults.
+function xmlDom(window) {
+  const doc = {
+    async: true,
+    parseError: { errorCode: 0, reason: '', line: 0 },
+    documentElement: null,
+    load(p) {
+      const file = resolvePackagePath(String(p).replace(/^\.\.\//, ''));
+      if (!fs.existsSync(file)) { this.parseError = { errorCode: 1, reason: 'missing', line: 0 }; return false; }
+      return this.loadXML(fs.readFileSync(file, 'utf8'));
+    },
+    loadXML(text) {
+      const cleaned = text.replace(/<\?xml[^?]*\?>/, '');
+      const parsed = new window.DOMParser().parseFromString('<__root>' + cleaned + '</__root>', 'application/xml');
+      if (parsed.getElementsByTagName('parsererror').length) { this.parseError = { errorCode: 1, reason: 'parse', line: 0 }; return false; }
+      this.parsed = parsed;
+      this.documentElement = parsed.documentElement.firstElementChild;
+      return true;
+    },
+    getElementsByTagName(name) { return this.parsed ? this.parsed.getElementsByTagName(name) : []; },
+    selectNodes(xpath) { return this.parsed ? this.parsed.getElementsByTagName(xpath.split('/').pop()) : []; },
+  };
+  return doc;
 }
 
 const dom = new JSDOM(html, {
@@ -77,12 +119,21 @@ const dom = new JSDOM(html, {
   virtualConsole,
   beforeParse(window) {
     window.ActiveXObject = function (progId) {
-      return /FileSystemObject/i.test(String(progId)) ? fileSystemObject() : inert();
+      if (/FileSystemObject/i.test(String(progId))) return fileSystemObject();
+      if (/XMLDOM|DOMDocument/i.test(String(progId))) return xmlDom(window);
+      return inert();
     };
     // JScript's Enumerator (drive listing): an empty collection.
     window.Enumerator = function () {
       return { atEnd: () => true, moveNext: () => {}, item: () => inert(), moveFirst: () => {} };
     };
+    // IE XML nodes expose .text (textContent).
+    if (!Object.getOwnPropertyDescriptor(window.Node.prototype, 'text')) {
+      Object.defineProperty(window.Element.prototype, 'text', {
+        configurable: true,
+        get() { return this.textContent; },
+      });
+    }
     window.alert = (msg) => alerts.push(String(msg));
     window.confirm = () => true;
     window.prompt = () => '';
@@ -101,13 +152,18 @@ const dom = new JSDOM(html, {
 // timers settle before serializing.
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 dom.window.addEventListener('load', async () => {
+  ieXmpText(dom.window.document);
   await sleep(Number(process.env.RUNTIME_SETTLE_MS || 1500));
   const w = dom.window;
   const doc = w.document;
+  // HTAs run in IE7 mode, where an unknown input type such as "number"
+  // is a text box (1707v2021 Schedule 2 shares, row A).
+  for (const el of doc.querySelectorAll('input[type="number"]')) el.type = 'text';
   const fire = (el, type) => el.dispatchEvent(new w.Event(type, { bubbles: true }));
   for (const step of steps) {
     try {
       if (step.call) { w.eval(step.call); continue; }
+      if (step.wait) { await sleep(Number(step.wait)); continue; }
       const el = doc.getElementById(step.set || step.click);
       if (!el) { process.stderr.write('no control: ' + (step.set || step.click) + '\n'); continue; }
       if (step.click) { el.checked = true; el.click(); fire(el, 'change'); continue; }
@@ -122,13 +178,31 @@ dom.window.addEventListener('load', async () => {
   }
   await sleep(500);
   let out;
-  try {
-    out = w.eval('var d = document;\n' + loop +
-      "\nallXML += tab + d.getElementById('xmlClose').innerHTML + '0';\nallXML;");
-  } catch (e) {
-    process.stderr.write('submit loop threw: ' + e.message + '\n');
-    process.exitCode = 1;
-    return;
+  if (process.env.OFFICIAL_LOOP === 'submit') {
+    try {
+      out = w.eval('var d = document;\n' + loop +
+        "\nallXML += tab + d.getElementById('xmlClose').innerHTML + '0';\nallXML;");
+    } catch (e) {
+      process.stderr.write('submit loop threw: ' + e.message + '\n');
+      process.exitCode = 1;
+      return;
+    }
+  } else {
+    // What the official submit uploads: the file saveEncryptedProfile(true)
+    // writes under IAF_RDO_Copy/ before EncryptFile() encrypts it.
+    try {
+      w.eval('saveEncryptedProfile(true)');
+    } catch (e) {
+      process.stderr.write('saveEncryptedProfile threw: ' + e.message + '\n' + (process.env.RUNTIME_DEBUG ? e.stack + '\n' : ''));
+    }
+    const upload = [...written].filter(([p]) => /IAF_RDO_Copy/i.test(p)).pop();
+    if (!upload) {
+      process.stderr.write('no IAF_RDO_Copy file was written; files: ' + JSON.stringify([...written.keys()]) + '\n');
+      if (alerts.length) process.stderr.write('alerts: ' + JSON.stringify(alerts) + '\n');
+      process.exitCode = 1;
+      return;
+    }
+    out = upload[1];
   }
   if (alerts.length) process.stderr.write('alerts: ' + JSON.stringify(alerts) + '\n');
   process.stdout.write(out);

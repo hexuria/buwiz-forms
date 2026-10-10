@@ -896,7 +896,7 @@ fn application_freeze_violations(sources: &FrozenApplicationSources) -> Vec<Stri
     check_desktop_evaluator_surface(&production, &mut violations);
     check_closed_2550q_core_surface(&production, &mut violations);
     check_capability_matrix(sources, &mut violations);
-    check_closed_2550q_actions(&production, &mut violations);
+    check_2550q_queue_actions(&production, &mut violations);
     check_2550q_transport_references(&production, &mut violations);
 
     violations
@@ -1052,17 +1052,50 @@ fn check_impl_method_inventory(
 }
 
 fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut Vec<String>) {
-    const EXPECTED: [(&str, &str, &str, u16, bool); 10] = [
+    const EXPECTED: [(&str, &str, &str, u16, bool); 43] = [
         ("2551Q", "2018", "2551Qv2018", 1023, false),
         ("1601C", "2018", "1601Cv2018", 1023, false),
-        ("0619E", "2018", "0619Ev2018", 1007, false),
-        ("0619F", "2018", "0619Fv2018", 1007, false),
-        ("0605", "1999", "0605v1999", 1007, false),
-        ("1701Q", "2018", "1701Qv2018", 1007, false),
-        ("2550Q", "2024", "2550Qv2024", 1007, false),
-        ("1701", "2018", "1701v2018", 1007, false),
-        ("1702RT", "2018C", "1702RTv2018C", 1007, false),
-        ("1702MX", "2018C", "1702MXv2018C", 1007, false),
+        ("2553", "1999", "2553", 1023, false),
+        ("1604F", "2018", "1604F", 1023, false),
+        ("1604C", "2018", "1604C", 1023, false),
+        ("1604E", "2018", "1604Ev2018", 1023, false),
+        ("0619E", "2018", "0619E", 1023, false),
+        ("0619F", "2018", "0619F", 1023, false),
+        ("0605", "1999", "0605", 1023, false),
+        ("1701Q", "2018", "1701Qv2018", 1023, false),
+        ("2550Q", "2024", "2550Qv2024", 1023, false),
+        ("1701", "2018", "1701v2018", 1023, false),
+        ("1702RT", "2018C", "1702RTv2018C", 1023, false),
+        ("1702MX", "2018C", "1702MXv2018C", 1023, false),
+        ("1606", "2018", "1606", 1023, false),
+        ("1600VT", "2018", "1600VTv2018", 1023, false),
+        ("1600PT", "2018", "1600PTv2018", 1023, false),
+        ("1600WP", "2010", "1600WP", 1023, false),
+        ("1601EQ", "2018", "1601EQ", 63, false),
+        ("1601FQ", "2018", "1601FQ", 63, false),
+        ("1603Q", "2018", "1603Qv2018", 1023, false),
+        ("1602Q", "2018", "1602Qv2018", 63, false),
+        ("2552", "2018", "2552v2018", 1023, false),
+        ("2550M", "2007", "2550M", 1023, false),
+        ("1706", "2018", "1706", 1023, false),
+        ("1707", "2021", "1707v2021", 1023, false),
+        ("1707A", "2021", "1707Av2021", 1023, false),
+        ("1800", "2018", "1800v2018", 1023, false),
+        ("1801", "2018", "1801v2018", 1023, false),
+        ("2000", "2018", "2000v2018", 1023, false),
+        ("2000OT", "2018", "2000OTv2018", 1023, false),
+        ("2200S", "2018", "2200S", 1023, false),
+        ("2200C", "2018", "2200Cv2018", 1023, false),
+        ("2200AN", "2018", "2200ANv2018", 1007, false),
+        ("2200M", "2018", "2200Mv2018", 1023, false),
+        ("2200P", "2020", "2200Pv2020", 1023, false),
+        ("2200A", "2020", "2200Av2020", 1023, false),
+        ("2200T", "2020", "2200Tv2020", 63, false),
+        ("1701MS", "2024", "1701MS", 1023, false),
+        ("1702Q", "2018C", "1702Qv2018C", 1023, false),
+        ("1701A", "2018", "1701A", 1023, false),
+        ("1700", "2018", "1700v2018", 1023, false),
+        ("1702EX", "2018C", "1702EXv2018C", 1023, false),
     ];
     let source = match sources.raw(CORE_CAPABILITIES_PATH) {
         Ok(source) => source,
@@ -1095,25 +1128,31 @@ fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut 
     }
 }
 
-fn check_closed_2550q_actions(production: &BTreeMap<String, String>, violations: &mut Vec<String>) {
+/// 2550Q left the application freeze (user approval 2026-10-10) through the
+/// generic `QueueableForm` path only. Pin that shape: the core flag is true,
+/// `transition_to_queued` is exactly the generic `queue` with a GUI grant, and
+/// the desktop action gates on the registry, queues through the generic trait
+/// and persists through `save_queued_queueable` (which revalidates).
+fn check_2550q_queue_actions(production: &BTreeMap<String, String>, violations: &mut Vec<String>) {
     let Some(core) = production.get(CORE_FORM_2550Q_PATH) else {
         violations.push(format!("{CORE_FORM_2550Q_PATH} is missing"));
         return;
     };
     if !source_matches(
         core,
-        r"(?m)^[ \t]*pub[ \t]+const[ \t]+QUEUE_SUBMISSION_SUPPORTED[ \t]*:[ \t]*bool[ \t]*=[ \t]*false[ \t]*;",
+        r"(?m)^[ \t]*pub[ \t]+const[ \t]+QUEUE_SUBMISSION_SUPPORTED[ \t]*:[ \t]*bool[ \t]*=[ \t]*true[ \t]*;",
     ) {
-        violations
-            .push("2550Q QUEUE_SUBMISSION_SUPPORTED is missing or no longer false".to_owned());
+        violations.push("2550Q QUEUE_SUBMISSION_SUPPORTED is missing or no longer true".to_owned());
     }
     match braced_body_after_pattern(
         core,
         r"\bpub\s+fn\s+transition_to_queued\s*\([^)]*\)\s*->\s*Result",
     ) {
-        Ok(body) if compact_rust(body) == "Err(vec![(.to_string(),.to_string(),)])" => {}
+        Ok(body)
+            if compact_rust(body)
+                == "super::queueable::QueueableForm::queue(self,QueueAuthSource::Gui)" => {}
         Ok(body) => violations.push(format!(
-            "2550Q transition_to_queued is no longer the inert Err-only body: {}",
+            "2550Q transition_to_queued no longer delegates to the generic queue: {}",
             compact_rust(body)
         )),
         Err(error) => violations.push(error),
@@ -1124,14 +1163,27 @@ fn check_closed_2550q_actions(production: &BTreeMap<String, String>, violations:
         return;
     };
     match braced_body_after_pattern(desktop, r"\bfn\s+mark_submitted\s*\([^)]*\)\s*") {
-        Ok(body)
-            if compact_rust(body)
-                == "self.status_message=Some(.to_string(),);cx.emit(Form2550QV2Event::PushNotification(.to_string(),.to_string(),.to_string(),));cx.notify();" =>
-            {}
-        Ok(body) => violations.push(format!(
-            "desktop 2550Q mark_submitted is no longer notification-only: {}",
-            compact_rust(body)
-        )),
+        Ok(body) => {
+            let body = compact_rust(body);
+            for (needle, what) in [
+                (
+                    "can_queue_for_submission(FORM_CODE)",
+                    "gate on the capability registry",
+                ),
+                (
+                    "QueueableForm::queue(&mutself.draft,bir_core::filing_queue::QueueAuthSource::Gui",
+                    "queue through the generic QueueableForm path with a GUI grant",
+                ),
+                (
+                    ".save_queued_queueable(&self.draft)",
+                    "persist through save_queued_queueable",
+                ),
+            ] {
+                if !body.contains(needle) {
+                    violations.push(format!("desktop 2550Q mark_submitted must {what}: {body}"));
+                }
+            }
+        }
         Err(error) => violations.push(error),
     }
 }
@@ -3569,17 +3621,14 @@ mod tests {
             .files
             .get_mut(CORE_CAPABILITIES_PATH)
             .expect("capability registry source");
-        *source = source.replacen("queue_submission: false", "queue_submission: true", 1);
-
-        let source = mutated
-            .files
-            .get_mut(CORE_FORM_2550Q_PATH)
-            .expect("2550Q form source");
+        // Revoking 2550Q's queue grant (or any capability drift) must change
+        // the pinned matrix.
         *source = source.replacen(
-            "QUEUE_SUBMISSION_SUPPORTED: bool = false",
-            "QUEUE_SUBMISSION_SUPPORTED: bool = true",
+            "form_id: \"2550Qv2024\",\n        capabilities: FormCapabilities {\n            xml_round_trip: true,\n            formula_evidence: true,\n            queue_submission: true,",
+            "form_id: \"2550Qv2024\",\n        capabilities: FormCapabilities {\n            xml_round_trip: true,\n            formula_evidence: true,\n            queue_submission: false,",
             1,
         );
+        assert!(source.contains("queue_submission: false,\n            render_contract"));
         let violations = application_freeze_violations(&mutated);
         assert!(
             violations
@@ -3587,12 +3636,48 @@ mod tests {
                 .any(|violation| violation.contains("capability/release authority")),
             "queue capability mutation was not rejected: {violations:?}"
         );
-        assert!(
-            violations
-                .iter()
-                .any(|violation| violation.contains("QUEUE_SUBMISSION_SUPPORTED")),
-            "queue authorization mutation was not rejected: {violations:?}"
+    }
+
+    #[test]
+    fn application_freeze_pins_the_2550q_generic_queue_shape() {
+        let mut mutated = landed_frozen_sources();
+        let source = mutated
+            .files
+            .get_mut(CORE_FORM_2550Q_PATH)
+            .expect("2550Q form source");
+        *source = source.replacen(
+            "QUEUE_SUBMISSION_SUPPORTED: bool = true",
+            "QUEUE_SUBMISSION_SUPPORTED: bool = false",
+            1,
         );
+        *source = source.replacen(
+            "super::queueable::QueueableForm::queue(self, QueueAuthSource::Gui)",
+            "Err(Vec::new())",
+            1,
+        );
+        let source = mutated
+            .files
+            .get_mut(DESKTOP_FORM_2550Q_PATH)
+            .expect("2550Q desktop source");
+        *source = source.replacen(
+            ".save_queued_queueable(&self.draft)",
+            ".save(&self.draft)",
+            1,
+        );
+
+        let violations = application_freeze_violations(&mutated);
+        for expected in [
+            "QUEUE_SUBMISSION_SUPPORTED",
+            "transition_to_queued no longer delegates to the generic queue",
+            "mark_submitted must persist through save_queued_queueable",
+        ] {
+            assert!(
+                violations
+                    .iter()
+                    .any(|violation| violation.contains(expected)),
+                "{expected} mutation was not rejected: {violations:?}"
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,760 @@
+{
+ "form_id": "1706-v2018",
+ "html_slug": "1706-2018",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) names the item. Text cells and combs: caption left of or above the cell, or the column header. Amounts: the 12/11-slot peso comb with the 2-slot centavo comb directly right form one money_joins pair. Boxes: X in the box immediately left of the printed option. Keys whose names carry no printed identity (j_id radios), seller/buyer TIN keys split across several cells, shared Schedule 4 A cells, and the Part III, signature and tax-agent blocks have no safe join and stay blank.",
+ "joins": [
+  {
+   "writer_key": "frm1706:txtDateMonth",
+   "html_id": "p1c4",
+   "printed": "1 Date of Transaction (MM)",
+   "reason": "caption \"1 Date of Transaction (MM/DD/YYYY)\" left of the 2-slot MM comb"
+  },
+  {
+   "writer_key": "frm1706:txtDateDay",
+   "html_id": "p1c5",
+   "printed": "1 Date of Transaction (DD)",
+   "reason": "second 2-slot comb of the date row"
+  },
+  {
+   "writer_key": "frm1706:txtDateYear",
+   "html_id": "p1c6",
+   "printed": "1 Date of Transaction (YYYY)",
+   "reason": "4-slot YYYY comb, last of the date row"
+  },
+  {
+   "writer_key": "frm1706:txtSheets",
+   "html_id": "p1c12",
+   "printed": "4 Number of Sheet/s Attached",
+   "reason": "caption \"4 Number of Sheet/s Attached\" left of the 2-slot comb"
+  },
+  {
+   "writer_key": "frm1706:txtRDOCode",
+   "html_id": "p1c18",
+   "printed": "5 RDO Code of Location of Property",
+   "reason": "caption left of the 3-slot comb"
+  },
+  {
+   "writer_key": "frm1706:txtSellerName",
+   "html_id": "p1c24",
+   "printed": "6A Seller name",
+   "reason": "row 6A name cell under \"6 Seller's Name\""
+  },
+  {
+   "writer_key": "frm1706:txtSellerRAddress",
+   "html_id": "p1c25",
+   "printed": "6A Seller's Registered Address",
+   "reason": "row 6A address cell under \"Seller's Registered Address\"; the single txtSellerAddress key has no separate cell"
+  },
+  {
+   "writer_key": "frm1706:txtBuyerName",
+   "html_id": "p1c47",
+   "printed": "7A Buyer name",
+   "reason": "row 7A name cell under \"7 Buyer's Name\"; page-2 repeat header p2c6 left out"
+  },
+  {
+   "writer_key": "frm1706:txtBuyerAddress",
+   "html_id": "p1c48",
+   "printed": "7A Buyer's Registered Address",
+   "reason": "row 7A address cell under \"Buyer's Registered Address\""
+  },
+  {
+   "writer_key": "frm1706:txtLocation",
+   "html_id": "p2c15",
+   "printed": "Schedule 1 Location (row 1)",
+   "reason": "header \"Location\" over the first Schedule 1 row cell"
+  },
+  {
+   "writer_key": "frm1706:txtTCT",
+   "html_id": "p2c13",
+   "printed": "Schedule 1 OCT/TCT/CCT No. (row 1)",
+   "reason": "header \"OCT/TCT/CCT No.\" over the first row cell"
+  },
+  {
+   "writer_key": "frm1706:txtTaxDC",
+   "html_id": "p2c14",
+   "printed": "Schedule 1 Tax Declaration No. (row 1)",
+   "reason": "header \"Tax Declaration No. (TD)\" over the first row cell"
+  },
+  {
+   "writer_key": "frm1706:txtArea",
+   "html_id": "p2c42",
+   "printed": "Schedule 1 Area (sq.m.), first lot row",
+   "reason": "header \"Area (sq.m.)\" over the first lot-table row cell"
+  },
+  {
+   "writer_key": "frm1706:txtOthers21",
+   "html_id": "p2c107",
+   "printed": "If Exempt, or others, specify",
+   "reason": "caption above the 15-slot specify comb under Schedule 2"
+  },
+  {
+   "writer_key": "frm1706:txtTotalN",
+   "html_id": "p2c114",
+   "printed": "6 No. of Installments in the contract",
+   "reason": "caption left of the 2-slot installment-count comb"
+  },
+  {
+   "writer_key": "frm1706:txtDateMonthI",
+   "html_id": "p2c116",
+   "printed": "7 Date of Installment (MM)",
+   "reason": "2-slot MM comb under \"7 Date of Installment (MM/DD/YYYY)\""
+  },
+  {
+   "writer_key": "frm1706:txtDateDayI",
+   "html_id": "p2c117",
+   "printed": "7 Date of Installment (DD)",
+   "reason": "2-slot DD comb, next to MM"
+  },
+  {
+   "writer_key": "frm1706:txtDateYearI",
+   "html_id": "p2c118",
+   "printed": "7 Date of Installment (YYYY)",
+   "reason": "4-slot YYYY comb, last of the installment date"
+  }
+ ],
+ "money_joins": [
+  {
+   "writer_key": "frm1706:txtSelling",
+   "peso_html_id": "p2c81",
+   "cent_html_id": "p2c83",
+   "printed": "1 Selling Price (installment sale)",
+   "reason": "caption \"1 Selling Price\" left of the 12-slot comb; cents comb directly right"
+  },
+  {
+   "writer_key": "frm1706:txtCost",
+   "peso_html_id": "p2c89",
+   "cent_html_id": "p2c91",
+   "printed": "2 Cost and Expenses",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtMortgage",
+   "peso_html_id": "p2c97",
+   "cent_html_id": "p2c99",
+   "printed": "3 Mortgage Assumed",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtTotalP",
+   "peso_html_id": "p2c103",
+   "cent_html_id": "p2c105",
+   "printed": "4 Total Payments (Collection)",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtAmount",
+   "peso_html_id": "p2c109",
+   "cent_html_id": "p2c111",
+   "printed": "5 Amount of Periodic Payment",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtFMVLI",
+   "peso_html_id": "p2c135",
+   "cent_html_id": "p2c137",
+   "printed": "Schedule 4 B Total FMV of Land and Improvement (From Schedule 1)",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtInstallment",
+   "peso_html_id": "p2c143",
+   "cent_html_id": "p2c145",
+   "printed": "Schedule 4 D Installment Collected (From Schedule 2 Item 5)",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtTax",
+   "peso_html_id": "p1c93",
+   "cent_html_id": "p1c95",
+   "printed": "14 Tax Due (Item 12 Multiply by Item 13)",
+   "reason": "caption left of the 11-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtLess",
+   "peso_html_id": "p1c97",
+   "cent_html_id": "p1c99",
+   "printed": "15 Less: Tax paid in previously filed return",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtTaxDue",
+   "peso_html_id": "p1c101",
+   "cent_html_id": "p1c103",
+   "printed": "16 Tax Payable/(Overpayment) (Item 14 Less Item 15)",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  },
+  {
+   "writer_key": "frm1706:txtSurcharge",
+   "peso_html_id": "p1c106",
+   "cent_html_id": "p1c108",
+   "printed": "17A Surcharge",
+   "reason": "caption \"17A Surcharge\" left of the 12-slot comb"
+  },
+  {
+   "writer_key": "frm1706:txtInterest",
+   "peso_html_id": "p1c110",
+   "cent_html_id": "p1c112",
+   "printed": "17B Interest",
+   "reason": "caption \"17B Interest\" left of the 12-slot comb"
+  },
+  {
+   "writer_key": "frm1706:txtCompromise",
+   "peso_html_id": "p1c114",
+   "cent_html_id": "p1c116",
+   "printed": "17C Compromise",
+   "reason": "caption \"17C Compromise\" left of the 12-slot comb"
+  },
+  {
+   "writer_key": "frm1706:txtTotalPenalties",
+   "peso_html_id": "p1c118",
+   "cent_html_id": "p1c120",
+   "printed": "17D Total Penalties (Sum of Items 17A to 17C)",
+   "reason": "caption left of the 12-slot comb"
+  },
+  {
+   "writer_key": "frm1706:txtTotal",
+   "peso_html_id": "p1c122",
+   "cent_html_id": "p1c124",
+   "printed": "18 Total Amount Payable/(Over remittance)",
+   "reason": "caption left of the 12-slot comb; cents comb right"
+  }
+ ],
+ "xbox_joins": [
+  {
+   "writer_key": "frm1706:opt4",
+   "html_id": "p1c9",
+   "printed": "3 ATC: WI 450-Individual",
+   "reason": "box immediately left of \"WI 450-Individual\"; Individual option by key name"
+  },
+  {
+   "writer_key": "frm1706:opt4C",
+   "html_id": "p1c15",
+   "printed": "3 ATC: WC 450-Corporation",
+   "reason": "box immediately left of \"WC 450-Corporation\"; Corporation option by key name"
+  },
+  {
+   "writer_key": "frm1706:rdTreaty:_1",
+   "html_id": "p1c81",
+   "printed": "11 Tax relief under International Tax Treaty or Special Law? Yes",
+   "reason": "box immediately left of the item 11 \"Yes\" (first printed option)"
+  }
+ ],
+ "left_out": [
+  {
+   "html_id": "p1c13",
+   "reason": "item 2 Amended Return Yes/No: key j_id217 carries no printed identity"
+  },
+  {
+   "html_id": "p1c14",
+   "reason": "item 2 Amended Return Yes/No: key j_id217 carries no printed identity"
+  },
+  {
+   "html_id": "p1c26",
+   "reason": "seller TIN text cell: txtTIN1-3 and txtBranchCode are four keys for one cell"
+  },
+  {
+   "html_id": "p1c28",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c29",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c30",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c32",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c33",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c34",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c36",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c37",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c38",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c40",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c41",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c42",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c49",
+   "reason": "buyer TIN text cell: txtTINB1-3 and txtBranchCodeB are four keys for one cell"
+  },
+  {
+   "html_id": "p1c51",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c52",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c53",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c55",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c56",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c57",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c59",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c60",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c61",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c63",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c64",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c65",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c67",
+   "reason": "item 8 principal residence Yes/No: key j_id392 carries no printed identity; Yes/No sit inside one text run"
+  },
+  {
+   "html_id": "p1c68",
+   "reason": "item 8 principal residence Yes/No: key j_id392 carries no printed identity; Yes/No sit inside one text run"
+  },
+  {
+   "html_id": "p1c70",
+   "reason": "item 9 new residence Yes/No: key j_id393 carries no printed identity"
+  },
+  {
+   "html_id": "p1c71",
+   "reason": "item 9 new residence Yes/No: key j_id393 carries no printed identity"
+  },
+  {
+   "html_id": "p1c77",
+   "reason": "item 11A \"If yes, specify\": selTreaty is a select code, not printable text"
+  },
+  {
+   "html_id": "p1c78",
+   "reason": "item 10 more than one property Yes/No: key j_id394 carries no printed identity"
+  },
+  {
+   "html_id": "p1c79",
+   "reason": "item 11 \"No\" box: rdTreaty:_2 not joined, box position against the \"Yes No\" text run is ambiguous"
+  },
+  {
+   "html_id": "p1c80",
+   "reason": "item 10 more than one property Yes/No: key j_id394 carries no printed identity"
+  },
+  {
+   "html_id": "p1c84",
+   "reason": "item 12 Taxable Base: no layout key"
+  },
+  {
+   "html_id": "p1c86",
+   "reason": "item 12 Taxable Base centavos: no layout key"
+  },
+  {
+   "html_id": "p1c132",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c134",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c136",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c144",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c145",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c146",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c147",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c148",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c149",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c151",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c153",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c154",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c155",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c156",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c157",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c158",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c160",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c162",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c163",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c164",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c165",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c166",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c167",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c169",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c171",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c172",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c173",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c174",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c175",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c176",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p1c178",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c5",
+   "reason": "buyer TIN comb: txtTINB1-3 and txtBranchCodeB are four keys for one comb"
+  },
+  {
+   "html_id": "p2c6",
+   "reason": "page-2 repeat of the buyer name: txtBuyerName already fills p1c47"
+  },
+  {
+   "html_id": "p2c17",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c18",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c19",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c21",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c22",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c23",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c25",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c26",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c27",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c29",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c30",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c31",
+   "reason": "Schedule 1 table rows 2-5: no layout key"
+  },
+  {
+   "html_id": "p2c40",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c41",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c43",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c44",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c45",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c47",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c48",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c49",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c50",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c51",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c52",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c54",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c55",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c56",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c57",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c58",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c59",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c61",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c62",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c63",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c64",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c65",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c66",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c68",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c69",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c70",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c71",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c72",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c73",
+   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
+  },
+  {
+   "html_id": "p2c75",
+   "reason": "Schedule 1 TOTAL row (To Schedule 4 Item 1B): no layout key"
+  },
+  {
+   "html_id": "p2c84",
+   "reason": "Schedule 2 mark-one box: the layout keys for these options carry no printed identity"
+  },
+  {
+   "html_id": "p2c85",
+   "reason": "Schedule 2 mark-one box: the layout keys for these options carry no printed identity"
+  },
+  {
+   "html_id": "p2c92",
+   "reason": "Schedule 2 mark-one box: the layout keys for these options carry no printed identity"
+  },
+  {
+   "html_id": "p2c93",
+   "reason": "Schedule 2 mark-one box: the layout keys for these options carry no printed identity"
+  },
+  {
+   "html_id": "p2c100",
+   "reason": "Schedule 2 mark-one box: the layout keys for these options carry no printed identity"
+  },
+  {
+   "html_id": "p2c121",
+   "reason": "Schedule 3 computation text line: no layout key"
+  },
+  {
+   "html_id": "p2c131",
+   "reason": "Schedule 4 A (gross selling price / bid price for foreclosure): txtGross and txtBid share one comb, no conditional join"
+  },
+  {
+   "html_id": "p2c133",
+   "reason": "Schedule 4 A centavos: same shared cell as txtGross/txtBid"
+  },
+  {
+   "html_id": "p2c139",
+   "reason": "Schedule 4 C (unutilized portion): no layout key"
+  },
+  {
+   "html_id": "p2c141",
+   "reason": "Schedule 4 C centavos: no layout key"
+  },
+  {
+   "html_id": "p2c147",
+   "reason": "Schedule 4 E Others amount: no layout key"
+  },
+  {
+   "html_id": "p2c149",
+   "reason": "Schedule 4 E Others centavos: no layout key"
+  },
+  {
+   "html_id": "p2c150",
+   "reason": "Schedule 4 E \"(specify)\" description: txtOthers30E is not tied to this cell"
+  },
+  {
+   "html_id": "p2c152",
+   "reason": "Schedule 4 Taxable Base peso: no layout key"
+  },
+  {
+   "html_id": "p2c154",
+   "reason": "Schedule 4 Taxable Base centavos: no layout key"
+  },
+  {
+   "html_id": "p2c183",
+   "reason": "Schedule 3 Taxable Base line: no layout key"
+  }
+ ]
+}

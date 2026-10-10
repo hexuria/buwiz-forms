@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "form_id": "1707-v2021",
-  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "generated_by": "oracle/gen_layout_runtime.js (official saveXMLsubmit loop run on the loaded page in jsdom)",
   "official_hta": "BIR-Form1707v2021.hta",
   "official_hta_sha256": "a645463cf3bc7a80f0ec96a08796adde33c76ae65c617b3fefdb478e61496cd4",
   "header": "<?xml version='1.0'?>",
@@ -14,7 +14,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I1Month",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "00",
@@ -26,7 +27,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I1Day",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -38,7 +40,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I1Year",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -68,7 +71,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I3Indiv",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "II 030",
@@ -86,7 +90,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I3Corp",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "IC 110",
@@ -98,7 +103,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I4NoOfSheets",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0",
@@ -110,7 +116,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1TIN1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -122,7 +129,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1TIN2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -134,7 +142,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1TIN3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -146,7 +155,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1TIN4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -158,7 +168,8 @@
       "parts": [
         {
           "source": "frm1707:ProfileName",
-          "codec": "js-escape"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -170,7 +181,8 @@
       "parts": [
         {
           "source": "frm1707:ProfileAddress1",
-          "codec": "js-escape"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -182,7 +194,8 @@
       "parts": [
         {
           "source": "frm1707:ProfileAddress2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -194,7 +207,8 @@
       "parts": [
         {
           "source": "frm1707:ProfileZipCode",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -206,7 +220,8 @@
       "parts": [
         {
           "source": "frm1707:ProfileContactNum",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -218,10 +233,23 @@
       "parts": [
         {
           "source": "frm1707:ProfileEmailAddr",
-          "codec": "raw"
+          "codec": "js-escape"
         }
       ],
       "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1707:rdoPg1Pt1I5RDO",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1707:rdoPg1Pt1I5RDO",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "000",
       "after": "    \n            "
     },
     {
@@ -236,7 +264,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerName0",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -248,7 +277,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerAddr0",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -260,7 +290,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerTIN0",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -278,7 +309,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerName1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -290,7 +322,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerAddr1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -302,7 +335,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerTIN1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -320,7 +354,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerName2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -332,7 +367,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerAddr2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -344,7 +380,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I6SellerTIN2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -362,7 +399,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerName0",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -374,7 +412,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerAddr0",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -386,7 +425,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerTIN0",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -404,7 +444,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerName1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -416,7 +457,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerAddr1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -428,7 +470,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerTIN1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -446,7 +489,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerName2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -458,7 +502,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerAddr2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -470,7 +515,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I7BuyerTIN2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -494,7 +540,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I8TaxReliefSpec",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -530,7 +577,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1I9TransDescSpec",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -542,7 +590,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I10TaxBase",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -554,7 +603,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I11AllowExpnse",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -566,7 +616,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I12NetCptalChnged",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -578,7 +629,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I13AppTaxRate",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -590,7 +642,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I13TaxDueForTrans",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -602,7 +655,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I14TaxDuePmtPriod",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -614,7 +668,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I15TaxPaidInPrevRtrn",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -626,7 +681,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I16TaxPayable",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -638,7 +694,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I17Surcharge",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -650,7 +707,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I17Interest",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -662,7 +720,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I17Compromise",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -674,7 +733,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I17TotPenalties",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -686,7 +746,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1P2I18TotAmtPyable",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -698,7 +759,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt4Indiv",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -710,7 +772,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt4NonIndiv",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -722,7 +785,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt4TaxAcredNo",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -734,7 +798,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt4DateOfIssue",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -746,7 +811,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt4DateOfExpiry",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -758,7 +824,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I28CashC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -770,7 +837,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I28CashC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -782,7 +850,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I28Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -794,7 +863,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I28CashC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -806,7 +876,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I29CheckC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -818,7 +889,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I29CheckC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -830,7 +902,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I29Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -842,7 +915,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I29CheckC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -854,7 +928,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I30TaxDebitC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -866,7 +941,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I30TaxDebitC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -878,7 +954,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I30Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -890,7 +967,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I30TaxDebitC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -902,7 +980,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I31OthersC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -914,7 +993,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I31OthersC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -926,7 +1006,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I31OthersC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -938,7 +1019,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I31Date",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -950,7 +1032,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg1Pt3I31OthersC4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -962,7 +1045,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2TinC1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -974,7 +1058,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2TinC2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -986,7 +1071,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2TinC3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -998,7 +1084,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2TinC4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1010,7 +1097,8 @@
       "parts": [
         {
           "source": "BrachMask2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "00000",
@@ -1022,7 +1110,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2RegisteredName",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1034,7 +1123,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I1SellPrice",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1046,7 +1136,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I2CostExpense",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1058,7 +1149,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I3AssumMortgage",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1070,7 +1162,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I4NumInstallments",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0",
@@ -1082,7 +1175,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I5InstallmentAmt",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1094,10 +1188,11 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I6ApplcRate",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
-      "default": "0.00",
+      "default": "",
       "after": "    \n            "
     },
     {
@@ -1106,7 +1201,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I7PeriodTaxDue",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1118,7 +1214,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I8DateCollection",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1130,7 +1227,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch1I9TotCollection",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1142,7 +1240,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NameOfCorpStock1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1154,7 +1253,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NameOfCorpStock2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1166,7 +1266,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NameOfCorpStock3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1178,10 +1279,24 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NameOfCorpStock4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1707:txtPg2P4Sch2NoOfShares1",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1707:txtPg2P4Sch2NoOfShares1",
+          "codec": "raw",
+          "uppercase": true
+        }
+      ],
+      "default": "0.00",
       "after": "    \n            "
     },
     {
@@ -1190,7 +1305,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2StockCertNo1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1202,7 +1318,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2TaxBaseSellPrice1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1214,7 +1331,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NoOfShares2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1226,7 +1344,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2StockCertNo2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1238,7 +1357,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2TaxBaseSellPrice2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1250,7 +1370,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NoOfShares3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1262,7 +1383,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2StockCertNo3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1274,7 +1396,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2TaxBaseSellPrice3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1286,7 +1409,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2NoOfShares4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1298,7 +1422,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2StockCertNo4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1310,7 +1435,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2TaxBaseSellPrice4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1322,7 +1448,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch2TotAmount",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1334,7 +1461,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Particulars1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1346,7 +1474,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Amount1",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1358,7 +1487,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Particulars2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1370,7 +1500,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Amount2",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1382,7 +1513,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Particulars3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1394,7 +1526,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Amount3",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1406,7 +1539,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Particulars4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1418,7 +1552,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3Amount4",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1430,7 +1565,8 @@
       "parts": [
         {
           "source": "frm1707:txtPg2P4Sch3TotAmount",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1442,7 +1578,8 @@
       "parts": [
         {
           "source": "frm1707:txtLOB",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1454,10 +1591,11 @@
       "parts": [
         {
           "source": "frm1707:txtCurrentPage",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
-      "default": "",
+      "default": "1",
       "after": "    \n            "
     },
     {
@@ -1466,7 +1604,8 @@
       "parts": [
         {
           "source": "frm1707:txtMaxPage",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "2",
@@ -1478,7 +1617,8 @@
       "parts": [
         {
           "source": "Pg2Pt4S2SubTotal",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1490,7 +1630,8 @@
       "parts": [
         {
           "source": "Pg2Pt4S3SubTotal",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1514,7 +1655,8 @@
       "parts": [
         {
           "source": "driveSelectTPExport",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0",
@@ -1526,7 +1668,8 @@
       "parts": [
         {
           "source": "txtFinalFlag",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "0.00",
@@ -1538,7 +1681,8 @@
       "parts": [
         {
           "source": "txtEnroll",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "N",
@@ -1550,7 +1694,8 @@
       "parts": [
         {
           "source": "ebirOnlineConfirmUsername",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1562,7 +1707,8 @@
       "parts": [
         {
           "source": "ebirOnlineUsername",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1574,7 +1720,8 @@
       "parts": [
         {
           "source": "ebirOnlineSecret",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1586,7 +1733,8 @@
       "parts": [
         {
           "source": "Pg2Pt4S2PopLength",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",
@@ -1598,7 +1746,8 @@
       "parts": [
         {
           "source": "Pg2Pt4S3PopLength",
-          "codec": "raw"
+          "codec": "raw",
+          "uppercase": true
         }
       ],
       "default": "",

@@ -183,16 +183,107 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "2553",
+        revision: "1999",
+        // `form_id` is the official formType and PROD SFTP folder. The submit
+        // plaintext is the official layout replayed through the full page
+        // runtime; queueing goes through the generic `QueueableForm` path.
+        form_id: "2553",
+        // The desktop editor is views::form_2553_view; print preview fills the
+        // one-page frozen 2553-1999 sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1604F",
+        revision: "2018",
+        // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
+        // Exact submit plaintext via the official layout; generic queue.
+        form_id: "1604F",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1604C",
+        revision: "2018",
+        // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
+        // Exact submit plaintext via the official layout; generic queue.
+        form_id: "1604C",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1604E",
+        revision: "2018",
+        // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
+        // Exact submit plaintext via the official layout; generic queue.
+        form_id: "1604Ev2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
-        form_id: "0619Ev2018",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
+        form_id: "0619E",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
             pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -200,14 +291,18 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "0619F",
         revision: "2018",
-        form_id: "0619Fv2018",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
+        form_id: "0619F",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
             pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -215,14 +310,19 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "0605",
         revision: "1999",
-        form_id: "0605v1999",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official layout plus the Item 6/8
+        // popup radios the page adds.
+        form_id: "0605",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
             pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -230,14 +330,18 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1701Q",
         revision: "2018",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
         form_id: "1701Qv2018",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
             pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -245,10 +349,13 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "2550Q",
         revision: "2024",
+        // Official formType; queued through the generic `QueueableForm` path
+        // with the official saveEncryptedProfile layout plus `<dateFiled>`.
         form_id: "2550Qv2024",
         capabilities: FormCapabilities {
             xml_round_trip: true,
             formula_evidence: true,
+            queue_submission: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
@@ -260,14 +367,18 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1701",
         revision: "2018",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official submit layout.
         form_id: "1701v2018",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
             pagination: true,
+            editor: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -275,10 +386,55 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "1702RT",
         revision: "2018C",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path with the official layout.
         form_id: "1702RTv2018C",
         capabilities: FormCapabilities {
+            queue_submission: true,
             xml_round_trip: true,
             formula_evidence: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1702MX",
+        revision: "2018C",
+        // Official formType and PROD SFTP folder. Queueing goes through the
+        // generic `QueueableForm` path (four base pages; the mandatory
+        // attachments are not supported).
+        form_id: "1702MXv2018C",
+        capabilities: FormCapabilities {
+            queue_submission: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1606",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; submit plaintext replayed
+        // through the full page runtime, queued on the generic path.
+        form_id: "1606",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
@@ -288,12 +444,572 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
-        code: "1702MX",
-        revision: "2018C",
-        form_id: "1702MXv2018C",
+        code: "1600VT",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; submit plaintext replayed
+        // through the full page runtime, queued on the generic path.
+        form_id: "1600VTv2018",
         capabilities: FormCapabilities {
+            typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1600PT",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; submit plaintext replayed
+        // through the full page runtime, queued on the generic path.
+        form_id: "1600PTv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1600WP",
+        revision: "2010",
+        // Official formType and PROD SFTP folder; submit plaintext replayed
+        // through the full page runtime, queued on the generic path.
+        form_id: "1600WP",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1601EQ",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1601EQ",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1601FQ",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1601FQ",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1603Q",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1603Qv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1602Q",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; queueing
+        // goes through the generic `QueueableForm` path.
+        form_id: "1602Qv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2552",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; queued through the generic
+        // `QueueableForm` path with the official layout replayed exactly.
+        form_id: "2552v2018",
+        // Editor: views::form_2552_view; print preview fills the
+        // frozen sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2550M",
+        revision: "2007",
+        // Official formType and PROD SFTP folder; every schedule (1–8) is
+        // modelled and replayed byte for byte.
+        form_id: "2550M",
+        // Editor: views::form_2550m_view; print preview fills the
+        // frozen sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1706",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; queued on the generic path.
+        form_id: "1706",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1707",
+        revision: "2021",
+        // Official formType and PROD SFTP folder; queued on the generic path.
+        form_id: "1707v2021",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1707A",
+        revision: "2021",
+        // Official formType and PROD SFTP folder; queued on the generic path.
+        form_id: "1707Av2021",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1800",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; queued on the generic path.
+        form_id: "1800v2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1801",
+        revision: "2018",
+        // Official formType and PROD SFTP folder; queued on the generic path.
+        form_id: "1801v2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2000",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2000v2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2000OT",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2000OTv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200S",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2200S",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200C",
+        revision: "2018",
+        // `form_id` is the official formType and PROD SFTP folder; the submit plaintext replays the official layout and queueing uses the generic `QueueableForm` path.
+        form_id: "2200Cv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200AN",
+        revision: "2018",
+        // `form_id` is the official formType. Queueing stays off:
+        // ftpTargetFolder.PROD has no '2200ANv2018' folder (getFtpFolder
+        // returns undefined), so the SFTP target is unconfirmed.
+        form_id: "2200ANv2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: false,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200M",
+        revision: "2018",
+        // `form_id` is the official formType (filename segment). PROD
+        // `ftpTargetFolder` has no `2200Mv2018` key; see form_2200m.
+        form_id: "2200Mv2018",
+        // The desktop editor is views::form_2200m_view; print preview fills the
+        // two-page frozen 2200m-2018 sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200P",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Pv2020",
+        // The desktop editor is views::form_2200p_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200A",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Av2020",
+        // The desktop editor is views::form_2200a_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200T",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Tv2020",
+        // The desktop editor is views::form_2200t_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1701MS",
+        revision: "2024",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout (radios, check boxes and the name) replayed through
+        // the full page runtime; queueing uses the generic path.
+        form_id: "1701MS",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1702Q",
+        revision: "2018C",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1702Qv2018C",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1701A",
+        revision: "2018",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1701A",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1700",
+        revision: "2018",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1700v2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "1702EX",
+        revision: "2018C",
+        // Official formType and PROD SFTP folder. The submit plaintext is the
+        // official layout replayed through the full page runtime; queueing
+        // uses the generic path.
+        form_id: "1702EXv2018C",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
@@ -448,17 +1164,36 @@ mod tests {
 
     #[test]
     fn queue_gate_is_semantic_and_registry_owned() {
-        assert!(can_queue_for_submission("2551Q"));
-        assert_eq!(queue_authorized_form_type_id("2551Q"), Some("2551Qv2018"));
-        assert!(can_queue_for_submission("1601C"));
-        assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
-
-        for code in [
-            "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
-        ] {
-            assert!(!can_queue_for_submission(code), "{code} must fail closed");
-            assert_eq!(queue_authorized_form_type_id(code), None);
+        // Every record that claims the queue capabilities opens the gate with
+        // its own official form type; everything else fails closed.
+        let mut queueable = 0;
+        for record in FORM_CAPABILITY_REGISTRY {
+            if record.capabilities.can_queue() {
+                queueable += 1;
+                assert!(can_queue_for_submission(record.code), "{}", record.code);
+                assert_eq!(
+                    queue_authorized_form_type_id(record.code),
+                    Some(record.form_id),
+                    "{}",
+                    record.code
+                );
+            } else {
+                assert!(
+                    !can_queue_for_submission(record.code),
+                    "{} must fail closed",
+                    record.code
+                );
+                assert_eq!(queue_authorized_form_type_id(record.code), None);
+            }
         }
+        assert!(queueable >= 3);
+        assert_eq!(queue_authorized_form_type_id("2551Q"), Some("2551Qv2018"));
+        assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
+        // 2550Q left the application freeze through the generic queue.
+        assert!(can_queue_for_submission("2550Q"));
+        assert_eq!(queue_authorized_form_type_id("2550Q"), Some("2550Qv2024"));
+        assert!(!can_queue_for_submission("9999"), "9999 must fail closed");
+        assert_eq!(queue_authorized_form_type_id("9999"), None);
     }
 
     #[test]
@@ -466,6 +1201,10 @@ mod tests {
         assert!(can_open_certification_draft("2551Q"));
         for code in [
             "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
+            "2553", "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT",
+            "1702MX", "2553", "2552", "2550M", "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q",
+            "1701", "1702RT", "1702MX", "2553", "2553", "1606", "1600VT", "1600PT", "1600WP",
+            "2553", "1701MS", "1702Q", "1701A", "1700", "1702EX", "1604F", "1604C", "1604E",
         ] {
             assert!(
                 can_open_certification_draft(code),
@@ -498,7 +1237,7 @@ mod tests {
     fn payment_form_uses_canonical_1999_identity() {
         let form = find_form_capability("0605").expect("0605 inventory record");
         assert_eq!(form.revision, "1999");
-        assert_eq!(form.form_id, "0605v1999");
+        assert_eq!(form.form_id, "0605");
         assert!(find_form_capability_by_id("0605v2018").is_none());
     }
 }

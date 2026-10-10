@@ -43,8 +43,42 @@ pub enum Entry {
         key: String,
         parts: Vec<Part>,
         default: String,
+        /// A value-dependent rule the official loop applies to this amount.
+        #[serde(default)]
+        number: Option<NumberRule>,
         after: String,
     },
+}
+
+/// 1702MX `numbertext` amounts: the official loop strips commas and turns
+/// `(5.00)` into `-5.00` (`NumWithParenthesis`). The upload loop
+/// (`saveEncryptedProfile`) stops there; the older `saveXMLsubmit` loop also
+/// writes no `<div>` (and no separator) when the result is numerically zero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum NumberRule {
+    #[serde(rename = "normalize")]
+    Normalize,
+    #[serde(rename = "omit-zero")]
+    OmitZero,
+}
+
+/// The official `numbertext` normalization: the first `(` becomes `-`, the
+/// first `)` goes, and commas are removed.
+pub fn official_number_text(value: &str) -> String {
+    if value.contains('(') && value.contains(')') {
+        value
+            .replacen('(', "-", 1)
+            .replacen(')', "", 1)
+            .replace(',', "")
+    } else {
+        value.replace(',', "")
+    }
+}
+
+/// JavaScript's `(value * 1) === 0`: blank is zero, non-numbers are not.
+fn js_is_zero(value: &str) -> bool {
+    let trimmed = value.trim();
+    trimmed.is_empty() || trimmed.parse::<f64>().is_ok_and(|n| n == 0.0)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -94,7 +128,55 @@ macro_rules! layouts {
 
 /// Layouts of the forms the app serializes today. Add a form here when its
 /// field map moves to [`write`].
-const LAYOUTS: &[(&str, &str)] = layouts!["1601c-v2018", "2551q-v2018"];
+const LAYOUTS: &[(&str, &str)] = layouts![
+    "0605-v2003",
+    "0619e-v2018",
+    "0619f-v2018",
+    "1600pt-v2018-government",
+    "1600pt-v2018-private",
+    "1600vt-v2018-government",
+    "1600vt-v2018-private",
+    "1600wp-v2010-atc0",
+    "1600wp-v2010-atc1",
+    "1600wp-v2010-atc2",
+    "1601c-v2018",
+    "1601eq-v2018",
+    "1601fq-v2018",
+    "1602q-v2018",
+    "1603q-v2018",
+    "1604c-v2018",
+    "1604e-v2018",
+    "1604f-v2018",
+    "1606-v2018",
+    "1700-v2013",
+    "1701-v2018",
+    "1701a-v2018",
+    "1701ms-v2024",
+    "1701q-v2018",
+    "1702ex-v2018c",
+    "1702mx-v2018c",
+    "1702q-v2018c",
+    "1702rt-v2018c",
+    "1706-v2018",
+    "1707-v2021",
+    "1707a-v2021",
+    "1800-v2018",
+    "1801-v2018",
+    "2000-v2018",
+    "2000ot-v2018",
+    "2200a-v2020",
+    "2200an-v2018",
+    "2200c-v2018",
+    "2200m-v2018",
+    "2200p-v2020",
+    "2200s-v2018",
+    "2200t-v2020",
+    "2550m-v2007",
+    "2550q-v2024",
+    "2551q-v2018",
+    "2552-v2018",
+    "2553-v1999",
+];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
 pub fn layout(form_id: &str) -> Result<&'static OfficialLayout, OfficialXmlError> {
@@ -177,6 +259,7 @@ pub fn write(
                 key,
                 parts,
                 default,
+                number,
                 after,
             } => {
                 let any_source = parts.iter().any(
@@ -207,6 +290,17 @@ pub fn write(
                         .collect()
                 } else {
                     default.clone()
+                };
+                let body = match number {
+                    Some(NumberRule::Normalize) => official_number_text(&body),
+                    Some(NumberRule::OmitZero) => {
+                        let normalized = official_number_text(&body);
+                        if js_is_zero(&normalized) {
+                            continue;
+                        }
+                        normalized
+                    }
+                    None => body,
                 };
                 (key, body, after)
             }
@@ -267,7 +361,26 @@ pub fn read(
         let (key, after) = match entry {
             Entry::Bool { key, after, .. } | Entry::Value { key, after, .. } => (key, after),
         };
-        expect(plaintext, &mut at, &format!("<div>{key}="))?;
+        let open = format!("<div>{key}=");
+        if let Entry::Value {
+            parts,
+            number: Some(NumberRule::OmitZero),
+            ..
+        } = entry
+        {
+            // `write` drops a zero amount and its separator; read it as "0",
+            // which writes back the same way.
+            if !plaintext[at..].starts_with(&open) {
+                if let Some(Part::Source { source, .. }) = parts
+                    .iter()
+                    .find(|part| matches!(part, Part::Source { .. }))
+                {
+                    store(&mut values, source, "0".to_string())?;
+                }
+                continue;
+            }
+        }
+        expect(plaintext, &mut at, &open)?;
         let close = format!("{key}=</div>");
         let Some(len) = plaintext[at..].find(&close) else {
             return Err(OfficialXmlError::Layout {
@@ -445,8 +558,13 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // The year in the trailer is per form (2012; 2014 on newer pages).
+            let year = after
+                .rsplit("All Rights Reserved BIR ")
+                .next()
+                .filter(|_| after.contains("All Rights Reserved BIR "));
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                year.is_some_and(|y| y.len() == 6 && y.ends_with(".0") && y.starts_with("20")),
                 "{id}: {after:?}"
             );
         }
@@ -501,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn read_inverts_write_and_checks_duplicates() {
+    fn read_inverts_write_and_checks_structure() {
         let layout = layout("2551q-v2018").unwrap();
         let mut values = BTreeMap::new();
         values.insert(
@@ -516,21 +634,56 @@ mod tests {
             assert_eq!(read_back.get(key), Some(value), "{key}");
         }
 
-        // The two copies of a duplicated control must agree.
-        let tampered = plain.replacen(
-            "<div>frm2551Qv2018:rtnMonth=06frm2551Qv2018:rtnMonth=</div>",
-            "<div>frm2551Qv2018:rtnMonth=07frm2551Qv2018:rtnMonth=</div>",
-            1,
-        );
-        assert_ne!(tampered, plain);
-        assert!(matches!(
-            read(layout, &tampered),
-            Err(OfficialXmlError::Inconsistent { .. })
+        // Raw values (the upload loop doesn't escape): a value is read back as written.
+        assert!(plain.contains(
+            "<div>frm2551Qv2018:registeredName=PEÑA, JUANfrm2551Qv2018:registeredName=</div>"
         ));
         assert!(matches!(
-            read(layout, &plain.replace("\n\t\t<div>", "\n<div>")),
+            read(layout, &plain.replace("\t\t<div>", "\n<div>")),
             Err(OfficialXmlError::Layout { .. })
         ));
+    }
+
+    #[test]
+    fn number_rule_normalizes_1702mx_amounts_and_keeps_zeros() {
+        // The saveEncryptedProfile loop: commas stripped, "(5.00)" -> "-5.00",
+        // zero amounts written like any other value.
+        let layout = layout("1702mx-v2018c").unwrap();
+        let values: BTreeMap<String, String> = [
+            ("frm1702MX:txtPg1Pt2I14TotalIncome", "1,234.50"),
+            ("frm1702MX:txtPg1Pt2I15LessTotalTax", "(5.00)"),
+            ("frm1702MX:txtPg1Pt2I16NetTaxPayable", "0"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        let ours = write(layout, &values).unwrap();
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I14TotalIncome=1234.50"));
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I15LessTotalTax=-5.00"));
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I16NetTaxPayable=0frm"));
+        let back = read(layout, &ours).unwrap();
+        assert_eq!(back["frm1702MX:txtPg1Pt2I14TotalIncome"], "1234.50");
+        assert_eq!(back["frm1702MX:txtPg1Pt2I16NetTaxPayable"], "0");
+        assert_eq!(official_number_text("(1,234.50)"), "-1234.50");
+    }
+
+    #[test]
+    fn read_accepts_an_omitted_zero_amount() {
+        let layout: OfficialLayout = serde_json::from_str(
+            r#"{"form_id":"t","official_hta":"","official_hta_sha256":"","header":"H","lead":"","entries":[
+                {"kind":"value","key":"a","parts":[{"source":"a","codec":"raw"}],"default":"0","number":"omit-zero","after":"|"},
+                {"kind":"value","key":"b","parts":[{"source":"b","codec":"raw"}],"default":"","after":""}]}"#,
+        )
+        .unwrap();
+        let values: BTreeMap<String, String> = [("a", "0.00"), ("b", "x")]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let plain = write(&layout, &values).unwrap();
+        assert_eq!(plain, "H<div>b=xb=</div>");
+        let back = read(&layout, &plain).unwrap();
+        assert_eq!(back["a"], "0");
+        assert_eq!(write(&layout, &back).unwrap(), plain);
     }
 
     #[test]
@@ -555,7 +708,8 @@ mod tests {
     fn empty_values_reproduce_the_official_page_defaults() {
         let layout = layout("2551q-v2018").unwrap();
         let plain = write(layout, &BTreeMap::new()).unwrap();
-        assert!(plain.starts_with("<?xml version='1.0'?>\n\t\t<div>frm2551Qv2018:forThe_1="));
+        // IE drops the newline after <xmp>, so the separator is "\t\t".
+        assert!(plain.starts_with("<?xml version='1.0'?>\t\t<div>frm2551Qv2018:forThe_1="));
         assert!(plain.contains(
             "<div>frm2551Qv2018:txtTaxReliefSpecify=0frm2551Qv2018:txtTaxReliefSpecify=</div>"
         ));

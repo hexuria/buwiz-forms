@@ -1,18 +1,61 @@
 //! BIR form data models, ATC tables, form registry, and typed form traits.
 
 pub mod atc;
+pub mod excise_places;
 pub mod form_0605;
+pub mod form_0605_official;
 pub mod form_0619e;
+pub mod form_0619e_official;
 pub mod form_0619f;
+pub mod form_0619f_official;
+pub mod form_1600pt;
+pub mod form_1600vt;
+pub mod form_1600wp;
 pub mod form_1601c;
+pub mod form_1601eq;
+pub mod form_1601fq;
+pub mod form_1602q;
+pub mod form_1603q;
+pub mod form_1604c;
+pub mod form_1604e;
+pub mod form_1604f;
+pub mod form_1606;
+pub mod form_1700;
 pub mod form_1701;
+pub mod form_1701_official;
+pub mod form_1701a;
+pub mod form_1701ms;
 pub mod form_1701q;
+pub mod form_1701q_official;
+pub mod form_1702ex;
 pub mod form_1702mx;
+pub mod form_1702mx_official;
+pub mod form_1702q;
 pub mod form_1702rt;
+pub mod form_1702rt_official;
+pub mod form_1706;
+pub mod form_1707;
+pub mod form_1707a;
+pub mod form_1800;
+pub mod form_1801;
+pub mod form_2000;
+pub mod form_2000ot;
+pub mod form_2200a;
+pub mod form_2200an;
+pub mod form_2200c;
+pub mod form_2200m;
+pub mod form_2200p;
+pub mod form_2200s;
+pub mod form_2200t;
 pub mod form_2307;
+pub mod form_2550m;
 pub mod form_2550q;
 pub mod form_2551q;
+pub mod form_2552;
+pub mod form_2553;
 pub mod forms_set;
+pub mod official_inputs;
+pub mod queueable;
 pub mod registry;
 pub mod support_level;
 
@@ -310,14 +353,14 @@ impl FormDraft {
         match self {
             Self::Form2551Q(f) => &f.status,
             Self::Form1601C(f) => &f.status,
-            Self::Form0605(f) => &f.status,
-            Self::Form0619E(f) => &f.status,
-            Self::Form0619F(f) => &f.status,
-            Self::Form1701(f) => &f.status,
-            Self::Form1701Q(f) => &f.status,
-            Self::Form1702MX(f) => &f.status,
-            Self::Form1702RT(f) => &f.status,
-            Self::Form2550Q(f) => &f.status,
+            Self::Form0605(f) => &f.lifecycle.status,
+            Self::Form0619E(f) => &f.lifecycle.status,
+            Self::Form0619F(f) => &f.lifecycle.status,
+            Self::Form1701(f) => &f.lifecycle.status,
+            Self::Form1701Q(f) => &f.lifecycle.status,
+            Self::Form1702MX(f) => &f.lifecycle.status,
+            Self::Form1702RT(f) => &f.lifecycle.status,
+            Self::Form2550Q(f) => &f.lifecycle.status,
         }
     }
 

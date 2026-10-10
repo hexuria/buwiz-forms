@@ -130,11 +130,134 @@ fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>)
 
 fn writer_cells_json(slug: &str) -> Option<&'static str> {
     match slug {
+        "0605-1999" => Some(include_str!(
+            "../../../html-frozen/0605-1999/writer-cells.json"
+        )),
+        "0619e-2018" => Some(include_str!(
+            "../../../html-frozen/0619e-2018/writer-cells.json"
+        )),
+        "0619f-2018" => Some(include_str!(
+            "../../../html-frozen/0619f-2018/writer-cells.json"
+        )),
+        "1600-pt-2018" => Some(include_str!(
+            "../../../html-frozen/1600-pt-2018/writer-cells.json"
+        )),
+        "1600-vt-2018" => Some(include_str!(
+            "../../../html-frozen/1600-vt-2018/writer-cells.json"
+        )),
+        "1600wp-2010" => Some(include_str!(
+            "../../../html-frozen/1600wp-2010/writer-cells.json"
+        )),
+        "1601-fq-2020" => Some(include_str!(
+            "../../../html-frozen/1601-fq-2020/writer-cells.json"
+        )),
         "1601c-2018" => Some(include_str!(
             "../../../html-frozen/1601c-2018/writer-cells.json"
         )),
+        "1601eq-2019" => Some(include_str!(
+            "../../../html-frozen/1601eq-2019/writer-cells.json"
+        )),
+        "1602q-2019" => Some(include_str!(
+            "../../../html-frozen/1602q-2019/writer-cells.json"
+        )),
+        "1603q-2018" => Some(include_str!(
+            "../../../html-frozen/1603q-2018/writer-cells.json"
+        )),
+        "1604c-2018" => Some(include_str!(
+            "../../../html-frozen/1604c-2018/writer-cells.json"
+        )),
+        "1604e-2018" => Some(include_str!(
+            "../../../html-frozen/1604e-2018/writer-cells.json"
+        )),
+        "1604f-2018" => Some(include_str!(
+            "../../../html-frozen/1604f-2018/writer-cells.json"
+        )),
+        "1606-2018" => Some(include_str!(
+            "../../../html-frozen/1606-2018/writer-cells.json"
+        )),
+        "1700-2018" => Some(include_str!(
+            "../../../html-frozen/1700-2018/writer-cells.json"
+        )),
+        "1701-2018" => Some(include_str!(
+            "../../../html-frozen/1701-2018/writer-cells.json"
+        )),
+        "1701a-2018" => Some(include_str!(
+            "../../../html-frozen/1701a-2018/writer-cells.json"
+        )),
+        "1701ms-2024" => Some(include_str!(
+            "../../../html-frozen/1701ms-2024/writer-cells.json"
+        )),
+        "1701q-2018" => Some(include_str!(
+            "../../../html-frozen/1701q-2018/writer-cells.json"
+        )),
+        "1702ex-2018" => Some(include_str!(
+            "../../../html-frozen/1702ex-2018/writer-cells.json"
+        )),
+        "1702mx-2018c" => Some(include_str!(
+            "../../../html-frozen/1702mx-2018c/writer-cells.json"
+        )),
+        "1702q-2018" => Some(include_str!(
+            "../../../html-frozen/1702q-2018/writer-cells.json"
+        )),
+        "1702rt-2018c" => Some(include_str!(
+            "../../../html-frozen/1702rt-2018c/writer-cells.json"
+        )),
+        "1706-2018" => Some(include_str!(
+            "../../../html-frozen/1706-2018/writer-cells.json"
+        )),
+        "1707-2021" => Some(include_str!(
+            "../../../html-frozen/1707-2021/writer-cells.json"
+        )),
+        "1707a-2021" => Some(include_str!(
+            "../../../html-frozen/1707a-2021/writer-cells.json"
+        )),
+        "1800-2018" => Some(include_str!(
+            "../../../html-frozen/1800-2018/writer-cells.json"
+        )),
+        "1801-2018" => Some(include_str!(
+            "../../../html-frozen/1801-2018/writer-cells.json"
+        )),
+        "2000-dst-2018" => Some(include_str!(
+            "../../../html-frozen/2000-dst-2018/writer-cells.json"
+        )),
+        "2000-ot-2018" => Some(include_str!(
+            "../../../html-frozen/2000-ot-2018/writer-cells.json"
+        )),
+        "2200a-2020" => Some(include_str!(
+            "../../../html-frozen/2200a-2020/writer-cells.json"
+        )),
+        "2200an-2018" => Some(include_str!(
+            "../../../html-frozen/2200an-2018/writer-cells.json"
+        )),
+        "2200c-2018" => Some(include_str!(
+            "../../../html-frozen/2200c-2018/writer-cells.json"
+        )),
+        "2200m-2018" => Some(include_str!(
+            "../../../html-frozen/2200m-2018/writer-cells.json"
+        )),
+        "2200p-2020" => Some(include_str!(
+            "../../../html-frozen/2200p-2020/writer-cells.json"
+        )),
+        "2200s-2018" => Some(include_str!(
+            "../../../html-frozen/2200s-2018/writer-cells.json"
+        )),
+        "2200t-2022" => Some(include_str!(
+            "../../../html-frozen/2200t-2022/writer-cells.json"
+        )),
+        "2550m-2007" => Some(include_str!(
+            "../../../html-frozen/2550m-2007/writer-cells.json"
+        )),
+        "2550q-2024" => Some(include_str!(
+            "../../../html-frozen/2550q-2024/writer-cells.json"
+        )),
         "2551q-2018" => Some(include_str!(
             "../../../html-frozen/2551q-2018/writer-cells.json"
+        )),
+        "2552-2018" => Some(include_str!(
+            "../../../html-frozen/2552-2018/writer-cells.json"
+        )),
+        "2553-1999" => Some(include_str!(
+            "../../../html-frozen/2553-1999/writer-cells.json"
         )),
         _ => None,
     }
@@ -153,10 +276,18 @@ struct XboxJoin {
     html_id: String,
 }
 
+/// A peso comb with no centavo comb beside it ("Do not enter centavos"):
+/// the amount prints rounded to whole pesos, 50 centavos and up rounding up.
+struct PesoJoin {
+    writer_key: String,
+    html_id: String,
+}
+
 struct WriterCells {
     joins: BTreeMap<String, String>,
     money_joins: Vec<MoneyJoin>,
     xbox_joins: Vec<XboxJoin>,
+    peso_joins: Vec<PesoJoin>,
 }
 
 fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
@@ -277,6 +408,40 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         }
     }
 
+    let mut peso_joins: Vec<PesoJoin> = Vec::new();
+    if let Some(rows) = payload.get("peso_joins").and_then(|value| value.as_array()) {
+        for join in rows {
+            let key = join
+                .get("writer_key")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "writer-cells.json peso_join missing writer_key".to_string())?;
+            let html_id = join
+                .get("html_id")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
+            if html_id.starts_with("frm") {
+                return Err(format!(
+                    "writer-cells.json {key} must target a cell id, not {html_id}"
+                ));
+            }
+            if cells.contains_key(key)
+                || money_joins.iter().any(|row| row.writer_key == key)
+                || xbox_joins.iter().any(|row| row.writer_key == key)
+                || peso_joins.iter().any(|row| row.writer_key == key)
+            {
+                return Err(format!(
+                    "writer-cells.json duplicate writer_key {key} across joins"
+                ));
+            }
+            peso_joins.push(PesoJoin {
+                writer_key: key.to_string(),
+                html_id: html_id.to_string(),
+            });
+        }
+    }
+
     {
         let mut used_cells: BTreeSet<&str> = cells.values().map(|id| id.as_str()).collect();
         for join in &money_joins {
@@ -301,12 +466,21 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
                 ));
             }
         }
+        for join in &peso_joins {
+            if !used_cells.insert(&join.html_id) {
+                return Err(format!(
+                    "writer-cells.json {} peso cell {} is already a fill target",
+                    join.writer_key, join.html_id
+                ));
+            }
+        }
     }
 
     Ok(WriterCells {
         joins: cells,
         money_joins,
         xbox_joins,
+        peso_joins,
     })
 }
 
@@ -317,6 +491,7 @@ fn writer_cells(slug: &str) -> Result<WriterCells, String> {
             joins: BTreeMap::new(),
             money_joins: Vec::new(),
             xbox_joins: Vec::new(),
+            peso_joins: Vec::new(),
         }),
     }
 }
@@ -335,17 +510,22 @@ fn ordered_comb_indices(tags: &[InputTag<'_>], indices: &[usize]) -> Vec<usize> 
     ordered
 }
 
-fn split_writer_money(value: &str) -> Option<(String, String)> {
+/// Splits a writer amount into `(negative, peso digits, two cent digits)`.
+fn split_writer_money(value: &str) -> Option<(bool, String, String)> {
     let cleaned: String = value
         .chars()
         .filter(|ch| *ch != ',' && !ch.is_whitespace())
         .collect();
-    if cleaned.is_empty() || cleaned.starts_with('-') {
+    let (negative, cleaned) = match cleaned.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, cleaned.as_str()),
+    };
+    if cleaned.is_empty() {
         return None;
     }
     let (peso, cents) = match cleaned.split_once('.') {
         Some((peso, cents)) => (peso, cents),
-        None => (cleaned.as_str(), "00"),
+        None => (cleaned, "00"),
     };
     if peso.chars().any(|ch| !ch.is_ascii_digit()) {
         return None;
@@ -353,7 +533,18 @@ fn split_writer_money(value: &str) -> Option<(String, String)> {
     if cents.is_empty() || cents.len() > 2 || cents.chars().any(|ch| !ch.is_ascii_digit()) {
         return None;
     }
-    Some((peso.to_string(), format!("{cents:0<2}")))
+    Some((negative, peso.to_string(), format!("{cents:0<2}")))
+}
+
+/// Puts the minus sign immediately left of the peso digits; a zero amount
+/// (`-0`, `-0.00`) prints unsigned.
+fn signed_digits(negative: bool, digits: &str, cents: &str) -> String {
+    let zero = digits.chars().chain(cents.chars()).all(|ch| ch == '0');
+    if negative && !zero {
+        format!("-{digits}")
+    } else {
+        digits.to_string()
+    }
 }
 
 fn right_aligned_slot_values(slots: usize, digits: &str) -> Option<Vec<String>> {
@@ -386,9 +577,10 @@ fn fill_money_joins(
         if value.is_empty() {
             continue;
         }
-        let Some((peso, cents)) = split_writer_money(value) else {
+        let Some((negative, peso, cents)) = split_writer_money(value) else {
             continue;
         };
+        let peso = signed_digits(negative, &peso, &cents);
         let Some(peso_indices) = grouped.get(join.peso_html_id.as_str()) else {
             continue;
         };
@@ -421,6 +613,74 @@ fn fill_money_joins(
                 tags[index].start,
                 tags[index].end,
                 set_value(tags[index].tag, &ch, None),
+            ));
+        }
+    }
+    apply_replacements(html, replacements)
+}
+
+/// `1234.49` -> `1234`, `1234.50` -> `1235`: the sheets' "49 centavos or
+/// less drop down; 50 or more round up". Negatives round the absolute value
+/// and keep the sign (`-1234.50` -> `-1235`); `-0` prints as `0`.
+fn whole_pesos(value: &str) -> Option<String> {
+    let (negative, peso, cents) = split_writer_money(value)?;
+    let peso = peso.trim_start_matches('0');
+    let mut digits: Vec<u8> = if peso.is_empty() {
+        b"0".to_vec()
+    } else {
+        peso.bytes().collect()
+    };
+    if cents.as_str() >= "50" {
+        let mut index = digits.len();
+        loop {
+            if index == 0 {
+                digits.insert(0, b'1');
+                break;
+            }
+            index -= 1;
+            if digits[index] == b'9' {
+                digits[index] = b'0';
+            } else {
+                digits[index] += 1;
+                break;
+            }
+        }
+    }
+    let digits = String::from_utf8(digits).ok()?;
+    Some(signed_digits(negative, &digits, ""))
+}
+
+fn fill_peso_joins(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    peso_joins: &[PesoJoin],
+) -> String {
+    if peso_joins.is_empty() {
+        return html.to_string();
+    }
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for join in peso_joins {
+        let Some(value) = fields.get(&join.writer_key) else {
+            continue;
+        };
+        let Some(pesos) = whole_pesos(value) else {
+            continue;
+        };
+        let Some(indices) = grouped.get(join.html_id.as_str()) else {
+            continue;
+        };
+        let ordered = ordered_comb_indices(&tags, indices);
+        let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) else {
+            continue;
+        };
+        for (offset, index) in ordered.into_iter().enumerate() {
+            let writer = (offset == 0).then_some(value.as_str());
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, &values[offset], writer),
             ));
         }
     }
@@ -501,7 +761,11 @@ fn with_class(tag: &str, class: &str) -> String {
 }
 
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
-    if cells.joins.is_empty() && cells.money_joins.is_empty() && cells.xbox_joins.is_empty() {
+    if cells.joins.is_empty()
+        && cells.money_joins.is_empty()
+        && cells.xbox_joins.is_empty()
+        && cells.peso_joins.is_empty()
+    {
         return Ok(());
     }
     let tags = input_tags(html);
@@ -559,6 +823,27 @@ fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<
             ));
         }
     }
+    for join in &cells.peso_joins {
+        if !present.contains(join.html_id.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells peso html_id {} for {} is not an input name=",
+                join.html_id, join.writer_key
+            ));
+        }
+        if present.contains(join.writer_key.as_str()) {
+            return Err(format!(
+                "{slug}: writer-cells {} is already a stamped name=; remove the peso join",
+                join.writer_key
+            ));
+        }
+        let slots = grouped.get(join.html_id.as_str()).map_or(0, Vec::len);
+        if slots < 3 {
+            return Err(format!(
+                "{slug}: writer-cells {} peso comb {} must have at least 3 slots",
+                join.writer_key, join.html_id
+            ));
+        }
+    }
     for join in &cells.xbox_joins {
         if !present.contains(join.html_id.as_str()) {
             return Err(format!(
@@ -601,6 +886,7 @@ fn fill_bundle(
     validate_writer_cells(html, slug, &cells)?;
     let filled = fill_by_name_with_cells(html, fields, &cells.joins);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
+    let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     Ok(fill_xbox_joins(&filled, fields, &cells.xbox_joins))
 }
 
@@ -886,6 +1172,117 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_print_map_is_registered_and_fills_its_sheet() {
+        use std::collections::BTreeMap;
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(root).unwrap() {
+            let dir = entry.unwrap().path();
+            if !dir.join("writer-cells.json").exists() {
+                continue;
+            }
+            let slug = dir.file_name().unwrap().to_str().unwrap();
+            assert!(
+                super::writer_cells_json(slug).is_some(),
+                "{slug}: not registered"
+            );
+            let cells = super::writer_cells(slug).unwrap_or_else(|e| panic!("{slug}: {e}"));
+            let mut fields = BTreeMap::new();
+            for key in cells.joins.keys() {
+                fields.insert(key.clone(), "1".to_string());
+            }
+            for join in &cells.money_joins {
+                fields.insert(join.writer_key.clone(), "1234.56".to_string());
+            }
+            for join in &cells.xbox_joins {
+                fields.insert(join.writer_key.clone(), "true".to_string());
+            }
+            for join in &cells.peso_joins {
+                fields.insert(join.writer_key.clone(), "1234.56".to_string());
+            }
+            let filled =
+                super::filled_document(slug, &fields).unwrap_or_else(|e| panic!("{slug}: {e}"));
+            let has_join = !cells.joins.is_empty()
+                || !cells.money_joins.is_empty()
+                || !cells.xbox_joins.is_empty()
+                || !cells.peso_joins.is_empty();
+            if has_join {
+                let empty = super::filled_document(slug, &BTreeMap::new())
+                    .unwrap_or_else(|e| panic!("{slug}: {e}"));
+                assert_ne!(filled, empty, "{slug}: fill joins changed nothing");
+            }
+            checked += 1;
+        }
+        assert!(checked >= 30, "only {checked} print maps found");
+    }
+
+    #[test]
+    fn peso_only_combs_round_to_whole_pesos() {
+        assert_eq!(super::whole_pesos("1,234.49").as_deref(), Some("1234"));
+        assert_eq!(super::whole_pesos("1234.50").as_deref(), Some("1235"));
+        assert_eq!(super::whole_pesos("999.5").as_deref(), Some("1000"));
+        assert_eq!(super::whole_pesos("0.49").as_deref(), Some("0"));
+        assert_eq!(super::whole_pesos("12").as_deref(), Some("12"));
+        assert_eq!(super::whole_pesos("-5.00").as_deref(), Some("-5"));
+        assert_eq!(super::whole_pesos("-1,234.50").as_deref(), Some("-1235"));
+        assert_eq!(super::whole_pesos("-0.49").as_deref(), Some("0"));
+    }
+
+    fn comb(name: &str, slots: usize) -> String {
+        (0..slots)
+            .map(|i| format!("<input name=\"{name}\" data-slot-index=\"{i}\" value=\"\">"))
+            .collect()
+    }
+
+    fn comb_values(doc: &str, name: &str) -> Vec<String> {
+        super::input_tags(doc)
+            .iter()
+            .filter(|tag| tag.name == name)
+            .map(|tag| super::attr(tag.tag, "value").unwrap_or("").to_string())
+            .collect()
+    }
+
+    #[test]
+    fn negative_money_join_puts_minus_left_of_pesos() {
+        use std::collections::BTreeMap;
+        let html = format!("{}{}", comb("p", 8), comb("c", 2));
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "-122,500.25".to_string());
+        let joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            peso_html_id: "p".into(),
+            cent_html_id: "c".into(),
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "-", "1", "2", "2", "5", "0", "0"]
+        );
+        assert_eq!(comb_values(&doc, "c"), ["2", "5"]);
+        fields.insert("k".to_string(), "-12,345,678.00".to_string());
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            vec![String::new(); 8],
+            "no room for '-'"
+        );
+    }
+
+    #[test]
+    fn negative_peso_join_puts_minus_left_of_pesos() {
+        use std::collections::BTreeMap;
+        let html = comb("p", 5);
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "-122.50".to_string());
+        let joins = [super::PesoJoin {
+            writer_key: "k".into(),
+            html_id: "p".into(),
+        }];
+        let doc = super::fill_peso_joins(&html, &fields, &joins);
+        assert_eq!(comb_values(&doc, "p"), ["", "-", "1", "2", "3"]);
+    }
+
     #[test]
     fn checked_xbox_is_centred_like_a_char_box() {
         use std::collections::BTreeMap;
@@ -1426,12 +1823,841 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1700_fills_identity_whole_peso_combs_and_boxes() {
+        use bir_core::forms::form_1700::{
+            Form1700CivilStatus, Form1700Column, Form1700Draft, Form1700Employer,
+            Form1700TaxpayerType,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Fixture, Sample Employee", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Employee", "registered_address":
+                "123 Sample Street, Barangay Example, Quezon City Metro Manila",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1700", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1700Draft::new_from_profile(&profile, 2025);
+        draft.taxpayer_type = Form1700TaxpayerType::Employee;
+        draft.birth_date = "01/15/1980".into();
+        draft.citizenship = "Filipino".into();
+        draft.foreign_tax_credits = Some(false);
+        draft.civil_status = Form1700CivilStatus::Single;
+        draft.number_of_attachments = 2;
+        draft.taxpayer = Form1700Column {
+            non_taxable: 90_000.0,
+            surcharge: 1_000.0,
+            ..Form1700Column::default()
+        };
+        let employer = |name: &str, regular: f64, withheld: f64| Form1700Employer {
+            for_spouse: false,
+            name: name.into(),
+            name2: String::new(),
+            tin: "12345678800000".into(),
+            regular,
+            flat: 0.0,
+            withheld,
+        };
+        draft.employers = vec![employer("Sample Employer Inc", 600_000.5, 40_000.0)];
+        draft.recompute();
+        let html = filled_document("1700-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(comb_text(&html, "p1c14"), "123");
+        assert_eq!(comb_text(&html, "p1c21"), "039");
+        assert!(html.contains("FIXTURE, SAMPLE EMPLOYEE"));
+        assert_eq!(
+            comb_text(&html, "p1c25"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c26"), "QUEZON CITY METRO MANILA");
+        assert_eq!(comb_text(&html, "p1c31"), "01");
+        assert_eq!(comb_text(&html, "p1c33"), "1980");
+        assert_eq!(comb_text(&html, "p1c118"), "02");
+        // Whole pesos, right-aligned: Item 42A 600,001 in the 8-slot comb.
+        let item_42a = named_values(&html, "p2c13");
+        assert_eq!(item_42a.len(), 8);
+        assert_eq!(item_42a.concat().trim(), "600001");
+        assert_eq!(item_42a[7], "1");
+        assert_eq!(comb_text(&html, "p2c16").trim(), "90000");
+        // Item 31 Surcharge on the sheet; Item 32 Interest stays blank.
+        assert_eq!(comb_text(&html, "p1c98").trim(), "1000");
+        assert_eq!(comb_text(&html, "p1c101").trim(), "");
+        // Column B of a non-joint return stays blank.
+        assert_eq!(comb_text(&html, "p1c84").trim(), "");
+        // Schedule 1 Item 1 and the 7-slot tax withheld comb.
+        assert!(comb_text(&html, "p2c73").starts_with("SAMPLE EMPLOYER INC"));
+        assert_eq!(comb_text(&html, "p2c76"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c99").trim(), "40000");
+        assert_eq!(named_values(&html, "p2c99").len(), 7);
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "FIXTURE");
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c42"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c47"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c55"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1700:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    fn annual_fixture_profile(form: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Annual Fixture Corp", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Unit 1 Fixture Tower, 123 Sample Street, Barangay Example, Quezon City",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": form, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filled_document_1604f_fills_identity_schedules_and_boxes() {
+        use bir_core::forms::form_1604f::{Form1604fAgentCategory, Form1604fDraft};
+        let mut draft = Form1604fDraft::new_from_profile(&annual_fixture_profile("1604F"), 2025);
+        draft.agent_category = Form1604fAgentCategory::Private;
+        draft.schedules[1][2].date = "10/30/2025".into();
+        draft.schedules[1][2].reference = "tra-9".into();
+        draft.schedules[1][2].taxes_withheld = 1_234.5;
+        draft.schedules[1][2].penalties = 10.0;
+        draft.recompute();
+        let html = filled_document("1604f-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(comb_text(&html, "p1c12"), "123");
+        assert_eq!(comb_text(&html, "p1c18"), "00000");
+        assert_eq!(comb_text(&html, "p1c20"), "039");
+        assert_eq!(comb_text(&html, "p1c22"), "ANNUAL FIXTURE CORP");
+        assert_eq!(
+            comb_text(&html, "p1c24"),
+            "UNIT 1 FIXTURE TOWER, 123 SAMPLE STREET,"
+        );
+        assert!(comb_text(&html, "p1c25").starts_with(" BARANGAY EXAMPLE, QUEZON CITY"));
+        assert!(comb_text(&html, "p1c25").ends_with("1100"));
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(named_values(&html, "p1c96"), vec!["TRA-9".to_string()]);
+        assert_eq!(named_values(&html, "p1c97"), vec!["1,234.50".to_string()]);
+        assert_eq!(named_values(&html, "p1c99"), vec!["1,244.50".to_string()]);
+        assert_eq!(named_values(&html, "p1c109"), vec!["1,244.50".to_string()]);
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c27"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c38"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"frm1604f:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_1604c_fills_months_refund_items_and_boxes() {
+        use bir_core::forms::form_1604c::{Form1604cAgentCategory, Form1604cDraft};
+        let mut draft = Form1604cDraft::new_from_profile(&annual_fixture_profile("1604C"), 2025);
+        draft.agent_category = Form1604cAgentCategory::Government;
+        let row = &mut draft.months[11];
+        row.date = "01/15/2026".into();
+        row.bank = "Bank 12".into();
+        row.reference = "TRA12".into();
+        row.taxes_withheld = 5_000.0;
+        row.adjustment = -250.25;
+        draft.recompute();
+        let html = filled_document("1604c-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c27"), "1100");
+        assert_eq!(named_values(&html, "p1c114"), vec!["BANK 12".to_string()]);
+        assert_eq!(named_values(&html, "p1c116"), vec!["5,000.00".to_string()]);
+        assert_eq!(named_values(&html, "p1c169"), vec!["-250.25".to_string()]);
+        assert_eq!(named_values(&html, "p1c171"), vec!["4,749.75".to_string()]);
+        assert_eq!(named_values(&html, "p1c175"), vec!["4,749.75".to_string()]);
+        // Item 11 "No": Items 11A-13 stay blank on paper.
+        assert_eq!(comb_text(&html, "p1c40"), "");
+        assert_eq!(comb_text(&html, "p1c46"), "");
+        assert_eq!(named_values(&html, "p1c44"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c31"), vec!["X".to_string()]);
+
+        draft.refunds_released = true;
+        draft.refund_date = "03/15/2026".into();
+        draft.overremittance = 4_321.56;
+        draft.first_crediting_month = 2;
+        draft.recompute();
+        let html = filled_document("1604c-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c40"), "03");
+        assert_eq!(comb_text(&html, "p1c41"), "15");
+        assert_eq!(comb_text(&html, "p1c42"), "2026");
+        assert!(comb_text(&html, "p1c46").ends_with("4321"));
+        assert_eq!(comb_text(&html, "p1c48"), "56");
+        assert_eq!(comb_text(&html, "p1c50"), "02");
+        assert_eq!(named_values(&html, "p1c43"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_1604e_fills_both_schedules_and_page_two() {
+        use bir_core::forms::form_1604e::{Form1604eAgentCategory, Form1604eDraft};
+        let mut draft = Form1604eDraft::new_from_profile(&annual_fixture_profile("1604E"), 2025);
+        draft.agent_category = Form1604eAgentCategory::Private;
+        draft.top_withholding_agent = Some(true);
+        draft.schedule1[3].date = "01/30/2026".into();
+        draft.schedule1[3].bank = "Bank4".into();
+        draft.schedule1[3].reference = "Tra4".into();
+        draft.schedule1[3].taxes_withheld = 250_000.0;
+        draft.schedule2[11].date = "01/15/2026".into();
+        draft.schedule2[11].bank = "BankDec".into();
+        draft.schedule2[11].reference = "TRA12".into();
+        draft.schedule2[11].taxes_withheld = 333.33;
+        draft.schedule2[11].penalties = 12.0;
+        draft.recompute();
+        let html = filled_document("1604e-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c22"), "ANNUAL FIXTURE CORP");
+        assert_eq!(comb_text(&html, "p1c25"), " BARANGAY EXAMPLE, QUEZON CITY");
+        assert_eq!(named_values(&html, "p1c71"), vec!["TRA4".to_string()]);
+        assert_eq!(named_values(&html, "p1c72"), vec!["250,000.00".to_string()]);
+        assert_eq!(named_values(&html, "p1c78"), vec!["250,000.00".to_string()]);
+        assert_eq!(named_values(&html, "p1c170"), vec!["345.33".to_string()]);
+        assert_eq!(named_values(&html, "p1c174"), vec!["345.33".to_string()]);
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c6"), "ANNUAL FIXTURE CORP");
+        assert_eq!(named_values(&html, "p1c30"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c32"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c33"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1604e:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_2553_fills_identity_rows_totals_and_boxes() {
+        use bir_core::forms::form_2553::{Form2553Draft, FORM_2553_ATC_OPTIONS};
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Special Law Fixture Inc", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Gaming", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+                "default_form_type": "2553", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form2553Draft::new_from_profile(&profile, 2025, 2);
+        draft.set_atc(0, &FORM_2553_ATC_OPTIONS[0]).unwrap();
+        draft.schedule[0].taxable_amount = 123_456.79;
+        draft.creditable_tax_withheld = 50_000.0;
+        draft.recompute();
+        let html = filled_document("2553-1999", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c18"), "123");
+        assert_eq!(comb_text(&html, "p1c24"), "00000");
+        assert_eq!(comb_text(&html, "p1c16"), "039");
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert!(html.contains("SPECIAL LAW FIXTURE INC"));
+        assert!(html.contains("123,456.79"));
+        assert!(html.contains("6,172.84"));
+        assert_eq!(named_values(&html, "p1c2"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c3"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c12"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c34"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"frm2553:"));
+    }
+
+    fn fixture_profile(form: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Print Fixture Corp", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Brokerage", "registered_address": "1 Fixture St",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": form, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filled_document_2552_fills_identity_money_schedules_and_boxes() {
+        use bir_core::forms::form_2552::{Form2552Draft, Form2552ShareRow, Form2552Transaction};
+        let mut draft = Form2552Draft::new_from_profile(&fixture_profile("2552"), 2025, 3, 14);
+        draft.set_transaction(Form2552Transaction::LocalStockExchange);
+        draft.schedule.push(Form2552ShareRow {
+            date: "03/14/2025".into(),
+            seller: "Seller One".into(),
+            buyer: "Buyer One".into(),
+            issuing_corporation: "Listed Corp".into(),
+            number_of_shares: 1_000.0,
+            tax_base: 1_234_567.89,
+            ..Default::default()
+        });
+        draft.recompute();
+        let html = filled_document("2552-2018", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c6"), "03");
+        assert_eq!(comb_text(&html, "p1c8"), "2025");
+        assert_eq!(comb_text(&html, "p1c14"), "123");
+        assert_eq!(comb_text(&html, "p1c20"), "00000");
+        assert_eq!(comb_text(&html, "p1c22"), "039");
+        assert!(
+            html.contains("PRINT FIXTURE CORP") || comb_text(&html, "p1c24").starts_with("PRINT")
+        );
+        // Item 13: 7,407.00 splits into the peso and centavo combs.
+        assert_eq!(comb_text(&html, "p1c51").trim(), "7407");
+        assert_eq!(comb_text(&html, "p1c53"), "00");
+        assert_eq!(named_values(&html, "p1c41"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert!(html.contains("1,234,567.89"));
+        assert!(html.contains("SELLER ONE"));
+        assert!(!html.contains("name=\"frm2552:"));
+    }
+
+    #[test]
+    fn filled_document_2550m_fills_items_and_schedules() {
+        use bir_core::forms::form_2550m::{Form2550MDraft, Form2550MWithholdingRow};
+        let mut draft = Form2550MDraft::new_from_profile(&fixture_profile("2550M"), 2022, 6);
+        draft.add_sales_atc("VB010").unwrap();
+        draft.sales_schedule[0].amount = 100_000.0;
+        draft.schedule_6.push(Form2550MWithholdingRow {
+            period_covered: "06/30/2022".into(),
+            withholding_agent: "Agent Corp".into(),
+            income_payment: 1_000.0,
+            total_withheld: 50.0,
+            applied_current_month: 40.0,
+        });
+        draft.recompute();
+        let html = filled_document("2550m-2007", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c1"), "06");
+        assert_eq!(comb_text(&html, "p1c2"), "2022");
+        assert!(html.contains("PRINT FIXTURE CORP"));
+        assert!(html.contains("100,000.00"));
+        assert!(html.contains("12,000.00"));
+        assert!(html.contains("VB010"));
+        assert!(html.contains("AGENT CORP"));
+        assert_eq!(named_values(&html, "p1c5"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c25"), vec!["X".to_string()]);
+    }
+
+    #[test]
+    fn filled_document_2200m_fills_identity_schedule_money_and_boxes() {
+        use bir_core::forms::form_2200m::{Form2200MDraft, Form2200MPayment};
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Mineral Fixture Corp", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Mining", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+                "default_form_type": "2200M", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form2200MDraft::new_from_profile(&profile, 2025, 3);
+        draft.day = 14;
+        draft.manner_of_payment = Form2200MPayment::Prepayment;
+        let row = draft.row_mut(3).unwrap();
+        row.place_of_removal = "Rizal".into();
+        row.local_value_taxable = Some(100_000.0);
+        row.local_tax_due = Some(4_000.0);
+        draft.surcharge = 25.5;
+        draft.recompute();
+        draft.tax_deposit = draft.tax_still_due;
+        draft.recompute();
+        let html = filled_document("2200m-2018", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "03");
+        assert_eq!(comb_text(&html, "p1c6"), "14");
+        assert_eq!(comb_text(&html, "p1c8"), "2025");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c22"), "00000");
+        assert_eq!(comb_text(&html, "p1c24"), "039");
+        assert!(html.contains("MINERAL FIXTURE CORP"));
+        assert!(html.contains("100,000.00"));
+        assert!(html.contains("RIZAL"));
+        // Item 16 4,000.00 and Item 22 4,025.50 in peso + centavo combs.
+        assert_eq!(comb_text(&html, "p1c65"), "4000");
+        assert_eq!(comb_text(&html, "p1c67"), "00");
+        assert_eq!(comb_text(&html, "p1c109"), "4025");
+        assert_eq!(comb_text(&html, "p1c111"), "50");
+        assert_eq!(named_values(&html, "p1c13"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c12"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c59"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"frm2200M:"));
+    }
+
+    fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Withholding Fixture Inc", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Fixture", "registered_address": "1 Fixture St",
+            "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+            "default_form_type": code, "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filled_document_1606_fills_parties_atc_box_amounts_and_schedules() {
+        use bir_core::forms::form_1606::{
+            Form1606Draft, Form1606SellerType, Form1606TaxRate, Form1606Transaction,
+        };
+        let mut draft = Form1606Draft::new_from_profile(&withholding_profile("1606"), 2025, 1);
+        draft.transaction_month = 6;
+        draft.transaction_day = 15;
+        draft.is_amended = true;
+        draft.seller_tin = "98765432100000".into();
+        draft.seller_name = "Seller Fixture".into();
+        draft.seller_type = Some(Form1606SellerType::Corporation);
+        draft.tct_number = "T-1".into();
+        draft.set_transaction(Form1606Transaction::InstallmentSale);
+        draft.gross_selling_price = 5_000_000.0;
+        draft.installment_collected = 250_000.0;
+        draft.tax_rate = Some(Form1606TaxRate::OnePointFive);
+        draft.recompute();
+        let html = filled_document("1606-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "06");
+        assert_eq!(comb_text(&html, "p1c6"), "2025");
+        assert_eq!(named_values(&html, "p1c14"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["".to_string()]);
+        assert!(html.contains("WITHHOLDING FIXTURE INC"));
+        assert_eq!(comb_text(&html, "p1c27"), "123-456-788-00000");
+        assert_eq!(comb_text(&html, "p1c42"), "987-654-321-00000");
+        // Corporate seller at 1.5%: the WC 555 box.
+        assert_eq!(named_values(&html, "p1c57"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c53"), vec!["".to_string()]);
+        assert_eq!(comb_text(&html, "p1c74"), "1");
+        assert_eq!(comb_text(&html, "p1c76"), "5");
+        assert_eq!(comb_text(&html, "p1c70"), "250000");
+        assert_eq!(comb_text(&html, "p1c79"), "3750");
+        assert_eq!(comb_text(&html, "p1c81"), "00");
+        assert_eq!(named_values(&html, "p2c85"), vec!["X".to_string()]);
+        assert_eq!(comb_text(&html, "p2c81"), "5000000");
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c13"), "T-1");
+        assert!(!html.contains("name=\"frm1606:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
+    fn filled_document_1600vt_and_1600pt_fill_identity_part_ii_and_schedule() {
+        use bir_core::forms::form_1600pt::{Form1600PtAgentCategory, Form1600PtDraft};
+        use bir_core::forms::form_1600vt::{
+            Form1600VtAgentCategory, Form1600VtDraft, Form1600VtScheduleRow,
+        };
+        let mut vt = Form1600VtDraft::new_from_profile(&withholding_profile("1600VT"), 2025, 6);
+        vt.set_agent_category(Form1600VtAgentCategory::Government);
+        vt.set_taxes_withheld(true);
+        vt.toggle_atc(2).unwrap();
+        vt.atc_rows[0].tax_base = 10_000.0;
+        vt.schedule.push(Form1600VtScheduleRow {
+            tin: "987654321000".into(),
+            payee_name: "Payee Fixture".into(),
+            atc: "WV110".into(),
+            income_payment: 10_000.0,
+            tax_rate: 12.0,
+            tax_withheld: 0.0,
+        });
+        vt.recompute();
+        let html = filled_document("1600-vt-2018", &vt.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "06");
+        assert_eq!(comb_text(&html, "p1c5"), "25");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c22"), "00000");
+        assert_eq!(named_values(&html, "p1c35"), vec!["X".to_string()]);
+        assert_eq!(comb_text(&html, "p1c50"), "WV110");
+        assert_eq!(comb_text(&html, "p1c51"), "10000");
+        assert_eq!(comb_text(&html, "p1c54"), "12");
+        assert_eq!(comb_text(&html, "p1c56"), "1200");
+        assert_eq!(comb_text(&html, "p1c136"), "1200");
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c17"), "PAYEE FIXTURE");
+        assert_eq!(comb_text(&html, "p2c21"), "1,200.00");
+        assert!(!html.contains("name=\"frm1600VT:"));
+
+        let mut pt = Form1600PtDraft::new_from_profile(&withholding_profile("1600PT"), 2025, 6);
+        pt.set_agent_category(Form1600PtAgentCategory::Government);
+        pt.set_taxes_withheld(true);
+        let wb200 = bir_core::forms::form_1600pt::form_1600pt_atc_index("WB200", "0.6").unwrap();
+        pt.toggle_atc(wb200).unwrap();
+        pt.atc_rows[0].tax_base = 10_000.0;
+        pt.recompute();
+        let html = filled_document("1600-pt-2018", &pt.to_print_field_map()).unwrap();
+        // 1600-PT prints Private left of Government (1600-VT the other way).
+        assert_eq!(named_values(&html, "p1c36"), vec!["X".to_string()]);
+        assert_eq!(comb_text(&html, "p1c50"), "WB200");
+        assert_eq!(comb_text(&html, "p1c54"), ".6");
+        assert_eq!(comb_text(&html, "p1c56"), "60");
+    }
+
+    #[test]
+    fn filled_document_1600wp_fills_part_ii_by_atc_row_and_schedule() {
+        use bir_core::forms::form_1600wp::{
+            Form1600WpAgentCategory, Form1600WpDraft, Form1600WpScheduleRow,
+        };
+        let mut draft = Form1600WpDraft::new_from_profile(&withholding_profile("1600WP"), 2025, 6);
+        draft.day = 15;
+        draft.set_taxes_withheld(true);
+        draft.set_agent_category(Form1600WpAgentCategory::Private);
+        draft.toggle_atc("WB194").unwrap();
+        draft.atc_rows[0].tax_base = 2_500.0;
+        draft.schedule.push(Form1600WpScheduleRow {
+            tin: "987654321000".into(),
+            payee_name: "Winner Fixture".into(),
+            atc_code: "WB194".into(),
+            amount: 2_500.0,
+            tax_withheld: 0.0,
+        });
+        draft.recompute();
+        let html = filled_document("1600wp-2010", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c1"), "06152025");
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c18"), vec!["X".to_string()]);
+        // The only ticked ATC is WB194: its printed row, not WB191's.
+        assert_eq!(comb_text(&html, "p1c47"), "2,500.00");
+        assert_eq!(comb_text(&html, "p1c49"), "250.00");
+        assert_eq!(comb_text(&html, "p1c32"), "");
+        assert_eq!(comb_text(&html, "p1c51"), "250.00");
+        assert_eq!(comb_text(&html, "p1c96"), "WINNER FIXTURE");
+        assert_eq!(comb_text(&html, "p1c74"), "00000");
+        assert!(!html.contains("name=\"frm1600WP:"));
+    }
+
+    #[test]
+    fn filled_document_1702q_fills_identity_amounts_rates_and_boxes() {
+        use bir_core::forms::form_1702q::{
+            Form1702qDeduction, Form1702qDraft, Form1702qOtherCredit, Form1702qSchedule1Column,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Dummy Corporation", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "sample@example.com",
+                "default_form_type": "1702Q", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1702qDraft::new_from_profile(&profile, 2025, 2);
+        draft.atc_mcit = true;
+        draft.atc = "IC010_25%".to_string();
+        draft.deduction = Form1702qDeduction::Itemized;
+        draft.special = Form1702qSchedule1Column {
+            sales: 800_000.5,
+            cost_of_sales: 300_000.0,
+            rate: 10.0,
+            ..Form1702qSchedule1Column::default()
+        };
+        draft.sales = 5_000_000.5;
+        draft.cost_of_sales = 1_200_000.0;
+        draft.mcit_gross_income_q2 = 3_800_000.5;
+        draft.other_credits = vec![Form1702qOtherCredit {
+            description: "Sample credit".to_string(),
+            amount: 1_234.0,
+        }];
+        draft.recompute();
+        let html = filled_document("1702q-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(named_values(&html, "p1c8"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c7"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c13"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c16"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c19"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c49"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c54"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["1".to_string()]);
+        assert_eq!(named_values(&html, "p1c23"), vec!["5".to_string()]);
+        assert_eq!(named_values(&html, "p1c17"), vec!["IC 010".to_string()]);
+        assert_eq!(comb_text(&html, "p1c26"), "123");
+        assert_eq!(comb_text(&html, "p1c34"), "039");
+        assert_eq!(comb_text(&html, "p1c37"), "SAMPLE DUMMY CORPORATION");
+        assert_eq!(
+            comb_text(&html, "p1c40"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
+        );
+        assert_eq!(comb_text(&html, "p1c41"), "UEZON CITY");
+        assert_eq!(comb_text(&html, "p1c47"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c55"), "5,000,001.00");
+        assert_eq!(comb_text(&html, "p2c57"), "1,200,000.00");
+        assert_eq!(comb_text(&html, "p2c13"), "  800,001.00");
+        assert_eq!(comb_text(&html, "p2c42"), "10");
+        assert_eq!(comb_text(&html, "p2c44"), "0");
+        assert_eq!(comb_text(&html, "p2c73"), "25");
+        assert_eq!(comb_text(&html, "p2c110"), "SAMPLE CREDIT");
+        assert_eq!(comb_text(&html, "p2c112"), "    1,234.00");
+        assert_eq!(
+            comb_text(&html, "p1c57"),
+            format!(
+                "{:>12}",
+                bir_core::official_xml::official_amount(draft.income_tax_due)
+            )
+        );
+        assert!(!html.contains("name=\"frm1702q:"));
+    }
+
+    #[test]
+    fn filled_document_1701a_fills_identity_whole_peso_combs_and_boxes() {
+        use bir_core::forms::form_1701a::{
+            Form1701AAtc, Form1701ACivilStatus, Form1701AColumn, Form1701ADraft, Form1701AFilerType,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Dummy, Sample Taxpayer", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "sample@example.com",
+                "default_form_type": "1701A", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1701ADraft::new_from_profile(&profile, 2025);
+        draft.filer_type = Form1701AFilerType::SingleProprietor;
+        draft.atc = Form1701AAtc::II012;
+        draft.civil_status = Form1701ACivilStatus::Single;
+        draft.birth_date = "01/15/1980".to_string();
+        draft.citizenship = "Filipino".to_string();
+        draft.other_income_41_description = "Interest income".to_string();
+        draft.taxpayer = Form1701AColumn {
+            sales: 1_234_567.89,
+            sales_returns: 10_000.5,
+            other_income_41: 5_000.55,
+            gpp_share: 20_000.0,
+            quarterly_payments: 30_000.0,
+            surcharge: 1_000.0,
+            ..Form1701AColumn::default()
+        };
+        draft.recompute();
+        let html = filled_document("1701a-2018", &draft.to_print_field_map()).unwrap();
+        // Header and identity.
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c20"), "788");
+        assert_eq!(comb_text(&html, "p1c23"), "039");
+        assert_eq!(comb_text(&html, "p1c32"), "DUMMY, SAMPLE TAXPAYER");
+        assert_eq!(
+            comb_text(&html, "p1c34"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c35"), "QUEZON CITY");
+        assert_eq!(comb_text(&html, "p1c40"), "01");
+        assert_eq!(comb_text(&html, "p1c42"), "1980");
+        assert_eq!(comb_text(&html, "p1c43"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p1c47"), "FILIPINO");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "DUMMY");
+        assert!(html.contains("INTEREST INCOME"));
+        // Whole pesos, right-aligned in the 8-slot comb; no decimal glyph.
+        assert_eq!(comb_text(&html, "p2c13"), " 1234568");
+        assert_eq!(comb_text(&html, "p2c48"), "   94448");
+        assert_eq!(comb_text(&html, "p1c74"), "   94448");
+        assert_eq!(comb_text(&html, "p1c89"), "    1000");
+        assert!(!comb_text(&html, "p1c74").contains('.'));
+        // Zero and column B (not joint) stay blank.
+        assert_eq!(comb_text(&html, "p2c52").trim(), "");
+        assert_eq!(comb_text(&html, "p1c75").trim(), "");
+        // X boxes.
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c163"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c11"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c24"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c27"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c195"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c56"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c67"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p2c126"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1701A:"));
+    }
+
+    #[test]
+    fn filled_document_1701ms_fills_both_columns_amounts_and_boxes() {
+        use bir_core::forms::form_1701ms::{
+            Form1701MsCivilStatus, Form1701MsColumn, Form1701MsDeduction, Form1701MsDraft,
+            Form1701MsFiling, Form1701MsSource, Form1701MsSpouseInfo, Form1701MsTaxOption,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Dummy Taxpayer", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Retail", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1701MS", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1701MsDraft::new_from_profile(&profile, 2025);
+        draft.civil_status = Form1701MsCivilStatus::Married;
+        draft.filing = Form1701MsFiling::Jointly;
+        draft.spouse_info = Form1701MsSpouseInfo {
+            tin: "12345678800000".to_string(),
+            rdo_code: "039".to_string(),
+            name: "Sample Dummy Spouse".to_string(),
+            email: "spouse@example.com".to_string(),
+            contact_number: "09170000001".to_string(),
+        };
+        draft.taxpayer = Form1701MsColumn {
+            source: Form1701MsSource::Mixed,
+            tax_option: Form1701MsTaxOption::Graduated,
+            deduction: Form1701MsDeduction::Osd,
+            gross_compensation: 900_000.0,
+            non_taxable_compensation: 90_000.0,
+            sales: 1_500_000.0,
+            sales_returns: 10_000.0,
+            quarterly_payments: 50_000.0,
+            cwt_2316: 80_000.0,
+            ..Form1701MsColumn::default()
+        };
+        draft.spouse = Form1701MsColumn {
+            source: Form1701MsSource::Compensation,
+            gross_compensation: 600_000.0,
+            non_taxable_compensation: 90_000.0,
+            cwt_2316: 44_500.0,
+            ..Form1701MsColumn::default()
+        };
+        draft.perjury_agreed = true;
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let html = filled_document("1701ms-2024", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "12");
+        assert_eq!(comb_text(&html, "p1c5"), "2025");
+        assert_eq!(comb_text(&html, "p1c23"), "123-456-788-00000");
+        assert_eq!(comb_text(&html, "p1c29"), "SAMPLE DUMMY TAXPAYER");
+        assert_eq!(comb_text(&html, "p1c30"), "SAMPLE DUMMY SPOUSE");
+        assert_eq!(comb_text(&html, "p1c85"), "II013");
+        assert_eq!(comb_text(&html, "p1c90"), "II011");
+        // Whole-peso 9-slot combs, right-aligned digits without separators.
+        assert_eq!(named_values(&html, "p2c13").len(), 9);
+        assert_eq!(comb_text(&html, "p2c13"), "   900000");
+        assert_eq!(comb_text(&html, "p2c14"), "   600000");
+        assert_eq!(comb_text(&html, "p2c27"), "  1500000");
+        assert_eq!(comb_text(&html, "p2c126"), "    80000");
+        let aggregate = format!("{:>9}", draft.aggregate_amount_payable as i64);
+        assert_eq!(comb_text(&html, "p1c141"), aggregate);
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "SAMPLE DUMMY TAXPAYER");
+        for x in [
+            "p1c9", "p1c11", "p1c15", "p1c44", "p1c46", "p1c52", "p1c81", "p1c153",
+        ] {
+            assert_eq!(named_values(&html, x), vec!["X".to_string()], "{x}");
+        }
+        for blank in ["p1c8", "p1c10", "p1c43", "p1c79", "p1c144"] {
+            assert_eq!(named_values(&html, blank), vec!["".to_string()], "{blank}");
+        }
+        assert!(!html.contains("name=\"frm1701MS:"));
+        // A separate return prints no spouse column.
+        draft.filing = Form1701MsFiling::Separately;
+        draft.recompute();
+        let html = filled_document("1701ms-2024", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c24"), "");
+        assert_eq!(comb_text(&html, "p2c14"), "");
+    }
+
+    #[test]
+    fn filled_document_1702ex_fills_identity_whole_pesos_schedules_and_boxes() {
+        use bir_core::forms::form_1702ex::{
+            Form1702ExAtc, Form1702ExDeduction, Form1702ExDraft, Form1702ExOverpayment,
+            Form1702ExRow, Form1702ExSpecialRow,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Exempt Fixture Foundation Inc", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Charity", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1702EX", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1702ExDraft::new_from_profile(&profile, 2025);
+        draft.atc = Form1702ExAtc::IC011;
+        draft.deduction = Form1702ExDeduction::Itemized;
+        draft.date_of_incorporation = "03/01/2010".to_string();
+        draft.sales = 1_234_567.5;
+        draft.ordinary_items[1] = 10_000.0;
+        draft.other_deductions = vec![Form1702ExRow {
+            description: "Sample expense".to_string(),
+            amount: 5_000.0,
+        }];
+        draft.special_rows = vec![Form1702ExSpecialRow {
+            description: "Sample deduction".to_string(),
+            legal_basis: "RA 0000".to_string(),
+            amount: 15_000.0,
+        }];
+        draft.cwt_q4 = 1_000.0;
+        draft.overpayment = Form1702ExOverpayment::Refund;
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let cells = writer_cells("1702ex-2018").unwrap();
+        for key in cells
+            .joins
+            .keys()
+            .chain(cells.xbox_joins.iter().map(|join| &join.writer_key))
+        {
+            assert!(fields.contains_key(key), "print map lacks {key}");
+        }
+        let html = filled_document("1702ex-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c25"), "123");
+        assert_eq!(comb_text(&html, "p1c33"), "039");
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p3c5"), "123456788");
+        assert!(comb_text(&html, "p1c36").starts_with("EXEMPT FIXTURE FOUNDATION INC"));
+        assert!(comb_text(&html, "p2c6").starts_with("EXEMPT FIXTURE FOUNDATIO"));
+        assert_eq!(comb_text(&html, "p1c50"), "2010");
+        assert_eq!(named_values(&html, "p1c19"), vec!["1".to_string()]);
+        assert_eq!(named_values(&html, "p1c20"), vec!["2".to_string()]);
+        assert_eq!(named_values(&html, "p1c22"), vec!["5".to_string()]);
+        // Whole pesos, right-aligned in the 12-slot comb.
+        assert_eq!(comb_text(&html, "p2c9"), "     1234568");
+        assert_eq!(comb_text(&html, "p3c12"), "       10000");
+        assert_eq!(comb_text(&html, "p3c52"), "SAMPLE EXPENSE");
+        assert_eq!(comb_text(&html, "p3c54"), "        5000");
+        assert_eq!(comb_text(&html, "p3c58"), "");
+        assert_eq!(comb_text(&html, "p3c81"), "SAMPLE DEDUCTIO");
+        assert_eq!(comb_text(&html, "p3c87"), "");
+        assert_eq!(comb_text(&html, "p2c47"), "        1000");
+        assert_eq!(comb_text(&html, "p1c83"), "      (1000)");
+        for checked in ["p1c7", "p1c13", "p1c15", "p1c11", "p1c56", "p1c86"] {
+            assert_eq!(
+                named_values(&html, checked),
+                vec!["X".to_string()],
+                "{checked}"
+            );
+        }
+        for unchecked in ["p1c8", "p1c12", "p1c18", "p1c57", "p1c87", "p1c88"] {
+            assert_eq!(
+                named_values(&html, unchecked),
+                vec!["".to_string()],
+                "{unchecked}"
+            );
+        }
+        // Items 18 and 41 (freeze preprints 000), signatory and Part III stay blank.
+        assert_eq!(comb_text(&html, "p1c75"), "");
+        assert_eq!(comb_text(&html, "p2c38"), "");
+        assert_eq!(comb_text(&html, "p1c116"), "");
+        assert!(!html.contains("name=\"frm1702EX:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
-        for slug in ["1601c-2018", "2551q-2018"] {
+        // Sheets that print amounts in one text cell, not peso + cent combs, say false.
+        // 2553 (1999) prints each amount in one text cell and 1702Q (2018) in
+        // one 12-slot comb, not peso + cent combs.
+        for (slug, split_money) in [
+            ("1601c-2018", true),
+            ("2551q-2018", true),
+            ("2553-1999", false),
+            ("2552-2018", true),
+            ("2550m-2007", false),
+            ("2200m-2018", true),
+            ("1606-2018", true),
+            ("1600-vt-2018", true),
+            ("1600-pt-2018", true),
+            ("1600wp-2010", false),
+            ("1702q-2018", false),
+            // 1700 (2018) prints whole pesos in one comb per column.
+            ("1700-2018", false),
+            // 1701A (2018) prints whole pesos in one 8-slot comb per column.
+            ("1701a-2018", false),
+            ("1701ms-2024", false),
+            ("1702ex-2018", false),
+            // 1604F/1604E print amounts in single text cells; 1604C splits Item 12.
+            ("1604f-2018", false),
+            ("1604c-2018", true),
+            ("1604e-2018", false),
+        ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();
             assert!(!cells.joins.is_empty(), "{slug}");
-            assert!(!cells.money_joins.is_empty(), "{slug} money_joins");
+            assert_eq!(
+                !cells.money_joins.is_empty(),
+                split_money,
+                "{slug} money_joins"
+            );
             assert!(!cells.xbox_joins.is_empty(), "{slug} xbox_joins");
             let present: std::collections::BTreeSet<&str> =
                 input_tags(html).into_iter().map(|tag| tag.name).collect();

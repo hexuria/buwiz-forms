@@ -1,9 +1,9 @@
 //! Evidence-safe editor for exact form `2550Qv2024`.
 //!
 //! The supplied official PDF and reviewed 160-field editable-save pair prove
-//! draft persistence and the form's arithmetic. They do not prove an online
-//! submission transport, so this view saves local drafts but never queues or
-//! submits them.
+//! draft persistence and the form's arithmetic. This view saves local drafts
+//! and, once a draft is ready, queues it for background submission through the
+//! generic queue.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
@@ -21,6 +21,7 @@ use bir_core::forms::form_2550q::{
     Form2550QQuarter, Form2550QRowFamily, Form2550QTaxpayerClassification,
 };
 use bir_core::forms::{FilingPeriod, FilingStatus, FormValidator};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::StyledExt;
 use gpui_component::button::ButtonVariants;
@@ -30,6 +31,7 @@ use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_validation::SemanticFieldTargets;
+use crate::views::event_form_kit::Layout;
 
 const YEAR_END_MONTH: &str = "year_end_month";
 const RAW_TAXABLE_YEAR: &str = "raw_taxable_year";
@@ -308,6 +310,8 @@ pub struct Form2550QV2View {
     draft: Form2550QDraft,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
+    /// Width class captured at the start of each render so row helpers can stack on Phone.
+    layout: std::cell::Cell<Layout>,
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
     editor_state_error: Option<String>,
@@ -696,13 +700,14 @@ impl Form2550QV2View {
                 "2550Q editor is locked because persisted control identity could not be validated. No positional fallback was used. {error}"
             )
         }).or_else(|| migrated_legacy_draft.then(|| {
-            "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before filing externally."
+            "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before queuing it for submission."
                 .to_string()
         }));
         let mut view = Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
+            layout: std::cell::Cell::new(Layout::Desktop),
             input_errors: Vec::new(),
             validation_errors,
             editor_state_error,
@@ -1361,28 +1366,28 @@ impl Form2550QV2View {
     }
 
     fn render_input_row(&self, label: &str, key: &'static str) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>
-                    {Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable())}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .child(half(layout).text_sm().child(label.to_string()))
+            .child(
+                half(layout).child(
+                    Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable()),
+                ),
+            )
+            .into_any_element()
     }
 
     fn render_candidate_raw_text_row(&self, label: &str, key: &'static str) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>
-                    {Input::new(field(&self.candidate_raw_text_fields, key))
-                        .disabled(!self.editor_is_editable())}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .child(half(layout).text_sm().child(label.to_string()))
+            .child(
+                half(layout).child(
+                    Input::new(field(&self.candidate_raw_text_fields, key))
+                        .disabled(!self.editor_is_editable()),
+                ),
+            )
+            .into_any_element()
     }
 
     fn render_computed_row(
@@ -1391,13 +1396,24 @@ impl Form2550QV2View {
         value: Option<f64>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
-                <div text_sm font_weight={FontWeight::BOLD}>{label.to_string()}</div>
-                <div font_weight={FontWeight::BOLD}>{format_optional_money(value)}</div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .p_2()
+            .rounded_md()
+            .bg(cx.theme().muted.opacity(0.5))
+            .child(
+                half(layout)
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child(label.to_string()),
+            )
+            .child(
+                half(layout)
+                    .when(layout != Layout::Phone, |d| d.text_right())
+                    .font_weight(FontWeight::BOLD)
+                    .child(format_optional_money(value)),
+            )
+            .into_any_element()
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
@@ -1447,6 +1463,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 1 row {}", index + 1))}>
                 {input_pair("Purchase/import date", &row.date, editable)}
@@ -1494,6 +1514,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 3 row {}", index + 1))}>
                 {input_pair("Period from", &row.period_from, editable)}
@@ -1517,6 +1541,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 4 row {}", index + 1))}>
                 {input_pair("Period from", &row.period_from, editable)}
@@ -1549,15 +1577,15 @@ impl FormViewTrait for Form2550QV2View {
     }
 
     fn current_status(&self) -> FilingStatus {
-        self.draft.status.clone()
+        self.draft.lifecycle.status.clone()
     }
 
     fn submitted_at(&self) -> Option<&str> {
-        self.draft.submitted_at.as_deref()
+        self.draft.lifecycle.submitted_at.as_deref()
     }
 
     fn confirmed_at(&self) -> Option<&str> {
-        self.draft.confirmed_at.as_deref()
+        self.draft.lifecycle.confirmed_at.as_deref()
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1607,7 +1635,7 @@ impl FormViewTrait for Form2550QV2View {
                     FORM_CODE,
                     self.draft.taxable_year,
                     &period,
-                    &self.draft.status,
+                    &self.draft.lifecycle.status,
                     &self.draft,
                 )
                 .map_err(|error| error.to_string())
@@ -1617,8 +1645,7 @@ impl FormViewTrait for Form2550QV2View {
             Ok(id) => {
                 self.draft.id = Some(id);
                 self.status_message = Some(if !has_unresolved_issues {
-                    "Draft saved locally for preservation. Filing and submission remain manual/external."
-                        .to_string()
+                    "Draft saved. Queue it for submission when ready.".to_string()
                 } else {
                     "Draft saved locally for preservation with unresolved issues, including any malformed visible text shown below. Filing and submission remain disabled."
                         .to_string()
@@ -1652,24 +1679,84 @@ impl FormViewTrait for Form2550QV2View {
         cx.notify();
     }
 
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "2550Qv2024 has reviewed editable-save evidence only. Electronic queue/submission is not certified."
-                .to_string(),
-        );
-        cx.emit(Form2550QV2Event::PushNotification(
-            "warning".to_string(),
-            "Manual / External Filing".to_string(),
-            "This 2550Q draft cannot be queued or submitted by the app.".to_string(),
+    /// Queue through the generic submission path, exactly as the generic
+    /// form pages do: the background worker uploads the official payload.
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use bir_core::forms::queueable::QueueableForm;
+        if !bir_core::forms::support_level::can_queue_for_submission(FORM_CODE) {
+            self.status_message =
+                Some("2550Q is not enabled for in-app submission in this build.".to_string());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message = Some(
+                "This return is already queued or filed and cannot be queued again.".to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        if self.editor_state_error.is_some() {
+            self.status_message = Some(
+                "The return was not queued because the editor identity boundary is unsafe."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(None, cx);
+        if self.editor_state_error.is_some() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let before = self.draft.clone();
+        if let Err(errors) = QueueableForm::queue(
+            &mut self.draft,
+            bir_core::filing_queue::QueueAuthSource::Gui,
+        ) {
+            self.validation_errors = errors;
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let saved = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_queueable(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match saved {
+            Ok(id) => self.draft.id = Some(id),
+            Err(error) => {
+                self.draft = before;
+                self.status_message = Some(format!(
+                    "Could not queue Form 2550Q. No submission was started: {error}"
+                ));
+                cx.notify();
+                return;
+            }
+        }
+        self.status_message = Some(format!(
+            "Queued for background submission as {}.",
+            QueueableForm::submission_filename(&self.draft)
         ));
+        self.notify(
+            window,
+            cx,
+            gpui_component::notification::NotificationType::Success,
+            "Form 2550Q queued.",
+        );
+        cx.emit(Form2550QV2Event::Saved);
+        bir_core::background_cron::wake();
         cx.notify();
     }
 
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "Payment status cannot advance automatically for a manual/external 2550Q filing."
-                .to_string(),
-        );
+        self.status_message =
+            Some("2550Q payment status needs a verified confirmation workflow.".to_string());
         cx.notify();
     }
 
@@ -1745,7 +1832,7 @@ impl FormViewTrait for Form2550QV2View {
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(format!(
-                    "{} Preview is available for review; filing remains manual/external.",
+                    "{} Preview is for review only; it does not queue or submit the return.",
                     launch_kind.status_message()
                 ));
                 launch_kind.observe_close(cx, |this, cx| {
@@ -1771,10 +1858,17 @@ impl FormViewTrait for Form2550QV2View {
 }
 
 impl Render for Form2550QV2View {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        self.layout.set(layout);
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
         let is_draft = self.draft.is_editable();
         let editor_is_editable = self.editor_is_editable();
-        let mut basis_choices = div().flex().gap_2();
+        let mut basis_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [
             ("Calendar", Form2550QFilingBasis::Calendar),
             ("Fiscal", Form2550QFilingBasis::Fiscal),
@@ -1789,7 +1883,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut quarter_choices = div().flex().gap_2();
+        let mut quarter_choices = div().flex().flex_wrap().gap_2();
         for value in Form2550QQuarter::ALL {
             let action = ChoiceAction::Quarter(value);
             quarter_choices = quarter_choices.child(self.render_choice(
@@ -1801,7 +1895,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut amended_choices = div().flex().gap_2();
+        let mut amended_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::Amended(value);
             amended_choices = amended_choices.child(self.render_choice(
@@ -1813,7 +1907,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut short_period_choices = div().flex().gap_2();
+        let mut short_period_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::ShortPeriod(value);
             short_period_choices = short_period_choices.child(self.render_choice(
@@ -1825,7 +1919,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut class_choices = div().flex().gap_2();
+        let mut class_choices = div().flex().flex_wrap().gap_2();
         for value in Form2550QTaxpayerClassification::ALL {
             let action = ChoiceAction::Classification(value);
             class_choices = class_choices.child(self.render_choice(
@@ -1837,7 +1931,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut relief_choices = div().flex().gap_2();
+        let mut relief_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::TaxRelief(value);
             relief_choices = relief_choices.child(self.render_choice(
@@ -1870,6 +1964,7 @@ impl Render for Form2550QV2View {
         }
 
         let mut content = div()
+            .w_full()
             .max_w(px(1100.0))
             .mx_auto()
             .flex()
@@ -2093,13 +2188,13 @@ impl Render for Form2550QV2View {
 
         rsx! {
             <div flex flex_col w_full h_full bg={cx.theme().background}>
-                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                <div flex items_center justify_between flex_wrap gap_2 px={pad} py_4 border_b_1 border_color={cx.theme().border}>
                     {gpui_component::button::Button::new("2550q_back")
                         .label("← Back")
                         .on_click(cx.listener(|_, _, _, cx| {
                             cx.emit(Form2550QV2Event::BackToDashboard);
                         }))}
-                    <div flex items_center gap_3>
+                    <div flex items_center flex_wrap gap_3>
                         {gpui_component::button::Button::new("2550q_validate")
                             .label("Validate")
                             .outline()
@@ -2126,11 +2221,11 @@ impl Render for Form2550QV2View {
                             .disabled(true)}
                     </div>
                 </div>
-                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
+                <div p={pad} border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
                     {self.render_header(cx)}
                     <div mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>
-                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
+                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p={pad}>
                     {content}
                 </div>
             </div>
@@ -2188,14 +2283,33 @@ fn row_card(cx: &Context<Form2550QV2View>, title: &str) -> Div {
     }
 }
 
-fn input_pair(label: &str, input: &Entity<InputState>, editable: bool) -> AnyElement {
-    let root = rsx! {
-        <div flex items_center gap_3>
-            <div w_1_2 text_sm>{label.to_string()}</div>
-            <div w_1_2>{Input::new(input).disabled(!editable)}</div>
-        </div>
-    };
-    root.into_any_element()
+/// Label/control pair: side by side above Phone, stacked on Phone.
+fn pair_row(layout: Layout) -> Div {
+    if layout == Layout::Phone {
+        div().flex().flex_col().gap_1().w_full()
+    } else {
+        div().flex().justify_between().items_center().gap_4()
+    }
+}
+
+fn half(layout: Layout) -> Div {
+    if layout == Layout::Phone {
+        div().w_full().min_w_0()
+    } else {
+        div().w_1_2().min_w_0()
+    }
+}
+
+fn input_pair(
+    layout: Layout,
+    label: &str,
+    input: &Entity<InputState>,
+    editable: bool,
+) -> AnyElement {
+    pair_row(layout)
+        .child(half(layout).text_sm().child(label.to_string()))
+        .child(half(layout).child(Input::new(input).disabled(!editable)))
+        .into_any_element()
 }
 
 fn text_input(

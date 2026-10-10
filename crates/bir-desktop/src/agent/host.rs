@@ -701,15 +701,9 @@ impl BirAgentHost {
             target,
             ActiveView::Dashboard
                 | ActiveView::Form2551Q
-                | ActiveView::Form1701Q
                 | ActiveView::Form1601C
-                | ActiveView::Form0619E
-                | ActiveView::Form0619F
-                | ActiveView::Form0605
                 | ActiveView::Form2550Q
-                | ActiveView::Form1701
-                | ActiveView::Form1702RT
-                | ActiveView::Form1702MX
+                | ActiveView::Queueable(_)
         ) && self.selected_tin.is_none()
             && target == ActiveView::Dashboard
         {
@@ -4152,15 +4146,11 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Settings => "Settings",
         ActiveView::AdminCalendarDashboard => "Tax Calendars",
         ActiveView::Form2551Q => "Form 2551Q",
-        ActiveView::Form1701Q => "Form 1701Q",
         ActiveView::Form1601C => "Form 1601C",
-        ActiveView::Form0619E => "Form 0619E",
-        ActiveView::Form0619F => "Form 0619F",
-        ActiveView::Form0605 => "Form 0605",
         ActiveView::Form2550Q => "Form 2550Q",
-        ActiveView::Form1701 => "Form 1701",
-        ActiveView::Form1702RT => "Form 1702RT",
-        ActiveView::Form1702MX => "Form 1702MX",
+        ActiveView::Queueable(kind) => crate::views::queueable_forms::spec_for_kind(kind)
+            .map(|spec| spec.title)
+            .unwrap_or("Form"),
     }
 }
 
@@ -4211,8 +4201,8 @@ mod tests {
     #[test]
     fn navigation_asserts_every_active_view_page_root() {
         let mut host = fixture_host();
-        for view in ids::ALL_VIEWS {
-            let slug = ids::view_slug(*view);
+        for view in ids::all_views() {
+            let slug = ids::view_slug(view);
             handle_request(
                 &mut host,
                 req(Op::Invoke {
@@ -4226,7 +4216,7 @@ mod tests {
                 &mut host,
                 req(Op::Assert {
                     spec: AssertSpec {
-                        target: ids::page_root(*view).into(),
+                        target: ids::page_root(view).into(),
                         exists: Some(true),
                         ..Default::default()
                     },

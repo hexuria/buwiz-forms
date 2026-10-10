@@ -1,0 +1,487 @@
+{
+ "form_id": "2200s-v2018",
+ "html_slug": "2200s-2018",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow the printed option order). Item 1 date takes three combs (MM, DD, YYYY) in order. Part III rows 27-30 print with those numbers while the layout keys are numbered 33-36; the keys are matched to the printed rows in order (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) by their Drawee Bank/Number/Amount captions. Part III amounts pair a peso comb with the 2-slot centavo comb directly right (money_joins). Part III dates are three combs per row and stay blank. The product rows and Schedule 1 rows on page 2 have no column captions in the text layer and stay blank. Layout keys for the Part II region/province codes, the Part III tax computations 16-24 (except Item 18, the page 2 grand total), and the page 2 TIN have no fillable cells.",
+ "joins": [
+  {
+   "writer_key": "frm2200S:txtMonth1",
+   "html_id": "p1c3",
+   "printed": "1 Date (MM/DD/YYYY), month",
+   "reason": "first of three combs under the item 1 Date caption"
+  },
+  {
+   "writer_key": "frm2200S:txtDate",
+   "html_id": "p1c5",
+   "printed": "1 Date (MM/DD/YYYY), day",
+   "reason": "middle comb under the item 1 Date caption"
+  },
+  {
+   "writer_key": "frm2200S:txtForYr",
+   "html_id": "p1c7",
+   "printed": "1 Date (MM/DD/YYYY), year",
+   "reason": "last comb under the item 1 Date caption"
+  },
+  {
+   "writer_key": "frm2200S:txtSheets",
+   "html_id": "p1c10",
+   "printed": "3 Number of Sheet/s Attached",
+   "reason": "caption left of the 2-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtTIN1",
+   "html_id": "p1c15",
+   "printed": "4 Taxpayer Identification Number (TIN), part 1",
+   "reason": "caption left of the 3-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtTIN2",
+   "html_id": "p1c17",
+   "printed": "4 Taxpayer Identification Number (TIN), part 2",
+   "reason": "comb after the first dash"
+  },
+  {
+   "writer_key": "frm2200S:txtTIN3",
+   "html_id": "p1c19",
+   "printed": "4 Taxpayer Identification Number (TIN), part 3",
+   "reason": "comb after the second dash"
+  },
+  {
+   "writer_key": "frm2200S:txtBranchCode",
+   "html_id": "p1c21",
+   "printed": "4 Taxpayer Identification Number (TIN), branch",
+   "reason": "5-slot branch comb after the third dash"
+  },
+  {
+   "writer_key": "frm2200S:txtRDOCode",
+   "html_id": "p1c23",
+   "printed": "5 RDO Code",
+   "reason": "caption left of the 3-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:taxpayerName",
+   "html_id": "p1c25",
+   "printed": "6 Taxpayer's Name",
+   "reason": "row 6 caption above the 36-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtAddress",
+   "html_id": "p1c27",
+   "printed": "7 Registered Address",
+   "reason": "row 7 caption above the 36-slot comb"
+  },
+  {
+   "writer_key": "txtEmail",
+   "html_id": "p1c35",
+   "printed": "11 Email Address",
+   "reason": "caption above the 36-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtOthMannerofPymnt",
+   "html_id": "p1c56",
+   "printed": "17 Other Similar Schemes (specify)",
+   "reason": "caption left of the 25-slot comb"
+  },
+  {
+   "writer_key": "txtTaxAgentNo",
+   "html_id": "p1c97",
+   "printed": "Tax Agent Accreditation No. / Representative/Taxpayer",
+   "reason": "caption left of the text cell"
+  },
+  {
+   "writer_key": "txtDateIssue",
+   "html_id": "p1c99",
+   "printed": "Date of Issue",
+   "reason": "caption left of the text cell"
+  },
+  {
+   "writer_key": "txtDateExpiry",
+   "html_id": "p1c101",
+   "printed": "Date of Expiry",
+   "reason": "caption left of the text cell"
+  },
+  {
+   "writer_key": "frm2200S:txtAgency33",
+   "html_id": "p1c109",
+   "printed": "27 Cash/Bank Debit Memo, Drawee Bank/Agency",
+   "reason": "row 27 caption left of the 5-slot comb; Drawee Bank column header"
+  },
+  {
+   "writer_key": "frm2200S:txtNumber33",
+   "html_id": "p1c110",
+   "printed": "27 Cash/Bank Debit Memo, Number",
+   "reason": "row 27 Number column, 6-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtAgency34",
+   "html_id": "p1c120",
+   "printed": "28 Check, Drawee Bank/Agency",
+   "reason": "row 28 caption left of the 5-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtNumber34",
+   "html_id": "p1c121",
+   "printed": "28 Check, Number",
+   "reason": "row 28 Number column, 6-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtNumber35",
+   "html_id": "p1c131",
+   "printed": "29 Tax Debit Memo, Number",
+   "reason": "row 29 caption left of the 6-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtParticular36",
+   "html_id": "p1c141",
+   "printed": "30 Others (specify)",
+   "reason": "row 30 Others caption above the 7-slot particulars comb"
+  },
+  {
+   "writer_key": "frm2200S:txtAgency36",
+   "html_id": "p1c142",
+   "printed": "30 Others, Drawee Bank/Agency",
+   "reason": "row 30 Drawee Bank column, 5-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtNumber36",
+   "html_id": "p1c143",
+   "printed": "30 Others, Number",
+   "reason": "row 30 Number column, 6-slot comb"
+  },
+  {
+   "writer_key": "frm2200S:txtTax18",
+   "html_id": "p2c115",
+   "printed": "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
+   "reason": "grand total printed to Item 18 of Part III"
+  },
+  {
+   "writer_key": "frm2200S:txtSched1TaxpayerName",
+   "html_id": "p2c6",
+   "printed": "Taxpayer's Name (page 2 header)",
+   "reason": "caption above the 26-slot comb"
+  }
+ ],
+ "money_joins": [
+  {
+   "writer_key": "frm2200S:txtAmount33",
+   "peso_html_id": "p1c116",
+   "cent_html_id": "p1c118",
+   "printed": "27 Cash/Bank Debit Memo, Amount",
+   "reason": "peso comb with the 2-slot centavo comb directly right"
+  },
+  {
+   "writer_key": "frm2200S:txtAmount34",
+   "peso_html_id": "p1c127",
+   "cent_html_id": "p1c129",
+   "printed": "28 Check, Amount",
+   "reason": "peso comb with the 2-slot centavo comb directly right"
+  },
+  {
+   "writer_key": "frm2200S:txtAmount35",
+   "peso_html_id": "p1c137",
+   "cent_html_id": "p1c139",
+   "printed": "29 Tax Debit Memo, Amount",
+   "reason": "peso comb with the 2-slot centavo comb directly right"
+  },
+  {
+   "writer_key": "frm2200S:txtAmount36",
+   "peso_html_id": "p1c149",
+   "cent_html_id": "p1c151",
+   "printed": "30 Others, Amount",
+   "reason": "peso comb with the 2-slot centavo comb directly right"
+  }
+ ],
+ "xbox_joins": [
+  {
+   "writer_key": "frm2200S:amendedRtn_1",
+   "html_id": "p1c11",
+   "printed": "2 Amended Return? Yes",
+   "reason": "box immediately left of \"Yes\""
+  },
+  {
+   "writer_key": "frm2200S:amendedRtn_2",
+   "html_id": "p1c12",
+   "printed": "2 Amended Return? No",
+   "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm2200S:optTreaty_1",
+   "html_id": "p1c48",
+   "printed": "International Tax Treaty? Yes",
+   "reason": "box immediately left of \"Yes\" in the same text run"
+  },
+  {
+   "writer_key": "frm2200S:optTreaty_2",
+   "html_id": "p1c49",
+   "printed": "International Tax Treaty? No",
+   "reason": "box immediately left of \"No\" in the same text run"
+  },
+  {
+   "writer_key": "frm2200S:chkPymntManner_1",
+   "html_id": "p1c53",
+   "printed": "15 Payment on Actual Removal",
+   "reason": "box immediately left of the printed option"
+  },
+  {
+   "writer_key": "frm2200S:chkPymntManner_2",
+   "html_id": "p1c54",
+   "printed": "16 Prepayment/Advance Deposit",
+   "reason": "box immediately left of the printed option"
+  },
+  {
+   "writer_key": "frm2200S:chkPymntManner_3",
+   "html_id": "p1c57",
+   "printed": "17 Other Similar Schemes",
+   "reason": "box immediately left of the printed option"
+  }
+ ],
+ "left_out": [
+  {
+   "html_id": "p1c28",
+   "reason": "second address line with no layout key on 2200S (txtAddress only)"
+  },
+  {
+   "html_id": "p1c33",
+   "reason": "one 36-slot comb under both the Contact Number and Main Line of Business captions; cannot tell which item it carries, so txtTelNum and txtLineBus stay blank"
+  },
+  {
+   "html_id": "p1c40",
+   "reason": "Region / Province comb with the region, province and city code keys (frm2200SoptRegion/Province/City) and no separate cell per code; left blank"
+  },
+  {
+   "html_id": "p1c45",
+   "reason": "Region / Province comb with the region, province and city code keys (frm2200SoptRegion1/Province1/City1) and no separate cell per code; left blank"
+  },
+  {
+   "html_id": "p1c50",
+   "reason": "14A \"If yes, specify\" holds the treaty option code (lstTaxTreaty), not printable text; left blank as on the 2553 sheet"
+  },
+  {
+   "html_id": "p1c92",
+   "reason": "declaration text cell with no layout key; left blank"
+  },
+  {
+   "html_id": "p1c93",
+   "reason": "declaration text cell with no layout key; left blank"
+  },
+  {
+   "html_id": "p1c111",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c113",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c115",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c122",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c124",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c126",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c132",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c134",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c136",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c144",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c146",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p1c148",
+   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
+  },
+  {
+   "html_id": "p2c5",
+   "reason": "one 14-slot comb under the page 2 TIN caption; the TIN parts (txtSched1TIN1-3, txtSched1BranchCode) have no separate cells, so left blank"
+  },
+  {
+   "html_id": "p2c27",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c28",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c29",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c34",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c35",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c36",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c41",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c42",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c43",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c48",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c49",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c50",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c55",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c56",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c57",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c62",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c63",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c64",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c69",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c70",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c71",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c76",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c77",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c78",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c83",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c84",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c85",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c90",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c91",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c92",
+   "reason": "Schedule product row (Per Liter, P 6.00) value column: the sales value / volume removals / basic tax columns have no captions in the text layer, so the key order cannot be confirmed; left blank"
+  },
+  {
+   "html_id": "p2c100",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c102",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c103",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c104",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c105",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c106",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c107",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c109",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c110",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c111",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c112",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  },
+  {
+   "html_id": "p2c113",
+   "reason": "Schedule 1 item 1/2 row: columns (ATC, rate, sales value, volume removals, basic tax) have no captions in the text layer and the layout has one row for two printed rows; left blank"
+  }
+ ]
+}

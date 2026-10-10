@@ -2787,7 +2787,11 @@ impl Render for Form2551QView {
                 )}
                 {crate::components::form_parts::form_accordion(
                     "acc_background_info",
-                    "PART I — BACKGROUND INFORMATION (pre-filled from profile)",
+                    if is_mobile {
+                        "PART I — BACKGROUND INFORMATION"
+                    } else {
+                        "PART I — BACKGROUND INFORMATION (pre-filled from profile)"
+                    },
                     self.show_background_info,
                     is_background_info_valid,
                     self.has_section_error("background_info"),

@@ -5,7 +5,7 @@
   "official_hta": "BIR-Form2550Qv2024.hta",
   "official_hta_sha256": "3a5a4d3b2b342a4dfc55a05c69b560fb9be47af6451d8c651d19e1d33406ec70",
   "header": "<?xml version='1.0'?>",
-  "lead": "\n\n        ",
+  "lead": "        ",
   "value_rules": [],
   "entries": [
     {
@@ -182,7 +182,7 @@
       "parts": [
         {
           "source": "frm2550qv2024:taxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -194,7 +194,7 @@
       "parts": [
         {
           "source": "frm2550qv2024:taxpayerAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1818,7 +1818,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\n        All Rights Reserved BIR 2012.0"
+      "after": "\n        All Rights Reserved BIR 2012.0"
     }
   ]
 }
