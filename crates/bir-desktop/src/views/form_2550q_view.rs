@@ -1645,8 +1645,7 @@ impl FormViewTrait for Form2550QV2View {
             Ok(id) => {
                 self.draft.id = Some(id);
                 self.status_message = Some(if !has_unresolved_issues {
-                    "Draft saved. Queue it for submission when ready."
-                        .to_string()
+                    "Draft saved. Queue it for submission when ready.".to_string()
                 } else {
                     "Draft saved locally for preservation with unresolved issues, including any malformed visible text shown below. Filing and submission remain disabled."
                         .to_string()
@@ -1756,10 +1755,8 @@ impl FormViewTrait for Form2550QV2View {
     }
 
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "2550Q payment status needs a verified confirmation workflow."
-                .to_string(),
-        );
+        self.status_message =
+            Some("2550Q payment status needs a verified confirmation workflow.".to_string());
         cx.notify();
     }
 
