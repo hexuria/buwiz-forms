@@ -101,7 +101,8 @@ const LAYOUTS: &[(&str, &str)] = layouts![
     "0619e-v2018",
     "0605-v2003",
     "0619f-v2018",
-    "1701q-v2018"
+    "1701q-v2018",
+    "1702rt-v2018c"
 ];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
@@ -453,8 +454,13 @@ mod tests {
             let after = match last {
                 Entry::Bool { after, .. } | Entry::Value { after, .. } => after,
             };
+            // The year in the trailer is per form (2012; 1702MX says 2014).
+            let year = after
+                .rsplit("All Rights Reserved BIR ")
+                .next()
+                .filter(|_| after.contains("All Rights Reserved BIR "));
             assert!(
-                after.ends_with("All Rights Reserved BIR 2012.0"),
+                year.is_some_and(|y| y.len() == 6 && y.ends_with(".0") && y.starts_with("20")),
                 "{id}: {after:?}"
             );
         }

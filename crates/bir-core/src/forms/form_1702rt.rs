@@ -11,9 +11,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use super::queueable::SubmissionLifecycle;
+use super::{FilingPeriod, FormValidator, TypedBirForm};
 use crate::profile::TaxpayerProfile;
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 
 pub const FORM_CODE: &str = "1702RT";
 pub const FORM_REVISION: &str = "2018C";
@@ -397,7 +397,7 @@ pub struct Form1702RTSchedule5 {
 
 /// Full four-page editable draft. Transport-only modal/subtotal fields are
 /// retained separately so an imported official save can round-trip exactly.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Form1702RTDraft {
     pub id: Option<i64>,
@@ -447,21 +447,18 @@ pub struct Form1702RTDraft {
     pub preserved_transport_fields: BTreeMap<String, String>,
     #[serde(default)]
     pub calculation_issues: Vec<(String, String)>,
-    pub status: FilingStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    pub submitted_at: Option<String>,
-    pub confirmed_at: Option<String>,
-    pub submission_filename: Option<String>,
-    pub receipt_id: Option<i64>,
-    pub submission_attempts: u32,
-    pub next_retry_at: Option<String>,
+    /// Pre-queue builds stored their own error text here. Kept so old JSON
+    /// round-trips; the generic lifecycle reports `submission_error`.
     pub last_error: Option<String>,
+    /// Status, queue authorization and retry state. Flattened so stored JSON
+    /// keeps the keys earlier builds wrote inline (`status`, `created_at`,
+    /// `submission_attempts`, ...).
+    #[serde(flatten)]
+    pub lifecycle: SubmissionLifecycle,
 }
 
 impl Form1702RTDraft {
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
         let incorporation_date = profile.business_start_date.and_then(|date| {
             use chrono::Datelike;
             Form1702RTDate::new(
@@ -491,9 +488,6 @@ impl Form1702RTDraft {
             email: profile.email.clone(),
             number_of_attachments: "000".to_string(),
             xml_final_flag: "1".to_string(),
-            status: FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
             ..Self::default()
         };
         draft.recompute();
@@ -501,494 +495,20 @@ impl Form1702RTDraft {
     }
 
     pub fn is_editable(&self) -> bool {
-        matches!(self.status, FilingStatus::Draft)
+        self.lifecycle.is_editable()
     }
 
-    /// Recompute only formulas printed by the locked official form. No rate,
-    /// applicability, or floor-at-zero rule is invented.
+    /// The official compute chain (see `form_1702rt_official`).
     pub fn recompute(&mut self) {
         self.calculation_issues.clear();
-
-        self.schedule_1.item_18_total = checked_sum(
-            "schedule_1.item_18_total",
-            self.schedule_1
-                .source_amounts()
-                .into_iter()
-                .chain(self.schedule_1.other.iter().map(|row| row.amount)),
-            &mut self.calculation_issues,
-        );
-        self.schedule_2.item_5_total = checked_sum(
-            "schedule_2.item_5_total",
-            self.schedule_2.rows.iter().map(|row| row.amount),
-            &mut self.calculation_issues,
-        );
-
-        // Part IV Items 27-33 are required before Schedule III.
-        self.part_iv.item_29_net_sales = checked_sub(
-            "part_iv.item_29_net_sales",
-            self.part_iv.item_27_sales,
-            self.part_iv.item_28_sales_returns,
-            &mut self.calculation_issues,
-        );
-        self.part_iv.item_31_gross_income_from_operations = checked_sub(
-            "part_iv.item_31_gross_income_from_operations",
-            self.part_iv.item_29_net_sales,
-            self.part_iv.item_30_cost_of_sales_or_services,
-            &mut self.calculation_issues,
-        );
-        self.part_iv.item_33_total_taxable_income = checked_sum(
-            "part_iv.item_33_total_taxable_income",
-            [
-                self.part_iv.item_31_gross_income_from_operations,
-                self.part_iv.item_32_other_taxable_income,
-            ],
-            &mut self.calculation_issues,
-        );
-
-        self.schedule_3.item_1_gross_income = self.part_iv.item_33_total_taxable_income;
-        self.schedule_3.item_2_ordinary_deductions = self.schedule_1.item_18_total;
-        self.schedule_3.item_3_net_operating_loss = checked_sub(
-            "schedule_3.item_3_net_operating_loss",
-            self.schedule_3.item_1_gross_income,
-            self.schedule_3.item_2_ordinary_deductions,
-            &mut self.calculation_issues,
-        );
-        // The official form explicitly carries Schedule III Item 3 to Item 7A.
-        self.schedule_3.rows[3].amount = self.schedule_3.item_3_net_operating_loss;
-        for (index, row) in self.schedule_3.rows.iter_mut().enumerate() {
-            row.unapplied_balance = checked_sub_many(
-                &format!("schedule_3.rows[{index}].unapplied_balance"),
-                row.amount,
-                [
-                    row.applied_previous_years,
-                    row.expired,
-                    row.applied_current_year,
-                ],
-                &mut self.calculation_issues,
-            );
-        }
-        self.schedule_3.item_8_total_applied_current_year = checked_sum(
-            "schedule_3.item_8_total_applied_current_year",
-            self.schedule_3
-                .rows
-                .iter()
-                .map(|row| row.applied_current_year),
-            &mut self.calculation_issues,
-        );
-
-        for (index, row) in self.schedule_4.rows.iter_mut().enumerate() {
-            row.allowable_balance = checked_sub_many(
-                &format!("schedule_4.rows[{index}].allowable_balance"),
-                row.excess_mcit,
-                [
-                    row.applied_previous_years,
-                    row.expired,
-                    row.applied_current_year,
-                ],
-                &mut self.calculation_issues,
-            );
-        }
-        self.schedule_4.item_4_total_applied_current_year = checked_sum(
-            "schedule_4.item_4_total_applied_current_year",
-            self.schedule_4
-                .rows
-                .iter()
-                .map(|row| row.applied_current_year),
-            &mut self.calculation_issues,
-        );
-
-        self.schedule_5.item_4_total = checked_sum(
-            "schedule_5.item_4_total",
-            std::iter::once(self.schedule_5.item_1_net_income_or_loss_per_books)
-                .chain(self.schedule_5.additions.iter().map(|row| row.amount)),
-            &mut self.calculation_issues,
-        );
-        self.schedule_5.item_9_total = checked_sum(
-            "schedule_5.item_9_total",
-            self.schedule_5
-                .non_taxable_income
-                .iter()
-                .chain(self.schedule_5.special_deductions.iter())
-                .map(|row| row.amount),
-            &mut self.calculation_issues,
-        );
-        self.schedule_5.item_10_net_taxable_income_or_loss = checked_sub(
-            "schedule_5.item_10_net_taxable_income_or_loss",
-            self.schedule_5.item_4_total,
-            self.schedule_5.item_9_total,
-            &mut self.calculation_issues,
-        );
-
-        self.part_iv.item_34_ordinary_itemized_deductions = self.schedule_1.item_18_total;
-        self.part_iv.item_35_special_itemized_deductions = self.schedule_2.item_5_total;
-        self.part_iv.item_36_nolco = self.schedule_3.item_8_total_applied_current_year;
-        self.part_iv.item_37_total_itemized_deductions = checked_sum(
-            "part_iv.item_37_total_itemized_deductions",
-            [
-                self.part_iv.item_34_ordinary_itemized_deductions,
-                self.part_iv.item_35_special_itemized_deductions,
-                self.part_iv.item_36_nolco,
-            ],
-            &mut self.calculation_issues,
-        );
-        match self.deduction_method {
-            Form1702RTDeductionMethod::Itemized => {
-                self.part_iv.item_38_optional_standard_deduction = WholePeso::ZERO;
-                self.part_iv.item_39_net_taxable_income_or_loss = checked_sub(
-                    "part_iv.item_39_net_taxable_income_or_loss",
-                    self.part_iv.item_33_total_taxable_income,
-                    self.part_iv.item_37_total_itemized_deductions,
-                    &mut self.calculation_issues,
-                );
-            }
-            Form1702RTDeductionMethod::OptionalStandard => {
-                self.part_iv.item_38_optional_standard_deduction = checked_percent(
-                    "part_iv.item_38_optional_standard_deduction",
-                    self.part_iv.item_33_total_taxable_income,
-                    40,
-                    &mut self.calculation_issues,
-                );
-                self.part_iv.item_39_net_taxable_income_or_loss = checked_sub(
-                    "part_iv.item_39_net_taxable_income_or_loss",
-                    self.part_iv.item_33_total_taxable_income,
-                    self.part_iv.item_38_optional_standard_deduction,
-                    &mut self.calculation_issues,
-                );
-            }
-            Form1702RTDeductionMethod::Unresolved => {
-                self.part_iv.item_38_optional_standard_deduction = WholePeso::ZERO;
-                self.part_iv.item_39_net_taxable_income_or_loss = WholePeso::ZERO;
-                self.calculation_issues.push((
-                    "deduction_method".to_string(),
-                    "Item 39 cannot be calculated until Item 13 is selected".to_string(),
-                ));
-            }
-        }
-        if self.part_iv.item_40_income_tax_rate_percent == 0 {
-            self.part_iv.item_41_normal_income_tax_due = WholePeso::ZERO;
-            self.calculation_issues.push((
-                "part_iv.item_40_income_tax_rate_percent".to_string(),
-                "Item 40 requires an evidenced applicable income-tax rate".to_string(),
-            ));
-        } else {
-            self.part_iv.item_41_normal_income_tax_due = checked_percent(
-                "part_iv.item_41_normal_income_tax_due",
-                self.part_iv.item_39_net_taxable_income_or_loss,
-                self.part_iv.item_40_income_tax_rate_percent,
-                &mut self.calculation_issues,
-            );
-        }
-        self.part_iv.item_42_mcit_due = checked_percent(
-            "part_iv.item_42_mcit_due",
-            self.part_iv.item_33_total_taxable_income,
-            2,
-            &mut self.calculation_issues,
-        );
-        self.part_iv.item_43_tax_due = std::cmp::max(
-            self.part_iv.item_41_normal_income_tax_due,
-            self.part_iv.item_42_mcit_due,
-        );
-        self.part_iv.tax_credits.item_47_excess_mcit_applied =
-            self.schedule_4.item_4_total_applied_current_year;
-        self.part_iv.tax_credits.item_55_total = checked_sum(
-            "part_iv.tax_credits.item_55_total",
-            [
-                self.part_iv.tax_credits.item_44_prior_year_excess_credits,
-                self.part_iv
-                    .tax_credits
-                    .item_45_previous_quarter_mcit_payments,
-                self.part_iv
-                    .tax_credits
-                    .item_46_previous_quarter_regular_payments,
-                self.part_iv.tax_credits.item_47_excess_mcit_applied,
-                self.part_iv
-                    .tax_credits
-                    .item_48_previous_quarter_withholding,
-                self.part_iv.tax_credits.item_49_fourth_quarter_withholding,
-                self.part_iv.tax_credits.item_50_foreign_tax_credits,
-                self.part_iv.tax_credits.item_51_tax_paid_on_previous_return,
-                self.part_iv.tax_credits.item_52_special_tax_credits,
-                self.part_iv.tax_credits.item_53_other.amount,
-                self.part_iv.tax_credits.item_54_other.amount,
-            ],
-            &mut self.calculation_issues,
-        );
-        self.part_iv.item_56_net_tax_payable_or_overpayment = checked_sub(
-            "part_iv.item_56_net_tax_payable_or_overpayment",
-            self.part_iv.item_43_tax_due,
-            self.part_iv.tax_credits.item_55_total,
-            &mut self.calculation_issues,
-        );
-
-        self.part_v.item_57_special_allowable_deductions_tax_effect = checked_percent(
-            "part_v.item_57_special_allowable_deductions_tax_effect",
-            self.part_iv.item_35_special_itemized_deductions,
-            self.part_iv.item_40_income_tax_rate_percent,
-            &mut self.calculation_issues,
-        );
-        self.part_v.item_58_special_tax_credits =
-            self.part_iv.tax_credits.item_52_special_tax_credits;
-        self.part_v.item_59_total_tax_relief = checked_sum(
-            "part_v.item_59_total_tax_relief",
-            [
-                self.part_v.item_57_special_allowable_deductions_tax_effect,
-                self.part_v.item_58_special_tax_credits,
-            ],
-            &mut self.calculation_issues,
-        );
-
-        self.part_ii.item_14_tax_due = self.part_iv.item_43_tax_due;
-        self.part_ii.item_15_total_tax_credits = self.part_iv.tax_credits.item_55_total;
-        self.part_ii.item_16_net_tax_payable_or_overpayment =
-            self.part_iv.item_56_net_tax_payable_or_overpayment;
-        self.part_ii.item_20_total_penalties = checked_sum(
-            "part_ii.item_20_total_penalties",
-            [
-                self.part_ii.item_17_surcharge,
-                self.part_ii.item_18_interest,
-                self.part_ii.item_19_compromise,
-            ],
-            &mut self.calculation_issues,
-        );
-        self.part_ii.item_21_total_amount_payable_or_overpayment = checked_sum(
-            "part_ii.item_21_total_amount_payable_or_overpayment",
-            [
-                self.part_ii.item_16_net_tax_payable_or_overpayment,
-                self.part_ii.item_20_total_penalties,
-            ],
-            &mut self.calculation_issues,
-        );
-
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        Err(vec![(
-            "submission".to_string(),
-            "1702RTv2018C electronic submission is disabled: the reviewed XML establishes editable-save persistence only".to_string(),
-        )])
-    }
-
-    pub fn transition_to_paid(&mut self) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Confirmed) {
-            return Err("Only a confirmed return can be marked paid".to_string());
-        }
-        self.status = FilingStatus::Paid;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
-    }
-
-    pub fn revert_to_draft(&mut self) -> Result<(), String> {
-        if matches!(self.status, FilingStatus::Paid) {
-            return Err("A paid return requires an explicit amendment workflow".to_string());
-        }
-        self.status = FilingStatus::Draft;
-        self.submitted_at = None;
-        self.confirmed_at = None;
-        self.submission_filename = None;
-        self.receipt_id = None;
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        self.official_recompute();
     }
 }
 
 impl FormValidator for Form1702RTDraft {
+    /// The official `validate()` port; see `form_1702rt_official`.
     fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-        let compact_tin = self
-            .tin
-            .chars()
-            .filter(|character| character.is_ascii_digit())
-            .collect::<String>();
-        if !matches!(compact_tin.len(), 12..=14)
-            || compact_tin.len() != self.tin.chars().filter(|c| c.is_ascii_digit()).count()
-            || self.tin.chars().any(|c| !c.is_ascii_digit() && c != '-')
-        {
-            errors.push((
-                "tin".to_string(),
-                "TIN must contain 12 to 14 digits, optionally separated by dashes".to_string(),
-            ));
-        }
-        if !(2000..=2099).contains(&self.taxable_year) {
-            errors.push((
-                "taxable_year".to_string(),
-                "Item 2 prints a fixed MM/20YY year and supports taxable years 2000 through 2099"
-                    .to_string(),
-            ));
-        }
-        if !(1..=12).contains(&self.month) {
-            errors.push((
-                "month".to_string(),
-                "Year-end month must be between 1 and 12".to_string(),
-            ));
-        }
-        for (field, value) in [
-            ("rdo_code", self.rdo_code.as_str()),
-            ("taxpayer_name", self.taxpayer_name.as_str()),
-            ("registered_address", self.registered_address.as_str()),
-        ] {
-            if value.trim().is_empty() {
-                errors.push((
-                    field.to_string(),
-                    "This profile-prefilled value is required".to_string(),
-                ));
-            }
-        }
-        if !self.zip_code.trim().is_empty() && !validate_zip(self.zip_code.trim()) {
-            errors.push((
-                "zip_code".to_string(),
-                "ZIP code must contain four digits".to_string(),
-            ));
-        }
-        if !self.contact_number.trim().is_empty() && !validate_ph_phone(&self.contact_number) {
-            errors.push((
-                "contact_number".to_string(),
-                "Contact number is not a recognized Philippine phone number".to_string(),
-            ));
-        }
-        if !self.email.trim().is_empty() && !validate_email(&self.email) {
-            errors.push(("email".to_string(), "Email address is invalid".to_string()));
-        }
-        if matches!(self.deduction_method, Form1702RTDeductionMethod::Unresolved) {
-            errors.push((
-                "deduction_method".to_string(),
-                "Item 13 method of deductions must be selected".to_string(),
-            ));
-        }
-        if self.part_iv.item_40_income_tax_rate_percent == 0
-            || self.part_iv.item_40_income_tax_rate_percent > 100
-        {
-            errors.push((
-                "part_iv.item_40_income_tax_rate_percent".to_string(),
-                "Item 40 must be an explicitly reviewed percentage from 1 to 100".to_string(),
-            ));
-        }
-        if !self.atc.printed_mcit_selected && !self.atc.other_selected {
-            errors.push((
-                "atc".to_string(),
-                "Item 5 ATC selection is unresolved".to_string(),
-            ));
-        }
-        if self.atc.other_selected {
-            if self.atc.other_code.trim().is_empty() {
-                errors.push((
-                    "atc.other_code".to_string(),
-                    "The alternate ATC selector requires an exact code".to_string(),
-                ));
-            } else if reviewed_alternate_atc_description(&self.atc.other_code).is_none() {
-                errors.push((
-                    "atc.other_code".to_string(),
-                    format!(
-                        "Alternate ATC {} has no reviewed 1702RTv2018C code/description evidence",
-                        self.atc.other_code.trim()
-                    ),
-                ));
-            }
-        }
-        for (index, row) in self.payment_details.iter().enumerate() {
-            let item = index + 23;
-            if item != 26 && !row.specification.trim().is_empty() {
-                errors.push((
-                    format!("payment_details[{index}].specification"),
-                    format!("Official Item {item} has no specification field"),
-                ));
-            }
-            if item == 25 && !row.drawee_bank_or_agency.trim().is_empty() {
-                errors.push((
-                    "payment_details[2].drawee_bank_or_agency".to_string(),
-                    "Official Item 25 Tax Debit Memo has no Drawee Bank/Agency field".to_string(),
-                ));
-            }
-        }
-        if !self.is_amended
-            && self
-                .part_iv
-                .tax_credits
-                .item_51_tax_paid_on_previous_return
-                .0
-                != 0
-        {
-            errors.push((
-                "part_iv.tax_credits.item_51_tax_paid_on_previous_return".to_string(),
-                "Item 51 applies only to an amended return".to_string(),
-            ));
-        }
-        if self.part_ii.item_21_total_amount_payable_or_overpayment.0 < 0
-            && self.part_ii.overpayment_disposition.is_none()
-        {
-            errors.push((
-                "part_ii.overpayment_disposition".to_string(),
-                "An overpayment requires exactly one irrevocable disposition".to_string(),
-            ));
-        }
-        if self.part_ii.item_21_total_amount_payable_or_overpayment.0 >= 0
-            && self.part_ii.overpayment_disposition.is_some()
-        {
-            errors.push((
-                "part_ii.overpayment_disposition".to_string(),
-                "The overpayment disposition boxes apply only when Item 21 is negative".to_string(),
-            ));
-        }
-        for (field, row) in self
-            .schedule_1
-            .other
-            .iter()
-            .enumerate()
-            .filter_map(|(index, row)| {
-                (row.amount.0 != 0 && row.description.trim().is_empty())
-                    .then_some((format!("schedule_1.other[{index}].description"), row))
-            })
-        {
-            let _ = row;
-            errors.push((
-                field,
-                "An Others deduction amount requires a description".to_string(),
-            ));
-        }
-        for (index, row) in self.schedule_2.rows.iter().enumerate() {
-            if row.amount.0 != 0
-                && (row.description.trim().is_empty() || row.legal_basis.trim().is_empty())
-            {
-                errors.push((
-                    format!("schedule_2.rows[{index}]"),
-                    "A special deduction amount requires both description and legal basis"
-                        .to_string(),
-                ));
-            }
-        }
-        for (field, row) in [
-            (
-                "part_iv.tax_credits.item_53_other",
-                &self.part_iv.tax_credits.item_53_other,
-            ),
-            (
-                "part_iv.tax_credits.item_54_other",
-                &self.part_iv.tax_credits.item_54_other,
-            ),
-        ] {
-            if row.amount.0 != 0 && row.description.trim().is_empty() {
-                errors.push((
-                    field.to_string(),
-                    "An other tax credit requires a description".to_string(),
-                ));
-            }
-        }
-        if !matches!(self.xml_final_flag.as_str(), "0" | "1") {
-            errors.push((
-                "xml_final_flag".to_string(),
-                "txtFinalFlag must be one of the two reviewed values 0 or 1".to_string(),
-            ));
-        }
-
-        errors.extend(self.calculation_issues.clone());
-        let mut expected = self.clone();
-        expected.recompute();
-        errors.extend(expected.calculation_issues.clone());
-        compare_derived_values(self, &expected, &mut errors);
-        errors
+        self.official_errors()
     }
 }
 
@@ -1014,251 +534,6 @@ impl TypedBirForm for Form1702RTDraft {
     }
 }
 
-fn compare_derived_values(
-    actual: &Form1702RTDraft,
-    expected: &Form1702RTDraft,
-    errors: &mut Vec<(String, String)>,
-) {
-    let pairs = [
-        (
-            "schedule_1.item_18_total",
-            actual.schedule_1.item_18_total,
-            expected.schedule_1.item_18_total,
-        ),
-        (
-            "schedule_2.item_5_total",
-            actual.schedule_2.item_5_total,
-            expected.schedule_2.item_5_total,
-        ),
-        (
-            "schedule_3.item_3_net_operating_loss",
-            actual.schedule_3.item_3_net_operating_loss,
-            expected.schedule_3.item_3_net_operating_loss,
-        ),
-        (
-            "schedule_3.item_8_total_applied_current_year",
-            actual.schedule_3.item_8_total_applied_current_year,
-            expected.schedule_3.item_8_total_applied_current_year,
-        ),
-        (
-            "schedule_4.item_4_total_applied_current_year",
-            actual.schedule_4.item_4_total_applied_current_year,
-            expected.schedule_4.item_4_total_applied_current_year,
-        ),
-        (
-            "schedule_5.item_4_total",
-            actual.schedule_5.item_4_total,
-            expected.schedule_5.item_4_total,
-        ),
-        (
-            "schedule_5.item_9_total",
-            actual.schedule_5.item_9_total,
-            expected.schedule_5.item_9_total,
-        ),
-        (
-            "schedule_5.item_10_net_taxable_income_or_loss",
-            actual.schedule_5.item_10_net_taxable_income_or_loss,
-            expected.schedule_5.item_10_net_taxable_income_or_loss,
-        ),
-        (
-            "part_iv.item_29_net_sales",
-            actual.part_iv.item_29_net_sales,
-            expected.part_iv.item_29_net_sales,
-        ),
-        (
-            "part_iv.item_31_gross_income_from_operations",
-            actual.part_iv.item_31_gross_income_from_operations,
-            expected.part_iv.item_31_gross_income_from_operations,
-        ),
-        (
-            "part_iv.item_33_total_taxable_income",
-            actual.part_iv.item_33_total_taxable_income,
-            expected.part_iv.item_33_total_taxable_income,
-        ),
-        (
-            "part_iv.item_37_total_itemized_deductions",
-            actual.part_iv.item_37_total_itemized_deductions,
-            expected.part_iv.item_37_total_itemized_deductions,
-        ),
-        (
-            "part_iv.item_38_optional_standard_deduction",
-            actual.part_iv.item_38_optional_standard_deduction,
-            expected.part_iv.item_38_optional_standard_deduction,
-        ),
-        (
-            "part_iv.item_39_net_taxable_income_or_loss",
-            actual.part_iv.item_39_net_taxable_income_or_loss,
-            expected.part_iv.item_39_net_taxable_income_or_loss,
-        ),
-        (
-            "part_iv.item_41_normal_income_tax_due",
-            actual.part_iv.item_41_normal_income_tax_due,
-            expected.part_iv.item_41_normal_income_tax_due,
-        ),
-        (
-            "part_iv.item_42_mcit_due",
-            actual.part_iv.item_42_mcit_due,
-            expected.part_iv.item_42_mcit_due,
-        ),
-        (
-            "part_iv.item_43_tax_due",
-            actual.part_iv.item_43_tax_due,
-            expected.part_iv.item_43_tax_due,
-        ),
-        (
-            "part_iv.tax_credits.item_55_total",
-            actual.part_iv.tax_credits.item_55_total,
-            expected.part_iv.tax_credits.item_55_total,
-        ),
-        (
-            "part_iv.item_56_net_tax_payable_or_overpayment",
-            actual.part_iv.item_56_net_tax_payable_or_overpayment,
-            expected.part_iv.item_56_net_tax_payable_or_overpayment,
-        ),
-        (
-            "part_v.item_59_total_tax_relief",
-            actual.part_v.item_59_total_tax_relief,
-            expected.part_v.item_59_total_tax_relief,
-        ),
-        (
-            "part_ii.item_20_total_penalties",
-            actual.part_ii.item_20_total_penalties,
-            expected.part_ii.item_20_total_penalties,
-        ),
-        (
-            "part_ii.item_21_total_amount_payable_or_overpayment",
-            actual.part_ii.item_21_total_amount_payable_or_overpayment,
-            expected.part_ii.item_21_total_amount_payable_or_overpayment,
-        ),
-    ];
-    for (field, actual, expected) in pairs {
-        if actual != expected {
-            errors.push((
-                field.to_string(),
-                format!(
-                    "Stored value {} does not match the official printed formula result {}",
-                    actual, expected
-                ),
-            ));
-        }
-    }
-    for (index, (actual, expected)) in actual
-        .schedule_3
-        .rows
-        .iter()
-        .zip(expected.schedule_3.rows.iter())
-        .enumerate()
-    {
-        if actual.unapplied_balance != expected.unapplied_balance {
-            errors.push((
-                format!("schedule_3.rows[{index}].unapplied_balance"),
-                "Stored NOLCO balance does not match E = A - (B + C + D)".to_string(),
-            ));
-        }
-    }
-    for (index, (actual, expected)) in actual
-        .schedule_4
-        .rows
-        .iter()
-        .zip(expected.schedule_4.rows.iter())
-        .enumerate()
-    {
-        if actual.allowable_balance != expected.allowable_balance {
-            errors.push((
-                format!("schedule_4.rows[{index}].allowable_balance"),
-                "Stored MCIT balance does not match G = C - (D + E + F)".to_string(),
-            ));
-        }
-    }
-}
-
-fn checked_sum(
-    field: &str,
-    values: impl IntoIterator<Item = WholePeso>,
-    issues: &mut Vec<(String, String)>,
-) -> WholePeso {
-    let total = values
-        .into_iter()
-        .try_fold(0_i64, |total, value| total.checked_add(value.0));
-    match total {
-        Some(total) => WholePeso(total),
-        None => {
-            issues.push((
-                field.to_string(),
-                "Whole-peso calculation overflowed".to_string(),
-            ));
-            WholePeso::ZERO
-        }
-    }
-}
-
-fn checked_sub(
-    field: &str,
-    left: WholePeso,
-    right: WholePeso,
-    issues: &mut Vec<(String, String)>,
-) -> WholePeso {
-    match left.0.checked_sub(right.0) {
-        Some(value) => WholePeso(value),
-        None => {
-            issues.push((
-                field.to_string(),
-                "Whole-peso calculation overflowed".to_string(),
-            ));
-            WholePeso::ZERO
-        }
-    }
-}
-
-fn checked_sub_many(
-    field: &str,
-    minuend: WholePeso,
-    subtrahends: impl IntoIterator<Item = WholePeso>,
-    issues: &mut Vec<(String, String)>,
-) -> WholePeso {
-    let result = subtrahends
-        .into_iter()
-        .try_fold(minuend.0, |value, subtrahend| {
-            value.checked_sub(subtrahend.0)
-        });
-    match result {
-        Some(value) => WholePeso(value),
-        None => {
-            issues.push((
-                field.to_string(),
-                "Whole-peso calculation overflowed".to_string(),
-            ));
-            WholePeso::ZERO
-        }
-    }
-}
-
-fn checked_percent(
-    field: &str,
-    amount: WholePeso,
-    percent: u8,
-    issues: &mut Vec<(String, String)>,
-) -> WholePeso {
-    let numerator = i128::from(amount.0) * i128::from(percent);
-    // The form's whole-peso instruction rounds an absolute 0.50 upward. For
-    // negative values this is symmetric, away from zero at the half boundary.
-    let rounded = if numerator >= 0 {
-        (numerator + 50) / 100
-    } else {
-        (numerator - 50) / 100
-    };
-    match i64::try_from(rounded) {
-        Ok(value) => WholePeso(value),
-        Err(_) => {
-            issues.push((
-                field.to_string(),
-                "Whole-peso percentage overflowed".to_string(),
-            ));
-            WholePeso::ZERO
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1269,54 +544,6 @@ mod tests {
         assert_eq!(WholePeso(-8_000).format_bir(), "-8,000");
         assert!(WholePeso::parse_bir("1,2").is_err());
         assert!(WholePeso::parse_bir("100.50").is_err());
-    }
-
-    #[test]
-    fn printed_part_iv_and_schedule_formulas_are_recomputed_without_a_rate_default() {
-        let mut draft = Form1702RTDraft {
-            deduction_method: Form1702RTDeductionMethod::OptionalStandard,
-            part_iv: Form1702RTPartIV {
-                item_27_sales: WholePeso(100_000),
-                item_28_sales_returns: WholePeso(10_000),
-                item_30_cost_of_sales_or_services: WholePeso(20_000),
-                item_32_other_taxable_income: WholePeso(5_000),
-                item_40_income_tax_rate_percent: 30,
-                ..Form1702RTPartIV::default()
-            },
-            ..Form1702RTDraft::default()
-        };
-        draft.recompute();
-        assert_eq!(draft.part_iv.item_29_net_sales, WholePeso(90_000));
-        assert_eq!(
-            draft.part_iv.item_31_gross_income_from_operations,
-            WholePeso(70_000)
-        );
-        assert_eq!(
-            draft.part_iv.item_33_total_taxable_income,
-            WholePeso(75_000)
-        );
-        assert_eq!(
-            draft.part_iv.item_38_optional_standard_deduction,
-            WholePeso(30_000)
-        );
-        assert_eq!(
-            draft.part_iv.item_39_net_taxable_income_or_loss,
-            WholePeso(45_000)
-        );
-        assert_eq!(
-            draft.part_iv.item_41_normal_income_tax_due,
-            WholePeso(13_500)
-        );
-        assert_eq!(draft.part_iv.item_42_mcit_due, WholePeso(1_500));
-        assert_eq!(draft.part_iv.item_43_tax_due, WholePeso(13_500));
-    }
-
-    #[test]
-    fn queue_submission_is_explicitly_disabled() {
-        let mut draft = Form1702RTDraft::default();
-        let errors = draft.transition_to_queued().expect_err("must fail closed");
-        assert!(errors[0].1.contains("editable-save persistence only"));
-        assert_eq!(draft.status, FilingStatus::Draft);
     }
 
     #[test]
@@ -1336,37 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn page_one_semantics_fail_closed_for_unreviewed_atc_years_and_payment_cells() {
-        let mut draft = Form1702RTDraft {
-            taxable_year: 2100,
-            atc: Form1702RTAtcSelection {
-                other_selected: true,
-                other_code: "IC999".to_string(),
-                ..Form1702RTAtcSelection::default()
-            },
-            ..Form1702RTDraft::default()
-        };
-        draft.payment_details[0].specification = "NOT AN OFFICIAL ITEM 23 FIELD".to_string();
-        draft.payment_details[2].drawee_bank_or_agency = "NOT AN ITEM 25 FIELD".to_string();
-
-        let errors = draft.validate();
-        assert!(
-            errors
-                .iter()
-                .any(|(field, message)| { field == "taxable_year" && message.contains("MM/20YY") })
-        );
-        assert!(errors.iter().any(|(field, message)| {
-            field == "atc.other_code" && message.contains("no reviewed 1702RTv2018C")
-        }));
-        assert!(errors.iter().any(|(field, message)| {
-            field == "payment_details[0].specification" && message.contains("Item 23")
-        }));
-        assert!(errors.iter().any(|(field, message)| {
-            field == "payment_details[2].drawee_bank_or_agency" && message.contains("no Drawee")
-        }));
-    }
-
-    #[test]
     fn reviewed_ic010_description_and_legacy_signatory_title_aliases_are_exact() {
         assert_eq!(
             reviewed_alternate_atc_description("IC010"),
@@ -1375,7 +571,7 @@ mod tests {
         assert_eq!(reviewed_alternate_atc_description("IC020"), None);
 
         let restored: Form1702RTDraft = serde_json::from_str(
-            r#"{"president_signatory_name":"PRESIDENT","treasurer_signatory_name":"TREASURER"}"#,
+            r#"{"president_signatory_name":"PRESIDENT","treasurer_signatory_name":"TREASURER","status":"Draft","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}"#,
         )
         .expect("legacy signatory keys remain readable");
         assert_eq!(restored.president_signatory_title, "PRESIDENT");

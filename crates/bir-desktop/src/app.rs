@@ -3,7 +3,6 @@ use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_1601c_view::{Form1601CEvent, Form1601CView};
 use crate::views::form_1701_view::{Form1701Event, Form1701View};
 use crate::views::form_1702mx_view::{Form1702MXEvent, Form1702MXView};
-use crate::views::form_1702rt_view::{Form1702RTEvent, Form1702RTView};
 use crate::views::form_2550q_view::{Form2550QV2Event, Form2550QV2View};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
@@ -51,7 +50,6 @@ pub enum ActiveView {
     Form1601C,
     Form2550Q,
     Form1701,
-    Form1702RT,
     Form1702MX,
     /// A form on the generic submission path (`views::queueable_forms`).
     Queueable(bir_core::forms::queueable::QueueableKind),
@@ -152,8 +150,6 @@ pub struct AppState {
     pub(crate) pending_form_2550q_draft: Option<bir_core::forms::form_2550q::Form2550QDraft>,
     pub(crate) form_1701_view: Option<Entity<Form1701View>>,
     pub(crate) pending_form_1701_draft: Option<bir_core::forms::form_1701::Form1701Draft>,
-    pub(crate) form_1702rt_view: Option<Entity<Form1702RTView>>,
-    pub(crate) pending_form_1702rt_draft: Option<bir_core::forms::form_1702rt::Form1702RTDraft>,
     pub(crate) form_1702mx_view: Option<Entity<Form1702MXView>>,
     pub(crate) pending_form_1702mx_draft: Option<bir_core::forms::form_1702mx::Form1702MXDraft>,
     /// Editor of the open generic-queue form.
@@ -877,8 +873,6 @@ impl AppState {
             pending_form_2550q_draft: None,
             form_1701_view: None,
             pending_form_1701_draft: None,
-            form_1702rt_view: None,
-            pending_form_1702rt_draft: None,
             form_1702mx_view: None,
             pending_form_1702mx_draft: None,
             queueable_view: None,
@@ -1531,14 +1525,6 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-            ActiveView::Form1702RT => {
-                if let Some(view) = &self.form_1702rt_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
             ActiveView::Queueable(_) => {
                 if let Some(view) = &self.queueable_view {
                     view.clone().into_any_element()
@@ -1860,27 +1846,6 @@ impl AppState {
             self.pending_form_1701_draft = Some(draft);
             self.active_view = ActiveView::Form1701;
             cx.notify();
-        } else if form_code == "1702RT"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
-                    tin, "1702RT", year, None,
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
-                        profile, year, 1,
-                    )
-                })
-            } else {
-                bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(profile, year, 1)
-            };
-            self.pending_form_1702rt_draft = Some(draft);
-            self.active_view = ActiveView::Form1702RT;
-            cx.notify();
         } else if form_code == "1702MX"
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
@@ -2086,31 +2051,6 @@ impl Render for AppState {
             )
             .detach();
             self.form_1701_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_1702rt_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form1702RTView::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form1702RTEvent, window, cx| match event {
-                    Form1702RTEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form1702RTEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form1702RTEvent::Saved
-                    | Form1702RTEvent::Submitted
-                    | Form1702RTEvent::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_1702rt_view = Some(form_view);
         }
 
         if let Some((kind, year, period)) = self.pending_queueable.take()
