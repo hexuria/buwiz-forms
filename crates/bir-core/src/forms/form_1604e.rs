@@ -379,6 +379,8 @@ impl Form1604eDraft {
         put("txtPg2TIN3", tin3);
         put("txtPg2BranchCode", branch);
         put("txtPg2TaxpayerName", text(&self.taxpayer_name));
+        // init() sets page 1; the upload loop writes the field as it stands.
+        put("txtCurrentPage", "1".to_string());
         put("txtLineBus", text(&self.line_of_business));
 
         fields.insert("txtEmail".to_string(), self.email.trim().to_string());
