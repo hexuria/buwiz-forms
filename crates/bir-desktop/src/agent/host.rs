@@ -2421,6 +2421,202 @@ impl BirAgentHost {
         Err("open form 1601C or 2551Q first".into())
     }
 
+    /// `form.context`: what the agent may fill from — the taxpayer's COR
+    /// facts, the income-tax elections exactly as stored (never inferred),
+    /// past returns for the TIN, and uploaded-document OCR for the period.
+    /// No PINs, TOTP secrets, mail credentials or tokens.
+    fn form_context(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        self.reconcile_open_forms_from_db();
+        let open = match self.active_view {
+            ActiveView::Form1601C => self.form_1601c.as_ref().map(|form| {
+                let draft = &form.draft;
+                (
+                    "1601C",
+                    draft.tin.clone(),
+                    draft.taxable_year,
+                    draft.month,
+                    month_bounds(draft.taxable_year, draft.month),
+                )
+            }),
+            ActiveView::Form2551Q => self.form_2551q.as_ref().map(|form| {
+                let draft = &form.draft;
+                (
+                    "2551Q",
+                    draft.tin.clone(),
+                    draft.taxable_year,
+                    draft.quarter,
+                    draft.filing_period_bounds(),
+                )
+            }),
+            _ => None,
+        };
+        let tin = match &open {
+            Some((_, tin, ..)) => tin.clone(),
+            None => self
+                .selected_tin
+                .clone()
+                .ok_or("open a form or select a taxpayer profile first")?,
+        };
+        let profile = self.load_profile(&tin)?;
+        let bounds = open.as_ref().and_then(|(.., bounds)| *bounds);
+        let overlaps = |version: &bir_core::profile::TaxProfileVersion| match bounds {
+            None => true,
+            Some((start, end)) => {
+                version.effective_from.is_none_or(|from| from <= end)
+                    && version.effective_until.is_none_or(|until| until >= start)
+            }
+        };
+        let period_versions: Vec<_> = profile
+            .profile_versions
+            .iter()
+            .filter(|version| overlaps(version))
+            .collect();
+        let trade_name = period_versions
+            .iter()
+            .find(|version| version.status == bir_core::profile::TaxProfileVersionStatus::Confirmed)
+            .or(period_versions.first())
+            .and_then(|version| version.cor.trade_name.clone());
+        let cor_versions: Vec<Value> = profile
+            .profile_versions
+            .iter()
+            .map(|version| {
+                json!({
+                    "label": version.label,
+                    "status": version.status,
+                    "source": version.source,
+                    "effective_from": version.effective_from,
+                    "effective_until": version.effective_until,
+                    "covers_period": overlaps(version),
+                    "cor": version.cor,
+                    "registered_tax_types": version.registered_tax_types,
+                })
+            })
+            .collect();
+        let profile_json = json!({
+            "tin": profile.tin.full(),
+            "registered_name": profile.full_name,
+            "trade_name": trade_name,
+            "registered_address": profile.registered_address,
+            "zip_code": profile.zip_code,
+            "rdo_code": profile.rdo_code,
+            "line_of_business": profile.line_of_business,
+            "taxpayer_type": profile.taxpayer_type,
+            "tax_classification": profile.tax_classification,
+            "is_vat_registered": profile.is_vat_registered,
+            "eopt_tier": profile.eopt_tier,
+            "business_start_date": profile.business_start_date,
+            "contact_number": profile.phone,
+            "email": profile.email,
+            "cor_versions": cor_versions,
+        });
+        let elections: Vec<Value> = profile
+            .tax_elections
+            .iter()
+            .map(|election| {
+                json!({
+                    "taxable_year": election.taxable_year,
+                    "election": election.election,
+                    "elected_at": election.elected_at,
+                    "source_form": election.source_form,
+                })
+            })
+            .collect();
+        let documents: Vec<Value> = period_versions
+            .iter()
+            .flat_map(|version| {
+                version.evidence.iter().map(move |document| {
+                    json!({
+                        "profile_version": version.label,
+                        "file_name": document.file_name,
+                        "document_type": document.document_type,
+                        "uploaded_at": document.uploaded_at,
+                        "extracted_form_codes": document.extracted_form_codes,
+                        "ocr_text": document.ocr_text,
+                        "ocr_confidence": document.ocr_confidence,
+                    })
+                })
+            })
+            .collect();
+
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        let mut past_returns: Vec<Value> = guard
+            .list_submissions_for_tin(&tin)
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .map(|submission| {
+                json!({
+                    "kind": "submission",
+                    "form": submission.form_type,
+                    "period": submission.period,
+                    "status": submission.status,
+                    "submitted_at": submission.submitted_at,
+                    "values": submission.form_data,
+                })
+            })
+            .collect();
+        // Other saved returns of the open form, this year and last.
+        if let Some((code, _, year, period, _)) = &open {
+            for y in year.saturating_sub(1)..=*year {
+                let periods: u8 = if *code == "1601C" { 12 } else { 4 };
+                for p in 1..=periods {
+                    if y == *year && p == *period {
+                        continue;
+                    }
+                    let saved = if *code == "1601C" {
+                        guard
+                            .get_1601c_draft(&tin, y, p)
+                            .ok()
+                            .flatten()
+                            .map(|draft| {
+                                (
+                                    format!("{:?}", draft.status),
+                                    assist::fillable_values_1601c(&draft),
+                                )
+                            })
+                    } else {
+                        guard
+                            .get_2551q_draft(&tin, y, p)
+                            .ok()
+                            .flatten()
+                            .map(|draft| {
+                                (
+                                    format!("{:?}", draft.status),
+                                    assist::fillable_values_2551q(&draft),
+                                )
+                            })
+                    };
+                    if let Some((status, values)) = saved {
+                        past_returns.push(json!({
+                            "kind": "saved_return",
+                            "form": code,
+                            "year": y,
+                            "period": p,
+                            "status": status,
+                            "values": values,
+                        }));
+                    }
+                }
+            }
+        }
+        drop(guard);
+
+        Ok(DispatchResult::json(json!({
+            "form": open.as_ref().map(|(code, ..)| *code),
+            "period": open.as_ref().map(|(_, _, year, period, bounds)| json!({
+                "year": year,
+                "period": period,
+                "start": bounds.map(|(start, _)| start),
+                "end": bounds.map(|(_, end)| end),
+            })),
+            "profile": profile_json,
+            "elections": elections,
+            "past_returns": past_returns,
+            "documents": documents,
+        })))
+    }
+
     /// `form.needs_you`: required boxes (rules/forms/<form>/fields.json) that
     /// are still empty.
     fn form_needs_you(&mut self) -> Result<DispatchResult, String> {
@@ -3028,6 +3224,7 @@ impl BirAgentHost {
             "form.fields" => self.form_fields(),
             "form.fill" => self.form_fill(args),
             "form.needs_you" => self.form_needs_you(),
+            "form.context" => self.form_context(),
             "form.pdf" | "form.preview_pdf" => self.form_pdf(),
             "form.print" => self.form_print(args),
             "form.revert_draft" | "draft.revert" => self.form_revert_draft(args),
@@ -3746,6 +3943,17 @@ fn parse_dashboard_forms(raw: Option<&Value>) -> Result<Option<Vec<String>>, Str
             "dashboard.set_forms forms must be \"all\", a comma list, or an array of codes".into(),
         ),
     }
+}
+
+/// First and last day of a 1601C month.
+fn month_bounds(year: u16, month: u8) -> Option<(NaiveDate, NaiveDate)> {
+    let start = NaiveDate::from_ymd_opt(i32::from(year), u32::from(month), 1)?;
+    let next = if month == 12 {
+        NaiveDate::from_ymd_opt(i32::from(year) + 1, 1, 1)?
+    } else {
+        NaiveDate::from_ymd_opt(i32::from(year), u32::from(month) + 1, 1)?
+    };
+    Some((start, next.pred_opt()?))
 }
 
 /// The period `form.open` actually opens for `code` (1601C months, 2551Q quarters).
@@ -8176,5 +8384,148 @@ mod tests {
         );
         assert!(filled.ok, "{:?}", filled.error);
         assert!(!fields_of(&mut host).contains(&"tax_25_total_taxes_withheld".to_string()));
+    }
+
+    #[test]
+    fn form_context_exposes_profile_and_past_returns() {
+        let year = last_year();
+        let mut host = file_tax_host(|profile| {
+            profile.tax_elections = vec![
+                serde_json::from_value(json!({
+                    "taxable_year": year,
+                    "election": "EightPercent",
+                    "elected_at": format!("{year}-04-10T09:00:00"),
+                    "source_form": "1701Q",
+                }))
+                .expect("stored election"),
+            ];
+            profile.profile_pin_hash = Some("pin-hash-must-not-leak".into());
+            profile.imap_app_password = Some("imap-secret-must-not-leak".into());
+            profile.profile_versions = vec![
+                serde_json::from_value(json!({
+                    "id": "cor-1",
+                    "label": "COR 2020",
+                    "status": "Draft",
+                    "source": "OcrCor",
+                    "effective_from": "2020-01-01",
+                    "cor": {
+                        "registered_name": "File Tax Test Taxpayer",
+                        "trade_name": "Test Sari-Sari Store",
+                        "registered_address": "Olongapo",
+                        "rdo_code": "018",
+                        "line_of_business_description": "Retail",
+                    },
+                    "registered_tax_types": ["IncomeTax", "PercentageTax"],
+                    "taxpayer_type": "Individual",
+                    "evidence": [{
+                        "id": "doc-1",
+                        "file_name": "cor.pdf",
+                        "stored_path": "/nonexistent/cor.pdf",
+                        "document_type": "COR",
+                        "extracted_form_codes": ["2551Q", "1701Q"],
+                        "ocr_text": "CERTIFICATE OF REGISTRATION ... PERCENTAGE TAX",
+                    }],
+                }))
+                .expect("COR version"),
+            ];
+        });
+        {
+            let db = host.db.as_ref().unwrap().lock().unwrap();
+            let profile = db.get_profile(FILE_TAX_TIN).unwrap().unwrap();
+            let mut q3 = Form2551QDraft::new_from_profile(&profile, year, 3);
+            q3.schedule_1[0].taxable_amount = 90_000.0;
+            q3.recompute(None);
+            db.save_2551q_draft(&q3).expect("Q3 return");
+            db.save_submission(bir_core::db::Submission {
+                id: None,
+                tin: FILE_TAX_TIN.into(),
+                form_type: "2551Q".into(),
+                period: format!("Q2 {year}"),
+                status: "Confirmed".into(),
+                form_data: [("txt14".to_string(), "2,400.00".to_string())]
+                    .into_iter()
+                    .collect(),
+                submitted_at: Some(format!("{year}-07-20")),
+                filename: None,
+                created_at: None,
+                updated_at: None,
+            })
+            .expect("past submission");
+        }
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let context = call(&mut host, "form.context", json!({}));
+        assert!(context.ok, "{:?}", context.error);
+        let body = context.result.unwrap();
+
+        let profile = &body["profile"];
+        assert_eq!(profile["tin"], FILE_TAX_TIN);
+        assert_eq!(profile["registered_name"], "File Tax Test Taxpayer");
+        assert_eq!(profile["trade_name"], "Test Sari-Sari Store");
+        assert_eq!(profile["rdo_code"], "018");
+        assert_eq!(profile["registered_address"], "Olongapo");
+        assert_eq!(profile["cor_versions"][0]["covers_period"], true);
+        let text = body.to_string();
+        assert!(!text.contains("must-not-leak"), "secrets leaked: {text}");
+
+        // Elections exactly as stored.
+        assert_eq!(
+            body["elections"],
+            json!([{
+                "taxable_year": year,
+                "election": "EightPercent",
+                "elected_at": format!("{year}-04-10T09:00:00"),
+                "source_form": "1701Q",
+            }])
+        );
+
+        let past = body["past_returns"].as_array().unwrap();
+        assert!(
+            past.iter().any(|item| item["kind"] == "submission"
+                && item["period"] == format!("Q2 {year}")
+                && item["values"]["txt14"] == "2,400.00"),
+            "{past:?}"
+        );
+        assert!(
+            past.iter().any(|item| item["kind"] == "saved_return"
+                && item["period"] == 3
+                && item["values"]["schedule_1.0.taxable_amount"] == 90_000.0),
+            "{past:?}"
+        );
+        assert!(
+            !past
+                .iter()
+                .any(|item| item["kind"] == "saved_return" && item["period"] == 4),
+            "the open return is not a past return"
+        );
+
+        let documents = body["documents"].as_array().unwrap();
+        assert_eq!(documents.len(), 1, "{documents:?}");
+        assert!(
+            documents[0]["ocr_text"]
+                .as_str()
+                .unwrap()
+                .contains("PERCENTAGE TAX")
+        );
+        assert_eq!(
+            documents[0]["extracted_form_codes"],
+            json!(["2551Q", "1701Q"])
+        );
+
+        // No stored election: none is made up.
+        let mut bare = file_tax_host(|_| {});
+        let opened = call(
+            &mut bare,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let context = call(&mut bare, "form.context", json!({}));
+        assert!(context.ok, "{:?}", context.error);
+        assert_eq!(context.result.unwrap()["elections"], json!([]));
     }
 }
