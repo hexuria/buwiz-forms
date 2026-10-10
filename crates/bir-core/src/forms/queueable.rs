@@ -398,6 +398,7 @@ pub enum QueueableKind {
     Form1701MS,
     Form1702Q,
     Form1701A,
+    Form1700,
     #[cfg(test)]
     Test,
 }
@@ -453,6 +454,10 @@ macro_rules! with_queueable_kind {
             }
             $crate::forms::queueable::QueueableKind::Form1701A => {
                 type $ty = $crate::forms::form_1701a::Form1701ADraft;
+                $body
+            }
+            $crate::forms::queueable::QueueableKind::Form1700 => {
+                type $ty = $crate::forms::form_1700::Form1700Draft;
                 $body
             }
             #[cfg(test)]
