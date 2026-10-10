@@ -1,7 +1,7 @@
 {
  "form_id": "1702mx-v2018c",
  "html_slug": "1702mx-2018c",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption sits directly left of or above it, or the printed item number on its row. Schedule amounts in single text cells (Schedules 1-5, 10 and the Schedule 6 total) take plain text joins and print as the writer holds them. Items 1, 3, 4, 13 and 21 options and the Instructions A/B boxes take xbox_joins (box immediately left of the printed option). Part II and the 12-slot schedule amounts have no centavo comb, so no money_joins pair exists and they stay blank. Schedule 1 effectivity dates, Schedule 6 rows 1-4 and Schedule 7.1/8.1 rows 4-7 print no row number or are multi-comb dates, and stay blank. The item 5 ATC boxes stay blank. Stamped TIN combs (name=) take no join.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption sits directly left of or above it, or the printed item number on its row. Schedule amounts in single text cells (Schedules 1-5, 10 and the Schedule 6 total) take plain text joins and print as the writer holds them. Items 1, 3, 4, 13 and 21 options and the Instructions A/B boxes take xbox_joins (box immediately left of the printed option). Part II and the 12-slot Schedule 7, 8 and 9 amounts (Schedule 9 continuation columns excepted) have no centavo comb, so no money_joins pair exists and each one takes a peso_joins entry that prints the amount rounded to whole pesos. Schedule 1 effectivity dates, Schedule 6 rows 1-4 and Schedule 7.1/8.1 rows 4-7 print no row number or are multi-comb dates, and stay blank. The item 5 ATC boxes stay blank. Stamped TIN combs (name=) take no join.",
  "joins": [
   {
    "writer_key": "frm1702MX:drpPg1Pt1I7RDO",
@@ -2041,6 +2041,176 @@
    "reason": "box immediately left of \"B. Two or more activities\""
   }
  ],
+ "peso_joins": [
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I14TotalIncome",
+   "html_id": "p1c59",
+   "printed": "14 Total Tax Due/(Overpayment)",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I15LessTotalTax",
+   "html_id": "p1c61",
+   "printed": "15 Less: Total Tax Credits/Payments",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I16NetTaxPayable",
+   "html_id": "p1c63",
+   "printed": "16 Net Tax Payable/(Overpayment)",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I17",
+   "html_id": "p1c66",
+   "printed": "17 Surcharge",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I18",
+   "html_id": "p1c68",
+   "printed": "18 Interest",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I19",
+   "html_id": "p1c70",
+   "printed": "19 Compromise",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I20TotalPenalties",
+   "html_id": "p1c72",
+   "printed": "20 Total Penalties",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt2I21TotalAmount",
+   "html_id": "p1c74",
+   "printed": "21 Total Amount Payable/(Overpayment)",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I26CashC4",
+   "html_id": "p1c107",
+   "printed": "23 Cash/Bank Debit Memo, Amount",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I27CheckC4",
+   "html_id": "p1c114",
+   "printed": "24 Check, Amount",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I28TaxDebitC4",
+   "html_id": "p1c120",
+   "printed": "25 Tax Debit Memo, Amount",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I29OthersC4",
+   "html_id": "p1c128",
+   "printed": "26 Others, Amount",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc7I1",
+   "html_id": "p3c218",
+   "printed": "Sch 7 item 1 Gross Income",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc7I2",
+   "html_id": "p3c220",
+   "printed": "Sch 7 item 2 Less: Ordinary Allowable Itemized Deductions",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc7I3",
+   "html_id": "p3c222",
+   "printed": "Sch 7 item 3 Net Operating Loss",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc8It1",
+   "html_id": "p4c49",
+   "printed": "Sch 8 item 1 Gross Income",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc8It2",
+   "html_id": "p4c51",
+   "printed": "Sch 8 item 2 Less: Ordinary Allowable Itemized Deductions",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc8It3",
+   "html_id": "p4c53",
+   "printed": "Sch 8 item 3 Net Operating Loss",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CA",
+   "html_id": "p4c101",
+   "printed": "Sch 9 item 1 A) Normal Income Tax as Adjusted",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CB",
+   "html_id": "p4c102",
+   "printed": "Sch 9 item 1 B) MCIT",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CC",
+   "html_id": "p4c103",
+   "printed": "Sch 9 item 1 C) Excess MCIT over Normal Income Tax",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CA",
+   "html_id": "p4c106",
+   "printed": "Sch 9 item 2 A) Normal Income Tax as Adjusted",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CB",
+   "html_id": "p4c107",
+   "printed": "Sch 9 item 2 B) MCIT",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CC",
+   "html_id": "p4c108",
+   "printed": "Sch 9 item 2 C) Excess MCIT over Normal Income Tax",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CA",
+   "html_id": "p4c111",
+   "printed": "Sch 9 item 3 A) Normal Income Tax as Adjusted",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CB",
+   "html_id": "p4c112",
+   "printed": "Sch 9 item 3 B) MCIT",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CC",
+   "html_id": "p4c113",
+   "printed": "Sch 9 item 3 C) Excess MCIT over Normal Income Tax",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I4",
+   "html_id": "p4c135",
+   "printed": "Sch 9 item 4 Total Excess MCIT Applied",
+   "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
+  }
+ ],
  "left_out": [
   {
    "html_id": "p1c11",
@@ -2087,38 +2257,6 @@
    "reason": "Item 10 Date of Incorporation: three combs under one layout key (txtPg1Pt1I8)"
   },
   {
-   "html_id": "p1c59",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c61",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c63",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c66",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c68",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c70",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c72",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p1c74",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
    "html_id": "p1c81",
    "reason": "attach authorization letter line: no layout key"
   },
@@ -2139,10 +2277,6 @@
    "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
   },
   {
-   "html_id": "p1c107",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
    "html_id": "p1c111",
    "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
   },
@@ -2153,10 +2287,6 @@
   {
    "html_id": "p1c113",
    "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c114",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
   },
   {
    "html_id": "p1c117",
@@ -2171,10 +2301,6 @@
    "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
   },
   {
-   "html_id": "p1c120",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
    "html_id": "p1c125",
    "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
   },
@@ -2185,10 +2311,6 @@
   {
    "html_id": "p1c127",
    "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c128",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
   },
   {
    "html_id": "p2c30",
@@ -2383,18 +2505,6 @@
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
   },
   {
-   "html_id": "p3c218",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p3c220",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p3c222",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
    "html_id": "p4c16",
    "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
   },
@@ -2489,18 +2599,6 @@
   {
    "html_id": "p4c42",
    "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c49",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c51",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c53",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
   },
   {
    "html_id": "p4c63",
@@ -2599,42 +2697,6 @@
    "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
   },
   {
-   "html_id": "p4c101",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c102",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c103",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c106",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c107",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c108",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c111",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c112",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c113",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
    "html_id": "p4c120",
    "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
   },
@@ -2680,10 +2742,6 @@
   },
   {
    "html_id": "p4c133",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c135",
    "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
   }
  ]
