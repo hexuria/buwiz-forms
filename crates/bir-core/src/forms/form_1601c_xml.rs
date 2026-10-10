@@ -10,6 +10,9 @@ use super::FormValidator;
 use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use std::collections::BTreeMap;
 
+/// The official form id of this rule package and layout.
+pub const FORM_1601C_FORM_ID: &str = "1601c-v2018";
+
 impl Form1601CDraft {
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
@@ -277,8 +280,13 @@ impl Form1601CDraft {
         fields
     }
 
+    /// The official submit plaintext for this draft, byte for byte as the
+    /// official `saveXMLsubmit()` writes it (see [`crate::official_xml`]).
     pub fn to_bir_xml_payload(&self) -> String {
-        crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
+        let layout = crate::official_xml::layout(FORM_1601C_FORM_ID)
+            .expect("the 1601C official layout is packaged");
+        crate::official_xml::write(layout, &self.to_bir_field_map())
+            .expect("the 1601C field map holds only official controls")
     }
 
     /// Generate XML only when the draft satisfies the verified model and
@@ -287,7 +295,7 @@ impl Form1601CDraft {
     pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = self.validate();
         if errors.is_empty() {
-            Ok(crate::bir_xml::generate_bir_xml(&self.to_bir_field_map()))
+            Ok(self.to_bir_xml_payload())
         } else {
             Err(errors)
         }
@@ -823,7 +831,14 @@ mod tests {
 
         assert!(parsed.tax_relief);
         assert_eq!(parsed.tax_relief_specification, "2");
-        assert_eq!(parsed.registered_address_2, "SECOND ADDRESS LINE");
+        // The official saveXMLsubmit() appends Address 2 to the txtAddress
+        // value with no separator and writes no txtAddress2 key, so a filed
+        // payload carries one combined address.
+        assert_eq!(
+            parsed.registered_address,
+            "FIRST ADDRESS LINESECOND ADDRESS LINE"
+        );
+        assert_eq!(parsed.registered_address_2, "");
         assert_eq!(parsed.schedule_1, draft.schedule_1);
         assert_eq!(parsed.tax_26_adjustment, 150.0);
         assert_eq!(parsed.tax_27_taxes_withheld_for_remittance, 1_150.0);

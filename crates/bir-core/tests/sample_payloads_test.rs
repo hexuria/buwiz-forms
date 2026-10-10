@@ -4,13 +4,18 @@
 //! taxpayer: the plaintext BIR pseudo-XML and the encrypted IAF file that is
 //! uploaded (`dump_xml <file>` decrypts it back). No real taxpayer data.
 //!
+//! `<stem>.official.xml` is what the official eBIRForms `saveXMLsubmit()`
+//! writes for the same values, produced by `rules/tools/official-xml/oracle.js`
+//! (the official HTA loop run in jsdom). Our plaintext must equal it byte for
+//! byte; regenerating our samples never changes it.
+//!
 //! Regenerate after an intentional serializer change with
 //! `UPDATE_SAMPLE_PAYLOADS=1 cargo test -p bir-core --test sample_payloads_test`.
 
-use bir_core::bir_xml::parse_bir_xml_checked;
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
 use bir_core::forms::form_2551q::{Form2551QDraft, Item13Election};
+use bir_core::official_xml;
 use bir_core::profile::TaxpayerProfile;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
@@ -22,11 +27,11 @@ use std::path::PathBuf;
 const OFFICIAL_ENCRYPT_EXE_SHA256: [(&str, &str); 2] = [
     (
         "1601C-062025",
-        "e7b6d0f9433f41608e9bb0bf059be513e9203c2ea549136cad8e35e9bdb91a47",
+        "ca2ad1dc15cb59eab57a140f7a32763f380ffe7509d8e9f9b5095d1e7ce12052",
     ),
     (
         "2551Q-122025Q1",
-        "282dcc73bfd7233ae37b56b1f4afcd994ed93719bd2a69048e552b7cbea28a4b",
+        "34e727bd8b9e08bc5cbc3f43338c9ce2ff80eb802740e3ff5df78652ccf3cbef",
     ),
 ];
 
@@ -101,8 +106,9 @@ fn samples_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sample-payloads")
 }
 
-fn check_sample(stem: &str, plaintext: &str) {
-    let fields = parse_bir_xml_checked(plaintext).expect("sample payload must parse");
+fn check_sample(stem: &str, form_id: &str, plaintext: &str) {
+    let layout = official_xml::layout(form_id).expect("official layout");
+    let fields = official_xml::read(layout, plaintext).expect("sample follows the official layout");
     assert!(!fields.is_empty());
 
     let encrypted = compress_and_encrypt(plaintext.as_bytes(), BIR_IAF_PASSPHRASE)
@@ -113,6 +119,24 @@ fn check_sample(stem: &str, plaintext: &str) {
         decrypted,
         plaintext.as_bytes(),
         "encryption must round-trip"
+    );
+
+    let dir = samples_dir();
+    let plain_path = dir.join(format!("{stem}.plain.xml"));
+    let iaf_path = dir.join(format!("{stem}.iaf.xml"));
+    let updating = std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some();
+    if updating {
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&plain_path, plaintext).unwrap();
+        std::fs::write(&iaf_path, &encrypted).unwrap();
+    }
+
+    let official_plain_path = dir.join(format!("{stem}.official.xml"));
+    let official_plain = std::fs::read_to_string(&official_plain_path)
+        .unwrap_or_else(|e| panic!("missing {}: {e}", official_plain_path.display()));
+    assert_eq!(
+        plaintext, official_plain,
+        "{stem}: our plaintext differs from the official saveXMLsubmit() output"
     );
 
     let official = OFFICIAL_ENCRYPT_EXE_SHA256
@@ -130,13 +154,7 @@ fn check_sample(stem: &str, plaintext: &str) {
         );
     }
 
-    let dir = samples_dir();
-    let plain_path = dir.join(format!("{stem}.plain.xml"));
-    let iaf_path = dir.join(format!("{stem}.iaf.xml"));
-    if std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some() {
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(&plain_path, plaintext).unwrap();
-        std::fs::write(&iaf_path, &encrypted).unwrap();
+    if updating {
         return;
     }
     let committed = std::fs::read_to_string(&plain_path)
@@ -158,7 +176,7 @@ fn form_1601c_sample_payload_is_current() {
     let payload = draft
         .try_to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 1601C must validate: {errors:?}"));
-    check_sample("1601C-062025", &payload);
+    check_sample("1601C-062025", "1601c-v2018", &payload);
 }
 
 #[test]
@@ -167,5 +185,5 @@ fn form_2551q_sample_payload_is_current() {
     let payload = draft
         .to_bir_xml_payload()
         .unwrap_or_else(|errors| panic!("dummy 2551Q must validate: {errors:?}"));
-    check_sample("2551Q-122025Q1", &payload);
+    check_sample("2551Q-122025Q1", "2551q-v2018", &payload);
 }
