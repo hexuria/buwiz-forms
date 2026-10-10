@@ -117,8 +117,11 @@ const entries = marked.divs.map((d, n) => {
   }
   if (consumed !== d.body.length) parts.push({ literal: d.body.slice(consumed) });
   if (numberKeys.has(d.key)) {
+    // The saveXMLsubmit loop skips zero amounts; the upload loop
+    // (saveEncryptedProfile) only normalizes them.
+    const rule = defaultBody.some((b) => b === null) ? 'omit-zero' : 'normalize';
     const def = defaultBody[n] === null ? String(controlDefault.get(d.key) ?? '') : defaultBody[n];
-    return { key: d.key, kind: 'value', parts, default: def, number: 'omit-zero', after: d.after };
+    return { key: d.key, kind: 'value', parts, default: def, number: rule, after: d.after };
   }
   return { key: d.key, kind: 'value', parts, default: defaultBody[n], after: d.after };
 });
@@ -138,7 +141,7 @@ function expected(entry, value, n) {
   if (entry.kind === 'bool') return marked.divs[n].body;
   if (entry.number) {
     const v = officialNumber(value);
-    return v * 1 !== 0 ? v : null;
+    return entry.number === 'normalize' || v * 1 !== 0 ? v : null;
   }
   return entry.parts.map((p) => {
     if (p.literal !== undefined) return p.literal;

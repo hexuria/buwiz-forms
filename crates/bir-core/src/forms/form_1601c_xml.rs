@@ -66,13 +66,12 @@ impl Form1601CDraft {
             "frm1601c:txtAddress",
             self.registered_address.to_uppercase(),
         );
-        if !self.registered_address_2.is_empty() {
-            insert(
-                &mut fields,
-                "frm1601c:txtAddress2",
-                self.registered_address_2.to_uppercase(),
-            );
-        }
+        // The upload writes the Address 2 control even when it is blank.
+        insert(
+            &mut fields,
+            "frm1601c:txtAddress2",
+            self.registered_address_2.to_uppercase(),
+        );
         insert(&mut fields, "frm1601c:txtZipCode", self.zip_code.clone());
         insert(
             &mut fields,
@@ -722,7 +721,7 @@ fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::form_1601c::EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT;
+    use super::super::form_1601c::EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT as EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT;
     use super::*;
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
@@ -843,14 +842,10 @@ mod tests {
 
         assert!(parsed.tax_relief);
         assert_eq!(parsed.tax_relief_specification, "2");
-        // The official saveXMLsubmit() appends Address 2 to the txtAddress
-        // value with no separator and writes no txtAddress2 key, so a filed
-        // payload carries one combined address.
-        assert_eq!(
-            parsed.registered_address,
-            "FIRST ADDRESS LINESECOND ADDRESS LINE"
-        );
-        assert_eq!(parsed.registered_address_2, "");
+        // The upload (saveEncryptedProfile) writes txtAddress and txtAddress2
+        // as separate controls, so both lines round-trip.
+        assert_eq!(parsed.registered_address, "FIRST ADDRESS LINE");
+        assert_eq!(parsed.registered_address_2, "SECOND ADDRESS LINE");
         assert_eq!(parsed.schedule_1, draft.schedule_1);
         assert_eq!(parsed.tax_26_adjustment, 150.0);
         assert_eq!(parsed.tax_27_taxes_withheld_for_remittance, 1_150.0);
@@ -1044,15 +1039,19 @@ frm1601c:txtLineBus
             missing.is_empty(),
             "missing source sample keys: {missing:?}"
         );
-        assert_eq!(reviewed_keys.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        // The upload adds Address 2 to the reviewed editable-save keys.
+        assert_eq!(
+            reviewed_keys.len() + 1,
+            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT
+        );
         assert_eq!(fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
-        assert!(!fields.contains_key("frm1601c:txtAddress2"));
+        assert_eq!(fields["frm1601c:txtAddress2"], "");
 
         draft.registered_address_2 = "Reviewed second address line".to_string();
         let fields_with_optional_address = draft.to_bir_field_map();
         assert_eq!(
             fields_with_optional_address.len(),
-            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT + 1
+            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT
         );
         assert_eq!(
             fields_with_optional_address["frm1601c:txtAddress2"],
