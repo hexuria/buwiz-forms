@@ -13,8 +13,8 @@
             <div>BranchMask=00000BranchMask=</div>    
             <div>frm1600VT:txtPg1I6RDO=039frm1600VT:txtPg1I6RDO=</div>    
             <div>frm1600VT:rdoPg1Pt1I6RDO=039frm1600VT:rdoPg1Pt1I6RDO=</div>    
-            <div>frm1600VT:txtPg1Pt1I7WithholdingAgentsName=SAMPLE%20DUMMY%20TAXPAYERfrm1600VT:txtPg1Pt1I7WithholdingAgentsName=</div>    
-            <div>frm1600VT:txtPg1Pt1I8RegisteredAddress=UNIT%201201%20SAMPLE%20TOWER%2C%20123%20SAMPLE%20STREET%20CORNER%20EXAMPLE%20AVENUE%2C%20BARANGAY%20EXAMPLfrm1600VT:txtPg1Pt1I8RegisteredAddress=</div>    
+            <div>frm1600VT:txtPg1Pt1I7WithholdingAgentsName=SAMPLE DUMMY TAXPAYERfrm1600VT:txtPg1Pt1I7WithholdingAgentsName=</div>    
+            <div>frm1600VT:txtPg1Pt1I8RegisteredAddress=UNIT 1201 SAMPLE TOWER, 123 SAMPLE STREET CORNER EXAMPLE AVENUE, BARANGAY EXAMPLfrm1600VT:txtPg1Pt1I8RegisteredAddress=</div>    
             <div>frm1600VT:txtPg1Pt1I8RegisteredAddress2=E, QUEZON CITYfrm1600VT:txtPg1Pt1I8RegisteredAddress2=</div>    
             <div>frm1600VT:txPg1I8ZipCode=1100frm1600VT:txPg1I8ZipCode=</div>    
             <div>frm1600VT:txtPg1Pt1I9ContactNumber=09170000000frm1600VT:txtPg1Pt1I9ContactNumber=</div>    
@@ -118,7 +118,7 @@
             <div>frm1600VT:Pg2Sc1TaxRate5=0.00frm1600VT:Pg2Sc1TaxRate5=</div>    
             <div>frm1600VT:Pg2Sc1AmtOfTxWthhld5=0.00frm1600VT:Pg2Sc1AmtOfTxWthhld5=</div>    
             <div>frm1600VT:Pg2Sc1TotTxWthhldAndRmtted=6,005.00frm1600VT:Pg2Sc1TotTxWthhldAndRmtted=</div>    
-            <div>frm1600VT:txtLOB=Sample Consulting Servicesfrm1600VT:txtLOB=</div>    
+            <div>frm1600VT:txtLOB=SAMPLE CONSULTING SERVICESfrm1600VT:txtLOB=</div>    
             <div>frm1600VT:txtCurrentPage=1frm1600VT:txtCurrentPage=</div>    
             <div>frm1600VT:txtMaxPage=2frm1600VT:txtMaxPage=</div>    
             <div>AtcCode1=trueAtcCode1=</div>    

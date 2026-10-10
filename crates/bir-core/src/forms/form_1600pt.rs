@@ -7,15 +7,16 @@
 //! (`getRequiredWithheld`, `pageOneComputation`, `pageTwoComputation`,
 //! `totTaxWithheldAndRemitted`), `validateAll` / `checkDate` /
 //! `initialValidateBeforeSave` with their exact alert texts, and
-//! `saveXMLsubmit` through [`crate::official_xml`].
+//! the uploaded file (`saveEncryptedProfile(true)`) through
+//! [`crate::official_xml`].
 //!
-//! Value rules: `saveXMLsubmit` strips commas and turns `(x)` into `-x` for
+//! Value rules: the upload loop strips commas and turns `(x)` into `-x` for
 //! controls with `maxLength` 12 or 15. On this page that is only
 //! `Pg2Sc1TIN5` (a digits-only TIN), so no field-map value is affected; the
 //! amounts keep their `1,234.56` commas.
 //!
 //! Item 10 makes the page draw the ATC popup (`AtcCode1..n` checkboxes)
-//! inside the form, and `saveXMLsubmit` serializes those checkboxes too: 6
+//! inside the form, and the upload loop serializes those checkboxes too: 6
 //! for a private agent, 31 for a government agent. The submit layout is
 //! therefore per category (`1600pt-v2018-private` / `-government`).
 //!
@@ -596,7 +597,7 @@ impl Form1600PtDraft {
         self.schedule_total = schedule_total;
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
+    /// The official field values the upload loop reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {
