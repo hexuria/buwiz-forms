@@ -144,6 +144,8 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
+        "2200m-2018" => Some(include_str!(
+            "../../../html-frozen/2200m-2018/writer-cells.json"
         )),
         _ => None,
     }
@@ -1540,6 +1542,50 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_2200m_fills_identity_schedule_money_and_boxes() {
+        use bir_core::forms::form_2200m::{Form2200MDraft, Form2200MPayment};
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Mineral Fixture Corp", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Mining", "registered_address": "1 Fixture St",
+                "zip_code": "1100", "phone": "5551234", "email": "fixture@example.com",
+                "default_form_type": "2200M", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form2200MDraft::new_from_profile(&profile, 2025, 3);
+        draft.day = 14;
+        draft.manner_of_payment = Form2200MPayment::Prepayment;
+        let row = draft.row_mut(3).unwrap();
+        row.place_of_removal = "Rizal".into();
+        row.local_value_taxable = Some(100_000.0);
+        row.local_tax_due = Some(4_000.0);
+        draft.surcharge = 25.5;
+        draft.recompute();
+        draft.tax_deposit = draft.tax_still_due;
+        draft.recompute();
+        let html = filled_document("2200m-2018", &draft.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "03");
+        assert_eq!(comb_text(&html, "p1c6"), "14");
+        assert_eq!(comb_text(&html, "p1c8"), "2025");
+        assert_eq!(comb_text(&html, "p1c16"), "123");
+        assert_eq!(comb_text(&html, "p1c22"), "00000");
+        assert_eq!(comb_text(&html, "p1c24"), "039");
+        assert!(html.contains("MINERAL FIXTURE CORP"));
+        assert!(html.contains("100,000.00"));
+        assert!(html.contains("RIZAL"));
+        // Item 16 4,000.00 and Item 22 4,025.50 in peso + centavo combs.
+        assert_eq!(comb_text(&html, "p1c65"), "4000");
+        assert_eq!(comb_text(&html, "p1c67"), "00");
+        assert_eq!(comb_text(&html, "p1c109"), "4025");
+        assert_eq!(comb_text(&html, "p1c111"), "50");
+        assert_eq!(named_values(&html, "p1c13"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c12"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c59"), vec!["X".to_string()]);
+        assert!(!html.contains("name=\"frm2200M:"));
+    }
+
+    #[test]
     fn writer_cells_target_catalog_cell_ids_not_stamps() {
         // 2553 (1999) prints each amount in one text cell, not peso + cent combs.
         for (slug, split_money) in [
@@ -1548,6 +1594,7 @@ mod tests {
             ("2553-1999", false),
             ("2552-2018", true),
             ("2550m-2007", false),
+            ("2200m-2018", true),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();

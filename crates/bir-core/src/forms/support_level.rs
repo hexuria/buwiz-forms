@@ -705,6 +705,80 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         },
         release_ready: false,
     },
+    FormCapabilityRecord {
+        code: "2200M",
+        revision: "2018",
+        // `form_id` is the official formType (filename segment). PROD
+        // `ftpTargetFolder` has no `2200Mv2018` key; see form_2200m.
+        form_id: "2200Mv2018",
+        // The desktop editor is views::form_2200m_view; print preview fills the
+        // two-page frozen 2200m-2018 sheet through its writer-cells map.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200P",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Pv2020",
+        // The desktop editor is views::form_2200p_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200A",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Av2020",
+        // The desktop editor is views::form_2200a_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
+        code: "2200T",
+        revision: "2020",
+        // `form_id` is the official formType (filename segment).
+        form_id: "2200Tv2020",
+        // The desktop editor is views::form_2200t_view.
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            editor: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
 ];
 
 /// Whether the app can actually draft/file a given form.
@@ -904,6 +978,14 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2000OT"), Some("2000OTv2018"));
         assert!(can_queue_for_submission("2000"));
         assert_eq!(queue_authorized_form_type_id("2000"), Some("2000v2018"));
+        assert!(can_queue_for_submission("2200M"));
+        assert_eq!(queue_authorized_form_type_id("2200M"), Some("2200Mv2018"));
+        assert!(can_queue_for_submission("2200P"));
+        assert_eq!(queue_authorized_form_type_id("2200P"), Some("2200Pv2020"));
+        assert!(can_queue_for_submission("2200A"));
+        assert_eq!(queue_authorized_form_type_id("2200A"), Some("2200Av2020"));
+        assert!(can_queue_for_submission("2200T"));
+        assert_eq!(queue_authorized_form_type_id("2200T"), Some("2200Tv2020"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
