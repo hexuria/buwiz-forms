@@ -1,4 +1,4 @@
-use crate::{check_sample, dummy_profile};
+use crate::dummy_profile;
 use bir_core::forms::form_2200m::{Form2200MDraft, Form2200MPayment, Form2200MPlace};
 
 fn sample_2200m() -> Form2200MDraft {
