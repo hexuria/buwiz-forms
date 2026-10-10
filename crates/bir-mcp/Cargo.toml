@@ -1,0 +1,27 @@
+[package]
+name = "bir-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Draft-only MCP (stdio) adapter that drives a running BIR app through gpui-agent."
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "bir-mcp"
+path = "src/main.rs"
+
+[dependencies]
+bir-core = { path = "../bir-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Same rev as bir-desktop's `agent` feature, so both sides speak one protocol.
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
