@@ -701,7 +701,6 @@ impl BirAgentHost {
             target,
             ActiveView::Dashboard
                 | ActiveView::Form2551Q
-                | ActiveView::Form1701Q
                 | ActiveView::Form1601C
                 | ActiveView::Form2550Q
                 | ActiveView::Form1701
@@ -4150,7 +4149,6 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Settings => "Settings",
         ActiveView::AdminCalendarDashboard => "Tax Calendars",
         ActiveView::Form2551Q => "Form 2551Q",
-        ActiveView::Form1701Q => "Form 1701Q",
         ActiveView::Form1601C => "Form 1601C",
         ActiveView::Form2550Q => "Form 2550Q",
         ActiveView::Form1701 => "Form 1701",

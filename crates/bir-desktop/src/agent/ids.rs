@@ -20,7 +20,6 @@ pub const PAGE_IMPORT_EXPORT: &str = "page-import-export";
 pub const PAGE_SETTINGS: &str = "page-settings";
 pub const PAGE_ADMIN_CALENDAR: &str = "page-admin-calendar";
 pub const PAGE_FORM_2551Q: &str = "page-form-2551q";
-pub const PAGE_FORM_1701Q: &str = "page-form-1701q";
 pub const PAGE_FORM_1601C: &str = "page-form-1601c";
 pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
 pub const PAGE_FORM_1701: &str = "page-form-1701";
@@ -140,9 +139,6 @@ pub const FORM_2551Q_TAXABLE_0: &str = "form-2551q-taxable-0";
 pub const FORM_2551Q_BACK: &str = "back_btn";
 pub const FORM_2551Q_SAVE: &str = "save_btn";
 pub const FORM_2551Q_SUBMIT: &str = "submit_btn";
-pub const FORM_1701Q_BACK: &str = "1701q_back";
-pub const FORM_1701Q_SAVE: &str = "1701q_save";
-pub const FORM_1701Q_SUBMIT: &str = "1701q_manual";
 pub const FORM_2550Q_BACK: &str = "2550q_back";
 pub const FORM_2550Q_SAVE: &str = "2550q_save";
 pub const FORM_2550Q_SUBMIT: &str = "2550q_manual";
@@ -338,7 +334,6 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Settings => PAGE_SETTINGS,
         ActiveView::AdminCalendarDashboard => PAGE_ADMIN_CALENDAR,
         ActiveView::Form2551Q => PAGE_FORM_2551Q,
-        ActiveView::Form1701Q => PAGE_FORM_1701Q,
         ActiveView::Form1601C => PAGE_FORM_1601C,
         ActiveView::Form2550Q => PAGE_FORM_2550Q,
         ActiveView::Form1701 => PAGE_FORM_1701,
@@ -359,7 +354,6 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Settings => "settings",
         ActiveView::AdminCalendarDashboard => "admin-calendar",
         ActiveView::Form2551Q => "form-2551q",
-        ActiveView::Form1701Q => "form-1701q",
         ActiveView::Form1601C => "form-1601c",
         ActiveView::Form2550Q => "form-2550q",
         ActiveView::Form1701 => "form-1701",
@@ -380,7 +374,6 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "settings" => Some(ActiveView::Settings),
         "admin-calendar" | "tax-calendars" => Some(ActiveView::AdminCalendarDashboard),
         "form-2551q" | "2551q" => Some(ActiveView::Form2551Q),
-        "form-1701q" | "1701q" => Some(ActiveView::Form1701Q),
         "form-1601c" | "1601c" => Some(ActiveView::Form1601C),
         "form-2550q" | "2550q" => Some(ActiveView::Form2550Q),
         "form-1701" | "1701" => Some(ActiveView::Form1701),
@@ -402,7 +395,6 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Settings,
     ActiveView::AdminCalendarDashboard,
     ActiveView::Form2551Q,
-    ActiveView::Form1701Q,
     ActiveView::Form1601C,
     ActiveView::Form2550Q,
     ActiveView::Form1701,
@@ -445,13 +437,6 @@ pub const FORM_CHROME: &[FormChrome] = &[
         back: FORM_2551Q_BACK,
         save: FORM_2551Q_SAVE,
         submit: FORM_2551Q_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form1701Q,
-        code: "1701Q",
-        back: FORM_1701Q_BACK,
-        save: FORM_1701Q_SAVE,
-        submit: FORM_1701Q_SUBMIT,
     },
     FormChrome {
         view: ActiveView::Form1601C,
@@ -521,7 +506,7 @@ mod tests {
             assert!(seen.insert(id), "duplicate page root {id}");
             assert_eq!(view_from_slug(view_slug(view)), Some(view));
         }
-        assert_eq!(ALL_VIEWS.len(), 15);
+        assert_eq!(ALL_VIEWS.len(), 14);
     }
 
     #[test]

@@ -2,7 +2,6 @@ use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_1601c_view::{Form1601CEvent, Form1601CView};
 use crate::views::form_1701_view::{Form1701Event, Form1701View};
-use crate::views::form_1701q_view::{Form1701QEvent, Form1701QView};
 use crate::views::form_1702mx_view::{Form1702MXEvent, Form1702MXView};
 use crate::views::form_1702rt_view::{Form1702RTEvent, Form1702RTView};
 use crate::views::form_2550q_view::{Form2550QV2Event, Form2550QV2View};
@@ -49,7 +48,6 @@ pub enum ActiveView {
     GlobalDashboard,
     Dashboard,
     Form2551Q,
-    Form1701Q,
     Form1601C,
     Form2550Q,
     Form1701,
@@ -148,8 +146,6 @@ pub struct AppState {
         Entity<crate::views::admin_calendar_dashboard::AdminCalendarDashboard>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
-    pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
-    pub(crate) pending_form_1701q_draft: Option<bir_core::forms::form_1701q::Form1701QDraft>,
     pub(crate) form_1601c_view: Option<Entity<Form1601CView>>,
     pub(crate) pending_form_1601c_draft: Option<bir_core::forms::form_1601c::Form1601CDraft>,
     pub(crate) form_2550q_view: Option<Entity<Form2550QV2View>>,
@@ -875,8 +871,6 @@ impl AppState {
             import_export_view,
             form_2551q_view: None,
             pending_form_draft: None,
-            form_1701q_view: None,
-            pending_form_1701q_draft: None,
             form_1601c_view: None,
             pending_form_1601c_draft: None,
             form_2550q_view: None,
@@ -1513,14 +1507,6 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-            ActiveView::Form1701Q => {
-                if let Some(view) = &self.form_1701q_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
             ActiveView::Form1601C => {
                 if let Some(view) = &self.form_1601c_view {
                     view.clone().into_any_element()
@@ -1740,42 +1726,6 @@ impl AppState {
             // Store the draft; the view will be created on next render with Window access
             self.pending_form_draft = Some(draft);
             self.active_view = ActiveView::Form2551Q;
-            cx.notify();
-        } else if form_code == "1701Q"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let load_result = self
-                .db
-                .lock()
-                .map_err(|_| "1701Q draft database lock is unavailable".to_string())
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_1701q::Form1701QDraft>(
-                        tin,
-                        "1701Q",
-                        year,
-                        Some(quarter),
-                    )
-                    .map_err(|error| error.to_string())
-                });
-            let draft = match load_result {
-                Ok(Some(draft)) => draft,
-                Ok(None) => bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
-                    profile, year, quarter,
-                ),
-                Err(error) => {
-                    tracing::error!(
-                        %error,
-                        tin,
-                        year,
-                        quarter,
-                        "Refusing to replace an unreadable 1701Q draft"
-                    );
-                    return;
-                }
-            };
-            self.pending_form_1701q_draft = Some(draft);
-            self.active_view = ActiveView::Form1701Q;
             cx.notify();
         } else if form_code == "1601C"
             && let Some(tin) = &self.active_profile_tin
@@ -2061,39 +2011,6 @@ impl Render for AppState {
             .detach();
 
             self.form_2551q_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_1701q_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form1701QView::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form1701QEvent, window, cx| match event {
-                    Form1701QEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form1701QEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form1701QEvent::Saved => cx.notify(),
-                    Form1701QEvent::OfficialSaveImported(draft) => {
-                        this.pending_form_1701q_draft = Some(draft.as_ref().clone());
-                        this.active_view = ActiveView::Form1701Q;
-                        push_notification(
-                            "success",
-                            "Official Save imported",
-                            "Imported as a local 1701Q draft. Queue and submit stay disabled.",
-                            window,
-                            cx,
-                        );
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_1701q_view = Some(form_view);
         }
 
         if let Some(draft) = self.pending_form_1601c_draft.take() {
