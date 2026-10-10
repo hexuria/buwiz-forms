@@ -1577,15 +1577,15 @@ impl FormViewTrait for Form2550QV2View {
     }
 
     fn current_status(&self) -> FilingStatus {
-        self.draft.status.clone()
+        self.draft.lifecycle.status.clone()
     }
 
     fn submitted_at(&self) -> Option<&str> {
-        self.draft.submitted_at.as_deref()
+        self.draft.lifecycle.submitted_at.as_deref()
     }
 
     fn confirmed_at(&self) -> Option<&str> {
-        self.draft.confirmed_at.as_deref()
+        self.draft.lifecycle.confirmed_at.as_deref()
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1635,7 +1635,7 @@ impl FormViewTrait for Form2550QV2View {
                     FORM_CODE,
                     self.draft.taxable_year,
                     &period,
-                    &self.draft.status,
+                    &self.draft.lifecycle.status,
                     &self.draft,
                 )
                 .map_err(|error| error.to_string())
@@ -1680,16 +1680,78 @@ impl FormViewTrait for Form2550QV2View {
         cx.notify();
     }
 
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "2550Qv2024 has reviewed editable-save evidence only. Electronic queue/submission is not certified."
-                .to_string(),
-        );
-        cx.emit(Form2550QV2Event::PushNotification(
-            "warning".to_string(),
-            "Manual / External Filing".to_string(),
-            "This 2550Q draft cannot be queued or submitted by the app.".to_string(),
+    /// Queue through the generic submission path, exactly as the generic
+    /// form pages do: the background worker uploads the official payload.
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use bir_core::forms::queueable::QueueableForm;
+        if !bir_core::forms::support_level::can_queue_for_submission(FORM_CODE) {
+            self.status_message =
+                Some("2550Q is not enabled for in-app submission in this build.".to_string());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message = Some(
+                "This return is already queued or filed and cannot be queued again.".to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        if self.editor_state_error.is_some() {
+            self.status_message = Some(
+                "The return was not queued because the editor identity boundary is unsafe."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(None, cx);
+        if self.editor_state_error.is_some() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let before = self.draft.clone();
+        if let Err(errors) = QueueableForm::queue(
+            &mut self.draft,
+            bir_core::filing_queue::QueueAuthSource::Gui,
+        ) {
+            self.validation_errors = errors;
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let saved = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_queueable(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match saved {
+            Ok(id) => self.draft.id = Some(id),
+            Err(error) => {
+                self.draft = before;
+                self.status_message = Some(format!(
+                    "Could not queue Form 2550Q. No submission was started: {error}"
+                ));
+                cx.notify();
+                return;
+            }
+        }
+        self.status_message = Some(format!(
+            "Queued for background submission as {}.",
+            QueueableForm::submission_filename(&self.draft)
         ));
+        self.notify(
+            window,
+            cx,
+            gpui_component::notification::NotificationType::Success,
+            "Form 2550Q queued.",
+        );
+        cx.emit(Form2550QV2Event::Saved);
+        bir_core::background_cron::wake();
         cx.notify();
     }
 

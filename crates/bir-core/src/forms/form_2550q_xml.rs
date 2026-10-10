@@ -960,7 +960,6 @@ impl Form2550QDraft {
             return Err(errors);
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
         let mut draft = Form2550QDraft {
             id: None,
             tin,
@@ -1167,16 +1166,7 @@ impl Form2550QDraft {
                 .collect(),
             migration_review_items: Vec::new(),
             legacy_flat_draft_fields: BTreeMap::new(),
-            status: super::FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
-            last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
 
         if !errors.is_empty() {
