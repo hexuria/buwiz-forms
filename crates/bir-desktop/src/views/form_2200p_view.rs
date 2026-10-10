@@ -1281,14 +1281,34 @@ impl FormViewTrait for Form2200PView {
         cx.notify();
     }
 
-    /// The frozen 2200p-2020 sheet prints Part III amounts in 14-slot combs
-    /// with no centavo cells, which the frozen-sheet filler does not map yet.
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(QueueableFormEvent::PushNotification(
-            "info".into(),
-            "Print preview".into(),
-            "Print preview for 2200P is not available yet: the frozen January 2020 sheet has no field map. No filing state was changed.".into(),
-        ));
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                "Fix the highlighted numbers first. No filing state was changed.".into(),
+            ));
+            return;
+        }
+        let fields = self.draft.to_bir_field_map();
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "2200p-2020",
+            &fields,
+            "2200-P — Print Preview",
+            cx,
+        ) {
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
+                "info".into(),
+                "Print preview".into(),
+                format!("{} No filing state was changed.", kind.status_message()),
+            )),
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                format!("{error}. No filing state was changed."),
+            )),
+        }
     }
 }
 

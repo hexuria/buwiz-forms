@@ -1366,14 +1366,34 @@ impl FormViewTrait for Form2200AView {
         cx.notify();
     }
 
-    /// The frozen 2200a-2020 sheet has no writer-cells map yet, so there is
-    /// nothing faithful to fill.
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(QueueableFormEvent::PushNotification(
-            "info".into(),
-            "Print preview".into(),
-            "Print preview for 2200A is not available yet: the frozen January 2020 sheet has no field map. No filing state was changed.".into(),
-        ));
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                "Fix the highlighted numbers first. No filing state was changed.".into(),
+            ));
+            return;
+        }
+        let fields = self.draft.to_bir_field_map();
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "2200a-2020",
+            &fields,
+            "2200-A — Print Preview",
+            cx,
+        ) {
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
+                "info".into(),
+                "Print preview".into(),
+                format!("{} No filing state was changed.", kind.status_message()),
+            )),
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                format!("{error}. No filing state was changed."),
+            )),
+        }
     }
 }
 
