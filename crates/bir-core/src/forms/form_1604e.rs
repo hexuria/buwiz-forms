@@ -387,6 +387,25 @@ impl Form1604eDraft {
         fields
     }
 
+    /// The field map plus print-only values the frozen 2018 sheet needs
+    /// (`derived:` keys, never submitted): Item 7 over its two comb lines
+    /// (40 + 31 slots) and the whole 14-digit TIN for the page-2 header.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let address: Vec<char> = self.registered_address.trim().chars().collect();
+        fields.insert(
+            "derived:address1".to_string(),
+            address.iter().take(40).collect(),
+        );
+        fields.insert(
+            "derived:address2".to_string(),
+            address.iter().skip(40).take(31).collect(),
+        );
+        let (a, b, c, d) = split_tin(&self.tin);
+        fields.insert("derived:tin_digits".to_string(), format!("{a}{b}{c}{d}"));
+        fields
+    }
+
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()

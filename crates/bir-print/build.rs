@@ -28,6 +28,9 @@ const SLUGS: &[&str] = &[
     "1701a-2018",
     "1701ms-2024",
     "1702ex-2018",
+    "1604f-2018",
+    "1604c-2018",
+    "1604e-2018",
 ];
 
 fn asset_names(html: &str) -> Vec<String> {
