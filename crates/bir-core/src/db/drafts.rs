@@ -3980,7 +3980,7 @@ mod tests {
             "0619E",
             draft.taxable_year,
             Some(draft.month),
-            &draft.status,
+            &draft.lifecycle.status,
             &draft,
         )
         .expect("0619-E draft should save");

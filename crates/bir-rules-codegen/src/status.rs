@@ -1056,7 +1056,7 @@ fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut 
         ("2551Q", "2018", "2551Qv2018", 1023, false),
         ("1601C", "2018", "1601Cv2018", 1023, false),
         ("2553", "1999", "2553", 1023, false),
-        ("0619E", "2018", "0619Ev2018", 1007, false),
+        ("0619E", "2018", "0619E", 1023, false),
         ("0619F", "2018", "0619Fv2018", 1007, false),
         ("0605", "1999", "0605", 1023, false),
         ("1701Q", "2018", "1701Qv2018", 1007, false),

@@ -400,10 +400,12 @@ mod tests {
         let error = import_and_submit_savefile_with_client(&path, None, &client)
             .await
             .unwrap_err();
+        // 0619E queues through the generic path, but importing an external
+        // savefile for submission still has no exact-form validator.
         assert!(matches!(
             error,
-            OfficialImportError::QueueSubmissionUnsupported { ref form_id }
-                if form_id == "0619Ev2018"
+            OfficialImportError::ImportedSubmissionUnsupported { ref form_id }
+                if form_id == "0619E"
         ));
         assert_eq!(client.calls.load(Ordering::SeqCst), 0);
     }
@@ -443,6 +445,7 @@ mod tests {
         assert!(matches!(
             error,
             OfficialImportError::QueueSubmissionUnsupported { .. }
+                | OfficialImportError::ImportedSubmissionUnsupported { .. }
         ));
         assert_eq!(client.calls.load(Ordering::SeqCst), 0);
     }
