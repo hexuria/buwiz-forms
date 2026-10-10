@@ -10,8 +10,11 @@
 //!
 //! Every computed amount on this page is `formatCurrency(x.toFixed(0))`, so
 //! the return is in whole pesos; the typed amount fields accept digits only.
-//! Column I (VAT) multiplies by `#vatColumnI`, a span the page never fills,
-//! so it is always 0.00.
+//! Column I (VAT) multiplies by `#vatColumnI`, a span whose `value`
+//! `js/tax-rate-helper.js` sets from `xml/taxRate.xml` (12%); the HTA's
+//! legacy IE document mode exposes that attribute as the span's `.value`.
+//! Column H uses the page's literal 0.05 (taxRate.xml `exciseTaxColumnH` is
+//! the same 5%).
 
 use std::collections::BTreeMap;
 
@@ -29,6 +32,10 @@ pub const FORM_2200C_FORM_ID: &str = "2200c-v2018";
 /// Rows of Part V Schedule 1.
 pub const FORM_2200C_ROWS: usize = 10;
 const PLACE_FORM: &str = "2200C";
+/// `xml/taxRate.xml` `exciseTaxColumnH` (the page multiplies by literal 0.05).
+pub const FORM_2200C_EXCISE_RATE: f64 = 0.05;
+/// `xml/taxRate.xml` `vatColumnI`.
+pub const FORM_2200C_VAT_RATE: f64 = 0.12;
 
 /// JavaScript `toFixed(0)` read back as a number (exact binary value, ties
 /// away from zero).
@@ -87,7 +94,7 @@ pub struct Form2200CRow {
     /// (H) = (E + F) × 5%.
     #[serde(default)]
     pub excise_tax: f64,
-    /// (I) VAT (always 0.00 on the official page).
+    /// (I) = (D + E + G + H) × 12% (taxRate.xml).
     #[serde(default)]
     pub vat: f64,
     /// (J) Sum of D to I.
@@ -298,8 +305,12 @@ impl Form2200CDraft {
             ] {
                 *value = cents(*value);
             }
-            row.excise_tax = pesos((row.excisable_net + row.excisable_vat_exempt) * 0.05);
-            row.vat = 0.0;
+            row.excise_tax =
+                pesos((row.excisable_net + row.excisable_vat_exempt) * FORM_2200C_EXCISE_RATE);
+            row.vat = pesos(
+                (row.net_of_vat + row.excisable_net + row.non_excisable + row.excise_tax)
+                    * FORM_2200C_VAT_RATE,
+            );
             row.total_billed = pesos(
                 row.net_of_vat
                     + row.excisable_net
@@ -772,7 +783,9 @@ mod tests {
         let draft = sample();
         // 50,010 × 5% = 2,500.5 → toFixed(0) → 2,501
         assert_eq!(draft.schedule[0].excise_tax, 2_501.0);
-        assert_eq!(draft.schedule[0].total_billed, 67_511.0);
+        // I = (10,000 + 50,010 + 5,000 + 2,501) x 12% = 8,101.32 -> 8,101
+        assert_eq!(draft.schedule[0].vat, 8_101.0);
+        assert_eq!(draft.schedule[0].total_billed, 75_612.0);
         assert_eq!(draft.excise_total, 2_501.0);
         assert_eq!(draft.excise_tax_due, 2_501.0);
         assert_eq!(draft.amount_payable, 2_501.0);
@@ -781,7 +794,7 @@ mod tests {
         let fields = draft.to_bir_field_map();
         assert_eq!(fields["frm2200C:CPPexcise1"], "3.00");
         assert_eq!(fields["frm2200C:CPPexmpt2"], "0.00");
-        assert_eq!(fields["frm2200C:ACvat1"], "0.00");
+        assert_eq!(fields["frm2200C:ACvat1"], "8,101.00");
         assert_eq!(
             fields["frm2200C:txtPg1Pt1I7RegisteredName"],
             "SAMPLE CLINIC INC"

@@ -737,7 +737,7 @@ impl Form2200CView {
                 .map(|(prefix, label)| self.field(&row_key(prefix, row), label, layout, !editable))
                 .collect();
             fields.push(self.computed("(H) Excise tax = (E + F) × 5%", entry.excise_tax, cx));
-            fields.push(self.computed("(I) VAT", entry.vat, cx));
+            fields.push(self.computed("(I) VAT = (D + E + G + H) × 12%", entry.vat, cx));
             fields.push(self.computed("(J) Total amount billed", entry.total_billed, cx));
             children.push(
                 div()

@@ -1,5 +1,8 @@
 [
  {
+  "call": "Object.defineProperty(window.HTMLSpanElement.prototype,'value',{configurable:true,get:function(){return this.getAttribute('value');},set:function(v){this.setAttribute('value',v);}})"
+ },
+ {
   "call": "(function(){var d=document,v=function(i,x){d.getElementById(i).value=x;};v('frm2200C:txtPg1Pt1I7RegisteredName','Sample Dummy Taxpayer'.toUpperCase());var n=['TIN1','TIN2','TIN3','TIN4'],t=['123','456','788','00000'];for(var k=0;k<4;k++){var e=d.getElementsByName('frm2200C:'+n[k]);for(var j=0;j<e.length;j++){e[j].value=t[k];}}v('frm2200C:txtPg1I6RDO','039');v('frm2200C:rdoPg1Pt1I6RDO','039');v('frm2200C:txtLOB','Sample Consulting Services');v('frm2200C:txtPg1Pt1I8RegisteredAddress','123 Sample Street, Barangay Example, Quezon City');v('frm2200C:txtPg1Pt1I8RegisteredAddress2','');v('frm2200C:txtPg1Pt1I9ContactNumber','09170000000');v('frm2200C:txPg1I8ZipCode','1100');v('frm2200C:txtPg1Pt1I10Email','sample.taxpayer@example.com');})()"
  },
  {
