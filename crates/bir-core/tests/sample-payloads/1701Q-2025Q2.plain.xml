@@ -42,7 +42,6 @@
             <div>frm1701q:txtSpouseTIN3=321frm1701q:txtSpouseTIN3=</div>	
             <div>frm1701q:txtSpouseBranchCode=00000frm1701q:txtSpouseBranchCode=</div>	
             <div>frm1701q:txtSpouseRDOCode=040frm1701q:txtSpouseRDOCode=</div>	
-            <div>frm1701q:txtSpouseRDOCode=000frm1701q:txtSpouseRDOCode=</div>	
             <div>frm1701q:optSpouseType_1=truefrm1701q:optSpouseType_1=</div>	
             <div>frm1701q:optSpouseType_2=falsefrm1701q:optSpouseType_2=</div>	
             <div>frm1701q:optSpouseType_3=falsefrm1701q:optSpouseType_3=</div>	
@@ -163,7 +162,7 @@
             <div>frm1701q:txt67B=500.00frm1701q:txt67B=</div>	
             <div>frm1701q:txt68A=96,308.00frm1701q:txt68A=</div>	
             <div>frm1701q:txt68B=50,688.00frm1701q:txt68B=</div>	
-            <div>frm1701q:txtCurrentPage=frm1701q:txtCurrentPage=</div>	
+            <div>frm1701q:txtCurrentPage=1frm1701q:txtCurrentPage=</div>	
             <div>frm1701q:txtMaxPage=2frm1701q:txtMaxPage=</div>	
             <div>txtFinalFlag=0txtFinalFlag=</div>	
             <div>txtEnroll=NtxtEnroll=</div>	

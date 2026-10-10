@@ -28,8 +28,6 @@ pub const FORM_1701Q_LAYOUT_ID: &str = "1701q-v2018";
 pub const FORM_1701Q_FORM_TYPE: &str = "1701Qv2018";
 
 const P: &str = "frm1701q:";
-const SPOUSE_RDO_KEY: &str = "frm1701q:txtSpouseRDOCode";
-const SPOUSE_RDO_AFTER: &str = "frm1701q:txtSpouseBranchCode";
 
 /// Items the filer types for each party (Parts V schedules and credits).
 const INPUT_ITEMS: [u8; 19] = [
@@ -630,6 +628,7 @@ impl Form1701QDraft {
             put(&format!("{prefix}BranchCode"), branch.clone());
         }
         put("txtRDOCode", self.rdo_code.trim().to_string());
+        put("txtCurrentPage", "1".to_string());
         for (index, filer) in [
             Form1701QFilerType::SingleProprietor,
             Form1701QFilerType::Professional,
@@ -860,44 +859,6 @@ impl QueueableForm for Form1701QDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
-    }
-
-    /// The layout replayed over the field map, with the spouse RDO dropdown
-    /// the page builds at load written after the spouse branch code.
-    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
-        let errors = <Self as QueueableForm>::validate(self);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-        let xml_error = |error: crate::official_xml::OfficialXmlError| {
-            vec![("xml".to_string(), error.to_string())]
-        };
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID).map_err(xml_error)?;
-        let mut fields = self.field_map();
-        let spouse_rdo = fields.remove(SPOUSE_RDO_KEY).unwrap_or_default();
-        let mut text = crate::official_xml::write(layout, &fields).map_err(xml_error)?;
-        let close = format!("{SPOUSE_RDO_AFTER}=</div>");
-        let at = text.find(&close).ok_or_else(|| {
-            vec![(
-                "xml".to_string(),
-                format!("{SPOUSE_RDO_AFTER} is missing from the layout"),
-            )]
-        })?;
-        let after_start = at + close.len();
-        // The text after each <div> is the same everywhere in this layout.
-        let separator = "\t\n            ";
-        if !text[after_start..].starts_with(separator) {
-            return Err(vec![(
-                "xml".to_string(),
-                "unexpected separator after txtSpouseBranchCode".to_string(),
-            )]);
-        }
-        let insert_at = after_start + separator.len();
-        text.insert_str(
-            insert_at,
-            &format!("<div>{SPOUSE_RDO_KEY}={spouse_rdo}{SPOUSE_RDO_KEY}=</div>{separator}"),
-        );
-        Ok(text)
     }
 }
 

@@ -63,7 +63,7 @@
     },
     {
       "probe": "(5.00)",
-      "key": "frm1702RT:rdoPg1Pt1I7RDO",
+      "key": "frm1702RT:drpPg1Pt1I7RDOCode",
       "expected": "(5.00)",
       "official": "-5.00"
     },
@@ -1636,11 +1636,11 @@
       "after": "\t\n            "
     },
     {
-      "key": "frm1702RT:rdoPg1Pt1I7RDO",
+      "key": "frm1702RT:drpPg1Pt1I7RDOCode",
       "kind": "value",
       "parts": [
         {
-          "source": "frm1702RT:rdoPg1Pt1I7RDO",
+          "source": "frm1702RT:drpPg1Pt1I7RDOCode",
           "codec": "raw"
         }
       ],

@@ -77,8 +77,7 @@ fn sample_1702rt() -> Form1702RTDraft {
     draft
 }
 
-/// Like `check_sample`, without `official_xml::read`: the official page adds
-/// the RDO select (`getRdo()`), which the packaged layout lacks.
+/// Checks the 1702RT sample against the official upload.
 #[test]
 fn form_1702rt_sample_payload_is_current() {
     let payload = sample_1702rt()
@@ -101,7 +100,7 @@ fn form_1702rt_sample_payload_is_current() {
         .map(|b| format!("{b:02x}"))
         .collect();
     assert_eq!(
-        digest, "cb362ca760c8453ea8756ba609fd2484f2377eae06e80d8f014ed3541486f307",
+        digest, "2946796a183bea2a2830c8ab020694ce0a699c70f097d6bd03c78222fccaf1b8",
         "{stem}: not the official Encrypt.exe output"
     );
     assert_eq!(

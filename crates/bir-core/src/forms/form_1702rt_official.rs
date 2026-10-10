@@ -957,40 +957,6 @@ impl QueueableForm for Form1702RTDraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
     }
-
-    /// The layout replayed over the field map, plus the RDO select that
-    /// `getRdo()` adds right after `txtRDO` when the page loads.
-    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
-        let errors = <Self as QueueableForm>::validate(self);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-        let xml_error = |error: crate::official_xml::OfficialXmlError| {
-            vec![("xml".to_string(), error.to_string())]
-        };
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID).map_err(xml_error)?;
-        let mut fields = self.field_map();
-        let rdo_key = format!("{P}drpPg1Pt1I7RDOCode");
-        let rdo = fields.remove(&rdo_key).unwrap_or_default();
-        let mut text = crate::official_xml::write(layout, &fields).map_err(xml_error)?;
-        let anchor = format!("{P}txtRDO=</div>");
-        let separator = "\t\n            ";
-        let at = text
-            .find(&anchor)
-            .map(|at| at + anchor.len() + separator.len())
-            .filter(|at| text.get(at - separator.len()..*at) == Some(separator))
-            .ok_or_else(|| {
-                vec![(
-                    "xml".to_string(),
-                    "txtRDO is missing from the layout".to_string(),
-                )]
-            })?;
-        text.insert_str(
-            at,
-            &format!("<div>{rdo_key}={rdo}{rdo_key}=</div>{separator}"),
-        );
-        Ok(text)
-    }
 }
 
 #[cfg(test)]
