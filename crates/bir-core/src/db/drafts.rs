@@ -57,11 +57,11 @@ pub enum AbandonedClaimRelease<T> {
     },
 }
 
-fn abandoned_claim_audit(reason: &str) -> String {
+pub(super) fn abandoned_claim_audit(reason: &str) -> String {
     format!("Abandoned claim released ({reason}); human confirmed nothing reached BIR")
 }
 
-fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
+pub(super) fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
     if reason != ABANDONED_CLAIM_RELEASE_REASON {
         return Err(DbError::Other(format!(
             "Abandoned claim release requires reason `{ABANDONED_CLAIM_RELEASE_REASON}`"
@@ -70,15 +70,15 @@ fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
     Ok(())
 }
 
-fn claim_fields_present(token: &Option<String>, claimed_at: &Option<String>) -> bool {
+pub(super) fn claim_fields_present(token: &Option<String>, claimed_at: &Option<String>) -> bool {
     token.is_some() && claimed_at.is_some()
 }
 
-fn claim_fields_partial(token: &Option<String>, claimed_at: &Option<String>) -> bool {
+pub(super) fn claim_fields_partial(token: &Option<String>, claimed_at: &Option<String>) -> bool {
     token.is_some() != claimed_at.is_some()
 }
 
-fn filing_status_to_db(status: &FilingStatus) -> &'static str {
+pub(super) fn filing_status_to_db(status: &FilingStatus) -> &'static str {
     match status {
         FilingStatus::Draft => "Draft",
         FilingStatus::Queued => "Queued",
