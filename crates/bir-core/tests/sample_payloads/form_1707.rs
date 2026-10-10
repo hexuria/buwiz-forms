@@ -79,3 +79,50 @@ fn form_1707_sample_payload_is_current() {
         "cf07401fc8ee6a3060ee04059b3fcbc6c29c45cc26a94e80f9399583c201372d",
     );
 }
+
+/// Schedules 2 and 3 past row D: the "More" pop-ups. The layout is the
+/// generated one extended by `Form1707Draft::official_layout`.
+fn sample_1707_with_popups() -> Form1707Draft {
+    let mut draft = sample_1707();
+    draft.transaction_month = 7;
+    draft.transaction_day = 15;
+    for (name, shares, cert, price) in [
+        ("Fourth Corp", 40.0, "4004", 4_000.005),
+        ("Fifth Co", 50.5, "5005", 5_000.5),
+        ("Sixth Co", 1_234.567_8, "6006", 6_000.125),
+    ] {
+        draft.shares.push(Form1707Shares {
+            corporation: name.into(),
+            number_of_shares: Some(shares),
+            certificate_number: cert.into(),
+            selling_price: price,
+        });
+    }
+    for (particulars, amount) in [
+        ("Docs fees", 100.0),
+        ("Notary", 200.5),
+        ("Transfer tax", 300.255),
+    ] {
+        draft.expenses.push(Form1707Expense {
+            particulars: particulars.into(),
+            amount,
+        });
+    }
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1707_sample_with_popups_is_current() {
+    let draft = sample_1707_with_popups();
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1707 must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1707-07152025",
+        &layout,
+        &payload,
+        "9fcf97016df335d3b114b0c52b6fe75d4065bffa6286b08d5aae63e64388d1b0",
+    );
+}

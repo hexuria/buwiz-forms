@@ -9,9 +9,11 @@
 //! (TIN, name, address, contact, e-mail) comes from the taxpayer profile the
 //! way `loadBGData()` fills it.
 //!
-//! The page holds up to three sellers and three buyers before "Add", and four
-//! rows in Schedules 2 and 3 before the "OTHERS" pop-ups; this model covers
-//! exactly those rows.
+//! The page holds up to three sellers and three buyers before "Add"; this
+//! model covers those rows. Schedules 2 and 3 take any number of rows: beyond
+//! row D the official "More" pop-up takes D and the rest, row D then reads
+//! "OTHERS" with the pop-up subtotal, and the pop-up rows are written where
+//! the page keeps them (see [`Form1707Draft::official_layout`]).
 
 use std::collections::BTreeMap;
 
@@ -19,8 +21,9 @@ use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 
 use super::official_inputs::{
-    capital, cents, digits_only, format_fixed, group_thousands, has_cent_precision,
-    is_calendar_date, split_tin, tin_is_well_formed, to_fixed_text, within_round_limit,
+    RowInsertion, capital, cents, digits_only, extend_layout, format_fixed, group_thousands,
+    has_cent_precision, is_calendar_date, split_tin, tin_is_well_formed, to_fixed_text,
+    within_round_limit,
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
@@ -33,6 +36,9 @@ pub const FORM_1707_FORM_ID: &str = "1707-v2021";
 pub const FORM_1707_PARTY_ROWS: usize = 3;
 /// Rows A–D of Schedules 2 and 3.
 pub const FORM_1707_SCHEDULE_ROWS: usize = 4;
+/// Rows a schedule may hold here (rows D onwards beyond four go to the
+/// official pop-up, which has no limit).
+pub const FORM_1707_MAX_SCHEDULE_ROWS: usize = 40;
 /// `transactionType` puts 15 in Item 13 / Schedule 1 Item 6.
 pub const FORM_1707_TAX_RATE: f64 = 15.0;
 
@@ -192,6 +198,12 @@ pub struct Form1707Draft {
     pub shares: Vec<Form1707Shares>,
     #[serde(default)]
     pub expenses: Vec<Form1707Expense>,
+    /// Pop-up subtotals (`Pg2Pt4S2SubTotal` / `Pg2Pt4S3SubTotal`) when a
+    /// schedule has more than four rows.
+    #[serde(default)]
+    pub shares_popup_subtotal: f64,
+    #[serde(default)]
+    pub expenses_popup_subtotal: f64,
     #[serde(default)]
     pub total_selling_price: f64,
     #[serde(default)]
@@ -268,6 +280,8 @@ impl Form1707Draft {
             installment: Form1707Installment::default(),
             shares: Vec::new(),
             expenses: Vec::new(),
+            shares_popup_subtotal: 0.0,
+            expenses_popup_subtotal: 0.0,
             total_selling_price: 0.0,
             total_expenses: 0.0,
             taxable_base: 0.0,
@@ -318,11 +332,35 @@ impl Form1707Draft {
         self.transaction_type == Some(Form1707TransactionType::InstallmentSale)
     }
 
-    fn share_row(&self, index: usize) -> Form1707Shares {
+    fn shares_popup(&self) -> bool {
+        self.shares.len() > FORM_1707_SCHEDULE_ROWS
+    }
+
+    fn expenses_popup(&self) -> bool {
+        self.expenses.len() > FORM_1707_SCHEDULE_ROWS
+    }
+
+    /// Main-table row `index` (0..4) as the page shows it: row D reads
+    /// "OTHERS" with the pop-up subtotal once the pop-up holds the rest.
+    fn main_share_row(&self, index: usize) -> Form1707Shares {
+        if index == FORM_1707_SCHEDULE_ROWS - 1 && self.shares_popup() {
+            return Form1707Shares {
+                corporation: "OTHERS".into(),
+                number_of_shares: None,
+                certificate_number: "OTHERS".into(),
+                selling_price: self.shares_popup_subtotal,
+            };
+        }
         self.shares.get(index).cloned().unwrap_or_default()
     }
 
-    fn expense_row(&self, index: usize) -> Form1707Expense {
+    fn main_expense_row(&self, index: usize) -> Form1707Expense {
+        if index == FORM_1707_SCHEDULE_ROWS - 1 && self.expenses_popup() {
+            return Form1707Expense {
+                particulars: "OTHERS".into(),
+                amount: self.expenses_popup_subtotal,
+            };
+        }
         self.expenses.get(index).cloned().unwrap_or_default()
     }
 
@@ -352,19 +390,34 @@ impl Form1707Draft {
             0.0
         };
 
-        let mut total = 0.0;
         for row in &mut self.shares {
             row.selling_price = cents(row.selling_price);
             row.number_of_shares = row
                 .number_of_shares
                 .map(|v| to_fixed_text(v, 3).parse().unwrap_or(0.0));
-            total = format_fixed(total + row.selling_price);
+        }
+        for row in &mut self.expenses {
+            row.amount = cents(row.amount);
+        }
+        // Sum_Pg2Pt4S2 / Sum_Pg2Pt4S3: the pop-up adds rows D onwards, then
+        // row D carries formatCurrency(subtotal).
+        let popup = |values: Vec<f64>| -> f64 {
+            if values.len() > FORM_1707_SCHEDULE_ROWS {
+                format_fixed(values[FORM_1707_SCHEDULE_ROWS - 1..].iter().sum::<f64>())
+            } else {
+                0.0
+            }
+        };
+        self.shares_popup_subtotal = popup(self.shares.iter().map(|r| r.selling_price).collect());
+        self.expenses_popup_subtotal = popup(self.expenses.iter().map(|r| r.amount).collect());
+        let mut total = 0.0;
+        for index in 0..self.shares.len().min(FORM_1707_SCHEDULE_ROWS) {
+            total = format_fixed(total + self.main_share_row(index).selling_price);
         }
         self.total_selling_price = total;
         let mut total = 0.0;
-        for row in &mut self.expenses {
-            row.amount = cents(row.amount);
-            total = format_fixed(total + row.amount);
+        for index in 0..self.expenses.len().min(FORM_1707_SCHEDULE_ROWS) {
+            total = format_fixed(total + self.main_expense_row(index).amount);
         }
         self.total_expenses = total;
 
@@ -600,18 +653,26 @@ impl Form1707Draft {
             official_amount(inst.total_collection),
         );
 
+        let shares_text = |row: &Form1707Shares| {
+            row.number_of_shares
+                .map(|v| group_thousands(&to_fixed_text(v, 3)))
+                .unwrap_or_else(|| "0.00".to_string())
+        };
         for index in 0..FORM_1707_SCHEDULE_ROWS {
             let n = index + 1;
-            let row = self.share_row(index);
+            let row = self.main_share_row(index);
+            let popup_row = index == FORM_1707_SCHEDULE_ROWS - 1 && self.shares_popup();
             put(
                 &format!("txtPg2P4Sch2NameOfCorpStock{n}"),
                 capital(&row.corporation),
             );
             put(
                 &format!("txtPg2P4Sch2NoOfShares{n}"),
-                row.number_of_shares
-                    .map(|v| group_thousands(&to_fixed_text(v, 3)))
-                    .unwrap_or_else(|| "0.00".to_string()),
+                if popup_row {
+                    "OTHERS".to_string()
+                } else {
+                    shares_text(&row)
+                },
             );
             put(
                 &format!("txtPg2P4Sch2StockCertNo{n}"),
@@ -621,7 +682,7 @@ impl Form1707Draft {
                 &format!("txtPg2P4Sch2TaxBaseSellPrice{n}"),
                 official_amount(row.selling_price),
             );
-            let expense = self.expense_row(index);
+            let expense = self.main_expense_row(index);
             put(
                 &format!("txtPg2P4Sch3Particulars{n}"),
                 capital(&expense.particulars),
@@ -630,6 +691,34 @@ impl Form1707Draft {
                 &format!("txtPg2P4Sch3Amount{n}"),
                 official_amount(expense.amount),
             );
+        }
+        if self.shares_popup() {
+            for (k, row) in self.shares[FORM_1707_SCHEDULE_ROWS - 1..]
+                .iter()
+                .enumerate()
+            {
+                let k = k + 1;
+                put(&format!("txtPg2Pt4S2_{k}Col1"), capital(&row.corporation));
+                put(&format!("txtPg2Pt4S2_{k}Col2"), shares_text(row));
+                put(
+                    &format!("txtPg2Pt4S2_{k}Col3"),
+                    capital(&row.certificate_number),
+                );
+                put(
+                    &format!("txtPg2Pt4S2_{k}Col4"),
+                    official_amount(row.selling_price),
+                );
+            }
+        }
+        if self.expenses_popup() {
+            for (k, row) in self.expenses[FORM_1707_SCHEDULE_ROWS - 1..]
+                .iter()
+                .enumerate()
+            {
+                let k = k + 1;
+                put(&format!("txtPg2Pt4S3_{k}Col1"), capital(&row.particulars));
+                put(&format!("txtPg2Pt4S3_{k}Col2"), official_amount(row.amount));
+            }
         }
         put(
             "txtPg2P4Sch2TotAmount",
@@ -647,7 +736,69 @@ impl Form1707Draft {
             "rdoCorpoForeign",
             flag(self.atc == Some(Form1707Atc::CorporationForeign)),
         );
+        // Outside the frm1707 prefix: pop-up subtotals and lengths.
+        if self.shares_popup() {
+            fields.insert(
+                "Pg2Pt4S2SubTotal".into(),
+                official_amount(self.shares_popup_subtotal),
+            );
+            fields.insert(
+                "Pg2Pt4S2PopLength".into(),
+                (self.shares.len() - FORM_1707_SCHEDULE_ROWS + 1).to_string(),
+            );
+        }
+        if self.expenses_popup() {
+            fields.insert(
+                "Pg2Pt4S3SubTotal".into(),
+                official_amount(self.expenses_popup_subtotal),
+            );
+            fields.insert(
+                "Pg2Pt4S3PopLength".into(),
+                (self.expenses.len() - FORM_1707_SCHEDULE_ROWS + 1).to_string(),
+            );
+        }
         fields
+    }
+
+    /// The generated layout with the "More" pop-up rows spliced in where the
+    /// page keeps them: Schedule 2's table (all column A cells, then B–D per
+    /// row) before `Pg2Pt4S2SubTotal`, Schedule 3's before `Pg2Pt4S3SubTotal`.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        let base = crate::official_xml::layout(FORM_1707_FORM_ID).map_err(|e| e.to_string())?;
+        let template = "Pg2Pt4S2SubTotal".to_string();
+        let copy = |key: String| (template.clone(), key);
+        let mut insertions = Vec::new();
+        if self.shares_popup() {
+            let rows = self.shares.len() - FORM_1707_SCHEDULE_ROWS + 1;
+            let mut copies: Vec<_> = (1..=rows)
+                .map(|k| copy(format!("frm1707:txtPg2Pt4S2_{k}Col1")))
+                .collect();
+            for k in 1..=rows {
+                for col in 2..=4 {
+                    copies.push(copy(format!("frm1707:txtPg2Pt4S2_{k}Col{col}")));
+                }
+            }
+            insertions.push(RowInsertion {
+                after: "frm1707:txtMaxPage".into(),
+                copies,
+            });
+        }
+        if self.expenses_popup() {
+            let rows = self.expenses.len() - FORM_1707_SCHEDULE_ROWS + 1;
+            let copies = (1..=rows)
+                .flat_map(|k| {
+                    [
+                        copy(format!("frm1707:txtPg2Pt4S3_{k}Col1")),
+                        copy(format!("frm1707:txtPg2Pt4S3_{k}Col2")),
+                    ]
+                })
+                .collect();
+            insertions.push(RowInsertion {
+                after: "Pg2Pt4S2SubTotal".into(),
+                copies,
+            });
+        }
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -877,31 +1028,48 @@ impl Form1707Draft {
             Some(_) => {}
         }
 
-        // checkPartIVSched2Fields / checkPartIVSched3Fields.
-        if self.shares.len() > FORM_1707_SCHEDULE_ROWS {
-            err("shares", "Schedule 2 holds rows A to D.");
+        // checkPartIVSched2Fields / checkPartIVSched3Fields on rows A–D, then
+        // CheckEmptyDesc / CheckEmptyDesc2 on the pop-up rows (D.1 onwards).
+        if self.shares.len() > FORM_1707_MAX_SCHEDULE_ROWS {
+            err(
+                "shares",
+                &format!("Schedule 2 holds at most {FORM_1707_MAX_SCHEDULE_ROWS} rows here."),
+            );
         }
-        for (index, row) in self.shares.iter().enumerate().take(FORM_1707_SCHEDULE_ROWS) {
-            let text =
-                !row.corporation.trim().is_empty() || !row.certificate_number.trim().is_empty();
-            let missing_text =
-                row.corporation.trim().is_empty() || row.certificate_number.trim().is_empty();
+        let main_shares = if self.shares_popup() {
+            FORM_1707_SCHEDULE_ROWS - 1
+        } else {
+            self.shares.len()
+        };
+        for (index, row) in self.shares.iter().enumerate() {
             let shares = row.number_of_shares.unwrap_or(0.0);
-            let amounts = shares != 0.0 || row.selling_price != 0.0;
-            let missing_amount = shares == 0.0 || row.selling_price == 0.0;
-            if (missing_text && amounts) || (text && missing_amount) {
+            if index < main_shares {
+                let text =
+                    !row.corporation.trim().is_empty() || !row.certificate_number.trim().is_empty();
+                let missing_text =
+                    row.corporation.trim().is_empty() || row.certificate_number.trim().is_empty();
+                let amounts = shares != 0.0 || row.selling_price != 0.0;
+                let missing_amount = shares == 0.0 || row.selling_price == 0.0;
+                if (missing_text && amounts) || (text && missing_amount) {
+                    err(
+                        &format!("shares[{index}]"),
+                        &format!(
+                            "Please complete Item #{} in Part IV Sched 2 Page 2.",
+                            index + 1
+                        ),
+                    );
+                }
+            } else if row.corporation.trim().is_empty()
+                || shares <= 0.0
+                || row.certificate_number.trim().is_empty()
+                || row.selling_price <= 0.0
+            {
                 err(
                     &format!("shares[{index}]"),
                     &format!(
-                        "Please complete Item #{} in Part IV Sched 2 Page 2.",
-                        index + 1
+                        "Cannot save. You have an empty data in D.{}",
+                        index + 2 - FORM_1707_SCHEDULE_ROWS
                     ),
-                );
-            }
-            if row.corporation.trim().eq_ignore_ascii_case("OTHERS") {
-                err(
-                    &format!("shares[{index}].corporation"),
-                    "OTHERS opens the official continuation pop-up, which this form does not cover.",
                 );
             }
             if row.corporation.trim().chars().count() > 100
@@ -920,29 +1088,36 @@ impl Form1707Draft {
                 );
             }
         }
-        if self.expenses.len() > FORM_1707_SCHEDULE_ROWS {
-            err("expenses", "Schedule 3 holds rows A to D.");
+        if self.expenses.len() > FORM_1707_MAX_SCHEDULE_ROWS {
+            err(
+                "expenses",
+                &format!("Schedule 3 holds at most {FORM_1707_MAX_SCHEDULE_ROWS} rows here."),
+            );
         }
-        for (index, row) in self
-            .expenses
-            .iter()
-            .enumerate()
-            .take(FORM_1707_SCHEDULE_ROWS)
-        {
+        let main_expenses = if self.expenses_popup() {
+            FORM_1707_SCHEDULE_ROWS - 1
+        } else {
+            self.expenses.len()
+        };
+        for (index, row) in self.expenses.iter().enumerate() {
             let blank = row.particulars.trim().is_empty();
-            if (row.amount == 0.0 && !blank) || (row.amount != 0.0 && blank) {
+            if index < main_expenses {
+                if (row.amount == 0.0 && !blank) || (row.amount != 0.0 && blank) {
+                    err(
+                        &format!("expenses[{index}]"),
+                        &format!(
+                            "Please complete Item #{} in Part IV Sched 3 Page 2.",
+                            index + 1
+                        ),
+                    );
+                }
+            } else if blank || row.amount <= 0.0 {
                 err(
                     &format!("expenses[{index}]"),
                     &format!(
-                        "Please complete Item #{} in Part IV Sched 3 Page 2.",
-                        index + 1
+                        "Cannot save. You have an empty data in D.{}",
+                        index + 2 - FORM_1707_SCHEDULE_ROWS
                     ),
-                );
-            }
-            if row.particulars.trim().eq_ignore_ascii_case("OTHERS") {
-                err(
-                    &format!("expenses[{index}].particulars"),
-                    "OTHERS opens the official continuation pop-up, which this form does not cover.",
                 );
             }
             if row.particulars.trim().chars().count() > 100 {
@@ -1101,6 +1276,19 @@ impl QueueableForm for Form1707Draft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+    /// The "More" pop-ups add rows at run time, so the plaintext follows
+    /// [`Form1707Draft::official_layout`] rather than the fixed layout.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
+    }
 }
 
 #[cfg(test)]
@@ -1146,6 +1334,8 @@ mod tests {
             installment: Form1707Installment::default(),
             shares: Vec::new(),
             expenses: Vec::new(),
+            shares_popup_subtotal: 0.0,
+            expenses_popup_subtotal: 0.0,
             total_selling_price: 0.0,
             total_expenses: 0.0,
             taxable_base: 0.0,

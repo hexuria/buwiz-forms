@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
 use bir_core::forms::form_1707::{
-    FORM_1707_PARTY_ROWS, FORM_1707_SCHEDULE_ROWS, Form1707Atc, Form1707Draft, Form1707Expense,
-    Form1707Party, Form1707Shares, Form1707TransactionType,
+    FORM_1707_PARTY_ROWS, Form1707Atc, Form1707Draft, Form1707Expense, Form1707Party,
+    Form1707Shares, Form1707TransactionType,
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
@@ -74,7 +74,17 @@ const SHARE_FIELDS: [(&str, &str); 4] = [
     ("cert", "Stock certificate no."),
     ("price", "Taxable base / selling price"),
 ];
-const ROW_LETTERS: [&str; 4] = ["A", "B", "C", "D"];
+/// Schedule 2/3 rows offered: A–C, then D and the official "More" list
+/// (D.1, D.2, …) once a schedule passes four rows.
+const SCHEDULE_UI_ROWS: usize = 10;
+
+fn row_label(row: usize) -> String {
+    match row {
+        0..=2 => ["A", "B", "C"][row].to_string(),
+        3 => "D".to_string(),
+        _ => format!("D.{}", row - 2),
+    }
+}
 
 fn party_key(kind: &str, row: usize, part: &str) -> String {
     format!("{kind}{row}_{part}")
@@ -145,7 +155,7 @@ impl Form1707View {
                 }
             }
         }
-        for row in 0..FORM_1707_SCHEDULE_ROWS {
+        for row in 0..SCHEDULE_UI_ROWS {
             let shares = d.shares.get(row).cloned().unwrap_or_default();
             let expense = d.expenses.get(row).cloned().unwrap_or_default();
             let values = [
@@ -188,7 +198,7 @@ impl Form1707View {
                 }
             }
         }
-        for row in 0..FORM_1707_SCHEDULE_ROWS {
+        for row in 0..SCHEDULE_UI_ROWS {
             for (part, _) in SHARE_FIELDS {
                 keys.push((share_key(row, part), String::new()));
             }
@@ -405,7 +415,7 @@ impl Form1707View {
                 children.push(
                     kit::label("Schedule 2 — Description of shares of stock").into_any_element(),
                 );
-                for (row, letter) in ROW_LETTERS.iter().enumerate() {
+                for (row, letter) in (0..SCHEDULE_UI_ROWS).map(|row| (row, row_label(row))) {
                     let cells = SHARE_FIELDS
                         .iter()
                         .map(|(part, caption)| {
@@ -424,7 +434,7 @@ impl Form1707View {
                 children.push(
                     kit::label("Schedule 3 — Cost and other allowable expenses").into_any_element(),
                 );
-                for (row, letter) in ROW_LETTERS.iter().enumerate() {
+                for (row, letter) in (0..SCHEDULE_UI_ROWS).map(|row| (row, row_label(row))) {
                     let cells = vec![
                         field(
                             &self.kit,
@@ -595,7 +605,7 @@ impl KitView for Form1707View {
         {
             let mut shares = Vec::new();
             let mut expenses = Vec::new();
-            for (row, letter) in ROW_LETTERS.iter().enumerate() {
+            for (row, letter) in (0..SCHEDULE_UI_ROWS).map(|row| (row, row_label(row))) {
                 let number = r
                     .optional_amount(
                         &share_key(row, "shares"),
