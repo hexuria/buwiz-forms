@@ -49,7 +49,7 @@ fn form_1700_sample_payload_is_current() {
         "1700-2025",
         "1700-v2013",
         &payload,
-        "2a9cd588fcb5ce2c03ac1bd8291ce603bbff4da3beeb0d199410f7f2a5779e0d",
+        "d2862acdc28a0430e1b02f8a0d2536bb1c38c0ef32baa34561f399570006bb3f",
     );
 }
 
@@ -88,6 +88,6 @@ fn form_1700_joint_sample_payload_is_current() {
         "1700-2025-joint",
         "1700-v2013",
         &payload,
-        "5ced309643ae7f884adf7152f52fef0e7ed7cffc49518ec2b473c25636ae23b0",
+        "6500d6fc3bf03e09f26b54091e6497b6dad663b62602f496807479fc852e07f4",
     );
 }

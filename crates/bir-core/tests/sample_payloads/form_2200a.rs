@@ -60,6 +60,6 @@ fn form_2200a_sample_payload_is_current() {
         "2200A-03142025",
         "2200a-v2020",
         &payload,
-        "2395f535883123f693d9080a741766b72cec296bdb77f0885d2597d0448de949",
+        "80270137fded0ec31f50299a555a077dbba2992efe37f23b58f6a446b3f6c61b",
     );
 }

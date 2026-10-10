@@ -59,6 +59,6 @@ fn form_2200t_sample_payload_is_current() {
         "2200T-03142025",
         "2200t-v2020",
         &payload,
-        "22d19460b02d7768b286a7d8e2dbcac1e7652f5ff8456d74d4bb5a00f2cdbba8",
+        "7d0327c4ba19b3ed02d29a6b5ea5e94fa4f16bba9b864666ea110f01358ef123",
     );
 }

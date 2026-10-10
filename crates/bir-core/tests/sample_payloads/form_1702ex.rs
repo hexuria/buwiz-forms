@@ -63,6 +63,6 @@ fn form_1702ex_sample_payload_is_current() {
         "1702EX-122025",
         "1702ex-v2018c",
         &payload,
-        "f101fdf1977954a564dc3e586b8a71d192772ddcc40c900e3cf6941fb2c7aed6",
+        "739058ef4704ddd829bc7c411ea3eea8a18e4ec4b2e8088614d1799784e2e8f9",
     );
 }

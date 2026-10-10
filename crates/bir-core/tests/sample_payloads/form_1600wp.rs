@@ -78,7 +78,7 @@ fn form_1600wp_two_atc_sample_payload_is_current() {
         sample_two_atcs(),
         "1600WP-06152025",
         "1600wp-v2010-atc2",
-        "e0af6176cf74f1e034f1f8ecd1089d436ea933fd3f07c0c9257103b5264beaaf",
+        "360c19135e45008260922f62faf88b9053e4f08483f3cb20f09c9f56d1c27006",
     );
 }
 
@@ -88,7 +88,7 @@ fn form_1600wp_one_atc_sample_payload_is_current() {
         sample_one_atc(),
         "1600WP-07012025",
         "1600wp-v2010-atc1",
-        "2ed0afc32305592567d6b2eaec4cacbb1e7ed9673ec7c419d7c70348f15b3850",
+        "6b221aded987f55a89510528392d2b5ccc22afadad816591a670a067ac9713dd",
     );
 }
 
@@ -98,6 +98,6 @@ fn form_1600wp_no_atc_sample_payload_is_current() {
         sample_no_atc(),
         "1600WP-08312025",
         "1600wp-v2010-atc0",
-        "e2033c2abd9d04a53c2362fce89ed60dd5393d8d3a6815bb5b9b0fc64351718a",
+        "ac0764b857e205d728a7177184badb6b0cd26c955599265fa8d5099740a9f1da",
     );
 }

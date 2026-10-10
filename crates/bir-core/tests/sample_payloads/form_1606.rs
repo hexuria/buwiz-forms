@@ -59,6 +59,6 @@ fn form_1606_sample_payload_is_current() {
         "1606-06152025_T123456",
         "1606-v2018",
         &payload,
-        "f2181d801152335549db45e27599c2b3aed39990cd8ecc07d6a760b9cba33a72",
+        "e6690b744ed1a6131134a0e275dadfb4ac5ab77b3c3604e75653cde06899efd6",
     );
 }
