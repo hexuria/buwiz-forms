@@ -360,7 +360,7 @@ impl FormDraft {
             Self::Form1701Q(f) => &f.lifecycle.status,
             Self::Form1702MX(f) => &f.lifecycle.status,
             Self::Form1702RT(f) => &f.lifecycle.status,
-            Self::Form2550Q(f) => &f.status,
+            Self::Form2550Q(f) => &f.lifecycle.status,
         }
     }
 

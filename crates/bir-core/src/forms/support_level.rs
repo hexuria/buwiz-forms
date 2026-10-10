@@ -349,10 +349,13 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "2550Q",
         revision: "2024",
+        // Official formType; queued through the generic `QueueableForm` path
+        // with the official saveEncryptedProfile layout plus `<dateFiled>`.
         form_id: "2550Qv2024",
         capabilities: FormCapabilities {
             xml_round_trip: true,
             formula_evidence: true,
+            queue_submission: true,
             render_contract: true,
             html_component: true,
             html_spec: true,
@@ -1186,11 +1189,11 @@ mod tests {
         assert!(queueable >= 3);
         assert_eq!(queue_authorized_form_type_id("2551Q"), Some("2551Qv2018"));
         assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
-        // 2550Q stays frozen (bir-rules-codegen application freeze).
-        for code in ["2550Q", "9999"] {
-            assert!(!can_queue_for_submission(code), "{code} must fail closed");
-            assert_eq!(queue_authorized_form_type_id(code), None);
-        }
+        // 2550Q left the application freeze through the generic queue.
+        assert!(can_queue_for_submission("2550Q"));
+        assert_eq!(queue_authorized_form_type_id("2550Q"), Some("2550Qv2024"));
+        assert!(!can_queue_for_submission("9999"), "9999 must fail closed");
+        assert_eq!(queue_authorized_form_type_id("9999"), None);
     }
 
     #[test]
