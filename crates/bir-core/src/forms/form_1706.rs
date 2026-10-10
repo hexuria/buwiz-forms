@@ -6,7 +6,7 @@
 //! `enableInstallment`), the compute chain (`compareFMVLI` →
 //! `computeTaxableBase` → `computeOfTaxDue` → `computeTaxPayable` →
 //! `computeOfTotalAmtDue`, `computePenalties`), `validate()` with its exact
-//! alert texts, and `saveXMLsubmit` through [`crate::official_xml`].
+//! alert texts, and the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`].
 //!
 //! 1706 is event-based: one return per sale. The dashboard's open-ended key
 //! and year identify the draft; the official filename carries the date of
@@ -663,7 +663,7 @@ impl Form1706Draft {
             .unwrap_or_default()
     }
 
-    /// The official field values `saveXMLsubmit` reads, keyed by element id.
+    /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {
