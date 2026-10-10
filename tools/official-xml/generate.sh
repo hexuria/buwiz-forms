@@ -2,11 +2,11 @@
 # Regenerate crates/bir-core/data/official-xml/<form_id>.json for every form in
 # forms.txt from a hexuria/buwiz-validation checkout.
 #
-# Usage: rules/tools/official-xml/generate.sh <buwiz-validation dir>
+# Usage: tools/official-xml/generate.sh <buwiz-validation dir>
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 validation="${1:?path to a hexuria/buwiz-validation checkout}"
-out="$here/../../../crates/bir-core/data/official-xml"
+out="$here/../../crates/bir-core/data/official-xml"
 mkdir -p "$out"
 cd "$here"
 [ -d node_modules ] || npm ci --silent

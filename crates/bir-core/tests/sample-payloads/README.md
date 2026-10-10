@@ -26,7 +26,7 @@ UPDATE_SAMPLE_PAYLOADS=1 cargo test -p bir-core --test sample_payloads_test
 Both steps are byte-identical to the official eBIRForms app:
 
 - `*.official.xml` is what the official `saveXMLsubmit()` writes for the same
-  values (`rules/tools/official-xml/oracle.js` runs the official HTA loop in
+  values (`tools/official-xml/oracle.js` runs the official HTA loop in
   jsdom). The test requires `*.plain.xml` to equal it.
 - Running the official `Encrypt.exe` under emulation on `*.plain.xml` gives
   exactly the `*.iaf.xml` bytes; the test pins those hashes.

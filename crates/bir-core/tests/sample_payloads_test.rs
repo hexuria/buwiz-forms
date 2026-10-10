@@ -5,7 +5,7 @@
 //! uploaded (`dump_xml <file>` decrypts it back). No real taxpayer data.
 //!
 //! `<stem>.official.xml` is what the official eBIRForms `saveXMLsubmit()`
-//! writes for the same values, produced by `rules/tools/official-xml/oracle.js`
+//! writes for the same values, produced by `tools/official-xml/oracle.js`
 //! (the official HTA loop run in jsdom). Our plaintext must equal it byte for
 //! byte; regenerating our samples never changes it.
 //!

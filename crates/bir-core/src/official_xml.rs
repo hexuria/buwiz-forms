@@ -4,7 +4,7 @@
 //! `<div>key=valuekey=</div>` per control, with per-form quirks: page order,
 //! `escape()` on some fields only, a few fields written twice or folded into
 //! another, form-specific whitespace and the `All Rights Reserved BIR 2012.0`
-//! trailer. `rules/tools/official-xml` runs that official loop in jsdom and
+//! trailer. `tools/official-xml` runs that official loop in jsdom and
 //! records the result for each form in `data/official-xml/<form_id>.json`.
 //! [`write`] replays such a layout over a form's field map, so the form code
 //! only supplies values.

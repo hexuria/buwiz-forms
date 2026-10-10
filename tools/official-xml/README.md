@@ -22,8 +22,8 @@ Needs Node 20+ and a checkout of
 ## Regenerate
 
 ```sh
-rules/tools/official-xml/generate.sh /path/to/buwiz-validation
-node rules/tools/official-xml/gen_atc_options.js /path/to/buwiz-validation \
+tools/official-xml/generate.sh /path/to/buwiz-validation
+node tools/official-xml/gen_atc_options.js /path/to/buwiz-validation \
   > crates/bir-core/data/official-xml/2551q-v2018-atc-options.json
 ```
 
