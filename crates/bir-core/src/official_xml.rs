@@ -98,8 +98,9 @@ const LAYOUTS: &[(&str, &str)] = layouts![
     "1601c-v2018",
     "2551q-v2018",
     "2553-v1999",
-    "0605-v2003",
     "0619e-v2018",
+    "0605-v2003",
+    "0619f-v2018"
 ];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.

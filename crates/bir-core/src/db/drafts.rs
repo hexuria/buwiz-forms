@@ -4030,7 +4030,7 @@ mod tests {
             "0619F",
             draft.taxable_year,
             Some(draft.month),
-            &draft.status,
+            &draft.lifecycle.status,
             &draft,
         )
         .expect("0619-F draft should save");

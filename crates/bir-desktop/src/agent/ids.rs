@@ -22,7 +22,6 @@ pub const PAGE_ADMIN_CALENDAR: &str = "page-admin-calendar";
 pub const PAGE_FORM_2551Q: &str = "page-form-2551q";
 pub const PAGE_FORM_1701Q: &str = "page-form-1701q";
 pub const PAGE_FORM_1601C: &str = "page-form-1601c";
-pub const PAGE_FORM_0619F: &str = "page-form-0619f";
 pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
 pub const PAGE_FORM_1701: &str = "page-form-1701";
 pub const PAGE_FORM_1702RT: &str = "page-form-1702rt";
@@ -144,9 +143,6 @@ pub const FORM_2551Q_SUBMIT: &str = "submit_btn";
 pub const FORM_1701Q_BACK: &str = "1701q_back";
 pub const FORM_1701Q_SAVE: &str = "1701q_save";
 pub const FORM_1701Q_SUBMIT: &str = "1701q_manual";
-pub const FORM_0619F_BACK: &str = "0619f_back";
-pub const FORM_0619F_SAVE: &str = "0619f_save";
-pub const FORM_0619F_SUBMIT: &str = "0619f_manual";
 pub const FORM_2550Q_BACK: &str = "2550q_back";
 pub const FORM_2550Q_SAVE: &str = "2550q_save";
 pub const FORM_2550Q_SUBMIT: &str = "2550q_manual";
@@ -344,7 +340,6 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Form2551Q => PAGE_FORM_2551Q,
         ActiveView::Form1701Q => PAGE_FORM_1701Q,
         ActiveView::Form1601C => PAGE_FORM_1601C,
-        ActiveView::Form0619F => PAGE_FORM_0619F,
         ActiveView::Form2550Q => PAGE_FORM_2550Q,
         ActiveView::Form1701 => PAGE_FORM_1701,
         ActiveView::Form1702RT => PAGE_FORM_1702RT,
@@ -366,7 +361,6 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Form2551Q => "form-2551q",
         ActiveView::Form1701Q => "form-1701q",
         ActiveView::Form1601C => "form-1601c",
-        ActiveView::Form0619F => "form-0619f",
         ActiveView::Form2550Q => "form-2550q",
         ActiveView::Form1701 => "form-1701",
         ActiveView::Form1702RT => "form-1702rt",
@@ -388,7 +382,6 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "form-2551q" | "2551q" => Some(ActiveView::Form2551Q),
         "form-1701q" | "1701q" => Some(ActiveView::Form1701Q),
         "form-1601c" | "1601c" => Some(ActiveView::Form1601C),
-        "form-0619f" | "0619f" => Some(ActiveView::Form0619F),
         "form-2550q" | "2550q" => Some(ActiveView::Form2550Q),
         "form-1701" | "1701" => Some(ActiveView::Form1701),
         "form-1702rt" | "1702rt" => Some(ActiveView::Form1702RT),
@@ -411,7 +404,6 @@ pub const ALL_VIEWS: &[ActiveView] = &[
     ActiveView::Form2551Q,
     ActiveView::Form1701Q,
     ActiveView::Form1601C,
-    ActiveView::Form0619F,
     ActiveView::Form2550Q,
     ActiveView::Form1701,
     ActiveView::Form1702RT,
@@ -467,13 +459,6 @@ pub const FORM_CHROME: &[FormChrome] = &[
         back: FORM_1601C_BACK,
         save: FORM_1601C_SAVE,
         submit: FORM_1601C_SUBMIT,
-    },
-    FormChrome {
-        view: ActiveView::Form0619F,
-        code: "0619F",
-        back: FORM_0619F_BACK,
-        save: FORM_0619F_SAVE,
-        submit: FORM_0619F_SUBMIT,
     },
     FormChrome {
         view: ActiveView::Form2550Q,
@@ -536,7 +521,7 @@ mod tests {
             assert!(seen.insert(id), "duplicate page root {id}");
             assert_eq!(view_from_slug(view_slug(view)), Some(view));
         }
-        assert_eq!(ALL_VIEWS.len(), 16);
+        assert_eq!(ALL_VIEWS.len(), 15);
     }
 
     #[test]
