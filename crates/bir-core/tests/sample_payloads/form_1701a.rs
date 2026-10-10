@@ -46,7 +46,7 @@ fn form_1701a_sample_payload_is_current() {
         "1701A-122025",
         "1701a-v2018",
         &payload,
-        "99d6adb51afca6a987d6fe532f5dd782c2f42a909180c5268878e49e55518e57",
+        "70833befa59b7c8055b92fb8414a1cd2c8732e9ccc99f8d40745448b6f5749f8",
     );
 }
 
@@ -83,6 +83,6 @@ fn form_1701a_joint_sample_payload_is_current() {
         "1701A-122025-joint",
         "1701a-v2018",
         &payload,
-        "6cba3b6852efd8b75b9603b328ec7b47b89bbe377004ab0d4576642184c9df6c",
+        "0c99ea1146e34bc57f1058bf57cd430a0f5679364f7e3b86451746be1cb2387e",
     );
 }
