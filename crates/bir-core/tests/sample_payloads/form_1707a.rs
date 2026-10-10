@@ -52,7 +52,7 @@ fn form_1707a_sample_payload_is_current() {
         "1707A-12312025",
         "1707a-v2021",
         &payload,
-        "2bf77639d5416e8bdabb63900b0eafc19afef5e2a6ff421971cf1ec4a2fbdc30",
+        "6fd4be4d37c9c80a824544001c231ed7771f5056dc4105ab7e68067b37d48e0d",
     );
 }
 
@@ -91,6 +91,6 @@ fn form_1707a_sample_with_popup_is_current() {
         "1707A-12312024",
         &layout,
         &payload,
-        "f24976694df75213070167d976401433831e8e36a1dcae5a523d57cc3a51c13e",
+        "a1ca2c78434fb131a887020bcf6b5f78c7b3e065bbeb22a887b2a98bb4d00191",
     );
 }

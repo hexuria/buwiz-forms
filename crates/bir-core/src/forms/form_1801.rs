@@ -4,7 +4,7 @@
 //! the page's own `formatCurrency` (`toFixed(2)` with thousands commas) and
 //! `NumWithComma`, the schedule totals (`get*_totals`), `calculate_Part4`,
 //! `computeNo18` and `calculate_Part2`, `validateForm()` with its exact alert
-//! texts, and `saveXMLsubmit` through [`crate::official_xml`]. Background
+//! texts, and the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`]. Background
 //! information comes from the taxpayer profile the way `loadBGData()` and
 //! `sleeptime()` fill it.
 //!
@@ -574,7 +574,7 @@ impl Form1801Draft {
         rows.get(index).cloned().unwrap_or_default()
     }
 
-    /// The official field values `saveXMLsubmit` writes, keyed by element id.
+    /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let mut put = |key: &str, value: String| {

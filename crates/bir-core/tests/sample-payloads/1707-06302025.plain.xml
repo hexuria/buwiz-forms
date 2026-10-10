@@ -13,8 +13,8 @@
             <div>frm1707:txtPg1TIN2=456frm1707:txtPg1TIN2=</div>    
             <div>frm1707:txtPg1TIN3=788frm1707:txtPg1TIN3=</div>    
             <div>frm1707:txtPg1TIN4=00000frm1707:txtPg1TIN4=</div>    
-            <div>frm1707:ProfileName=SAMPLE%20DUMMY%20TAXPAYERfrm1707:ProfileName=</div>    
-            <div>frm1707:ProfileAddress1=123%20SAMPLE%20STREET%2C%20BARANGAY%20EXAMPLE%2C%20QUEZON%20CITYfrm1707:ProfileAddress1=</div>    
+            <div>frm1707:ProfileName=SAMPLE DUMMY TAXPAYERfrm1707:ProfileName=</div>    
+            <div>frm1707:ProfileAddress1=123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITYfrm1707:ProfileAddress1=</div>    
             <div>frm1707:ProfileAddress2=frm1707:ProfileAddress2=</div>    
             <div>frm1707:ProfileZipCode=1100frm1707:ProfileZipCode=</div>    
             <div>frm1707:ProfileContactNum=09170000000frm1707:ProfileContactNum=</div>    
@@ -128,7 +128,7 @@
             <div>frm1707:txtPg2P4Sch3Particulars4=frm1707:txtPg2P4Sch3Particulars4=</div>    
             <div>frm1707:txtPg2P4Sch3Amount4=0.00frm1707:txtPg2P4Sch3Amount4=</div>    
             <div>frm1707:txtPg2P4Sch3TotAmount=912,345.68frm1707:txtPg2P4Sch3TotAmount=</div>    
-            <div>frm1707:txtLOB=Sample Consulting Servicesfrm1707:txtLOB=</div>    
+            <div>frm1707:txtLOB=SAMPLE CONSULTING SERVICESfrm1707:txtLOB=</div>    
             <div>frm1707:txtCurrentPage=1frm1707:txtCurrentPage=</div>    
             <div>frm1707:txtMaxPage=2frm1707:txtMaxPage=</div>    
             <div>Pg2Pt4S2SubTotal=Pg2Pt4S2SubTotal=</div>    
