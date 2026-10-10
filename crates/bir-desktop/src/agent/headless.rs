@@ -299,12 +299,7 @@ impl Drop for ServePidGuard {
 }
 
 fn serve(wait: bool) -> Result<(), ExitCode> {
-    let mut config = load_serve_config()?;
-    // `--wait` exists to wait for the port (restart handoff), so it must not
-    // fall back to an ephemeral port while the old server still holds it.
-    if !wait {
-        config.addr = super::discovery::resolve_addr(config.addr);
-    }
+    let config = load_serve_config()?;
     let token_set = config.token.is_some();
 
     loop {
@@ -367,7 +362,6 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             eprintln!("pid file: {error}");
         }
         let _pid_guard = ServePidGuard;
-        let _discovery_guard = super::discovery::register("bir-desktop", addr, "headless");
 
         eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
         eprintln!(
