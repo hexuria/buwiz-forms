@@ -55,6 +55,36 @@ fn select_row(
         .optional()?)
 }
 
+/// Annual and open-ended forms saved by their pre-generic editors stored a
+/// NULL `quarter` (the period lives in `period_key`). Give such a row this
+/// form's period column so every generic lookup finds it and it is updated
+/// in place instead of duplicated.
+fn adopt_legacy_null_period_row(
+    tx: &Transaction<'_>,
+    form_code: &str,
+    tin: &str,
+    taxable_year: u16,
+    period: i64,
+    period_key: &str,
+) -> Result<(), DbError> {
+    tx.execute(
+        "UPDATE form_drafts SET quarter = ?4
+         WHERE id = (
+             SELECT id FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
+               AND quarter IS NULL AND period_key = ?5
+             ORDER BY updated_at DESC, id DESC
+             LIMIT 1
+         )
+         AND NOT EXISTS (
+             SELECT 1 FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND quarter = ?4
+         )",
+        params![tin, form_code, i64::from(taxable_year), period, period_key],
+    )?;
+    Ok(())
+}
+
 impl Database {
     pub fn get_queueable_draft<F: QueueableForm>(
         &self,
@@ -113,6 +143,14 @@ impl Database {
         let json = serde_json::to_string(draft)?;
         let period = draft.period_column();
         let period_key = draft.filing_period().to_period_key();
+        adopt_legacy_null_period_row(
+            &tx,
+            F::FORM_CODE,
+            draft.tin(),
+            draft.taxable_year(),
+            period,
+            &period_key,
+        )?;
         let id = match select_row(&tx, F::FORM_CODE, draft.tin(), draft.taxable_year(), period)? {
             Some((id, raw_json, db_status)) => {
                 let stored: F = serde_json::from_str(&raw_json)?;
@@ -704,5 +742,48 @@ impl Database {
         );
         self.save_confirmed_queueable(&draft)?;
         Ok(ReceiptConfirmationOutcome::Confirmed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::forms::queueable::test_support::TestForm;
+
+    #[test]
+    fn a_legacy_row_with_a_null_period_column_is_adopted_not_duplicated() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let mut form = TestForm::new(6, 10.0);
+        let legacy = serde_json::to_string(&form).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, ?2, 2025, NULL, 'M06', 'Draft', ?3)",
+                params![form.tin, TestForm::CODE, legacy],
+            )
+            .unwrap();
+        form.amount = 11.0;
+        db.save_queueable_draft(&form).unwrap();
+        let rows: Vec<(Option<i64>, String)> = db
+            .conn
+            .prepare("SELECT quarter, data_json FROM form_drafts WHERE form_code = ?1")
+            .unwrap()
+            .query_map(params![TestForm::CODE], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, Some(6));
+        let stored: TestForm = serde_json::from_str(&rows[0].1).unwrap();
+        assert_eq!(stored.amount, 11.0);
+        assert_eq!(
+            db.get_queueable_draft::<TestForm>(&form.tin, 2025, 6)
+                .unwrap()
+                .map(|f| f.amount),
+            Some(11.0)
+        );
     }
 }
