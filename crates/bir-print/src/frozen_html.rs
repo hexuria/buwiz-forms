@@ -971,6 +971,35 @@ fn base64_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn every_print_map_is_registered_and_fills_its_sheet() {
+        use std::collections::BTreeMap;
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(root).unwrap() {
+            let dir = entry.unwrap().path();
+            if !dir.join("writer-cells.json").exists() {
+                continue;
+            }
+            let slug = dir.file_name().unwrap().to_str().unwrap();
+            assert!(super::writer_cells_json(slug).is_some(), "{slug}: not registered");
+            let cells = super::writer_cells(slug).unwrap_or_else(|e| panic!("{slug}: {e}"));
+            let mut fields = BTreeMap::new();
+            for key in cells.joins.keys() {
+                fields.insert(key.clone(), "1".to_string());
+            }
+            for join in &cells.money_joins {
+                fields.insert(join.writer_key.clone(), "1234.56".to_string());
+            }
+            for join in &cells.xbox_joins {
+                fields.insert(join.writer_key.clone(), "true".to_string());
+            }
+            super::filled_document(slug, &fields).unwrap_or_else(|e| panic!("{slug}: {e}"));
+            checked += 1;
+        }
+        assert!(checked >= 30, "only {checked} print maps found");
+    }
+
+    #[test]
     fn checked_xbox_is_centred_like_a_char_box() {
         use std::collections::BTreeMap;
         let mut fields = BTreeMap::new();
