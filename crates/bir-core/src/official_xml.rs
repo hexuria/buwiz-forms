@@ -43,8 +43,39 @@ pub enum Entry {
         key: String,
         parts: Vec<Part>,
         default: String,
+        /// A value-dependent rule the official loop applies to this amount.
+        #[serde(default)]
+        number: Option<NumberRule>,
         after: String,
     },
+}
+
+/// 1702MX `numbertext` amounts: the official loop strips commas, turns
+/// `(5.00)` into `-5.00` (`NumWithParenthesis`) and writes no `<div>` (and
+/// no separator) when the result is numerically zero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum NumberRule {
+    #[serde(rename = "omit-zero")]
+    OmitZero,
+}
+
+/// The official `numbertext` normalization: the first `(` becomes `-`, the
+/// first `)` goes, and commas are removed.
+pub fn official_number_text(value: &str) -> String {
+    if value.contains('(') && value.contains(')') {
+        value
+            .replacen('(', "-", 1)
+            .replacen(')', "", 1)
+            .replace(',', "")
+    } else {
+        value.replace(',', "")
+    }
+}
+
+/// JavaScript's `(value * 1) === 0`: blank is zero, non-numbers are not.
+fn js_is_zero(value: &str) -> bool {
+    let trimmed = value.trim();
+    trimmed.is_empty() || trimmed.parse::<f64>().is_ok_and(|n| n == 0.0)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -103,7 +134,8 @@ const LAYOUTS: &[(&str, &str)] = layouts![
     "0619f-v2018",
     "1701q-v2018",
     "1702rt-v2018c",
-    "1701-v2018"
+    "1701-v2018",
+    "1702mx-v2018c"
 ];
 
 /// The official layout for a rule-package form id such as `"2551q-v2018"`.
@@ -187,6 +219,7 @@ pub fn write(
                 key,
                 parts,
                 default,
+                number,
                 after,
             } => {
                 let any_source = parts.iter().any(
@@ -217,6 +250,16 @@ pub fn write(
                         .collect()
                 } else {
                     default.clone()
+                };
+                let body = match number {
+                    Some(NumberRule::OmitZero) => {
+                        let normalized = official_number_text(&body);
+                        if js_is_zero(&normalized) {
+                            continue;
+                        }
+                        normalized
+                    }
+                    None => body,
                 };
                 (key, body, after)
             }
@@ -277,7 +320,19 @@ pub fn read(
         let (key, after) = match entry {
             Entry::Bool { key, after, .. } | Entry::Value { key, after, .. } => (key, after),
         };
-        expect(plaintext, &mut at, &format!("<div>{key}="))?;
+        let open = format!("<div>{key}=");
+        if matches!(
+            entry,
+            Entry::Value {
+                number: Some(NumberRule::OmitZero),
+                ..
+            }
+        ) && !plaintext[at..].starts_with(&open)
+        {
+            // Omitted zero amount: no <div> and no separator.
+            continue;
+        }
+        expect(plaintext, &mut at, &open)?;
         let close = format!("{key}=</div>");
         let Some(len) = plaintext[at..].find(&close) else {
             return Err(OfficialXmlError::Layout {
@@ -546,6 +601,30 @@ mod tests {
             read(layout, &plain.replace("\n\t\t<div>", "\n<div>")),
             Err(OfficialXmlError::Layout { .. })
         ));
+    }
+
+    #[test]
+    fn number_rule_matches_the_official_1702mx_loop() {
+        // `tools/official-xml/oracle.js` output for these values: commas
+        // stripped, "(5.00)" -> "-5.00", the zero amount and every untouched
+        // zero-default amount written as no <div> at all.
+        let values: BTreeMap<String, String> = serde_json::from_str(include_str!(
+            "../tests/official-xml/1702mx-number-rule.values.json"
+        ))
+        .unwrap();
+        let official = include_str!("../tests/official-xml/1702mx-number-rule.official.xml");
+        let layout = layout("1702mx-v2018c").unwrap();
+        let ours = write(layout, &values).unwrap();
+        assert_eq!(ours, official);
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I14TotalIncome=1234.50"));
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I15LessTotalTax=-5.00"));
+        assert!(ours.contains("<div>frm1702MX:txtPg1Pt2I17=-1000.25"));
+        assert!(!ours.contains("<div>frm1702MX:txtPg1Pt2I16NetTaxPayable="));
+        let back = read(layout, &ours).unwrap();
+        assert_eq!(back["frm1702MX:txtPg1Pt2I14TotalIncome"], "1234.50");
+        assert!(!back.contains_key("frm1702MX:txtPg1Pt2I16NetTaxPayable"));
+        assert_eq!(official_number_text("(1,234.50)"), "-1234.50");
+        assert!(js_is_zero("") && js_is_zero("-0.00") && !js_is_zero("abc"));
     }
 
     #[test]
