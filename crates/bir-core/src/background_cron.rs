@@ -2751,6 +2751,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn generic_receipt_confirms_by_uploaded_filename_when_the_period_cannot_key_it() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+
+        // BIR echoes the base filename; an event-based form's period part
+        // (a date, a TCT) does not parse back to the draft's key.
+        let local_now =
+            chrono::Utc::now() + chrono::Duration::hours(8) + chrono::Duration::minutes(1);
+        let uploaded = queued.submission_filename();
+        let confirmation = crate::receipt::BirReceiptConfirmation {
+            filename: format!("{}.xml", uploaded.split('#').next().unwrap()),
+            date_received: local_now.date_naive(),
+            time_received: local_now.time(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let guard = db.lock().unwrap();
+        let (mut saved, _) = guard.save_submission_receipt(&confirmation).unwrap();
+        saved.period = "03152025_T123456".to_string();
+        assert_eq!(
+            guard
+                .confirm_queueable_from_receipt::<TestForm>(&saved)
+                .unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
+        );
+        drop(guard);
+        assert_eq!(
+            stored_test_form(&db, &queued).lifecycle.status,
+            FilingStatus::Confirmed
+        );
+    }
+
+    #[tokio::test]
     async fn generic_worker_pre_store_failure_stays_unclaimed_and_backs_off() {
         let profile = test_profile();
         let db = test_db();
