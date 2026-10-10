@@ -6,15 +6,10 @@
 //! `computeInputTaxSched5`), `validate` with its exact alert texts, and
 //! `saveXMLsubmit` through [`crate::official_xml`].
 //!
-//! Schedule 1 (vatable sales per ATC) writes one row of controls per ATC the
-//! filer ticks, inside the modal ahead of `frm2550M:txtmodaltxtTotal12A`;
+//! Schedules 1, 2, 3 (Parts A and B), 6, 7 and 8 write one row of controls per
+//! entry inside their modals, ahead of each modal's totals;
 //! [`Form2550MDraft::official_payload`] splices those rows into the fixed
 //! layout exactly where the page's own submit loop writes them.
-//!
-//! Schedules 2, 3, 6, 7 and 8 (capital goods, creditable VAT withheld,
-//! advance payments, VAT withheld on sales to government) also add rows of
-//! their own; this model does not offer them, so Items 18A–18D, 20A and
-//! 23A–23C stay `0.00`.
 
 use std::collections::BTreeMap;
 
@@ -30,7 +25,11 @@ pub const FORM_2550M_FORM_ID: &str = "2550m-v2007";
 /// VAT rate the page applies (`* 0.12`).
 pub const FORM_2550M_VAT_RATE: f64 = 0.12;
 /// The modal control Schedule 1 rows are written ahead of.
+#[cfg(test)]
 const SCHEDULE_1_ANCHOR: &str = "<div>frm2550M:txtmodaltxtTotal12A=";
+/// Schedule 2 aggregate cap and Schedule 3A floor (`getSched2Modal`,
+/// `checkifEmptyFieldSched3`).
+const ONE_MILLION: f64 = 1_000_000.0;
 
 /// The ATC popup (`ATCList`): every `xml/atcCodes.xml` entry tagged 2550M,
 /// in file order. Checkbox `AtcCode<n>` is entry `n` (1-based).
@@ -158,6 +157,101 @@ pub struct Form2550MAllocation {
     pub not_direct_input_tax: f64,
 }
 
+/// Schedule 2 — purchase of capital goods not exceeding P1 million (18A/18B).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Form2550MCapitalGoodsRow {
+    /// `MM/DD/YYYY`, within the return period.
+    pub date_purchased: String,
+    pub description: String,
+    /// Amount net of VAT.
+    pub amount: f64,
+    /// Starts at 12% of the amount (`getInputTaxCompute`) and stays editable.
+    pub input_tax: f64,
+}
+
+/// Schedule 3 — capital goods exceeding P1 million, amortized.
+/// Part A (current purchases, 18C/18D) and Part B (purchases of previous
+/// periods) share this row; in Part B `input_tax` is the balance of input
+/// tax from the previous period (`txtBalInputTaxPrevious3B`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Form2550MAmortizedRow {
+    pub date_purchased: String,
+    pub description: String,
+    pub amount: f64,
+    pub input_tax: f64,
+    /// Estimated life in months (1–999).
+    pub estimated_life: u16,
+    /// Recognized life in months (1–60).
+    pub recognized_life: u16,
+    /// Allowable input tax for the period: `input_tax / recognized_life`.
+    #[serde(default)]
+    pub allowable_input_tax: f64,
+    /// Balance of input tax carried to the next period.
+    #[serde(default)]
+    pub balance: f64,
+}
+
+impl Default for Form2550MAmortizedRow {
+    /// A new row as `Schedule3()` makes it: estimated life 0, recognized 1.
+    fn default() -> Self {
+        Self {
+            date_purchased: String::new(),
+            description: String::new(),
+            amount: 0.0,
+            input_tax: 0.0,
+            estimated_life: 0,
+            recognized_life: 1,
+            allowable_input_tax: 0.0,
+            balance: 0.0,
+        }
+    }
+}
+
+/// Schedule 6 (creditable VAT withheld, 23A) and Schedule 8 (VAT withheld on
+/// sales to government, 23C).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Form2550MWithholdingRow {
+    /// `MM/DD/YYYY`, within the return period.
+    pub period_covered: String,
+    pub withholding_agent: String,
+    pub income_payment: f64,
+    pub total_withheld: f64,
+    pub applied_current_month: f64,
+}
+
+/// Schedule 7 — advance VAT payments (23B).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Form2550MAdvancePaymentRow {
+    /// `MM/DD/YYYY`, within the return period.
+    pub period_covered: String,
+    pub miller: String,
+    pub taxpayer_name: String,
+    pub or_number: String,
+    pub amount_paid: f64,
+    pub applied_current_month: f64,
+}
+
+/// Schedule totals the modals show and copy into Items 18, 20A and 23.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct Form2550MScheduleTotals {
+    /// Schedule 2 (18A, 18B).
+    pub schedule_2_amount: f64,
+    pub schedule_2_input_tax: f64,
+    /// Schedule 3A (18C, 18D) and the balances (20A).
+    pub schedule_3_amount: f64,
+    pub schedule_3_input_tax: f64,
+    pub schedule_3a_balance: f64,
+    pub schedule_3b_balance: f64,
+    pub schedule_3_deferred: f64,
+    /// Schedules 6–8: withheld/paid and applied this month.
+    pub schedule_6_withheld: f64,
+    pub schedule_6_applied: f64,
+    pub schedule_7_paid: f64,
+    pub schedule_7_applied: f64,
+    pub schedule_8_withheld: f64,
+    pub schedule_8_applied: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Form2550MDraft {
     #[serde(default)]
@@ -270,6 +364,21 @@ pub struct Form2550MDraft {
     pub schedule_5: Option<Form2550MAllocation>,
     #[serde(default)]
     pub schedule_5_attributed: f64,
+    /// Schedule rows.
+    #[serde(default)]
+    pub schedule_2: Vec<Form2550MCapitalGoodsRow>,
+    #[serde(default)]
+    pub schedule_3a: Vec<Form2550MAmortizedRow>,
+    #[serde(default)]
+    pub schedule_3b: Vec<Form2550MAmortizedRow>,
+    #[serde(default)]
+    pub schedule_6: Vec<Form2550MWithholdingRow>,
+    #[serde(default)]
+    pub schedule_7: Vec<Form2550MAdvancePaymentRow>,
+    #[serde(default)]
+    pub schedule_8: Vec<Form2550MWithholdingRow>,
+    #[serde(default)]
+    pub schedule_totals: Form2550MScheduleTotals,
     /// 20B, 20C, 20D, 20E, 20F.
     #[serde(default)]
     pub input_tax_sales_to_government: f64,
@@ -404,6 +513,13 @@ impl Form2550MDraft {
             schedule_4_total: 0.0,
             schedule_5: None,
             schedule_5_attributed: 0.0,
+            schedule_2: Vec::new(),
+            schedule_3a: Vec::new(),
+            schedule_3b: Vec::new(),
+            schedule_6: Vec::new(),
+            schedule_7: Vec::new(),
+            schedule_8: Vec::new(),
+            schedule_totals: Form2550MScheduleTotals::default(),
             input_tax_sales_to_government: 0.0,
             input_tax_exempt_sales: 0.0,
             vat_refund_claimed: 0.0,
@@ -444,6 +560,24 @@ impl Form2550MDraft {
         let (base, input) = self.purchase_fields(purchase);
         *base = amount;
         *input = tax;
+        self.recompute();
+    }
+
+    /// A Schedule 2 amount on blur: `round` and `getInputTaxCompute` (12%).
+    pub fn set_schedule_2_amount(&mut self, row: usize, amount: f64) {
+        if let Some(entry) = self.schedule_2.get_mut(row) {
+            entry.amount = cents(amount);
+            entry.input_tax = cents(entry.amount * FORM_2550M_VAT_RATE);
+        }
+        self.recompute();
+    }
+
+    /// A Schedule 3A amount on blur: `round` and `getInputTaxCompute3A` (12%).
+    pub fn set_schedule_3a_amount(&mut self, row: usize, amount: f64) {
+        if let Some(entry) = self.schedule_3a.get_mut(row) {
+            entry.amount = cents(amount);
+            entry.input_tax = cents(entry.amount * FORM_2550M_VAT_RATE);
+        }
         self.recompute();
     }
 
@@ -563,9 +697,12 @@ impl Form2550MDraft {
                 + self.presumptive_input_tax
                 + self.other_input_tax,
         );
-        // compute18P (18A and 18C come from Schedules 2 and 3: 0.00 here).
+        self.compute_schedules();
+        let t = self.schedule_totals;
+        // compute18P.
         self.total_current_purchases = cents(
-            0.0 + 0.0
+            t.schedule_2_amount
+                + t.schedule_3_amount
                 + self.domestic_goods
                 + self.imported_goods
                 + self.domestic_services
@@ -573,11 +710,11 @@ impl Form2550MDraft {
                 + self.purchases_not_qualified
                 + self.other_purchases,
         );
-        // compute19 (18B and 18D likewise).
+        // compute19.
         self.total_available_input_tax = cents(
             self.total_input_tax_17f
-                + 0.0
-                + 0.0
+                + t.schedule_2_input_tax
+                + t.schedule_3_input_tax
                 + self.domestic_goods_input_tax
                 + self.imported_goods_input_tax
                 + self.domestic_services_input_tax
@@ -621,9 +758,10 @@ impl Form2550MDraft {
             }
         }
 
-        // compute20F (20A comes from Schedule 3: 0.00 here) … compute24.
+        // compute20F … compute24.
         self.total_deductions = cents(
-            0.0 + self.input_tax_sales_to_government
+            t.schedule_3_deferred
+                + self.input_tax_sales_to_government
                 + self.input_tax_exempt_sales
                 + self.vat_refund_claimed
                 + self.other_deductions,
@@ -631,30 +769,213 @@ impl Form2550MDraft {
         self.total_allowable_input_tax =
             cents(self.total_available_input_tax - self.total_deductions);
         self.net_vat_payable = cents(self.total_output_tax - self.total_allowable_input_tax);
-        // compute23G (23A–23C come from Schedules 6–8: 0.00 here).
+        // compute23G.
         self.total_credits = cents(
-            0.0 + 0.0 + 0.0 + self.vat_paid_previous + self.advance_payments + self.other_credits,
+            t.schedule_6_applied
+                + t.schedule_7_applied
+                + t.schedule_8_applied
+                + self.vat_paid_previous
+                + self.advance_payments
+                + self.other_credits,
         );
         self.tax_still_payable = cents(self.net_vat_payable - self.total_credits);
         self.total_penalties = cents(self.surcharge + self.interest + self.compromise);
         self.total_amount_payable = cents(self.tax_still_payable + self.total_penalties);
     }
 
+    /// Schedules 2, 3, 6, 7 and 8: `computeSumTax`, `computeSumTax3A`,
+    /// `computeSumTax3B`, `computeSumModal20A`, `computeSumWithheldApp*`.
+    fn compute_schedules(&mut self) {
+        let mut t = Form2550MScheduleTotals::default();
+        let (mut amount, mut input) = (0.0, 0.0);
+        for row in &mut self.schedule_2 {
+            row.amount = cents(row.amount);
+            row.input_tax = cents(row.input_tax);
+            amount += row.amount;
+            input += row.input_tax;
+        }
+        t.schedule_2_amount = cents(amount);
+        t.schedule_2_input_tax = cents(input);
+
+        let (mut amount, mut input, mut balance) = (0.0, 0.0, 0.0);
+        for row in &mut self.schedule_3a {
+            row.amount = cents(row.amount);
+            row.input_tax = cents(row.input_tax);
+            row.allowable_input_tax = cents(row.input_tax / f64::from(row.recognized_life));
+            row.balance = cents(row.input_tax - row.allowable_input_tax);
+            amount += row.amount;
+            input += row.input_tax;
+            balance += row.balance;
+        }
+        t.schedule_3_amount = cents(amount);
+        t.schedule_3_input_tax = cents(input);
+        t.schedule_3a_balance = cents(balance);
+        let mut balance = 0.0;
+        for row in &mut self.schedule_3b {
+            row.amount = cents(row.amount);
+            row.input_tax = cents(row.input_tax);
+            row.allowable_input_tax = cents(row.input_tax / f64::from(row.recognized_life));
+            row.balance = cents(row.input_tax - row.allowable_input_tax);
+            balance += row.balance;
+        }
+        t.schedule_3b_balance = cents(balance);
+        t.schedule_3_deferred = cents(t.schedule_3a_balance + t.schedule_3b_balance);
+
+        let sum_withholding = |rows: &mut Vec<Form2550MWithholdingRow>| {
+            let (mut withheld, mut applied) = (0.0, 0.0);
+            for row in rows.iter_mut() {
+                row.income_payment = cents(row.income_payment);
+                row.total_withheld = cents(row.total_withheld);
+                row.applied_current_month = cents(row.applied_current_month);
+                withheld += row.total_withheld;
+                applied += row.applied_current_month;
+            }
+            (cents(withheld), cents(applied))
+        };
+        (t.schedule_6_withheld, t.schedule_6_applied) = sum_withholding(&mut self.schedule_6);
+        (t.schedule_8_withheld, t.schedule_8_applied) = sum_withholding(&mut self.schedule_8);
+        let (mut paid, mut applied) = (0.0, 0.0);
+        for row in &mut self.schedule_7 {
+            row.amount_paid = cents(row.amount_paid);
+            row.applied_current_month = cents(row.applied_current_month);
+            paid += row.amount_paid;
+            applied += row.applied_current_month;
+        }
+        t.schedule_7_paid = cents(paid);
+        t.schedule_7_applied = cents(applied);
+        self.schedule_totals = t;
+    }
+
+    /// The row controls of every schedule, grouped by the modal control the
+    /// page writes them ahead of, in page order.
+    fn schedule_row_controls(&self) -> Vec<(&'static str, Vec<(String, String)>)> {
+        let money = official_amount;
+        let mut groups = Vec::new();
+        let mut rows = Vec::new();
+        for (n, row) in self
+            .sales_schedule
+            .iter()
+            .enumerate()
+            .map(|(i, r)| (i + 1, r))
+        {
+            rows.push((format!("frm2550m:txtAtcCde{n}"), row.atc_code.clone()));
+            rows.push((format!("frm2550m:txtAmountSales{n}"), money(row.amount)));
+            rows.push((format!("frm2550m:txtOutputTax{n}"), money(row.output_tax)));
+        }
+        groups.push(("frm2550M:txtmodaltxtTotal12A", rows));
+
+        let mut rows = Vec::new();
+        for (i, row) in self.schedule_2.iter().enumerate() {
+            rows.push((format!("chxSched2{i}"), "false".to_string()));
+            rows.push((
+                format!("txtDatePurchased{i}"),
+                row.date_purchased.trim().to_string(),
+            ));
+            rows.push((format!("txtDescription{i}"), caps(&row.description)));
+            rows.push((format!("txtAmt{i}"), money(row.amount)));
+            rows.push((format!("txtInputTax{i}"), money(row.input_tax)));
+        }
+        groups.push(("txtmodalTotalAmt", rows));
+
+        for (part, schedule, anchor, previous) in [
+            (
+                "3A",
+                &self.schedule_3a,
+                "txtmodalTotalAmountSched3",
+                "txtInputTax3A",
+            ),
+            (
+                "3B",
+                &self.schedule_3b,
+                "txtmodalTotalBalanceSched3B",
+                "txtBalInputTaxPrevious3B",
+            ),
+        ] {
+            let mut rows = Vec::new();
+            for (i, row) in schedule.iter().enumerate() {
+                rows.push((format!("chxSched{part}{i}"), "false".to_string()));
+                rows.push((
+                    format!("txtDatePurchased{part}{i}"),
+                    row.date_purchased.trim().to_string(),
+                ));
+                rows.push((format!("txtDescription{part}{i}"), caps(&row.description)));
+                rows.push((format!("txtAmt{part}{i}"), money(row.amount)));
+                rows.push((format!("{previous}{i}"), money(row.input_tax)));
+                rows.push((
+                    format!("txtEstLife{part}{i}"),
+                    row.estimated_life.to_string(),
+                ));
+                rows.push((
+                    format!("txtRecogLife{part}{i}"),
+                    row.recognized_life.to_string(),
+                ));
+                rows.push((
+                    format!("txtAllowInputTax{part}{i}"),
+                    money(row.allowable_input_tax),
+                ));
+                rows.push((format!("txtBalInputTax{part}{i}"), money(row.balance)));
+            }
+            groups.push((anchor, rows));
+        }
+
+        for (schedule, rows_in, suffix, anchor) in [
+            (6, &self.schedule_6, "", "txtmodalTotal23A"),
+            (8, &self.schedule_8, "Sch8", "txtmodalTotal23C"),
+        ] {
+            let mut rows = Vec::new();
+            for (i, row) in rows_in.iter().enumerate() {
+                rows.push((format!("chxSched{schedule}{i}"), "false".to_string()));
+                rows.push((
+                    format!("txtPeriodCovered{suffix}{i}"),
+                    row.period_covered.trim().to_string(),
+                ));
+                rows.push((
+                    format!("txtNameAgent{suffix}{i}"),
+                    caps(&row.withholding_agent),
+                ));
+                rows.push((
+                    format!("txtIncomePayment{suffix}{i}"),
+                    money(row.income_payment),
+                ));
+                rows.push((
+                    format!("txtTotalWithheld{suffix}{i}"),
+                    money(row.total_withheld),
+                ));
+                rows.push((
+                    format!("txtAppliedCurr{suffix}{i}"),
+                    money(row.applied_current_month),
+                ));
+            }
+            groups.push((anchor, rows));
+        }
+        let mut rows = Vec::new();
+        for (i, row) in self.schedule_7.iter().enumerate() {
+            rows.push((format!("chxSched7{i}"), "false".to_string()));
+            rows.push((
+                format!("txtPeriodCoveredSch7{i}"),
+                row.period_covered.trim().to_string(),
+            ));
+            rows.push((format!("txtNameMillerSch7{i}"), caps(&row.miller)));
+            rows.push((format!("txtNameTaxPayerSch7{i}"), caps(&row.taxpayer_name)));
+            rows.push((format!("txtORNumSch7{i}"), caps(&row.or_number)));
+            rows.push((format!("txtAmountPaidSch7{i}"), money(row.amount_paid)));
+            rows.push((
+                format!("txtAppliedCurrSch7{i}"),
+                money(row.applied_current_month),
+            ));
+        }
+        groups.push(("txtmodalTotal23B", rows));
+        // Page order: Schedule 1, 2, 3A, 3B, then 6, 7, 8.
+        let order = [0, 1, 2, 3, 4, 6, 5];
+        order.iter().map(|&i| groups[i].clone()).collect()
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id,
     /// including the Schedule 1 row controls.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.layout_fields();
-        for (index, row) in self.sales_schedule.iter().enumerate() {
-            let n = index + 1;
-            fields.insert(format!("frm2550m:txtAtcCde{n}"), row.atc_code.clone());
-            fields.insert(
-                format!("frm2550m:txtAmountSales{n}"),
-                official_amount(row.amount),
-            );
-            fields.insert(
-                format!("frm2550m:txtOutputTax{n}"),
-                official_amount(row.output_tax),
-            );
+        for (_, rows) in self.schedule_row_controls() {
+            fields.extend(rows);
         }
         fields
     }
@@ -697,6 +1018,7 @@ impl Form2550MDraft {
             self.tax_relief.list_value().to_string(),
         );
 
+        let t = self.schedule_totals;
         let items: [(&str, f64); 46] = [
             ("12A", self.vatable_sales_private),
             ("12B", self.output_tax_private),
@@ -712,10 +1034,10 @@ impl Form2550MDraft {
             ("17D", self.presumptive_input_tax),
             ("17E", self.other_input_tax),
             ("17F", self.total_input_tax_17f),
-            ("18A", 0.0),
-            ("18B", 0.0),
-            ("18C", 0.0),
-            ("18D", 0.0),
+            ("18A", t.schedule_2_amount),
+            ("18B", t.schedule_2_input_tax),
+            ("18C", t.schedule_3_amount),
+            ("18D", t.schedule_3_input_tax),
             ("18E", self.domestic_goods),
             ("18F", self.domestic_goods_input_tax),
             ("18G", self.imported_goods),
@@ -729,7 +1051,7 @@ impl Form2550MDraft {
             ("18O", self.other_purchases_input_tax),
             ("18P", self.total_current_purchases),
             ("19", self.total_available_input_tax),
-            ("20A", 0.0),
+            ("20A", t.schedule_3_deferred),
             ("20B", self.input_tax_sales_to_government),
             ("20C", self.input_tax_exempt_sales),
             ("20D", self.vat_refund_claimed),
@@ -737,9 +1059,9 @@ impl Form2550MDraft {
             ("20F", self.total_deductions),
             ("21", self.total_allowable_input_tax),
             ("22", self.net_vat_payable),
-            ("23A", 0.0),
-            ("23B", 0.0),
-            ("23C", 0.0),
+            ("23A", t.schedule_6_applied),
+            ("23B", t.schedule_7_applied),
+            ("23C", t.schedule_8_applied),
             ("23D", self.vat_paid_previous),
             ("23E", self.advance_payments),
             ("23F", self.other_credits),
@@ -767,6 +1089,25 @@ impl Form2550MDraft {
         for (index, (code, _)) in FORM_2550M_ATCS.iter().enumerate() {
             let ticked = self.sales_schedule.iter().any(|row| row.atc_code == *code);
             put(&format!("AtcCode{}", index + 1), flag(ticked));
+        }
+
+        // Schedule 2, 3, 6, 7 and 8 modal totals.
+        for (key, value) in [
+            ("txtmodalTotalAmt", t.schedule_2_amount),
+            ("txtmodalTotalInputTax", t.schedule_2_input_tax),
+            ("txtmodalTotalAmountSched3", t.schedule_3_amount),
+            ("txtmodalTotalInputTaxSched3", t.schedule_3_input_tax),
+            ("txtmodalTotalBalanceSched3A", t.schedule_3a_balance),
+            ("txtmodalTotalBalanceSched3B", t.schedule_3b_balance),
+            ("txtmodalTotalInputTax20ASched3", t.schedule_3_deferred),
+            ("txtmodalTotal23A", t.schedule_6_withheld),
+            ("txtmodalTotalSched6AppliedCurrent", t.schedule_6_applied),
+            ("txtmodalTotal23B", t.schedule_7_paid),
+            ("txtmodalTotalSched7AppliedCurrent", t.schedule_7_applied),
+            ("txtmodalTotal23C", t.schedule_8_withheld),
+            ("txtmodalTotalSched8AppliedCurrent", t.schedule_8_applied),
+        ] {
+            put(key, money(value));
         }
 
         // Schedule 4 and 5 modal controls.
@@ -833,6 +1174,281 @@ impl Form2550MDraft {
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
+    }
+
+    /// The checks each schedule's OK button runs (`checkifEmptyFieldSched2`,
+    /// `checkifEmptyFieldSched3`, `checkifEmptyFieldSched6/7/8`), in order,
+    /// stopping at a schedule's first problem as the page does. The page only
+    /// checks the return period for dates outside February; every date is
+    /// checked here.
+    fn validate_schedules(&self, err: &mut impl FnMut(&str, &str)) {
+        let any_rows = !(self.schedule_2.is_empty()
+            && self.schedule_3a.is_empty()
+            && self.schedule_3b.is_empty()
+            && self.schedule_6.is_empty()
+            && self.schedule_7.is_empty()
+            && self.schedule_8.is_empty());
+        if any_rows && self.taxable_year <= 2000 {
+            err(
+                "taxable_year",
+                "Please input a valid Return period year. Please enter 2000 above.",
+            );
+        }
+        let period = (u32::from(self.taxable_year), u32::from(self.month));
+        let text_limit = |value: &str, max: usize| value.trim().chars().count() > max;
+
+        // Schedule 2.
+        'schedule_2: {
+            for (i, row) in self.schedule_2.iter().enumerate() {
+                let n = i + 1;
+                let field = format!("schedule_2[{i}]");
+                if row.date_purchased.trim().is_empty() || row.description.trim().is_empty() {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter valid row {n} data for Schedule 2.\nEmpty fields are not allowed."
+                        ),
+                    );
+                    break 'schedule_2;
+                }
+                if row.amount > ONE_MILLION {
+                    err(
+                        &field,
+                        "Please enter valid data.\n Aggregate amount should not exceed P1 Million.",
+                    );
+                    break 'schedule_2;
+                }
+                if let Some(message) = date_problem(&row.date_purchased, n, period, false) {
+                    err(&field, &message);
+                    break 'schedule_2;
+                }
+                if row.amount <= 0.0 {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter amount for Net of VAT on row {n}.\nValue must be greater than 0."
+                        ),
+                    );
+                    break 'schedule_2;
+                }
+                if text_limit(&row.description, 50) {
+                    err(
+                        &field,
+                        "Schedule 2 descriptions hold at most 50 characters.",
+                    );
+                    break 'schedule_2;
+                }
+            }
+            if self.schedule_totals.schedule_2_amount > ONE_MILLION {
+                err(
+                    "schedule_2",
+                    "The total aggregate amount should not exceed 1 Million.\n Please re-enter the values of Schedule 2.",
+                );
+            }
+        }
+
+        // Schedule 3, Part A then Part B.
+        'schedule_3: {
+            for (i, row) in self.schedule_3a.iter().enumerate() {
+                let n = i + 1;
+                let field = format!("schedule_3a[{i}]");
+                if row.date_purchased.trim().is_empty()
+                    || row.description.trim().is_empty()
+                    || row.allowable_input_tax == 0.0
+                {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter valid row {n} data for Schedule 3A.\nEmpty fields are not allowed."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if let Some(message) = date_problem(&row.date_purchased, n, period, false) {
+                    err(&field, &message);
+                    break 'schedule_3;
+                }
+                if row.amount <= 0.0 {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter amount for Net of VAT on row {n}.\nValue must be greater than 0."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if !(1..=999).contains(&row.estimated_life) {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter a value 1 to 999 for Estimated Life on row {n} Schedule 3Part A."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if !(1..=60).contains(&row.recognized_life) {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter a value 1 to 60 for Recognized Life on row {n}Part A."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if text_limit(&row.description, 50) {
+                    err(
+                        &field,
+                        "Schedule 3 descriptions hold at most 50 characters.",
+                    );
+                    break 'schedule_3;
+                }
+            }
+            if !self.schedule_3a.is_empty() && self.schedule_totals.schedule_3_amount <= ONE_MILLION
+            {
+                err(
+                    "schedule_3a",
+                    "The total aggregate amount does not exceed 1 Million.\n Please re-enter the values of Schedule 3.",
+                );
+                break 'schedule_3;
+            }
+            for (i, row) in self.schedule_3b.iter().enumerate() {
+                let n = i + 1;
+                let field = format!("schedule_3b[{i}]");
+                if row.date_purchased.trim().is_empty() || row.description.trim().is_empty() {
+                    err(
+                        &field,
+                        "If you don't have any entries for Schedule 3b,\nplease delete the row on this schedule if not applicable.",
+                    );
+                    break 'schedule_3;
+                }
+                if let Some(message) = date_problem(&row.date_purchased, n, period, true) {
+                    err(&field, &message);
+                    break 'schedule_3;
+                }
+                if row.amount <= 0.0 {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter amount for Net of VAT on row {n}.\nValue must be greater than 0 in Part B."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if !(1..=999).contains(&row.estimated_life) {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter a value 1 to 999 for Estimated Life on row {n} Schedule 3Part B."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if !(1..=60).contains(&row.recognized_life) {
+                    err(
+                        &field,
+                        &format!(
+                            "Please enter a value 1 to 60 for Recognized Life on row {n}Part B."
+                        ),
+                    );
+                    break 'schedule_3;
+                }
+                if text_limit(&row.description, 50) {
+                    err(
+                        &field,
+                        "Schedule 3 descriptions hold at most 50 characters.",
+                    );
+                    break 'schedule_3;
+                }
+            }
+        }
+
+        // Schedules 6 and 8.
+        for (schedule, rows, name) in [
+            (6, &self.schedule_6, "schedule_6"),
+            (8, &self.schedule_8, "schedule_8"),
+        ] {
+            if schedule == 8 && !rows.is_empty() && self.sales_to_government <= 0.0 {
+                err(
+                    name,
+                    "Please enter a valid value on Item 13A to be able to load the Schedule 8.",
+                );
+            }
+            for (i, row) in rows.iter().enumerate() {
+                let n = i + 1;
+                let field = format!("{name}[{i}]");
+                let problem = if row.period_covered.trim().is_empty()
+                    || row.withholding_agent.trim().is_empty()
+                {
+                    Some(format!(
+                        "Please enter valid row {n} data for Schedule {schedule}.\nEmpty fields are not allowed."
+                    ))
+                } else if let Some(message) = date_problem(&row.period_covered, n, period, false) {
+                    Some(message)
+                } else if row.income_payment <= 0.0 {
+                    Some(format!(
+                        "Please enter a valid amount for Income Payment on row {n}.\nValue must be greater than 0."
+                    ))
+                } else if row.total_withheld <= 0.0 {
+                    Some(format!(
+                        "Please enter a valid amount for Total Tax Withheld on row {n}.\nValue must be greater than 0."
+                    ))
+                } else if row.applied_current_month <= 0.0 {
+                    Some(format!(
+                        "Please enter a valid amount for Applied Current Month on row {n}.\nValue must be greater than 0."
+                    ))
+                } else if row.applied_current_month > row.total_withheld {
+                    // Schedule 6's check; Schedule 8's is commented out on the
+                    // page, but applying more than was withheld is never right.
+                    Some(format!(
+                        "The Applied Current Month on row {n} should not be greater than the Total Tax Withheld."
+                    ))
+                } else if text_limit(&row.withholding_agent, 50) {
+                    Some("Withholding agent names hold at most 50 characters.".to_string())
+                } else {
+                    None
+                };
+                if let Some(message) = problem {
+                    err(&field, &message);
+                    break;
+                }
+            }
+        }
+
+        // Schedule 7.
+        for (i, row) in self.schedule_7.iter().enumerate() {
+            let n = i + 1;
+            let field = format!("schedule_7[{i}]");
+            let problem = if row.period_covered.trim().is_empty()
+                || row.miller.trim().is_empty()
+                || row.taxpayer_name.trim().is_empty()
+                || row.or_number.trim().is_empty()
+            {
+                Some(format!(
+                    "Please enter valid row {n} data for Schedule 7.\nEmpty fields are not allowed."
+                ))
+            } else if let Some(message) = date_problem(&row.period_covered, n, period, false) {
+                Some(message)
+            } else if row.amount_paid <= 0.0 {
+                Some(format!(
+                    "Please enter a valid amount for Amount Paid on row {n}.\nValue must be greater than 0."
+                ))
+            } else if row.applied_current_month <= 0.0 {
+                Some(format!(
+                    "Please enter a valid amount for Applied Current Month on row {n}.\nValue must be greater than 0."
+                ))
+            } else if text_limit(&row.miller, 50)
+                || text_limit(&row.taxpayer_name, 17)
+                || text_limit(&row.or_number, 20)
+            {
+                Some("Schedule 7 holds at most 50 characters for the miller, 17 for the taxpayer and 20 for the OR number.".to_string())
+            } else {
+                None
+            };
+            if let Some(message) = problem {
+                err(&field, &message);
+                break;
+            }
+        }
     }
 
     fn validate_inner(&self) -> Vec<(String, String)> {
@@ -967,6 +1583,8 @@ impl Form2550MDraft {
                 );
             }
         }
+        self.validate_schedules(&mut err);
+
         // showSched4 / showSched5 refuse to open without the sales they allocate.
         if self.schedule_4.is_some() && self.sales_to_government <= 0.0 {
             err(
@@ -1040,6 +1658,39 @@ impl Form2550MDraft {
         for (index, row) in self.sales_schedule.iter().enumerate() {
             amounts.push((format!("sales_schedule[{index}].amount"), row.amount));
         }
+        for (i, row) in self.schedule_2.iter().enumerate() {
+            amounts.push((format!("schedule_2[{i}].amount"), row.amount));
+            amounts.push((format!("schedule_2[{i}].input_tax"), row.input_tax));
+        }
+        for (name, rows) in [
+            ("schedule_3a", &self.schedule_3a),
+            ("schedule_3b", &self.schedule_3b),
+        ] {
+            for (i, row) in rows.iter().enumerate() {
+                amounts.push((format!("{name}[{i}].amount"), row.amount));
+                amounts.push((format!("{name}[{i}].input_tax"), row.input_tax));
+            }
+        }
+        for (name, rows) in [
+            ("schedule_6", &self.schedule_6),
+            ("schedule_8", &self.schedule_8),
+        ] {
+            for (i, row) in rows.iter().enumerate() {
+                amounts.push((format!("{name}[{i}].income_payment"), row.income_payment));
+                amounts.push((format!("{name}[{i}].total_withheld"), row.total_withheld));
+                amounts.push((
+                    format!("{name}[{i}].applied_current_month"),
+                    row.applied_current_month,
+                ));
+            }
+        }
+        for (i, row) in self.schedule_7.iter().enumerate() {
+            amounts.push((format!("schedule_7[{i}].amount_paid"), row.amount_paid));
+            amounts.push((
+                format!("schedule_7[{i}].applied_current_month"),
+                row.applied_current_month,
+            ));
+        }
         for (name, schedule) in [
             ("schedule_4", self.schedule_4),
             ("schedule_5", self.schedule_5),
@@ -1081,6 +1732,50 @@ impl Form2550MDraft {
         }
         errors
     }
+}
+
+/// A schedule date (`MM/DD/YYYY`) the way the schedule checks read it:
+/// within the return period, or before it for Schedule 3B.
+fn date_problem(
+    value: &str,
+    row: usize,
+    period: (u32, u32),
+    before_period: bool,
+) -> Option<String> {
+    let format_error = || {
+        Some(format!(
+            "Please enter a valid date for Date of Purchase on row {row}.\nPlease enter a date in the MM/DD/YYYY format."
+        ))
+    };
+    let parts: Vec<&str> = value.trim().split('/').collect();
+    if parts.len() != 3 || parts.iter().any(|p| p.is_empty() || !digits_only(p)) {
+        return format_error();
+    }
+    let (Ok(month), Ok(day), Ok(year)) = (
+        parts[0].parse::<u32>(),
+        parts[1].parse::<u32>(),
+        parts[2].parse::<u32>(),
+    ) else {
+        return format_error();
+    };
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let days = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    let outside = if before_period {
+        (year, month) >= period
+    } else {
+        (year, month) != period
+    };
+    if !(1..=12).contains(&month) || day < 1 || day > days || outside {
+        return Some(format!(
+            "Invalid entry on row {row}. Date of Purchase must be within the Return Period only."
+        ));
+    }
+    None
 }
 
 impl FormValidator for Form2550MDraft {
@@ -1150,35 +1845,24 @@ impl QueueableForm for Form2550MDraft {
         let xml_error = |error: String| vec![("xml".to_string(), error)];
         let layout = crate::official_xml::layout(Self::LAYOUT_ID)
             .map_err(|error| xml_error(error.to_string()))?;
-        let fixed = crate::official_xml::write(layout, &self.layout_fields())
+        let mut payload = crate::official_xml::write(layout, &self.layout_fields())
             .map_err(|error| xml_error(error.to_string()))?;
-        if self.sales_schedule.is_empty() {
-            return Ok(fixed);
-        }
-        let at = fixed
-            .find(SCHEDULE_1_ANCHOR)
-            .ok_or_else(|| xml_error("Schedule 1 totals are missing from the layout".into()))?;
         // Every control on this page is followed by the same separator.
         let separator = &layout.lead;
-        let mut rows = String::new();
-        for (index, row) in self.sales_schedule.iter().enumerate() {
-            let n = index + 1;
-            for (id, value) in [
-                (format!("frm2550m:txtAtcCde{n}"), row.atc_code.clone()),
-                (
-                    format!("frm2550m:txtAmountSales{n}"),
-                    official_amount(row.amount),
-                ),
-                (
-                    format!("frm2550m:txtOutputTax{n}"),
-                    official_amount(row.output_tax),
-                ),
-            ] {
-                rows.push_str(&format!("<div>{id}={value}{id}=</div>{separator}"));
+        for (anchor, rows) in self.schedule_row_controls() {
+            if rows.is_empty() {
+                continue;
             }
+            let anchor = format!("<div>{anchor}=");
+            let at = payload
+                .find(&anchor)
+                .ok_or_else(|| xml_error(format!("{anchor} is missing from the layout")))?;
+            let controls: String = rows
+                .iter()
+                .map(|(id, value)| format!("<div>{id}={value}{id}=</div>{separator}"))
+                .collect();
+            payload.insert_str(at, &controls);
         }
-        let mut payload = fixed;
-        payload.insert_str(at, &rows);
         Ok(payload)
     }
 }
@@ -1408,6 +2092,146 @@ mod tests {
             "Please enter a valid value on Item 15 to be able to load the Schedule 5.",
         );
         check(&|d| d.month = 0, "Select the month on Item 1.");
+    }
+
+    #[test]
+    fn schedules_feed_items_18_20a_and_23() {
+        let mut d = sample();
+        d.schedule_2.push(Form2550MCapitalGoodsRow {
+            date_purchased: "06/05/2022".into(),
+            description: "Laptop".into(),
+            ..Default::default()
+        });
+        d.set_schedule_2_amount(0, 85_000.55);
+        d.schedule_3a.push(Form2550MAmortizedRow {
+            date_purchased: "06/10/2022".into(),
+            description: "Machine".into(),
+            estimated_life: 120,
+            recognized_life: 60,
+            ..Default::default()
+        });
+        d.set_schedule_3a_amount(0, 1_500_000.25);
+        d.schedule_6.push(Form2550MWithholdingRow {
+            period_covered: "06/30/2022".into(),
+            withholding_agent: "Agent".into(),
+            income_payment: 1_000.0,
+            total_withheld: 50.0,
+            applied_current_month: 40.0,
+        });
+        d.recompute();
+        let t = d.schedule_totals;
+        assert_eq!(d.schedule_2[0].input_tax, 10_200.07);
+        assert_eq!(t.schedule_3_input_tax, 180_000.03);
+        assert_eq!(d.schedule_3a[0].allowable_input_tax, 3_000.0);
+        assert_eq!(t.schedule_3_deferred, 177_000.03);
+        assert_eq!(t.schedule_6_applied, 40.0);
+        let fields = d.to_bir_field_map();
+        assert_eq!(fields["frm2550m:txtTax18A"], "85,000.55");
+        assert_eq!(fields["frm2550m:txtTax20A"], "177,000.03");
+        assert_eq!(fields["frm2550m:txtTax23A"], "40.00");
+        assert_eq!(fields["txtDescription0"], "LAPTOP");
+        assert!(messages(&d).is_empty(), "{:?}", messages(&d));
+    }
+
+    #[test]
+    fn schedule_checks_use_the_official_alerts() {
+        let check = |mutate: &dyn Fn(&mut Form2550MDraft), expected: &str| {
+            let mut d = sample();
+            mutate(&mut d);
+            d.recompute();
+            let found = messages(&d);
+            assert!(
+                found.iter().any(|m| m == expected),
+                "{expected:?} not in {found:?}"
+            );
+        };
+        let row2 = |date: &str, amount: f64| Form2550MCapitalGoodsRow {
+            date_purchased: date.into(),
+            description: "Item".into(),
+            amount,
+            input_tax: 0.0,
+        };
+        check(
+            &|d| d.schedule_2.push(row2("", 10.0)),
+            "Please enter valid row 1 data for Schedule 2.\nEmpty fields are not allowed.",
+        );
+        check(
+            &|d| d.schedule_2.push(row2("07/01/2022", 10.0)),
+            "Invalid entry on row 1. Date of Purchase must be within the Return Period only.",
+        );
+        check(
+            &|d| d.schedule_2.push(row2("6/1/22x", 10.0)),
+            "Please enter a valid date for Date of Purchase on row 1.\nPlease enter a date in the MM/DD/YYYY format.",
+        );
+        check(
+            &|d| d.schedule_2.push(row2("06/01/2022", 0.0)),
+            "Please enter amount for Net of VAT on row 1.\nValue must be greater than 0.",
+        );
+        check(
+            &|d| {
+                d.schedule_2.push(row2("06/01/2022", 600_000.0));
+                d.schedule_2.push(row2("06/02/2022", 600_000.0));
+            },
+            "The total aggregate amount should not exceed 1 Million.\n Please re-enter the values of Schedule 2.",
+        );
+        let row3 = |date: &str, amount: f64, input: f64| Form2550MAmortizedRow {
+            date_purchased: date.into(),
+            description: "Machine".into(),
+            amount,
+            input_tax: input,
+            estimated_life: 60,
+            recognized_life: 60,
+            ..Default::default()
+        };
+        check(
+            &|d| d.schedule_3a.push(row3("06/01/2022", 500_000.0, 60_000.0)),
+            "The total aggregate amount does not exceed 1 Million.\n Please re-enter the values of Schedule 3.",
+        );
+        check(
+            &|d| {
+                let mut row = row3("06/01/2022", 2_000_000.0, 240_000.0);
+                row.recognized_life = 61;
+                d.schedule_3a.push(row);
+            },
+            "Please enter a value 1 to 60 for Recognized Life on row 1Part A.",
+        );
+        check(
+            &|d| {
+                d.schedule_3b
+                    .push(row3("06/01/2022", 2_000_000.0, 100_000.0))
+            },
+            "Invalid entry on row 1. Date of Purchase must be within the Return Period only.",
+        );
+        check(
+            &|d| {
+                d.schedule_6.push(Form2550MWithholdingRow {
+                    period_covered: "06/30/2022".into(),
+                    withholding_agent: "Agent".into(),
+                    income_payment: 1_000.0,
+                    total_withheld: 50.0,
+                    applied_current_month: 60.0,
+                })
+            },
+            "The Applied Current Month on row 1 should not be greater than the Total Tax Withheld.",
+        );
+        check(
+            &|d| d.schedule_7.push(Form2550MAdvancePaymentRow::default()),
+            "Please enter valid row 1 data for Schedule 7.\nEmpty fields are not allowed.",
+        );
+        check(
+            &|d| {
+                d.set_sales_to_government(0.0);
+                d.schedule_4 = None;
+                d.schedule_8.push(Form2550MWithholdingRow {
+                    period_covered: "06/30/2022".into(),
+                    withholding_agent: "Agency".into(),
+                    income_payment: 1_000.0,
+                    total_withheld: 50.0,
+                    applied_current_month: 50.0,
+                })
+            },
+            "Please enter a valid value on Item 13A to be able to load the Schedule 8.",
+        );
     }
 
     #[test]

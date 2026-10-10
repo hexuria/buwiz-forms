@@ -2,8 +2,6 @@
 //! Declaration. Rust owns every calculation, validation and the official
 //! submit plaintext (`bir_core::forms::form_2550m`); this view only edits
 //! source values. The layout reflows for desktop, tablet and phone widths.
-//!
-//! Schedules 2, 3, 6, 7 and 8 are not offered (see the core module).
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -11,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_2550m::{
-    FORM_2550M_ATCS, Form2550MAllocation, Form2550MDraft, Form2550MPurchase, Form2550MTaxRelief,
-    form_2550m_atc_index,
+    FORM_2550M_ATCS, Form2550MAdvancePaymentRow, Form2550MAllocation, Form2550MAmortizedRow,
+    Form2550MCapitalGoodsRow, Form2550MDraft, Form2550MPurchase, Form2550MTaxRelief,
+    Form2550MWithholdingRow, form_2550m_atc_index,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -192,6 +191,291 @@ const PURCHASES: &[(&str, &str, Form2550MPurchase)] = &[
     ("18n", "18o", Form2550MPurchase::Others),
 ];
 
+/// How a schedule column is typed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Text,
+    Money,
+    Whole,
+}
+
+/// The row schedules: Schedule 2, 3 (Parts A and B), 6, 7 and 8.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Table {
+    S2,
+    S3a,
+    S3b,
+    S6,
+    S7,
+    S8,
+}
+
+impl Table {
+    const ALL: [Table; 6] = [Self::S2, Self::S3a, Self::S3b, Self::S6, Self::S7, Self::S8];
+
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::S2 => "s2",
+            Self::S3a => "s3a",
+            Self::S3b => "s3b",
+            Self::S6 => "s6",
+            Self::S7 => "s7",
+            Self::S8 => "s8",
+        }
+    }
+
+    /// The validation field name of the row list.
+    fn field(self) -> &'static str {
+        match self {
+            Self::S2 => "schedule_2",
+            Self::S3a => "schedule_3a",
+            Self::S3b => "schedule_3b",
+            Self::S6 => "schedule_6",
+            Self::S7 => "schedule_7",
+            Self::S8 => "schedule_8",
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::S2 => "Schedule 2 — Capital goods not exceeding P1 million (18A/18B)",
+            Self::S3a => "Schedule 3 Part A — Capital goods exceeding P1 million (18C/18D)",
+            Self::S3b => "Schedule 3 Part B — Capital goods of previous periods (20A)",
+            Self::S6 => "Schedule 6 — Creditable VAT withheld (23A)",
+            Self::S7 => "Schedule 7 — Advance payments (23B)",
+            Self::S8 => "Schedule 8 — VAT withheld on sales to Government (23C)",
+        }
+    }
+
+    fn columns(self) -> &'static [(&'static str, &'static str, Kind)] {
+        match self {
+            Self::S2 => &[
+                ("date", "Date of purchase (MM/DD/YYYY)", Kind::Text),
+                ("desc", "Description", Kind::Text),
+                ("amount", "Amount net of VAT", Kind::Money),
+                ("input", "Input tax", Kind::Money),
+            ],
+            Self::S3a => &[
+                ("date", "Date of purchase (MM/DD/YYYY)", Kind::Text),
+                ("desc", "Description", Kind::Text),
+                ("amount", "Amount net of VAT", Kind::Money),
+                ("input", "Input tax", Kind::Money),
+                ("est", "Estimated life (months)", Kind::Whole),
+                ("recog", "Recognized life (months)", Kind::Whole),
+            ],
+            Self::S3b => &[
+                ("date", "Date of purchase (MM/DD/YYYY)", Kind::Text),
+                ("desc", "Description", Kind::Text),
+                ("amount", "Amount net of VAT", Kind::Money),
+                (
+                    "input",
+                    "Balance of input tax from previous period",
+                    Kind::Money,
+                ),
+                ("est", "Estimated life (months)", Kind::Whole),
+                ("recog", "Recognized life (months)", Kind::Whole),
+            ],
+            Self::S6 | Self::S8 => &[
+                ("date", "Period covered (MM/DD/YYYY)", Kind::Text),
+                ("agent", "Name of withholding agent", Kind::Text),
+                ("income", "Income payment", Kind::Money),
+                ("withheld", "Total tax withheld", Kind::Money),
+                ("applied", "Applied this month", Kind::Money),
+            ],
+            Self::S7 => &[
+                ("date", "Period covered (MM/DD/YYYY)", Kind::Text),
+                ("miller", "Name of miller", Kind::Text),
+                ("taxpayer", "Name of taxpayer", Kind::Text),
+                ("or", "OR number", Kind::Text),
+                ("paid", "Amount paid", Kind::Money),
+                ("applied", "Applied this month", Kind::Money),
+            ],
+        }
+    }
+
+    fn len(self, d: &Form2550MDraft) -> usize {
+        match self {
+            Self::S2 => d.schedule_2.len(),
+            Self::S3a => d.schedule_3a.len(),
+            Self::S3b => d.schedule_3b.len(),
+            Self::S6 => d.schedule_6.len(),
+            Self::S7 => d.schedule_7.len(),
+            Self::S8 => d.schedule_8.len(),
+        }
+    }
+
+    fn push(self, d: &mut Form2550MDraft) {
+        match self {
+            Self::S2 => d.schedule_2.push(Form2550MCapitalGoodsRow::default()),
+            Self::S3a => d.schedule_3a.push(Form2550MAmortizedRow::default()),
+            Self::S3b => d.schedule_3b.push(Form2550MAmortizedRow::default()),
+            Self::S6 => d.schedule_6.push(Form2550MWithholdingRow::default()),
+            Self::S7 => d.schedule_7.push(Form2550MAdvancePaymentRow::default()),
+            Self::S8 => d.schedule_8.push(Form2550MWithholdingRow::default()),
+        }
+    }
+
+    fn remove(self, d: &mut Form2550MDraft, row: usize) {
+        if row >= self.len(d) {
+            return;
+        }
+        match self {
+            Self::S2 => drop(d.schedule_2.remove(row)),
+            Self::S3a => drop(d.schedule_3a.remove(row)),
+            Self::S3b => drop(d.schedule_3b.remove(row)),
+            Self::S6 => drop(d.schedule_6.remove(row)),
+            Self::S7 => drop(d.schedule_7.remove(row)),
+            Self::S8 => drop(d.schedule_8.remove(row)),
+        }
+    }
+
+    fn key(self, row: usize, column: &str) -> String {
+        format!("{}_{row}_{column}", self.prefix())
+    }
+
+    /// Editor text of one cell.
+    fn text(self, d: &Form2550MDraft, row: usize, column: &str) -> Option<String> {
+        let whole = |value: u16| value.to_string();
+        Some(match self {
+            Self::S2 => {
+                let r = d.schedule_2.get(row)?;
+                match column {
+                    "date" => r.date_purchased.clone(),
+                    "desc" => r.description.clone(),
+                    "amount" => money(r.amount),
+                    _ => money(r.input_tax),
+                }
+            }
+            Self::S3a | Self::S3b => {
+                let rows = if self == Self::S3a {
+                    &d.schedule_3a
+                } else {
+                    &d.schedule_3b
+                };
+                let r = rows.get(row)?;
+                match column {
+                    "date" => r.date_purchased.clone(),
+                    "desc" => r.description.clone(),
+                    "amount" => money(r.amount),
+                    "input" => money(r.input_tax),
+                    "est" => whole(r.estimated_life),
+                    _ => whole(r.recognized_life),
+                }
+            }
+            Self::S6 | Self::S8 => {
+                let rows = if self == Self::S6 {
+                    &d.schedule_6
+                } else {
+                    &d.schedule_8
+                };
+                let r = rows.get(row)?;
+                match column {
+                    "date" => r.period_covered.clone(),
+                    "agent" => r.withholding_agent.clone(),
+                    "income" => money(r.income_payment),
+                    "withheld" => money(r.total_withheld),
+                    _ => money(r.applied_current_month),
+                }
+            }
+            Self::S7 => {
+                let r = d.schedule_7.get(row)?;
+                match column {
+                    "date" => r.period_covered.clone(),
+                    "miller" => r.miller.clone(),
+                    "taxpayer" => r.taxpayer_name.clone(),
+                    "or" => r.or_number.clone(),
+                    "paid" => money(r.amount_paid),
+                    _ => money(r.applied_current_month),
+                }
+            }
+        })
+    }
+
+    /// Store one cell: `text` for text columns, `number` otherwise.
+    fn set(self, d: &mut Form2550MDraft, row: usize, column: &str, text: &str, number: f64) {
+        let whole = if (0.0..=65_535.0).contains(&number) {
+            number as u16
+        } else {
+            0
+        };
+        match self {
+            Self::S2 => {
+                let Some(r) = d.schedule_2.get_mut(row) else {
+                    return;
+                };
+                match column {
+                    "date" => r.date_purchased = text.trim().to_string(),
+                    "desc" => r.description = text.to_string(),
+                    "amount" => r.amount = number,
+                    _ => r.input_tax = number,
+                }
+            }
+            Self::S3a | Self::S3b => {
+                let rows = if self == Self::S3a {
+                    &mut d.schedule_3a
+                } else {
+                    &mut d.schedule_3b
+                };
+                let Some(r) = rows.get_mut(row) else {
+                    return;
+                };
+                match column {
+                    "date" => r.date_purchased = text.trim().to_string(),
+                    "desc" => r.description = text.to_string(),
+                    "amount" => r.amount = number,
+                    "input" => r.input_tax = number,
+                    "est" => r.estimated_life = whole,
+                    _ => r.recognized_life = whole,
+                }
+            }
+            Self::S6 | Self::S8 => {
+                let rows = if self == Self::S6 {
+                    &mut d.schedule_6
+                } else {
+                    &mut d.schedule_8
+                };
+                let Some(r) = rows.get_mut(row) else {
+                    return;
+                };
+                match column {
+                    "date" => r.period_covered = text.trim().to_string(),
+                    "agent" => r.withholding_agent = text.to_string(),
+                    "income" => r.income_payment = number,
+                    "withheld" => r.total_withheld = number,
+                    _ => r.applied_current_month = number,
+                }
+            }
+            Self::S7 => {
+                let Some(r) = d.schedule_7.get_mut(row) else {
+                    return;
+                };
+                match column {
+                    "date" => r.period_covered = text.trim().to_string(),
+                    "miller" => r.miller = text.to_string(),
+                    "taxpayer" => r.taxpayer_name = text.to_string(),
+                    "or" => r.or_number = text.to_string(),
+                    "paid" => r.amount_paid = number,
+                    _ => r.applied_current_month = number,
+                }
+            }
+        }
+    }
+
+    /// Schedules whose amount, when changed, refills the input tax at 12%.
+    fn fills_input_tax(self) -> bool {
+        matches!(self, Self::S2 | Self::S3a)
+    }
+
+    fn table_key(key: &str) -> Option<(Table, usize, &str)> {
+        let mut parts = key.splitn(3, '_');
+        let prefix = parts.next()?;
+        let row = parts.next()?.parse().ok()?;
+        let column = parts.next()?;
+        let table = Self::ALL.into_iter().find(|t| t.prefix() == prefix)?;
+        Some((table, row, column))
+    }
+}
+
 fn sales_key(atc_index: usize) -> String {
     format!("atc{atc_index}")
 }
@@ -337,6 +621,9 @@ impl Form2550MView {
             "zip" => draft.zip_code.clone(),
             "email" => draft.email.clone(),
             _ => {
+                if let Some((table, row, column)) = Table::table_key(key) {
+                    return table.text(draft, row, column).unwrap_or_default();
+                }
                 if let Some(index) = key
                     .strip_prefix("atc")
                     .and_then(|n| n.parse::<usize>().ok())
@@ -352,6 +639,61 @@ impl Form2550MView {
                     money(money_value(draft, key))
                 }
             }
+        }
+    }
+
+    /// Every editor key the draft needs: (key, placeholder).
+    fn all_keys(draft: &Form2550MDraft) -> Vec<(String, String)> {
+        let mut keys: Vec<(String, String)> = TEXT_INPUTS
+            .iter()
+            .map(|(key, _, placeholder, _)| (key.to_string(), placeholder.to_string()))
+            .collect();
+        for (key, _, _) in MONEY_INPUTS {
+            keys.push((key.to_string(), "0.00".into()));
+        }
+        for index in 0..FORM_2550M_ATCS.len() {
+            keys.push((sales_key(index), "0.00".into()));
+        }
+        for table in Table::ALL {
+            for row in 0..table.len(draft) {
+                for (column, _, kind) in table.columns() {
+                    let placeholder = match kind {
+                        Kind::Text => "",
+                        Kind::Money => "0.00",
+                        Kind::Whole => "0",
+                    };
+                    keys.push((table.key(row, column), placeholder.into()));
+                }
+            }
+        }
+        keys
+    }
+
+    /// Create the editors the draft needs that do not exist yet.
+    fn ensure_inputs(
+        inputs: &mut BTreeMap<String, Entity<InputState>>,
+        subscriptions: &mut Vec<Subscription>,
+        draft: &Form2550MDraft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for (key, placeholder) in Self::all_keys(draft) {
+            if inputs.contains_key(&key) {
+                continue;
+            }
+            let value = Self::initial(draft, &key);
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(window, cx);
+                    }
+                },
+            ));
+            inputs.insert(key, input);
         }
     }
 
@@ -432,6 +774,34 @@ impl Form2550MView {
                 row.amount = value;
             }
         }
+        let mut filled: Vec<(Table, usize, f64)> = Vec::new();
+        for table in Table::ALL {
+            for row in 0..table.len(&draft) {
+                for (column, label, kind) in table.columns() {
+                    let key = table.key(row, column);
+                    let text = self.input_text(&key, cx);
+                    let value = match kind {
+                        Kind::Text => 0.0,
+                        _ => {
+                            let label = format!("{} row {} — {label}", table.title(), row + 1);
+                            match number(&key, &label, cx) {
+                                Some(value) => value,
+                                None => continue,
+                            }
+                        }
+                    };
+                    if table.fills_input_tax()
+                        && *column == "amount"
+                        && table.text(&draft, row, "amount").as_deref()
+                            != Some(money(value).as_str())
+                    {
+                        filled.push((table, row, value));
+                        continue;
+                    }
+                    table.set(&mut draft, row, column, &text, value);
+                }
+            }
+        }
         draft.line_of_business = self.input_text("lob", cx);
         draft.taxpayer_name = self.input_text("name", cx);
         draft.contact_number = self.input_text("phone", cx).trim().to_string();
@@ -448,6 +818,15 @@ impl Form2550MView {
             draft.set_purchase(purchase, value);
             refreshed.push(tax_key);
         }
+        let mut refreshed_rows: Vec<String> = Vec::new();
+        for (table, row, value) in filled {
+            match table {
+                Table::S2 => draft.set_schedule_2_amount(row, value),
+                _ => draft.set_schedule_3a_amount(row, value),
+            }
+            refreshed_rows.push(table.key(row, "input"));
+        }
+        refreshed.extend(refreshed_rows.iter().map(String::as_str));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -472,6 +851,15 @@ impl Form2550MView {
         self.sync_from_inputs(window, cx);
         change(&mut self.draft);
         self.draft.recompute();
+        let mut inputs = std::mem::take(&mut self.inputs);
+        Self::ensure_inputs(
+            &mut inputs,
+            &mut self._subscriptions,
+            &self.draft,
+            window,
+            cx,
+        );
+        self.inputs = inputs;
         let keys: Vec<String> = self.inputs.keys().cloned().collect();
         let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
         self.reload(&keys, window, cx);
@@ -903,6 +1291,122 @@ impl Form2550MView {
         )
     }
 
+    /// One row schedule: a card per row and an add button.
+    fn render_table(&self, table: Table, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        let mut children: Vec<AnyElement> = Vec::new();
+        for row in 0..table.len(d) {
+            let error_key = format!("{}[{row}]", table.field());
+            let heading = div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .font_weight(FontWeight::BOLD)
+                        .when(self.has_error(&error_key), |d| d.text_color(gpui::red()))
+                        .child(format!("Row {}", row + 1)),
+                )
+                .child(
+                    Button::new((
+                        SharedString::from(format!("2550m_remove_{}", table.prefix())),
+                        row,
+                    ))
+                    .label("Remove")
+                    .outline()
+                    .small()
+                    .disabled(!editable)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit(window, cx, |d| table.remove(d, row))
+                    })),
+                );
+            let fields: Vec<AnyElement> = table
+                .columns()
+                .iter()
+                .map(|(column, label, _)| {
+                    self.field(
+                        &table.key(row, column),
+                        label,
+                        &error_key,
+                        layout,
+                        !editable,
+                    )
+                })
+                .collect();
+            let mut card = div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_3()
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded_md()
+                .child(heading)
+                .child(self.grid(layout, fields));
+            let amortized = match table {
+                Table::S3a => d.schedule_3a.get(row),
+                Table::S3b => d.schedule_3b.get(row),
+                _ => None,
+            };
+            if let Some(entry) = amortized {
+                card = card
+                    .child(self.computed(
+                        "Allowable input tax for the period",
+                        entry.allowable_input_tax,
+                        cx,
+                    ))
+                    .child(self.computed("Balance of input tax", entry.balance, cx));
+            }
+            children.push(card.into_any_element());
+        }
+        if editable {
+            children.push(
+                Button::new(SharedString::from(format!("2550m_add_{}", table.prefix())))
+                    .label("Add a row")
+                    .outline()
+                    .small()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit(window, cx, |d| table.push(d))
+                    }))
+                    .into_any_element(),
+            );
+        }
+        let t = d.schedule_totals;
+        let totals: Vec<(&str, f64)> = match table {
+            Table::S2 => vec![
+                ("Total amount", t.schedule_2_amount),
+                ("Total input tax", t.schedule_2_input_tax),
+            ],
+            Table::S3a => vec![
+                ("Total amount", t.schedule_3_amount),
+                ("Total input tax", t.schedule_3_input_tax),
+                ("Total balance, Part A", t.schedule_3a_balance),
+            ],
+            Table::S3b => vec![
+                ("Total balance, Part B", t.schedule_3b_balance),
+                ("Input tax deferred (20A)", t.schedule_3_deferred),
+            ],
+            Table::S6 => vec![
+                ("Total withheld", t.schedule_6_withheld),
+                ("Applied this month", t.schedule_6_applied),
+            ],
+            Table::S7 => vec![
+                ("Total paid", t.schedule_7_paid),
+                ("Applied this month", t.schedule_7_applied),
+            ],
+            Table::S8 => vec![
+                ("Total withheld", t.schedule_8_withheld),
+                ("Applied this month", t.schedule_8_applied),
+            ],
+        };
+        for (label, value) in totals {
+            children.push(self.computed(label, value, cx));
+        }
+        self.section(table.title(), children, cx)
+    }
+
     fn render_sales(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let d = &self.draft;
         let children = vec![
@@ -927,6 +1431,19 @@ impl Form2550MView {
             .map(|key| self.money_field(key, layout, false))
             .collect();
         children.push(self.computed("17F — Total", d.total_input_tax_17f, cx));
+        let t = d.schedule_totals;
+        children.push(self.computed(
+            "18A — Capital goods ≤ P1M (Sch. 2)",
+            t.schedule_2_amount,
+            cx,
+        ));
+        children.push(self.computed("18B — Input tax", t.schedule_2_input_tax, cx));
+        children.push(self.computed(
+            "18C — Capital goods > P1M (Sch. 3)",
+            t.schedule_3_amount,
+            cx,
+        ));
+        children.push(self.computed("18D — Input tax", t.schedule_3_input_tax, cx));
         for key in [
             "18e", "18f", "18g", "18h", "18i", "18j", "18k", "18l", "18m", "18n", "18o",
         ] {
@@ -944,13 +1461,7 @@ impl Form2550MView {
         ));
         self.section(
             "Part II — Allowable Input Tax (Items 17–19)",
-            vec![
-                div()
-                    .text_sm()
-                    .child("Capital goods (18A–18D, Schedules 2 and 3) are not supported in this editor.")
-                    .into_any_element(),
-                self.grid(layout, children),
-            ],
+            vec![self.grid(layout, children)],
             cx,
         )
     }
@@ -1023,6 +1534,11 @@ impl Form2550MView {
             layout,
             vec![
                 self.computed(
+                    "20A — Deferred input tax on capital goods (Sch. 3)",
+                    d.schedule_totals.schedule_3_deferred,
+                    cx,
+                ),
+                self.computed(
                     "20B — Sale to Government",
                     d.input_tax_sales_to_government,
                     cx,
@@ -1048,7 +1564,19 @@ impl Form2550MView {
 
     fn render_payable(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let d = &self.draft;
+        let t = d.schedule_totals;
         let children = vec![
+            self.computed(
+                "23A — Creditable VAT withheld (Sch. 6)",
+                t.schedule_6_applied,
+                cx,
+            ),
+            self.computed("23B — Advance payment (Sch. 7)", t.schedule_7_applied, cx),
+            self.computed(
+                "23C — VAT withheld on sales to Government (Sch. 8)",
+                t.schedule_8_applied,
+                cx,
+            ),
             self.money_field("23d", layout, !d.is_amended),
             self.money_field("23e", layout, false),
             self.money_field("23f", layout, false),
@@ -1070,13 +1598,7 @@ impl Form2550MView {
         ];
         self.section(
             "Part II — Tax Credits, Penalties and Amount Payable (Items 23–26)",
-            vec![
-                div()
-                    .text_sm()
-                    .child("Schedules 6–8 (23A–23C) are not supported in this editor.")
-                    .into_any_element(),
-                self.grid(layout, children),
-            ],
+            vec![self.grid(layout, children)],
             cx,
         )
     }
@@ -1093,31 +1615,7 @@ impl QueueableFormView for Form2550MView {
     ) -> Self {
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
-        let mut keys: Vec<(String, String)> = TEXT_INPUTS
-            .iter()
-            .map(|(key, _, placeholder, _)| (key.to_string(), placeholder.to_string()))
-            .collect();
-        for (key, _, _) in MONEY_INPUTS {
-            keys.push((key.to_string(), "0.00".into()));
-        }
-        for index in 0..FORM_2550M_ATCS.len() {
-            keys.push((sales_key(index), "0.00".into()));
-        }
-        for (key, placeholder) in keys {
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, window, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(window, cx);
-                    }
-                },
-            ));
-            inputs.insert(key, input);
-        }
+        Self::ensure_inputs(&mut inputs, &mut subscriptions, &draft, window, cx);
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -1486,8 +1984,14 @@ impl Render for Form2550MView {
             .child(self.render_part_one(layout, cx))
             .child(self.render_schedule_1(layout, cx))
             .child(self.render_sales(layout, cx))
+            .child(self.render_table(Table::S2, layout, cx))
+            .child(self.render_table(Table::S3a, layout, cx))
+            .child(self.render_table(Table::S3b, layout, cx))
             .child(self.render_input_tax(layout, cx))
             .child(self.render_deductions(layout, cx))
+            .child(self.render_table(Table::S6, layout, cx))
+            .child(self.render_table(Table::S7, layout, cx))
+            .child(self.render_table(Table::S8, layout, cx))
             .child(self.render_payable(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
@@ -1526,7 +2030,9 @@ impl Render for Form2550MView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, MONEY_INPUTS, format_tin, money_value, parse_amount, set_money_value};
+    use super::{
+        Kind, Layout, MONEY_INPUTS, Table, format_tin, money_value, parse_amount, set_money_value,
+    };
     use bir_core::forms::form_2550m::Form2550MDraft;
     use gpui::px;
 
@@ -1562,6 +2068,40 @@ mod tests {
         }
         for (index, (key, _, _)) in MONEY_INPUTS.iter().enumerate() {
             assert_eq!(money_value(&draft, key), 1000.0 + index as f64, "{key}");
+        }
+    }
+
+    #[test]
+    fn schedule_cells_round_trip() {
+        let profile = serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "", "tin": {"segment1": "", "segment2": "", "segment3": "", "branch": ""},
+            "rdo_code": "", "line_of_business": "", "registered_address": "", "zip_code": "",
+            "phone": "", "email": "", "default_form_type": "2550M", "taxpayer_type": "Corporation",
+            "business_start_date": "2020-01-15", "tax_elections": []
+        }))
+        .unwrap();
+        let mut draft = Form2550MDraft::new_from_profile(&profile, 2022, 6);
+        for table in Table::ALL {
+            table.push(&mut draft);
+            for (index, (column, _, kind)) in table.columns().iter().enumerate() {
+                let number = 10.0 + index as f64;
+                table.set(&mut draft, 0, column, "Text", number);
+                let expected = match kind {
+                    Kind::Text => "Text".to_string(),
+                    Kind::Money => format!("{number:.2}"),
+                    Kind::Whole => format!("{number:.0}"),
+                };
+                assert_eq!(
+                    table.text(&draft, 0, column).unwrap(),
+                    expected,
+                    "{table:?} {column}"
+                );
+                let key = table.key(0, column);
+                assert_eq!(Table::table_key(&key), Some((table, 0, *column)));
+            }
+            assert_eq!(table.len(&draft), 1);
+            table.remove(&mut draft, 0);
+            assert_eq!(table.len(&draft), 0);
         }
     }
 }

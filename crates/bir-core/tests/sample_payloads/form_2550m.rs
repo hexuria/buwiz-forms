@@ -1,6 +1,9 @@
 use crate::{check_sample, dummy_profile, samples_dir};
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
-use bir_core::forms::form_2550m::{Form2550MAllocation, Form2550MDraft, Form2550MPurchase};
+use bir_core::forms::form_2550m::{
+    Form2550MAdvancePaymentRow, Form2550MAllocation, Form2550MAmortizedRow,
+    Form2550MCapitalGoodsRow, Form2550MDraft, Form2550MPurchase, Form2550MWithholdingRow,
+};
 use bir_core::official_xml;
 use sha2::{Digest, Sha256};
 
@@ -69,25 +72,28 @@ fn form_2550m_sample_payload_is_current() {
     );
 }
 
-/// `check_sample` for a plaintext with Schedule 1 rows: the rows are not part
-/// of the fixed layout, so the layout is checked with them taken out.
-#[test]
-fn form_2550m_schedule_1_sample_payload_is_current() {
-    let stem = "2550M-072022";
-    let plaintext = sample_2550m_schedule_1()
-        .to_bir_xml_payload()
-        .unwrap_or_else(|errors| panic!("dummy 2550M must validate: {errors:?}"));
+/// `check_sample` for a plaintext with schedule rows: they are not part of
+/// the fixed layout, so the layout is checked with them taken out.
+fn check_spliced_sample(stem: &str, plaintext: &str, official_encrypt_sha256: &str) {
     let layout = official_xml::layout("2550m-v2007").unwrap();
-    let mut fixed = plaintext.clone();
-    for n in 1..=3 {
-        for id in ["txtAtcCde", "txtAmountSales", "txtOutputTax"] {
-            let key = format!("frm2550m:{id}{n}");
-            let start = fixed.find(&format!("<div>{key}=")).expect("row control");
-            let end = start + fixed[start..].find("</div>").unwrap() + "</div>".len();
-            fixed.replace_range(start..end + layout.lead.len(), "");
+    let known = layout.keys();
+    let mut fixed = String::new();
+    let mut rest = plaintext;
+    let mut removed = 0;
+    while let Some(start) = rest.find("<div>") {
+        let end = start + rest[start..].find("</div>").unwrap() + "</div>".len();
+        let key = rest[start + 5..].split('=').next().unwrap();
+        if known.contains(key) {
+            fixed.push_str(&rest[..end]);
+            rest = &rest[end..];
+        } else {
+            fixed.push_str(&rest[..start]);
+            rest = &rest[end + layout.lead.len()..];
+            removed += 1;
         }
     }
-    assert!(!fixed.contains("txtAtcCde"));
+    fixed.push_str(rest);
+    assert!(removed > 0, "{stem} has schedule rows");
     official_xml::read(layout, &fixed).expect("the rest follows the official layout");
 
     let encrypted = compress_and_encrypt(plaintext.as_bytes(), BIR_IAF_PASSPHRASE).unwrap();
@@ -100,7 +106,7 @@ fn form_2550m_schedule_1_sample_payload_is_current() {
     let iaf_path = dir.join(format!("{stem}.iaf.xml"));
     let updating = std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some();
     if updating {
-        std::fs::write(&plain_path, &plaintext).unwrap();
+        std::fs::write(&plain_path, plaintext).unwrap();
         std::fs::write(&iaf_path, &encrypted).unwrap();
     }
     let official = std::fs::read_to_string(dir.join(format!("{stem}.official.xml"))).unwrap();
@@ -113,11 +119,138 @@ fn form_2550m_schedule_1_sample_payload_is_current() {
         .map(|b| format!("{b:02x}"))
         .collect();
     assert_eq!(
-        digest, "537d9efdc32b81d56f13f292397a868253a169312a86b2499dfdb699d0ec0f17",
+        digest, official_encrypt_sha256,
         "{stem}: compress_and_encrypt no longer matches the official Encrypt.exe output"
     );
     if !updating {
         assert_eq!(std::fs::read_to_string(&plain_path).unwrap(), plaintext);
         assert_eq!(std::fs::read(&iaf_path).unwrap(), encrypted);
     }
+}
+
+fn payload(draft: Form2550MDraft) -> String {
+    draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 2550M must validate: {errors:?}"))
+}
+
+#[test]
+fn form_2550m_schedule_1_sample_payload_is_current() {
+    check_spliced_sample(
+        "2550M-072022",
+        &payload(sample_2550m_schedule_1()),
+        "537d9efdc32b81d56f13f292397a868253a169312a86b2499dfdb699d0ec0f17",
+    );
+}
+
+/// Capital goods: Schedule 2 (one input tax edited) and Schedule 3 Parts A and B.
+fn sample_2550m_capital_goods() -> Form2550MDraft {
+    let mut draft =
+        Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 8);
+    draft.add_sales_atc("VT010").unwrap();
+    draft.sales_schedule[0].amount = 3_000_000.0;
+    draft.schedule_2 = vec![
+        Form2550MCapitalGoodsRow {
+            date_purchased: "08/05/2022".into(),
+            description: "Office laptop".into(),
+            ..Default::default()
+        },
+        Form2550MCapitalGoodsRow {
+            date_purchased: "08/20/2022".into(),
+            description: "Delivery motorbike".into(),
+            ..Default::default()
+        },
+    ];
+    draft.set_schedule_2_amount(0, 85_000.55);
+    draft.set_schedule_2_amount(1, 120_000.0);
+    draft.schedule_2[1].input_tax = 14_000.0;
+    draft.schedule_3a = vec![
+        Form2550MAmortizedRow {
+            date_purchased: "08/10/2022".into(),
+            description: "Factory machine".into(),
+            estimated_life: 120,
+            recognized_life: 60,
+            ..Default::default()
+        },
+        Form2550MAmortizedRow {
+            date_purchased: "08/15/2022".into(),
+            description: "Warehouse racks".into(),
+            estimated_life: 60,
+            recognized_life: 60,
+            ..Default::default()
+        },
+    ];
+    draft.set_schedule_3a_amount(0, 1_500_000.25);
+    draft.set_schedule_3a_amount(1, 250_000.0);
+    draft.schedule_3b = vec![Form2550MAmortizedRow {
+        date_purchased: "03/01/2022".into(),
+        description: "Generator set".into(),
+        amount: 2_000_000.0,
+        input_tax: 200_000.5,
+        estimated_life: 120,
+        recognized_life: 55,
+        ..Default::default()
+    }];
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_2550m_capital_goods_sample_payload_is_current() {
+    check_spliced_sample(
+        "2550M-082022",
+        &payload(sample_2550m_capital_goods()),
+        "ee7ff72cac770ef70a09859577d87c0519ed4cb34c9e39d6bc892eb07008da45",
+    );
+}
+
+/// Tax credits: Schedules 6, 7 and 8 (Schedule 8 needs sales to government).
+fn sample_2550m_credits() -> Form2550MDraft {
+    let mut draft =
+        Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 9);
+    draft.add_sales_atc("VB010").unwrap();
+    draft.sales_schedule[0].amount = 500_000.0;
+    draft.set_sales_to_government(200_000.0);
+    draft.schedule_6 = vec![
+        Form2550MWithholdingRow {
+            period_covered: "09/30/2022".into(),
+            withholding_agent: "Sample Agent Corp".into(),
+            income_payment: 100_000.0,
+            total_withheld: 5_000.0,
+            applied_current_month: 4_000.5,
+        },
+        Form2550MWithholdingRow {
+            period_covered: "09/15/2022".into(),
+            withholding_agent: "agent two".into(),
+            income_payment: 50_000.0,
+            total_withheld: 2_500.0,
+            applied_current_month: 2_500.0,
+        },
+    ];
+    draft.schedule_7 = vec![Form2550MAdvancePaymentRow {
+        period_covered: "09/10/2022".into(),
+        miller: "Sample Rice Mill".into(),
+        taxpayer_name: "Sample Dummy".into(),
+        or_number: "or-12345".into(),
+        amount_paid: 3_000.0,
+        applied_current_month: 1_500.25,
+    }];
+    draft.schedule_8 = vec![Form2550MWithholdingRow {
+        period_covered: "09/30/2022".into(),
+        withholding_agent: "Sample Gov Agency".into(),
+        income_payment: 200_000.0,
+        total_withheld: 10_000.0,
+        applied_current_month: 10_000.0,
+    }];
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_2550m_credits_sample_payload_is_current() {
+    check_spliced_sample(
+        "2550M-092022",
+        &payload(sample_2550m_credits()),
+        "ac6a09196f30f06dd53397384a120bf0e8979defdc4d08c23bb4cb16b840b8df",
+    );
 }

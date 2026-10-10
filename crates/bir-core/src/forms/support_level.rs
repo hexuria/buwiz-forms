@@ -218,8 +218,8 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
     FormCapabilityRecord {
         code: "2550M",
         revision: "2007",
-        // Official formType and PROD SFTP folder. Schedules 2, 3, 6, 7 and 8
-        // are not modelled; their items stay 0.00.
+        // Official formType and PROD SFTP folder; every schedule (1–8) is
+        // modelled and replayed byte for byte.
         form_id: "2550M",
         capabilities: FormCapabilities {
             typed_model: true,
