@@ -314,8 +314,9 @@ fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
     insert(map, key, format_money(value));
 }
 
+/// Official money text: `1,234.50` (see [`crate::official_xml::official_amount`]).
 fn format_money(value: f64) -> String {
-    format!("{:.2}", value)
+    crate::official_xml::official_amount(value)
 }
 
 #[cfg(test)]

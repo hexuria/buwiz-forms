@@ -357,6 +357,44 @@ pub fn js_unescape(value: &str) -> Option<String> {
     String::from_utf16(&units).ok()
 }
 
+/// An amount as the official form holds it at submit time: `formatCurrency()`
+/// and `round()` (`js/string-util.js`) give two decimals rounded half up with
+/// `floor(x * 100 + 0.50000000001)`, thousands separated by commas, and a
+/// leading `-` when negative. Every official money field passes through one
+/// of them on blur or compute, so the plaintext carries `1,234,567.89`.
+pub fn official_amount(value: f64) -> String {
+    if !value.is_finite() {
+        return "0.00".to_string();
+    }
+    let negative = value < 0.0;
+    let cents_total = (value.abs() * 100.0 + 0.500_000_000_01).floor();
+    let cents = (cents_total % 100.0) as u64;
+    let whole = format!("{:.0}", (cents_total / 100.0).floor());
+    let mut grouped = String::with_capacity(whole.len() + whole.len() / 3);
+    for (i, ch) in whole.chars().enumerate() {
+        if i > 0 && (whole.len() - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    let sign = if negative && cents_total > 0.0 {
+        "-"
+    } else {
+        ""
+    };
+    format!("{sign}{grouped}.{cents:02}")
+}
+
+/// Parse an official amount back: commas removed, then a plain decimal.
+pub fn parse_official_amount(value: &str) -> Option<f64> {
+    let cleaned: String = value.chars().filter(|ch| *ch != ',').collect();
+    let cleaned = cleaned.trim();
+    if cleaned.is_empty() {
+        return Some(0.0);
+    }
+    cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
 /// JavaScript's legacy global `escape()`: keeps `A-Z a-z 0-9 @ * _ + - . /`,
 /// writes other UTF-16 code units below 256 as `%XX` and the rest as `%uXXXX`.
 pub fn js_escape(value: &str) -> String {
@@ -410,6 +448,38 @@ mod tests {
             assert!(
                 after.ends_with("All Rights Reserved BIR 2012.0"),
                 "{id}: {after:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn official_amount_matches_format_currency() {
+        // Expected values are node running the official formatCurrency().
+        for (input, expected) in [
+            (0.0, "0.00"),
+            (-0.0, "0.00"),
+            (0.004, "0.00"),
+            (0.005, "0.01"),
+            (0.015, "0.02"),
+            (1.005, "1.01"),
+            (999.995, "1,000.00"),
+            (1000.0, "1,000.00"),
+            (1234.5, "1,234.50"),
+            (50000.0, "50,000.00"),
+            (1500.125, "1,500.13"),
+            (-250.5, "-250.50"),
+            (-1234.565, "-1,234.57"),
+            (1_234_567.891, "1,234,567.89"),
+            (100_000_000_000.01, "100,000,000,000.01"),
+            (12.3456, "12.35"),
+        ] {
+            assert_eq!(official_amount(input), expected, "{input}");
+            assert_eq!(
+                parse_official_amount(expected)
+                    .map(official_amount)
+                    .as_deref(),
+                Some(expected),
+                "{expected} round trip"
             );
         }
     }

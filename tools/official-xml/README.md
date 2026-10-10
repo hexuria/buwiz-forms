@@ -18,6 +18,8 @@ Needs Node 20+ and a checkout of
 | `generate.sh` | Runs `gen_layout.js` for every form in `forms.txt` into `crates/bir-core/data/official-xml/`. |
 | `oracle.js` | The official plaintext for a JSON map of values. Flags keys that are not controls and select values that are not official options. |
 | `gen_atc_options.js` | The official 2551Q ATC dropdown options from `xml/atcCodes.xml`. |
+| `runtime.js` | Runs the whole official page with its own scripts (ActiveX file access served from the package; VBScript, dialogs and drives stubbed), plays a list of filer steps through the official event handlers, and prints what `saveXMLsubmit()` submits. Official calculations and amount formatting (`250,000.00`) happen inside. `alert()` texts go to stderr. |
+| `list_inputs.js`, `steps_from_plain.py` | Turn one of our plaintexts into runtime steps: typed controls get their value, true radios get clicked, disabled numeric controls are left for the official page to compute. |
 
 ## Regenerate
 
@@ -32,7 +34,16 @@ node tools/official-xml/gen_atc_options.js /path/to/buwiz-validation \
 1. Write the form's field map as JSON (`{"frm…:txtYear": "2025", …}`).
 2. `node oracle.js /path/to/buwiz-validation/package/forms/BIR-Form….hta values.json > official.xml`
 3. Compare `official.xml` with our `to_bir_xml_payload()` output byte for byte.
-   `crates/bir-core/tests/sample-payloads/*.official.xml` are made this way.
+
+## Check a form end to end (calculations and formatting too)
+
+```sh
+python3 tools/official-xml/steps_from_plain.py BIR-Form….hta ours.plain.xml steps.json
+node tools/official-xml/runtime.js BIR-Form….hta steps.json > official.xml
+```
+
+`crates/bir-core/tests/sample-payloads/*.official.xml` and `*.steps.json` are
+made this way; `sample_payloads_test` requires our plaintext to equal them.
 
 ## Known gaps
 
