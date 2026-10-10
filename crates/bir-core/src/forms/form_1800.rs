@@ -501,7 +501,16 @@ impl Form1800Draft {
             );
         }
 
-        // Official defects, refused rather than filed.
+        // Official defects, refused rather than filed. Both reproduce on the
+        // page itself (re-checked with the runtime that serves taxRate.xml),
+        // independent of the oracle:
+        // - Items 28-32: `compute33()` reads `frm1800v2018:DeductionAmt1..5`,
+        //   which the page does not have (its controls are
+        //   `txtDeductionAmount28..32`), so it throws `TypeError` on the first
+        //   one; Item 33 stays 0.00 and the deduction is never subtracted.
+        // - Item 38: `compute38()` subtracts the P250,000 exemption without a
+        //   floor, so net gifts within the exemption give a negative Item 14
+        //   and a negative tax due (e.g. P100,000 of gifts -> -9,000.00).
         if self.deductions.iter().any(|row| row.amount != 0.0) {
             err(
                 "deductions",
