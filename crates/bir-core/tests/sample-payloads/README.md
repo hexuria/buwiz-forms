@@ -23,12 +23,16 @@ files. If the change is intended, regenerate them with:
 UPDATE_SAMPLE_PAYLOADS=1 cargo test -p bir-core --test sample_payloads_test
 ```
 
-The encryption step is byte-identical to the official `Encrypt.exe`: running
-it under emulation on these plaintexts gives exactly the `*.iaf.xml` bytes,
-pinned by hash in the test.
+Both steps are byte-identical to the official eBIRForms app:
 
-The plaintext is not byte-identical to what the official eBIRForms app writes.
-Official `saveXML` emits fields in form order, `escape()`s only the name, line
-of business and address (folding Address 2 into the `txtAddress` div), leaves
-other values raw, and appends a trailer. Ours emits keys sorted and
-percent-encodes every value.
+- `*.official.xml` is what the official `saveXMLsubmit()` writes for the same
+  values (`tools/official-xml/oracle.js` runs the official HTA loop in
+  jsdom). The test requires `*.plain.xml` to equal it.
+- Running the official `Encrypt.exe` under emulation on `*.plain.xml` gives
+  exactly the `*.iaf.xml` bytes; the test pins those hashes.
+
+The plaintext follows each form's official layout
+(`crates/bir-core/data/official-xml/<form_id>.json`): page order, `escape()` on
+the fields the official code escapes, 2551Q's ten fields written twice,
+1601C's Address 2 folded into `txtAddress`, the form's whitespace and the
+`All Rights Reserved BIR 2012.0` trailer.

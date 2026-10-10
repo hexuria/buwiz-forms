@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.0.0",
+  "form_id": "1701ms-v2024",
+  "generated_by": "oracle/gen_layout.js (official saveXMLsubmit loop run in jsdom)",
+  "official_hta": "BIR-Form1701MS.hta",
+  "official_hta_sha256": "5737ddbd86d467457b613cc1f016c51d1add7fa91b396f6af88d213bccc48202",
+  "header": "<?xml version='1.0'?>",
+  "lead": "\n\n            ",
+  "value_rules": [],
+  "entries": [
+    {
+      "key": "frm1701MS:txtAmendedYesNo2",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtAmendedNoNo2",
+      "kind": "bool",
+      "default": "true",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtReturnPeriodYesNo3",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtReturnPeriodNoNo3",
+      "kind": "bool",
+      "default": "true",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtIfMarriedJointlyNo5",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtIfMarriedSeparatelyNo5",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtIfMarriedNotApplicableNo5",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo8a",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1701MS:txtTaxpayerNo8a",
+          "codec": "js-escape"
+        }
+      ],
+      "default": "",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11a",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11b",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11c",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11a1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11b1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11c1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo11d1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12b",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12c",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12d",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12e",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12b1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12c1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12d1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo12e1",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo17a",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtTaxpayerNo17b",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtSpouseNo17a",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtSpouseNo17b",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtToBeRefunded",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtToBeIssued",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:txtToBeCarried",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n"
+    },
+    {
+      "key": "frm1701MS:perjuryClause",
+      "kind": "bool",
+      "default": "false",
+      "after": "\n\n            All Rights Reserved BIR 2012.0"
+    }
+  ]
+}

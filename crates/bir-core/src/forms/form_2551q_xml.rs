@@ -1,9 +1,53 @@
 use super::form_2551q::{Form2551QDraft, Item13Election, OverpaymentDisposition, TaxPeriodBasis};
 use super::{AtcRateResolution, resolve_2551q_atc_rate};
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
+
+/// The official form id of this rule package and layout.
+pub const FORM_2551Q_FORM_ID: &str = "2551q-v2018";
+
+#[derive(serde::Deserialize)]
+struct OfficialAtcOptions {
+    options: Vec<OfficialAtcOption>,
+}
+
+/// One option of the official `drpATC` dropdown.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct OfficialAtcOption {
+    /// The option value the official form submits (1-based list position).
+    pub value: String,
+    pub code: String,
+    /// The rate text the official form submits in `txtATCRate`, e.g. `3.0`.
+    pub rate: String,
+}
+
+/// The official 2551Q ATC option for `code` at `rate` (a fraction, e.g.
+/// 0.03). PT010 has two options: 3% (value 1) and the 1% of July 2020 to
+/// June 2023 (value 23). `None` when the official dropdown has no such entry.
+pub fn official_atc_option(code: &str, rate: f64) -> Option<&'static OfficialAtcOption> {
+    static OPTIONS: OnceLock<Vec<OfficialAtcOption>> = OnceLock::new();
+    OPTIONS
+        .get_or_init(|| {
+            serde_json::from_str::<OfficialAtcOptions>(include_str!(
+                "../../data/official-xml/2551q-v2018-atc-options.json"
+            ))
+            .expect("valid 2551Q ATC options")
+            .options
+        })
+        .iter()
+        .find(|option| {
+            option.code == code
+                && option
+                    .rate
+                    .parse::<f64>()
+                    .is_ok_and(|percent| (percent / 100.0 - rate).abs() < 1e-9)
+        })
+}
 
 impl Form2551QDraft {
-    /// Build the fixed reviewed eBIRForms field set.
+    /// Build the official eBIRForms field set: official control ids and the
+    /// values the official controls hold. Controls left out keep the official
+    /// page default when [`Self::to_bir_xml_payload`] writes the plaintext.
     ///
     /// This low-level helper exposes exactly six Schedule 1 slots. User-facing
     /// export must call [`Self::to_bir_xml_payload`], which validates the draft
@@ -33,15 +77,11 @@ impl Form2551QDraft {
             "frm2551Qv2018:forThe_2",
             matches!(self.tax_period_basis, TaxPeriodBasis::Fiscal),
         );
+        // The official select's option values are two digits: "01".."12".
         insert(
             &mut fields,
             "frm2551Qv2018:rtnMonth",
-            self.year_end_month.to_string(),
-        );
-        insert(
-            &mut fields,
-            "__year_ended",
-            format!("{:02}{}", self.year_end_month, self.taxable_year),
+            format!("{:02}", self.year_end_month),
         );
         insert(
             &mut fields,
@@ -63,14 +103,14 @@ impl Form2551QDraft {
         insert(
             &mut fields,
             "frm2551Qv2018:txtTaxReliefSpecify",
-            // Known labels map to the official option code; anything else is
-            // preserved verbatim (the official `<option>` values for this
-            // field were never captured), never dropped to blank.
+            // Official options: 0 (blank, the page default), 1 Special
+            // Rate, 2 International Tax Treaty. `validate` rejects anything
+            // else when relief is Yes.
             if self.tax_relief {
                 crate::validation::official_tax_relief_code(&self.tax_relief_specification, false)
                     .unwrap_or_else(|| self.tax_relief_specification.trim().to_string())
             } else {
-                String::new()
+                "0".to_string()
             },
         );
         insert_bool(
@@ -169,30 +209,27 @@ impl Form2551QDraft {
 
         for i in 0..6 {
             let row = self.schedule_1.get(i);
-            let atc = row.map(|r| r.atc.as_str()).unwrap_or("0");
+            // The official dropdown submits its option value (a list
+            // position) and the list's rate text, not the ATC code. A row
+            // with no official option (unknown ATC, split period) keeps the
+            // blank option; `validate` rejects such a draft.
+            let option = row.and_then(|r| {
+                let rate = match resolve_2551q_atc_rate(
+                    r.atc.trim(),
+                    self.taxable_year,
+                    self.quarter,
+                    self.year_end_month,
+                ) {
+                    Some(AtcRateResolution::Single(rate)) => rate,
+                    _ => return None,
+                };
+                official_atc_option(r.atc.trim(), rate)
+            });
+            let atc = option.map_or("0", |option| option.value.as_str());
+            let atc_rate = option.map_or("0.00", |option| option.rate.as_str());
             let atc_amt = row
                 .map(|r| format_money(r.taxable_amount))
                 .unwrap_or_else(|| "0.00".to_string());
-            let atc_rate = row
-                .map(|r| {
-                    // Validation permits only a negligible float tolerance,
-                    // but XML must still emit the exact registry-owned rate.
-                    let canonical_rate = match resolve_2551q_atc_rate(
-                        r.atc.trim(),
-                        self.taxable_year,
-                        self.quarter,
-                        self.year_end_month,
-                    ) {
-                        Some(AtcRateResolution::Single(rate)) => rate,
-                        // Unknown ATCs and split periods are rejected by
-                        // `to_bir_xml_payload` validation. Keep the persisted
-                        // value here so this infallible field-map helper never
-                        // invents a different rate for an invalid draft.
-                        _ => r.tax_rate,
-                    };
-                    format_rate_percent(canonical_rate)
-                })
-                .unwrap_or_else(|| "0".to_string());
             let atc_due = row
                 .map(|r| format_money(r.tax_due))
                 .unwrap_or_else(|| "0.00".to_string());
@@ -215,10 +252,6 @@ impl Form2551QDraft {
         insert(&mut fields, "frm2551Qv2018:txtCurrentPage", "1");
         insert(&mut fields, "frm2551Qv2018:txtMaxPage", "2");
 
-        for field in 25..=28 {
-            insert(&mut fields, &format!("frm2551Qv2018:txt{}", field), "");
-        }
-
         // This field is legal tax-agent metadata, not the XML render time.
         // Keep it blank until the draft owns an explicit issue date.
         insert(&mut fields, "txtDateIssue", "");
@@ -229,7 +262,10 @@ impl Form2551QDraft {
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = <Self as super::FormValidator>::validate(self);
         if errors.is_empty() {
-            Ok(crate::bir_xml::generate_bir_xml(&self.to_bir_field_map()))
+            let layout = crate::official_xml::layout(FORM_2551Q_FORM_ID)
+                .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
+            crate::official_xml::write(layout, &self.to_bir_field_map())
+                .map_err(|error| vec![("xml".to_string(), error.to_string())])
         } else {
             Err(errors)
         }
@@ -280,17 +316,6 @@ fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
 
 fn format_money(value: f64) -> String {
     format!("{:.2}", value)
-}
-
-fn format_rate_percent(rate: f64) -> String {
-    let mut value = format!("{:.8}", rate * 100.0);
-    while value.contains('.') && value.ends_with('0') {
-        value.pop();
-    }
-    if value.ends_with('.') {
-        value.pop();
-    }
-    value
 }
 
 #[cfg(test)]
@@ -370,7 +395,6 @@ mod tests {
 
         for key in [
             "frm2551Qv2018:txtYear",
-            "__year_ended",
             "frm2551Qv2018:txtTIN1",
             "frm2551Qv2018:txtTIN2",
             "frm2551Qv2018:txtTIN3",
@@ -397,7 +421,7 @@ mod tests {
         assert_eq!(fields["frm2551Qv2018:forThe_1"], "true");
         assert_eq!(fields["frm2551Qv2018:forThe_2"], "false");
         assert_eq!(fields["frm2551Qv2018:rtnMonth"], "12");
-        assert_eq!(fields["__year_ended"], "122026");
+        assert!(!fields.contains_key("__year_ended"));
         assert_eq!(fields["frm2551Qv2018:txtSheets"], "0");
 
         // This Individual Q1 PT010 return explicitly selects the graduated
@@ -410,7 +434,20 @@ mod tests {
     }
 
     #[test]
-    fn writer_frm_keys_are_in_fields_json_except_collapsed_txt25_through_txt28() {
+    fn writer_keys_are_all_official_controls() {
+        // Every key must be a control the official saveXMLsubmit() writes.
+        let layout = crate::official_xml::layout(FORM_2551Q_FORM_ID).expect("layout");
+        let official = layout.keys();
+        for key in sample_draft().to_bir_field_map().keys() {
+            assert!(
+                official.contains(key.as_str()),
+                "{key} is not an official control"
+            );
+        }
+    }
+
+    #[test]
+    fn writer_frm_keys_are_in_fields_json() {
         let inventory: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../rules/forms/2551q-v2018/fields.json"
         ))
@@ -430,18 +467,9 @@ mod tests {
 
         let missing: std::collections::BTreeSet<String> =
             frm_keys.difference(&serialized).cloned().collect();
-        let expected_missing: std::collections::BTreeSet<String> = [
-            "frm2551Qv2018:txt25",
-            "frm2551Qv2018:txt26",
-            "frm2551Qv2018:txt27",
-            "frm2551Qv2018:txt28",
-        ]
-        .into_iter()
-        .map(str::to_string)
-        .collect();
-        assert_eq!(
-            missing, expected_missing,
-            "writer frm2551Qv2018:* keys must stay inside fields.json except the pinned txt25-28 collapse"
+        assert!(
+            missing.is_empty(),
+            "writer frm2551Qv2018:* keys must stay inside fields.json: {missing:?}"
         );
 
         for key in [
@@ -477,8 +505,8 @@ mod tests {
 
         assert_eq!(fields["frm2551Qv2018:forThe_1"], "false");
         assert_eq!(fields["frm2551Qv2018:forThe_2"], "true");
-        assert_eq!(fields["frm2551Qv2018:rtnMonth"], "6");
-        assert_eq!(fields["__year_ended"], "062026");
+        // The official select's option values are two digits.
+        assert_eq!(fields["frm2551Qv2018:rtnMonth"], "06");
         assert_eq!(fields["frm2551Qv2018:txtSheets"], "3");
         assert_eq!(fields["frm2551Qv2018:taxTreaty_1"], "true");
         assert_eq!(fields["frm2551Qv2018:taxTreaty_2"], "false");
@@ -603,7 +631,10 @@ mod tests {
         let mut draft = sample_draft();
         draft.schedule_1[0].tax_rate = 0.030_000_000_000_5;
 
-        assert_eq!(draft.to_bir_field_map()["txtATCRate1"], "3");
+        let fields = draft.to_bir_field_map();
+        // Official option 1 is PT010 at the list's rate text "3.0".
+        assert_eq!(fields["drpATC1"], "1");
+        assert_eq!(fields["txtATCRate1"], "3.0");
         draft
             .to_bir_xml_payload()
             .expect("a tolerated binary float delta must serialize canonically");
@@ -624,10 +655,13 @@ mod tests {
             draft.recompute(None);
 
             let fields = draft.to_bir_field_map();
+            let option = official_atc_option(entry.code, entry.rate)
+                .unwrap_or_else(|| panic!("{} has no official option", entry.code));
+            assert_eq!(fields["drpATC1"], option.value, "{}", entry.code);
             assert_eq!(
                 fields["txtATCRate1"],
-                format!("{:.0}", entry.rate * 100.0),
-                "{} must not expose a binary floating-point artifact",
+                format!("{:.1}", entry.rate * 100.0),
+                "{} must use the official rate text",
                 entry.code
             );
             draft.to_bir_xml_payload().unwrap_or_else(|errors| {
@@ -647,7 +681,10 @@ mod tests {
         draft.recompute(None);
 
         assert_eq!(draft.schedule_1[0].tax_rate, 0.01);
-        assert_eq!(draft.to_bir_field_map()["txtATCRate1"], "1");
+        let fields = draft.to_bir_field_map();
+        // The 1% PT010 is a separate official option, value 23.
+        assert_eq!(fields["drpATC1"], "23");
+        assert_eq!(fields["txtATCRate1"], "1.0");
         draft
             .to_bir_xml_payload()
             .expect("the temporary statutory rate must serialize canonically");

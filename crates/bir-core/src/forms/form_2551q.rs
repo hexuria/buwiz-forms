@@ -1701,6 +1701,20 @@ impl FormValidator for Form2551QDraft {
                 continue;
             };
 
+            // The official dropdown submits a list position; a code and rate
+            // with no official option cannot be written.
+            if super::form_2551q_xml::official_atc_option(entry.code, expected_rate).is_none() {
+                errors.push((
+                    field.clone(),
+                    format!(
+                        "Schedule 1 row {} ATC {} at {:.1}% is not an option on the official form",
+                        i + 1,
+                        entry.code,
+                        expected_rate * 100.0
+                    ),
+                ));
+            }
+
             if !row.tax_rate.is_finite()
                 || (row.tax_rate - expected_rate).abs() > ATC_RATE_TOLERANCE
             {
