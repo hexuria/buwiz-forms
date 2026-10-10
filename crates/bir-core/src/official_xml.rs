@@ -97,6 +97,7 @@ macro_rules! layouts {
 const LAYOUTS: &[(&str, &str)] = layouts![
     "1601c-v2018",
     "1604c-v2018",
+    "1604e-v2018",
     "1604f-v2018",
     "2551q-v2018",
     "2553-v1999"

@@ -232,6 +232,22 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         release_ready: false,
     },
     FormCapabilityRecord {
+        code: "1604E",
+        revision: "2018",
+        // Official formType and PROD SFTP folder (`ftpTargetFolder.PROD`).
+        // Exact submit plaintext via the official layout; generic queue.
+        form_id: "1604Ev2018",
+        capabilities: FormCapabilities {
+            typed_model: true,
+            xml_round_trip: true,
+            formula_evidence: true,
+            persistence: true,
+            queue_submission: true,
+            ..SCAFFOLD
+        },
+        release_ready: false,
+    },
+    FormCapabilityRecord {
         code: "0619E",
         revision: "2018",
         form_id: "0619Ev2018",
@@ -507,6 +523,8 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("1604F"), Some("1604F"));
         assert!(can_queue_for_submission("1604C"));
         assert_eq!(queue_authorized_form_type_id("1604C"), Some("1604C"));
+        assert!(can_queue_for_submission("1604E"));
+        assert_eq!(queue_authorized_form_type_id("1604E"), Some("1604Ev2018"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
