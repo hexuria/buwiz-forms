@@ -142,6 +142,9 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "1702q-2018" => Some(include_str!(
             "../../../html-frozen/1702q-2018/writer-cells.json"
         )),
+        "1700-2018" => Some(include_str!(
+            "../../../html-frozen/1700-2018/writer-cells.json"
+        )),
         _ => None,
     }
 }
@@ -1432,6 +1435,85 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1700_fills_identity_whole_peso_combs_and_boxes() {
+        use bir_core::forms::form_1700::{
+            Form1700CivilStatus, Form1700Column, Form1700Draft, Form1700Employer,
+            Form1700TaxpayerType,
+        };
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Fixture, Sample Employee", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "Employee", "registered_address":
+                "123 Sample Street, Barangay Example, Quezon City Metro Manila",
+                "zip_code": "1100", "phone": "09170000000", "email": "fixture@example.com",
+                "default_form_type": "1700", "taxpayer_type": "Individual"
+            }))
+            .unwrap();
+        let mut draft = Form1700Draft::new_from_profile(&profile, 2025);
+        draft.taxpayer_type = Form1700TaxpayerType::Employee;
+        draft.birth_date = "01/15/1980".into();
+        draft.citizenship = "Filipino".into();
+        draft.foreign_tax_credits = Some(false);
+        draft.civil_status = Form1700CivilStatus::Single;
+        draft.number_of_attachments = 2;
+        draft.taxpayer = Form1700Column {
+            non_taxable: 90_000.0,
+            surcharge: 1_000.0,
+            ..Form1700Column::default()
+        };
+        let employer = |name: &str, regular: f64, withheld: f64| Form1700Employer {
+            for_spouse: false,
+            name: name.into(),
+            name2: String::new(),
+            tin: "12345678800000".into(),
+            regular,
+            flat: 0.0,
+            withheld,
+        };
+        draft.employers = vec![employer("Sample Employer Inc", 600_000.5, 40_000.0)];
+        draft.recompute();
+        let html = filled_document("1700-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "2025");
+        assert_eq!(comb_text(&html, "p1c14"), "123");
+        assert_eq!(comb_text(&html, "p1c21"), "039");
+        assert!(html.contains("FIXTURE, SAMPLE EMPLOYEE"));
+        assert_eq!(
+            comb_text(&html, "p1c25"),
+            "123 SAMPLE STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c26"), "QUEZON CITY METRO MANILA");
+        assert_eq!(comb_text(&html, "p1c31"), "01");
+        assert_eq!(comb_text(&html, "p1c33"), "1980");
+        assert_eq!(comb_text(&html, "p1c118"), "02");
+        // Whole pesos, right-aligned: Item 42A 600,001 in the 8-slot comb.
+        let item_42a = named_values(&html, "p2c13");
+        assert_eq!(item_42a.len(), 8);
+        assert_eq!(item_42a.concat().trim(), "600001");
+        assert_eq!(item_42a[7], "1");
+        assert_eq!(comb_text(&html, "p2c16").trim(), "90000");
+        // Item 31 Surcharge on the sheet; Item 32 Interest stays blank.
+        assert_eq!(comb_text(&html, "p1c98").trim(), "1000");
+        assert_eq!(comb_text(&html, "p1c101").trim(), "");
+        // Column B of a non-joint return stays blank.
+        assert_eq!(comb_text(&html, "p1c84").trim(), "");
+        // Schedule 1 Item 1 and the 7-slot tax withheld comb.
+        assert!(comb_text(&html, "p2c73").starts_with("SAMPLE EMPLOYER INC"));
+        assert_eq!(comb_text(&html, "p2c76"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c99").trim(), "40000");
+        assert_eq!(named_values(&html, "p2c99").len(), 7);
+        assert_eq!(comb_text(&html, "p2c5"), "123456788");
+        assert_eq!(comb_text(&html, "p2c6"), "FIXTURE");
+        assert_eq!(named_values(&html, "p1c9"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c8"), vec!["".to_string()]);
+        assert_eq!(named_values(&html, "p1c42"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c47"), vec!["X".to_string()]);
+        assert_eq!(named_values(&html, "p1c55"), vec!["".to_string()]);
+        assert!(!html.contains("name=\"frm1700:"));
+        assert!(!html.contains("name=\"derived:"));
+    }
+
+    #[test]
     fn filled_document_2553_fills_identity_rows_totals_and_boxes() {
         use bir_core::forms::form_2553::{Form2553Draft, FORM_2553_ATC_OPTIONS};
         let profile: bir_core::profile::TaxpayerProfile =
@@ -1547,6 +1629,8 @@ mod tests {
             ("2551q-2018", true),
             ("2553-1999", false),
             ("1702q-2018", false),
+            // 1700 (2018) prints whole pesos in one comb per column.
+            ("1700-2018", false),
         ] {
             let html = bundle(slug).unwrap().html;
             let cells = writer_cells(slug).unwrap();

@@ -266,6 +266,23 @@ fn check_digit_ok(tin: &str) -> bool {
         || crate::validation::official_tin_check_code(&format!("{a}{b}{c}")) == 0
 }
 
+/// `text` over two print combs: the first `width` characters, cut back to
+/// the last word break, then the rest.
+fn split_print_line(text: &str, width: usize) -> (String, String) {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= width {
+        return (text.to_string(), String::new());
+    }
+    let cut = chars[..=width]
+        .iter()
+        .rposition(|ch| *ch == ' ')
+        .filter(|at| *at > 0)
+        .unwrap_or(width);
+    let first: String = chars[..cut].iter().collect();
+    let rest: String = chars[cut..].iter().collect();
+    (first.trim_end().to_string(), rest.trim_start().to_string())
+}
+
 /// `computeTaxDue`: the table for the taxable year, `toFixed(2)` then the
 /// `toFixed(0)` the caller applies.
 pub fn form_1700_graduated_tax(year: u16, income: f64) -> f64 {
@@ -880,6 +897,167 @@ impl Form1700Draft {
         // The submit loop writes "1" for the current page.
         put("txtCurrentPage", "1".to_string());
         put("txtLOB", self.line_of_business.trim().to_uppercase());
+        fields
+    }
+
+    /// The field map plus the `derived:` values the printed January 2018
+    /// sheet needs (`html-frozen/1700-2018/writer-cells.json`). Print only;
+    /// never submitted.
+    ///
+    /// - `derived:amount_<item><A|B>` / `derived:amount_36` /
+    ///   `derived:amount_sched1_<row><c|d|e>`: whole pesos (`toFixed(0)`; the
+    ///   sheet says "DO NOT enter Centavos"), right-aligned in the sheet's
+    ///   comb; an overpayment prints in parentheses. Zero, column B of a
+    ///   non-joint return, and amounts wider than the comb stay blank. The
+    ///   sheet prints Item 31 Surcharge and Item 32 Interest (the page's own
+    ///   controls are the other way round).
+    /// - `derived:address_line1/2`: the address over the 40- and 32-slot
+    ///   combs, split at a word break.
+    /// - `derived:birth_mm/dd/yyyy`, `derived:tin_digits` (page 2's nine
+    ///   TIN slots),
+    ///   `derived:employer<n>_tin`, `derived:attachments`,
+    ///   `derived:spouse_rdo` (joint only).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        const AMOUNT_SLOTS: usize = 8;
+        const WITHHELD_SLOTS: usize = 7;
+        let mut fields = self.to_bir_field_map();
+        let mut derived = BTreeMap::new();
+        let whole = |value: f64, slots: usize| -> Option<String> {
+            let value = fixed0(value);
+            if value == 0.0 {
+                return None;
+            }
+            let digits = format!("{:.0}", value.abs());
+            let printed = if value < 0.0 {
+                format!("({digits})")
+            } else {
+                digits
+            };
+            (printed.len() <= slots).then(|| format!("{printed:>slots$}"))
+        };
+        let mut columns = vec![("A", &self.taxpayer)];
+        if self.is_joint() {
+            columns.push(("B", &self.spouse_column));
+        }
+        for (suffix, c) in columns {
+            for (item, value) in [
+                (26, c.tax_due),
+                (27, c.total_credits),
+                (28, c.net_payable),
+                (29, c.second_installment),
+                (30, c.amount_payable),
+                (31, c.surcharge),
+                (32, c.interest),
+                (33, c.compromise),
+                (34, c.total_penalties),
+                (35, c.total_amount_payable),
+                (42, c.gross_compensation),
+                (43, c.non_taxable),
+                (44, c.taxable_compensation),
+                (45, c.other_income),
+                (46, c.taxable_income),
+                (47, c.graduated_tax_due),
+                (48, c.flat_gross_compensation),
+                (49, c.flat_non_taxable),
+                (50, c.flat_taxable_compensation),
+                (51, c.flat_other_income),
+                (52, c.flat_taxable_income),
+                (53, c.flat_tax_due),
+                (54, c.tax_withheld),
+                (55, c.previously_filed),
+                (56, c.foreign_tax_credits),
+                (57, c.other_credits),
+                (58, c.total_credits),
+                (59, c.net_payable),
+            ] {
+                if let Some(printed) = whole(value, AMOUNT_SLOTS) {
+                    derived.insert(format!("amount_{item}{suffix}"), printed);
+                }
+            }
+        }
+        if let Some(printed) = whole(self.aggregate_amount_payable, AMOUNT_SLOTS) {
+            derived.insert("amount_36".to_string(), printed);
+        }
+
+        // Schedule 1 rows 1-4 as the return files them (Item 4 folded into
+        // OTHERS when the popup holds rows), then 5A/5B.
+        let mut schedule = Vec::new();
+        for n in 1..=FORM_1700_EMPLOYER_ROWS {
+            let amount = |column: &str| {
+                fields
+                    .get(&format!("frm1700:txtPg2ISched1{column}"))
+                    .and_then(|text| parse_official_amount(text))
+                    .unwrap_or(0.0)
+            };
+            schedule.push((
+                n.to_string(),
+                [
+                    amount(&format!("c_{n}REG")),
+                    amount(&format!("d_{n}CIFR")),
+                    amount(&format!("e_{n}TW")),
+                ],
+            ));
+            let tin = [
+                format!("frm1700:txtPg2I{n}PartVIEmployerTIN1"),
+                format!("frm1700:txtPg2I{n}PartVIEmployerTIN2"),
+                format!("frm1700:txtPg2I{n}PartVIEmployerTIN3"),
+                format!("frm1700:txtPg2I{n}PartVIEmployerBranchCode"),
+            ]
+            .iter()
+            .filter_map(|key| fields.get(key))
+            .cloned()
+            .collect::<String>();
+            if !tin.is_empty() {
+                derived.insert(format!("employer{n}_tin"), tin);
+            }
+        }
+        schedule.push(("5A".to_string(), self.schedule_totals[0]));
+        if self.is_joint() {
+            schedule.push(("5B".to_string(), self.schedule_totals[1]));
+        }
+        for (row, values) in schedule {
+            for (column, value, slots) in [
+                ("c", values[0], AMOUNT_SLOTS),
+                ("d", values[1], AMOUNT_SLOTS),
+                ("e", values[2], WITHHELD_SLOTS),
+            ] {
+                if let Some(printed) = whole(value, slots) {
+                    derived.insert(format!("amount_sched1_{row}{column}"), printed);
+                }
+            }
+        }
+
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = split_print_line(&address, 40);
+        derived.insert("address_line1".to_string(), line1);
+        derived.insert("address_line2".to_string(), line2);
+        let mut parts = self.birth_date.trim().split('/');
+        if let (Some(mm), Some(dd), Some(yyyy), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        {
+            derived.insert("birth_mm".to_string(), mm.to_string());
+            derived.insert("birth_dd".to_string(), dd.to_string());
+            derived.insert("birth_yyyy".to_string(), yyyy.to_string());
+        }
+        let (t1, t2, t3, _) = split_tin(&self.tin);
+        derived.insert("tin_digits".to_string(), format!("{t1}{t2}{t3}"));
+        if self.number_of_attachments > 0 {
+            derived.insert(
+                "attachments".to_string(),
+                format!("{:02}", self.number_of_attachments % 100),
+            );
+        }
+        if self.is_joint() {
+            derived.insert(
+                "spouse_rdo".to_string(),
+                self.spouse.rdo_code.trim().to_string(),
+            );
+        }
+        fields.extend(
+            derived
+                .into_iter()
+                .map(|(key, value)| (format!("derived:{key}"), value)),
+        );
         fields
     }
 
@@ -1662,6 +1840,29 @@ mod tests {
             messages(&d)
                 .contains(&"Please enter Employer's name on Part VI Item 4_1A ".to_string())
         );
+    }
+
+    #[test]
+    fn print_map_derives_whole_peso_combs() {
+        let d = folded();
+        let p = d.to_print_field_map();
+        // 26A: graduated tax due; 32 Interest / 31 Surcharge follow the sheet.
+        assert_eq!(p["derived:amount_42A"], "  775001");
+        assert_eq!(p["derived:amount_31A"], "    1000");
+        assert!(!p.contains_key("derived:amount_32A"));
+        assert!(!p.contains_key("derived:amount_42B"));
+        assert_eq!(p["derived:amount_sched1_1c"], "  600001");
+        assert_eq!(p["derived:amount_sched1_4c"], "  175001");
+        assert_eq!(p["derived:amount_sched1_4e"], "   8500");
+        assert_eq!(p["derived:amount_sched1_5Ae"], "  48500");
+        assert_eq!(p["derived:employer1_tin"], "12345678800000");
+        assert!(!p.contains_key("derived:employer4_tin"));
+        assert_eq!(p["derived:tin_digits"], "123456788");
+        assert_eq!(p["derived:birth_yyyy"], "1980");
+        assert_eq!(p["frm1700:txtPg2I4PartVIEmployerName1"], "OTHERS");
+        assert!(!p.contains_key("derived:spouse_rdo"));
+        let fields = d.to_bir_field_map();
+        assert!(fields.keys().all(|key| !key.starts_with("derived:")));
     }
 
     #[test]
