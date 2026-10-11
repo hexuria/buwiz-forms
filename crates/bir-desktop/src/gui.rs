@@ -403,6 +403,7 @@ pub fn run_gui() {
                             session.shutdown,
                             cx,
                         );
+                        state.agent_discovery = session.discovery;
                     }
                     state
                 });
