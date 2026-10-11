@@ -257,6 +257,7 @@ impl Form1706View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let amended = choice_row(
+            layout,
             "Item 2 — Amended return?",
             vec![
                 choice("1706_amended_yes", "Yes", d.is_amended, !editable).on_click(cx.listener(
@@ -272,6 +273,7 @@ impl Form1706View {
             ],
         );
         let seller_type = choice_row(
+            layout,
             "Item 4 — ATC",
             vec![
                 choice(
@@ -381,6 +383,7 @@ impl Form1706View {
         let mut questions = Vec::new();
         if individual {
             questions.push(yes_no::<Self>(
+                layout,
                 "1706_item17",
                 "Item 17 — Is the property being sold your principal residence?",
                 d.principal_residence,
@@ -389,6 +392,7 @@ impl Form1706View {
                 |d, yes| d.set_individual_answers(Some(yes), d.new_residence_within_18_months),
             ));
             questions.push(yes_no::<Self>(
+                layout,
                 "1706_item18",
                 "Item 18 — Do you intend to construct or acquire a new principal residence within 18 months?",
                 d.new_residence_within_18_months,
@@ -398,6 +402,7 @@ impl Form1706View {
             ));
         }
         questions.push(yes_no::<Self>(
+            layout,
             "1706_item19",
             "Item 19 — Does the selling price cover more than one property?",
             d.covers_multiple_properties,
@@ -425,13 +430,14 @@ impl Form1706View {
         })
         .collect();
         questions.push(choice_row(
+            layout,
             "Item 20 — Availing of tax relief under an International Tax Treaty or Special Law?",
             reliefs,
         ));
         section(
             "Part I — Property (Items 14–20)",
             vec![
-                choice_row("Item 15 — Classification of property", classes),
+                choice_row(layout, "Item 15 — Classification of property", classes),
                 grid(layout, fields),
                 grid(layout, questions),
             ],
@@ -458,7 +464,11 @@ impl Form1706View {
                 }))
             })
             .collect();
-        let mut children = vec![choice_row("Item 21 — Description of transaction", kinds)];
+        let mut children = vec![choice_row(
+            layout,
+            "Item 21 — Description of transaction",
+            kinds,
+        )];
         if d.transaction_type.is_some_and(|t| t.needs_description()) {
             children.push(self.f("txn_description", layout));
         }
@@ -547,7 +557,7 @@ impl Form1706View {
                 kit::label("Item 29 — Fair market value at the time of the contract")
                     .into_any_element(),
                 fmv,
-                choice_row("Item 30 — Determination of taxable base", options),
+                choice_row(layout, "Item 30 — Determination of taxable base", options),
                 grid(layout, amounts),
             ],
             cx,
@@ -581,6 +591,7 @@ impl Form1706View {
         if d.total_amount_payable < 0.0 {
             let over = d.overpayment;
             children.push(choice_row(
+                layout,
                 "If overpayment, mark one:",
                 vec![
                     choice(

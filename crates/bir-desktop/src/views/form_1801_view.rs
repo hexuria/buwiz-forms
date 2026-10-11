@@ -283,6 +283,7 @@ impl Form1801View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let amended = choice_row(
+            layout,
             "Item 2 — Amended return?",
             vec![
                 choice("1801_amended_yes", "Yes", d.is_amended, !editable).on_click(cx.listener(
@@ -298,6 +299,7 @@ impl Form1801View {
             ],
         );
         let relief = choice_row(
+            layout,
             "Item 14 — Availing of tax relief under a Special Law / International Tax Treaty?",
             vec![
                 choice("1801_relief_yes", "Yes", d.tax_relief.is_some(), !editable).on_click(
@@ -339,6 +341,7 @@ impl Form1801View {
             self.f("name", layout, false),
             self.f("address", layout, false),
             yes_no::<Self>(
+                layout,
                 "1801_nra",
                 "Item 9 — Non-resident alien?",
                 d.non_resident_alien,
@@ -357,6 +360,7 @@ impl Form1801View {
             children.push(self.f("relief", layout, false));
         }
         children.push(yes_no::<Self>(
+            layout,
             "1801_15a",
             "15A — Has an extension to file the return been granted?",
             Some(d.extension_to_file),
@@ -365,6 +369,7 @@ impl Form1801View {
             |d, yes| d.extension_to_file = yes,
         ));
         children.push(yes_no::<Self>(
+            layout,
             "1801_15b",
             "15B — Has the estate been settled judicially?",
             Some(d.settled_judicially),
@@ -373,6 +378,7 @@ impl Form1801View {
             |d, yes| d.settled_judicially = yes,
         ));
         children.push(yes_no::<Self>(
+            layout,
             "1801_15c",
             "15C — Has an extension to pay the tax been granted?",
             Some(d.extension_to_pay),
@@ -381,6 +387,7 @@ impl Form1801View {
             |d, yes| d.extension_to_pay = yes,
         ));
         children.push(yes_no::<Self>(
+            layout,
             "1801_15d",
             "15D — Has an installment payment been granted?",
             Some(d.installment_granted),
@@ -409,7 +416,7 @@ impl Form1801View {
                 }))
             })
             .collect();
-            children.push(choice_row("15D — Frequency of payment", freqs));
+            children.push(choice_row(layout, "15D — Frequency of payment", freqs));
             if d.installment_frequency == Some(Form1801Frequency::Others) {
                 children.push(self.f("freq_other", layout, false));
             }

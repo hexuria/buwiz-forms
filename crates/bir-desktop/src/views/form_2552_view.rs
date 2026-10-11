@@ -507,6 +507,7 @@ impl Form2552View {
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
         let label = div()
+            .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -544,10 +545,10 @@ impl Form2552View {
                     .flex()
                     .gap_6()
                     .w_full()
-                    .child(div().flex_1().child(left));
+                    .child(div().flex_1().min_w_0().max_w_full().child(left));
                 row = match iter.next() {
-                    Some(right) => row.child(div().flex_1().child(right)),
-                    None => row.child(div().flex_1()),
+                    Some(right) => row.child(div().flex_1().min_w_0().max_w_full().child(right)),
+                    None => row.child(div().flex_1().min_w_0()),
                 };
                 rows = rows.child(row);
             }
@@ -566,8 +567,8 @@ impl Form2552View {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -593,20 +594,32 @@ impl Form2552View {
         button.disabled(disabled)
     }
 
-    fn choice_row(label: &str, buttons: Vec<Button>) -> AnyElement {
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
-            .children(buttons)
-            .into_any_element()
+    fn choice_row(layout: Layout, label: &str, buttons: Vec<Button>) -> AnyElement {
+        let caption = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(caption)
+                .child(div().flex().flex_wrap().w_full().gap_2().children(buttons))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(caption.flex_1())
+                .children(buttons)
+                .into_any_element()
+        }
     }
 
     fn info(label: &str, value: String) -> AnyElement {
@@ -616,6 +629,7 @@ impl Form2552View {
             .gap_1()
             .child(
                 div()
+                    .min_w_0()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),
@@ -633,6 +647,7 @@ impl Form2552View {
             .gap_2()
             .child(
                 div()
+                    .min_w_0()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child("Item 1 — Date of transaction or of listing (MM/DD/YYYY)"),
@@ -662,6 +677,7 @@ impl Form2552View {
         let children = vec![
             date,
             Self::choice_row(
+                layout,
                 "Item 2 — Amended return?",
                 vec![
                     Self::choice("2552_amended_yes", "Yes", amended, !editable).on_click(
@@ -719,6 +735,7 @@ impl Form2552View {
         let children = vec![
             self.grid(layout, fields),
             Self::choice_row(
+                layout,
                 "Item 10 — Availing of tax relief under a Special Law or International Tax Treaty?",
                 vec![
                     Self::choice("2552_relief_yes", "Yes", relief, !editable).on_click(
@@ -739,6 +756,7 @@ impl Form2552View {
                 !editable || !relief,
             ),
             Self::choice_row(
+                layout,
                 "Item 11 — Kind of transaction",
                 vec![
                     pick(
@@ -994,6 +1012,7 @@ impl Form2552View {
         if d.tax_still_due < 0.0 {
             let over = d.overpayment;
             children.push(Self::choice_row(
+                layout,
                 "If overpayment, mark one:",
                 vec![
                     Self::choice(

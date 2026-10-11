@@ -586,6 +586,7 @@ pub fn section<V: 'static>(title: &str, children: Vec<AnyElement>, cx: &Context<
 
 pub fn label(text: &str) -> Div {
     div()
+        .min_w_0()
         .text_sm()
         .font_weight(FontWeight::MEDIUM)
         .child(text.to_string())
@@ -639,10 +640,10 @@ pub fn grid(layout: Layout, children: Vec<AnyElement>) -> AnyElement {
                 .flex()
                 .gap_6()
                 .w_full()
-                .child(div().flex_1().min_w_0().child(left));
+                .child(div().flex_1().min_w_0().max_w_full().child(left));
             row = match iter.next() {
-                Some(right) => row.child(div().flex_1().min_w_0().child(right)),
-                None => row.child(div().flex_1()),
+                Some(right) => row.child(div().flex_1().min_w_0().max_w_full().child(right)),
+                None => row.child(div().flex_1().min_w_0()),
             };
             rows = rows.child(row);
         }
@@ -673,9 +674,10 @@ pub fn computed_text<V: 'static>(label_text: &str, value: String, cx: &Context<V
         .p_2()
         .bg(cx.theme().muted.opacity(0.5))
         .rounded_md()
-        .child(label(label_text))
+        .child(label(label_text).min_w_0().flex_1())
         .child(
             div()
+                .flex_none()
                 .text_right()
                 .font_weight(FontWeight::BOLD)
                 .child(value),
@@ -703,19 +705,33 @@ pub fn choice(
     button.disabled(disabled)
 }
 
-/// A caption followed by a wrapping row of choice buttons.
-pub fn choice_row(caption: &str, buttons: Vec<Button>) -> AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(label(caption))
-        .child(div().flex().flex_wrap().gap_2().children(buttons))
-        .into_any_element()
+/// A caption and a wrapping row of choice buttons. On phones the caption sits
+/// on its own line with the buttons full width below it.
+pub fn choice_row(layout: Layout, caption: &str, buttons: Vec<Button>) -> AnyElement {
+    if layout == Layout::Phone {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .w_full()
+            .child(label(caption).min_w_0().max_w_full())
+            .child(div().flex().flex_wrap().w_full().gap_2().children(buttons))
+            .into_any_element()
+    } else {
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(label(caption).min_w_0().flex_1().max_w_full())
+            .children(buttons)
+            .into_any_element()
+    }
 }
 
 /// Yes / No buttons for an optional answer; `on_pick` gets the answer.
 pub fn yes_no<V: KitView>(
+    layout: Layout,
     id: &'static str,
     caption: &str,
     answer: Option<bool>,
@@ -724,6 +740,7 @@ pub fn yes_no<V: KitView>(
     on_pick: fn(&mut V::Draft, bool),
 ) -> AnyElement {
     choice_row(
+        layout,
         caption,
         vec![
             choice((id, 1usize), "Yes", answer == Some(true), disabled).on_click(
