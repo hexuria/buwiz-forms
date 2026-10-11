@@ -25,6 +25,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{field_error, messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -790,7 +791,7 @@ impl Form1700View {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -806,7 +807,14 @@ impl Form1700View {
                 .child(label.w(relative(0.55)))
                 .child(body.w(relative(0.45))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(
+            row,
+            messages_for(
+                self.parse_errors.iter().chain(&self.validation_errors),
+                &[key, error_key],
+            ),
+        )
     }
 
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
@@ -858,21 +866,30 @@ impl Form1700View {
             .into_any_element()
     }
 
-    fn choice_row(&self, label: &str, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(&self, label: &str, error_keys: &[&str], buttons: Vec<Button>) -> AnyElement {
+        let message = messages_for(
+            self.parse_errors.iter().chain(&self.validation_errors),
+            error_keys,
+        );
+        let title = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let title = if message.is_some() {
+            title.text_color(gpui::red())
+        } else {
+            title
+        };
         div()
             .flex()
             .flex_col()
             .gap_1()
             .w_full()
-            .child(
-                div()
-                    .min_w_0()
-                    .max_w_full()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
+            .child(title)
             .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+            .children(message.map(field_error))
             .into_any_element()
     }
 
@@ -1050,15 +1067,17 @@ impl Form1700View {
     fn yes_no(
         &self,
         id: &'static str,
-        label: &str,
+        label_key: (&str, &str),
         value: Option<bool>,
         enabled: bool,
         set: fn(&mut Form1700Draft, Option<bool>),
         cx: &Context<Self>,
     ) -> AnyElement {
+        let (label, error_key) = label_key;
         let editable = self.draft.lifecycle.is_editable();
         self.choice_row(
             label,
+            &[error_key],
             vec![
                 Self::choice(
                     (id, 1usize),
@@ -1114,7 +1133,11 @@ impl Form1700View {
             }))
         })
         .collect();
-        self.choice_row(label, buttons)
+        let error_key = match who {
+            Who::Taxpayer => "taxpayer_type",
+            Who::Spouse => "spouse.taxpayer_type",
+        };
+        self.choice_row(label, &[error_key], buttons)
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -1124,6 +1147,7 @@ impl Form1700View {
             self.static_value(text("year").label, d.taxable_year.to_string()),
             self.choice_row(
                 "Item 2 — Amended return?",
+                &[],
                 vec![
                     Self::choice("1700_amended_yes", "Yes", d.is_amended, !editable).on_click(
                         cx.listener(|this, _, window, cx| {
@@ -1187,7 +1211,10 @@ impl Form1700View {
         ];
         children.push(self.yes_no(
             "1700_ftc",
-            "Item 12 — Claiming foreign tax credits?",
+            (
+                "Item 12 — Claiming foreign tax credits?",
+                "foreign_tax_credits_choice",
+            ),
             d.foreign_tax_credits,
             true,
             |d, v| d.foreign_tax_credits = v,
@@ -1219,10 +1246,13 @@ impl Form1700View {
             }))
         })
         .collect();
-        children.push(self.choice_row("Item 15 — Civil status", statuses));
+        children.push(self.choice_row("Item 15 — Civil status", &["civil_status"], statuses));
         children.push(self.yes_no(
             "1700_sp_income",
-            "Item 16 — If married, spouse has income?",
+            (
+                "Item 16 — If married, spouse has income?",
+                "spouse_has_income",
+            ),
             d.spouse_has_income,
             d.civil_status == Form1700CivilStatus::Married,
             |d, v| d.spouse_has_income = v,
@@ -1231,6 +1261,7 @@ impl Form1700View {
         let can_file = d.spouse_has_income == Some(true);
         children.push(self.choice_row(
             "Item 17 — Filing status",
+            &["filing_status"],
             vec![
                     Self::choice(
                         "1700_joint",
@@ -1280,7 +1311,10 @@ impl Form1700View {
             self.type_choice(Who::Spouse, cx),
             self.yes_no(
                 "1700_sp_ftc",
-                "Item 24 — Spouse claiming foreign tax credits?",
+                (
+                    "Item 24 — Spouse claiming foreign tax credits?",
+                    "spouse.foreign_tax_credits_choice",
+                ),
                 d.spouse.foreign_tax_credits,
                 true,
                 |d, v| d.spouse.foreign_tax_credits = v,
@@ -1314,6 +1348,8 @@ impl Form1700View {
         for row in 0..shown {
             let entry = d.employers.get(row).cloned().unwrap_or_default();
             let used = entry != Form1700Employer::default();
+            let spouse_key = format!("employers[{row}].for_spouse");
+            let row_key = format!("employers[{row}]");
             let owners = vec![
                 Self::choice(
                     ("1700_emp_tp", row),
@@ -1380,7 +1416,11 @@ impl Form1700View {
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .child(self.choice_row(&Self::employer_title(d, row), owners))
+                    .child(self.choice_row(
+                        &Self::employer_title(d, row),
+                        &[spouse_key.as_str(), row_key.as_str()],
+                        owners,
+                    ))
                     .child(self.grid(layout, fields))
                     .into_any_element(),
             );
@@ -1763,13 +1803,13 @@ impl Render for Form1700View {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
             })
             .collect();
 
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let toolbar =
             div()
                 .flex()
@@ -1816,6 +1856,11 @@ impl Render for Form1700View {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) need review before queuing."
+                            )))
                         })
                         .child(
                             Button::new("1700_submit")

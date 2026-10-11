@@ -25,7 +25,9 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{self, messages_for, select_field, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form1701View {}
@@ -56,7 +58,6 @@ const SP: Form1701Party = Form1701Party::Spouse;
 /// Free-text inputs: (key, label).
 const TEXT_INPUTS: &[(&str, &str)] = &[
     ("year", "Item 1 — Year"),
-    ("month", "Item 1 — Month (short period)"),
     ("name", "Item 8 — Taxpayer's Name"),
     ("address", "Item 9 — Registered Address"),
     ("zip", "Item 9A — ZIP Code"),
@@ -78,6 +79,47 @@ const TEXT_INPUTS: &[(&str, &str)] = &[
     ("d17d", "Schedule 4 Item 17d — Others (specify)"),
     ("d7_9", "Part VII Item 9 — Others (specify)"),
 ];
+
+const MONTH_OPTIONS: [(&str, &str); 12] = [
+    ("1", "January"),
+    ("2", "February"),
+    ("3", "March"),
+    ("4", "April"),
+    ("5", "May"),
+    ("6", "June"),
+    ("7", "July"),
+    ("8", "August"),
+    ("9", "September"),
+    ("10", "October"),
+    ("11", "November"),
+    ("12", "December"),
+];
+
+/// (code, "code — label") for `Form1701Atc::ALL`.
+const ATC_OPTIONS: [(&str, &str); 7] = [
+    ("II011", "II011 — Compensation Income"),
+    ("II012", "II012 — Business Income - Graduated IT Rates"),
+    ("II013", "II013 — Mixed Income - Graduated IT Rates"),
+    (
+        "II014",
+        "II014 — Income from Profession - Graduated IT Rates",
+    ),
+    ("II015", "II015 — Business Income - 8% IT Rate"),
+    ("II016", "II016 — Mixed Income - 8% IT Rate"),
+    ("II017", "II017 — Income from Profession - 8% IT Rate"),
+];
+
+/// Taxpayer types, keyed by their label.
+fn taxpayer_type_options() -> Vec<(&'static str, &'static str)> {
+    Form1701TaxpayerType::ALL
+        .into_iter()
+        .map(|kind| (kind.label(), kind.label()))
+        .collect()
+}
+
+fn atc_for_code(code: &str) -> Option<Form1701Atc> {
+    Form1701Atc::ALL.into_iter().find(|atc| atc.code() == code)
+}
 
 /// Two-column amount inputs: (section, item, label).
 const PAIR_INPUTS: &[(Sec, u8, &str)] = &[
@@ -297,6 +339,10 @@ pub struct Form1701View {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    month_select: Entity<ComboboxState>,
+    type_select: Entity<ComboboxState>,
+    atc_select: Entity<ComboboxState>,
+    sp_atc_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -311,7 +357,6 @@ impl Form1701View {
         let desc = |item: u8| descs.get(&item).cloned().unwrap_or_default();
         match key {
             "year" => return d.taxable_year.to_string(),
-            "month" => return d.period_end_month.to_string(),
             "name" => return d.taxpayer_name.clone(),
             "address" => return d.registered_address.clone(),
             "zip" => return d.zip_code.clone(),
@@ -437,15 +482,7 @@ impl Form1701View {
             parsed
         };
         // Item 1 year is fixed by the library tile; keep the draft's value.
-        if d.is_short_period
-            && let Some(month) = number(self.text("month", cx), "Item 1 month", &mut errors)
-        {
-            d.period_end_month = if (1.0..=12.0).contains(&month) {
-                month as u8
-            } else {
-                0
-            };
-        }
+        // Item 1 month is chosen in the month select (see `new`).
         d.taxpayer_name = self.text("name", cx);
         d.registered_address = self.text("address", cx);
         d.zip_code = self.text("zip", cx).trim().to_string();
@@ -671,23 +708,80 @@ impl Form1701View {
             .expect("editor input registry is complete");
         let editable = self.draft.lifecycle.is_editable();
         let body = div().child(Input::new(input).disabled(!editable || disabled));
-        match layout {
+        let keys = Self::error_keys(key, label);
+        let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let message = self.message_for(&key_refs);
+        let caption = if message.is_some() {
+            Self::label(label).text_color(gpui::red())
+        } else {
+            Self::label(label)
+        };
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
                 .gap_1()
                 .w_full()
-                .child(Self::label(label))
+                .child(caption)
                 .child(body.w_full()),
             _ => div()
                 .flex()
                 .items_center()
                 .gap_4()
                 .w_full()
-                .child(Self::label(label).w(relative(0.5)))
+                .child(caption.w(relative(0.5)))
                 .child(body.w(relative(0.5))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
+    }
+
+    /// Validation keys that belong to one editor input. Parse errors are
+    /// keyed by the item label, so the label is a key too.
+    fn error_keys(key: &str, label: &str) -> Vec<String> {
+        let mut keys = vec![key.to_string(), label.to_string()];
+        let mapped: &[&str] = match key {
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "birth" => &["date_of_birth"],
+            "foreign_no" => &["foreign_tax_number"],
+            "phone" => &["contact_number"],
+            "attachments" => &["Item 33"],
+            "sp_tin" => &["spouse_tin"],
+            "sp_rdo" => &["spouse_rdo_code"],
+            "sp_name" => &["spouse_name"],
+            "sp_phone" => &["spouse_contact_number"],
+            "sp_citizenship" => &["spouse_citizenship"],
+            "sp_foreign_no" => &["spouse_foreign_tax_number"],
+            "emp_0_name" => &["employer_1"],
+            "emp_1_name" => &["employer_2"],
+            "s3_26_a" | "s3_26_b" => &["schedule_3_26"],
+            "s3_29_a" | "s3_29_b" => &["schedule_3_29"],
+            "p2_25_a" => &["item_25_taxpayer"],
+            "p2_25_b" => &["item_25_spouse"],
+            "s6_0_year_a" | "s6_0_year_b" => &["schedule_6"],
+            _ => &[],
+        };
+        keys.extend(mapped.iter().map(|k| k.to_string()));
+        // Schedule 5 rows: taxpayer rows are items 1 and 2, spouse rows 4 and 5.
+        for (prefix, party_items) in [("a", [1, 2]), ("b", [4, 5])] {
+            for (row, item) in party_items.iter().enumerate() {
+                if key.starts_with(&format!("s5_{row}_")) && key.ends_with(&format!("_{prefix}")) {
+                    keys.push(format!("schedule_5_{item}"));
+                }
+            }
+        }
+        // Generic parse-error labels of the grouped number inputs.
+        if key.starts_with("s5_") && key.contains("_amt_") {
+            keys.push("Schedule 5".to_string());
+        } else if key.starts_with("s4_17_") {
+            keys.push("Schedule 4 Item 17".to_string());
+        } else if key.starts_with("s6_") && !key.contains("_year_") {
+            keys.push("Schedule 6 NOLCO".to_string());
+        } else if key.starts_with("emp_") && (key.ends_with("_ci") || key.ends_with("_tw")) {
+            keys.push("Schedule 1".to_string());
+        }
+        keys
     }
 
     /// Read-only label + value row (the period the library tile chose).
@@ -897,14 +991,34 @@ impl Form1701View {
         button.disabled(disabled)
     }
 
-    fn choice_row(layout: Layout, title: &str, buttons: Vec<Button>) -> AnyElement {
-        if layout == Layout::Phone {
-            return div()
+    /// The message recorded for any of `keys`, if any.
+    fn message_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors.iter().chain(&self.validation_errors),
+            keys,
+        )
+    }
+
+    fn choice_row(
+        &self,
+        layout: Layout,
+        title: &str,
+        error_keys: &[&str],
+        buttons: Vec<Button>,
+    ) -> AnyElement {
+        let message = self.message_for(error_keys);
+        let title_label = if message.is_some() {
+            Self::label(title).text_color(gpui::red())
+        } else {
+            Self::label(title)
+        };
+        let row = if layout == Layout::Phone {
+            div()
                 .flex()
                 .flex_col()
                 .gap_2()
                 .w_full()
-                .child(Self::label(title).w_full())
+                .child(title_label.w_full())
                 .child(
                     div()
                         .flex()
@@ -914,31 +1028,36 @@ impl Form1701View {
                         .w_full()
                         .children(buttons),
                 )
-                .into_any_element();
-        }
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(Self::label(title))
-            .children(buttons)
-            .into_any_element()
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(title_label)
+                .children(buttons)
+                .into_any_element()
+        };
+        with_field_error(row, message)
     }
 
+    /// `title_keys` is the row title plus the validation keys shown under it.
     fn yes_no(
         &self,
         layout: Layout,
         id: &'static str,
-        title: &str,
+        title_keys: (&str, &[&str]),
         value: Option<bool>,
         set: fn(&mut Form1701Draft, bool),
         cx: &Context<Self>,
     ) -> AnyElement {
+        let (title, error_keys) = title_keys;
         let editable = self.draft.lifecycle.is_editable();
-        Self::choice_row(
+        self.choice_row(
             layout,
             title,
+            error_keys,
             vec![
                 Self::choice((id, 1usize), "Yes", value == Some(true), !editable)
                     .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| set(d, true)))),
@@ -955,7 +1074,7 @@ impl Form1701View {
             self.yes_no(
                 layout,
                 "1701_amended",
-                "Item 2 — Amended return?",
+                ("Item 2 — Amended return?", &[]),
                 Some(d.is_amended),
                 |d, v| d.is_amended = v,
                 cx,
@@ -963,14 +1082,26 @@ impl Form1701View {
             self.yes_no(
                 layout,
                 "1701_short",
-                "Item 3 — Short period return?",
+                ("Item 3 — Short period return?", &[]),
                 Some(d.is_short_period),
                 |d, v| d.is_short_period = v,
                 cx,
             ),
         ];
         if d.is_short_period {
-            children.push(self.text_field("month", layout));
+            let month = d.period_end_month.to_string();
+            children.push(select_field(
+                "Item 1 — Month (short period)",
+                &self.month_select,
+                &MONTH_OPTIONS,
+                (1..=12)
+                    .contains(&d.period_end_month)
+                    .then_some(month.as_str()),
+                !self.draft.lifecycle.is_editable(),
+                self.message_for(&["period_end_month", "Item 1 month"])
+                    .as_deref(),
+                cx,
+            ));
         }
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
@@ -987,39 +1118,29 @@ impl Form1701View {
                 .child(div().font_weight(FontWeight::BOLD).child(value))
                 .into_any_element()
         };
-        let types: Vec<Button> = Form1701TaxpayerType::ALL
-            .into_iter()
-            .enumerate()
-            .map(|(index, kind)| {
-                Self::choice(
-                    ("1701_type", index),
-                    kind.label(),
-                    d.taxpayer_type == Some(kind),
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.edit(cx, |d| d.taxpayer_type = Some(kind))
-                }))
-            })
-            .collect();
+        let type_options = taxpayer_type_options();
+        let type_select = select_field(
+            "Item 6 — Taxpayer type",
+            &self.type_select,
+            &type_options,
+            d.taxpayer_type.map(Form1701TaxpayerType::label),
+            !editable,
+            self.message_for(&["taxpayer_type"]).as_deref(),
+            cx,
+        );
         let mixed_possible = matches!(
             d.taxpayer_type,
             Some(Form1701TaxpayerType::SingleProprietor | Form1701TaxpayerType::Professional)
         );
-        let atcs: Vec<Button> = Form1701Atc::ALL
-            .into_iter()
-            .enumerate()
-            .map(|(index, atc)| {
-                Self::choice(
-                    ("1701_atc", index),
-                    format!("{} — {}", atc.code(), atc.label()),
-                    d.atc == Some(atc),
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.atc = Some(atc))))
-            })
-            .collect();
+        let atc_select = select_field(
+            "Item 7 — ATC",
+            &self.atc_select,
+            &ATC_OPTIONS,
+            d.atc.map(Form1701Atc::code),
+            !editable,
+            self.message_for(&["atc"]).as_deref(),
+            cx,
+        );
         let statuses: Vec<Button> = Form1701CivilStatus::ALL
             .into_iter()
             .enumerate()
@@ -1043,19 +1164,19 @@ impl Form1701View {
                     fixed("Item 5 — RDO Code", d.rdo_code.clone()),
                 ],
             ),
-            Self::choice_row(layout, "Item 6 — Taxpayer type", types),
+            type_select,
         ];
         if mixed_possible {
             rows.push(self.yes_no(
                 layout,
                 "1701_mixed",
-                "Also a compensation earner (mixed income)?",
+                ("Also a compensation earner (mixed income)?", &[]),
                 Some(d.taxpayer_also_compensation_earner),
                 |d, v| d.taxpayer_also_compensation_earner = v,
                 cx,
             ));
         }
-        rows.push(Self::choice_row(layout, "Item 7 — ATC", atcs));
+        rows.push(atc_select);
         rows.push(self.grid(
             layout,
             vec![
@@ -1070,7 +1191,7 @@ impl Form1701View {
         rows.push(self.yes_no(
             layout,
             "1701_ftc",
-            "Item 13 — Claiming foreign tax credits?",
+            ("Item 13 — Claiming foreign tax credits?", &[]),
             d.claims_foreign_tax_credits,
             |d, v| d.claims_foreign_tax_credits = Some(v),
             cx,
@@ -1079,21 +1200,27 @@ impl Form1701View {
             rows.push(self.text_field("foreign_no", layout));
         }
         rows.push(self.grid(layout, vec![self.text_field("phone", layout)]));
-        rows.push(Self::choice_row(layout, "Item 16 — Civil status", statuses));
+        rows.push(self.choice_row(
+            layout,
+            "Item 16 — Civil status",
+            &["civil_status"],
+            statuses,
+        ));
         if d.civil_status == Some(Form1701CivilStatus::Married) {
             rows.push(self.yes_no(
                 layout,
                 "1701_spouse_income",
-                "Item 17 — Spouse has income?",
+                ("Item 17 — Spouse has income?", &["spouse_has_income"]),
                 d.spouse_has_income,
                 |d, v| d.spouse_has_income = Some(v),
                 cx,
             ));
             if d.spouse_has_income == Some(true) {
                 let joint = d.joint_filing_status;
-                rows.push(Self::choice_row(
+                rows.push(self.choice_row(
                     layout,
                     "Item 18 — Filing status",
+                    &["joint_filing_status"],
                     vec![
                         Self::choice(
                             "1701_joint",
@@ -1124,7 +1251,10 @@ impl Form1701View {
         rows.push(self.yes_no(
             layout,
             "1701_exempt",
-            "Item 19 — Has income exempt from income tax?",
+            (
+                "Item 19 — Has income exempt from income tax?",
+                &["has_exempt_income", "part_x"],
+            ),
             d.has_exempt_income,
             |d, v| d.has_exempt_income = Some(v),
             cx,
@@ -1132,31 +1262,39 @@ impl Form1701View {
         rows.push(self.yes_no(
             layout,
             "1701_special",
-            "Item 20 — Has income subject to special/preferential rates?",
+            (
+                "Item 20 — Has income subject to special/preferential rates?",
+                &["has_special_rate_income", "part_x"],
+            ),
             d.has_special_rate_income,
             |d, v| d.has_special_rate_income = Some(v),
             cx,
         ));
         if d.tax_rate == Some(bir_core::forms::form_1701::Form1701TaxRate::Graduated) {
-            rows.push(Self::choice_row(
-                layout,
-                "Item 21A — Method of deduction",
-                Form1701DeductionMethod::ALL
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, method)| {
-                        Self::choice(
-                            ("1701_method", index),
-                            method.label(),
-                            d.deduction_method == Some(method),
-                            !editable,
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.edit(cx, |d| d.deduction_method = Some(method))
-                        }))
-                    })
-                    .collect(),
-            ));
+            rows.push(
+                self.choice_row(
+                    layout,
+                    "Item 21A — Method of deduction",
+                    &["deduction_method"],
+                    Form1701DeductionMethod::ALL
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, method)| {
+                            Self::choice(
+                                ("1701_method", index),
+                                method.label(),
+                                d.deduction_method == Some(method),
+                                !editable,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.edit(cx, |d| d.deduction_method = Some(method))
+                                },
+                            ))
+                        })
+                        .collect(),
+                ),
+            );
         }
         self.section("Part I — Background Information (Taxpayer/Filer)", rows, cx)
     }
@@ -1183,22 +1321,15 @@ impl Form1701View {
             }))
         })
         .collect();
-        let atcs: Vec<Button> = Form1701Atc::ALL
-            .into_iter()
-            .enumerate()
-            .map(|(index, atc)| {
-                Self::choice(
-                    ("1701_sp_atc", index),
-                    format!("{} — {}", atc.code(), atc.label()),
-                    sp.atc == Some(atc),
-                    !editable,
-                )
-                .small()
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.spouse.atc = Some(atc))),
-                )
-            })
-            .collect();
+        let atc_select = select_field(
+            "Item 4 — ATC",
+            &self.sp_atc_select,
+            &ATC_OPTIONS,
+            sp.atc.map(Form1701Atc::code),
+            !editable,
+            self.message_for(&["spouse_atc"]).as_deref(),
+            cx,
+        );
         let mut rows = vec![
             self.grid(
                 layout,
@@ -1210,7 +1341,7 @@ impl Form1701View {
                     self.text_field("sp_citizenship", layout),
                 ],
             ),
-            Self::choice_row(layout, "Item 3 — Spouse type", types),
+            self.choice_row(layout, "Item 3 — Spouse type", &["spouse_type"], types),
         ];
         if matches!(
             sp.filer_type,
@@ -1219,17 +1350,20 @@ impl Form1701View {
             rows.push(self.yes_no(
                 layout,
                 "1701_sp_mixed",
-                "Also a compensation earner (mixed income)?",
+                ("Also a compensation earner (mixed income)?", &[]),
                 Some(self.draft.spouse_also_compensation_earner),
                 |d, v| d.spouse_also_compensation_earner = v,
                 cx,
             ));
         }
-        rows.push(Self::choice_row(layout, "Item 4 — ATC", atcs));
+        rows.push(atc_select);
         rows.push(self.yes_no(
             layout,
             "1701_sp_ftc",
-            "Item 8 — Claiming foreign tax credits?",
+            (
+                "Item 8 — Claiming foreign tax credits?",
+                &["spouse_claims_foreign_tax_credits"],
+            ),
             sp.claims_foreign_tax_credits,
             |d, v| d.spouse.claims_foreign_tax_credits = Some(v),
             cx,
@@ -1240,7 +1374,10 @@ impl Form1701View {
         rows.push(self.yes_no(
             layout,
             "1701_sp_exempt",
-            "Item 10 — Has income exempt from income tax?",
+            (
+                "Item 10 — Has income exempt from income tax?",
+                &["spouse_has_exempt_income", "spouse_part_x"],
+            ),
             sp.has_exempt_income,
             |d, v| d.spouse.has_exempt_income = Some(v),
             cx,
@@ -1248,31 +1385,39 @@ impl Form1701View {
         rows.push(self.yes_no(
             layout,
             "1701_sp_special",
-            "Item 11 — Has income subject to special/preferential rates?",
+            (
+                "Item 11 — Has income subject to special/preferential rates?",
+                &["spouse_has_special_rate_income", "spouse_part_x"],
+            ),
             sp.has_special_rate_income,
             |d, v| d.spouse.has_special_rate_income = Some(v),
             cx,
         ));
         if sp.tax_rate == Some(bir_core::forms::form_1701::Form1701TaxRate::Graduated) {
-            rows.push(Self::choice_row(
-                layout,
-                "Item 12A — Method of deduction",
-                Form1701DeductionMethod::ALL
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, method)| {
-                        Self::choice(
-                            ("1701_sp_method", index),
-                            method.label(),
-                            sp.deduction_method == Some(method),
-                            !editable,
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.edit(cx, |d| d.spouse.deduction_method = Some(method))
-                        }))
-                    })
-                    .collect(),
-            ));
+            rows.push(
+                self.choice_row(
+                    layout,
+                    "Item 12A — Method of deduction",
+                    &["spouse_deduction_method"],
+                    Form1701DeductionMethod::ALL
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, method)| {
+                            Self::choice(
+                                ("1701_sp_method", index),
+                                method.label(),
+                                sp.deduction_method == Some(method),
+                                !editable,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.edit(cx, |d| d.spouse.deduction_method = Some(method))
+                                },
+                            ))
+                        })
+                        .collect(),
+                ),
+            );
         }
         self.section("Part IV — Background Information (Spouse)", rows, cx)
     }
@@ -1282,6 +1427,7 @@ impl Form1701View {
         let mut children = Vec::new();
         for row in 0..2 {
             let owner = self.draft.employers[row].owner;
+            let employer_error = format!("employer_{}", row + 1);
             let mut owners = vec![
                 Self::choice(
                     ("1701_emp_tp", row),
@@ -1320,9 +1466,10 @@ impl Form1701View {
                 .border_1()
                 .border_color(cx.theme().border)
                 .rounded_md()
-                .child(Self::choice_row(
+                .child(self.choice_row(
                     layout,
                     &format!("Employer {}", row + 1),
+                    &[employer_error.as_str()],
                     owners,
                 ));
             if owner.is_some() {
@@ -1940,31 +2087,33 @@ impl Form1701View {
             || self.draft.amount(Sec::PartIi, 26, SP).unwrap_or(0.0) < 0.0;
         if overpaid {
             let over = self.draft.overpayment_disposition;
-            rows.push(Self::choice_row(
-                layout,
-                "If overpayment, mark one:",
-                [
-                    (Form1701OverpaymentDisposition::Refund, "To be refunded"),
-                    (
-                        Form1701OverpaymentDisposition::TaxCreditCertificate,
-                        "To be issued a Tax Credit Certificate",
-                    ),
-                    (
-                        Form1701OverpaymentDisposition::CarryOver,
-                        "To be carried over as tax credit",
-                    ),
-                ]
-                .into_iter()
-                .enumerate()
-                .map(|(index, (value, label))| {
-                    Self::choice(("1701_over", index), label, over == value, !editable).on_click(
-                        cx.listener(move |this, _, _, cx| {
-                            this.edit(cx, |d| d.overpayment_disposition = value)
-                        }),
-                    )
-                })
-                .collect(),
-            ));
+            rows.push(
+                self.choice_row(
+                    layout,
+                    "If overpayment, mark one:",
+                    &["overpayment_disposition"],
+                    [
+                        (Form1701OverpaymentDisposition::Refund, "To be refunded"),
+                        (
+                            Form1701OverpaymentDisposition::TaxCreditCertificate,
+                            "To be issued a Tax Credit Certificate",
+                        ),
+                        (
+                            Form1701OverpaymentDisposition::CarryOver,
+                            "To be carried over as tax credit",
+                        ),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (value, label))| {
+                        Self::choice(("1701_over", index), label, over == value, !editable)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.edit(cx, |d| d.overpayment_disposition = value)
+                            }))
+                    })
+                    .collect(),
+                ),
+            );
         }
         rows.push(self.text_field("attachments", layout));
         self.section("Part II — Total Tax Payable", rows, cx)
@@ -2001,12 +2150,68 @@ impl QueueableFormView for Form1701View {
             ));
             inputs.insert(key, input);
         }
+        let month_select = form_controls::new_select_state(&MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &month_select,
+            &MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(cx, |d| d.period_end_month = month);
+                }
+            },
+        ));
+        let type_options = taxpayer_type_options();
+        let type_select = form_controls::new_select_state(&type_options, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &type_select,
+            &type_options,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(kind) = Form1701TaxpayerType::ALL
+                    .into_iter()
+                    .find(|kind| kind.label() == value)
+                {
+                    this.edit(cx, |d| d.taxpayer_type = Some(kind));
+                }
+            },
+        ));
+        let atc_select = form_controls::new_select_state(&ATC_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &atc_select,
+            &ATC_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(atc) = atc_for_code(&value) {
+                    this.edit(cx, |d| d.atc = Some(atc));
+                }
+            },
+        ));
+        let sp_atc_select = form_controls::new_select_state(&ATC_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &sp_atc_select,
+            &ATC_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(atc) = atc_for_code(&value) {
+                    this.edit(cx, |d| d.spouse.atc = Some(atc));
+                }
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            month_select,
+            type_select,
+            atc_select,
+            sp_atc_select,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -2252,11 +2457,42 @@ impl Render for Form1701View {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let month_text = self.draft.period_end_month.to_string();
+        form_controls::sync_select(
+            &self.month_select,
+            &MONTH_OPTIONS,
+            (1..=12)
+                .contains(&self.draft.period_end_month)
+                .then_some(month_text.as_str()),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.type_select,
+            &taxpayer_type_options(),
+            self.draft.taxpayer_type.map(Form1701TaxpayerType::label),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.atc_select,
+            &ATC_OPTIONS,
+            self.draft.atc.map(Form1701Atc::code),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.sp_atc_select,
+            &ATC_OPTIONS,
+            self.draft.spouse.atc.map(Form1701Atc::code),
+            window,
+            cx,
+        );
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(25)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -2309,6 +2545,11 @@ impl Render for Form1701View {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) need review before queuing."
+                            )))
                         })
                         .child(
                             Button::new("1701_submit")
