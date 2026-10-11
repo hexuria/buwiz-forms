@@ -85,6 +85,81 @@ fn adopt_legacy_null_period_row(
     Ok(())
 }
 
+/// Refusal when a re-keyed save would land on another return's Draft.
+pub const REKEY_COLLISION_MESSAGE: &str =
+    "Another draft already uses this date; open it from the library";
+
+/// When `draft` was loaded or saved as row `draft.draft_id()` and its period
+/// key has since changed (e.g. the 2200 Item 1 day or a transaction date),
+/// move that row to the new key so exactly one Draft remains.
+///
+/// Returns `Ok(Some(id))` when the row was moved, `Ok(None)` when the normal
+/// upsert should proceed. A non-Draft previous row is never touched, and an
+/// existing Draft at the new key that belongs to another row is refused.
+fn move_rekeyed_draft<F: QueueableForm>(
+    tx: &Transaction<'_>,
+    draft: &F,
+    target: Option<&Row>,
+    period: i64,
+    period_key: &str,
+    status: &str,
+) -> Result<Option<i64>, DbError> {
+    let Some(previous_id) = draft.draft_id() else {
+        return Ok(None);
+    };
+    if let Some((target_id, _, target_status)) = target {
+        if *target_id == previous_id {
+            return Ok(None);
+        }
+        if target_status == "Draft" {
+            return Err(DbError::Other(REKEY_COLLISION_MESSAGE.to_string()));
+        }
+        // A queued or filed row at the new key: the normal path refuses it.
+        return Ok(None);
+    }
+    let previous: Option<(String, String, String)> = tx
+        .query_row(
+            "SELECT tin, status, data_json FROM form_drafts WHERE id = ?1 AND form_code = ?2",
+            params![previous_id, F::FORM_CODE],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    let Some((previous_tin, previous_status, previous_json)) = previous else {
+        return Ok(None);
+    };
+    if previous_tin != draft.tin() || previous_status != "Draft" {
+        return Ok(None);
+    }
+    let stored: F = serde_json::from_str(&previous_json)?;
+    if !stored.lifecycle().is_editable() {
+        return Ok(None);
+    }
+    let mut moved = draft.clone();
+    moved.set_draft_id(Some(previous_id));
+    let updated = tx.execute(
+        "UPDATE form_drafts
+         SET taxable_year = ?1, quarter = ?2, period_key = ?3, status = ?4,
+             data_json = ?5, updated_at = datetime('now')
+         WHERE id = ?6 AND status = 'Draft' AND data_json = ?7",
+        params![
+            i64::from(draft.taxable_year()),
+            period,
+            period_key,
+            status,
+            serde_json::to_string(&moved)?,
+            previous_id,
+            previous_json
+        ],
+    )?;
+    if updated != 1 {
+        return Err(DbError::Other(format!(
+            "{} draft changed before the save completed",
+            F::FORM_CODE
+        )));
+    }
+    Ok(Some(previous_id))
+}
+
 impl Database {
     pub fn get_queueable_draft<F: QueueableForm>(
         &self,
@@ -92,17 +167,21 @@ impl Database {
         taxable_year: u16,
         period: i64,
     ) -> Result<Option<F>, DbError> {
-        let raw: Option<String> = self
+        let raw: Option<(i64, String)> = self
             .conn
             .query_row(
-                "SELECT data_json FROM form_drafts
+                "SELECT id, data_json FROM form_drafts
                  WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND quarter = ?4",
                 params![tin, F::FORM_CODE, i64::from(taxable_year), period],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
-        raw.map(|json| serde_json::from_str(&json).map_err(DbError::from))
-            .transpose()
+        raw.map(|(id, json)| {
+            let mut draft: F = serde_json::from_str(&json)?;
+            draft.set_draft_id(Some(id));
+            Ok(draft)
+        })
+        .transpose()
     }
 
     /// Save an editable Draft. A queued or filed snapshot is never replaced.
@@ -151,7 +230,15 @@ impl Database {
             period,
             &period_key,
         )?;
-        let id = match select_row(&tx, F::FORM_CODE, draft.tin(), draft.taxable_year(), period)? {
+        let target = select_row(&tx, F::FORM_CODE, draft.tin(), draft.taxable_year(), period)?;
+        if let Some(moved) =
+            move_rekeyed_draft(&tx, draft, target.as_ref(), period, &period_key, status)?
+        {
+            tx.commit()?;
+            let _ = self.request_google_calendar_sync();
+            return Ok(moved);
+        }
+        let id = match target {
             Some((id, raw_json, db_status)) => {
                 let stored: F = serde_json::from_str(&raw_json)?;
                 if db_status != "Draft" || !stored.lifecycle().is_editable() {
@@ -192,6 +279,16 @@ impl Database {
                 tx.last_insert_rowid()
             }
         };
+        // Record the row id inside the stored JSON so a later load and a
+        // re-keyed save can name the row it came from.
+        if draft.draft_id() != Some(id) {
+            let mut stamped = draft.clone();
+            stamped.set_draft_id(Some(id));
+            tx.execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+                params![serde_json::to_string(&stamped)?, id],
+            )?;
+        }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
@@ -830,5 +927,86 @@ mod tests {
                 .map(|f| f.amount),
             Some(11.0)
         );
+    }
+
+    fn rows(db: &Database) -> Vec<(i64, i64, String)> {
+        db.conn
+            .prepare("SELECT id, quarter, status FROM form_drafts WHERE form_code = ?1 ORDER BY id")
+            .unwrap()
+            .query_map(params![TestForm::CODE], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_rekeyed_draft_moves_its_row() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let id = db.save_queueable_draft(&TestForm::new(6, 10.0)).unwrap();
+        let mut loaded = db
+            .get_queueable_draft::<TestForm>("123-456-788-00000", 2025, 6)
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.id, Some(id));
+        loaded.month = 7;
+        loaded.amount = 12.0;
+        assert_eq!(db.save_queueable_draft(&loaded).unwrap(), id);
+        assert_eq!(rows(&db), vec![(id, 7, "Draft".to_string())]);
+        let moved = db
+            .get_queueable_draft::<TestForm>("123-456-788-00000", 2025, 7)
+            .unwrap()
+            .unwrap();
+        assert_eq!((moved.id, moved.amount), (Some(id), 12.0));
+    }
+
+    #[test]
+    fn a_rekey_never_touches_a_non_draft_old_row() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let id = db.save_queueable_draft(&TestForm::new(6, 10.0)).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Filed' WHERE id = ?1",
+                params![id],
+            )
+            .unwrap();
+        let mut copy = TestForm::new(7, 12.0);
+        copy.id = Some(id);
+        let new_id = db.save_queueable_draft(&copy).unwrap();
+        assert_ne!(new_id, id);
+        assert_eq!(
+            rows(&db),
+            vec![
+                (id, 6, "Filed".to_string()),
+                (new_id, 7, "Draft".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn a_rekey_onto_another_draft_is_refused() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let first = db.save_queueable_draft(&TestForm::new(6, 10.0)).unwrap();
+        let second = db.save_queueable_draft(&TestForm::new(7, 20.0)).unwrap();
+        let mut loaded = db
+            .get_queueable_draft::<TestForm>("123-456-788-00000", 2025, 6)
+            .unwrap()
+            .unwrap();
+        loaded.month = 7;
+        let error = db.save_queueable_draft(&loaded).unwrap_err();
+        assert!(error.to_string().contains(REKEY_COLLISION_MESSAGE));
+        assert_eq!(
+            rows(&db),
+            vec![
+                (first, 6, "Draft".to_string()),
+                (second, 7, "Draft".to_string())
+            ]
+        );
+        let kept = db
+            .get_queueable_draft::<TestForm>("123-456-788-00000", 2025, 7)
+            .unwrap()
+            .unwrap();
+        assert_eq!(kept.amount, 20.0);
     }
 }

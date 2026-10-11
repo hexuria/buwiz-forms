@@ -243,6 +243,12 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
     fn lifecycle(&self) -> &SubmissionLifecycle;
     fn lifecycle_mut(&mut self) -> &mut SubmissionLifecycle;
 
+    /// `form_drafts.id` of the row this draft was loaded from or last saved
+    /// to. Lets a save under a changed period key move that row instead of
+    /// leaving a stale duplicate behind.
+    fn draft_id(&self) -> Option<i64>;
+    fn set_draft_id(&mut self, id: Option<i64>);
+
     /// TIN as stored on the draft (dashed or compact, with branch).
     fn tin(&self) -> &str;
     fn taxable_year(&self) -> u16;
@@ -706,6 +712,8 @@ pub(crate) mod test_support {
         pub amount: f64,
         #[serde(default)]
         pub doubled: f64,
+        #[serde(default)]
+        pub id: Option<i64>,
         #[serde(flatten)]
         pub lifecycle: SubmissionLifecycle,
     }
@@ -722,6 +730,7 @@ pub(crate) mod test_support {
                 email: "sample@example.com".to_string(),
                 amount,
                 doubled: 0.0,
+                id: None,
                 lifecycle: SubmissionLifecycle::default(),
             }
         }
@@ -737,6 +746,12 @@ pub(crate) mod test_support {
         }
         fn lifecycle_mut(&mut self) -> &mut SubmissionLifecycle {
             &mut self.lifecycle
+        }
+        fn draft_id(&self) -> Option<i64> {
+            self.id
+        }
+        fn set_draft_id(&mut self, id: Option<i64>) {
+            self.id = id;
         }
         fn tin(&self) -> &str {
             &self.tin
