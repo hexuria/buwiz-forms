@@ -73,7 +73,7 @@ const MONEY_INPUTS: &[(&str, &str)] = &[
     ("cred", "17B — Creditable excise tax, if applicable"),
     (
         "prev",
-        "19 — Payment on return previously filed (amended only)",
+        "19 — Less: Payment on Returns Previously Filed for the Same Period, if amended return",
     ),
     ("sur", "21A — Surcharge"),
     ("int", "21B — Interest"),
@@ -708,7 +708,8 @@ impl Form2200AView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel instead of running into its border.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     /// On phones the label sits on its own line with the chips in a
@@ -844,7 +845,7 @@ impl Form2200AView {
         fields.push(self.place_block(PlaceItem::Removal, "Item 11 — Place of Removal", layout));
         let relief = self.draft.tax_relief;
         let relief_row = self.choice_row(
-            "Item 12 — Availing of tax relief under a Special Law/International Tax Treaty?",
+            "Item 12 — Are you availing of tax relief under Special Law or International Tax Treaty?",
             false,
             layout,
             vec![
@@ -1010,9 +1011,9 @@ impl Form2200AView {
                 .skip(start)
             {
                 let caption = if bracket.is_empty() {
-                    format!("Rate {rate}")
+                    format!("Rate: {rate}")
                 } else {
-                    format!("{bracket} · rate {rate}")
+                    format!("{bracket}\nRate: {rate}")
                 };
                 card = card.child(self.amount_line(
                     caption,
@@ -1077,7 +1078,7 @@ impl Form2200AView {
             cx,
         ));
         self.section(
-            "Part V — Schedule 1: Removals and Excise Tax Due",
+            "Part V — Schedule 1 – Summary of Removals and Excise Tax Due on Alcohol Products Chargeable Against Payment",
             children,
             cx,
         )
@@ -1094,7 +1095,11 @@ impl Form2200AView {
             ),
             self.field("bal", MONEY_INPUTS[0].1, layout, !editable),
             self.field("cred", MONEY_INPUTS[1].1, layout, !editable),
-            self.computed("17C — Total (17A + 17B)", d.total_credits, cx),
+            self.computed(
+                "17C — Total (Sum of Items 17A and 17B)",
+                d.total_credits,
+                cx,
+            ),
             self.computed("18 — Net tax due / (overpayment)", d.net_tax_due, cx),
             self.field(
                 "prev",
@@ -1107,7 +1112,7 @@ impl Form2200AView {
             self.field("int", MONEY_INPUTS[4].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[5].1, layout, !editable),
             self.computed("21D — Total penalties", d.total_penalties, cx),
-            self.computed("22 — Total amount payable", d.amount_payable, cx),
+            self.computed("22 — Amount Payable/(Overpayment)", d.amount_payable, cx),
             self.field("dep", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("23B — Penalties", d.penalties_paid, cx),
             self.computed("23C — Total payment made today", d.total_payment, cx),
@@ -1549,8 +1554,8 @@ impl Render for Form2200AView {
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_part_two(layout, cx))
-            .child(self.render_schedule(layout, cx));
-        body = body.child(self.render_part_three(layout, cx));
+            .child(self.render_part_three(layout, cx));
+        body = body.child(self.render_schedule(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
