@@ -934,6 +934,15 @@ impl Form2550MView {
         .into_any_element()
     }
 
+    /// A plain group caption inside a section (not a heading).
+    fn caption(text: &str) -> AnyElement {
+        div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(text.to_string())
+            .into_any_element()
+    }
+
     fn has_error(&self, key: &str) -> bool {
         self.validation_errors
             .iter()
@@ -1050,7 +1059,8 @@ impl Form2550MView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel instead of running into its border.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     /// On Phone the label sits on its own line with the chips wrapping in a
@@ -1171,7 +1181,7 @@ impl Form2550MView {
             Self::info("Item 4 — TIN", format_tin(&d.tin)),
             Self::info("Item 5 — RDO Code", d.rdo_code.clone()),
         ];
-        for key in ["lob", "name", "phone", "address", "zip", "email"] {
+        for key in ["lob", "name", "phone", "address", "zip"] {
             fields.push(self.text_field(key, layout));
         }
         let relief = d.tax_relief;
@@ -1180,10 +1190,11 @@ impl Form2550MView {
                 move |this, _, window, cx| this.edit(window, cx, |d| d.tax_relief = value),
             ))
         };
+        let email = self.text_field("email", layout);
         let children = vec![
             self.grid(layout, fields),
             Self::choice_row(
-                "Item 11 — Availing of tax relief under a Special Law or International Tax Treaty?",
+                "Item 11 — Are you availing of tax relief under Special Law or International Tax Treaty?",
                 layout,
                 vec![
                     pick("2550m_relief_no", "No", Form2550MTaxRelief::No),
@@ -1199,6 +1210,7 @@ impl Form2550MView {
                     ),
                 ],
             ),
+            email,
         ];
         self.section("Part I — Background Information", children, cx)
     }
@@ -1427,9 +1439,15 @@ impl Form2550MView {
         self.section(table.title(), children, cx)
     }
 
-    fn render_sales(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn sales_items(&self, layout: Layout, cx: &Context<Self>) -> Vec<AnyElement> {
         let d = &self.draft;
         let children = vec![
+            self.computed(
+                "12A — Vatable sales/receipts, private",
+                d.vatable_sales_private,
+                cx,
+            ),
+            self.computed("12B — Output tax", d.output_tax_private, cx),
             self.money_field("13a", layout, false),
             self.money_field("13b", layout, false),
             self.money_field("14", layout, false),
@@ -1437,14 +1455,13 @@ impl Form2550MView {
             self.computed("16A — Total sales/receipts", d.total_sales, cx),
             self.computed("16B — Total output tax due", d.total_output_tax, cx),
         ];
-        self.section(
-            "Part II — Sales and Output Tax (Items 13–16)",
-            vec![self.grid(layout, children)],
-            cx,
-        )
+        vec![
+            Self::caption("Sales and Output Tax (Items 12–16)"),
+            self.grid(layout, children),
+        ]
     }
 
-    fn render_input_tax(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn input_tax_items(&self, layout: Layout, cx: &Context<Self>) -> Vec<AnyElement> {
         let d = &self.draft;
         let mut children: Vec<AnyElement> = ["17a", "17b", "17c", "17d", "17e"]
             .iter()
@@ -1479,20 +1496,19 @@ impl Form2550MView {
             d.total_available_input_tax,
             cx,
         ));
-        self.section(
-            "Part II — Allowable Input Tax (Items 17–19)",
-            vec![self.grid(layout, children)],
-            cx,
-        )
+        vec![
+            Self::caption("Allowable Input Tax (Items 17–19)"),
+            Self::caption("Less:"),
+            self.grid(layout, children),
+        ]
     }
 
-    fn render_deductions(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn render_schedule_4(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let s4_open = d.schedule_4.is_some();
-        let s5_open = d.schedule_5.is_some();
         let mut children = vec![Self::choice_row(
-            "Schedule 4 — Input tax on sale to Government closed to expense (20B)",
+            "Use this schedule?",
             layout,
             vec![
                 Self::choice(
@@ -1522,8 +1538,19 @@ impl Form2550MView {
                 ],
             ));
         }
-        children.push(Self::choice_row(
-            "Schedule 5 — Input tax allocable to exempt sales (20C)",
+        self.section(
+            "Schedule 4 — Input tax on sale to Government closed to expense (20B)",
+            children,
+            cx,
+        )
+    }
+
+    fn render_schedule_5(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        let s5_open = d.schedule_5.is_some();
+        let mut children = vec![Self::choice_row(
+            "Use this schedule?",
             layout,
             vec![
                 Self::choice(
@@ -1541,7 +1568,7 @@ impl Form2550MView {
                     })
                 })),
             ],
-        ));
+        )];
         if s5_open {
             children.push(self.grid(
                 layout,
@@ -1552,7 +1579,16 @@ impl Form2550MView {
                 ],
             ));
         }
-        children.push(self.grid(
+        self.section(
+            "Schedule 5 — Input tax allocable to exempt sales (20C)",
+            children,
+            cx,
+        )
+    }
+
+    fn deductions_items(&self, layout: Layout, cx: &Context<Self>) -> Vec<AnyElement> {
+        let d = &self.draft;
+        let grid = self.grid(
             layout,
             vec![
                 self.computed(
@@ -1576,18 +1612,18 @@ impl Form2550MView {
                 ),
                 self.computed("22 — Net VAT payable", d.net_vat_payable, cx),
             ],
-        ));
-        self.section(
-            "Part II — Deductions from Input Tax (Items 20–22)",
-            children,
-            cx,
-        )
+        );
+        vec![
+            Self::caption("Deductions from Input Tax (Items 20–22)"),
+            Self::caption("Less:"),
+            grid,
+        ]
     }
 
-    fn render_payable(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn payable_items(&self, layout: Layout, cx: &Context<Self>) -> Vec<AnyElement> {
         let d = &self.draft;
         let t = d.schedule_totals;
-        let children = vec![
+        let credits = vec![
             self.computed(
                 "23A — Creditable VAT withheld (Sch. 6)",
                 t.schedule_6_applied,
@@ -1608,6 +1644,8 @@ impl Form2550MView {
                 d.tax_still_payable,
                 cx,
             ),
+        ];
+        let penalties = vec![
             self.money_field("25a", layout, false),
             self.money_field("25b", layout, false),
             self.money_field("25c", layout, false),
@@ -1618,11 +1656,22 @@ impl Form2550MView {
                 cx,
             ),
         ];
-        self.section(
-            "Part II — Tax Credits, Penalties and Amount Payable (Items 23–26)",
-            vec![self.grid(layout, children)],
-            cx,
-        )
+        vec![
+            Self::caption("Tax Credits, Penalties and Amount Payable (Items 23–26)"),
+            Self::caption("Less:"),
+            self.grid(layout, credits),
+            Self::caption("Add: Penalties"),
+            self.grid(layout, penalties),
+        ]
+    }
+
+    /// Item 12–26 rendered as one "Part II — Computation of Tax" section.
+    fn render_part_two(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let mut children = self.sales_items(layout, cx);
+        children.extend(self.input_tax_items(layout, cx));
+        children.extend(self.deductions_items(layout, cx));
+        children.extend(self.payable_items(layout, cx));
+        self.section("Part II — Computation of Tax", children, cx)
     }
 }
 
@@ -2004,17 +2053,16 @@ impl Render for Form2550MView {
             })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
+            .child(self.render_part_two(layout, cx))
             .child(self.render_schedule_1(layout, cx))
-            .child(self.render_sales(layout, cx))
             .child(self.render_table(Table::S2, layout, cx))
             .child(self.render_table(Table::S3a, layout, cx))
             .child(self.render_table(Table::S3b, layout, cx))
-            .child(self.render_input_tax(layout, cx))
-            .child(self.render_deductions(layout, cx))
+            .child(self.render_schedule_4(layout, cx))
+            .child(self.render_schedule_5(layout, cx))
             .child(self.render_table(Table::S6, layout, cx))
             .child(self.render_table(Table::S7, layout, cx))
-            .child(self.render_table(Table::S8, layout, cx))
-            .child(self.render_payable(layout, cx));
+            .child(self.render_table(Table::S8, layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

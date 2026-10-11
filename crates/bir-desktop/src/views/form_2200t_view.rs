@@ -707,7 +707,8 @@ impl Form2200TView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel instead of running into its border.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     /// On Phone the label sits on its own line with the chips wrapping in a
@@ -783,7 +784,7 @@ impl Form2200TView {
             ),
             self.field(
                 "sheets",
-                "Item 3 — No. of sheets attached",
+                "Item 3 — Number of Sheet/s Attached",
                 layout,
                 !editable,
             ),
@@ -844,7 +845,7 @@ impl Form2200TView {
         fields.push(self.place_block(PlaceItem::Removal, "Item 11 — Place of Removal", layout));
         let relief = self.draft.tax_relief;
         let relief_row = self.choice_row(
-            "Item 12 — Availing of tax relief under a Special Law/International Tax Treaty?",
+            "Item 12 — Are you availing of tax relief under Special Law or International Tax Treaty?",
             false,
             layout,
             vec![
@@ -891,7 +892,7 @@ impl Form2200TView {
                 .on_click(pick(Form2200TPayment::Prepayment)),
                 Self::choice(
                     "2200t_mop_other",
-                    "15 — Other similar schemes",
+                    "15 — Other Similar Schemes (specify)",
                     mop == Form2200TPayment::OtherScheme,
                     !editable,
                 )
@@ -907,7 +908,7 @@ impl Form2200TView {
     /// One schedule line: a caption and its three amount inputs.
     fn amount_line(
         &self,
-        caption: String,
+        caption: Vec<String>,
         keys: [String; 3],
         error: bool,
         layout: Layout,
@@ -935,7 +936,9 @@ impl Form2200TView {
             .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
-            .child(caption);
+            .flex()
+            .flex_col()
+            .children(caption.into_iter().map(|line| div().child(line)));
         if layout == Layout::Phone {
             div()
                 .flex()
@@ -987,9 +990,9 @@ impl Form2200TView {
                 .skip(start)
             {
                 let caption = if bracket.is_empty() {
-                    format!("Rate {rate}")
+                    vec![format!("Rate: {rate}")]
                 } else {
-                    format!("{bracket} · rate {rate}")
+                    vec![bracket.to_string(), format!("Rate: {rate}")]
                 };
                 card = card.child(self.amount_line(
                     caption,
@@ -1034,7 +1037,7 @@ impl Form2200TView {
                     )
                     .child(self.grid(layout, texts))
                     .child(self.amount_line(
-                        "Amounts".to_string(),
+                        vec!["Amounts".to_string()],
                         [
                             other_key(row, "x"),
                             other_key(row, "t"),
@@ -1052,7 +1055,7 @@ impl Form2200TView {
             cx,
         ));
         self.section(
-            "Part V — Schedule 1: Removals and Excise Tax Due",
+            "Part V — Schedule 1 – Summary of Removals and Excise Tax Due on Tobacco Products Chargeable Against Payment",
             children,
             cx,
         )
@@ -1063,7 +1066,7 @@ impl Form2200TView {
         let d = &self.draft;
         let children = vec![
             self.computed(
-                "16 — Excise tax due (from Schedule 1)",
+                "16 — Excise tax due (from Part V – Schedule 1)",
                 d.excise_tax_due,
                 cx,
             ),
@@ -1525,8 +1528,8 @@ impl Render for Form2200TView {
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_part_two(layout, cx))
+            .child(self.render_part_three(layout, cx))
             .child(self.render_schedule(layout, cx));
-        body = body.child(self.render_part_three(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
