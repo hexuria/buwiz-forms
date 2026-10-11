@@ -664,6 +664,8 @@ impl Form1701View {
         div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
+            .min_w_0()
+            .max_w_full()
             .child(text.to_string())
     }
 
@@ -739,6 +741,7 @@ impl Form1701View {
     fn amount_cell(&self, value: f64, cx: &Context<Self>) -> AnyElement {
         div()
             .p_2()
+            .flex_none()
             .rounded_md()
             .bg(cx.theme().muted.opacity(0.5))
             .text_right()
@@ -888,7 +891,25 @@ impl Form1701View {
         button.disabled(disabled)
     }
 
-    fn choice_row(title: &str, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(layout: Layout, title: &str, buttons: Vec<Button>) -> AnyElement {
+        if layout == Layout::Phone {
+            return div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(Self::label(title).w_full())
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .w_full()
+                        .children(buttons),
+                )
+                .into_any_element();
+        }
         div()
             .flex()
             .flex_wrap()
@@ -901,6 +922,7 @@ impl Form1701View {
 
     fn yes_no(
         &self,
+        layout: Layout,
         id: &'static str,
         title: &str,
         value: Option<bool>,
@@ -909,6 +931,7 @@ impl Form1701View {
     ) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         Self::choice_row(
+            layout,
             title,
             vec![
                 Self::choice((id, 1usize), "Yes", value == Some(true), !editable)
@@ -924,6 +947,7 @@ impl Form1701View {
         let mut children = vec![
             self.text_field("year", layout),
             self.yes_no(
+                layout,
                 "1701_amended",
                 "Item 2 — Amended return?",
                 Some(d.is_amended),
@@ -931,6 +955,7 @@ impl Form1701View {
                 cx,
             ),
             self.yes_no(
+                layout,
                 "1701_short",
                 "Item 3 — Short period return?",
                 Some(d.is_short_period),
@@ -1019,10 +1044,11 @@ impl Form1701View {
                     self.text_field("phone", layout),
                 ],
             ),
-            Self::choice_row("Item 6 — Taxpayer type", types),
+            Self::choice_row(layout, "Item 6 — Taxpayer type", types),
         ];
         if mixed_possible {
             rows.push(self.yes_no(
+                layout,
                 "1701_mixed",
                 "Also a compensation earner (mixed income)?",
                 Some(d.taxpayer_also_compensation_earner),
@@ -1030,8 +1056,9 @@ impl Form1701View {
                 cx,
             ));
         }
-        rows.push(Self::choice_row("Item 7 — ATC", atcs));
+        rows.push(Self::choice_row(layout, "Item 7 — ATC", atcs));
         rows.push(self.yes_no(
+            layout,
             "1701_ftc",
             "Item 13 — Claiming foreign tax credits?",
             d.claims_foreign_tax_credits,
@@ -1041,9 +1068,10 @@ impl Form1701View {
         if d.claims_foreign_tax_credits == Some(true) {
             rows.push(self.text_field("foreign_no", layout));
         }
-        rows.push(Self::choice_row("Item 16 — Civil status", statuses));
+        rows.push(Self::choice_row(layout, "Item 16 — Civil status", statuses));
         if d.civil_status == Some(Form1701CivilStatus::Married) {
             rows.push(self.yes_no(
+                layout,
                 "1701_spouse_income",
                 "Item 17 — Spouse has income?",
                 d.spouse_has_income,
@@ -1053,6 +1081,7 @@ impl Form1701View {
             if d.spouse_has_income == Some(true) {
                 let joint = d.joint_filing_status;
                 rows.push(Self::choice_row(
+                    layout,
                     "Item 18 — Filing status",
                     vec![
                         Self::choice(
@@ -1082,6 +1111,7 @@ impl Form1701View {
             }
         }
         rows.push(self.yes_no(
+            layout,
             "1701_exempt",
             "Item 19 — Has income exempt from income tax?",
             d.has_exempt_income,
@@ -1089,6 +1119,7 @@ impl Form1701View {
             cx,
         ));
         rows.push(self.yes_no(
+            layout,
             "1701_special",
             "Item 20 — Has income subject to special/preferential rates?",
             d.has_special_rate_income,
@@ -1097,6 +1128,7 @@ impl Form1701View {
         ));
         if d.tax_rate == Some(bir_core::forms::form_1701::Form1701TaxRate::Graduated) {
             rows.push(Self::choice_row(
+                layout,
                 "Item 21A — Method of deduction",
                 Form1701DeductionMethod::ALL
                     .into_iter()
@@ -1167,13 +1199,14 @@ impl Form1701View {
                     self.text_field("sp_citizenship", layout),
                 ],
             ),
-            Self::choice_row("Item 3 — Spouse type", types),
+            Self::choice_row(layout, "Item 3 — Spouse type", types),
         ];
         if matches!(
             sp.filer_type,
             Some(Form1701SpouseType::SingleProprietor | Form1701SpouseType::Professional)
         ) {
             rows.push(self.yes_no(
+                layout,
                 "1701_sp_mixed",
                 "Also a compensation earner (mixed income)?",
                 Some(self.draft.spouse_also_compensation_earner),
@@ -1181,8 +1214,9 @@ impl Form1701View {
                 cx,
             ));
         }
-        rows.push(Self::choice_row("Item 4 — ATC", atcs));
+        rows.push(Self::choice_row(layout, "Item 4 — ATC", atcs));
         rows.push(self.yes_no(
+            layout,
             "1701_sp_ftc",
             "Item 8 — Claiming foreign tax credits?",
             sp.claims_foreign_tax_credits,
@@ -1193,6 +1227,7 @@ impl Form1701View {
             rows.push(self.text_field("sp_foreign_no", layout));
         }
         rows.push(self.yes_no(
+            layout,
             "1701_sp_exempt",
             "Item 10 — Has income exempt from income tax?",
             sp.has_exempt_income,
@@ -1200,6 +1235,7 @@ impl Form1701View {
             cx,
         ));
         rows.push(self.yes_no(
+            layout,
             "1701_sp_special",
             "Item 11 — Has income subject to special/preferential rates?",
             sp.has_special_rate_income,
@@ -1208,6 +1244,7 @@ impl Form1701View {
         ));
         if sp.tax_rate == Some(bir_core::forms::form_1701::Form1701TaxRate::Graduated) {
             rows.push(Self::choice_row(
+                layout,
                 "Item 12A — Method of deduction",
                 Form1701DeductionMethod::ALL
                     .into_iter()
@@ -1272,7 +1309,11 @@ impl Form1701View {
                 .border_1()
                 .border_color(cx.theme().border)
                 .rounded_md()
-                .child(Self::choice_row(&format!("Employer {}", row + 1), owners));
+                .child(Self::choice_row(
+                    layout,
+                    &format!("Employer {}", row + 1),
+                    owners,
+                ));
             if owner.is_some() {
                 card = card.child(self.grid(
                     layout,
@@ -1889,6 +1930,7 @@ impl Form1701View {
         if overpaid {
             let over = self.draft.overpayment_disposition;
             rows.push(Self::choice_row(
+                layout,
                 "If overpayment, mark one:",
                 [
                     (Form1701OverpaymentDisposition::Refund, "To be refunded"),
