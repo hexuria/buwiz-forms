@@ -522,6 +522,8 @@ impl Form1702MXView {
         let editable = self.draft.lifecycle.is_editable();
         let body = div().child(Input::new(input).disabled(disabled || !editable));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -585,8 +587,8 @@ impl Form1702MXView {
     fn computed(&self, label: &str, value: i64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_display(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_display(value)}</div>
             </div>
         }
         .into_any_element()
@@ -612,7 +614,24 @@ impl Form1702MXView {
         button.disabled(disabled)
     }
 
-    fn choice_row(title: &str, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(layout: Layout, title: &str, buttons: Vec<Button>) -> AnyElement {
+        if layout == Layout::Phone {
+            return div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(
+                    div()
+                        .min_w_0()
+                        .max_w_full()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(title.to_string()),
+                )
+                .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+                .into_any_element();
+        }
         div()
             .flex()
             .flex_wrap()
@@ -620,6 +639,9 @@ impl Form1702MXView {
             .gap_2()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
+                    .max_w_full()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(title.to_string()),
@@ -683,14 +705,23 @@ impl Form1702MXView {
             .rounded_md()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),
             )
-            .child(div().text_sm().font_weight(FontWeight::BOLD).child(format!(
-                "A {} · B {} · C {} · D {}",
-                values[0], values[1], values[2], values[3]
-            )))
+            .child(
+                div()
+                    .min_w_0()
+                    .max_w_full()
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child(format!(
+                        "A {} · B {} · C {} · D {}",
+                        values[0], values[1], values[2], values[3]
+                    )),
+            )
             .into_any_element()
     }
 
@@ -715,6 +746,7 @@ impl Form1702MXView {
         let (amended, short) = (d.is_amended, d.is_short_period);
         let children = vec![
             Self::choice_row(
+                layout,
                 "Item 1 —",
                 vec![
                     Self::choice("1702mx_calendar", "Calendar", !fiscal, !editable).on_click(
@@ -748,6 +780,7 @@ impl Form1702MXView {
                 .into_any_element(),
             self.text("year", layout),
             Self::choice_row(
+                layout,
                 "Item 3 — Amended return?",
                 vec![
                     Self::choice("1702mx_amended_yes", "Yes", amended, !editable).on_click(
@@ -759,6 +792,7 @@ impl Form1702MXView {
                 ],
             ),
             Self::choice_row(
+                layout,
                 "Item 4 — Short period return?",
                 vec![
                     Self::choice("1702mx_short_yes", "Yes", short, !editable).on_click(
@@ -832,8 +866,9 @@ impl Form1702MXView {
         let method = d.deduction_method;
         let rows = vec![
             self.grid(layout, fields),
-            Self::choice_row("Item 5 — ATC", atc_buttons),
+            Self::choice_row(layout, "Item 5 — ATC", atc_buttons),
             Self::choice_row(
+                layout,
                 "Item 13 — Method of deduction",
                 vec![
                     Self::choice(
@@ -868,6 +903,7 @@ impl Form1702MXView {
         let editable = self.draft.lifecycle.is_editable();
         let multiple = self.draft.relief_basis.instruction_multiple_activities;
         let mut rows = vec![Self::choice_row(
+            layout,
             "Instruction",
             vec![
                 Self::choice(
@@ -1392,6 +1428,7 @@ impl Form1702MXView {
                     ))
                 };
             children.push(Self::choice_row(
+                layout,
                 "If overpayment, mark one:",
                 vec![
                     pick(
