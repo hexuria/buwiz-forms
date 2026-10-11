@@ -26,6 +26,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{field_error, messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -110,6 +111,26 @@ const NON_TAXABLE_COLUMNS: &[(&str, &str, bool)] = &[
 
 fn row_key(table: &str, row: usize, column: &str) -> String {
     format!("{table}{row}_{column}")
+}
+
+/// The model's field name for an editor column (validation keys use it).
+fn model_column(column: &str) -> &str {
+    match column {
+        "class" => "classification",
+        "corp" => "issuing_corporation",
+        "shares" => "number_of_shares",
+        "base" => "tax_base",
+        "rate" => "tax_rate",
+        other => other,
+    }
+}
+
+/// One removable table row: which table, its validation prefix and footer.
+struct TableRow {
+    table: &'static str,
+    error_table: &'static str,
+    row: usize,
+    footer: Option<AnyElement>,
 }
 
 /// Accepts `1,234.56`, `1234.5`, blank (zero).
@@ -495,7 +516,23 @@ impl Form2552View {
             .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")))
     }
 
-    /// A labelled input. On phones the label sits above the field.
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built element.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
+    }
+
+    /// A labelled input. On phones the label sits above the field; its
+    /// message (if any) sits directly under it.
     fn field(
         &self,
         key: &str,
@@ -514,12 +551,13 @@ impl Form2552View {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if self.has_error(key) || self.has_error(error_key) {
+        let message = self.errors_for(&[key, error_key]);
+        let label = if message.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -535,7 +573,8 @@ impl Form2552View {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
     }
 
     /// Two columns on desktop, one otherwise.
@@ -678,6 +717,17 @@ impl Form2552View {
                     ),
             )
             .into_any_element();
+        let date = self.with_errors(
+            date,
+            &[
+                "month",
+                "day",
+                "year",
+                "transaction_month",
+                "transaction_day",
+                "transaction_year",
+            ],
+        );
         let children = vec![
             date,
             Self::choice_row(
@@ -711,8 +761,11 @@ impl Form2552View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut fields = vec![
-            Self::info("Item 4 — TIN", format_tin(&d.tin)),
-            Self::info("Item 5 — RDO Code", d.rdo_code.clone()),
+            self.with_errors(Self::info("Item 4 — TIN", format_tin(&d.tin)), &["tin"]),
+            self.with_errors(
+                Self::info("Item 5 — RDO Code", d.rdo_code.clone()),
+                &["rdo_code"],
+            ),
         ];
         for (key, error_key) in [
             ("name", "taxpayer_name"),
@@ -759,26 +812,29 @@ impl Form2552View {
                 layout,
                 !editable || !relief,
             ),
-            Self::choice_row(
-                layout,
-                "Item 11 — Kind of transaction",
-                vec![
-                    pick(
-                        "2552_kind_lse",
-                        "11A — Listed and traded through the LSE",
-                        Form2552Transaction::LocalStockExchange,
-                    ),
-                    pick(
-                        "2552_kind_primary",
-                        "11B — Initial Public Offering: Primary",
-                        Form2552Transaction::PrimaryOffering,
-                    ),
-                    pick(
-                        "2552_kind_secondary",
-                        "11B — Initial Public Offering: Secondary",
-                        Form2552Transaction::SecondaryOffering,
-                    ),
-                ],
+            self.with_errors(
+                Self::choice_row(
+                    layout,
+                    "Item 11 — Kind of transaction",
+                    vec![
+                        pick(
+                            "2552_kind_lse",
+                            "11A — Listed and traded through the LSE",
+                            Form2552Transaction::LocalStockExchange,
+                        ),
+                        pick(
+                            "2552_kind_primary",
+                            "11B — Initial Public Offering: Primary",
+                            Form2552Transaction::PrimaryOffering,
+                        ),
+                        pick(
+                            "2552_kind_secondary",
+                            "11B — Initial Public Offering: Secondary",
+                            Form2552Transaction::SecondaryOffering,
+                        ),
+                    ],
+                ),
+                &["transaction"],
             ),
             self.grid(
                 layout,
@@ -804,17 +860,19 @@ impl Form2552View {
     }
 
     /// A removable table row of inputs.
-    #[allow(clippy::too_many_arguments)]
     fn table_row(
         &self,
-        table: &'static str,
-        error_table: &str,
-        row: usize,
+        spec: TableRow,
         columns: &[(&'static str, String)],
-        footer: Option<AnyElement>,
         layout: Layout,
         cx: &Context<Self>,
     ) -> AnyElement {
+        let TableRow {
+            table,
+            error_table,
+            row,
+            footer,
+        } = spec;
         let editable = self.draft.lifecycle.is_editable();
         let error_key = format!("{error_table}[{row}]");
         let heading = div()
@@ -854,7 +912,7 @@ impl Form2552View {
                 self.field(
                     &row_key(table, row, column),
                     label,
-                    &format!("{error_key}.{column}"),
+                    &format!("{error_key}.{}", model_column(column)),
                     layout,
                     !editable,
                 )
@@ -869,6 +927,7 @@ impl Form2552View {
             .border_color(cx.theme().border)
             .rounded_md()
             .child(heading)
+            .children(self.errors_for(&[error_key.as_str()]).map(field_error))
             .child(self.grid(layout, fields))
             .when_some(footer, |d, footer| d.child(footer))
             .into_any_element()
@@ -942,11 +1001,13 @@ impl Form2552View {
                 .child(self.computed("(h) Tax due", entry.tax_due, cx))
                 .into_any_element();
             children.push(self.table_row(
-                "share",
-                "schedule",
-                row,
+                TableRow {
+                    table: "share",
+                    error_table: "schedule",
+                    row,
+                    footer: Some(footer),
+                },
                 &columns,
-                Some(footer),
                 layout,
                 cx,
             ));
@@ -1025,7 +1086,7 @@ impl Form2552View {
         ];
         if d.tax_still_due < 0.0 {
             let over = d.overpayment;
-            children.push(Self::choice_row(
+            let overpayment_row = Self::choice_row(
                 layout,
                 "If overpayment, mark one:",
                 vec![
@@ -1050,7 +1111,8 @@ impl Form2552View {
                         })
                     })),
                 ],
-            ));
+            );
+            children.push(self.with_errors(overpayment_row, &["overpayment"]));
         }
         self.section(
             "Part II — Computation of Tax",
@@ -1068,11 +1130,13 @@ impl Form2552View {
         let mut children: Vec<AnyElement> = (0..d.exempt_transactions.len().min(FORM_2552_ROWS))
             .map(|row| {
                 self.table_row(
-                    "exempt",
-                    "exempt_transactions",
-                    row,
+                    TableRow {
+                        table: "exempt",
+                        error_table: "exempt_transactions",
+                        row,
+                        footer: None,
+                    },
                     &columns,
-                    None,
                     layout,
                     cx,
                 )
@@ -1100,11 +1164,13 @@ impl Form2552View {
             (0..d.non_taxable_transactions.len().min(FORM_2552_ROWS))
                 .map(|row| {
                     self.table_row(
-                        "free",
-                        "non_taxable_transactions",
-                        row,
+                        TableRow {
+                            table: "free",
+                            error_table: "non_taxable_transactions",
+                            row,
+                            footer: None,
+                        },
                         &columns,
-                        None,
                         layout,
                         cx,
                     )
@@ -1409,11 +1475,11 @@ impl Render for Form2552View {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1466,6 +1532,11 @@ impl Render for Form2552View {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_sm().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) under Needs review block queueing."
+                            )))
                         })
                         .child(
                             Button::new("2552_submit")
@@ -1531,7 +1602,14 @@ impl Render for Form2552View {
             .child(self.render_part_five(layout, cx))
             .child(self.render_part_six(layout, cx));
         if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
+            let mut rows = vec![
+                div()
+                    .text_sm()
+                    .child(format!("{error_count} item(s) need review."))
+                    .into_any_element(),
+            ];
+            rows.extend(issues);
+            body = body.child(self.section("Needs review", rows, cx));
         }
 
         div()

@@ -4,7 +4,7 @@
 //! edits source values. The layout reflows for desktop, tablet and phone.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
@@ -23,7 +23,11 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form2000View {}
@@ -51,6 +55,65 @@ impl Layout {
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+/// The official ATC dropdown as (code, "code — description") select options.
+fn atc_options() -> &'static [(&'static str, &'static str)] {
+    static OPTIONS: LazyLock<Vec<(&'static str, &'static str)>> = LazyLock::new(|| {
+        FORM_2000_ATC_OPTIONS
+            .iter()
+            .map(|option| {
+                let label: &'static str =
+                    Box::leak(format!("{} — {}", option.code, option.description).into_boxed_str());
+                (option.code, label)
+            })
+            .collect()
+    });
+    &OPTIONS
+}
+
+/// The model's field names behind an editor key (validation uses them).
+fn model_keys(key: &str) -> Vec<String> {
+    let direct = match key {
+        "sheets" => Some("number_of_attached_sheets"),
+        "name" => Some("taxpayer_name"),
+        "address" => Some("registered_address"),
+        "zip" => Some("zip_code"),
+        "phone" => Some("contact_number"),
+        "email" => Some("email"),
+        "oname" => Some("other_party_name"),
+        "otin" => Some("other_party_tin"),
+        "days" => Some("ds106_term_days"),
+        "prev" => Some("balance_carried_over"),
+        "sur" => Some("surcharge"),
+        "int" => Some("interest"),
+        "comp" => Some("compromise"),
+        _ => None,
+    };
+    if let Some(field) = direct {
+        return vec![field.to_string()];
+    }
+    // Row keys end in the row number: `s2date3` is schedule2[3].date.
+    let prefix = key.trim_end_matches(|c: char| c.is_ascii_digit());
+    let Ok(row) = key[prefix.len()..].parse::<usize>() else {
+        return Vec::new();
+    };
+    let (list, column) = match prefix {
+        "s1base" => ("schedule1", "tax_base"),
+        "s1due" => ("schedule1", "tax_due"),
+        "s2date" => ("schedule2", "date"),
+        "s2rcpt" => ("schedule2", "receipt_number"),
+        "s2amt" => ("schedule2", "amount"),
+        "s3date" => ("schedule3", "date"),
+        "s3rcpt" => ("schedule3", "receipt_number"),
+        "s3amt" => ("schedule3", "amount"),
+        "s4rco" | "s4bank" => ("schedule4", "bank"),
+        "s4date" => ("schedule4", "date"),
+        "s4amt" => ("schedule4", "amount"),
+        "s4from" | "s4to" => ("schedule4", "number_from"),
+        _ => return Vec::new(),
+    };
+    vec![format!("{list}[{row}].{column}")]
+}
 
 /// Single text inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
@@ -132,8 +195,8 @@ pub struct Form2000View {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
-    /// Schedule 1 row whose ATC list is open.
-    picking_row: Option<usize>,
+    /// One ATC dropdown per Schedule 1 row (grown with the rows).
+    atc_selects: Vec<Entity<ComboboxState>>,
     /// Rows the user has opened per schedule (index 0 = Schedule 1). Blank
     /// trailing rows are not kept in the draft, so the page remembers them.
     visible_rows: [usize; 4],
@@ -398,8 +461,25 @@ impl Form2000View {
         keys
     }
 
+    /// Make sure Schedule 1 rows `0..=row` each have an ATC dropdown.
+    fn ensure_atc_selects(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
+        while self.atc_selects.len() <= row {
+            let index = self.atc_selects.len();
+            let state = form_controls::new_select_state(atc_options(), window, cx);
+            self._subscriptions.push(form_controls::on_select(
+                &state,
+                atc_options(),
+                window,
+                cx,
+                move |this: &mut Self, code, window, cx| this.pick_atc(index, &code, window, cx),
+            ));
+            self.atc_selects.push(state);
+        }
+    }
+
     /// Create the editors for one row index on demand.
     fn ensure_row_inputs(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.ensure_atc_selects(row, window, cx);
         for (key, placeholder) in Self::row_input_keys(row) {
             if self.inputs.contains_key(&key) {
                 continue;
@@ -464,7 +544,6 @@ impl Form2000View {
             _ => {}
         }
         self.visible_rows[schedule - 1] = (count - 1).max(FORM_2000_ROWS);
-        self.picking_row = None;
         self.draft.recompute();
         self.reload_row_inputs(window, cx);
         self.sync_from_inputs(cx);
@@ -524,15 +603,18 @@ impl Form2000View {
             .into_any_element()
     }
 
-    fn pick_atc(&mut self, row: usize, option: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(option) = FORM_2000_ATC_OPTIONS.get(option) else {
+    /// Pick the ATC with `code` for a Schedule 1 row from its dropdown.
+    fn pick_atc(&mut self, row: usize, code: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let Some(option) = FORM_2000_ATC_OPTIONS.iter().find(|o| o.code == code) else {
             return;
         };
         let mut draft = self.draft.clone();
         match draft.set_atc(row, option) {
             Ok(()) => {
                 self.draft = draft;
-                self.picking_row = None;
                 self.reload_row_inputs(window, cx);
                 self.sync_from_inputs(cx);
             }
@@ -643,18 +725,34 @@ impl Form2000View {
         .into_any_element()
     }
 
-    /// A labelled input. On phones the label sits above the field.
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built element.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
+    }
+
+    /// A labelled input. On phones the label sits above the field; its
+    /// message (if any) sits directly under it.
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
         let input = self
             .inputs
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let model = model_keys(key);
+        let mut keys: Vec<&str> = vec![key];
+        keys.extend(model.iter().map(String::as_str));
+        let message = self.errors_for(&keys);
+        let error = message.is_some();
         let label = div()
             .min_w_0()
             .max_w_full()
@@ -666,7 +764,7 @@ impl Form2000View {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -682,7 +780,8 @@ impl Form2000View {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
     }
 
     /// Two columns on desktop, one otherwise.
@@ -780,10 +879,13 @@ impl Form2000View {
             .unwrap_or("—");
         let amended = self.draft.is_amended;
         let children = vec![
-            self.static_value(
-                "Item 1 — For the month of",
-                format!("{month_name} {}", self.draft.taxable_year),
-                cx,
+            self.with_errors(
+                self.static_value(
+                    "Item 1 — For the month of",
+                    format!("{month_name} {}", self.draft.taxable_year),
+                    cx,
+                ),
+                &["month", "taxable_year"],
             ),
             Self::label_row("Item 2 — Amended return?", layout)
                 .child(
@@ -811,39 +913,41 @@ impl Form2000View {
         let editable = self.draft.lifecycle.is_editable();
         let party = self.draft.other_party;
         let mode = self.draft.affixture_mode;
+        let tin = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("Item 4 — TIN"),
+            )
+            .child(
+                div()
+                    .font_weight(FontWeight::BOLD)
+                    .child(format_tin(&self.draft.tin)),
+            )
+            .into_any_element();
+        let rdo = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("Item 5 — RDO Code"),
+            )
+            .child(
+                div()
+                    .font_weight(FontWeight::BOLD)
+                    .child(self.draft.rdo_code.clone()),
+            )
+            .into_any_element();
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 4 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 5 — RDO Code"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            self.with_errors(tin, &["tin"]),
+            self.with_errors(rdo, &["rdo_code"]),
         ];
         for key in ["name", "address", "zip", "phone", "email"] {
             let label = TEXT_INPUTS
@@ -868,7 +972,10 @@ impl Form2000View {
                 ),
             );
         }
-        let mut children = vec![self.grid(layout, fields), party_row.into_any_element()];
+        let mut children = vec![
+            self.grid(layout, fields),
+            self.with_errors(party_row.into_any_element(), &["other_party"]),
+        ];
         if party.has_other_party() {
             children.push(self.grid(
                 layout,
@@ -896,7 +1003,7 @@ impl Form2000View {
                 ),
             );
         }
-        children.push(mode_row.into_any_element());
+        children.push(self.with_errors(mode_row.into_any_element(), &["affixture_mode"]));
         self.section("Part I — Background Information", children, cx)
     }
 
@@ -928,25 +1035,6 @@ impl Form2000View {
                 div()
                     .flex()
                     .gap_2()
-                    .child(
-                        Button::new(("2000_pick_atc", row))
-                            .label(if entry.is_empty() {
-                                "Choose ATC"
-                            } else {
-                                "Change"
-                            })
-                            .outline()
-                            .small()
-                            .disabled(!editable)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.picking_row = if this.picking_row == Some(row) {
-                                    None
-                                } else {
-                                    Some(row)
-                                };
-                                cx.notify();
-                            })),
-                    )
                     .when(!entry.is_empty(), |d| {
                         d.child(
                             Button::new(("2000_clear_atc", row))
@@ -973,20 +1061,17 @@ impl Form2000View {
                     }),
             );
         let mut body = div().flex().flex_col().gap_2().child(heading);
-        if self.picking_row == Some(row) && editable {
-            let mut picks = div().flex().flex_wrap().gap_2();
-            for (index, option) in FORM_2000_ATC_OPTIONS.iter().enumerate() {
-                picks = picks.child(
-                    Button::new(("2000_atc_option", row * 100 + index))
-                        .label(format!("{} — {}", option.code, option.description))
-                        .outline()
-                        .small()
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.pick_atc(row, index, window, cx)
-                        })),
-                );
-            }
-            body = body.child(picks);
+        if let Some(state) = self.atc_selects.get(row) {
+            let atc_key = format!("schedule1[{row}].atc_code");
+            body = body.child(select_field(
+                &format!("Row {} — ATC", row + 1),
+                state,
+                atc_options(),
+                (!entry.is_empty()).then_some(entry.atc_code.as_str()),
+                !editable,
+                self.errors_for(&[atc_key.as_str()]).as_deref(),
+                cx,
+            ));
         }
         if !entry.is_empty() {
             let rate = self.draft.rate_text(&entry);
@@ -1023,23 +1108,25 @@ impl Form2000View {
                 .child(due);
             if entry.atc_code == "DS106" {
                 let answer = self.draft.ds106_term_under_a_year;
-                body = body.child(
-                    Self::label_row(
-                        "Is the term of the debt instrument less than a year?",
-                        layout,
-                    )
-                    .child(
-                        Self::choice("2000_ds106_yes", "Yes", answer == Some(true), !editable)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.edit(cx, |d| d.ds106_term_under_a_year = Some(true))
-                            })),
-                    )
-                    .child(
-                        Self::choice("2000_ds106_no", "No", answer == Some(false), !editable)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.edit(cx, |d| d.ds106_term_under_a_year = Some(false))
-                            })),
+                let term_row = Self::label_row(
+                    "Is the term of the debt instrument less than a year?",
+                    layout,
+                )
+                .child(
+                    Self::choice("2000_ds106_yes", "Yes", answer == Some(true), !editable)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.ds106_term_under_a_year = Some(true))
+                        })),
+                )
+                .child(
+                    Self::choice("2000_ds106_no", "No", answer == Some(false), !editable).on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.ds106_term_under_a_year = Some(false))
+                        }),
                     ),
+                );
+                body = body.child(
+                    self.with_errors(term_row.into_any_element(), &["ds106_term_under_a_year"]),
                 );
                 if answer == Some(true) {
                     body =
@@ -1058,6 +1145,10 @@ impl Form2000View {
         let mut children: Vec<AnyElement> = (0..self.row_count(1))
             .map(|row| self.render_atc_row(row, layout, cx))
             .collect();
+        children.extend(
+            self.errors_for(&["schedule1"])
+                .map(|message| field_error(message).into_any_element()),
+        );
         children.push(self.add_row_controls(1, cx));
         children.push(self.computed("Total tax due (to Item 14)", self.draft.tax_due, cx));
         self.section("Schedule 1 — Computation of Tax Due", children, cx)
@@ -1110,6 +1201,10 @@ impl Form2000View {
                     .into_any_element(),
             );
         }
+        children.extend(
+            self.errors_for(&[format!("schedule{schedule}").as_str()])
+                .map(|message| field_error(message).into_any_element()),
+        );
         children.push(self.add_row_controls(schedule as usize, cx));
         children.push(self.computed(&format!("Total payments (to Item {item})"), total, cx));
         self.section(title, children, cx)
@@ -1139,6 +1234,10 @@ impl Form2000View {
                     .into_any_element(),
             );
         }
+        children.extend(
+            self.errors_for(&["schedule4"])
+                .map(|message| field_error(message).into_any_element()),
+        );
         children.push(self.add_row_controls(4, cx));
         children.push(self.computed("Total remittance (to Item 19)", self.draft.stamps_sold, cx));
         self.section(
@@ -1237,6 +1336,18 @@ impl QueueableFormView for Form2000View {
             ));
             inputs.insert(key, input);
         }
+        let mut atc_selects = Vec::new();
+        for index in 0..initial_rows {
+            let state = form_controls::new_select_state(atc_options(), window, cx);
+            subscriptions.push(form_controls::on_select(
+                &state,
+                atc_options(),
+                window,
+                cx,
+                move |this: &mut Self, code, window, cx| this.pick_atc(index, &code, window, cx),
+            ));
+            atc_selects.push(state);
+        }
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -1247,7 +1358,7 @@ impl QueueableFormView for Form2000View {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
-            picking_row: None,
+            atc_selects,
             visible_rows: [FORM_2000_ROWS; 4],
             _subscriptions: subscriptions,
         }
@@ -1488,11 +1599,20 @@ impl Render for Form2000View {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        for (row, state) in self.atc_selects.iter().enumerate() {
+            let code = self
+                .draft
+                .schedule1
+                .get(row)
+                .filter(|entry| !entry.is_empty())
+                .map(|entry| entry.atc_code.as_str());
+            form_controls::sync_select(state, atc_options(), code, window, cx);
+        }
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1545,6 +1665,11 @@ impl Render for Form2000View {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_sm().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) under Needs review block queueing."
+                            )))
                         })
                         .child(
                             Button::new("2000_submit")
@@ -1618,7 +1743,14 @@ impl Render for Form2000View {
             body = body.child(self.render_schedule4(layout, cx));
         }
         if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
+            let mut rows = vec![
+                div()
+                    .text_sm()
+                    .child(format!("{error_count} item(s) need review."))
+                    .into_any_element(),
+            ];
+            rows.extend(issues);
+            body = body.child(self.section("Needs review", rows, cx));
         }
 
         div()
