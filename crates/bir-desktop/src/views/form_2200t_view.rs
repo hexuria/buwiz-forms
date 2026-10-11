@@ -1340,15 +1340,35 @@ impl FormViewTrait for Form2200TView {
         cx.notify();
     }
 
-    /// The only frozen 2200-T sheet is the August 2022 revision, whose
-    /// Schedule 1 rows differ from this January 2020 return, so there is no
-    /// faithful print sheet to fill yet.
+    /// Prints on the August 2022 sheet revision (`2200t-2022`).
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(QueueableFormEvent::PushNotification(
-            "info".into(),
-            "Print preview".into(),
-            "Print preview for 2200T (January 2020) is not available yet: the frozen sheet is the August 2022 revision. No filing state was changed.".into(),
-        ));
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                "Fix the highlighted numbers first. No filing state was changed.".into(),
+            ));
+            return;
+        }
+        let fields = self.draft.to_bir_field_map();
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "2200t-2022",
+            &fields,
+            "2200-T — Print Preview",
+            cx,
+        ) {
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
+                "info".into(),
+                "Print preview".into(),
+                format!("{} No filing state was changed.", kind.status_message()),
+            )),
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                format!("{error}. No filing state was changed."),
+            )),
+        }
     }
 }
 
