@@ -778,6 +778,9 @@ fn row_into_item(draft: &mut Form1701ADraft, part_b: bool, row: Form1701AMoreRow
     }
 }
 
+/// The official processShortPeriod alert (BIR-Form1701A.hta:3372).
+const SHORT_PERIOD_NOTICE: &str = "Choosing 'YES' means you are filing for a short period return. You are required to change the Month field to correspond with your Last Return Period.";
+
 pub struct Form1701AView {
     draft: Form1701ADraft,
     db: Arc<Mutex<Database>>,
@@ -1462,7 +1465,17 @@ impl Form1701AView {
                     vec![
                         Self::choice("1701a_short_yes", "Yes", d.is_short_period, !editable)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.edit(window, cx, |d| d.is_short_period = true)
+                                let was_short = this.draft.is_short_period;
+                                this.edit(window, cx, |d| d.is_short_period = true);
+                                if !was_short {
+                                    // The official processShortPeriod alert.
+                                    this.notify(
+                                        notification::NotificationType::Info,
+                                        SHORT_PERIOD_NOTICE.into(),
+                                        window,
+                                        cx,
+                                    );
+                                }
                             })),
                         Self::choice("1701a_short_no", "No", !d.is_short_period, !editable)
                             .on_click(cx.listener(|this, _, window, cx| {

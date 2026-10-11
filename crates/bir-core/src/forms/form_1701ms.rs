@@ -19,6 +19,8 @@
 //! totals they write back into the page do (and Item 9's description, which
 //! `closeModalSched5No9` sets to `VARIOUS` for two or more rows). Holding
 //! the popup totals as plain amounts is therefore exact.
+//! Schedule 10A also keeps its popup rows ([`Form1701MsScheduleRow`]) for the
+//! `validationSpecify10A` check; only their total is sent.
 //!
 //! Every amount entry on this form passes through `removeDecimal()`
 //! (`Math.round`) or a `Math.round` in the compute chain, so the model holds
@@ -162,6 +164,16 @@ pub struct Form1701MsSpouseInfo {
     pub contact_number: String,
 }
 
+/// One row of a Schedule IV "View Details" popup (`sched410A`): a
+/// description and a whole-peso amount. The rows stay outside `frmMain`, so
+/// only their total (Item 10A) reaches the upload.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Form1701MsScheduleRow {
+    pub description: String,
+    pub amount: f64,
+}
+
 /// One column (taxpayer or spouse) of Part I Items 11–17, Part II, Part IV,
 /// Part V and Part VI. Amounts are whole pesos.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -195,6 +207,9 @@ pub struct Form1701MsColumn {
     pub gross_income: f64,
     /// 10A — total of the itemized deduction schedule.
     pub itemized_deductions: f64,
+    /// 10A "View Details" rows; when present, Item 10A is their total
+    /// (`computeOtherSched410A`).
+    pub itemized_rows: Vec<Form1701MsScheduleRow>,
     /// 10B — total of the special allowable itemized deduction schedule.
     pub special_allowable_deductions: f64,
     /// 10C — NOLCO.
@@ -818,6 +833,7 @@ impl Form1701MsColumn {
         if !self.itemized_open() {
             self.cost_of_sales = 0.0;
             self.itemized_deductions = 0.0;
+            self.itemized_rows.clear();
             self.special_allowable_deductions = 0.0;
             self.nolco = 0.0;
         }
@@ -863,6 +879,15 @@ impl Form1701MsColumn {
             &mut self.compromise,
         ] {
             *value = js_round(*value);
+        }
+        // removeDecimal on each popup amount, then
+        // computeOtherSched410A writes Math.round(total) into Item 10A.
+        for row in &mut self.itemized_rows {
+            row.amount = js_round(row.amount);
+        }
+        if !self.itemized_rows.is_empty() {
+            self.itemized_deductions =
+                js_round(self.itemized_rows.iter().map(|row| row.amount).sum());
         }
     }
 
@@ -1912,6 +1937,19 @@ impl Form1701MsDraft {
             }
         }
 
+        // validationSpecify10A: every popup row needs a description and a
+        // non-zero amount.
+        for (prefix, column) in [("taxpayer", tp), ("spouse", sp)] {
+            for (index, row) in column.itemized_rows.iter().enumerate() {
+                if row.description.trim().is_empty() || row.amount == 0.0 {
+                    err(
+                        &format!("{prefix}.itemized_rows[{index}]"),
+                        "Empty fields are not allowed",
+                    );
+                }
+            }
+        }
+
         // Derived items must be what the official compute chain produces.
         let mut expected = self.clone();
         expected.recompute();
@@ -2472,5 +2510,46 @@ mod tests {
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.perjury_agreed = false;
         assert!(d.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn schedule_10a_rows_total_into_item_10a_and_need_both_fields() {
+        let mut d = sample();
+        d.taxpayer.deduction = Form1701MsDeduction::Itemized;
+        d.taxpayer.itemized_rows = vec![
+            Form1701MsScheduleRow {
+                description: "Rent".into(),
+                amount: 100_000.4,
+            },
+            Form1701MsScheduleRow {
+                description: "Utilities".into(),
+                amount: 20_000.5,
+            },
+        ];
+        d.recompute();
+        assert_eq!(d.taxpayer.itemized_deductions, 120_001.0);
+        assert!(
+            !messages(&d)
+                .iter()
+                .any(|m| m == "Empty fields are not allowed")
+        );
+        d.taxpayer.itemized_rows[1].description.clear();
+        assert!(
+            messages(&d)
+                .iter()
+                .any(|m| m == "Empty fields are not allowed")
+        );
+        d.taxpayer.itemized_rows[1].description = "Utilities".into();
+        d.taxpayer.itemized_rows[0].amount = 0.0;
+        d.recompute();
+        assert!(
+            messages(&d)
+                .iter()
+                .any(|m| m == "Empty fields are not allowed")
+        );
+        // OSD closes Item 10A and drops the rows.
+        d.taxpayer.deduction = Form1701MsDeduction::Osd;
+        d.recompute();
+        assert!(d.taxpayer.itemized_rows.is_empty());
     }
 }

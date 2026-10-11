@@ -1374,7 +1374,9 @@ impl Form1701ADraft {
             );
         }
         if !(1..=12).contains(&self.month) {
-            err("month", "Please enter a valid year in Item 1.");
+            // The official page has no month alert (the select offers only
+            // 01-12); a plain message of its own, not the Item 1 year text.
+            err("month", "Please select a valid month in Item 1.");
         }
 
         let (tin1, tin2, tin3, _) = split_tin(&self.tin);
@@ -1388,7 +1390,14 @@ impl Form1701ADraft {
         } else if !crate::validation::relaxed_dev_mode()
             && crate::validation::official_tin_check_code(&format!("{tin1}{tin2}{tin3}")) != 0
         {
-            err("tin", crate::validation::OFFICIAL_INVALID_TIN_MESSAGE);
+            // The official getChkTinErrDesc(...) + " on Item N." pattern.
+            err(
+                "tin",
+                &format!(
+                    "{} on Item 4.",
+                    crate::validation::OFFICIAL_INVALID_TIN_MESSAGE
+                ),
+            );
         }
         if !crate::validation::rdo_code_is_official_option(self.rdo_code.trim()) {
             err("rdo_code", "Please enter a valid RDO Code on Item 5.");
@@ -1930,6 +1939,13 @@ mod tests {
             &|d| d.tin = "1".into(),
             "Please enter a valid TIN number on Item 4.",
         );
+        if !crate::validation::relaxed_dev_mode() {
+            check(
+                &|d| d.tin = "123-456-789-000".into(),
+                "You have entered an incorrect TIN on Item 4.",
+            );
+        }
+        check(&|d| d.month = 13, "Please select a valid month in Item 1.");
         check(
             &|d| d.rdo_code.clear(),
             "Please enter a valid RDO Code on Item 5.",
