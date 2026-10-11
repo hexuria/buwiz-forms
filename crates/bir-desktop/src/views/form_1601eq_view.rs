@@ -443,8 +443,8 @@ impl Form1601EqView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -478,6 +478,8 @@ impl Form1601EqView {
             .gap_2()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),

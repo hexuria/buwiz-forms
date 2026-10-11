@@ -561,6 +561,9 @@ impl Form1601FqView {
             .gap_2()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
+                    .max_w_full()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),

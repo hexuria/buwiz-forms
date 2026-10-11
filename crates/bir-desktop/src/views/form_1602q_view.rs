@@ -55,10 +55,10 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("year", "Item 1 — For the Year", "YYYY"),
     ("sheets", "No. of sheets attached", "0"),
     ("name", "Item 8 — Withholding Agent's Name", ""),
-    ("address", "Item 10 — Registered Address", ""),
-    ("zip", "Item 11 — Zip Code", ""),
-    ("phone", "Item 9 — Contact Number", "digits only"),
-    ("email", "Email Address", ""),
+    ("address", "Item 9 — Registered Address", ""),
+    ("zip", "Item 9A — Zip Code", ""),
+    ("phone", "Item 10 — Contact Number", "digits only"),
+    ("email", "Item 12 — Email Address", ""),
 ];
 
 /// Money inputs of Part II: (key, label).
@@ -659,9 +659,13 @@ impl Form1602QView {
                 )
                 .into_any_element(),
         ];
-        for (key, label, _) in TEXT_INPUTS.iter().skip(2) {
+        for (key, label, _) in TEXT_INPUTS.iter().skip(2).filter(|(k, _, _)| *k != "email") {
             fields.push(self.field(key, label, layout, !editable));
         }
+        let email_field = TEXT_INPUTS
+            .iter()
+            .find(|(k, _, _)| *k == "email")
+            .map(|(key, label, _)| self.field(key, label, layout, !editable));
         let category_row = Self::labelled_row(
             "Item 11 — Category of withholding agent",
             vec![
@@ -726,6 +730,7 @@ impl Form1602QView {
             ));
         }
         let mut children = vec![self.grid(layout, fields), category_row];
+        children.extend(email_field);
         children.extend(relief_rows);
         self.section("Part I — Background Information", children, cx)
     }
