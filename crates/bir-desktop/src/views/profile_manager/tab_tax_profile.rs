@@ -121,6 +121,21 @@ impl ProfileManagerView {
                     },
                 )
             })
+            .when(!is_individual && !is_cooperative, |this| {
+                this.child(
+                    // Row: EOPT Tier (Micro/Small/Medium/Large) for corporations,
+                    // partnerships, estates and trusts; 2550Q needs it for every type.
+                    rsx! {
+                        <div flex gap_4 w_full>
+                            <div flex_1 min_w_0>
+                                {Self::field_label("EOPT Tier", cx)}
+                                {Combobox::new(&self.eopt_tier_select)}
+                            </div>
+                            <div flex_1 min_w_0></div>
+                        </div>
+                    },
+                )
+            })
             .child(
                 // Line of Business (full width)
                 rsx! {
