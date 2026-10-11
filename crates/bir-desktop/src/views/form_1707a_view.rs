@@ -14,23 +14,23 @@ use gpui::*;
 
 use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
-    computed, field, format_tin, grid, money_text, section,
+    computed, computed_text, field, format_tin, grid, money_text, section,
 };
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 /// Plain inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
-    ("month", "Item 1 — Year-end month (fiscal)", "MM"),
-    ("day", "Item 1 — Year-end day (fiscal)", "DD"),
-    ("year", "Item 1 — Year ended", "YYYY"),
-    ("sheets", "Item 3 — No. of sheets attached", "0"),
+    ("month", "Item 2 — Year-end month (fiscal)", "MM"),
+    ("day", "Item 2 — Year-end day (fiscal)", "DD"),
+    ("year", "Item 2 — Year ended", "YYYY"),
+    ("sheets", "Item 4 — No. of sheets attached", "0"),
     ("rdo", "Item 7 — RDO code", "e.g. 039"),
     ("name", "Item 8 — Taxpayer's name", ""),
     ("lob", "Line of business (profile)", ""),
     ("address", "Item 9 — Registered address", ""),
-    ("zip", "Item 10 — Zip code", ""),
-    ("contact", "Contact number", ""),
+    ("zip", "Item 9A — Zip code", ""),
+    ("contact", "Item 10 — Contact number", ""),
     ("email", "Item 11 — E-mail address", ""),
     ("relief", "Item 12A — Tax relief, specify", ""),
 ];
@@ -39,11 +39,11 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
 const AMOUNTS: &[(&str, &str)] = &[
     (
         "less",
-        "16B — Tax paid in return previously filed (amended only)",
+        "18B — Tax paid in return previously filed (amended only)",
     ),
-    ("surcharge", "18A — Surcharge"),
-    ("interest", "18B — Interest"),
-    ("compromise", "18C — Compromise"),
+    ("surcharge", "20A — Surcharge"),
+    ("interest", "20B — Interest"),
+    ("compromise", "20C — Compromise"),
 ];
 
 /// Row inputs: (part, caption, gains only).
@@ -186,7 +186,7 @@ impl Form1707AView {
         );
         let amended = choice_row(
             layout,
-            "Item 2 — Amended return?",
+            "Item 3 — Amended return?",
             vec![
                 choice("1707a_amended_yes", "Yes", d.is_amended, !editable).on_click(cx.listener(
                     |this: &mut Self, _, window, cx| {
@@ -202,7 +202,7 @@ impl Form1707AView {
         );
         let atc = choice_row(
             layout,
-            "Item 4 — ATC",
+            "Item 5 — ATC",
             vec![
                 choice(
                     "1707a_atc_ii030",
@@ -248,17 +248,19 @@ impl Form1707AView {
             .flex()
             .flex_col()
             .gap_1()
-            .child(kit::label("Item 5 — TIN (profile)"))
+            .child(kit::label("Item 6 — TIN (profile)"))
             .child(
                 div()
                     .font_weight(FontWeight::BOLD)
                     .child(format_tin(&d.tin)),
             )
             .into_any_element();
-        let mut children = vec![
-            basis,
-            self.f("month", layout, !d.fiscal),
-            self.f("day", layout, !d.fiscal),
+        let mut children = vec![basis];
+        if d.fiscal {
+            children.push(self.f("month", layout, false));
+            children.push(self.f("day", layout, false));
+        }
+        children.extend([
             self.f("year", layout, false),
             amended,
             self.f("sheets", layout, false),
@@ -272,7 +274,7 @@ impl Form1707AView {
             self.f("contact", layout, false),
             self.f("email", layout, false),
             relief,
-        ];
+        ]);
         if d.tax_relief.is_some() {
             children.push(self.f("relief", layout, false));
         }
@@ -318,14 +320,14 @@ impl Form1707AView {
             vec![
                 computed("Total selling price", d.s1_total_selling_price, cx),
                 computed("Total cost", d.s1_total_cost, cx),
-                computed("Total capital gains (Item 12)", d.s1_total_gains, cx),
-                computed("Total tax paid (Item 16A)", d.s1_total_tax_paid, cx),
+                computed("Total capital gains (Item 13)", d.s1_total_gains, cx),
+                computed("Total tax paid (Item 18A)", d.s1_total_tax_paid, cx),
             ]
         } else {
             vec![
                 computed("Total selling price", d.s2_total_selling_price, cx),
                 computed("Total cost", d.s2_total_cost, cx),
-                computed("Total capital loss (Item 13)", d.s2_total_loss, cx),
+                computed("Total capital loss (Item 14)", d.s2_total_loss, cx),
             ]
         };
         children.push(grid(layout, totals));
@@ -343,30 +345,27 @@ impl Form1707AView {
     fn render_computation(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let d = &self.draft;
         let children = vec![
-            computed("12 — Total capital gains", d.s1_total_gains, cx),
-            computed("13 — Total capital loss", d.s2_total_loss, cx),
-            computed("14 — Net capital gain (loss)", d.net_capital_gain, cx),
-            computed("15 — Tax due (15%)", d.tax_due, cx),
-            computed(
-                "16A — Tax paid on prior returns this year",
-                d.s1_total_tax_paid,
-                cx,
-            ),
+            computed("13 — Total capital gains", d.s1_total_gains, cx),
+            computed("14 — Less: Total capital loss", d.s2_total_loss, cx),
+            computed("15 — Net capital gain (loss)", d.net_capital_gain, cx),
+            computed_text("16 — Applicable tax rate", "15%".to_string(), cx),
+            computed("17 — Tax due", d.tax_due, cx),
+            computed("18A — Total tax paid", d.s1_total_tax_paid, cx),
             self.f("less", layout, !d.is_amended),
-            computed("16C — Total tax paid", d.total_tax_paid, cx),
-            computed("17 — Tax payable (overpayment)", d.tax_payable, cx),
+            computed("18C — Total tax credits/payments", d.total_tax_paid, cx),
+            computed("19 — Net tax payable (overpayment)", d.tax_payable, cx),
             self.f("surcharge", layout, false),
             self.f("interest", layout, false),
             self.f("compromise", layout, false),
-            computed("18D — Total penalties", d.total_penalties, cx),
+            computed("20D — Total penalties", d.total_penalties, cx),
             computed(
-                "19 — Total amount payable (overpayment)",
+                "21 — Total amount payable (overpayment)",
                 d.total_amount_payable,
                 cx,
             ),
         ];
         section(
-            "Part II — Computation of tax (Items 12–19)",
+            "Part II — Computation of tax (Items 13–21)",
             vec![grid(layout, children)],
             cx,
         )
@@ -404,17 +403,17 @@ impl KitView for Form1707AView {
         let mut r = InputReader::new(&self.kit, cx);
         let d = &mut self.draft;
         if d.fiscal {
-            if let Some(v) = r.whole::<u8>("month", "Item 1 month", 99) {
+            if let Some(v) = r.whole::<u8>("month", "Item 2 month", 99) {
                 d.year_end_month = v;
             }
-            if let Some(v) = r.whole::<u8>("day", "Item 1 day", 99) {
+            if let Some(v) = r.whole::<u8>("day", "Item 2 day", 99) {
                 d.year_end_day = v;
             }
         }
-        if let Some(v) = r.whole::<u16>("year", "Item 1 year", 9999) {
+        if let Some(v) = r.whole::<u16>("year", "Item 2 year", 9999) {
             d.year_end_year = v;
         }
-        if let Some(v) = r.whole::<u16>("sheets", "Item 3", 999) {
+        if let Some(v) = r.whole::<u16>("sheets", "Item 4", 999) {
             d.number_of_attached_sheets = v;
         }
         d.rdo_code = r.trimmed("rdo").to_uppercase();
@@ -543,9 +542,9 @@ impl Render for Form1707AView {
         let layout = Layout::for_width(window.viewport_size().width);
         let sections = vec![
             self.render_header_items(layout, cx),
+            self.render_computation(layout, cx),
             self.render_schedule(1, layout, cx),
             self.render_schedule(2, layout, cx),
-            self.render_computation(layout, cx),
         ];
         kit::render_page(self, sections, window, cx)
     }

@@ -277,7 +277,7 @@ impl Form1707View {
             .flex()
             .flex_col()
             .gap_1()
-            .child(kit::label("TIN (profile)"))
+            .child(kit::label("TIN (header, no item number)"))
             .child(
                 div()
                     .font_weight(FontWeight::BOLD)
@@ -285,13 +285,13 @@ impl Form1707View {
             )
             .into_any_element();
         let children = vec![
+            fixed,
             self.f("month", layout),
             self.f("day", layout),
             self.f("year", layout),
-            self.f("sheets", layout),
             amended,
             choice_row(layout, "Item 3 — ATC", atcs),
-            fixed,
+            self.f("sheets", layout),
             self.f("rdo", layout),
             self.f("name", layout),
             self.f("address", layout),
@@ -317,13 +317,21 @@ impl Form1707View {
         let disabled = !self.draft.lifecycle.is_editable();
         let rows: Vec<AnyElement> = (0..FORM_1707_PARTY_ROWS)
             .map(|row| {
+                let number = if kind == "seller" { 6 } else { 7 };
+                let who = if kind == "seller" { "Seller" } else { "Buyer" };
                 let cells: Vec<AnyElement> = PARTY_FIELDS
                     .iter()
-                    .map(|(part, caption)| {
+                    .zip(['A', 'B', 'C'])
+                    .map(|((part, caption), letter)| {
+                        let caption = match *part {
+                            "name" => "Name",
+                            "addr" => "Registered address",
+                            _ => *caption,
+                        };
                         field(
                             &self.kit,
                             &party_key(kind, row, part),
-                            &format!("{} {} — {caption}", title, row + 1),
+                            &format!("{number}{letter} — {who}'s {caption} (row {})", row + 1),
                             layout,
                             disabled,
                         )
@@ -480,11 +488,8 @@ impl Form1707View {
                 cx,
             ),
             computed("12 — Net capital gain (loss)", d.net_capital_gain, cx),
-            computed(
-                "14 — Tax due on the entire transaction (15%)",
-                d.tax_due,
-                cx,
-            ),
+            kit::computed_text("13 — Applicable tax rate", "15%".to_string(), cx),
+            computed("14 — Tax due on the entire transaction", d.tax_due, cx),
             computed(
                 "15 — Tax due for this payment period",
                 d.tax_due_this_period,
@@ -727,8 +732,8 @@ impl Render for Form1707View {
             self.render_parties("seller", "Item 6 — Seller", layout, cx),
             self.render_parties("buyer", "Item 7 — Buyer", layout, cx),
             self.render_transaction(layout, cx),
-            self.render_schedules(layout, cx),
             self.render_computation(layout, cx),
+            self.render_schedules(layout, cx),
         ];
         kit::render_page(self, sections, window, cx)
     }

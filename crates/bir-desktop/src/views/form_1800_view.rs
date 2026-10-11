@@ -8,8 +8,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
 use bir_core::forms::form_1800::{
-    FORM_1800_DEDUCTIONS, FORM_1800_DONEES, FORM_1800_SCHEDULE_ROWS, Form1800Deduction,
-    Form1800Donee, Form1800Draft, Form1800PersonalProperty, Form1800RealProperty,
+    FORM_1800_DEDUCTIONS, FORM_1800_DONEES, FORM_1800_EXEMPT_GIFT, FORM_1800_SCHEDULE_ROWS,
+    FORM_1800_TAX_RATE, Form1800Deduction, Form1800Donee, Form1800Draft, Form1800PersonalProperty,
+    Form1800RealProperty,
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
@@ -268,7 +269,7 @@ impl Form1800View {
                     .child(format_tin(&d.tin)),
             )
             .into_any_element();
-        let mut children = vec![
+        let children = vec![
             self.f("month", layout, false),
             self.f("day", layout, false),
             self.f("year", layout, false),
@@ -285,10 +286,10 @@ impl Form1800View {
             self.f("contact", layout, false),
             self.f("email", layout, false),
             self.f("lob", layout, false),
-            relief,
         ];
+        let mut relief_rows = vec![relief];
         if d.tax_relief.is_some() {
-            children.push(self.f("relief", layout, false));
+            relief_rows.push(self.f("relief", layout, false));
         }
         let donees: Vec<AnyElement> = (0..FORM_1800_DONEES)
             .flat_map(|row| {
@@ -312,6 +313,7 @@ impl Form1800View {
                 grid(layout, children),
                 kit::label("Item 12 — Donees").into_any_element(),
                 grid(layout, donees),
+                grid(layout, relief_rows),
             ],
             cx,
         )
@@ -362,7 +364,7 @@ impl Form1800View {
         section("Part V — Schedules", children, cx)
     }
 
-    fn render_computation(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn render_computation(&self, layout: Layout, cx: &Context<Self>) -> Vec<AnyElement> {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut deductions = Vec::new();
@@ -378,8 +380,12 @@ impl Form1800View {
                 layout,
             ));
         }
-        let children = vec![
+        let part_four = vec![
+            computed("25 — Personal properties", d.total_personal, cx),
+            computed("26 — Real properties", d.total_real, cx),
             computed("27 — Total gifts in this return", d.total_gifts, cx),
+        ];
+        let part_four_rest = vec![
             computed("33 — Total deductions allowed", d.total_deductions, cx),
             computed(
                 "34 — Total net gifts in this return",
@@ -388,12 +394,25 @@ impl Form1800View {
             ),
             self.f("prior_net", layout, false),
             computed("36 — Total net gifts", d.total_net_gifts, cx),
+            computed("37 — Less: Exempt gift", FORM_1800_EXEMPT_GIFT, cx),
             computed(
-                "38 / 14 — Net gifts subject to tax",
+                "38 — Total net gifts subject to tax",
                 d.net_gifts_subject_to_tax,
                 cx,
             ),
-            computed("16 — Donor's tax due (6%)", d.tax_due, cx),
+        ];
+        let children = vec![
+            computed(
+                "14 — Total net gifts subject to tax (from Item 38)",
+                d.net_gifts_subject_to_tax,
+                cx,
+            ),
+            kit::computed_text(
+                "15 — Applicable donor's tax rate",
+                format!("{:.0}%", FORM_1800_TAX_RATE * 100.0),
+                cx,
+            ),
+            computed("16 — Total donor's tax due", d.tax_due, cx),
             self.f("credit_a", layout, false),
             self.f("credit_b", layout, false),
             self.f("credit_c", layout, !d.is_amended || !editable),
@@ -409,15 +428,23 @@ impl Form1800View {
                 cx,
             ),
         ];
-        section(
-            "Part II / IV — Computation of tax",
-            vec![
-                kit::label("Items 28–32 — Deductions").into_any_element(),
-                grid(layout, deductions),
-                grid(layout, children),
-            ],
-            cx,
-        )
+        vec![
+            section(
+                "Part II — Computation of tax",
+                vec![grid(layout, children)],
+                cx,
+            ),
+            section(
+                "Part IV — Computation of tax (gifts and deductions)",
+                vec![
+                    grid(layout, part_four),
+                    kit::label("Items 28–32 — Deductions").into_any_element(),
+                    grid(layout, deductions),
+                    grid(layout, part_four_rest),
+                ],
+                cx,
+            ),
+        ]
     }
 }
 
@@ -629,11 +656,9 @@ impl FormViewTrait for Form1800View {
 impl Render for Form1800View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
-        let sections = vec![
-            self.render_part_one(layout, cx),
-            self.render_schedules(layout, cx),
-            self.render_computation(layout, cx),
-        ];
+        let mut sections = vec![self.render_part_one(layout, cx)];
+        sections.extend(self.render_computation(layout, cx));
+        sections.push(self.render_schedules(layout, cx));
         kit::render_page(self, sections, window, cx)
     }
 }
