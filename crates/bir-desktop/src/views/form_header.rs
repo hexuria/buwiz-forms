@@ -137,6 +137,12 @@ pub fn status_text(props: &FormHeaderProps<'_>, separate_validate: bool) -> Opti
     separate_validate.then(|| CLICK_VALIDATE_MESSAGE.to_string())
 }
 
+/// Whether the status box renders at all: only with non-blank text or an
+/// open "what was sent" view, so no empty band sits under the stepper.
+pub fn status_box_visible(text: Option<&str>, showing_sent: bool) -> bool {
+    showing_sent || text.is_some_and(|t| !t.trim().is_empty())
+}
+
 /// Header state a view keeps: the ⋯ menu, the status box's dismiss state
 /// and the latest snapshot of what BIR received.
 #[derive(Default)]
@@ -278,12 +284,20 @@ pub fn render_header_buttons<V: 'static>(
         .on_simulate
         .filter(|_| matches!(props.status, FilingStatus::Submitted));
 
-    let menu_item = |key: &str, text: &str| {
-        Button::new(id(props.slug, key))
-            .label(text.to_string())
-            .ghost()
+    // Same row look as the dashboard profile ⋯ menu (`header_menu_item`):
+    // left-aligned text, px_3/py_2 padding, rounded_md, muted hover.
+    let hover_bg = cx.theme().muted;
+    let menu_item = move |key: &str, text: &str| {
+        div()
+            .id(id(props.slug, key))
             .w_full()
-            .when(phone, |b| b.small())
+            .px_3()
+            .py_2()
+            .rounded_md()
+            .text_sm()
+            .cursor_pointer()
+            .hover(move |s| s.bg(hover_bg))
+            .child(text.to_string())
     };
     let mut items: Vec<AnyElement> = Vec::new();
     if visible.save {
@@ -369,17 +383,17 @@ pub fn render_header_buttons<V: 'static>(
                     .absolute()
                     .top_full()
                     .right_0()
-                    .mt_1()
-                    .min_w(px(200.))
-                    .p_1()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .bg(cx.theme().popover)
+                    .mt_1p5()
+                    .w(px(240.))
                     .border_1()
                     .border_color(cx.theme().border)
-                    .rounded_md()
-                    .shadow_md()
+                    .shadow_lg()
+                    .rounded_xl()
+                    .bg(cx.theme().popover)
+                    .text_color(cx.theme().popover_foreground)
+                    .flex()
+                    .flex_col()
+                    .p_1()
                     .children(items),
             ))
         });
@@ -434,7 +448,8 @@ pub fn render_status_box<V: 'static>(
 ) -> Option<AnyElement> {
     let state = (actions.state_ref)(this);
     let text = status_text(props, props.separate_validate)
-        .filter(|text| state.dismissed.as_deref() != Some(text.as_str()));
+        .filter(|text| state.dismissed.as_deref() != Some(text.as_str()))
+        .filter(|text| status_box_visible(Some(text), false));
     let sent = state
         .show_sent
         .then(|| state.sent.get().and_then(Option::as_ref))
@@ -445,7 +460,7 @@ pub fn render_status_box<V: 'static>(
                 .clone()
                 .unwrap_or_else(|| "The XML BIR received is not available for this copy.".into())
         });
-    if text.is_none() && sent.is_none() {
+    if !status_box_visible(text.as_deref(), sent.is_some()) {
         return None;
     }
     let is_error = props.message.is_none() && props.blocking_errors > 0;
@@ -530,7 +545,7 @@ pub fn render_status_box<V: 'static>(
 mod tests {
     use super::{
         AMENDED_REVERT_MESSAGE, CLICK_VALIDATE_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderProps,
-        HeaderVisibility, header_visibility, status_text, submit_enabled,
+        HeaderVisibility, header_visibility, status_box_visible, status_text, submit_enabled,
     };
     use bir_core::forms::FilingStatus;
 
@@ -634,5 +649,14 @@ mod tests {
         );
         let q = props(FilingStatus::Queued);
         assert_eq!(status_text(&q, true), None);
+    }
+
+    #[test]
+    fn status_box_collapses_without_a_message() {
+        assert!(!status_box_visible(None, false));
+        assert!(!status_box_visible(Some(""), false));
+        assert!(!status_box_visible(Some("   "), false));
+        assert!(status_box_visible(Some("Validation successful."), false));
+        assert!(status_box_visible(None, true));
     }
 }
