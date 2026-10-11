@@ -4,6 +4,7 @@
 //! source values. The layout reflows for desktop, tablet and phone widths.
 
 use std::collections::BTreeMap;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
@@ -23,7 +24,11 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, MultiChange, messages_for, multi_select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -476,6 +481,27 @@ fn sales_key(atc_index: usize) -> String {
     format!("atc{atc_index}")
 }
 
+/// The 36 official ATC checkboxes as `(code, "code — description")`.
+fn atc_pairs() -> Vec<(&'static str, String)> {
+    FORM_2550M_ATCS
+        .iter()
+        .map(|(code, description)| (*code, format!("{code} — {description}")))
+        .collect()
+}
+
+fn as_refs<'a>(pairs: &'a [(&'static str, String)]) -> Vec<(&'a str, &'a str)> {
+    pairs.iter().map(|(v, l)| (*v, l.as_str())).collect()
+}
+
+/// The ticked ATC codes, in Schedule 1 order.
+fn selected_atcs(draft: &Form2550MDraft) -> Vec<String> {
+    draft
+        .sales_schedule
+        .iter()
+        .map(|row| row.atc_code.clone())
+        .collect()
+}
+
 /// Accepts `1,234.56`, `1234.5`, blank (zero).
 fn parse_amount(value: &str) -> Option<f64> {
     let cleaned: String = value
@@ -601,10 +627,64 @@ pub struct Form2550MView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    atc_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Form2550MView {
+    /// Apply a multi-select change: untick the dropped ATCs and tick the new
+    /// ones with the same model setters the old chips used.
+    fn apply_atc_selection(
+        &mut self,
+        next: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current = selected_atcs(&self.draft);
+        let removed: Vec<String> = current
+            .iter()
+            .filter(|code| !next.contains(code))
+            .cloned()
+            .collect();
+        let added: Vec<String> = next
+            .iter()
+            .filter(|code| !current.contains(code))
+            .cloned()
+            .collect();
+        self.edit(window, cx, |d| {
+            for code in &removed {
+                d.remove_sales_atc(code);
+            }
+            for code in &added {
+                let _ = d.add_sales_atc(code);
+            }
+        });
+    }
+
+    /// Validation and parse messages recorded for any of `keys`.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Messages for one schedule row: its `prefix[row]` key and any
+    /// `prefix[row].column` key.
+    fn row_error(&self, prefix: &str) -> Option<String> {
+        let dotted = format!("{prefix}.");
+        let keys: Vec<&str> = self
+            .validation_errors
+            .iter()
+            .chain(self.parse_errors.iter())
+            .map(|(field, _)| field.as_str())
+            .filter(|field| *field == prefix || field.starts_with(&dotted))
+            .collect();
+        self.error_for(&keys)
+    }
+
     /// Editor text for one input from the draft.
     fn initial(draft: &Form2550MDraft, key: &str) -> String {
         match key {
@@ -964,7 +1044,7 @@ impl Form2550MView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -980,7 +1060,13 @@ impl Form2550MView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        // Row-level keys (`schedule_2[0]`) are shown once on the row card.
+        let keys: Vec<&str> = [key, error_key]
+            .into_iter()
+            .filter(|k| !k.contains('['))
+            .collect();
+        with_field_error(row, self.error_for(&keys))
     }
 
     fn money_field(&self, key: &str, layout: Layout, disabled: bool) -> AnyElement {
@@ -1083,6 +1169,11 @@ impl Form2550MView {
         }
     }
 
+    /// A read-only item with its validation message (if any) under it.
+    fn info_with_error(&self, label: &str, value: String, keys: &[&str]) -> AnyElement {
+        with_field_error(Self::info(label, value), self.error_for(keys))
+    }
+
     fn info(label: &str, value: String) -> AnyElement {
         div()
             .flex()
@@ -1131,8 +1222,16 @@ impl Form2550MView {
             .unwrap_or("-");
         let amended = self.draft.is_amended;
         let children = vec![
-            Self::info("Item 1 — For the month of", month_name.to_string()),
-            Self::info("Item 1 — Year", self.draft.taxable_year.to_string()),
+            self.info_with_error(
+                "Item 1 — For the month of",
+                month_name.to_string(),
+                &["month"],
+            ),
+            self.info_with_error(
+                "Item 1 — Year",
+                self.draft.taxable_year.to_string(),
+                &["taxable_year"],
+            ),
             Self::choice_row(
                 "Item 2 — Amended return?",
                 layout,
@@ -1158,8 +1257,8 @@ impl Form2550MView {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut fields = vec![
-            Self::info("Item 4 — TIN", format_tin(&d.tin)),
-            Self::info("Item 5 — RDO Code", d.rdo_code.clone()),
+            self.info_with_error("Item 4 — TIN", format_tin(&d.tin), &["tin"]),
+            self.info_with_error("Item 5 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
         ];
         for key in ["lob", "name", "phone", "address", "zip"] {
             fields.push(self.text_field(key, layout));
@@ -1173,29 +1272,32 @@ impl Form2550MView {
         let email = self.text_field("email", layout);
         let children = vec![
             self.grid(layout, fields),
-            Self::choice_row(
-                "Item 11 — Are you availing of tax relief under Special Law or International Tax Treaty?",
-                layout,
-                vec![
-                    pick("2550m_relief_no", "No", Form2550MTaxRelief::No),
-                    pick(
-                        "2550m_relief_special",
-                        "Yes — Special Rate",
-                        Form2550MTaxRelief::SpecialRate,
-                    ),
-                    pick(
-                        "2550m_relief_treaty",
-                        "Yes — International Tax Treaty",
-                        Form2550MTaxRelief::InternationalTaxTreaty,
-                    ),
-                ],
+            with_field_error(
+                Self::choice_row(
+                    "Item 11 — Are you availing of tax relief under Special Law or International Tax Treaty?",
+                    layout,
+                    vec![
+                        pick("2550m_relief_no", "No", Form2550MTaxRelief::No),
+                        pick(
+                            "2550m_relief_special",
+                            "Yes — Special Rate",
+                            Form2550MTaxRelief::SpecialRate,
+                        ),
+                        pick(
+                            "2550m_relief_treaty",
+                            "Yes — International Tax Treaty",
+                            Form2550MTaxRelief::InternationalTaxTreaty,
+                        ),
+                    ],
+                ),
+                self.error_for(&["tax_relief"]),
             ),
             email,
         ];
         self.section("Part I — Background Information", children, cx)
     }
 
-    fn render_schedule_1(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn render_schedule_1(&self, layout: Layout, cx: &mut Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut children: Vec<AnyElement> = Vec::new();
@@ -1229,67 +1331,51 @@ impl Form2550MView {
                             this.edit(window, cx, |d| d.remove_sales_atc(&code))
                         })),
                 );
-            children.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .p_3()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .child(heading)
-                    .child(self.field(
-                        &sales_key(index),
-                        "Amount of sales/receipts for the period",
-                        "sales_schedule",
-                        layout,
-                        !editable,
-                    ))
-                    .child(self.computed("Output tax (12%)", row.output_tax, cx))
-                    .into_any_element(),
-            );
-        }
-        if editable {
-            let mut picks = div().flex().flex_wrap().gap_1();
-            for (index, (code, description)) in FORM_2550M_ATCS.iter().enumerate() {
-                if d.sales_schedule.iter().any(|row| row.atc_code == *code) {
-                    continue;
-                }
-                let label = if layout == Layout::Phone {
-                    code.to_string()
-                } else {
-                    let short: String = description.chars().take(40).collect();
-                    format!("{code} — {short}")
-                };
-                picks = picks.child(
-                    Button::new(("2550m_add_atc", index))
-                        .label(label)
-                        .outline()
-                        .small()
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.edit(window, cx, |d| {
-                                let _ = d.add_sales_atc(FORM_2550M_ATCS[index].0);
-                            })
-                        })),
-                );
+            let row_position = d
+                .sales_schedule
+                .iter()
+                .position(|r| r.atc_code == row.atc_code)
+                .unwrap_or(0);
+            let mut card = div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_3()
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded_md()
+                .child(heading)
+                .child(self.field(
+                    &sales_key(index),
+                    "Amount of sales/receipts for the period",
+                    "sales_schedule",
+                    layout,
+                    !editable,
+                ))
+                .child(self.computed("Output tax (12%)", row.output_tax, cx));
+            if let Some(message) = self.row_error(&format!("sales_schedule[{row_position}]")) {
+                card = card.child(form_controls::field_error(message));
             }
-            children.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child("Add an ATC"),
-                    )
-                    .child(picks)
-                    .into_any_element(),
-            );
+            children.push(card.into_any_element());
         }
+        // The official form has 36 ATC checkboxes, so several can be ticked.
+        let pairs = atc_pairs();
+        let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
+        children.insert(
+            0,
+            multi_select_field(
+                "2550m_atc",
+                "Item 12 — ATCs (search by code or description)",
+                &self.atc_select,
+                &as_refs(&pairs),
+                &selected_atcs(d),
+                FORM_2550M_ATCS.len(),
+                !editable,
+                self.error_for(&["sales_schedule"]).as_deref(),
+                on_change,
+                cx,
+            ),
+        );
         children.push(self.computed(
             "12A — Vatable sales/receipts, private",
             d.vatable_sales_private,
@@ -1357,6 +1443,9 @@ impl Form2550MView {
                 .rounded_md()
                 .child(heading)
                 .child(self.grid(layout, fields));
+            if let Some(message) = self.row_error(&error_key) {
+                card = card.child(form_controls::field_error(message));
+            }
             let amortized = match table {
                 Table::S3a => d.schedule_3a.get(row),
                 Table::S3b => d.schedule_3b.get(row),
@@ -1507,6 +1596,8 @@ impl Form2550MView {
                 })),
             ],
         )];
+        let toggle = children.remove(0);
+        children.insert(0, with_field_error(toggle, self.error_for(&["schedule_4"])));
         if s4_open {
             children.push(self.grid(
                 layout,
@@ -1549,6 +1640,8 @@ impl Form2550MView {
                 })),
             ],
         )];
+        let toggle = children.remove(0);
+        children.insert(0, with_field_error(toggle, self.error_for(&["schedule_5"])));
         if s5_open {
             children.push(self.grid(
                 layout,
@@ -1668,6 +1761,19 @@ impl QueueableFormView for Form2550MView {
         let mut subscriptions = Vec::new();
         Self::ensure_inputs(&mut inputs, &mut subscriptions, &draft, window, cx);
         let validation_errors = draft.validate();
+        let pairs = atc_pairs();
+        let refs = as_refs(&pairs);
+        let atc_select = form_controls::new_select_state(&refs, window, cx);
+        let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
+        subscriptions.push(form_controls::on_multi_select(
+            &atc_select,
+            &refs,
+            FORM_2550M_ATCS.len(),
+            window,
+            cx,
+            |this: &Self| selected_atcs(&this.draft),
+            on_change,
+        ));
         Self {
             draft,
             db,
@@ -1677,6 +1783,7 @@ impl QueueableFormView for Form2550MView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            atc_select,
             _subscriptions: subscriptions,
         }
     }
@@ -1909,6 +2016,15 @@ impl FormViewTrait for Form2550MView {
 impl Render for Form2550MView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let pairs = atc_pairs();
+        form_controls::sync_multi_select(
+            &self.atc_select,
+            &as_refs(&pairs),
+            &selected_atcs(&self.draft),
+            window,
+            cx,
+        );
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1973,6 +2089,11 @@ impl Render for Form2550MView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) need review before queueing."
+                            )))
                         })
                         .child(
                             Button::new("2550m_submit")

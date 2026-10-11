@@ -2289,7 +2289,16 @@ impl Render for Form2551QView {
                         cx,
                     )
                     .w(px(80.))}
-                    {tax_period_basis_controls}
+                    {div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(tax_period_basis_controls)
+                        .when_some(self.get_error("tax_period_basis").cloned(), |field, error| {
+                            field.child(rsx! {
+                                <div text_xs text_color={cx.theme().danger}>{error}</div>
+                            })
+                        })}
                     {year_end_month_field}
                     {attached_sheets_field}
                 </div>
@@ -2373,6 +2382,16 @@ impl Render for Form2551QView {
                     {"Use one line per distinct ATC. Combine businesses that share the same ATC; add another line when the ATC differs."}
                 </div>
             })
+            .when_some(
+                self.get_error("schedule_1")
+                    .filter(|_| !self.suppressed_sections.contains("schedule_1"))
+                    .cloned(),
+                |controls, error| {
+                    controls.child(rsx! {
+                        <div w_full text_xs text_color={cx.theme().danger}>{error}</div>
+                    })
+                },
+            )
             .when(
                 schedule_row_count > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
                 |controls| {
