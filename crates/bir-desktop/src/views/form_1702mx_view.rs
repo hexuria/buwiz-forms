@@ -5,6 +5,7 @@
 //! source values. The layout reflows for desktop, tablet and phone widths.
 
 use std::collections::BTreeMap;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
@@ -26,7 +27,12 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use super::event_form_kit as kit;
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, MultiChange, field_error, messages_for, multi_select_field, select_field,
+    with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form1702MXView {}
@@ -51,9 +57,51 @@ impl Layout {
     }
 }
 
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+/// Month the year ends: (stored month number, shown name).
+const MONTH_OPTIONS: [(&str, &str); 12] = [
+    ("1", "January"),
+    ("2", "February"),
+    ("3", "March"),
+    ("4", "April"),
+    ("5", "May"),
+    ("6", "June"),
+    ("7", "July"),
+    ("8", "August"),
+    ("9", "September"),
+    ("10", "October"),
+    ("11", "November"),
+    ("12", "December"),
 ];
+
+/// Value of the Item 5 "IC 055 — MCIT" slot in the ATC multi-select.
+const MCIT_VALUE: &str = "IC055";
+/// The official form has two Item 5 ATC slots: IC 055 and one other code.
+const ATC_MAX: usize = 2;
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
+
+/// Item 5 choices: IC 055 first, then the 13 official alternatives.
+fn atc_options() -> Vec<(&'static str, &'static str)> {
+    let mut options = vec![(MCIT_VALUE, "IC 055 — MCIT")];
+    options.extend_from_slice(FORM_1702MX_ATC_OPTIONS);
+    options
+}
+
+/// Validation keys (the model's) that belong to one text input. Messages
+/// that name a whole group of inputs are shown by the group instead.
+fn model_error_keys(key: &str) -> &'static [&'static str] {
+    match key {
+        "name" => &["taxpayer_name"],
+        "address" => &["registered_address"],
+        "phone" => &["contact_number"],
+        "email" => &["email"],
+        "incorp" => &["incorporation_date"],
+        "rate34" => &["relief_basis.special_tax_rate"],
+        "rate14b" => &["schedule_2.item_14_special_rate"],
+        "rate14c" => &["schedule_2.item_14_regular_rate"],
+        "s2.17.2" => &["schedule_2.item_18"],
+        _ => &[],
+    }
+}
 const COLUMNS: [&str; 3] = ["A (exempt)", "B (special rate)", "C (regular rate)"];
 
 /// Schedule 5 row labels (Items 1-16, 17a-17i).
@@ -338,6 +386,8 @@ pub struct Form1702MXView {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    month_select: Entity<ComboboxState>,
+    atc_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -554,6 +604,122 @@ impl Form1702MXView {
         cx.notify();
     }
 
+    /// Item 5 ATC from the multi-select: IC 055 plus at most one other code
+    /// (when two other codes arrive, the newest replaces the older).
+    fn set_atcs(&mut self, picked: Vec<String>, cx: &mut Context<Self>) {
+        let mcit = picked.iter().any(|value| value == MCIT_VALUE);
+        let other = picked.into_iter().rfind(|value| value != MCIT_VALUE);
+        self.edit(cx, |d| {
+            d.atc.mcit_selected = mcit;
+            d.atc.other_selected = other.is_some();
+            if let Some(code) = other {
+                d.atc.other_code = code;
+            }
+        });
+    }
+
+    /// The Item 5 values the draft holds, in slot order.
+    fn picked_atcs(draft: &Form1702MXDraft) -> Vec<String> {
+        let mut picked = Vec::new();
+        if draft.atc.mcit_selected {
+            picked.push(MCIT_VALUE.to_string());
+        }
+        if draft.atc.other_selected {
+            picked.push(draft.atc.other_code.clone());
+        }
+        picked
+    }
+
+    fn atc_change() -> MultiChange<Self> {
+        Rc::new(
+            |this: &mut Self, picked: Vec<String>, _: &mut Window, cx: &mut Context<Self>| {
+                this.set_atcs(picked, cx)
+            },
+        )
+    }
+
+    /// Validation messages recorded for any of the model's `keys`.
+    fn message_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(&self.validation_errors, keys)
+    }
+
+    /// Put the messages for `keys` directly under an already-built row.
+    fn with_errors(&self, row: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(row, self.message_for(keys))
+    }
+
+    /// The "Please provide complete data on ..." messages that name `marker`
+    /// (for example `Schedule 5 Item`), so each schedule shows only its own.
+    fn description_message(&self, marker: &str) -> Option<String> {
+        let own: Vec<(String, String)> = self
+            .validation_errors
+            .iter()
+            .filter(|(key, message)| key == "descriptions" && message.contains(marker))
+            .cloned()
+            .collect();
+        messages_for(&own, &["descriptions"])
+    }
+
+    /// Put the description messages that name `marker` under `row`.
+    fn described(&self, row: AnyElement, marker: &str) -> AnyElement {
+        with_field_error(row, self.description_message(marker))
+    }
+
+    /// Error lines for the messages that exist, in order.
+    fn error_lines(messages: impl IntoIterator<Item = Option<String>>) -> Vec<AnyElement> {
+        messages
+            .into_iter()
+            .flatten()
+            .map(|message| field_error(message).into_any_element())
+            .collect()
+    }
+
+    /// The Schedule 1 (Part IV) messages that name column `letter`.
+    fn relief_message(&self, letter: char) -> Option<String> {
+        let own: Vec<(String, String)> = self
+            .validation_errors
+            .iter()
+            .filter(|(key, message)| {
+                key == "relief_details"
+                    && (1..=6).any(|item| message.contains(&format!("Item {item}{letter}")))
+            })
+            .cloned()
+            .collect();
+        messages_for(&own, &["relief_details"])
+    }
+
+    /// The message under one text or amount input: its parse error and the
+    /// model messages that belong to it alone.
+    fn input_message(&self, key: &str) -> Option<String> {
+        let parse = messages_for(&self.parse_errors, &[key]);
+        let model = self.message_for(model_error_keys(key));
+        match (parse, model) {
+            (Some(parse), Some(model)) => Some(format!("{parse} {model}")),
+            (parse, model) => parse.or(model),
+        }
+    }
+
+    /// Messages for values that come from the taxpayer profile and have no
+    /// input here (the RDO code), with the note on where to fix them.
+    fn render_profile_errors(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let message = self.message_for(&["rdo_code"])?;
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(field_error(format!("RDO Code: {message}")))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(PROFILE_NOTE),
+                )
+                .into_any_element(),
+        )
+    }
+
     fn notify(
         &self,
         kind: notification::NotificationType,
@@ -635,7 +801,7 @@ impl Form1702MXView {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -650,8 +816,8 @@ impl Form1702MXView {
                 .w_full()
                 .child(label.w(relative(0.5)))
                 .child(body.w(relative(0.5))),
-        }
-        .into_any_element()
+        };
+        with_field_error(row.into_any_element(), self.input_message(key))
     }
 
     fn text(&self, key: &str, layout: Layout) -> AnyElement {
@@ -871,20 +1037,18 @@ impl Form1702MXView {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let fiscal = d.filing_basis == Form1702MXFilingBasis::Fiscal;
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("1702mx_month", index),
-                    *name,
-                    d.month == month,
-                    !editable || (!fiscal && !d.is_short_period),
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month))),
-            );
-        }
+        // Editable only for a Fiscal or Short period return; otherwise the
+        // select shows December read-only.
+        let month_text = d.month.to_string();
+        let month_select = select_field(
+            "Item 2 — Year ended: month",
+            &self.month_select,
+            &MONTH_OPTIONS,
+            (1..=12).contains(&d.month).then_some(month_text.as_str()),
+            !editable || (!fiscal && !d.is_short_period),
+            self.message_for(&["month", "taxable_year"]).as_deref(),
+            cx,
+        );
         let (amended, short) = (d.is_amended, d.is_short_period);
         let children = vec![
             Self::choice_row(
@@ -908,18 +1072,7 @@ impl Form1702MXView {
                     ),
                 ],
             ),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 2 — Year ended: month (MM)"),
-                )
-                .child(months)
-                .into_any_element(),
+            month_select,
             Self::read_only_row(
                 layout,
                 "Item 2 — Year ended: year (YYYY)",
@@ -953,7 +1106,7 @@ impl Form1702MXView {
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
 
-    fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn render_part_one(&self, layout: Layout, cx: &mut Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let fixed = |label: &str, value: String| {
@@ -980,39 +1133,23 @@ impl Form1702MXView {
             self.text("phone", layout),
             self.text("email", layout),
         ];
-        let mut atc_buttons = vec![
-            Self::choice(
-                "1702mx_atc_mcit",
-                "IC 055 — MCIT",
-                d.atc.mcit_selected,
-                !editable,
-            )
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.edit(cx, |d| d.atc.mcit_selected = !d.atc.mcit_selected)
-            })),
-        ];
-        for (index, (code, label)) in FORM_1702MX_ATC_OPTIONS.iter().enumerate() {
-            let code = *code;
-            atc_buttons.push(
-                Self::choice(
-                    ("1702mx_atc", index),
-                    *label,
-                    d.atc.other_selected && d.atc.other_code == code,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.edit(cx, |d| {
-                        d.atc.other_selected = true;
-                        d.atc.other_code = code.to_string();
-                    })
-                })),
-            );
-        }
+        // Two official slots: IC 055 and one other code.
+        let atc_select = multi_select_field(
+            "1702mx_atc",
+            "Item 5 — ATC",
+            &self.atc_select,
+            &atc_options(),
+            &Self::picked_atcs(d),
+            ATC_MAX,
+            !editable,
+            self.message_for(&["atc"]).as_deref(),
+            Self::atc_change(),
+            cx,
+        );
         let method = d.deduction_method;
-        let rows = vec![
-            Self::choice_row(layout, "Item 5 — ATC", atc_buttons),
-            self.grid(layout, fields),
+        let mut rows = vec![atc_select, self.grid(layout, fields)];
+        rows.extend(self.render_profile_errors(cx));
+        rows.push(self.with_errors(
             Self::choice_row(
                 layout,
                 "Item 13 — Method of deduction",
@@ -1041,17 +1178,19 @@ impl Form1702MXView {
                     })),
                 ],
             ),
-        ];
+            &["deduction_method"],
+        ));
         self.section("Part I — Background Information", rows, cx)
     }
 
     fn render_relief(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let multiple = self.draft.relief_basis.instruction_multiple_activities;
-        let mut rows = vec![Self::choice_row(
-            layout,
-            "Instruction",
-            vec![
+        let mut rows = vec![self.with_errors(
+            Self::choice_row(
+                layout,
+                "Instruction",
+                vec![
                 Self::choice(
                     "1702mx_inst_a",
                     "A — one activity per column",
@@ -1075,6 +1214,8 @@ impl Form1702MXView {
                     })
                 })),
             ],
+            ),
+            &["relief_basis"],
         )];
         for (column, title) in COLUMNS.iter().enumerate() {
             let mut fields = vec![
@@ -1118,7 +1259,10 @@ impl Form1702MXView {
                     .child(format!("Column {title}"))
                     .into_any_element(),
             );
-            rows.push(self.grid(layout, fields));
+            rows.push(with_field_error(
+                self.grid(layout, fields),
+                self.relief_message(['A', 'B', 'C'][column]),
+            ));
         }
         self.section("Part IV Schedule 1 — Tax relief availment", rows, cx)
     }
@@ -1213,10 +1357,10 @@ impl Form1702MXView {
         let mut rows: Vec<AnyElement> = Vec::new();
         for (index, label) in labels {
             if index == 10 {
-                rows.push(self.text("d30", layout));
+                rows.push(self.described(self.text("d30", layout), "Schedule 3 Item 30"));
             }
             if index == 11 {
-                rows.push(self.text("d31", layout));
+                rows.push(self.described(self.text("d31", layout), "Schedule 3 Item 31"));
             }
             rows.push(self.abc_row(
                 "s3",
@@ -1226,6 +1370,12 @@ impl Form1702MXView {
                 layout,
                 cx,
             ));
+            if index == 7 {
+                // Item 27 applies only to an amended return.
+                rows.extend(Self::error_lines([
+                    self.message_for(&["schedule_3.item_27"])
+                ]));
+            }
         }
         rows.insert(
             1,
@@ -1245,40 +1395,43 @@ impl Form1702MXView {
     fn render_schedule_4(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let s4 = &self.draft.schedule_4.items;
         let rows = vec![
-            self.grid(
-                layout,
-                vec![
-                    self.field(
-                        "s4.0.0",
-                        "1A — Regular income tax otherwise due (exempt)",
-                        layout,
-                        false,
-                    ),
-                    self.field(
-                        "s4.0.1",
-                        "1B — Regular income tax otherwise due (special)",
-                        layout,
-                        false,
-                    ),
-                    self.field(
-                        "s4.1.0",
-                        "2A — Special allowable itemized deductions × rate",
-                        layout,
-                        false,
-                    ),
-                    self.field(
-                        "s4.1.1",
-                        "2B — Special allowable itemized deductions × rate",
-                        layout,
-                        false,
-                    ),
-                    self.field(
-                        "s4.1.2",
-                        "2C — Special allowable itemized deductions × rate",
-                        layout,
-                        false,
-                    ),
-                ],
+            self.with_errors(
+                self.grid(
+                    layout,
+                    vec![
+                        self.field(
+                            "s4.0.0",
+                            "1A — Regular income tax otherwise due (exempt)",
+                            layout,
+                            false,
+                        ),
+                        self.field(
+                            "s4.0.1",
+                            "1B — Regular income tax otherwise due (special)",
+                            layout,
+                            false,
+                        ),
+                        self.field(
+                            "s4.1.0",
+                            "2A — Special allowable itemized deductions × rate",
+                            layout,
+                            false,
+                        ),
+                        self.field(
+                            "s4.1.1",
+                            "2B — Special allowable itemized deductions × rate",
+                            layout,
+                            false,
+                        ),
+                        self.field(
+                            "s4.1.2",
+                            "2C — Special allowable itemized deductions × rate",
+                            layout,
+                            false,
+                        ),
+                    ],
+                ),
+                &["schedule_4"],
             ),
             self.computed_row("3 Total", &s4[2], cx),
             self.computed_row("5 Tax relief", &s4[4], cx),
@@ -1292,11 +1445,14 @@ impl Form1702MXView {
         let mut rows = Vec::new();
         for (index, label) in SCHEDULE_5_ITEMS.iter().enumerate() {
             if index >= 19 {
-                rows.push(self.field(
-                    &format!("d5.{}", index - 19),
-                    &format!("Item {} — description", &label[..3]),
-                    layout,
-                    false,
+                rows.push(self.described(
+                    self.field(
+                        &format!("d5.{}", index - 19),
+                        &format!("Item {} — description", &label[..3]),
+                        layout,
+                        false,
+                    ),
+                    &format!("Schedule 5 Item {}", &label[..3]),
                 ));
             }
             rows.push(self.abc_row(
@@ -1335,22 +1491,25 @@ impl Form1702MXView {
                 rows.push(self.computed_row("Item 4", &entry.amounts, cx));
                 continue;
             }
-            rows.push(self.grid(
-                layout,
-                vec![
-                    self.field(
-                        &format!("d6.{index}"),
-                        &format!("Item {} — description", index + 1),
-                        layout,
-                        false,
-                    ),
-                    self.field(
-                        &format!("l6.{index}"),
-                        &format!("Item {} — legal basis", index + 1),
-                        layout,
-                        false,
-                    ),
-                ],
+            rows.push(self.described(
+                self.grid(
+                    layout,
+                    vec![
+                        self.field(
+                            &format!("d6.{index}"),
+                            &format!("Item {} — description", index + 1),
+                            layout,
+                            false,
+                        ),
+                        self.field(
+                            &format!("l6.{index}"),
+                            &format!("Item {} — legal basis", index + 1),
+                            layout,
+                            false,
+                        ),
+                    ],
+                ),
+                &format!("Schedule 6 Item {}", index + 1),
             ));
             rows.push(self.abc_row(
                 "s6",
@@ -1405,6 +1564,9 @@ impl Form1702MXView {
                 )
                 .into_any_element(),
         );
+        rows.extend(Self::error_lines([
+            self.message_for(&["schedule_6.more_rows"])
+        ]));
         if s6.is_folded() {
             rows.push(self.computed_row("Item 4 subtotal", &s6.modal_subtotal(), cx));
         }
@@ -1433,6 +1595,12 @@ impl Form1702MXView {
             &self.draft.schedule_8_1
         };
         let year_group = if group == "n7" { "y7" } else { "y8" };
+        // How the validation messages name this table.
+        let (table_key, schedule) = if group == "n7" {
+            ("schedule_7_1", "Schedule 7")
+        } else {
+            ("schedule_8_1", "Schedule 8.1")
+        };
         let mut rows = Vec::new();
         for row in 0..3 {
             let fields = vec![
@@ -1463,12 +1631,19 @@ impl Form1702MXView {
                     .child(format!("Item {}", row + 4))
                     .into_any_element(),
             );
-            rows.push(self.grid(layout, fields));
+            rows.push(self.described(
+                self.grid(layout, fields),
+                &format!("{schedule} Item {}", row + 4),
+            ));
             rows.push(self.computed(
                 "E — Unapplied",
                 table.rows[row].unapplied.value_or_zero().0,
                 cx,
             ));
+            let balance_key = format!("{table_key}.rows[{row}]");
+            rows.extend(Self::error_lines([
+                self.message_for(&[balance_key.as_str()])
+            ]));
         }
         rows.push(self.computed(
             "Item 7 — This year's net operating loss",
@@ -1516,9 +1691,16 @@ impl Form1702MXView {
                     .child(format!("Item {}", row + 1))
                     .into_any_element(),
             );
-            rows.push(self.grid(layout, fields));
+            rows.push(self.described(
+                self.grid(layout, fields),
+                &format!("Schedule 9 Item {}", row + 1),
+            ));
             rows.push(self.computed("C — Excess MCIT", entry.excess_mcit.value_or_zero().0, cx));
             rows.push(self.computed("G — Balance", entry.balance.value_or_zero().0, cx));
+            let balance_key = format!("schedule_9.rows[{row}]");
+            rows.extend(Self::error_lines([
+                self.message_for(&[balance_key.as_str()])
+            ]));
         }
         rows.push(
             self.computed(
@@ -1554,11 +1736,14 @@ impl Form1702MXView {
             (7, "8 Less: others"),
         ] {
             if index != 0 {
-                rows.push(self.field(
-                    &format!("d10.{index}"),
-                    &format!("Item {} — description", index + 1),
-                    layout,
-                    false,
+                rows.push(self.described(
+                    self.field(
+                        &format!("d10.{index}"),
+                        &format!("Item {} — description", index + 1),
+                        layout,
+                        false,
+                    ),
+                    &format!("Schedule 10 Item {}", index + 1),
                 ));
             }
             rows.push(self.abc_row(
@@ -1577,6 +1762,7 @@ impl Form1702MXView {
             &s10[9],
             cx,
         ));
+        rows.extend(Self::error_lines([self.message_for(&["schedule_10"])]));
         self.section(
             "Schedule 10 — Reconciliation of Net Income per Books",
             rows,
@@ -1629,28 +1815,32 @@ impl Form1702MXView {
                         },
                     ))
                 };
-            children.push(Self::choice_row(
-                layout,
-                "If overpayment, mark one:",
-                vec![
-                    pick(
-                        "1702mx_refund",
-                        "To be refunded",
-                        Form1702MXOverpaymentDisposition::Refund,
-                    ),
-                    pick(
-                        "1702mx_tcc",
-                        "To be issued a Tax Credit Certificate",
-                        Form1702MXOverpaymentDisposition::TaxCreditCertificate,
-                    ),
-                    pick(
-                        "1702mx_carry",
-                        "To be carried over",
-                        Form1702MXOverpaymentDisposition::CarryOver,
-                    ),
-                ],
+            children.push(self.with_errors(
+                Self::choice_row(
+                    layout,
+                    "If overpayment, mark one:",
+                    vec![
+                        pick(
+                            "1702mx_refund",
+                            "To be refunded",
+                            Form1702MXOverpaymentDisposition::Refund,
+                        ),
+                        pick(
+                            "1702mx_tcc",
+                            "To be issued a Tax Credit Certificate",
+                            Form1702MXOverpaymentDisposition::TaxCreditCertificate,
+                        ),
+                        pick(
+                            "1702mx_carry",
+                            "To be carried over",
+                            Form1702MXOverpaymentDisposition::CarryOver,
+                        ),
+                    ],
+                ),
+                &["part_ii.overpayment_disposition"],
             ));
         }
+        children.extend(Self::error_lines([self.message_for(&["part_ii"])]));
         self.section(
             "Part II — Total Tax Payable",
             vec![self.grid(layout, children)],
@@ -1682,12 +1872,37 @@ impl QueueableFormView for Form1702MXView {
             subscriptions.push(subscription);
             inputs.insert(key, input);
         }
+        let month_select = form_controls::new_select_state(&MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &month_select,
+            &MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(cx, |d| d.month = month);
+                }
+            },
+        ));
+        let atc_choices = atc_options();
+        let atc_select = form_controls::new_select_state(&atc_choices, window, cx);
+        subscriptions.push(form_controls::on_multi_select(
+            &atc_select,
+            &atc_choices,
+            ATC_MAX,
+            window,
+            cx,
+            |this: &Self| Self::picked_atcs(&this.draft),
+            Self::atc_change(),
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            month_select,
+            atc_select,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1948,6 +2163,24 @@ impl Render for Form1702MXView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let month_text = self.draft.month.to_string();
+        form_controls::sync_select(
+            &self.month_select,
+            &MONTH_OPTIONS,
+            (1..=12)
+                .contains(&self.draft.month)
+                .then_some(month_text.as_str()),
+            window,
+            cx,
+        );
+        form_controls::sync_multi_select(
+            &self.atc_select,
+            &atc_options(),
+            &Self::picked_atcs(&self.draft),
+            window,
+            cx,
+        );
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -2005,6 +2238,11 @@ impl Render for Form1702MXView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) need review before queuing."
+                            )))
                         })
                         .child(
                             Button::new("1702mx_submit")
@@ -2082,6 +2320,19 @@ impl Render for Form1702MXView {
                 cx,
             ));
         if !issues.is_empty() {
+            let mut issues = issues;
+            if error_count > issues.len() {
+                issues.push(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(format!(
+                            "Showing the first {} of {error_count} items.",
+                            issues.len()
+                        ))
+                        .into_any_element(),
+                );
+            }
             body = body.child(self.section("Needs review", issues, cx));
         }
 
@@ -2118,8 +2369,22 @@ impl Render for Form1702MXView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, amount_keys, bound_text_keys, format_tin, parse_percent, parse_peso};
+    use super::{
+        ATC_MAX, Layout, MCIT_VALUE, MONTH_OPTIONS, amount_keys, atc_options, bound_text_keys,
+        format_tin, model_error_keys, parse_percent, parse_peso,
+    };
     use gpui::px;
+
+    #[test]
+    fn atc_choices_and_months_match_the_official_slots() {
+        let options = atc_options();
+        assert_eq!(options.len(), 14);
+        assert_eq!(options[0].0, MCIT_VALUE);
+        assert_eq!(ATC_MAX, 2);
+        assert_eq!(MONTH_OPTIONS.len(), 12);
+        assert_eq!(model_error_keys("email"), ["email"]);
+        assert!(model_error_keys("s2.0.0").is_empty());
+    }
 
     #[test]
     fn layout_breakpoints() {

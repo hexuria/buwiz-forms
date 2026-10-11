@@ -25,7 +25,11 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use super::event_form_kit as kit;
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -94,6 +98,84 @@ impl Who {
             Self::Spouse => Form1701AAtc::Unanswered,
         }
     }
+}
+
+/// Month of the short period: (stored month number, shown name).
+const MONTH_OPTIONS: [(&str, &str); 12] = [
+    ("1", "January"),
+    ("2", "February"),
+    ("3", "March"),
+    ("4", "April"),
+    ("5", "May"),
+    ("6", "June"),
+    ("7", "July"),
+    ("8", "August"),
+    ("9", "September"),
+    ("10", "October"),
+    ("11", "November"),
+    ("12", "December"),
+];
+
+/// ATC choices: (code, shown label, filer type the code belongs to).
+const ATC_CHOICES: [(&str, &str, Form1701AFilerType); 4] = [
+    (
+        "II012",
+        "II012 Business income — graduated (OSD)",
+        Form1701AFilerType::SingleProprietor,
+    ),
+    (
+        "II014",
+        "II014 Income from profession — graduated (OSD)",
+        Form1701AFilerType::Professional,
+    ),
+    (
+        "II015",
+        "II015 Business income — 8%",
+        Form1701AFilerType::SingleProprietor,
+    ),
+    (
+        "II017",
+        "II017 Income from profession — 8%",
+        Form1701AFilerType::Professional,
+    ),
+];
+
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
+
+/// The ATC model value behind a select code.
+fn atc_for_code(code: &str) -> Option<Form1701AAtc> {
+    match code {
+        "II012" => Some(Form1701AAtc::II012),
+        "II014" => Some(Form1701AAtc::II014),
+        "II015" => Some(Form1701AAtc::II015),
+        "II017" => Some(Form1701AAtc::II017),
+        _ => None,
+    }
+}
+
+/// The select code of an ATC, if it is one of the four.
+fn code_for_atc(atc: Form1701AAtc) -> Option<&'static str> {
+    ATC_CHOICES
+        .iter()
+        .map(|(code, _, _)| *code)
+        .find(|code| atc_for_code(code) == Some(atc))
+}
+
+/// The ATCs open to one filer type; none until a type is chosen.
+fn atc_options_for(filer: Form1701AFilerType) -> Vec<(&'static str, &'static str)> {
+    ATC_CHOICES
+        .iter()
+        .filter(|(_, _, needs)| *needs == filer)
+        .map(|(code, label, _)| (*code, *label))
+        .collect()
+}
+
+/// Every ATC choice, for wiring the selects.
+fn all_atc_options() -> Vec<(&'static str, &'static str)> {
+    ATC_CHOICES
+        .iter()
+        .map(|(code, label, _)| (*code, *label))
+        .collect()
 }
 
 type Get = fn(&Form1701AColumn) -> f64;
@@ -701,6 +783,9 @@ pub struct Form1701AView {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    month_select: Entity<ComboboxState>,
+    atc_select: Entity<ComboboxState>,
+    sp_atc_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -709,6 +794,50 @@ pub struct Form1701AView {
 }
 
 impl Form1701AView {
+    /// Messages recorded for any of `keys` (parse errors use the input key,
+    /// validation errors the model's key), joined into one line.
+    fn message_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors.iter().chain(&self.validation_errors),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built row.
+    fn with_errors(&self, row: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(row, self.message_for(keys))
+    }
+
+    /// Messages for the values that come from the taxpayer profile and have
+    /// no input here (TIN and RDO code), with the note on where to fix them.
+    fn render_profile_errors(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let lines: Vec<AnyElement> = [("TIN", "tin"), ("RDO Code", "rdo_code")]
+            .into_iter()
+            .filter_map(|(label, key)| {
+                self.message_for(&[key])
+                    .map(|message| field_error(format!("{label}: {message}")).into_any_element())
+            })
+            .collect();
+        if lines.is_empty() {
+            return None;
+        }
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .children(lines)
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(PROFILE_NOTE),
+                )
+                .into_any_element(),
+        )
+    }
+
     fn money_text(value: f64) -> String {
         if value == 0.0 {
             String::new()
@@ -1051,7 +1180,7 @@ impl Form1701AView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -1066,8 +1195,8 @@ impl Form1701AView {
                 .w_full()
                 .child(label.w(relative(0.55)))
                 .child(body.w(relative(0.45))),
-        }
-        .into_any_element()
+        };
+        self.with_errors(row.into_any_element(), &[key, error_key])
     }
 
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
@@ -1301,9 +1430,18 @@ impl Form1701AView {
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
+        // The month has its own select (and message) only for a short period.
+        let year_keys: &[&str] = if d.is_short_period {
+            &["taxable_year"]
+        } else {
+            &["taxable_year", "month"]
+        };
         let mut children =
             vec![
-                self.static_value(text("year").label, d.taxable_year.to_string()),
+                self.with_errors(
+                    self.static_value(text("year").label, d.taxable_year.to_string()),
+                    year_keys,
+                ),
                 self.choice_row(
                     "Item 2 — Amended return?",
                     vec![
@@ -1334,20 +1472,16 @@ impl Form1701AView {
                 ),
             ];
         if d.is_short_period {
-            let months = (1..=12u8)
-                .map(|month| {
-                    Self::choice(
-                        ("1701a_month", month as usize),
-                        format!("{month:02}"),
-                        d.month == month,
-                        !editable,
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.edit(window, cx, |d| d.month = month)
-                    }))
-                })
-                .collect();
-            children.push(self.choice_row("Item 1 — Month of the short period", months));
+            let month_text = d.month.to_string();
+            children.push(select_field(
+                "Item 1 — Month of the short period",
+                &self.month_select,
+                &MONTH_OPTIONS,
+                (1..=12).contains(&d.month).then_some(month_text.as_str()),
+                !editable,
+                self.message_for(&["month"]).as_deref(),
+                cx,
+            ));
         }
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
@@ -1380,55 +1514,36 @@ impl Form1701AView {
             }))
         })
         .collect();
-        let atcs = [
-            (
-                Form1701AAtc::II012,
-                "II012 Business income — graduated (OSD)",
-                Form1701AFilerType::SingleProprietor,
-            ),
-            (
-                Form1701AAtc::II014,
-                "II014 Income from profession — graduated (OSD)",
-                Form1701AFilerType::Professional,
-            ),
-            (
-                Form1701AAtc::II015,
-                "II015 Business income — 8%",
-                Form1701AFilerType::SingleProprietor,
-            ),
-            (
-                Form1701AAtc::II017,
-                "II017 Income from profession — 8%",
-                Form1701AFilerType::Professional,
-            ),
-        ]
-        .into_iter()
-        .enumerate()
-        .map(|(index, (value, label, needs))| {
-            Self::choice(
-                (SharedString::from(format!("1701a_{p}_atc")), index),
-                label,
-                atc == value,
-                !editable || filer != needs,
-            )
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.edit(window, cx, |d| match who {
-                    Who::Taxpayer => d.atc = value,
-                    Who::Spouse => d.spouse.atc = value,
-                })
-            }))
-        })
-        .collect();
-        let (type_item, atc_item) = match who {
+        let (type_item, atc_item, type_key, atc_key, state) = match who {
             Who::Taxpayer => (
                 "Item 6 — Taxpayer type",
                 "Item 7 — ATC (sets Item 19, the tax rate)",
+                "filer_type",
+                "atc",
+                &self.atc_select,
             ),
-            Who::Spouse => ("Item 68 — Spouse type", "Item 69 — Spouse ATC"),
+            Who::Spouse => (
+                "Item 68 — Spouse type",
+                "Item 69 — Spouse ATC",
+                "spouse.filer_type",
+                "spouse.atc",
+                &self.sp_atc_select,
+            ),
         };
+        // Only the two ATCs of the chosen type are listed; with no type
+        // chosen yet the select stays closed.
+        let atc_select = select_field(
+            atc_item,
+            state,
+            &atc_options_for(filer),
+            code_for_atc(atc),
+            !editable || filer == Form1701AFilerType::Unanswered,
+            self.message_for(&[atc_key]).as_deref(),
+            cx,
+        );
         vec![
-            self.choice_row(type_item, types),
-            self.choice_row(atc_item, atcs),
+            self.with_errors(self.choice_row(type_item, types), &[type_key]),
+            atc_select,
         ]
     }
 
@@ -1464,6 +1579,7 @@ impl Form1701AView {
         }
         // Items 4-5, 6-7, 8-12, 13, 14, 15, 16 ... in official order.
         let mut children = vec![self.grid(layout, vec![tin_row])];
+        children.extend(self.render_profile_errors(cx));
         children.extend(self.filer_choices(Who::Taxpayer, cx));
         children.push(self.grid(layout, fields));
         children.push(self.choice_row(
@@ -1506,11 +1622,15 @@ impl Form1701AView {
             }))
         })
         .collect();
-        children.push(self.choice_row("Item 16 — Civil status", statuses));
+        children.push(self.with_errors(
+            self.choice_row("Item 16 — Civil status", statuses),
+            &["civil_status"],
+        ));
         let married = d.civil_status == Form1701ACivilStatus::Married;
-        children.push(self.choice_row(
-            "Item 17 — If married, spouse has income?",
-            vec![
+        children.push(self.with_errors(
+            self.choice_row(
+                "Item 17 — If married, spouse has income?",
+                vec![
                     Self::choice(
                         "1701a_sp_income_yes",
                         "Yes",
@@ -1530,11 +1650,14 @@ impl Form1701AView {
                         this.edit(window, cx, |d| d.spouse_has_income = Some(false))
                     })),
                 ],
+            ),
+            &["spouse_has_income"],
         ));
         let can_file = d.spouse_has_income == Some(true);
-        children.push(self.choice_row(
-            "Item 18 — Filing status",
-            vec![
+        children.push(self.with_errors(
+            self.choice_row(
+                "Item 18 — Filing status",
+                vec![
                     Self::choice(
                         "1701a_joint",
                         "Joint filing",
@@ -1558,6 +1681,8 @@ impl Form1701AView {
                         })
                     })),
                 ],
+            ),
+            &["filing_status"],
         ));
         // Not an official item: kept last in Part I.
         children.push(self.grid(
@@ -1631,6 +1756,11 @@ impl Form1701AView {
                 .child(format!("Item {item} — (add more...)"))
                 .into_any_element(),
         ];
+        let field = if part_b {
+            "eight_other_income_more"
+        } else {
+            "other_income_more"
+        };
         for index in 0..more_rows(&self.draft, part_b).len() {
             let remove = Button::new((
                 SharedString::from(format!("1701a_more_{tag}_remove")),
@@ -1641,9 +1771,11 @@ impl Form1701AView {
                 this.edit_rows(window, cx, |d| Self::remove_more_row(d, part_b, index))
             }));
             children.push(kit::row_heading(&format!("{item}.{}", index + 1), remove));
+            // The model reports a row's description and amount problems as
+            // `<list>[<row>]`; show them under the row's description.
             children.push(self.field(
                 &more_key(part_b, index, "desc"),
-                "",
+                &format!("{field}[{index}]"),
                 "Description",
                 layout,
                 !editable,
@@ -1665,11 +1797,6 @@ impl Form1701AView {
                 ));
             }
         }
-        let field = if part_b {
-            "eight_other_income_more"
-        } else {
-            "other_income_more"
-        };
         let disabled = !editable || !self.draft.more_link_available(part_b);
         children.push(
             kit::add_row_button(
@@ -1680,6 +1807,10 @@ impl Form1701AView {
                 this.edit_rows(window, cx, |d| Self::add_more_row(d, part_b))
             }))
             .into_any_element(),
+        );
+        children.extend(
+            self.message_for(&[field])
+                .map(|message| field_error(message).into_any_element()),
         );
         if self.has_error(field) {
             children[0] = div()
@@ -1801,8 +1932,15 @@ impl Form1701AView {
                 }))
             })
             .collect();
-            children.push(self.choice_row("If overpayment, mark one box only", options));
+            children.push(self.with_errors(
+                self.choice_row("If overpayment, mark one box only", options),
+                &["overpayment"],
+            ));
         }
+        children.extend(
+            self.message_for(&["aggregate_amount_payable"])
+                .map(|message| field_error(message).into_any_element()),
+        );
         children.push(self.text_field("sheets", "number_of_attachments", layout, false));
         self.section("Part II — Total tax payable", children, cx)
     }
@@ -1824,12 +1962,52 @@ impl QueueableFormView for Form1701AView {
             subscriptions.push(subscription);
             inputs.insert(key, input);
         }
+        let month_select = form_controls::new_select_state(&MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &month_select,
+            &MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(window, cx, |d| d.month = month);
+                }
+            },
+        ));
+        let atc_choices = all_atc_options();
+        let atc_select = form_controls::new_select_state(&atc_choices, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &atc_select,
+            &atc_choices,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                if let Some(atc) = atc_for_code(&value) {
+                    this.edit(window, cx, |d| d.atc = atc);
+                }
+            },
+        ));
+        let sp_atc_select = form_controls::new_select_state(&atc_choices, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &sp_atc_select,
+            &atc_choices,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                if let Some(atc) = atc_for_code(&value) {
+                    this.edit(window, cx, |d| d.spouse.atc = atc);
+                }
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            month_select,
+            atc_select,
+            sp_atc_select,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -2068,6 +2246,31 @@ impl Render for Form1701AView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let month_text = self.draft.month.to_string();
+        form_controls::sync_select(
+            &self.month_select,
+            &MONTH_OPTIONS,
+            (1..=12)
+                .contains(&self.draft.month)
+                .then_some(month_text.as_str()),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.atc_select,
+            &atc_options_for(self.draft.filer_type),
+            code_for_atc(self.draft.atc),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.sp_atc_select,
+            &atc_options_for(self.draft.spouse.filer_type),
+            code_for_atc(self.draft.spouse.atc),
+            window,
+            cx,
+        );
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -2125,6 +2328,11 @@ impl Render for Form1701AView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) need review before queuing."
+                            )))
                         })
                         .child(
                             Button::new("1701a_submit")
@@ -2191,6 +2399,19 @@ impl Render for Form1701AView {
         }
         body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
+            let mut issues = issues;
+            if error_count > issues.len() {
+                issues.push(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(format!(
+                            "Showing the first {} of {error_count} items.",
+                            issues.len()
+                        ))
+                        .into_any_element(),
+                );
+            }
             body = body.child(self.section("Needs review", issues, cx));
         }
 
@@ -2227,8 +2448,37 @@ impl Render for Form1701AView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Form1701AView, Layout, format_tin, parse_amount};
+    use super::{
+        Form1701AView, Layout, MONTH_OPTIONS, all_atc_options, atc_for_code, atc_options_for,
+        code_for_atc, format_tin, parse_amount,
+    };
+    use bir_core::forms::form_1701a::{Form1701AAtc, Form1701AFilerType};
     use gpui::px;
+
+    #[test]
+    fn atc_select_lists_only_the_codes_of_the_filer_type() {
+        let single = atc_options_for(Form1701AFilerType::SingleProprietor);
+        assert_eq!(
+            single.iter().map(|(code, _)| *code).collect::<Vec<_>>(),
+            ["II012", "II015"]
+        );
+        let professional = atc_options_for(Form1701AFilerType::Professional);
+        assert_eq!(
+            professional
+                .iter()
+                .map(|(code, _)| *code)
+                .collect::<Vec<_>>(),
+            ["II014", "II017"]
+        );
+        assert!(atc_options_for(Form1701AFilerType::Unanswered).is_empty());
+        assert_eq!(all_atc_options().len(), 4);
+        assert_eq!(MONTH_OPTIONS.len(), 12);
+        for (code, _) in all_atc_options() {
+            let atc = atc_for_code(code).expect("every listed code maps to an ATC");
+            assert_eq!(code_for_atc(atc), Some(code));
+        }
+        assert_eq!(code_for_atc(Form1701AAtc::Unanswered), None);
+    }
 
     #[test]
     fn layout_breakpoints() {
