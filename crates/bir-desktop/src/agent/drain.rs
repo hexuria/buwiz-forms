@@ -70,6 +70,29 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
             cx.notify();
             continue;
         }
+        if let Op::Invoke { name, args } = &posted.request.op
+            && name == "dashboard.tab"
+        {
+            let response = match parse_dashboard_tab(args) {
+                Ok(_) if app.active_view != ActiveView::Dashboard => Response::err(
+                    &posted.request.id,
+                    "dashboard.tab needs the profile dashboard open (nav.go dashboard)",
+                ),
+                Ok(tab) => {
+                    let slug = dashboard_tab_slug(&tab);
+                    app.dashboard_view
+                        .update(cx, |view, cx| view.agent_set_tab(tab, cx));
+                    let mut resp = Response::ok(&posted.request.id);
+                    resp.result = Some(serde_json::json!({ "tab": slug }));
+                    resp
+                }
+                Err(error) => Response::err(&posted.request.id, error),
+            };
+            crate::agent::request_log::emit_request_log(&posted.request, &response);
+            posted.reply(response);
+            cx.notify();
+            continue;
+        }
         if matches!(posted.request.op, Op::Keybinding { .. }) {
             if app.start_keybinding_fire(posted, window, cx) {
                 break;
@@ -122,6 +145,34 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
             cx.quit();
         }
         cx.notify();
+    }
+}
+
+/// `dashboard.tab` args: `{"tab": "calendar" | "forms" | "library"}`.
+///
+/// Painted app only: the tab lives in `DashboardView`, not in the semantic
+/// host, so `bir-headless` does not answer it.
+fn parse_dashboard_tab(
+    args: &serde_json::Value,
+) -> Result<crate::views::dashboard::ProfileTab, String> {
+    use crate::views::dashboard::ProfileTab;
+    let slug = args
+        .get("tab")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("dashboard.tab requires args.tab")?;
+    match slug.trim().to_ascii_lowercase().as_str() {
+        "calendar" => Ok(ProfileTab::Calendar),
+        "forms" | "library" | "tax-form-library" => Ok(ProfileTab::Forms),
+        other => Err(format!(
+            "unknown dashboard tab `{other}` (expected calendar or forms)"
+        )),
+    }
+}
+
+fn dashboard_tab_slug(tab: &crate::views::dashboard::ProfileTab) -> &'static str {
+    match tab {
+        crate::views::dashboard::ProfileTab::Calendar => "calendar",
+        crate::views::dashboard::ProfileTab::Forms => "forms",
     }
 }
 
@@ -1266,6 +1317,17 @@ mod tests {
     use super::{ActiveView, profile_to_adopt};
 
     const TIN: &str = "00000000000000";
+
+    #[test]
+    fn dashboard_tab_accepts_calendar_and_library_slugs() {
+        use super::{dashboard_tab_slug, parse_dashboard_tab};
+        let slug = |v: serde_json::Value| parse_dashboard_tab(&v).map(|t| dashboard_tab_slug(&t));
+        assert_eq!(slug(serde_json::json!({"tab": "calendar"})), Ok("calendar"));
+        assert_eq!(slug(serde_json::json!({"tab": "Forms"})), Ok("forms"));
+        assert_eq!(slug(serde_json::json!({"tab": "library"})), Ok("forms"));
+        assert!(slug(serde_json::json!({"tab": "jobs"})).is_err());
+        assert!(slug(serde_json::json!({})).is_err());
+    }
 
     #[test]
     fn a_form_navigation_adopts_the_hosts_taxpayer_once() {
