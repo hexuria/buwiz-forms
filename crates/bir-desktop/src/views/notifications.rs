@@ -213,6 +213,8 @@ impl NotificationsView {
         let id = alert.id;
         let action = alert.action;
 
+        // The header wraps: a long title keeps its own lines, and the
+        // seen-count drops under it rather than being cut off.
         let root = rsx! {
             <div
                 flex
@@ -225,9 +227,10 @@ impl NotificationsView {
                 bg={cx.theme().background}
                 border_l_4
             >
-                <div flex flex_row items_center justify_between gap_4>
-                    <div flex flex_row items_center gap_2>
+                <div flex flex_row flex_wrap items_start justify_between gap_x_4 gap_y_1>
+                    <div flex flex_row flex_1 items_start gap_2 min_w={px(220.)}>
                         <div
+                            flex_shrink_0
                             text_xs
                             font_weight={FontWeight::BOLD}
                             text_color={accent}
@@ -238,11 +241,11 @@ impl NotificationsView {
                         >
                             {Self::severity_label(alert.severity)}
                         </div>
-                        <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().foreground}>
+                        <div flex_1 min_w_0 text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().foreground}>
                             {alert.title.clone()}
                         </div>
                     </div>
-                    <div text_xs text_color={cx.theme().muted_foreground}>
+                    <div flex_shrink_0 py_1 text_xs text_color={cx.theme().muted_foreground}>
                         {Self::occurrence_summary(alert)}
                     </div>
                 </div>

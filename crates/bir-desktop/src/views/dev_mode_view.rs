@@ -216,40 +216,19 @@ impl DevModeView {
         cx: &Context<Self>,
     ) -> AnyElement {
         div()
-            .flex()
             .w_full()
-            .justify_between()
-            .items_center()
-            .gap_4()
             .p_4()
             .border_b_1()
             .border_color(cx.theme().border)
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(title.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(description.to_string()),
-                    )
-                    .when_some(note, |col, note| {
-                        col.child(
-                            div()
-                                .text_xs()
-                                .text_color(crate::dev_mode::dev_orange())
-                                .child(note),
-                        )
-                    }),
+                crate::components::setting_row::SettingRow::new(
+                    title.to_string(),
+                    description.to_string(),
+                )
+                .note(note)
+                .note_color(crate::dev_mode::dev_orange())
+                .control(control),
             )
-            .child(control)
             .into_any_element()
     }
 
@@ -546,7 +525,6 @@ impl Render for DevModeView {
                     .into_any_element(),
             );
         }
-        body.push(Self::heading("Submission", cx));
         body.extend(self.submission_section(cx));
 
         body.push(Self::heading("Validation and filing", cx));

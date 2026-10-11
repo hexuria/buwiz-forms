@@ -26,6 +26,18 @@ const LOG_RENDERED_LINES: usize = 500;
 
 /// Which job cards a filter shows. "Completed" is the `Archived` status:
 /// an email-confirmation poll is archived the moment its receipt lands.
+/// Empty-state text for the job list: `None` while any job is shown.
+/// `total` is every job loaded; `shown` is what survived filter and search.
+fn jobs_empty_message(total: usize, shown: usize) -> Option<&'static str> {
+    if shown > 0 {
+        None
+    } else if total == 0 {
+        Some("No queued jobs. Submitted returns appear here while they send.")
+    } else {
+        Some("No jobs match this filter or search.")
+    }
+}
+
 fn job_matches_filter(filter: &str, status: &str) -> bool {
     match filter {
         "Queued" => status == "Queued",
@@ -826,6 +838,13 @@ impl Render for CronTasksView {
                             </div>
                         }
                     })}
+                    {...jobs_empty_message(self.jobs.len(), filtered_jobs.len()).map(|message| {
+                        rsx! {
+                            <div p_8 text_center text_sm text_color={cx.theme().muted_foreground} border_1 border_color={cx.theme().border} rounded_lg>
+                                {message}
+                            </div>
+                        }
+                    })}
                 </div>
                 <div flex justify_center pt_4 pb_8 when={(total_pages > 1, |this| {
                     this.child(
@@ -1045,7 +1064,20 @@ impl CronTasksView {
 mod tests {
     // Not `use super::*`: that would import gpui's `#[test]` attribute macro
     // over std's.
-    use super::{LogLevel, job_matches_filter, log_line_level, tail_lines};
+    use super::{LogLevel, job_matches_filter, jobs_empty_message, log_line_level, tail_lines};
+
+    #[test]
+    fn empty_state_text_depends_on_whether_any_job_exists() {
+        assert_eq!(jobs_empty_message(3, 2), None);
+        assert_eq!(
+            jobs_empty_message(0, 0),
+            Some("No queued jobs. Submitted returns appear here while they send.")
+        );
+        assert_eq!(
+            jobs_empty_message(4, 0),
+            Some("No jobs match this filter or search.")
+        );
+    }
 
     #[test]
     fn completed_filter_is_the_archived_status_and_done_is_gone() {

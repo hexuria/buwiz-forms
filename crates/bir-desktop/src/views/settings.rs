@@ -1,6 +1,8 @@
-use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
+use crate::components::combobox::{Combobox, ComboboxState};
 use crate::components::hotkey_recorder::{HotkeyRecorder, HotkeyRecorderEvent};
 use crate::components::otp_paste::paste_otp_value;
+use crate::components::setting_row::SettingRow;
+use crate::views::form_controls::{new_select_state, on_select, sync_select};
 use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -33,8 +35,9 @@ pub struct SettingsView {
     /// D2A "Separate Validate button" (default On).
     separate_validate: bool,
     hotkey_recorder: Entity<HotkeyRecorder>,
-    /// "7 days" etc.; the stored value is `log_retention_days`.
+    /// "30 days" etc.; the stored value is `log_retention_days`.
     log_retention: Entity<ComboboxState>,
+    log_retention_days: u32,
     google_calendar_configured: bool,
     google_calendar_email: Option<String>,
     google_calendar_message: Option<(bool, String)>,
@@ -103,20 +106,8 @@ impl SettingsView {
             .ok()
             .map(|guard| bir_core::log_files::retention_days(&guard))
             .unwrap_or(bir_core::log_files::DEFAULT_RETENTION_DAYS);
-        let log_retention = cx.new(|cx| {
-            ComboboxState::new(
-                bir_core::log_files::RETENTION_CHOICES
-                    .iter()
-                    .map(|days| retention_label(*days))
-                    .collect(),
-                6,
-                window,
-                cx,
-            )
-        });
-        log_retention.update(cx, |state, cx| {
-            state.set_selected_value(&retention_label(retention_days), window, cx)
-        });
+        let retention_choices = RetentionChoices::new(retention_days);
+        let log_retention = new_select_state(&retention_choices.as_options(), window, cx);
         let calendar_connection = db
             .lock()
             .ok()
@@ -139,20 +130,23 @@ impl SettingsView {
             separate_validate,
             hotkey_recorder: hotkey_recorder.clone(),
             log_retention: log_retention.clone(),
+            log_retention_days: retention_days,
             google_calendar_configured: calendar_connection.configured,
             google_calendar_email: calendar_connection.connected_email,
             google_calendar_message: None,
             show_google_calendar_setup_guide: false,
         };
 
-        cx.subscribe_in(
+        on_select(
             &log_retention,
+            &retention_choices.as_options(),
             window,
-            |this: &mut Self, _entity, _event: &ComboboxEvent, _window, cx| {
-                let label = this.log_retention.read(cx).selected_value(cx);
-                let Some(days) = retention_days_from_label(&label) else {
+            cx,
+            |this: &mut Self, value, _window, cx| {
+                let Ok(days) = value.parse::<u32>() else {
                     return;
                 };
+                this.log_retention_days = days;
                 if let Ok(db) = this.db.lock() {
                     let _ =
                         db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string());
@@ -243,6 +237,21 @@ impl SettingsView {
         view
     }
 
+    /// Turn Profile PINs on or off. Turning them off also un-hides profiles,
+    /// since hiding needs PINs.
+    fn set_profile_pins(&mut self, on: bool, cx: &mut Context<'_, Self>) {
+        self.enable_profile_pins = on;
+        if let Ok(db) = self.db.lock() {
+            let _ = db.set_setting("enable_profile_pins", if on { "true" } else { "false" });
+            if !on && self.hide_tax_profiles {
+                self.hide_tax_profiles = false;
+                let _ = db.set_setting("hide_tax_profiles", "false");
+            }
+        }
+        cx.emit(SettingsEvent::ReloadApp);
+        cx.notify();
+    }
+
     fn render_google_calendar_settings(&self, cx: &Context<'_, Self>) -> impl IntoElement {
         let connected = self.google_calendar_email.is_some();
         div()
@@ -255,19 +264,18 @@ impl SettingsView {
             .rounded_xl()
             .p_6()
             .gap_4()
-            .child(rsx! {
-                <div flex justify_between items_start gap_4>
-                    <div flex flex_col gap_1>
-                        <div font_weight={FontWeight::SEMIBOLD}>{"Google Calendar"}</div>
-                        <div text_sm text_color={cx.theme().muted_foreground}>
-                            {"Connect one Google account, then create a separate filing calendar for each tax profile."}
-                        </div>
-                    </div>
-                    <div text_sm text_color={if connected { cx.theme().success } else { cx.theme().muted_foreground }}>
+            .child(
+                SettingRow::new(
+                    "Google Calendar",
+                    "Connect one Google account, then create a separate filing calendar for each tax profile.",
+                )
+                // Bounded so a long address wraps inside the card.
+                .control(rsx! {
+                    <div max_w={px(280.)} text_sm text_color={if connected { cx.theme().success } else { cx.theme().muted_foreground }}>
                         {self.google_calendar_email.clone().unwrap_or_else(|| "Not connected".to_string())}
                     </div>
-                </div>
-            })
+                }),
+            )
             .child(rsx! {
                 <div text_sm text_color={cx.theme().muted_foreground}>
                     {"eBIRForms requests access only to calendars it creates. Deadline events use email reminders 7 days and 1 day before filing."}
@@ -423,7 +431,16 @@ impl SettingsView {
 }
 
 impl Render for SettingsView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let retention_choices = RetentionChoices::new(self.log_retention_days);
+        let retention_value = self.log_retention_days.to_string();
+        sync_select(
+            &self.log_retention,
+            &retention_choices.as_options(),
+            Some(&retention_value),
+            window,
+            cx,
+        );
         let bg = cx.theme().background;
         let border = cx.theme().border;
 
@@ -480,15 +497,17 @@ impl Render for SettingsView {
                             .gap_4()
                             .border_b_1()
                             .border_color(border)
-                            .child(rsx! {
-                                <div flex w_full justify_between items_center>
-                                    <div flex flex_col gap_1>
-                                        <div font_weight={FontWeight::SEMIBOLD}>{"Master PIN"}</div>
-                                        <div text_sm text_color={cx.theme().muted_foreground}>
-                                            {"Require a 4-digit PIN to unlock the app. If forgotten, your OS login password will be required."}
-                                        </div>
-                                    </div>
-                                    {Switch::new("app_lock_switch")
+                            .child(
+                                SettingRow::new(
+                                    "Master PIN",
+                                    "Require a 4-digit PIN to unlock the app. If forgotten, your OS login password will be required.",
+                                )
+                                .note(
+                                    self.is_app_totp_enabled
+                                        .then_some("Disable Authenticator App first to use 4-digit PIN."),
+                                )
+                                .control(
+                                    Switch::new("app_lock_switch")
                                         .checked(self.is_app_lock_enabled)
                                         .disabled(self.is_app_totp_enabled)
                                         .on_click(cx.listener(|this, checked, _window, cx| {
@@ -503,16 +522,9 @@ impl Render for SettingsView {
                                                 this.show_pin_setup = true;
                                             }
                                             cx.notify();
-                                        }))}
-                                </div>
-                            })
-                            .when(self.is_app_totp_enabled, |this| {
-                                this.child(rsx! {
-                                    <div text_xs text_color={cx.theme().muted_foreground}>
-                                        {"Disable Authenticator App first to use 4-digit PIN."}
-                                    </div>
-                                })
-                            })
+                                        })),
+                                ),
+                            )
                             .when(self.show_pin_setup, |this| {
                                 this.child(rsx! {
                                     <div flex flex_col gap_4 mt_4>
@@ -542,15 +554,17 @@ impl Render for SettingsView {
                             .gap_4()
                             .border_b_1()
                             .border_color(border)
-                            .child(rsx! {
-                                <div flex w_full justify_between items_center>
-                                    <div flex flex_col gap_1>
-                                        <div font_weight={FontWeight::SEMIBOLD}>{"Master Authenticator App"}</div>
-                                        <div text_sm text_color={cx.theme().muted_foreground}>
-                                            {"Use a 6-digit TOTP code from an authenticator app (e.g. Google Authenticator) for enhanced security."}
-                                        </div>
-                                    </div>
-                                    {Switch::new("app_totp_switch")
+                            .child(
+                                SettingRow::new(
+                                    "Master Authenticator App",
+                                    "Use a 6-digit TOTP code from an authenticator app (e.g. Google Authenticator) for enhanced security.",
+                                )
+                                .note(
+                                    self.is_app_lock_enabled
+                                        .then_some("Disable 4-digit PIN first to use Authenticator App."),
+                                )
+                                .control(
+                                    Switch::new("app_totp_switch")
                                         .checked(self.is_app_totp_enabled)
                                         .disabled(self.is_app_lock_enabled)
                                         .on_click(cx.listener(|this, checked, window, cx| {
@@ -573,143 +587,116 @@ impl Render for SettingsView {
                                                 this.setup_totp_state.update(cx, |s, cx| s.focus(window, cx));
                                             }
                                             cx.notify();
-                                        }))}
-                                </div>
-                            })
-                            .when(self.is_app_lock_enabled, |this| {
-                                this.child(rsx! {
-                                    <div text_xs text_color={cx.theme().muted_foreground}>
-                                        {"Disable 4-digit PIN first to use Authenticator App."}
-                                    </div>
-                                })
-                            })
+                                        })),
+                                ),
+                            )
 
                     )
 
-                    .child(rsx! {
-                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
-                            <div flex w_full justify_between items_center gap_4>
-                                <div flex flex_col gap_1>
-                                    <div font_weight={FontWeight::SEMIBOLD}>{"Keep application logs for"}</div>
-                                    <div text_sm text_color={cx.theme().muted_foreground}>
-                                        {"One log file per day under Background Tasks → Logs. Older days are deleted automatically."}
-                                    </div>
-                                </div>
-                                <div w_40>{Combobox::new(&self.log_retention)}</div>
-                            </div>
-                        </div>
-                    })
-                    .child(rsx! {
-                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
-                            <div flex w_full justify_between items_center>
-                                <div flex flex_col gap_1>
-                                    <div font_weight={FontWeight::SEMIBOLD}>{"Enable Profile PINs"}</div>
-                                    <div text_sm text_color={cx.theme().muted_foreground}>
-                                        {"Allow securing individual tax profiles with a separate 4-digit PIN."}
-                                    </div>
-                                </div>
-                                {Switch::new("enable_profile_pins_switch")
-                                    .checked(self.enable_profile_pins)
+                    .child(section(border).child(
+                        SettingRow::new(
+                            "Keep application logs for",
+                            "One log file per day under Background Tasks → Logs. Older days are deleted automatically.",
+                        )
+                        .control(div().w(px(180.)).child(Combobox::new(&self.log_retention))),
+                    ))
+                    .child(section(border).child(
+                        SettingRow::new(
+                            "Enable Profile PINs",
+                            "Allow securing individual tax profiles with a separate 4-digit PIN.",
+                        )
+                        .control(
+                            Switch::new("enable_profile_pins_switch")
+                                .checked(self.enable_profile_pins)
+                                .on_click(cx.listener(|this, checked, _window, cx| {
+                                    this.set_profile_pins(*checked, cx);
+                                })),
+                        ),
+                    ))
+                    .child(section(border).child({
+                        let hide_control = div()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .when(!self.enable_profile_pins, |row| {
+                                row.child(
+                                    gpui_component::button::Button::new("turn_on_profile_pins_btn")
+                                        .label("Turn on Profile PINs")
+                                        .small()
+                                        .on_click(cx.listener(|this, _ev, _window, cx| {
+                                            this.set_profile_pins(true, cx);
+                                        })),
+                                )
+                            })
+                            .child(
+                                Switch::new("hide_tax_profiles_switch")
+                                    .checked(self.hide_tax_profiles)
+                                    .disabled(!self.enable_profile_pins)
                                     .on_click(cx.listener(|this, checked, _window, cx| {
-                                        this.enable_profile_pins = *checked;
+                                        let Some(hide) = hide_profiles_after_toggle(this.enable_profile_pins, *checked) else {
+                                            return;
+                                        };
+                                        this.hide_tax_profiles = hide;
                                         if let Ok(db) = this.db.lock() {
-                                            let _ = db.set_setting("enable_profile_pins", if *checked { "true" } else { "false" });
-                                            if !*checked && this.hide_tax_profiles {
-                                                this.hide_tax_profiles = false;
-                                                let _ = db.set_setting("hide_tax_profiles", "false");
-                                            }
+                                            let _ = db.set_setting("hide_tax_profiles", if hide { "true" } else { "false" });
                                         }
                                         cx.emit(SettingsEvent::ReloadApp);
                                         cx.notify();
-                                    }))}
-                            </div>
-                        </div>
-                    })
-                    .child(rsx! {
-                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}
-                            when={(!self.enable_profile_pins, |this| this.opacity(0.5))}>
-                            <div flex w_full justify_between items_center>
-                                <div flex flex_col gap_1>
-                                    <div font_weight={FontWeight::SEMIBOLD}>{"Hide Tax Profiles from Sidebar"}</div>
-                                    <div text_sm text_color={cx.theme().muted_foreground}>
-                                        {"Prevent profiles from being listed in the sidebar. Useful in public spaces. Requires Profile PINs to be enabled."}
-                                    </div>
-                                </div>
-                                <div>
-                                    {Switch::new("hide_tax_profiles_switch")
-                                        .checked(self.hide_tax_profiles)
-                                        .on_click(cx.listener(|this, checked, _window, cx| {
-                                            if !this.enable_profile_pins { return; }
-                                            this.hide_tax_profiles = *checked;
-                                            if let Ok(db) = this.db.lock() {
-                                                let _ = db.set_setting("hide_tax_profiles", if *checked { "true" } else { "false" });
-                                            }
-                                            cx.emit(SettingsEvent::ReloadApp);
-                                            cx.notify();
-                                        }))}
-                                </div>
-                            </div>
-                        </div>
-                    })
-                    .child(rsx! {
-                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
-                            <div flex w_full justify_between items_center>
-                                <div flex flex_col gap_1>
-                                    <div font_weight={FontWeight::SEMIBOLD}>{"Separate Validate button"}</div>
-                                    <div text_sm text_color={cx.theme().muted_foreground}>
-                                        {"On: return pages show Validate next to Submit, and Submit waits for a passing Validate. Off: Submit validates first and only queues a return with no errors."}
-                                    </div>
-                                </div>
-                                {Switch::new("separate_validate_switch")
-                                    .checked(self.separate_validate)
-                                    .on_click(cx.listener(|this, checked, _window, cx| {
-                                        this.separate_validate = *checked;
-                                        crate::views::form_header::set_separate_validate_button(&this.db, *checked);
-                                        cx.notify();
-                                    }))}
-                            </div>
-                        </div>
-                    })
+                                    })),
+                            );
+                        SettingRow::new(
+                            "Hide Tax Profiles from Sidebar",
+                            "Prevent profiles from being listed in the sidebar. Useful in public spaces. Requires Profile PINs to be enabled.",
+                        )
+                        .note(hide_profiles_note(self.enable_profile_pins))
+                        .control(hide_control)
+                    }))
+                    .child(section(border).child(
+                        SettingRow::new(
+                            "Separate Validate button",
+                            "On: return pages show Validate next to Submit, and Submit waits for a passing Validate. Off: Submit validates first and only queues a return with no errors.",
+                        )
+                        .control(
+                            Switch::new("separate_validate_switch")
+                                .checked(self.separate_validate)
+                                .on_click(cx.listener(|this, checked, _window, cx| {
+                                    this.separate_validate = *checked;
+                                    crate::views::form_header::set_separate_validate_button(&this.db, *checked);
+                                    cx.notify();
+                                })),
+                        ),
+                    ))
                     // Global Toggle Hotkey
-                    .child({
-                        let description =
-                            "Toggle eBIRForms from anywhere. Click the shortcut, then press your desired modifiers (Ctrl / Option / Shift / Cmd) together with a letter, number, or F-key.".to_string();
-
-                        rsx! {
-                            <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
-                                <div flex w_full justify_between items_center>
-                                    <div flex flex_col gap_1>
-                                        <div font_weight={FontWeight::SEMIBOLD}>{"Global Toggle Hotkey"}</div>
-                                        <div text_sm text_color={cx.theme().muted_foreground}>
-                                            {description}
-                                        </div>
-                                    </div>
-                                    {self.hotkey_recorder.clone()}
-                                </div>
-                            </div>
-                        }
-                    })
+                    .child(section(border).child(
+                        SettingRow::new(
+                            "Global Toggle Hotkey",
+                            "Toggle eBIRForms from anywhere. Click the shortcut, then press your desired modifiers (Ctrl / Option / Shift / Cmd) together with a letter, number, or F-key.",
+                        )
+                        .control(self.hotkey_recorder.clone()),
+                    ))
                     .child(rsx! {
                         <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
-                            <div flex flex_col gap_1>
-                                <div font_weight={FontWeight::SEMIBOLD}>{"Export Data"}</div>
-                                <div text_sm text_color={cx.theme().muted_foreground}>
-                                    {"Create a complete backup of your entire application database or all profiles."}
-                                </div>
-                            </div>
-                            <div flex gap_4>
+                            {SettingRow::new(
+                                "Export Data",
+                                "Create a complete backup of your entire application database or all profiles.",
+                            )}
+                            <div flex flex_wrap gap_4>
                                     {
                                         gpui_component::button::Button::new("export_database_btn")
                                             .label("Export Full Database")
                                             .on_click(cx.listener(|_this, _ev, _window, cx| {
                                                 cx.spawn(async move |this, cx| {
-                                                    let Some(target_dir_handle) = rfd::AsyncFileDialog::new()
-                                                        .set_title("Select Folder to Save Database Backup")
-                                                        .pick_folder()
-                                                        .await
-                                                    else { return; };
-
-                                                    let target_dir = target_dir_handle.path().to_path_buf();
+                                                    let target_dir = match export_dir("Select Folder to Save Database Backup").await {
+                                                        Ok(dir) => dir,
+                                                        Err(e) => {
+                                                            rfd::AsyncMessageDialog::new()
+                                                                .set_title("Export Failed")
+                                                                .set_description(&e)
+                                                                .show()
+                                                                .await;
+                                                            return;
+                                                        }
+                                                    };
 
                                                     let res = this.update(cx, |this, _cx| {
                                                         let db_path = bir_core::db::default_database_path();
@@ -757,13 +744,17 @@ impl Render for SettingsView {
                                             .label("Export All Profiles (JSON)")
                                             .on_click(cx.listener(|_this, _ev, _window, cx| {
                                                 cx.spawn(async move |this, cx| {
-                                                    let Some(target_dir_handle) = rfd::AsyncFileDialog::new()
-                                                        .set_title("Select Folder to Save Profiles Backup")
-                                                        .pick_folder()
-                                                        .await
-                                                    else { return; };
-
-                                                    let target_dir = target_dir_handle.path().to_path_buf();
+                                                    let target_dir = match export_dir("Select Folder to Save Profiles Backup").await {
+                                                        Ok(dir) => dir,
+                                                        Err(e) => {
+                                                            rfd::AsyncMessageDialog::new()
+                                                                .set_title("Export Failed")
+                                                                .set_description(&e)
+                                                                .show()
+                                                                .await;
+                                                            return;
+                                                        }
+                                                    };
 
                                                     let res = this.update(cx, |this, _cx| {
                                                         let timestamp = std::time::SystemTime::now()
@@ -807,12 +798,11 @@ impl Render for SettingsView {
                     })
                     .child(rsx! {
                         <div flex flex_col items_start p_6 gap_4 w_full bg={cx.theme().danger.opacity(0.1)}>
-                            <div flex flex_col gap_1>
-                                <div font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().danger}>{"Danger Zone: Factory Reset"}</div>
-                                <div text_sm text_color={cx.theme().muted_foreground}>
-                                    {"Permanently delete all profiles, submissions, drafts, and settings. This cannot be undone."}
-                                </div>
-                            </div>
+                            {SettingRow::new(
+                                "Danger Zone: Factory Reset",
+                                "Permanently delete all profiles, submissions, drafts, and settings. This cannot be undone.",
+                            )
+                            .title_color(cx.theme().danger)}
                             {
                                 gpui_component::button::Button::new("factory_reset_btn")
                                     .label("Zero Out Everything")
@@ -1003,6 +993,90 @@ impl Render for SettingsView {
     }
 }
 
+/// One bordered section of the settings card.
+fn section(border: Hsla) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .items_start()
+        .w_full()
+        .p_6()
+        .gap_4()
+        .border_b_1()
+        .border_color(border)
+}
+
+/// Note under "Hide Tax Profiles": hiding needs Profile PINs.
+fn hide_profiles_note(profile_pins: bool) -> Option<&'static str> {
+    (!profile_pins).then_some("Turn on Profile PINs first")
+}
+
+/// The new hide setting after the switch is clicked, or `None` when the
+/// click must be ignored because Profile PINs are off.
+fn hide_profiles_after_toggle(profile_pins: bool, checked: bool) -> Option<bool> {
+    profile_pins.then_some(checked)
+}
+
+/// Log retention offered in Settings, in days.
+const RETENTION_OPTIONS: [u32; 4] = [7, 14, 30, 90];
+
+/// The dropdown's `(value, label)` options: the standard four, plus the saved
+/// value when it is something else, so the current setting always shows.
+struct RetentionChoices(Vec<(String, String)>);
+
+impl RetentionChoices {
+    fn new(saved_days: u32) -> Self {
+        let mut days = RETENTION_OPTIONS.to_vec();
+        if saved_days > 0 && !days.contains(&saved_days) {
+            days.push(saved_days);
+            days.sort_unstable();
+        }
+        Self(
+            days.into_iter()
+                .map(|d| (d.to_string(), retention_label(d)))
+                .collect(),
+        )
+    }
+
+    fn as_options(&self) -> Vec<(&str, &str)> {
+        self.0
+            .iter()
+            .map(|(value, label)| (value.as_str(), label.as_str()))
+            .collect()
+    }
+}
+
+/// Where an export goes: the picked folder, else the fallback folder
+/// (created if needed). Errors are messages for the user.
+async fn export_dir(title: &str) -> Result<std::path::PathBuf, String> {
+    if let Some(picked) = rfd::AsyncFileDialog::new()
+        .set_title(title)
+        .pick_folder()
+        .await
+    {
+        return Ok(picked.path().to_path_buf());
+    }
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from);
+    let dir = fallback_export_dir(home.as_deref(), &bir_core::platform::data_dir());
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    Ok(dir)
+}
+
+/// `~/Documents/eBIRForms/exports`, or `data_dir/exports` when there is no
+/// Documents folder.
+fn fallback_export_dir(
+    home: Option<&std::path::Path>,
+    data_dir: &std::path::Path,
+) -> std::path::PathBuf {
+    match home.map(|h| h.join("Documents")) {
+        Some(documents) if documents.is_dir() => documents.join("eBIRForms").join("exports"),
+        _ => data_dir.join("exports"),
+    }
+}
+
 fn retention_label(days: u32) -> String {
     if days == 1 {
         "1 day".to_string()
@@ -1011,6 +1085,65 @@ fn retention_label(days: u32) -> String {
     }
 }
 
-fn retention_days_from_label(label: &str) -> Option<u32> {
-    label.split_whitespace().next()?.parse().ok()
+#[cfg(test)]
+mod tests {
+    // Not `use super::*`: that would import gpui's `#[test]` attribute macro.
+    use super::{
+        RetentionChoices, fallback_export_dir, hide_profiles_after_toggle, hide_profiles_note,
+        retention_label,
+    };
+
+    #[test]
+    fn retention_values_map_to_labels_and_back() {
+        let choices = RetentionChoices::new(30);
+        assert_eq!(
+            choices.as_options(),
+            vec![
+                ("7", "7 days"),
+                ("14", "14 days"),
+                ("30", "30 days"),
+                ("90", "90 days")
+            ]
+        );
+        assert_eq!(retention_label(1), "1 day");
+    }
+
+    #[test]
+    fn an_off_list_saved_retention_still_shows() {
+        let choices = RetentionChoices::new(3);
+        assert_eq!(choices.as_options()[0], ("3", "3 days"));
+        assert_eq!(choices.as_options().len(), 5);
+    }
+
+    #[test]
+    fn hiding_profiles_needs_profile_pins() {
+        assert_eq!(
+            hide_profiles_note(false),
+            Some("Turn on Profile PINs first")
+        );
+        assert_eq!(hide_profiles_note(true), None);
+        assert_eq!(hide_profiles_after_toggle(false, true), None);
+        assert_eq!(hide_profiles_after_toggle(true, true), Some(true));
+        assert_eq!(hide_profiles_after_toggle(true, false), Some(false));
+    }
+
+    #[test]
+    fn export_fallback_prefers_documents_then_data_dir() {
+        let home = tempfile::tempdir().unwrap();
+        let data = std::path::Path::new("/data");
+        assert_eq!(
+            fallback_export_dir(Some(home.path()), data),
+            data.join("exports"),
+            "no Documents folder"
+        );
+        std::fs::create_dir(home.path().join("Documents")).unwrap();
+        assert_eq!(
+            fallback_export_dir(Some(home.path()), data),
+            home.path()
+                .join("Documents")
+                .join("eBIRForms")
+                .join("exports")
+        );
+        assert_eq!(fallback_export_dir(None, data), data.join("exports"));
+    }
 }
