@@ -1,7 +1,7 @@
 {
  "form_id": "2200c-v2018",
  "html_slug": "2200c-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs (MM, DD, YYYY). Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins, not money_joins. Part IV rows 25-28 are 33-slot combs spanning the Drawee Bank, Number, Date and Amount columns, so those row keys stay blank. The Schedule 1 grid (10 unlabeled rows, columns A-J) has no printed row numbers or product labels and stays blank; the total cell on the TOTAL EXCISE TAX DUE row joins to ACexciseTotal. Keys with no fillable cell (TIN parts and the second name line on page 2, signature names, Part IV name fields, the RDO comb which two keys could name) stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs (MM, DD, YYYY). Item 6 RDO takes the 4-slot comb to the right of its caption (txtPg1I6RDO; rdoPg1Pt1I6RDO carries the same value and is not joined). Items 9 and 10 share one full-width 40-slot comb, and Item 11 Region, Province and City share another, so those keys stay blank. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins, not money_joins. Part IV rows 25-28 are 33-slot combs spanning the Drawee Bank, Number, Date and Amount columns, so those row keys stay blank. Schedule 1 (page 2) has ten rows numbered by position, top to bottom, and columns A-J whose captions sit directly above each cell: A exempt, B excisable, C non-excisable (CPP), D net of VAT, E excisable net, F excisable VAT exempt, G non-excisable (GR), H excise tax, I VAT, J total billed (AC). The total cell on the TOTAL EXCISE TAX DUE row joins to ACexciseTotal. Keys with no fillable cell (TIN parts and the second name line on page 2, signature names, Part IV name fields) stay blank.",
  "joins": [
   {
    "writer_key": "frm2200C:txtPg1I1Month",
@@ -50,6 +50,12 @@
    "html_id": "p1c24",
    "printed": "Taxpayer Identification Number (TIN), branch",
    "reason": "5-slot branch comb after the third dash"
+  },
+  {
+   "writer_key": "frm2200C:txtPg1I6RDO",
+   "html_id": "p1c26",
+   "printed": "6 RDO Code",
+   "reason": "caption left of the 4-slot RDO comb; text key, same as the 2200M/2200P RDO joins. rdoPg1Pt1I6RDO carries the same value and is not joined: one cell takes one key"
   },
   {
    "writer_key": "frm2200C:txtPg1Pt1I7RegisteredName",
@@ -208,6 +214,606 @@
    "reason": "caption above the 40-slot comb; the TIN parts (txtPg2TinC1-4) have no separate cells"
   },
   {
+   "writer_key": "frm2200C:CPPexmpt1",
+   "html_id": "p2c25",
+   "printed": "Schedule 1 row 1, column A: cosmetic procedures performed, exempt",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise1",
+   "html_id": "p2c26",
+   "printed": "Schedule 1 row 1, column B: cosmetic procedures performed, excisable",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise1",
+   "html_id": "p2c27",
+   "printed": "Schedule 1 row 1, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat1",
+   "html_id": "p2c28",
+   "printed": "Schedule 1 row 1, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet1",
+   "html_id": "p2c29",
+   "printed": "Schedule 1 row 1, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt1",
+   "html_id": "p2c30",
+   "printed": "Schedule 1 row 1, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise1",
+   "html_id": "p2c31",
+   "printed": "Schedule 1 row 1, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise1",
+   "html_id": "p2c32",
+   "printed": "Schedule 1 row 1, column H: excise tax = (E + F) x 5%",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat1",
+   "html_id": "p2c33",
+   "printed": "Schedule 1 row 1, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill1",
+   "html_id": "p2c34",
+   "printed": "Schedule 1 row 1, column J: total amount billed = sum of D to I",
+   "reason": "row 1 of 10 by sheet order (cell top 215.66pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt2",
+   "html_id": "p2c35",
+   "printed": "Schedule 1 row 2, column A: cosmetic procedures performed, exempt",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise2",
+   "html_id": "p2c36",
+   "printed": "Schedule 1 row 2, column B: cosmetic procedures performed, excisable",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise2",
+   "html_id": "p2c37",
+   "printed": "Schedule 1 row 2, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat2",
+   "html_id": "p2c38",
+   "printed": "Schedule 1 row 2, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet2",
+   "html_id": "p2c39",
+   "printed": "Schedule 1 row 2, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt2",
+   "html_id": "p2c40",
+   "printed": "Schedule 1 row 2, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise2",
+   "html_id": "p2c41",
+   "printed": "Schedule 1 row 2, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise2",
+   "html_id": "p2c42",
+   "printed": "Schedule 1 row 2, column H: excise tax = (E + F) x 5%",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat2",
+   "html_id": "p2c43",
+   "printed": "Schedule 1 row 2, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill2",
+   "html_id": "p2c44",
+   "printed": "Schedule 1 row 2, column J: total amount billed = sum of D to I",
+   "reason": "row 2 of 10 by sheet order (cell top 230.54pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt3",
+   "html_id": "p2c45",
+   "printed": "Schedule 1 row 3, column A: cosmetic procedures performed, exempt",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise3",
+   "html_id": "p2c46",
+   "printed": "Schedule 1 row 3, column B: cosmetic procedures performed, excisable",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise3",
+   "html_id": "p2c47",
+   "printed": "Schedule 1 row 3, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat3",
+   "html_id": "p2c48",
+   "printed": "Schedule 1 row 3, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet3",
+   "html_id": "p2c49",
+   "printed": "Schedule 1 row 3, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt3",
+   "html_id": "p2c50",
+   "printed": "Schedule 1 row 3, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise3",
+   "html_id": "p2c51",
+   "printed": "Schedule 1 row 3, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise3",
+   "html_id": "p2c52",
+   "printed": "Schedule 1 row 3, column H: excise tax = (E + F) x 5%",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat3",
+   "html_id": "p2c53",
+   "printed": "Schedule 1 row 3, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill3",
+   "html_id": "p2c54",
+   "printed": "Schedule 1 row 3, column J: total amount billed = sum of D to I",
+   "reason": "row 3 of 10 by sheet order (cell top 245.42pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt4",
+   "html_id": "p2c55",
+   "printed": "Schedule 1 row 4, column A: cosmetic procedures performed, exempt",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise4",
+   "html_id": "p2c56",
+   "printed": "Schedule 1 row 4, column B: cosmetic procedures performed, excisable",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise4",
+   "html_id": "p2c57",
+   "printed": "Schedule 1 row 4, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat4",
+   "html_id": "p2c58",
+   "printed": "Schedule 1 row 4, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet4",
+   "html_id": "p2c59",
+   "printed": "Schedule 1 row 4, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt4",
+   "html_id": "p2c60",
+   "printed": "Schedule 1 row 4, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise4",
+   "html_id": "p2c61",
+   "printed": "Schedule 1 row 4, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise4",
+   "html_id": "p2c62",
+   "printed": "Schedule 1 row 4, column H: excise tax = (E + F) x 5%",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat4",
+   "html_id": "p2c63",
+   "printed": "Schedule 1 row 4, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill4",
+   "html_id": "p2c64",
+   "printed": "Schedule 1 row 4, column J: total amount billed = sum of D to I",
+   "reason": "row 4 of 10 by sheet order (cell top 260.3pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt5",
+   "html_id": "p2c65",
+   "printed": "Schedule 1 row 5, column A: cosmetic procedures performed, exempt",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise5",
+   "html_id": "p2c66",
+   "printed": "Schedule 1 row 5, column B: cosmetic procedures performed, excisable",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise5",
+   "html_id": "p2c67",
+   "printed": "Schedule 1 row 5, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat5",
+   "html_id": "p2c68",
+   "printed": "Schedule 1 row 5, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet5",
+   "html_id": "p2c69",
+   "printed": "Schedule 1 row 5, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt5",
+   "html_id": "p2c70",
+   "printed": "Schedule 1 row 5, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise5",
+   "html_id": "p2c71",
+   "printed": "Schedule 1 row 5, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise5",
+   "html_id": "p2c72",
+   "printed": "Schedule 1 row 5, column H: excise tax = (E + F) x 5%",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat5",
+   "html_id": "p2c73",
+   "printed": "Schedule 1 row 5, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill5",
+   "html_id": "p2c74",
+   "printed": "Schedule 1 row 5, column J: total amount billed = sum of D to I",
+   "reason": "row 5 of 10 by sheet order (cell top 275.21pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt6",
+   "html_id": "p2c75",
+   "printed": "Schedule 1 row 6, column A: cosmetic procedures performed, exempt",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise6",
+   "html_id": "p2c76",
+   "printed": "Schedule 1 row 6, column B: cosmetic procedures performed, excisable",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise6",
+   "html_id": "p2c77",
+   "printed": "Schedule 1 row 6, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat6",
+   "html_id": "p2c78",
+   "printed": "Schedule 1 row 6, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet6",
+   "html_id": "p2c79",
+   "printed": "Schedule 1 row 6, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt6",
+   "html_id": "p2c80",
+   "printed": "Schedule 1 row 6, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise6",
+   "html_id": "p2c81",
+   "printed": "Schedule 1 row 6, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise6",
+   "html_id": "p2c82",
+   "printed": "Schedule 1 row 6, column H: excise tax = (E + F) x 5%",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat6",
+   "html_id": "p2c83",
+   "printed": "Schedule 1 row 6, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill6",
+   "html_id": "p2c84",
+   "printed": "Schedule 1 row 6, column J: total amount billed = sum of D to I",
+   "reason": "row 6 of 10 by sheet order (cell top 290.21pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt7",
+   "html_id": "p2c85",
+   "printed": "Schedule 1 row 7, column A: cosmetic procedures performed, exempt",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise7",
+   "html_id": "p2c86",
+   "printed": "Schedule 1 row 7, column B: cosmetic procedures performed, excisable",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise7",
+   "html_id": "p2c87",
+   "printed": "Schedule 1 row 7, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat7",
+   "html_id": "p2c88",
+   "printed": "Schedule 1 row 7, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet7",
+   "html_id": "p2c89",
+   "printed": "Schedule 1 row 7, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt7",
+   "html_id": "p2c90",
+   "printed": "Schedule 1 row 7, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise7",
+   "html_id": "p2c91",
+   "printed": "Schedule 1 row 7, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise7",
+   "html_id": "p2c92",
+   "printed": "Schedule 1 row 7, column H: excise tax = (E + F) x 5%",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat7",
+   "html_id": "p2c93",
+   "printed": "Schedule 1 row 7, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill7",
+   "html_id": "p2c94",
+   "printed": "Schedule 1 row 7, column J: total amount billed = sum of D to I",
+   "reason": "row 7 of 10 by sheet order (cell top 305.09pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt8",
+   "html_id": "p2c95",
+   "printed": "Schedule 1 row 8, column A: cosmetic procedures performed, exempt",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise8",
+   "html_id": "p2c96",
+   "printed": "Schedule 1 row 8, column B: cosmetic procedures performed, excisable",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise8",
+   "html_id": "p2c97",
+   "printed": "Schedule 1 row 8, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat8",
+   "html_id": "p2c98",
+   "printed": "Schedule 1 row 8, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet8",
+   "html_id": "p2c99",
+   "printed": "Schedule 1 row 8, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt8",
+   "html_id": "p2c100",
+   "printed": "Schedule 1 row 8, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise8",
+   "html_id": "p2c101",
+   "printed": "Schedule 1 row 8, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise8",
+   "html_id": "p2c102",
+   "printed": "Schedule 1 row 8, column H: excise tax = (E + F) x 5%",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat8",
+   "html_id": "p2c103",
+   "printed": "Schedule 1 row 8, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill8",
+   "html_id": "p2c104",
+   "printed": "Schedule 1 row 8, column J: total amount billed = sum of D to I",
+   "reason": "row 8 of 10 by sheet order (cell top 319.97pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt9",
+   "html_id": "p2c105",
+   "printed": "Schedule 1 row 9, column A: cosmetic procedures performed, exempt",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise9",
+   "html_id": "p2c106",
+   "printed": "Schedule 1 row 9, column B: cosmetic procedures performed, excisable",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise9",
+   "html_id": "p2c107",
+   "printed": "Schedule 1 row 9, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat9",
+   "html_id": "p2c108",
+   "printed": "Schedule 1 row 9, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet9",
+   "html_id": "p2c109",
+   "printed": "Schedule 1 row 9, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt9",
+   "html_id": "p2c110",
+   "printed": "Schedule 1 row 9, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise9",
+   "html_id": "p2c111",
+   "printed": "Schedule 1 row 9, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise9",
+   "html_id": "p2c112",
+   "printed": "Schedule 1 row 9, column H: excise tax = (E + F) x 5%",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat9",
+   "html_id": "p2c113",
+   "printed": "Schedule 1 row 9, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill9",
+   "html_id": "p2c114",
+   "printed": "Schedule 1 row 9, column J: total amount billed = sum of D to I",
+   "reason": "row 9 of 10 by sheet order (cell top 334.85pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexmpt10",
+   "html_id": "p2c115",
+   "printed": "Schedule 1 row 10, column A: cosmetic procedures performed, exempt",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column A cell left 16.32pt under caption A at x 39.84pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPexcise10",
+   "html_id": "p2c116",
+   "printed": "Schedule 1 row 10, column B: cosmetic procedures performed, excisable",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column B cell left 74.18pt under caption B at x 97.82pt"
+  },
+  {
+   "writer_key": "frm2200C:CPPnonexcise10",
+   "html_id": "p2c117",
+   "printed": "Schedule 1 row 10, column C: cosmetic procedures performed, non-excisable",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column C cell left 132.14pt under caption C at x 155.54pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnetVat10",
+   "html_id": "p2c118",
+   "printed": "Schedule 1 row 10, column D: gross receipts, non-invasive, net of VAT",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column D cell left 189.98pt under caption D at x 213.41pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseNet10",
+   "html_id": "p2c119",
+   "printed": "Schedule 1 row 10, column E: gross receipts, invasive excisable, net of VAT and excise",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column E cell left 247.97pt under caption E at x 271.61pt"
+  },
+  {
+   "writer_key": "frm2200C:GRexciseExmpt10",
+   "html_id": "p2c120",
+   "printed": "Schedule 1 row 10, column F: gross receipts, invasive excisable, VAT exempt",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column F cell left 305.81pt under caption F at x 329.59pt"
+  },
+  {
+   "writer_key": "frm2200C:GRnonexcise10",
+   "html_id": "p2c121",
+   "printed": "Schedule 1 row 10, column G: gross receipts, invasive non-excisable, net of VAT",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column G cell left 363.67pt under caption G at x 386.83pt"
+  },
+  {
+   "writer_key": "frm2200C:ACexcise10",
+   "html_id": "p2c122",
+   "printed": "Schedule 1 row 10, column H: excise tax = (E + F) x 5%",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column H cell left 421.63pt under caption H at x 445.03pt"
+  },
+  {
+   "writer_key": "frm2200C:ACvat10",
+   "html_id": "p2c123",
+   "printed": "Schedule 1 row 10, column I: VAT = (D + E + G + H) x 12%",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column I cell left 479.5pt under caption I at x 504.7pt"
+  },
+  {
+   "writer_key": "frm2200C:ACtotAmountBill10",
+   "html_id": "p2c124",
+   "printed": "Schedule 1 row 10, column J: total amount billed = sum of D to I",
+   "reason": "row 10 of 10 by sheet order (cell top 349.73pt); column J cell left 537.46pt under caption J at x 561.7pt"
+  },
+  {
    "writer_key": "frm2200C:ACexciseTotal",
    "html_id": "p2c126",
    "printed": "TOTAL EXCISE TAX DUE (To Part III, Item 16)",
@@ -261,16 +867,12 @@
  ],
  "left_out": [
   {
-   "html_id": "p1c26",
-   "reason": "RDO comb under item 6: two layout keys name it (txtPg1I6RDO and rdoPg1Pt1I6RDO, default 000); one cell cannot carry both, so left blank"
-  },
-  {
    "html_id": "p1c36",
-   "reason": "one 40-slot comb under both the item 9 Contact Number and item 10 Email Address captions; cannot tell which item it carries, so txtPg1Pt1I9ContactNumber and txtPg1Pt1I10Email stay blank"
+   "reason": "one full-width 40-slot comb (x 16-595pt) under both the item 9 Contact Number caption (x 27pt) and the item 10 Email Address caption (x 206pt); a join fills the whole comb with one value, so txtPg1Pt1I9ContactNumber and txtPg1Pt1I10Email stay blank"
   },
   {
    "html_id": "p1c41",
-   "reason": "Region / Province / City comb under item 11 holds the three option codes (region, province, city) with no separate cell per code; left blank"
+   "reason": "one full-width 40-slot comb under the item 11 Region (x 37pt), Province (x 94pt) and City (x 369pt) captions; a join fills the whole comb with one value, so txtPg1Pt1I11Region, txtPg1Pt1I11Province and txtPg1Pt1I11City stay blank"
   },
   {
    "html_id": "p1c104",
@@ -291,406 +893,6 @@
   {
    "html_id": "p1c110",
    "reason": "Part IV row 28 (Others) is one 33-slot comb across the columns with no per-column cells; the row keys stay blank"
-  },
-  {
-   "html_id": "p2c25",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c26",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c27",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c28",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c29",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c30",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c31",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c32",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c33",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c34",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c35",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c36",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c37",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c38",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c39",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c40",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c41",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c42",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c43",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c44",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c45",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c46",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c47",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c48",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c49",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c50",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c51",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c52",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c53",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c54",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c55",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c56",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c57",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c58",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c59",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c60",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c61",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c62",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c63",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c64",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c65",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c66",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c67",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c68",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c69",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c70",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c71",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c72",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c73",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c74",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c75",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c76",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c77",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c78",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c79",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c80",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c81",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c82",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c83",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c84",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c85",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c86",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c87",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c88",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c89",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c90",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c91",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c92",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c93",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c94",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c95",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c96",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c97",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c98",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c99",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c100",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c101",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c102",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c103",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c104",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c105",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c106",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c107",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c108",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c109",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c110",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c111",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c112",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c113",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c114",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c115",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c116",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c117",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c118",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c119",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c120",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c121",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c122",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c123",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
-  },
-  {
-   "html_id": "p2c124",
-   "reason": "Schedule 1 product row cells: the rows carry no printed row number or product label, so the row suffix of the layout keys (CPP/GR/AC 1-10) cannot be matched to a printed row; left blank"
   },
   {
    "html_id": "p1c12",
