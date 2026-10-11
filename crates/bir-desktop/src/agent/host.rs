@@ -4154,6 +4154,8 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Notifications => "Notifications",
         ActiveView::ImportExport => "Import Data",
         ActiveView::Settings => "Settings",
+        #[cfg(debug_assertions)]
+        ActiveView::DevMode => "Dev Mode",
         ActiveView::AdminCalendarDashboard => "Tax Calendars",
         ActiveView::Form2551Q => "Form 2551Q",
         ActiveView::Form1601C => "Form 1601C",

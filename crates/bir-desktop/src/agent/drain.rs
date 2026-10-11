@@ -363,6 +363,8 @@ fn apply_navigation(
         ActiveView::Settings | ActiveView::CronTasks | ActiveView::AdminCalendarDashboard => {
             app.request_admin_access(target, window, cx);
         }
+        #[cfg(debug_assertions)]
+        ActiveView::DevMode => app.open_dev_mode(window, cx),
         ActiveView::GlobalDashboard => {
             if app.block_unsaved_compliance_navigation(window, cx) {
                 return;

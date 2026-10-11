@@ -55,6 +55,9 @@ pub enum ActiveView {
     ImportExport,
     Settings,
     AdminCalendarDashboard,
+    /// Dev Mode page. Compiled out of release builds.
+    #[cfg(debug_assertions)]
+    DevMode,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -212,7 +215,8 @@ pub struct AppState {
     pub(crate) admin_os_auth_triggered: bool,
     /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
     pub(crate) active_session_tin: Option<String>,
-    /// Dev Mode panel; `Some` while it is open (debug builds only).
+    /// Dev Mode page entity, created the first time `ActiveView::DevMode`
+    /// is opened (debug builds only).
     #[cfg(debug_assertions)]
     pub(crate) dev_mode_view: Option<Entity<crate::views::dev_mode_view::DevModeView>>,
     #[cfg(feature = "agent")]
@@ -1483,10 +1487,13 @@ impl AppState {
 
     // NOTE: render_sidebar() is implemented in sidebar.rs
 
-    /// Open the Dev Mode panel over the current page (debug builds only).
+    /// Navigate to the Dev Mode page (debug builds only).
     #[cfg(debug_assertions)]
     pub(crate) fn open_dev_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::views::dev_mode_view::{DevModeEvent, DevModeView};
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
         if self.dev_mode_view.is_none() {
             let db = Arc::clone(&self.db);
             let view = cx.new(|cx| DevModeView::new(db, window, cx));
@@ -1499,7 +1506,6 @@ impl AppState {
                             cx.notify();
                         });
                     }
-                    DevModeEvent::Close => this.dev_mode_view = None,
                 }
                 this.dashboard_view.update(cx, |_, cx| cx.notify());
                 cx.notify();
@@ -1507,18 +1513,11 @@ impl AppState {
             .detach();
             self.dev_mode_view = Some(view);
         }
+        self.active_view = ActiveView::DevMode;
         cx.notify();
     }
 
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        #[cfg(debug_assertions)]
-        if let Some(view) = &self.dev_mode_view {
-            return div()
-                .id("dev_mode_page")
-                .size_full()
-                .child(view.clone())
-                .into_any_element();
-        }
         let page = match self.active_view {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
@@ -1526,6 +1525,15 @@ impl AppState {
             ActiveView::Notifications => self.notifications_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
+            #[cfg(debug_assertions)]
+            ActiveView::DevMode => match &self.dev_mode_view {
+                Some(view) => div()
+                    .id("dev_mode_page")
+                    .size_full()
+                    .child(view.clone())
+                    .into_any_element(),
+                None => div().into_any_element(),
+            },
             ActiveView::AdminCalendarDashboard => self
                 .admin_calendar_dashboard_view
                 .clone()

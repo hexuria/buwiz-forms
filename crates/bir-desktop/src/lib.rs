@@ -21,6 +21,7 @@ mod cor_evidence;
 mod cor_ocr;
 pub(crate) mod dev_mode;
 pub mod events;
+pub(crate) mod export_target;
 mod gui;
 mod ipc;
 pub(crate) mod layout_probe;
@@ -29,6 +30,7 @@ mod quit_guard;
 mod sidebar;
 mod theme;
 mod views;
+mod window_geometry;
 
 pub mod global_actions {
     gpui_kit::actions!(

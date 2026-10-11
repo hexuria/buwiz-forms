@@ -252,8 +252,15 @@ pub fn run_gui() {
         #[cfg(target_os = "macos")]
         let macos_quit_router = platform::install_app_menu(cx);
 
-        let bounds =
-            gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
+        // About 90% of the primary display on first start, then the last
+        // size and position, clamped to the display (`window_geometry`).
+        let bounds = match cx.primary_display() {
+            Some(display) => crate::window_geometry::to_bounds(crate::window_geometry::initial(
+                crate::window_geometry::from_bounds(display.bounds()),
+                crate::window_geometry::load(),
+            )),
+            None => gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx),
+        };
 
         cx.spawn(async move |cx| {
             let (db, profiles) = cx
@@ -362,7 +369,7 @@ pub fn run_gui() {
                     title: Some("e-BIRForms".into()),
                     ..Default::default()
                 }),
-                window_bounds: Some(WindowBounds::Maximized(bounds)),
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
                 // X11 WM_CLASS / Wayland app_id; must match StartupWMClass in
                 // assets/linux/ebirforms.desktop so docks group the window.
@@ -383,6 +390,14 @@ pub fn run_gui() {
                         );
                     }
                     state
+                });
+                // Remember the size and position for the next start.
+                view.update(cx, |_, cx| {
+                    cx.observe_window_bounds(window, |_, window, _| {
+                        let bounds = window.window_bounds().get_bounds();
+                        crate::window_geometry::save(crate::window_geometry::from_bounds(bounds));
+                    })
+                    .detach();
                 });
                 cx.on_action({
                     let entity = view.downgrade();
