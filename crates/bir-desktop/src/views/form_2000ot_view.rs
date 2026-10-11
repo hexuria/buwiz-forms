@@ -402,6 +402,7 @@ impl Form2000OTView {
             .chain(self.parse_errors.iter())
             .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
         let label = div()
+            .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -461,20 +462,50 @@ impl Form2000OTView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
     }
 
-    fn label_row(label: &str) -> Div {
-        div().flex().flex_wrap().items_center().gap_2().child(
+    /// A question label plus choice chips. On phones the label sits on its own
+    /// line with the chips in a full-width wrapping row below.
+    fn choice_row(label: &str, layout: Layout, choices: Vec<Button>) -> AnyElement {
+        if layout == Layout::Phone {
             div()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .child(label.to_string()),
-        )
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(
+                    div()
+                        .min_w_0()
+                        .max_w_full()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(label.to_string()),
+                )
+                .child(div().flex().flex_wrap().gap_2().w_full().children(choices))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .max_w_full()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(label.to_string()),
+                )
+                .children(choices)
+                .into_any_element()
+        }
     }
 
     fn choice(
@@ -501,7 +532,7 @@ impl Form2000OTView {
         let editable = self.draft.lifecycle.is_editable();
         let amended = self.draft.is_amended;
         let atc = self.draft.atc;
-        let mut atc_row = Self::label_row("Item 3 — ATC");
+        let mut atc_choices = Vec::new();
         for (index, (value, label)) in [
             (
                 Form2000OTAtc::Do102,
@@ -516,7 +547,7 @@ impl Form2000OTView {
         .into_iter()
         .enumerate()
         {
-            atc_row = atc_row.child(
+            atc_choices.push(
                 Self::choice(("2000ot_atc", index), label, atc == value, !editable)
                     .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.atc = value))),
             );
@@ -528,19 +559,19 @@ impl Form2000OTView {
                 layout,
                 !editable,
             ),
-            Self::label_row("Item 2 — Amended return?")
-                .child(
+            Self::choice_row(
+                "Item 2 — Amended return?",
+                layout,
+                vec![
                     Self::choice("2000ot_amended_yes", "Yes", amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
                     ),
-                )
-                .child(
                     Self::choice("2000ot_amended_no", "No", !amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
                     ),
-                )
-                .into_any_element(),
-            atc_row.into_any_element(),
+                ],
+            ),
+            Self::choice_row("Item 3 — ATC", layout, atc_choices),
             self.field(
                 "sheets",
                 "Item 4 — No. of sheets attached",
@@ -562,6 +593,7 @@ impl Form2000OTView {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 5 — TIN"),
@@ -578,6 +610,7 @@ impl Form2000OTView {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 6 — RDO Code"),
@@ -597,7 +630,7 @@ impl Form2000OTView {
                 .unwrap_or(key);
             fields.push(self.field(key, label, layout, !editable));
         }
-        let mut party_row = Self::label_row("Item 11 — Other party to the transaction");
+        let mut party_choices = Vec::new();
         for (index, (value, label)) in [
             (Form2000OTOtherParty::Creditor, "Creditor/Mortgagor/etc."),
             (Form2000OTOtherParty::Debtor, "Debtor/Mortgagee/etc."),
@@ -605,13 +638,13 @@ impl Form2000OTView {
         .into_iter()
         .enumerate()
         {
-            party_row = party_row.child(
+            party_choices.push(
                 Self::choice(("2000ot_party", index), label, party == value, !editable).on_click(
                     cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.other_party = value)),
                 ),
             );
         }
-        let mut nature_row = Self::label_row("Item 12 — Nature of transaction");
+        let mut nature_choices = Vec::new();
         for (index, (value, label)) in [
             (
                 Form2000OTNature::SharesOfStock,
@@ -629,7 +662,7 @@ impl Form2000OTView {
         .into_iter()
         .enumerate()
         {
-            nature_row = nature_row.child(
+            nature_choices.push(
                 Self::choice(("2000ot_nature", index), label, nature == value, !editable).on_click(
                     cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.nature = value)),
                 ),
@@ -637,7 +670,11 @@ impl Form2000OTView {
         }
         let mut children = vec![
             self.grid(layout, fields),
-            party_row.into_any_element(),
+            Self::choice_row(
+                "Item 11 — Other party to the transaction",
+                layout,
+                party_choices,
+            ),
             self.grid(
                 layout,
                 vec![
@@ -645,7 +682,7 @@ impl Form2000OTView {
                     self.field("otin", "Item 11B — Other party's TIN", layout, !editable),
                 ],
             ),
-            nature_row.into_any_element(),
+            Self::choice_row("Item 12 — Nature of transaction", layout, nature_choices),
         ];
         if nature.is_real_property() {
             children.push(self.field(
@@ -673,7 +710,7 @@ impl Form2000OTView {
             .border_1()
             .border_color(cx.theme().border)
             .rounded_md()
-            .child(div().font_weight(FontWeight::BOLD).child(title))
+            .child(div().min_w_0().font_weight(FontWeight::BOLD).child(title))
             .child(self.grid(layout, fields))
             .into_any_element()
     }
@@ -767,6 +804,7 @@ impl Form2000OTView {
                 .p_2()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("16 — Tax rate"),
