@@ -686,56 +686,23 @@ impl Render for SettingsView {
                                             .label("Export Full Database")
                                             .on_click(cx.listener(|_this, _ev, _window, cx| {
                                                 cx.spawn(async move |this, cx| {
-                                                    let target_dir = match export_dir("Select Folder to Save Database Backup").await {
-                                                        Ok(dir) => dir,
-                                                        Err(e) => {
-                                                            rfd::AsyncMessageDialog::new()
-                                                                .set_title("Export Failed")
-                                                                .set_description(&e)
-                                                                .show()
-                                                                .await;
-                                                            return;
-                                                        }
-                                                    };
-
-                                                    let res = this.update(cx, |this, _cx| {
-                                                        let db_path = bir_core::db::default_database_path();
-                                                        if !db_path.exists() { return Err("Database file not found".to_string()); }
-
-                                                        let timestamp = std::time::SystemTime::now()
-                                                            .duration_since(std::time::UNIX_EPOCH)
-                                                            .unwrap()
-                                                            .as_secs();
-                                                        let backup_path = target_dir.join(format!("BIR_Database_Backup_{}.db.zip", timestamp));
-
-                                                        if let Ok(db) = this.db.lock() {
-                                                            let _ = db.checkpoint();
-                                                            match bir_core::export::export_database_zip(&db, &backup_path) {
-                                                                Ok(_) => Ok(backup_path),
-                                                                Err(e) => Err(e.to_string()),
-                                                            }
-                                                        } else {
-                                                            Err("Failed to acquire database lock".to_string())
-                                                        }
-                                                    });
-
-                                                    match res {
-                                                        Ok(Ok(path)) => {
-                                                            rfd::AsyncMessageDialog::new()
-                                                                .set_title("Database Exported")
-                                                                .set_description(format!("Saved to {}", path.display()))
-                                                                .show()
-                                                                .await;
-                                                        }
-                                                        Ok(Err(e)) => {
-                                                            rfd::AsyncMessageDialog::new()
-                                                                .set_title("Export Failed")
-                                                                .set_description(&e)
-                                                                .show()
-                                                                .await;
-                                                        }
-                                                        _ => {}
-                                                    }
+                                                    let result = crate::export_target::folder_with_fallback(
+                                                        "Select Folder to Save Database Backup",
+                                                        |target_dir| {
+                                                            let db_path = bir_core::db::default_database_path();
+                                                            if !db_path.exists() { return Err("Database file not found".to_string()); }
+                                                            let backup_path = target_dir.join(format!("BIR_Database_Backup_{}.db.zip", unix_timestamp()));
+                                                            this.update(cx, |this, _cx| {
+                                                                let db = this.db.lock().map_err(|_| "Failed to acquire database lock".to_string())?;
+                                                                let _ = db.checkpoint();
+                                                                bir_core::export::export_database_zip(&db, &backup_path).map_err(|e| e.to_string())?;
+                                                                Ok(backup_path)
+                                                            })
+                                                            .map_err(|e| e.to_string())?
+                                                        },
+                                                    )
+                                                    .await;
+                                                    report_export("Database Exported", result).await;
                                                 }).detach();
                                             }))
                                     }
@@ -744,52 +711,20 @@ impl Render for SettingsView {
                                             .label("Export All Profiles (JSON)")
                                             .on_click(cx.listener(|_this, _ev, _window, cx| {
                                                 cx.spawn(async move |this, cx| {
-                                                    let target_dir = match export_dir("Select Folder to Save Profiles Backup").await {
-                                                        Ok(dir) => dir,
-                                                        Err(e) => {
-                                                            rfd::AsyncMessageDialog::new()
-                                                                .set_title("Export Failed")
-                                                                .set_description(&e)
-                                                                .show()
-                                                                .await;
-                                                            return;
-                                                        }
-                                                    };
-
-                                                    let res = this.update(cx, |this, _cx| {
-                                                        let timestamp = std::time::SystemTime::now()
-                                                            .duration_since(std::time::UNIX_EPOCH)
-                                                            .unwrap()
-                                                            .as_secs();
-                                                        let backup_path = target_dir.join(format!("BIR_Profiles_Backup_{}.zip", timestamp));
-
-                                                        if let Ok(db) = this.db.lock() {
-                                                            match bir_core::export::export_all_profiles_data(&db, &backup_path) {
-                                                                Ok(_) => Ok(backup_path),
-                                                                Err(e) => Err(e.to_string()),
-                                                            }
-                                                        } else {
-                                                            Err("Failed to acquire database lock".to_string())
-                                                        }
-                                                    });
-
-                                                    match res {
-                                                        Ok(Ok(path)) => {
-                                                            rfd::AsyncMessageDialog::new()
-                                                                .set_title("Profiles Exported")
-                                                                .set_description(format!("Saved to {}", path.display()))
-                                                                .show()
-                                                                .await;
-                                                        }
-                                                        Ok(Err(e)) => {
-                                                            rfd::AsyncMessageDialog::new()
-                                                                .set_title("Export Failed")
-                                                                .set_description(&e)
-                                                                .show()
-                                                                .await;
-                                                        }
-                                                        _ => {}
-                                                    }
+                                                    let result = crate::export_target::folder_with_fallback(
+                                                        "Select Folder to Save Profiles Backup",
+                                                        |target_dir| {
+                                                            let backup_path = target_dir.join(format!("BIR_Profiles_Backup_{}.zip", unix_timestamp()));
+                                                            this.update(cx, |this, _cx| {
+                                                                let db = this.db.lock().map_err(|_| "Failed to acquire database lock".to_string())?;
+                                                                bir_core::export::export_all_profiles_data(&db, &backup_path).map_err(|e| e.to_string())?;
+                                                                Ok(backup_path)
+                                                            })
+                                                            .map_err(|e| e.to_string())?
+                                                        },
+                                                    )
+                                                    .await;
+                                                    report_export("Profiles Exported", result).await;
                                                 }).detach();
                                             }))
                                     }
@@ -818,32 +753,28 @@ impl Render for SettingsView {
                                             let proceed = match confirm {
                                                 rfd::MessageDialogResult::Cancel => return,
                                                 rfd::MessageDialogResult::Yes => {
-                                                    let Some(target_dir_handle) = rfd::AsyncFileDialog::new()
-                                                        .set_title("Select Folder to Save Portable Backup")
-                                                        .pick_folder()
-                                                        .await
-                                                    else { return; };
-
-                                                    let target_dir = target_dir_handle.path().to_path_buf();
-                                                    let res = this.update(cx, |this, _cx| {
-                                                        let timestamp = std::time::SystemTime::now()
-                                                            .duration_since(std::time::UNIX_EPOCH)
-                                                            .unwrap()
-                                                            .as_secs();
-                                                        let backup_path = target_dir.join(format!("BIR_Portable_Backup_{}.db.zip", timestamp));
-                                                        if let Ok(db) = this.db.lock() {
-                                                            let _ = db.checkpoint();
-                                                            match bir_core::export::export_database_zip(&db, &backup_path) {
-                                                                Ok(_) => Ok(backup_path),
-                                                                Err(e) => Err(e.to_string()),
-                                                            }
-                                                        } else {
-                                                            Err("Failed to acquire database lock".to_string())
-                                                        }
-                                                    });
-
+                                                    let res = crate::export_target::folder_with_fallback(
+                                                        "Select Folder to Save Portable Backup",
+                                                        |target_dir| {
+                                                            let backup_path = target_dir.join(format!("BIR_Portable_Backup_{}.db.zip", unix_timestamp()));
+                                                            this.update(cx, |this, _cx| {
+                                                                let db = this.db.lock().map_err(|_| "Failed to acquire database lock".to_string())?;
+                                                                let _ = db.checkpoint();
+                                                                bir_core::export::export_database_zip(&db, &backup_path).map_err(|e| e.to_string())?;
+                                                                Ok(backup_path)
+                                                            })
+                                                            .map_err(|e| e.to_string())?
+                                                        },
+                                                    )
+                                                    .await;
+                                                    // Cancel in the folder picker cancels the reset.
+                                                    let res = match res {
+                                                        Ok(None) => return,
+                                                        Ok(Some(saved)) => Ok(saved.path),
+                                                        Err(e) => Err(e),
+                                                    };
                                                     match res {
-                                                        Ok(Ok(path)) => {
+                                                        Ok(path) => {
                                                             let continue_reset = rfd::AsyncMessageDialog::new()
                                                                 .set_title("Backup Successful")
                                                                 .set_description(format!("Backup saved to {}. Proceed with Factory Reset?", path.display()))
@@ -852,7 +783,7 @@ impl Render for SettingsView {
                                                                 .await;
                                                             matches!(continue_reset, rfd::MessageDialogResult::Ok)
                                                         }
-                                                        Ok(Err(e)) => {
+                                                        Err(e) => {
                                                             rfd::AsyncMessageDialog::new()
                                                                 .set_title("Backup Failed")
                                                                 .set_description(format!("Backup failed: {}. Factory Reset cancelled.", e))
@@ -860,7 +791,6 @@ impl Render for SettingsView {
                                                                 .await;
                                                             false
                                                         }
-                                                        _ => false
                                                     }
                                                 }
                                                 rfd::MessageDialogResult::No => {
@@ -1046,34 +976,44 @@ impl RetentionChoices {
     }
 }
 
-/// Where an export goes: the picked folder, else the fallback folder
-/// (created if needed). Errors are messages for the user.
-async fn export_dir(title: &str) -> Result<std::path::PathBuf, String> {
-    if let Some(picked) = rfd::AsyncFileDialog::new()
-        .set_title(title)
-        .pick_folder()
-        .await
-    {
-        return Ok(picked.path().to_path_buf());
-    }
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(std::path::PathBuf::from);
-    let dir = fallback_export_dir(home.as_deref(), &bir_core::platform::data_dir());
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
-    Ok(dir)
+fn unix_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
-/// `~/Documents/eBIRForms/exports`, or `data_dir/exports` when there is no
-/// Documents folder.
-fn fallback_export_dir(
-    home: Option<&std::path::Path>,
-    data_dir: &std::path::Path,
-) -> std::path::PathBuf {
-    match home.map(|h| h.join("Documents")) {
-        Some(documents) if documents.is_dir() => documents.join("eBIRForms").join("exports"),
-        _ => data_dir.join("exports"),
+/// Report a folder export: "Saved to <path>" with "Open folder", the error,
+/// or nothing at all when the user cancelled.
+async fn report_export(
+    title: &str,
+    result: Result<Option<crate::export_target::SavedExport>, String>,
+) {
+    match result {
+        Ok(None) => {}
+        Ok(Some(saved)) => {
+            let choice = rfd::AsyncMessageDialog::new()
+                .set_title(title)
+                .set_description(saved.message())
+                .set_buttons(rfd::MessageButtons::OkCancelCustom(
+                    "Open folder".into(),
+                    "OK".into(),
+                ))
+                .show()
+                .await;
+            if choice == rfd::MessageDialogResult::Custom("Open folder".into())
+                && let Err(error) = crate::export_target::open_folder(&saved)
+            {
+                tracing::warn!("{error}");
+            }
+        }
+        Err(e) => {
+            rfd::AsyncMessageDialog::new()
+                .set_title("Export Failed")
+                .set_description(&e)
+                .show()
+                .await;
+        }
     }
 }
 
@@ -1089,8 +1029,7 @@ fn retention_label(days: u32) -> String {
 mod tests {
     // Not `use super::*`: that would import gpui's `#[test]` attribute macro.
     use super::{
-        RetentionChoices, fallback_export_dir, hide_profiles_after_toggle, hide_profiles_note,
-        retention_label,
+        RetentionChoices, hide_profiles_after_toggle, hide_profiles_note, retention_label,
     };
 
     #[test]
@@ -1125,25 +1064,5 @@ mod tests {
         assert_eq!(hide_profiles_after_toggle(false, true), None);
         assert_eq!(hide_profiles_after_toggle(true, true), Some(true));
         assert_eq!(hide_profiles_after_toggle(true, false), Some(false));
-    }
-
-    #[test]
-    fn export_fallback_prefers_documents_then_data_dir() {
-        let home = tempfile::tempdir().unwrap();
-        let data = std::path::Path::new("/data");
-        assert_eq!(
-            fallback_export_dir(Some(home.path()), data),
-            data.join("exports"),
-            "no Documents folder"
-        );
-        std::fs::create_dir(home.path().join("Documents")).unwrap();
-        assert_eq!(
-            fallback_export_dir(Some(home.path()), data),
-            home.path()
-                .join("Documents")
-                .join("eBIRForms")
-                .join("exports")
-        );
-        assert_eq!(fallback_export_dir(None, data), data.join("exports"));
     }
 }
