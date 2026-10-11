@@ -1,4 +1,4 @@
-use crate::{check_sample, dummy_profile};
+use crate::{check_sample, check_sample_with_layout, dummy_profile};
 use bir_core::forms::form_1600pt::{
     Form1600PtAgentCategory, Form1600PtDraft, Form1600PtScheduleRow, form_1600pt_atc_index,
 };
@@ -90,5 +90,58 @@ fn form_1600pt_private_sample_payload_is_current() {
         "1600pt-v2018-private",
         &payload,
         "05a5d8404320cf7bcbdd1021e8dcb16173486a2a19cd1353130024cf2fac43d2",
+    );
+}
+
+/// More than five ATCs: the sixth onward go to the "Other Selected ATC"
+/// table, written after `hPartIITableSize`.
+fn sample_1600pt_other_atcs() -> Form1600PtDraft {
+    let mut draft =
+        Form1600PtDraft::new_from_profile(&dummy_profile("1600PT", "Corporation"), 2025, 8);
+    draft.set_agent_category(Form1600PtAgentCategory::Government);
+    draft.set_taxes_withheld(true);
+    for (code, rate) in [
+        ("WB030", "3.0"),
+        ("WB040", "2.0"),
+        ("WB070", "2.0"),
+        ("WB080", "1.0"),
+        ("WB090", "10.0"),
+        ("WB140", "18.0"),
+        ("WB200", "0.6"),
+    ] {
+        draft
+            .toggle_atc(form_1600pt_atc_index(code, rate).unwrap())
+            .unwrap();
+    }
+    let bases = [
+        123_456.785,
+        1_000.0,
+        77_777.77,
+        50_000.005,
+        3_333.335,
+        45_000.25,
+        8_333.33,
+        99.995,
+    ];
+    for (row, base) in draft.atc_rows.iter_mut().zip(bases) {
+        row.tax_base = base;
+    }
+    draft.other_payments = 500.0;
+    draft.interest = 12.5;
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1600pt_other_atcs_sample_payload_is_current() {
+    let draft = sample_1600pt_other_atcs();
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1600PT must validate: {errors:?}"));
+    check_sample_with_layout(
+        "1600PT-082025",
+        &draft.official_layout().unwrap(),
+        &payload,
+        "ae8b3603f776bca76e74d4a911c2d975e2bbd681529c36759065043d35a543c8",
     );
 }

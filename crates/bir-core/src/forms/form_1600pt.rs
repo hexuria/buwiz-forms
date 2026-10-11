@@ -20,15 +20,20 @@
 //! for a private agent, 31 for a government agent. The submit layout is
 //! therefore per category (`1600pt-v2018-private` / `-government`).
 //!
-//! The Part II table holds at most five ATCs here (Items 13–17). The official
-//! page moves a sixth ATC onward into an "other taxes" table whose controls
-//! are not in the fixed layout; this model rejects more than five.
+//! Part II shows five ATCs (Items 13–17). The popup has no limit: when more
+//! than five are ticked, `getATCCode` puts the sixth onward in the "Other
+//! Selected ATC" table (`tblPartIIOtherTax`, rows `txtAtcCd6..n` /
+//! `txtPg1P2TaxBase6..n` / `txtPg1P2TaxRate6..n` / `txtPg1P2TaxWithheld6..n`),
+//! `computeTotalOtherWithheldTax` sums them into `txtTotalOtherTax`, and Item
+//! 18 adds that total. Those rows sit after `hPartIITableSize` in the form, so
+//! the upload writes them there ([`Form1600PtDraft::official_layout`]).
 
 use std::collections::BTreeMap;
 
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 
+use super::official_inputs::{RowInsertion, extend_layout};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -40,7 +45,8 @@ pub const FORM_1600PT_FORM_ID: &str = "1600pt-v2018";
 pub const FORM_1600PT_PRIVATE_LAYOUT_ID: &str = "1600pt-v2018-private";
 /// Submit layout once Item 10 is Government.
 pub const FORM_1600PT_GOVERNMENT_LAYOUT_ID: &str = "1600pt-v2018-government";
-/// Part II rows, Items 13–17.
+/// Part II rows, Items 13–17. ATCs past these go to the "Other Selected
+/// ATC" table; the popup itself has no limit beyond the ATCs it offers.
 pub const FORM_1600PT_ATC_ROWS: usize = 5;
 /// Page 2 Schedule 1 rows.
 pub const FORM_1600PT_SCHEDULE_ROWS: usize = 5;
@@ -358,9 +364,12 @@ pub struct Form1600PtDraft {
     pub line_of_business: String,
 
     // Part II
-    /// Items 13–17 in popup order.
+    /// Items 13–17 in popup order, then the "Other Selected ATC" rows.
     #[serde(default)]
     pub atc_rows: Vec<Form1600PtAtcRow>,
+    /// `txtTotalOtherTax`: tax withheld on the sixth ATC onward.
+    #[serde(default)]
+    pub total_other_tax: f64,
     /// Item 18.
     #[serde(default)]
     pub total_tax_withheld: f64,
@@ -475,6 +484,7 @@ impl Form1600PtDraft {
             tax_relief_specify: String::new(),
             line_of_business: profile.line_of_business.clone(),
             atc_rows: Vec::new(),
+            total_other_tax: 0.0,
             total_tax_withheld: 0.0,
             tax_remitted_previous: 0.0,
             other_payments: 0.0,
@@ -539,9 +549,6 @@ impl Form1600PtDraft {
         {
             self.atc_rows.remove(at);
         } else {
-            if self.atc_rows.len() >= FORM_1600PT_ATC_ROWS {
-                return Err("Select at most five ATCs (Items 13 to 17).".to_string());
-            }
             self.atc_rows.push(Form1600PtAtcRow {
                 atc_code: option.code.to_string(),
                 rate_text: option.rate_text.to_string(),
@@ -564,13 +571,24 @@ impl Form1600PtDraft {
         if !self.tax_relief {
             self.tax_relief_specify.clear();
         }
-        let mut total = 0.0;
         for row in &mut self.atc_rows {
             let rate = row.option().map(|o| o.rate).unwrap_or(0.0);
             row.tax_withheld = cents(row.tax_base * rate / 100.0);
-            total += row.tax_withheld;
         }
-        // txtTotalOtherTax is 0.00 with at most five ATCs.
+        // computeTotalOtherWithheldTax: rows 6 onward.
+        let mut other = 0.0;
+        for row in self.atc_rows.iter().skip(FORM_1600PT_ATC_ROWS) {
+            other += row.tax_withheld;
+        }
+        self.total_other_tax = cents(other);
+        // pageOneComputation adds Items 13–16, the other total, then Item 17.
+        let withheld = |index: usize| self.atc_rows.get(index).map_or(0.0, |row| row.tax_withheld);
+        let total = withheld(0)
+            + withheld(1)
+            + withheld(2)
+            + withheld(3)
+            + self.total_other_tax
+            + withheld(4);
         self.total_tax_withheld = cents(total);
         self.tax_remitted_previous = cents(self.tax_remitted_previous);
         self.other_payments = cents(self.other_payments);
@@ -649,7 +667,7 @@ impl Form1600PtDraft {
             capitalized(&self.tax_relief_specify),
         );
 
-        for index in 0..FORM_1600PT_ATC_ROWS {
+        for index in 0..self.atc_rows.len().max(FORM_1600PT_ATC_ROWS) {
             let n = index + 1;
             match self.atc_rows.get(index) {
                 Some(row) => {
@@ -677,7 +695,7 @@ impl Form1600PtDraft {
                 }
             }
         }
-        put("txtTotalOtherTax", "0.00".to_string());
+        put("txtTotalOtherTax", official_amount(self.total_other_tax));
         put(
             "txtPg1P2I18TotTaxWithheld",
             official_amount(self.total_tax_withheld),
@@ -778,6 +796,39 @@ impl Form1600PtDraft {
             Some(Form1600PtAgentCategory::Private) => FORM_1600PT_PRIVATE_LAYOUT_ID,
             _ => FORM_1600PT_GOVERNMENT_LAYOUT_ID,
         }
+    }
+
+    /// The generated layout with the "Other Selected ATC" rows (`txtAtcCd6`
+    /// onward) spliced in after `hPartIITableSize`, where `getATCCode` draws
+    /// them inside the form.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        let base = crate::official_xml::layout(self.layout_id()).map_err(|e| e.to_string())?;
+        let columns = [
+            "txtAtcCd",
+            "txtPg1P2TaxBase",
+            "txtPg1P2TaxRate",
+            "txtPg1P2TaxWithheld",
+        ];
+        let last = FORM_1600PT_ATC_ROWS;
+        let insertions: Vec<RowInsertion> = (last + 1..=self.atc_rows.len())
+            .map(|n| RowInsertion {
+                after: if n == last + 1 {
+                    "hPartIITableSize".to_string()
+                } else {
+                    format!("{PREFIX}:txtPg1P2TaxWithheld{}", n - 1)
+                },
+                copies: columns
+                    .iter()
+                    .map(|column| {
+                        (
+                            format!("{PREFIX}:{column}{last}"),
+                            format!("{PREFIX}:{column}{n}"),
+                        )
+                    })
+                    .collect(),
+            })
+            .collect();
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -917,9 +968,6 @@ impl FormValidator for Form1600PtDraft {
                 "atc_rows",
                 "Selecting an ATC is not necessary when item no. 3 is set to ' NO '",
             );
-        }
-        if self.atc_rows.len() > FORM_1600PT_ATC_ROWS {
-            err("atc_rows", "Select at most five ATCs (Items 13 to 17).");
         }
         for (index, row) in self.atc_rows.iter().enumerate() {
             match (row.option(), self.agent_category) {
@@ -1099,9 +1147,10 @@ impl QueueableForm for Form1600PtDraft {
         if !errors.is_empty() {
             return Err(errors);
         }
-        let layout = crate::official_xml::layout(self.layout_id())
-            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
-        crate::official_xml::write(layout, &self.field_map())
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
             .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
@@ -1350,6 +1399,49 @@ mod tests {
             &|d| d.surcharge = 1.0,
             "Totals are out of date. Recompute the return.",
         );
+    }
+
+    #[test]
+    fn sixth_atc_onward_goes_to_other_selected_atc() {
+        let mut draft = sample();
+        draft.set_agent_category(Form1600PtAgentCategory::Government);
+        let offered: Vec<usize> = form_1600pt_popup(Form1600PtAgentCategory::Government)
+            .map(|(index, _)| index)
+            .collect();
+        for index in offered.iter().copied() {
+            if !draft
+                .atc_rows
+                .iter()
+                .any(|row| form_1600pt_atc_index(&row.atc_code, &row.rate_text) == Some(index))
+            {
+                draft.toggle_atc(index).unwrap();
+            }
+        }
+        assert_eq!(draft.atc_rows.len(), offered.len());
+        for row in &mut draft.atc_rows {
+            row.tax_base = 1_000.0;
+        }
+        draft.recompute();
+        assert!(messages(&draft).is_empty(), "{:?}", messages(&draft));
+        let other: f64 = draft.atc_rows[FORM_1600PT_ATC_ROWS..]
+            .iter()
+            .map(|row| row.tax_withheld)
+            .sum();
+        assert_eq!(draft.total_other_tax, cents(other));
+        let fields = draft.to_bir_field_map();
+        let last = draft.atc_rows.len();
+        assert_eq!(
+            fields[&format!("frm1600PT:txtAtcCd{last}")],
+            draft.atc_rows[last - 1].atc_code
+        );
+        assert_eq!(
+            fields["frm1600PT:txtTotalOtherTax"],
+            official_amount(draft.total_other_tax)
+        );
+        let payload = draft.to_bir_xml_payload().unwrap();
+        let table = payload.find("hPartIITableSize=").unwrap();
+        assert!(payload[table..].contains("frm1600PT:txtAtcCd6="));
+        assert!(payload[..table].contains("frm1600PT:txtAtcCd5="));
     }
 
     #[test]

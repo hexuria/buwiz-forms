@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1600pt::{
-    FORM_1600PT_ATC_ROWS, FORM_1600PT_SCHEDULE_ROWS, Form1600PtAgentCategory, Form1600PtDraft,
-    Form1600PtScheduleRow, form_1600pt_atc_index, form_1600pt_popup,
+    FORM_1600PT_ATC_OPTIONS, FORM_1600PT_ATC_ROWS, FORM_1600PT_SCHEDULE_ROWS,
+    Form1600PtAgentCategory, Form1600PtDraft, Form1600PtScheduleRow, form_1600pt_atc_index,
+    form_1600pt_popup,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -109,7 +110,11 @@ fn label_for(key: &str) -> String {
         .strip_prefix("base")
         .and_then(|n| n.parse::<usize>().ok())
     {
-        return format!("{} — Tax base", 13 + row);
+        return if row < FORM_1600PT_ATC_ROWS {
+            format!("{} — Tax base", 13 + row)
+        } else {
+            format!("Other ATC {} — Tax base", row + 1 - FORM_1600PT_ATC_ROWS)
+        };
     }
     if let Some((row, column)) = key
         .strip_prefix('s')
@@ -215,7 +220,9 @@ impl Form1600PtView {
         for (key, _) in MONEY_INPUTS {
             keys.push((key.to_string(), "0.00".into()));
         }
-        for row in 0..FORM_1600PT_ATC_ROWS {
+        // One tax-base input per ATC the popup can offer: the sixth onward
+        // are the "Other Selected ATC" rows.
+        for row in 0..FORM_1600PT_ATC_OPTIONS.len() {
             keys.push((base_key(row), "0.00".into()));
         }
         for row in 0..FORM_1600PT_SCHEDULE_ROWS {
@@ -333,7 +340,7 @@ impl Form1600PtView {
                 }
             }
         }
-        for row in 0..draft.atc_rows.len().min(FORM_1600PT_ATC_ROWS) {
+        for row in 0..draft.atc_rows.len() {
             if let Some(value) = number(&base_key(row), cx) {
                 draft.atc_rows[row].tax_base = value;
             }
@@ -867,8 +874,8 @@ impl Form1600PtView {
         let d = &self.draft;
         let mut children = Vec::new();
         if d.agent_category.is_some() && d.taxes_withheld {
-            // The model allows five ATCs today; a sixth needs the separate
-            // other-taxes table (model change, out of scope here).
+            // No limit beyond the popup: getATCCode moves the sixth ATC
+            // onward into the "Other Selected ATC" table.
             let all = atc_option_pairs();
             let selected = selected_atc_values(d);
             let row_keys: Vec<String> = (0..d.atc_rows.len().max(FORM_1600PT_ATC_ROWS))
@@ -880,11 +887,11 @@ impl Form1600PtView {
             let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
             children.push(multi_select_field(
                 "1600pt_atc",
-                "ATCs (search, at most five)",
+                "ATCs (search; the sixth onward go to Other Selected ATC)",
                 &self.atc_select,
                 &as_refs(&all),
                 &selected,
-                FORM_1600PT_ATC_ROWS,
+                FORM_1600PT_ATC_OPTIONS.len(),
                 !editable,
                 error.as_deref(),
                 on_change,
@@ -898,7 +905,25 @@ impl Form1600PtView {
                     .into_any_element(),
             );
         }
-        for (row, entry) in d.atc_rows.iter().enumerate().take(FORM_1600PT_ATC_ROWS) {
+        for (row, entry) in d.atc_rows.iter().enumerate() {
+            if row == FORM_1600PT_ATC_ROWS {
+                children.push(
+                    div()
+                        .font_weight(FontWeight::BOLD)
+                        .child("Other Selected ATC")
+                        .into_any_element(),
+                );
+            }
+            let item = if row < FORM_1600PT_ATC_ROWS {
+                format!("Item {}", 13 + row)
+            } else {
+                format!("Other ATC {}", row + 1 - FORM_1600PT_ATC_ROWS)
+            };
+            let short = if row < FORM_1600PT_ATC_ROWS {
+                (13 + row).to_string()
+            } else {
+                format!("Other ATC {}", row + 1 - FORM_1600PT_ATC_ROWS)
+            };
             let description = form_1600pt_atc_index(&entry.atc_code, &entry.rate_text)
                 .map(|i| {
                     bir_core::forms::form_1600pt::FORM_1600PT_ATC_OPTIONS[i]
@@ -909,7 +934,7 @@ impl Form1600PtView {
             let body = vec![
                 self.text_field(&base_key(row), layout, !editable),
                 self.computed(
-                    &format!("{} — Tax withheld at {}%", 13 + row, entry.rate_text),
+                    &format!("{short} — Tax withheld at {}%", entry.rate_text),
                     entry.tax_withheld,
                     cx,
                 ),
@@ -923,15 +948,22 @@ impl Form1600PtView {
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .child(div().font_weight(FontWeight::BOLD).child(format!(
-                        "Item {} — {}",
-                        13 + row,
-                        entry.atc_code
-                    )))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format!("{item} — {}", entry.atc_code)),
+                    )
                     .child(div().text_sm().child(description))
                     .child(self.grid(layout, body))
                     .into_any_element(),
             );
+        }
+        if d.atc_rows.len() > FORM_1600PT_ATC_ROWS {
+            children.push(self.computed(
+                "Other Selected ATC — Total tax withheld",
+                d.total_other_tax,
+                cx,
+            ));
         }
         let totals = vec![
             self.computed("18 — Total taxes withheld", d.total_tax_withheld, cx),
@@ -1028,7 +1060,7 @@ impl QueueableFormView for Form1600PtView {
         subscriptions.push(form_controls::on_multi_select(
             &atc_select,
             &atc_refs,
-            FORM_1600PT_ATC_ROWS,
+            FORM_1600PT_ATC_OPTIONS.len(),
             window,
             cx,
             |this: &Self| selected_atc_values(&this.draft),
