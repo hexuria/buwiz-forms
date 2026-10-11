@@ -1035,13 +1035,6 @@ impl Form1701View {
                 vec![
                     fixed("Item 4 — TIN", format_tin(&d.tin)),
                     fixed("Item 5 — RDO Code", d.rdo_code.clone()),
-                    self.text_field("name", layout),
-                    self.text_field("address", layout),
-                    self.text_field("zip", layout),
-                    self.text_field("birth", layout),
-                    self.text_field("email", layout),
-                    self.text_field("citizenship", layout),
-                    self.text_field("phone", layout),
                 ],
             ),
             Self::choice_row(layout, "Item 6 — Taxpayer type", types),
@@ -1057,6 +1050,17 @@ impl Form1701View {
             ));
         }
         rows.push(Self::choice_row(layout, "Item 7 — ATC", atcs));
+        rows.push(self.grid(
+            layout,
+            vec![
+                self.text_field("name", layout),
+                self.text_field("address", layout),
+                self.text_field("zip", layout),
+                self.text_field("birth", layout),
+                self.text_field("email", layout),
+                self.text_field("citizenship", layout),
+            ],
+        ));
         rows.push(self.yes_no(
             layout,
             "1701_ftc",
@@ -1068,6 +1072,7 @@ impl Form1701View {
         if d.claims_foreign_tax_credits == Some(true) {
             rows.push(self.text_field("foreign_no", layout));
         }
+        rows.push(self.grid(layout, vec![self.text_field("phone", layout)]));
         rows.push(Self::choice_row(layout, "Item 16 — Civil status", statuses));
         if d.civil_status == Some(Form1701CivilStatus::Married) {
             rows.push(self.yes_no(

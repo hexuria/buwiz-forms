@@ -413,11 +413,12 @@ const PART_II_COMPUTED: &[Computed] = &[
         label: "29 — Total amount payable (overpayment)",
         get: |c| c.total_amount_payable,
     },
-    Computed {
-        label: "Part VI — Total tax relief availment",
-        get: |c| c.tax_relief,
-    },
 ];
+
+const PART_VI_COMPUTED: &[Computed] = &[Computed {
+    label: "Part VI — Total tax relief availment",
+    get: |c| c.tax_relief,
+}];
 
 /// Text inputs of one column: (id, label, placeholder).
 const COLUMN_TEXT: &[(&str, &str, &str)] = &[
@@ -836,7 +837,8 @@ impl Form1701MsView {
         } else {
             button.outline()
         };
-        button.small().disabled(disabled)
+        // Let long chips shrink to the panel instead of running into its border.
+        button.small().disabled(disabled).min_w_0().max_w_full()
     }
 
     fn choice_row(&self, label: &str, buttons: Vec<Button>) -> AnyElement {
@@ -853,7 +855,15 @@ impl Form1701MsView {
                     .w_full()
                     .child(label.to_string()),
             )
-            .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .w_full()
+                    .min_w_0()
+                    .children(buttons),
+            )
             .into_any_element()
     }
 
@@ -925,17 +935,28 @@ impl Form1701MsView {
         }
     }
 
+    /// Interleaves editable and computed rows in official item order (the
+    /// leading number in each label). `extras` are `(item number, row)` pairs
+    /// placed after the other rows with the same number.
     fn money_block(
         &self,
         who: Who,
         moneys: &[Money],
         computed: &[Computed],
+        extras: Vec<(u32, AnyElement)>,
         layout: Layout,
         cx: &Context<Self>,
     ) -> Vec<AnyElement> {
+        fn item_no(label: &str) -> u32 {
+            label
+                .split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(u32::MAX)
+        }
         let editable = self.draft.lifecycle.is_editable();
         let column = who.column(&self.draft);
-        let mut children: Vec<AnyElement> = moneys
+        let mut rows: Vec<(u32, AnyElement)> = moneys
             .iter()
             .map(|money| {
                 let key = money_key(who, money.id);
@@ -947,21 +968,27 @@ impl Form1701MsView {
                     },
                     money.id
                 );
-                self.field(
-                    &key,
-                    &error_key,
-                    money.label,
-                    layout,
-                    !editable || !(money.open)(column),
+                (
+                    item_no(money.label),
+                    self.field(
+                        &key,
+                        &error_key,
+                        money.label,
+                        layout,
+                        !editable || !(money.open)(column),
+                    ),
                 )
             })
             .collect();
-        children.extend(
-            computed
-                .iter()
-                .map(|item| self.computed(item.label, (item.get)(column), cx)),
-        );
-        children
+        rows.extend(computed.iter().map(|item| {
+            (
+                item_no(item.label),
+                self.computed(item.label, (item.get)(column), cx),
+            )
+        }));
+        rows.extend(extras);
+        rows.sort_by_key(|(n, _)| *n);
+        rows.into_iter().map(|(_, el)| el).collect()
     }
 
     fn render_period(&self, layout: Layout, window: &Window, cx: &Context<Self>) -> AnyElement {
@@ -1246,23 +1273,34 @@ impl Form1701MsView {
         let editable = self.draft.lifecycle.is_editable();
         let mut sections = Vec::new();
         let whos = self.joint_whos();
-        let block = |moneys: &[Money], computed: &[Computed]| {
+        let block = |moneys: &[Money],
+                     computed: &[Computed],
+                     extras: &dyn Fn(Who) -> Vec<(u32, AnyElement)>| {
             whos.iter()
-                .map(|who| (*who, self.money_block(*who, moneys, computed, layout, cx)))
+                .map(|who| {
+                    (
+                        *who,
+                        self.money_block(*who, moneys, computed, extras(*who), layout, cx),
+                    )
+                })
                 .collect::<Vec<_>>()
         };
         sections.push(self.section(
             "Part IV Schedule A — Compensation income",
-            vec![self.columns(layout, block(SCHEDULE_A, SCHEDULE_A_COMPUTED), cx)],
+            vec![self.columns(
+                layout,
+                block(SCHEDULE_A, SCHEDULE_A_COMPUTED, &|_| Vec::new()),
+                cx,
+            )],
             cx,
         ));
-        let mut b1 = block(SCHEDULE_B1, SCHEDULE_B1_COMPUTED);
-        for (who, children) in &mut b1 {
+        // The Item 16 special rate sits between Items 15 and 17.
+        let b1 = block(SCHEDULE_B1, SCHEDULE_B1_COMPUTED, &|who| {
             let column = who.column(&self.draft);
-            children.insert(
-                7,
+            vec![(
+                16,
                 self.field(
-                    &money_key(*who, "rate"),
+                    &money_key(who, "rate"),
                     &format!(
                         "{}.special_rate",
                         match who {
@@ -1274,8 +1312,8 @@ impl Form1701MsView {
                     layout,
                     !editable || !column.relief_items_open(),
                 ),
-            );
-        }
+            )]
+        });
         sections.push(self.section(
             "Part IV Schedule B1 — Business income (graduated, exempt or special rate)",
             vec![self.columns(layout, b1, cx)],
@@ -1283,10 +1321,42 @@ impl Form1701MsView {
         ));
         sections.push(self.section(
             "Part IV Schedule B2 — Business income (8% rate)",
-            vec![self.columns(layout, block(SCHEDULE_B2, SCHEDULE_B2_COMPUTED), cx)],
+            vec![self.columns(
+                layout,
+                block(SCHEDULE_B2, SCHEDULE_B2_COMPUTED, &|_| Vec::new()),
+                cx,
+            )],
             cx,
         ));
-        let mut credits = block(PART_V, &[]);
+        // The "(specify)" inputs are draft-level, so they sit under Items 7
+        // and 9 of the taxpayer column only.
+        let mut credits = block(PART_V, &[], &|who| {
+            if who != Who::Taxpayer {
+                return Vec::new();
+            }
+            vec![
+                (
+                    7,
+                    self.field(
+                        "ftc_desc",
+                        "foreign_tax_credits_description",
+                        TEXT_INPUTS[9].1,
+                        layout,
+                        !editable,
+                    ),
+                ),
+                (
+                    9,
+                    self.field(
+                        "other_desc",
+                        "other_credits_description",
+                        TEXT_INPUTS[10].1,
+                        layout,
+                        !editable,
+                    ),
+                ),
+            ]
+        });
         for (who, children) in &mut credits {
             children.push(self.computed(
                 "10 — Total tax credits/payments",
@@ -1296,28 +1366,7 @@ impl Form1701MsView {
         }
         sections.push(self.section(
             "Part V — Tax credits/payments",
-            vec![
-                self.grid(
-                    layout,
-                    vec![
-                        self.field(
-                            "ftc_desc",
-                            "foreign_tax_credits_description",
-                            TEXT_INPUTS[9].1,
-                            layout,
-                            !editable,
-                        ),
-                        self.field(
-                            "other_desc",
-                            "other_credits_description",
-                            TEXT_INPUTS[10].1,
-                            layout,
-                            !editable,
-                        ),
-                    ],
-                ),
-                self.columns(layout, credits, cx),
-            ],
+            vec![self.columns(layout, credits, cx)],
             cx,
         ));
         div()
@@ -1337,7 +1386,17 @@ impl Form1701MsView {
             .map(|who| {
                 (
                     who,
-                    self.money_block(who, PART_II, PART_II_COMPUTED, layout, cx),
+                    self.money_block(who, PART_II, PART_II_COMPUTED, Vec::new(), layout, cx),
+                )
+            })
+            .collect();
+        let relief_blocks = self
+            .joint_whos()
+            .into_iter()
+            .map(|who| {
+                (
+                    who,
+                    self.money_block(who, &[], PART_VI_COMPUTED, Vec::new(), layout, cx),
                 )
             })
             .collect();
@@ -1348,6 +1407,11 @@ impl Form1701MsView {
                 d.aggregate_amount_payable,
                 cx,
             ),
+            div()
+                .font_weight(FontWeight::BOLD)
+                .child("Part VI — Tax relief availment")
+                .into_any_element(),
+            self.columns(layout, relief_blocks, cx),
         ];
         if d.overpayment_open() {
             let toggles = vec![

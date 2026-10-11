@@ -114,6 +114,51 @@ struct Computed {
     get: Get,
 }
 
+/// A "(specify)" text input shown right after the money row `after`.
+struct Note {
+    after: u32,
+    key: &'static str,
+    error_key: &'static str,
+    disabled: fn(&Form1701ADraft) -> bool,
+}
+
+const PART_IVA_NOTES: &[Note] = &[
+    Note {
+        after: 41,
+        key: "desc41",
+        error_key: "other_income_41_description",
+        disabled: |d| !d.part_iva_descriptions_open(),
+    },
+    Note {
+        after: 42,
+        key: "desc42",
+        error_key: "other_income_42_description",
+        disabled: |d| !d.part_iva_descriptions_open(),
+    },
+];
+
+const PART_IVB_NOTES: &[Note] = &[
+    Note {
+        after: 50,
+        key: "desc50",
+        error_key: "eight_other_income_50_description",
+        disabled: |d| !d.part_ivb_descriptions_open(),
+    },
+    Note {
+        after: 51,
+        key: "desc51",
+        error_key: "eight_other_income_51_description",
+        disabled: |d| !d.part_ivb_descriptions_open(),
+    },
+];
+
+const PART_IVC_NOTES: &[Note] = &[Note {
+    after: 62,
+    key: "desc63",
+    error_key: "other_credits_description",
+    disabled: |_| false,
+}];
+
 fn graduated(d: &Form1701ADraft, who: Who) -> bool {
     who.atc(d).is_graduated()
 }
@@ -923,17 +968,29 @@ impl Form1701AView {
         }
     }
 
+    /// Interleaves editable and computed rows in official item order (the
+    /// leading number in each label). `notes` are single "(specify)" text
+    /// inputs placed right after the row with the given item number; they
+    /// are draft-level, so they render only in the taxpayer column.
     fn money_block(
         &self,
         who: Who,
         moneys: &[Money],
         computed: &[Computed],
+        notes: &[Note],
         layout: Layout,
         cx: &Context<Self>,
     ) -> Vec<AnyElement> {
+        fn item_no(label: &str) -> u32 {
+            label
+                .split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(u32::MAX)
+        }
         let editable = self.draft.lifecycle.is_editable();
         let column = who.column(&self.draft);
-        let mut children: Vec<AnyElement> = moneys
+        let mut rows: Vec<(u32, AnyElement)> = moneys
             .iter()
             .map(|money| {
                 let key = money_key(who, money.id);
@@ -945,21 +1002,40 @@ impl Form1701AView {
                     },
                     money.id
                 );
-                self.field(
-                    &key,
-                    &error_key,
-                    money.label,
-                    layout,
-                    !editable || !(money.open)(&self.draft, who),
+                (
+                    item_no(money.label),
+                    self.field(
+                        &key,
+                        &error_key,
+                        money.label,
+                        layout,
+                        !editable || !(money.open)(&self.draft, who),
+                    ),
                 )
             })
             .collect();
-        children.extend(
-            computed
-                .iter()
-                .map(|item| self.computed(item.label, (item.get)(column), cx)),
-        );
-        children
+        rows.extend(computed.iter().map(|item| {
+            (
+                item_no(item.label),
+                self.computed(item.label, (item.get)(column), cx),
+            )
+        }));
+        if who == Who::Taxpayer {
+            rows.extend(notes.iter().map(|note| {
+                (
+                    note.after,
+                    self.text_field(
+                        note.key,
+                        note.error_key,
+                        layout,
+                        (note.disabled)(&self.draft),
+                    ),
+                )
+            }));
+        }
+        // Stable sort: a note follows the money row with the same number.
+        rows.sort_by_key(|(n, _)| *n);
+        rows.into_iter().map(|(_, el)| el).collect()
     }
 
     fn text_field(&self, key: &str, error_key: &str, layout: Layout, disabled: bool) -> AnyElement {
@@ -1110,24 +1186,23 @@ impl Form1701AView {
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 4 — TIN / Item 5 — RDO"),
-                )
-                .child(div().font_weight(FontWeight::BOLD).child(format!(
-                    "{}  ·  RDO {}",
-                    format_tin(&d.tin),
-                    d.rdo_code
-                )))
-                .into_any_element(),
-        ];
+        let tin_row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("Item 4 — TIN / Item 5 — RDO"),
+            )
+            .child(div().font_weight(FontWeight::BOLD).child(format!(
+                "{}  ·  RDO {}",
+                format_tin(&d.tin),
+                d.rdo_code
+            )))
+            .into_any_element();
+        let mut fields = Vec::new();
         for (key, error_key) in [
             ("name", "taxpayer_name"),
             ("address", "registered_address"),
@@ -1135,13 +1210,13 @@ impl Form1701AView {
             ("birth", "birth_date"),
             ("email", "email"),
             ("citizenship", "citizenship"),
-            ("phone", "contact_number"),
-            ("lob", "line_of_business"),
         ] {
             fields.push(self.text_field(key, error_key, layout, false));
         }
-        let mut children = vec![self.grid(layout, fields)];
+        // Items 4-5, 6-7, 8-12, 13, 14, 15, 16 ... in official order.
+        let mut children = vec![self.grid(layout, vec![tin_row])];
         children.extend(self.filer_choices(Who::Taxpayer, cx));
+        children.push(self.grid(layout, fields));
         children.push(self.choice_row(
             "Item 13 — Claiming foreign tax credits?",
             vec![
@@ -1158,6 +1233,10 @@ impl Form1701AView {
             ],
         ));
         children.push(self.text_field("ftn", "foreign_tax_number", layout, !d.foreign_tax_credits));
+        children.push(self.grid(
+            layout,
+            vec![self.text_field("phone", "contact_number", layout, false)],
+        ));
         let statuses = [
             (Form1701ACivilStatus::Single, "Single"),
             (Form1701ACivilStatus::Married, "Married"),
@@ -1231,6 +1310,11 @@ impl Form1701AView {
                     })),
                 ],
         ));
+        // Not an official item: kept last in Part I.
+        children.push(self.grid(
+            layout,
+            vec![self.text_field("lob", "line_of_business", layout, false)],
+        ));
         self.section(
             "Part I — Background information on taxpayer/filer",
             children,
@@ -1280,63 +1364,42 @@ impl Form1701AView {
 
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let whos = self.joint_whos();
-        let block = |moneys: &[Money], computed: &[Computed]| {
+        let block = |moneys: &[Money], computed: &[Computed], notes: &[Note]| {
             whos.iter()
-                .map(|who| (*who, self.money_block(*who, moneys, computed, layout, cx)))
+                .map(|who| {
+                    (
+                        *who,
+                        self.money_block(*who, moneys, computed, notes, layout, cx),
+                    )
+                })
                 .collect::<Vec<_>>()
         };
-        let d = &self.draft;
-        let iva_desc = vec![
-            self.text_field(
-                "desc41",
-                "other_income_41_description",
-                layout,
-                !d.part_iva_descriptions_open(),
-            ),
-            self.text_field(
-                "desc42",
-                "other_income_42_description",
-                layout,
-                !d.part_iva_descriptions_open(),
-            ),
-        ];
-        let ivb_desc = vec![
-            self.text_field(
-                "desc50",
-                "eight_other_income_50_description",
-                layout,
-                !d.part_ivb_descriptions_open(),
-            ),
-            self.text_field(
-                "desc51",
-                "eight_other_income_51_description",
-                layout,
-                !d.part_ivb_descriptions_open(),
-            ),
-        ];
         let sections = vec![
             self.section(
                 "Part IV.A — Graduated rates with OSD",
-                vec![
-                    self.grid(layout, iva_desc),
-                    self.columns(layout, block(PART_IVA, PART_IVA_COMPUTED), cx),
-                ],
+                vec![self.columns(
+                    layout,
+                    block(PART_IVA, PART_IVA_COMPUTED, PART_IVA_NOTES),
+                    cx,
+                )],
                 cx,
             ),
             self.section(
                 "Part IV.B — 8% income tax rate",
-                vec![
-                    self.grid(layout, ivb_desc),
-                    self.columns(layout, block(PART_IVB, PART_IVB_COMPUTED), cx),
-                ],
+                vec![self.columns(
+                    layout,
+                    block(PART_IVB, PART_IVB_COMPUTED, PART_IVB_NOTES),
+                    cx,
+                )],
                 cx,
             ),
             self.section(
                 "Part IV.C — Tax credits/payments",
-                vec![
-                    self.text_field("desc63", "other_credits_description", layout, false),
-                    self.columns(layout, block(PART_IVC, PART_IVC_COMPUTED), cx),
-                ],
+                vec![self.columns(
+                    layout,
+                    block(PART_IVC, PART_IVC_COMPUTED, PART_IVC_NOTES),
+                    cx,
+                )],
                 cx,
             ),
         ];
@@ -1357,7 +1420,7 @@ impl Form1701AView {
             .map(|who| {
                 (
                     who,
-                    self.money_block(who, PART_II, PART_II_COMPUTED, layout, cx),
+                    self.money_block(who, PART_II, PART_II_COMPUTED, &[], layout, cx),
                 )
             })
             .collect();
