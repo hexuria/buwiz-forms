@@ -1866,7 +1866,6 @@ impl Render for Form2550QV2View {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let is_draft = self.draft.is_editable();
         let editor_is_editable = self.editor_is_editable();
         let mut basis_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [
@@ -2211,7 +2210,7 @@ impl Render for Form2550QV2View {
                         {gpui_component::button::Button::new("2550q_revert")
                             .label("Revert to Draft")
                             .outline()
-                            .disabled(is_draft)
+                            .disabled(!revert_button_enabled(&self.draft.lifecycle.status))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.revert_to_draft(window, cx);
                             }))}
@@ -2221,6 +2220,7 @@ impl Render for Form2550QV2View {
                             .disabled(!queue_button_enabled(
                                 editor_is_editable,
                                 !self.validation_errors.is_empty(),
+                                &self.validation_state,
                             ))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.mark_submitted(window, cx);
@@ -3133,9 +3133,22 @@ fn format_optional_money(value: Option<f64>) -> String {
 const QUEUE_BUTTON_LABEL: &str = "Queue for submission";
 
 /// The queue button is enabled only for an editable draft with no blocking
-/// validation errors, matching the 2551Q and 1601-C pages.
-fn queue_button_enabled(editor_is_editable: bool, has_blocking_errors: bool) -> bool {
-    editor_is_editable && !has_blocking_errors
+/// validation errors, matching the 2551Q and 1601-C pages. Validation must also
+/// have actually run and be available (not "not run" or "unavailable").
+fn queue_button_enabled(
+    editor_is_editable: bool,
+    has_blocking_errors: bool,
+    validation_state: &Form2550QDiagnosticState,
+) -> bool {
+    editor_is_editable
+        && !has_blocking_errors
+        && matches!(validation_state, Form2550QDiagnosticState::Incomplete(_))
+}
+
+/// Revert pulls a Queued return back before the worker sends it. Once
+/// Submitted (or later) the filing may already be at BIR, so it stays disabled.
+fn revert_button_enabled(status: &FilingStatus) -> bool {
+    matches!(status, FilingStatus::Queued)
 }
 
 #[cfg(test)]
@@ -3153,8 +3166,8 @@ mod tests {
         RawValue, SHORT_PERIOD_NO, SHORT_PERIOD_YES, SIGNATORY, StableInstanceId, TAX_RELIEF_NO,
         TAX_RELIEF_YES, YEAR_END_MONTH, advance_input_revision, candidate_radio_raw_is_selected,
         candidate_radio_ui_key, candidate_radio_values, diagnostic_state_from_setup,
-        queue_button_enabled, raw_text_override, repeated_member_is_parsed, should_capture_raw,
-        singleton_is_parsed, singleton_raw_key, stable_parse_path,
+        queue_button_enabled, raw_text_override, repeated_member_is_parsed, revert_button_enabled,
+        should_capture_raw, singleton_is_parsed, singleton_raw_key, stable_parse_path,
     };
 
     #[test]
@@ -3163,9 +3176,29 @@ mod tests {
         let src = include_str!("form_2550q_view.rs");
         assert!(!src.contains(concat!("Manual / External", " Filing")));
         assert!(src.contains(concat!("this.mark_", "submitted(window, cx)")));
-        assert!(queue_button_enabled(true, false));
-        assert!(!queue_button_enabled(true, true));
-        assert!(!queue_button_enabled(false, false));
+        let ran = Form2550QDiagnosticState::Incomplete("ran".to_string());
+        assert!(queue_button_enabled(true, false, &ran));
+        assert!(!queue_button_enabled(true, true, &ran));
+        assert!(!queue_button_enabled(false, false, &ran));
+        assert!(!queue_button_enabled(
+            true,
+            false,
+            &Form2550QDiagnosticState::Unavailable("x".to_string())
+        ));
+        assert!(!queue_button_enabled(
+            true,
+            false,
+            &Form2550QDiagnosticState::NotRun
+        ));
+        assert!(revert_button_enabled(
+            &bir_core::forms::FilingStatus::Queued
+        ));
+        assert!(!revert_button_enabled(
+            &bir_core::forms::FilingStatus::Submitted
+        ));
+        assert!(!revert_button_enabled(
+            &bir_core::forms::FilingStatus::Draft
+        ));
     }
 
     #[test]

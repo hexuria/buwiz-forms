@@ -2165,6 +2165,21 @@ impl Render for Form2551QView {
                     }),
             );
 
+        // Item 13 and the profile's annual election are validated together in
+        // the model; show their actual messages beside the control.
+        let mut item_13_messages = div().flex().flex_col().gap_1();
+        if !self.suppressed_sections.contains("filing_period") {
+            for (_, message) in self
+                .validation_errors
+                .iter()
+                .filter(|(f, _)| f == "item_13_election" || f == "annual_income_tax_election")
+            {
+                item_13_messages = item_13_messages.child(rsx! {
+                    <div text_xs text_color={cx.theme().danger}>{message.clone()}</div>
+                });
+            }
+        }
+
         let item_13_controls = rsx! {
             <div flex flex_col gap_2>
                 {Self::field_label("13. Income-tax-rate election", cx)}
@@ -2217,6 +2232,7 @@ impl Render for Form2551QView {
                 <div text_xs text_color={cx.theme().muted_foreground}>
                     {"This legal election is stored exactly as selected and is never inferred."}
                 </div>
+                {item_13_messages}
             </div>
         };
 
@@ -2897,7 +2913,25 @@ impl Render for Form2551QView {
                                                 this.mark_submitted(cx);
                                             } else {
                                                 this.is_validated = false;
-                                                this.status_message = Some("Fix validation errors to continue.".to_string());
+                                                let total = this.validation_errors.len();
+                                                let item_13_count = this
+                                                    .validation_errors
+                                                    .iter()
+                                                    .filter(|(f, _)| {
+                                                        f == "item_13_election"
+                                                            || f == "annual_income_tax_election"
+                                                    })
+                                                    .count();
+                                                let pointer = if item_13_count > 0 {
+                                                    format!(
+                                                        " {item_13_count} of them are shown under \"13. Income-tax-rate election\"."
+                                                    )
+                                                } else {
+                                                    " See the messages in the flagged sections.".to_string()
+                                                };
+                                                this.status_message = Some(format!(
+                                                    "Fix {total} validation error(s) to continue.{pointer}"
+                                                ));
                                                 use gpui_component::WindowExt;
                                                 window.push_notification(
                                                     gpui_component::notification::Notification::new()
