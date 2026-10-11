@@ -282,6 +282,12 @@ impl DashboardView {
         }
     }
 
+    /// Switch the Calendar / Tax Form Library tab (agent `dashboard.tab`).
+    pub(crate) fn agent_set_tab(&mut self, tab: ProfileTab, cx: &mut Context<Self>) {
+        self.active_tab = tab;
+        cx.notify();
+    }
+
     pub(crate) fn agent_dues(&self) -> Vec<(String, u16, u8, String, String)> {
         self.deadlines
             .iter()
