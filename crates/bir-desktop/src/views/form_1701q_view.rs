@@ -51,7 +51,6 @@ impl Layout {
 
 /// Free-text inputs: (key, label).
 const TEXT_INPUTS: &[(&str, &str)] = &[
-    ("year", "Item 1 — For the year"),
     ("sheets", "Item 4 — Number of sheets attached"),
     ("name", "Item 9 — Taxpayer/Filer's Name"),
     ("address", "Item 10 — Registered Address"),
@@ -153,7 +152,6 @@ impl Form1701QView {
     /// Editor text for one input from the draft.
     fn initial(draft: &Form1701QDraft, key: &str) -> String {
         match key {
-            "year" => draft.taxable_year.to_string(),
             "sheets" => draft.number_of_sheets.to_string(),
             "name" => draft.taxpayer_name.clone(),
             "address" => format!("{}{}", draft.registered_address, draft.registered_address_2),
@@ -221,13 +219,6 @@ impl Form1701QView {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number(self.input_text("year", cx), "Item 1 year") {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         if let Some(sheets) = number(self.input_text("sheets", cx), "Item 4") {
             draft.number_of_sheets = if (0.0..=99.0).contains(&sheets) {
                 sheets as u8
@@ -434,6 +425,34 @@ impl Form1701QView {
         .into_any_element()
     }
 
+    /// Read-only item: the label, then the value in bold.
+    fn read_only_row(layout: Layout, label: &str, value: String) -> AnyElement {
+        let label = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div().font_weight(FontWeight::BOLD).child(value);
+        match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.5)))
+                .child(value.w(relative(0.5))),
+        }
+        .into_any_element()
+    }
+
     fn choice(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
@@ -501,21 +520,10 @@ impl Form1701QView {
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let quarters: Vec<Button> = (1..=3u8)
-            .map(|quarter| {
-                Self::choice(
-                    ("1701q_qtr", quarter as usize),
-                    format!("Q{quarter}"),
-                    d.quarter == quarter,
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.quarter = quarter)))
-            })
-            .collect();
         let amended = d.is_amended;
         let children = vec![
-            self.text("year", layout),
-            Self::choice_row(layout, "Item 2 — Quarter", quarters),
+            Self::read_only_row(layout, "Item 1 — For the year", d.taxable_year.to_string()),
+            Self::read_only_row(layout, "Item 2 — Quarter", format!("Q{}", d.quarter)),
             Self::choice_row(
                 layout,
                 "Item 3 — Amended return?",

@@ -576,7 +576,7 @@ impl Form1702ExView {
                 amount,
             });
         }
-        for text in TEXTS {
+        for text in TEXTS.iter().filter(|t| t.key != "year") {
             (text.set)(&mut draft, self.input_text(text.key, cx));
         }
         for list in ROW_LISTS {
@@ -728,6 +728,34 @@ impl Form1702ExView {
                 .w_full()
                 .child(label.w(relative(0.55)))
                 .child(body.w(relative(0.45))),
+        }
+        .into_any_element()
+    }
+
+    /// Read-only item: the label, then the value in bold.
+    fn read_only_row(layout: Layout, label: &str, value: String) -> AnyElement {
+        let label = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div().font_weight(FontWeight::BOLD).child(value);
+        match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.55)))
+                .child(value.w(relative(0.45))),
         }
         .into_any_element()
     }
@@ -899,7 +927,11 @@ impl Form1702ExView {
                 .collect();
             children.push(self.choice_row("Item 2 — Year ended: month (MM)", months));
         }
-        children.push(self.field("year", TEXTS[0].label, layout, !editable));
+        children.push(Self::read_only_row(
+            layout,
+            TEXTS[0].label,
+            d.taxable_year.to_string(),
+        ));
         children.push(self.choice_row(
             "Item 3 — Amended return?",
             vec![
