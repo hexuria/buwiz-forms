@@ -171,6 +171,8 @@ pub struct Form1601EqView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// The official submit confirm is open (OK queues, Cancel changes nothing).
+    submit_confirm_open: bool,
     /// Searchable multi-select for the Part II ATCs (values are ATC codes).
     atc_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
@@ -792,8 +794,17 @@ impl Form1601EqView {
                 &["rdo_code"],
             ),
         ];
+        // Items 8-10, then Item 11 (category), then Item 12 (email) and the
+        // line of business, in the official sheet order (CatAgent_P comes
+        // before txtEmail).
+        let mut after_category = Vec::new();
         for (key, label, _) in TEXT_INPUTS.iter().skip(2) {
-            fields.push(self.field(key, label, layout, !editable));
+            let field = self.field(key, label, layout, !editable);
+            if matches!(*key, "email" | "lob") {
+                after_category.push(field);
+            } else {
+                fields.push(field);
+            }
         }
         let category_row = self.labelled_row(
             "Item 11 — Category of withholding agent",
@@ -823,6 +834,7 @@ impl Form1601EqView {
         );
         let mut body = vec![self.grid(layout, fields), category_row];
         body.extend(self.wipe_confirm(|w| matches!(w, PendingWipe::Category(_)), cx));
+        body.push(self.grid(layout, after_category));
         self.section("Part I — Background Information", body, cx)
     }
 
@@ -1066,6 +1078,7 @@ impl QueueableFormView for Form1601EqView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            submit_confirm_open: false,
             pending_wipe: None,
             atc_select,
             _subscriptions: vec![atc_subscription],
@@ -1169,6 +1182,7 @@ impl FormViewTrait for Form1601EqView {
     }
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
         if !can_queue_for_submission(Form1601EqDraft::FORM_CODE) {
             self.status_message =
                 Some("1601-EQ is not enabled for in-app submission in this build.".into());
@@ -1301,7 +1315,10 @@ impl FormViewTrait for Form1601EqView {
             Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
                 "info".into(),
                 "Print preview".into(),
-                format!("{} No filing state was changed.", kind.status_message()),
+                format!(
+                    "{} This preview uses the January 2019 printed sheet (no January 2018 sheet is available). No filing state was changed.",
+                    kind.status_message()
+                ),
             )),
             Err(error) => cx.emit(QueueableFormEvent::PushNotification(
                 "error".into(),
@@ -1311,6 +1328,38 @@ impl FormViewTrait for Form1601EqView {
         }
     }
 }
+
+impl Form1601EqView {
+    /// Queue for submission: the same checks as queueing, then the official
+    /// confirm prompt. Nothing changes until the filer clicks OK.
+    fn request_submit(&mut self, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
+        if !can_queue_for_submission(Form1601EqDraft::FORM_CODE) {
+            self.status_message =
+                Some("This form is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        self.submit_confirm_open = true;
+        cx.notify();
+    }
+}
+
+/// The official submit prompt (rule 1601eq-final-001, `openAlertEmail`), verbatim.
+const SUBMIT_CONFIRM_TEXT: &str = "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?";
 
 impl Render for Form1601EqView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1331,25 +1380,15 @@ impl Render for Form1601EqView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let mut issues: Vec<AnyElement> = self
+        let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
             })
             .collect();
-        if error_count > issues.len() {
-            issues.push(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(format!("and {} more", error_count - issues.len()))
-                    .into_any_element(),
-            );
-        }
 
         let toolbar =
             div()
@@ -1412,9 +1451,7 @@ impl Render for Form1601EqView {
                                         || !self.validation_errors.is_empty()
                                         || !self.parse_errors.is_empty(),
                                 )
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
-                                })),
+                                .on_click(cx.listener(|this, _, _, cx| this.request_submit(cx))),
                         ),
                 );
 
@@ -1461,13 +1498,49 @@ impl Render for Form1601EqView {
                         ),
                 )
             })
+            .when(self.submit_confirm_open && is_draft, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .child(div().text_sm().child(SUBMIT_CONFIRM_TEXT))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .child(
+                                    Button::new("1601eq_submit_confirm")
+                                        .label("OK")
+                                        .primary()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.mark_submitted(window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("1601eq_submit_cancel")
+                                        .label("Cancel")
+                                        .outline()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.submit_confirm_open = false;
+                                            cx.notify();
+                                        })),
+                                ),
+                        ),
+                )
+            })
+            .when(!issues.is_empty(), |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(schedule);
         body = body.child(self.render_totals(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
@@ -1502,6 +1575,25 @@ impl Render for Form1601EqView {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn submit_confirm_is_the_official_text() {
+        let rules: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../rules/forms/1601eq-v2018/validations.json"
+        ))
+        .expect("rules json");
+        let rules = rules
+            .as_array()
+            .or_else(|| rules.get("rules").and_then(|r| r.as_array()))
+            .expect("rule list");
+        let official = rules
+            .iter()
+            .find(|rule| rule["rule_id"] == "1601eq-final-001")
+            .and_then(|rule| rule["exact_message"].as_str())
+            .expect("final-copy rule")
+            .replace("\\n", "\n");
+        assert_eq!(super::SUBMIT_CONFIRM_TEXT, official);
+    }
+
     use super::{Layout, atc_pairs, format_tin, parse_amount};
     use gpui::px;
 

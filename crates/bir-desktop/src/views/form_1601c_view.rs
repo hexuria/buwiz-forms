@@ -14,6 +14,7 @@ use bir_core::forms::form_1601c::{
     FORM_1601C_ATC, Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS,
 };
 use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
+use bir_core::official_xml::{official_amount, parse_official_amount};
 
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
@@ -460,13 +461,17 @@ impl Form1601CView {
             if value.trim().is_empty() {
                 0.0
             } else {
-                value.parse::<f64>().unwrap_or_else(|_| {
-                    errors.push((
-                        field.to_string(),
-                        format!("{field} must contain a valid amount"),
-                    ));
-                    0.0
-                })
+                // Official `round(this,2)` on blur: two decimals, half up.
+                value
+                    .parse::<f64>()
+                    .map(|v| parse_official_amount(&official_amount(v)).unwrap_or(v))
+                    .unwrap_or_else(|_| {
+                        errors.push((
+                            field.to_string(),
+                            format!("{field} must contain a valid amount"),
+                        ));
+                        0.0
+                    })
             }
         };
         let get_text =
@@ -1429,6 +1434,10 @@ impl Render for Form1601CView {
                                     text_color={cx.theme().muted_foreground}>
                                     {"TAXPAYER PROFILE"}
                                 </div>
+                                <div mt_2 flex flex_wrap gap_4 text_sm>
+                                    <div>{format!("1 For the Month (MM): {:02}", self.draft.month)}</div>
+                                    <div>{format!("For the Year (YYYY): {}", self.draft.taxable_year)}</div>
+                                </div>
                                 <div mt_2 flex gap_4>
                                     <div text_xl font_weight={FontWeight::BOLD}>
                                         {self.draft.taxpayer_name.clone()}
@@ -1461,87 +1470,22 @@ impl Render for Form1601CView {
                                                     {"Part I - Background Information"}
                                                 </div>
                                             })
-                                            .child(rsx! {
-                                                <div flex flex_wrap gap_2 items_center>
-                                                    <div>{"Amended Return?"}</div>
-                                                    {div()
-                                                            .when(layout == Layout::Phone, |d| d.w_full())
-                                                            .id("amended_btn")
-                                                            .p_2()
-                                                            .border_1()
-                                                            .border_color(if self.is_amended {
-                                                                cx.theme().primary
-                                                            } else {
-                                                                cx.theme().border
-                                                            })
-                                                            .bg(if self.is_amended {
-                                                                cx.theme().primary.opacity(0.2)
-                                                            } else {
-                                                                cx.theme().background
-                                                            })
-                                                            .rounded_md()
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(
-                                                                |this, _, _, cx| {
-                                                                    if matches!(
-                                                                        this.draft.status,
-                                                                        FilingStatus::Draft
-                                                                    ) {
-                                                                        this.is_amended =
-                                                                            !this.is_amended;
-                                                                        this.sync_from_inputs(cx);
-                                                                    }
-                                                                },
-                                                            ))
-                                                            .child(if self.is_amended {
-                                                                "Yes"
-                                                            } else {
-                                                                "No"
-                                                            })}
-                                                </div>
-                                            })
-                                            .child(rsx! {
-                                                <div flex flex_wrap gap_2 items_center>
-                                                    <div>{"Any Taxes Withheld?"}</div>
-                                                    {div()
-                                                            .when(layout == Layout::Phone, |d| d.w_full())
-                                                            .id(crate::agent::ids::FORM_1601C_WITHHELD)
-                                                            .p_2()
-                                                            .border_1()
-                                                            .border_color(
-                                                                if self.any_taxes_withheld {
-                                                                    cx.theme().primary
-                                                                } else {
-                                                                    cx.theme().border
-                                                                },
-                                                            )
-                                                            .bg(if self.any_taxes_withheld {
-                                                                cx.theme().primary.opacity(0.2)
-                                                            } else {
-                                                                cx.theme().background
-                                                            })
-                                                            .rounded_md()
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(
-                                                                |this, _, _, cx| {
-                                                                    if matches!(
-                                                                        this.draft.status,
-                                                                        FilingStatus::Draft
-                                                                    ) {
-                                                                        this.any_taxes_withheld =
-                                                                            !this
-                                                                                .any_taxes_withheld;
-                                                                        this.sync_from_inputs(cx);
-                                                                    }
-                                                                },
-                                                            ))
-                                                            .child(if self.any_taxes_withheld {
-                                                                "Yes"
-                                                            } else {
-                                                                "No"
-                                                            })}
-                                                </div>
-                                            })
+                                            .child(self.render_yes_no(
+                                                layout,
+                                                "Amended Return?",
+                                                "amended_btn",
+                                                self.is_amended,
+                                                |this, value| this.is_amended = value,
+                                                cx,
+                                            ))
+                                            .child(self.render_yes_no(
+                                                layout,
+                                                "Any Taxes Withheld?",
+                                                crate::agent::ids::FORM_1601C_WITHHELD,
+                                                self.any_taxes_withheld,
+                                                |this, value| this.any_taxes_withheld = value,
+                                                cx,
+                                            ))
                                             .child(div().id(crate::agent::ids::FORM_1601C_SHEETS).child(self.render_input_row(layout,
                                                 "Number of Sheets Attached",
                                                 &self.number_of_sheets,
@@ -1778,8 +1722,8 @@ impl Render for Form1601CView {
                                     font_weight={FontWeight::BLACK}
                                     text_color={cx.theme().primary}>
                                     {format!(
-                                        "P {:.2}",
-                                        self.draft.tax_36_total_amount_payable
+                                        "P {}",
+                                        official_amount(self.draft.tax_36_total_amount_payable)
                                     )}
                                 </div>
                                 {div().px_6().pb_4().children(
@@ -2102,9 +2046,64 @@ impl Form1601CView {
                 Self::half(layout)
                     .when(layout != Layout::Phone, |d| d.text_right())
                     .font_weight(FontWeight::BOLD)
-                    .child(format!("{:.2}", value)),
+                    .child(official_amount(value)),
             );
         self.with_errors(row, keys)
+    }
+
+    /// One labelled question with both answers visible (radio-style), the
+    /// chosen one primary, as the 2551Q `choice()` helper draws them.
+    fn render_yes_no(
+        &self,
+        layout: Layout,
+        label: &'static str,
+        id: &'static str,
+        value: bool,
+        set: fn(&mut Self, bool),
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let editable = matches!(self.draft.status, FilingStatus::Draft);
+        let choice = |suffix: &'static str, text: &'static str, answer: bool| {
+            let selected = value == answer;
+            let button =
+                gpui_component::button::Button::new(SharedString::from(format!("{id}_{suffix}")))
+                    .label(if selected {
+                        format!("✓ {text}")
+                    } else {
+                        text.to_string()
+                    });
+            let button = if selected {
+                button.primary()
+            } else {
+                button.outline()
+            };
+            button
+                .disabled(!editable)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if matches!(this.draft.status, FilingStatus::Draft) {
+                        set(this, answer);
+                        this.sync_from_inputs(cx);
+                    }
+                }))
+        };
+        div()
+            .flex()
+            .flex_wrap()
+            .gap_2()
+            .items_center()
+            .child(
+                div()
+                    .when(layout == Layout::Phone, |d| d.w_full())
+                    .child(label),
+            )
+            .child(
+                div()
+                    .id(id)
+                    .flex()
+                    .gap_2()
+                    .child(choice("yes", "Yes", true))
+                    .child(choice("no", "No", false)),
+            )
     }
 
     fn render_category_of_agent(&self, layout: Layout, cx: &mut Context<Self>) -> impl IntoElement {
