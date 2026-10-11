@@ -448,7 +448,6 @@ const COLUMN_TEXT: &[(&str, &str, &str)] = &[
 
 /// Text inputs outside the columns: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
-    ("year", "Item 1 — Year", "YYYY"),
     ("name", "Item 8 — Taxpayer's name", ""),
     ("email", "Item 9 — Email address", ""),
     ("phone", "Item 10 — Contact number", ""),
@@ -547,7 +546,6 @@ impl Form1701MsView {
             };
         }
         match key {
-            "year" => draft.taxable_year.to_string(),
             "name" => draft.taxpayer_name.clone(),
             "email" => draft.email.clone(),
             "phone" => draft.contact_number.clone(),
@@ -607,13 +605,6 @@ impl Form1701MsView {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         for who in [Who::Taxpayer, Who::Spouse] {
             for money in all_money() {
                 let key = money_key(who, money.id);
@@ -820,6 +811,34 @@ impl Form1701MsView {
         .into_any_element()
     }
 
+    /// Read-only item: the label, then the value in bold.
+    fn read_only_row(layout: Layout, label: &str, value: String) -> AnyElement {
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .min_w_0()
+            .max_w_full()
+            .child(label.to_string());
+        let value = div().font_weight(FontWeight::BOLD).child(value);
+        match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.55)))
+                .child(value.w(relative(0.45))),
+        }
+        .into_any_element()
+    }
+
     fn choice(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
@@ -1013,12 +1032,10 @@ impl Form1701MsView {
         }
         let mut children =
             vec![
-                self.field(
-                    "year",
-                    "taxable_year",
-                    "Item 1 — For the year (YYYY)",
+                Self::read_only_row(
                     layout,
-                    !editable,
+                    "Item 1 — For the year (YYYY)",
+                    d.taxable_year.to_string(),
                 ),
                 self.choice_row(
                     "Item 2 — Amended return?",
