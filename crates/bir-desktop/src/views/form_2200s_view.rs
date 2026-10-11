@@ -24,7 +24,9 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use super::event_form_kit as kit;
+use crate::components::combobox::{ComboboxEvent, ComboboxState};
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{self, messages_for, select_field, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form2200SView {}
@@ -58,7 +60,6 @@ const MONTHS: [&str; 12] = [
 /// Text inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("day", "Item 1 — Day", "DD"),
-    ("year", "Item 1 — Year", "YYYY"),
     ("sheets", "Item 3 — Number of Sheet/s Attached", "0"),
     ("name", "Item 6 — Taxpayer's Name", ""),
     ("address", "Item 7 — Registered Address", ""),
@@ -119,12 +120,19 @@ fn money_text(value: f64) -> String {
     }
 }
 
-/// Which place item (12 or 13) and level is being picked.
+/// Level of a place dropdown (Items 12 and 13).
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum PlacePick {
-    Region(u8),
-    Province(u8),
-    City(u8),
+enum PlaceLevel {
+    Region,
+    Province,
+    City,
+}
+
+const PLACE_LEVELS: [PlaceLevel; 3] = [PlaceLevel::Region, PlaceLevel::Province, PlaceLevel::City];
+
+/// Index into `Form2200SView::places` of item 12 or 13 at `level`.
+fn place_index(item: u8, level: PlaceLevel) -> usize {
+    usize::from(item == 13) * 3 + level as usize
 }
 
 pub struct Form2200SView {
@@ -136,7 +144,8 @@ pub struct Form2200SView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
-    picking: Option<PlacePick>,
+    /// Region, province and city dropdowns of Item 12, then of Item 13.
+    places: Vec<Entity<ComboboxState>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -159,7 +168,6 @@ impl Form2200SView {
         }
         match key {
             "day" => format!("{:02}", draft.day),
-            "year" => draft.year.to_string(),
             "sheets" => draft.number_of_attached_sheets.to_string(),
             "name" => draft.taxpayer_name.clone(),
             "address" => draft.registered_address.clone(),
@@ -217,13 +225,6 @@ impl Form2200SView {
         if let Some(day) = number("day", "Item 1 day", cx) {
             draft.day = if (0.0..=99.0).contains(&day) {
                 day as u8
-            } else {
-                0
-            };
-        }
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.year = if (0.0..=9999.0).contains(&year) {
-                year as u16
             } else {
                 0
             };
@@ -405,6 +406,69 @@ impl Form2200SView {
         }
     }
 
+    /// The options a place dropdown lists, given the draft's current place.
+    fn place_options(place: &ExcisePlace, level: PlaceLevel) -> Vec<(&'static str, &'static str)> {
+        match level {
+            PlaceLevel::Region => excise_places::regions(PLACE_FORM),
+            PlaceLevel::Province => excise_places::provinces(PLACE_FORM, &place.region),
+            PlaceLevel::City => excise_places::cities(PLACE_FORM, &place.region, &place.province),
+        }
+    }
+
+    fn place_of(&self, item: u8) -> &ExcisePlace {
+        if item == 12 {
+            &self.draft.place_of_production
+        } else {
+            &self.draft.place_of_removal
+        }
+    }
+
+    /// A place dropdown choice: a new region clears province and city, a new
+    /// province clears the city.
+    fn pick_place(&mut self, item: u8, level: PlaceLevel, label: &str, cx: &mut Context<Self>) {
+        let options = Self::place_options(self.place_of(item), level);
+        let Some(code) = options.iter().find(|(_, l)| *l == label).map(|(c, _)| *c) else {
+            return;
+        };
+        self.edit(cx, |d| {
+            let place = Self::place_mut(d, item);
+            match level {
+                PlaceLevel::Region => {
+                    *place = ExcisePlace {
+                        region: code.to_string(),
+                        ..Default::default()
+                    }
+                }
+                PlaceLevel::Province => {
+                    place.province = code.to_string();
+                    place.city.clear();
+                }
+                PlaceLevel::City => place.city = code.to_string(),
+            }
+        });
+    }
+
+    /// Make every place dropdown list and show the draft's current place.
+    fn sync_places(&self, window: &mut Window, cx: &mut Context<Self>) {
+        for item in [12u8, 13] {
+            let place = self.place_of(item);
+            for level in PLACE_LEVELS {
+                let value = match level {
+                    PlaceLevel::Region => &place.region,
+                    PlaceLevel::Province => &place.province,
+                    PlaceLevel::City => &place.city,
+                };
+                form_controls::sync_select(
+                    &self.places[place_index(item, level)],
+                    &Self::place_options(place, level),
+                    Some(value.as_str()).filter(|v| !v.is_empty()),
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
+
     fn notify(
         &self,
         kind: notification::NotificationType,
@@ -471,17 +535,72 @@ impl Form2200SView {
         .into_any_element()
     }
 
+    /// Validator keys (`Form2200SDraft::validate`) behind input `key`.
+    fn model_keys(key: &str) -> Vec<String> {
+        let fixed: &[&str] = match key {
+            "day" => &["day"],
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "phone" => &["contact_number"],
+            "lob" => &["line_of_business"],
+            "psic" => &["psic"],
+            "email" => &["email"],
+            "scheme" => &["other_scheme_text"],
+            "bal" => &["balance_carried_over"],
+            "cred" => &["creditable_excise_tax"],
+            "prev" => &["previous_payment"],
+            "sur" => &["surcharge"],
+            "int" => &["interest"],
+            "comp" => &["compromise"],
+            "pay" => &["tax_payment"],
+            _ => &[],
+        };
+        let mut keys: Vec<String> = fixed.iter().map(|k| k.to_string()).collect();
+        // "Others" rows: `oatc3` is `others[3].atc`.
+        for (prefix, field) in [
+            ("oatc", "atc"),
+            ("odesc", "description"),
+            ("obracket", "tax_bracket"),
+            ("orate", "rate"),
+            ("ovol", "volume"),
+        ] {
+            if let Some(row) = key
+                .strip_prefix(prefix)
+                .and_then(|rest| rest.parse::<usize>().ok())
+            {
+                keys.push(format!("others[{row}].{field}"));
+            }
+        }
+        keys
+    }
+
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built control.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
+    }
+
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
         let input = self
             .inputs
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let mut keys = Self::model_keys(key);
+        keys.push(key.to_string());
+        let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let message = self.errors_for(&key_refs);
+        let error = message.is_some();
         let label = div()
             .min_w_0()
             .text_sm()
@@ -492,7 +611,7 @@ impl Form2200SView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -508,7 +627,32 @@ impl Form2200SView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
+    }
+
+    /// A printed label with its read-only value (the library tile's period,
+    /// TIN, RDO), showing any validation message under it.
+    fn read_only_row(&self, label: &str, value: String, key: &str) -> AnyElement {
+        let message = self.errors_for(&[key]);
+        let text = div()
+            .min_w_0()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let text = if message.is_some() {
+            text.text_color(gpui::red())
+        } else {
+            text
+        };
+        let shown = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(text)
+            .child(div().font_weight(FontWeight::BOLD).child(value))
+            .into_any_element();
+        with_field_error(shown, message)
     }
 
     fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
@@ -601,37 +745,17 @@ impl Form2200SView {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("2200s_month", index),
-                    *name,
-                    self.draft.month == month,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month))),
-            );
-        }
+        // Month and year come from the library tile and are read-only; the
+        // Day stays editable (the draft is keyed by the Item 1 date).
+        let month_name = MONTHS
+            .get((self.draft.month as usize).wrapping_sub(1))
+            .copied()
+            .unwrap_or("-");
         let amended = self.draft.is_amended;
         let children = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 1 — Month"),
-                )
-                .child(months)
-                .into_any_element(),
+            self.read_only_row("Item 1 — Month", month_name.to_string(), "month"),
             self.field("day", "Item 1 — Day", layout, !editable),
-            self.field("year", "Item 1 — Year", layout, !editable),
+            self.read_only_row("Item 1 — Year", self.draft.year.to_string(), "year"),
             self.field(
                 "sheets",
                 "Item 3 — Number of Sheet/s Attached",
@@ -658,141 +782,66 @@ impl Form2200SView {
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
 
-    fn render_place(&self, item: u8, cx: &Context<Self>) -> AnyElement {
+    /// Item 12 or 13: a searchable dropdown per level (Region, Province, City).
+    fn render_place(&self, item: u8, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let place = if item == 12 {
-            &self.draft.place_of_production
+        let place = self.place_of(item);
+        let (title, key) = if item == 12 {
+            ("Item 12 — Place of production", "place_of_production")
         } else {
-            &self.draft.place_of_removal
+            ("Item 13 — Place of removal", "place_of_removal")
         };
-        let title = if item == 12 {
-            "Item 12 — Place of production"
-        } else {
-            "Item 13 — Place of removal"
-        };
-        let name = |code: &str| {
-            excise_places::place_name(code)
-                .unwrap_or("(select)")
-                .to_string()
-        };
-        let base = usize::from(item) * 10;
-        let mut body = div().flex().flex_col().gap_2().child(
-            div()
-                .min_w_0()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .child(title.to_string()),
-        );
-        let levels = [
-            (PlacePick::Region(item), "Region", name(&place.region)),
-            (PlacePick::Province(item), "Province", name(&place.province)),
-            (PlacePick::City(item), "City", name(&place.city)),
-        ];
-        let mut row = div().flex().flex_wrap().gap_2();
-        for (index, (pick, label, current)) in levels.into_iter().enumerate() {
-            let enabled = match pick {
-                PlacePick::Region(_) => true,
-                PlacePick::Province(_) => !place.region.is_empty(),
-                PlacePick::City(_) => !place.province.is_empty(),
-            };
-            row = row.child(
-                Button::new(("2200s_place", base + index))
-                    .label(format!("{label}: {current}"))
-                    .outline()
-                    .small()
-                    .disabled(!editable || !enabled)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.picking = if this.picking == Some(pick) {
-                            None
-                        } else {
-                            Some(pick)
-                        };
-                        cx.notify();
-                    })),
-            );
-        }
-        body = body.child(row);
-        if let Some(pick) = self.picking.filter(|pick| match pick {
-            PlacePick::Region(n) | PlacePick::Province(n) | PlacePick::City(n) => *n == item,
-        }) {
-            let options = match pick {
-                PlacePick::Region(_) => excise_places::regions(PLACE_FORM),
-                PlacePick::Province(_) => excise_places::provinces(PLACE_FORM, &place.region),
-                PlacePick::City(_) => {
-                    excise_places::cities(PLACE_FORM, &place.region, &place.province)
-                }
-            };
-            let mut list = div().flex().flex_wrap().gap_1();
-            for (index, (code, label)) in options.into_iter().enumerate() {
-                list = list.child(
-                    Button::new(("2200s_place_option", base * 1000 + index))
-                        .label(label.to_string())
-                        .outline()
-                        .small()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.picking = None;
-                            this.edit(cx, |d| {
-                                let place = Self::place_mut(d, item);
-                                match pick {
-                                    PlacePick::Region(_) => {
-                                        *place = ExcisePlace {
-                                            region: code.to_string(),
-                                            ..Default::default()
-                                        }
-                                    }
-                                    PlacePick::Province(_) => {
-                                        place.province = code.to_string();
-                                        place.city.clear();
-                                    }
-                                    PlacePick::City(_) => place.city = code.to_string(),
-                                }
-                            })
-                        })),
-                );
-            }
-            body = body.child(list);
-        }
-        body.into_any_element()
+        let selects: Vec<AnyElement> = [
+            (PlaceLevel::Region, "Region", true, &place.region),
+            (
+                PlaceLevel::Province,
+                "Province",
+                !place.region.is_empty(),
+                &place.province,
+            ),
+            (
+                PlaceLevel::City,
+                "City",
+                !place.province.is_empty(),
+                &place.city,
+            ),
+        ]
+        .into_iter()
+        .map(|(level, label, enabled, value)| {
+            select_field(
+                label,
+                &self.places[place_index(item, level)],
+                &Self::place_options(place, level),
+                Some(value.as_str()).filter(|v| !v.is_empty()),
+                !editable || !enabled,
+                None,
+                cx,
+            )
+        })
+        .collect();
+        let body = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .w_full()
+            .child(
+                div()
+                    .min_w_0()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(title.to_string()),
+            )
+            .child(self.grid(layout, selects))
+            .into_any_element();
+        self.with_errors(body, &[key])
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let relief = self.draft.tax_relief;
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 4 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 5 — RDO Code"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            self.read_only_row("Item 4 — TIN", format_tin(&self.draft.tin), "tin"),
+            self.read_only_row("Item 5 — RDO Code", self.draft.rdo_code.clone(), "rdo_code"),
         ];
         for key in ["name", "address", "zip", "phone", "lob", "psic", "email"] {
             let label = TEXT_INPUTS
@@ -823,8 +872,8 @@ impl Form2200SView {
         );
         let mut children = vec![
             self.grid(layout, fields),
-            self.render_place(12, cx),
-            self.render_place(13, cx),
+            self.render_place(12, layout, cx),
+            self.render_place(13, layout, cx),
             relief_row,
         ];
         if relief_yes {
@@ -847,10 +896,9 @@ impl Form2200SView {
                         .into_any_element(),
                 );
             }
-            children.push(Self::label_row(
-                "Item 14A — If yes, specify",
-                layout,
-                specify,
+            children.push(self.with_errors(
+                Self::label_row("Item 14A — If yes, specify", layout, specify),
+                &["tax_relief"],
             ));
         }
         self.section("Part I — Background Information", children, cx)
@@ -881,7 +929,10 @@ impl Form2200SView {
                     .into_any_element(),
             );
         }
-        let mut children = vec![Self::label_row("Manner of payment", layout, chips)];
+        let mut children = vec![self.with_errors(
+            Self::label_row("Manner of payment", layout, chips),
+            &["manner"],
+        )];
         if manner == Form2200SManner::Prepayment {
             let scheme = self.draft.other_scheme;
             children.push(Self::label_row(
@@ -896,7 +947,7 @@ impl Form2200SView {
                 ],
             ));
             if scheme {
-                children.push(self.field("scheme", TEXT_INPUTS[10].1, layout, !editable));
+                children.push(self.field("scheme", TEXT_INPUTS[9].1, layout, !editable));
             }
         }
         self.section("Part II — Manner of Payment", children, cx)
@@ -1008,10 +1059,13 @@ impl Form2200SView {
                 }))
                 .into_any_element(),
         );
-        children.push(self.computed(
-            "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
-            self.draft.schedule_total,
-            cx,
+        children.push(self.with_errors(
+            self.computed(
+                "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
+                self.draft.schedule_total,
+                cx,
+            ),
+            &["beverages"],
         ));
         self.section("Part V — Schedule 1", children, cx)
     }
@@ -1045,17 +1099,18 @@ impl Form2200SView {
             self.field("pay", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("25B — Penalties paid", d.penalties_paid, cx),
             self.computed("25C — Total payment made today", d.total_payment, cx),
-            self.computed(
-                "26 — Balance to be carried over to next return",
-                d.balance_carried_forward,
-                cx,
+            self.with_errors(
+                self.computed(
+                    "26 — Balance to be carried over to next return",
+                    d.balance_carried_forward,
+                    cx,
+                ),
+                &["balance_carried_forward"],
             ),
         ];
-        self.section(
-            "Part III — Payments and Application",
-            vec![self.grid(layout, children)],
-            cx,
-        )
+        // "amounts" is raised for any money value in the return.
+        let grid = self.with_errors(self.grid(layout, children), &["amounts"]);
+        self.section("Part III — Payments and Application", vec![grid], cx)
     }
 }
 
@@ -1091,6 +1146,23 @@ impl QueueableFormView for Form2200SView {
             subscriptions.push(subscription);
             inputs.insert(key, input);
         }
+        // Lists and values are kept in step with the draft by `render`.
+        let mut places = Vec::new();
+        for item in [12u8, 13] {
+            for level in PLACE_LEVELS {
+                let state = form_controls::new_select_state(&[], window, cx);
+                subscriptions.push(cx.subscribe_in(
+                    &state,
+                    window,
+                    move |this: &mut Self, _, event: &ComboboxEvent, _, cx| {
+                        if let Some(label) = event.selected.as_deref() {
+                            this.pick_place(item, level, label, cx);
+                        }
+                    },
+                ));
+                places.push(state);
+            }
+        }
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -1101,7 +1173,7 @@ impl QueueableFormView for Form2200SView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
-            picking: None,
+            places,
             _subscriptions: subscriptions,
         }
     }
@@ -1352,6 +1424,8 @@ impl Render for Form2200SView {
         let layout = Layout::for_width(window.viewport_size().width);
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        self.sync_places(window, cx);
+        let open_issues = self.validation_errors.len() + self.parse_errors.len();
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1414,6 +1488,12 @@ impl Render for Form2200SView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && open_issues > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {open_issues} {} to queue (see Needs review).",
+                                if open_issues == 1 { "item" } else { "items" }
+                            )))
                         })
                         .child(
                             Button::new("2200s_submit")

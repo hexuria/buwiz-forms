@@ -24,6 +24,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -589,11 +590,42 @@ impl Form2200TView {
         .into_any_element()
     }
 
-    fn has_error(&self, key: &str) -> bool {
-        self.validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")))
+    /// Validator keys (`Form2200TDraft::validate`) behind input `key`.
+    fn model_keys(key: &str) -> &'static [&'static str] {
+        match key {
+            "day" => &["day"],
+            "sheets" => &["number_of_attached_sheets"],
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "phone" => &["contact_number"],
+            "email" => &["email"],
+            "relief" => &["tax_relief_specify"],
+            "other" => &["other_scheme_description"],
+            "bal" => &["balance_carried_over"],
+            "cred" => &["creditable_excise_tax"],
+            "prev" => &["previous_payment"],
+            "sur" => &["surcharge"],
+            "int" => &["interest"],
+            "comp" => &["compromise"],
+            "dep" => &["tax_deposit"],
+            _ => &[],
+        }
+    }
+
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built control.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
     }
 
     fn label(&self, text: &str, error: bool) -> Div {
@@ -636,12 +668,16 @@ impl Form2200TView {
             .inputs
             .get(key)
             .expect("editor input registry is complete");
-        self.labelled(
+        let mut keys = vec![key];
+        keys.extend_from_slice(Self::model_keys(key));
+        let message = self.errors_for(&keys);
+        let row = self.labelled(
             label,
-            self.has_error(key),
+            message.is_some(),
             Input::new(input).disabled(disabled).into_any_element(),
             layout,
-        )
+        );
+        with_field_error(row, message)
     }
 
     /// Two columns on desktop, one otherwise.
@@ -737,14 +773,15 @@ impl Form2200TView {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let read_only_row = |label: &str, value: String| {
-            div()
+        let read_only_row = |label: &str, value: String, key: &str| {
+            let shown = div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(self.label(label, false))
+                .child(self.label(label, self.errors_for(&[key]).is_some()))
                 .child(div().font_weight(FontWeight::BOLD).child(value))
-                .into_any_element()
+                .into_any_element();
+            self.with_errors(shown, &[key])
         };
         let month_name = MONTHS
             .get((self.draft.month as usize).wrapping_sub(1))
@@ -752,9 +789,9 @@ impl Form2200TView {
             .unwrap_or("-");
         let amended = self.draft.is_amended;
         let children = vec![
-            read_only_row("Item 1 — Month", month_name.to_string()),
+            read_only_row("Item 1 — Month", month_name.to_string(), "month"),
             self.field("day", "Item 1 — Day", layout, !editable),
-            read_only_row("Item 1 — Year", self.draft.year.to_string()),
+            read_only_row("Item 1 — Year", self.draft.year.to_string(), "year"),
             self.choice_row(
                 "Item 2 — Amended return?",
                 false,
@@ -785,7 +822,7 @@ impl Form2200TView {
             PlaceItem::Production => "place_of_production",
             PlaceItem::Removal => "place_of_removal",
         };
-        let error = self.has_error(key);
+        let message = self.errors_for(&[key]);
         let select = |state: &GeoSelect, placeholder: &'static str| {
             Select::new(state)
                 .placeholder(placeholder)
@@ -802,23 +839,27 @@ impl Form2200TView {
             .child(select(&selects.province, "(Select Province)"))
             .child(select(&selects.city, "(Select City)"))
             .into_any_element();
-        self.labelled(title, error, body, layout)
+        with_field_error(
+            self.labelled(title, message.is_some(), body, layout),
+            message,
+        )
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let static_value = |label: &str, value: String| {
-            div()
+        let static_value = |label: &str, value: String, key: &str| {
+            let shown = div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(self.label(label, false))
+                .child(self.label(label, self.errors_for(&[key]).is_some()))
                 .child(div().font_weight(FontWeight::BOLD).child(value))
-                .into_any_element()
+                .into_any_element();
+            self.with_errors(shown, &[key])
         };
         let mut fields = vec![
-            static_value("Item 4 — TIN", format_tin(&self.draft.tin)),
-            static_value("Item 5 — RDO Code", self.draft.rdo_code.clone()),
+            static_value("Item 4 — TIN", format_tin(&self.draft.tin), "tin"),
+            static_value("Item 5 — RDO Code", self.draft.rdo_code.clone(), "rdo_code"),
         ];
         for (key, label, _) in TEXT_INPUTS.iter().skip(3).take(5) {
             fields.push(self.field(key, label, layout, !editable));
@@ -857,9 +898,10 @@ impl Form2200TView {
                 this.edit(cx, |d| d.manner_of_payment = payment)
             })
         };
-        let mut children = vec![self.choice_row(
+        let mop_error = self.errors_for(&["manner_of_payment"]);
+        let mop_row = self.choice_row(
             "Manner of payment",
-            self.has_error("manner_of_payment"),
+            mop_error.is_some(),
             layout,
             vec![
                 Self::choice(
@@ -884,22 +926,25 @@ impl Form2200TView {
                 )
                 .on_click(pick(Form2200TPayment::OtherScheme)),
             ],
-        )];
+        );
+        let mut children = vec![with_field_error(mop_row, mop_error)];
         if mop == Form2200TPayment::OtherScheme {
             children.push(self.field("other", "Item 15 — Specify the scheme", layout, !editable));
         }
         self.section("Part II — Manner of Payment", children, cx)
     }
 
-    /// One schedule line: a caption and its three amount inputs.
+    /// One schedule line: a caption and its three amount inputs. `message`
+    /// (the row's validation message) shows under the line.
     fn amount_line(
         &self,
         caption: Vec<String>,
         keys: [String; 3],
-        error: bool,
+        message: Option<String>,
         layout: Layout,
     ) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
+        let error = message.is_some();
         let cells: Vec<AnyElement> = keys
             .iter()
             .zip(ROW_COLUMNS)
@@ -913,7 +958,7 @@ impl Form2200TView {
                     .flex_col()
                     .gap_1()
                     .flex_1()
-                    .child(self.label(label, error || self.has_error(key)))
+                    .child(self.label(label, error || self.errors_for(&[key]).is_some()))
                     .child(Input::new(input).disabled(!editable))
                     .into_any_element()
             })
@@ -925,7 +970,7 @@ impl Form2200TView {
             .flex()
             .flex_col()
             .children(caption.into_iter().map(|line| div().child(line)));
-        if layout == Layout::Phone {
+        let line = if layout == Layout::Phone {
             div()
                 .flex()
                 .flex_col()
@@ -941,7 +986,8 @@ impl Form2200TView {
                 .child(caption)
                 .child(div().flex().gap_3().w_full().children(cells))
                 .into_any_element()
-        }
+        };
+        with_field_error(line, message)
     }
 
     fn render_schedule(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -983,28 +1029,35 @@ impl Form2200TView {
                 card = card.child(self.amount_line(
                     caption,
                     [row_key(row, "x"), row_key(row, "t"), row_key(row, "d")],
-                    self.has_error(&format!("schedule[{row}]")),
+                    self.errors_for(&[format!("schedule[{row}]").as_str()]),
                     layout,
                 ));
             }
             children.push(card.into_any_element());
         }
         for row in 0..FORM_2200T_OTHER_ROWS {
-            let error = self.has_error(&format!("others[{row}]"));
+            let row_error = format!("others[{row}]");
             let texts: Vec<AnyElement> = OTHER_TEXT_COLUMNS
                 .iter()
                 .map(|(column, label)| {
                     let key = other_key(row, column);
+                    let cell_key = match *column {
+                        "atc" => format!("others[{row}].atc_digits"),
+                        "desc" => format!("others[{row}].description"),
+                        _ => String::new(),
+                    };
+                    let message = self.errors_for(&[key.as_str(), cell_key.as_str()]);
                     let input = self
                         .inputs
                         .get(&key)
                         .expect("editor input registry is complete");
-                    self.labelled(
+                    let cell = self.labelled(
                         label,
-                        error,
+                        message.is_some(),
                         Input::new(input).disabled(!editable).into_any_element(),
                         layout,
-                    )
+                    );
+                    with_field_error(cell, message)
                 })
                 .collect();
             children.push(
@@ -1029,16 +1082,19 @@ impl Form2200TView {
                             other_key(row, "t"),
                             other_key(row, "d"),
                         ],
-                        error,
+                        self.errors_for(&[row_error.as_str()]),
                         layout,
                     ))
                     .into_any_element(),
             );
         }
-        children.push(self.computed(
-            "Total tax due (to Part III, Item 16)",
-            self.draft.schedule_total,
-            cx,
+        children.push(self.with_errors(
+            self.computed(
+                "Total tax due (to Part III, Item 16)",
+                self.draft.schedule_total,
+                cx,
+            ),
+            &["schedule", "others"],
         ));
         self.section(
             "Part V — Schedule 1 – Summary of Removals and Excise Tax Due on Tobacco Products Chargeable Against Payment",
@@ -1075,10 +1131,13 @@ impl Form2200TView {
             self.field("dep", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("23B — Penalties", d.penalties_paid, cx),
             self.computed("23C — Total payment made today", d.total_payment, cx),
-            self.computed(
-                "24 — Balance to be carried over to next return",
-                d.balance_to_carry_over,
-                cx,
+            self.with_errors(
+                self.computed(
+                    "24 — Balance to be carried over to next return",
+                    d.balance_to_carry_over,
+                    cx,
+                ),
+                &["balance_to_carry_over"],
             ),
         ];
         self.section(
@@ -1396,6 +1455,7 @@ impl Render for Form2200TView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let open_issues = self.validation_errors.len() + self.parse_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -1453,6 +1513,12 @@ impl Render for Form2200TView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && open_issues > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {open_issues} {} to queue (see Needs review).",
+                                if open_issues == 1 { "item" } else { "items" }
+                            )))
                         })
                         .child(
                             Button::new("2200t_submit")
