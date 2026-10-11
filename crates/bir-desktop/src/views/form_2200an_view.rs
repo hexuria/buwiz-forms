@@ -60,12 +60,12 @@ const MONTHS: [&str; 12] = [
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("day", "Item 1 — Day", "DD"),
     ("year", "Item 1 — Year", "YYYY"),
-    ("name", "Taxpayer's Name", ""),
-    ("address", "Registered Address", ""),
-    ("zip", "Zip Code", ""),
-    ("phone", "Contact Number", "digits only"),
-    ("email", "Email Address", ""),
-    ("relief", "Item 12A — Tax relief (specify)", ""),
+    ("name", "Item 6 — Taxpayer's Name", ""),
+    ("address", "Item 7 — Registered Address", ""),
+    ("zip", "Item 7A — Zip Code", ""),
+    ("phone", "Item 8 — Contact Number", "digits only"),
+    ("email", "Item 9 — Email Address", ""),
+    ("relief", "Item 12A — If yes, specify", ""),
     ("other", "Item 15 — Other similar scheme (specify)", ""),
 ];
 
@@ -75,7 +75,7 @@ const MONEY_INPUTS: &[(&str, &str)] = &[
     ("cred", "17B — Creditable excise tax, if applicable"),
     (
         "prev",
-        "19 — Payment on returns previously filed (amended only)",
+        "19 — Less: Payment on Returns Previously Filed for the Same Period, if amended return",
     ),
     ("sur", "21A — Surcharge"),
     ("int", "21B — Interest"),
@@ -524,7 +524,7 @@ impl Form2200ANView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -686,7 +686,7 @@ impl Form2200ANView {
                         .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("TIN"),
+                        .child("Item 4 — Taxpayer Identification Number (TIN)"),
                 )
                 .child(
                     div()
@@ -703,7 +703,7 @@ impl Form2200ANView {
                         .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("RDO Code"),
+                        .child("Item 5 — RDO Code"),
                 )
                 .child(
                     div()
@@ -721,7 +721,7 @@ impl Form2200ANView {
             fields.push(self.field(key, label, layout, !editable));
         }
         let relief_row = Self::choice_row(
-            "Item 12 — Availing of tax relief?",
+            "Item 12 — Are you availing of tax relief under Special Law or International Tax Treaty?",
             layout,
             vec![
                 Self::choice("2200an_relief_yes", "Yes", relief == Some(true), !editable).on_click(
@@ -749,9 +749,15 @@ impl Form2200ANView {
         let manner = self.draft.manner;
         let mut choices = Vec::new();
         for (index, (value, label)) in [
-            (Form2200ANManner::ActualRemoval, "Payment on Actual Removal"),
-            (Form2200ANManner::Prepayment, "Prepayment/Advance Deposit"),
-            (Form2200ANManner::Other, "Other similar schemes"),
+            (
+                Form2200ANManner::ActualRemoval,
+                "13 — Payment on Actual Removal",
+            ),
+            (
+                Form2200ANManner::Prepayment,
+                "14 — Prepayment/Advance Deposit",
+            ),
+            (Form2200ANManner::Other, "15 — Other Similar Schemes"),
         ]
         .into_iter()
         .enumerate()
@@ -777,7 +783,7 @@ impl Form2200ANView {
         &self,
         group: char,
         row: usize,
-        title: String,
+        (title, rate): (String, Option<String>),
         extra: Vec<AnyElement>,
         layout: Layout,
         cx: &Context<Self>,
@@ -796,6 +802,9 @@ impl Form2200ANView {
             .border_color(cx.theme().border)
             .rounded_md()
             .child(div().min_w_0().font_weight(FontWeight::BOLD).child(title))
+            .when_some(rate, |d, rate| {
+                d.child(div().min_w_0().text_sm().child(format!("Rate: {rate}")))
+            })
             .child(self.grid(layout, fields))
             .into_any_element()
     }
@@ -806,18 +815,36 @@ impl Form2200ANView {
         } else {
             format!(", {}", item.bracket)
         };
-        format!("{} — {}{} ({})", item.atc, item.group, bracket, item.rate)
+        format!("{} — {}{}", item.atc, item.group, bracket)
     }
 
     fn render_schedule(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let mut autos: Vec<AnyElement> = FORM_2200AN_AUTOMOBILES
+        let last_hybrid = FORM_2200AN_AUTOMOBILES
             .iter()
-            .enumerate()
-            .map(|(row, item)| {
-                self.row_box('a', row, Self::item_title(item), Vec::new(), layout, cx)
-            })
-            .collect();
+            .rposition(|item| item.group == "Hybrid Vehicles");
+        let mut autos: Vec<AnyElement> = Vec::new();
+        for (row, item) in FORM_2200AN_AUTOMOBILES.iter().enumerate() {
+            autos.push(self.row_box(
+                'a',
+                row,
+                (Self::item_title(item), Some(item.rate.to_string())),
+                Vec::new(),
+                layout,
+                cx,
+            ));
+            if last_hybrid == Some(row) {
+                autos.push(
+                    div()
+                        .min_w_0()
+                        .text_sm()
+                        .child(
+                            "*50% of the applicable excise tax rates on automobiles under Section 149 of NIRC, as amended",
+                        )
+                        .into_any_element(),
+                );
+            }
+        }
         autos.push(self.computed(
             "Basic excise tax due — automobiles (to Schedule 1C)",
             self.draft.automobiles_total,
@@ -827,7 +854,14 @@ impl Form2200ANView {
             .iter()
             .enumerate()
             .map(|(row, item)| {
-                self.row_box('g', row, Self::item_title(item), Vec::new(), layout, cx)
+                self.row_box(
+                    'g',
+                    row,
+                    (Self::item_title(item), Some(item.rate.to_string())),
+                    Vec::new(),
+                    layout,
+                    cx,
+                )
             })
             .collect();
         for row in 0..2 {
@@ -844,7 +878,7 @@ impl Form2200ANView {
             goods.push(self.row_box(
                 'o',
                 row,
-                format!("Others (specify) {}", row + 1),
+                (format!("Others (specify) {}", row + 1), None),
                 extra,
                 layout,
                 cx,
@@ -862,7 +896,7 @@ impl Form2200ANView {
             .child(self.section("Schedule 1A — Automobiles", autos, cx))
             .child(self.section("Schedule 1B — Non-Essential Goods", goods, cx))
             .child(self.section(
-                "Schedule 1C",
+                "Schedule 1C — TOTAL EXCISE TAX DUE – Automobiles and Non-Essential Goods (Sum of Schedule 1A and 1B)",
                 vec![self.computed(
                     "Total basic excise tax due (to Item 16)",
                     self.draft.schedule_total,
@@ -880,7 +914,11 @@ impl Form2200ANView {
             self.computed("16 — Excise tax due", d.excise_tax_due, cx),
             self.field("bal", MONEY_INPUTS[0].1, layout, !editable),
             self.field("cred", MONEY_INPUTS[1].1, layout, !editable),
-            self.computed("17C — Total", d.total_credits, cx),
+            self.computed(
+                "17C — Total (Sum of Items 17A and 17B)",
+                d.total_credits,
+                cx,
+            ),
             self.computed("18 — Net tax due/(overpayment)", d.net_tax_due, cx),
             self.field(
                 "prev",
@@ -893,7 +931,7 @@ impl Form2200ANView {
             self.field("int", MONEY_INPUTS[4].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[5].1, layout, !editable),
             self.computed("21D — Total penalties", d.total_penalties, cx),
-            self.computed("22 — Amount payable", d.amount_payable, cx),
+            self.computed("22 — Amount Payable/(Overpayment)", d.amount_payable, cx),
             self.field("pay", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("23B — Penalties", d.penalties_paid, cx),
             self.computed("23C — Total payment made", d.total_payment, cx),
@@ -904,7 +942,7 @@ impl Form2200ANView {
             ),
         ];
         self.section(
-            "Part III — Computation of Tax",
+            "Part III — Payments and Application",
             vec![self.grid(layout, children)],
             cx,
         )
@@ -1350,8 +1388,8 @@ impl Render for Form2200ANView {
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_manner(layout, cx));
-        body = body.child(self.render_schedule(layout, cx));
         body = body.child(self.render_totals(layout, cx));
+        body = body.child(self.render_schedule(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

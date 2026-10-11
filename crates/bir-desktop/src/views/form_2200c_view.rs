@@ -61,7 +61,7 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("zip", "Item 8A — Zip Code", ""),
     ("phone", "Item 9 — Contact Number", "digits only"),
     ("email", "Item 10 — Email Address", ""),
-    ("relief", "Item 12A — Tax relief (specify)", ""),
+    ("relief", "Item 12A — If yes, specify", ""),
     ("other", "Item 15 — Other manner of payment (specify)", ""),
 ];
 
@@ -514,7 +514,7 @@ impl Form2200CView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -715,7 +715,7 @@ impl Form2200CView {
             fields.push(self.field(key, label, layout, !editable));
         }
         let relief_row = Self::label_row(
-            "Item 12 — Availing of tax relief?",
+            "Item 12 — Are you availing of tax relief under Special Law or International Tax Treaty?",
             layout,
             vec![
                 Self::choice("2200c_relief_yes", "Yes", relief == Some(true), !editable).on_click(
@@ -738,9 +738,15 @@ impl Form2200CView {
         let manner = self.draft.manner;
         let mut buttons = Vec::new();
         for (index, (value, label)) in [
-            (Form2200CManner::ActualRemoval, "Payment on Actual Removal"),
-            (Form2200CManner::Prepayment, "Prepayment/Advance Deposit"),
-            (Form2200CManner::Other, "Other similar schemes"),
+            (
+                Form2200CManner::ActualRemoval,
+                "13 — Payment on Actual Performance of Services",
+            ),
+            (
+                Form2200CManner::Prepayment,
+                "14 — Prepayment / Advance Deposit",
+            ),
+            (Form2200CManner::Other, "15 — Other Similar Schemes"),
         ]
         .into_iter()
         .enumerate()
@@ -792,7 +798,7 @@ impl Form2200CView {
         }
         children.push(self.computed("Total excise tax (to Item 16)", self.draft.excise_total, cx));
         self.section(
-            "Part V Schedule 1 — Summary of Cosmetic Procedures Performed",
+            "Part V — Schedule 1 – Summary of Cosmetic Procedures Performed",
             children,
             cx,
         )
@@ -829,7 +835,7 @@ impl Form2200CView {
             ),
         ];
         self.section(
-            "Part III — Computation of Tax",
+            "Part III — Payments and Application",
             vec![self.grid(layout, children)],
             cx,
         )
@@ -1256,14 +1262,14 @@ impl Render for Form2200CView {
             })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
-            .child(self.render_manner(layout, cx));
+            .child(self.render_manner(layout, cx))
+            .child(self.render_totals(layout, cx));
         if matches!(
             self.draft.manner,
             Form2200CManner::ActualRemoval | Form2200CManner::Other
         ) {
             body = body.child(self.render_schedule(layout, cx));
         }
-        body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
