@@ -32,6 +32,7 @@ use gpui_rsx::rsx;
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_validation::SemanticFieldTargets;
 use crate::views::event_form_kit::Layout;
+use crate::views::form_controls::{messages_for, with_field_error};
 
 const YEAR_END_MONTH: &str = "year_end_month";
 const RAW_TAXABLE_YEAR: &str = "raw_taxable_year";
@@ -1342,13 +1343,21 @@ impl Form2550QV2View {
                 cx.theme().primary.opacity(0.15)
             } else {
                 cx.theme().background
-            })
-            .cursor_pointer();
+            });
         if let Some(ui_key) = candidate_radio_ui_key(action) {
             choice =
                 choice.track_focus(&field(&self.candidate_choice_fields, ui_key).focus_handle(cx));
         }
+        if !self.editor_is_editable() {
+            // Locked draft: draw the choice as disabled and ignore clicks.
+            return choice
+                .opacity(0.5)
+                .text_color(cx.theme().muted_foreground)
+                .child(label)
+                .into_any_element();
+        }
         choice
+            .cursor_pointer()
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.apply_choice(action, window, cx);
             }))
@@ -1365,21 +1374,54 @@ impl Form2550QV2View {
         })
     }
 
+    /// The stored messages for any of `keys`. `validation_errors` already
+    /// holds the parse errors followed by the draft's validation.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(self.validation_errors.iter(), keys)
+    }
+
+    /// The messages that belong to one input: its parse error (raw key), the
+    /// validator names mapped by [`model_error_keys`], and malformed-text notes.
+    fn input_error(&self, ui_key: &str) -> Option<String> {
+        let mut keys: Vec<String> = model_error_keys(ui_key)
+            .iter()
+            .map(|key| key.to_string())
+            .collect();
+        if let Some(raw) = singleton_raw_key_if_known(ui_key) {
+            keys.push(raw.to_string());
+            keys.push(format!("raw_editor.{raw}"));
+        }
+        let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        self.error_for(&refs)
+    }
+
+    /// Messages for one schedule row (`schedule_1[0]` and `schedule_1[0].x`).
+    fn row_error(&self, prefix: &str) -> Option<String> {
+        let dotted = format!("{prefix}.");
+        let keys: Vec<&str> = self
+            .validation_errors
+            .iter()
+            .map(|(field, _)| field.as_str())
+            .filter(|field| *field == prefix || field.starts_with(&dotted))
+            .collect();
+        self.error_for(&keys)
+    }
+
     fn render_input_row(&self, label: &str, key: &'static str) -> AnyElement {
         let layout = self.layout.get();
-        pair_row(layout)
-            .child(half(layout).text_sm().child(label.to_string()))
-            .child(
-                half(layout).child(
+        let row =
+            pair_row(layout)
+                .child(half(layout).text_sm().child(label.to_string()))
+                .child(half(layout).child(
                     Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable()),
-                ),
-            )
-            .into_any_element()
+                ))
+                .into_any_element();
+        with_field_error(row, self.input_error(key))
     }
 
     fn render_candidate_raw_text_row(&self, label: &str, key: &'static str) -> AnyElement {
         let layout = self.layout.get();
-        pair_row(layout)
+        let row = pair_row(layout)
             .child(half(layout).text_sm().child(label.to_string()))
             .child(
                 half(layout).child(
@@ -1387,7 +1429,8 @@ impl Form2550QV2View {
                         .disabled(!self.editor_is_editable()),
                 ),
             )
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.input_error(key))
     }
 
     fn render_computed_row(
@@ -1421,8 +1464,8 @@ impl Form2550QV2View {
             return div().into_any_element();
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
-            list = list.child(rsx! { <div text_xs>{format!("{field}: {message}")}</div> });
+        for (_, message) in &self.validation_errors {
+            list = list.child(rsx! { <div text_xs>{message.clone()}</div> });
         }
         let root = rsx! {
             <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
@@ -1504,7 +1547,10 @@ impl Form2550QV2View {
                 )}
             </div>
         };
-        root.into_any_element()
+        with_field_error(
+            root.into_any_element(),
+            self.row_error(&format!("schedule_1[{index}]")),
+        )
     }
 
     fn render_creditable_vat_row(
@@ -1531,7 +1577,10 @@ impl Form2550QV2View {
                 )}
             </div>
         };
-        root.into_any_element()
+        with_field_error(
+            root.into_any_element(),
+            self.row_error(&format!("schedule_3[{index}]")),
+        )
     }
 
     fn render_advance_vat_row(
@@ -1559,7 +1608,10 @@ impl Form2550QV2View {
                 {input_pair("Amount paid", &row.amount_paid, editable)}
             </div>
         };
-        root.into_any_element()
+        with_field_error(
+            root.into_any_element(),
+            self.row_error(&format!("schedule_4[{index}]")),
+        )
     }
 }
 
@@ -1867,6 +1919,18 @@ impl Render for Form2550QV2View {
             Layout::Desktop => px(32.),
         };
         let editor_is_editable = self.editor_is_editable();
+        let queue_reason = match queue_blocked_reason(
+            editor_is_editable,
+            self.validation_errors.len(),
+            &self.validation_state,
+        ) {
+            Some(text) => div()
+                .text_xs()
+                .text_color(cx.theme().danger)
+                .child(text)
+                .into_any_element(),
+            None => div().into_any_element(),
+        };
         let mut basis_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [
             ("Calendar", Form2550QFilingBasis::Calendar),
@@ -2072,7 +2136,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("Year-end month", YEAR_END_MONTH))
                     .child(self.render_input_row("Item 2 taxable year (raw)", RAW_TAXABLE_YEAR))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Quarter"))
-                    .child(quarter_choices)
+                    .child(with_field_error(quarter_choices.into_any_element(), self.error_for(&["quarter"])))
                     .child(self.render_input_row("Return period from", RETURN_PERIOD_FROM))
                     .child(self.render_input_row("Return period to", RETURN_PERIOD_TO))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Amended return"))
@@ -2080,7 +2144,7 @@ impl Render for Form2550QV2View {
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Short-period return"))
                     .child(short_period_choices)
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Item 13 taxpayer classification"))
-                    .child(class_choices)
+                    .child(with_field_error(class_choices.into_any_element(), self.error_for(&["taxpayer_classification"])))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Item 14 tax relief"))
                     .child(relief_choices)
                     .child(self.render_input_row("Item 14A special law / treaty", TAX_RELIEF_DETAILS)),
@@ -2214,6 +2278,7 @@ impl Render for Form2550QV2View {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.revert_to_draft(window, cx);
                             }))}
+                        {queue_reason}
                         {gpui_component::button::Button::new("2550q_queue")
                             .label(QUEUE_BUTTON_LABEL)
                             .primary()
@@ -2628,6 +2693,93 @@ fn restore_repeated_raw_values(
             set_input_value(&input, value, window, cx);
         }
     }
+}
+
+/// The validator's field names that belong to one input, so its message can be
+/// shown directly under it. Parse errors use the input's raw key instead.
+fn model_error_keys(ui_key: &str) -> &'static [&'static str] {
+    match ui_key {
+        YEAR_END_MONTH => &["year_end_month"],
+        RAW_TAXABLE_YEAR => &["taxable_year"],
+        RETURN_PERIOD_FROM | RETURN_PERIOD_TO => &["return_period"],
+        TAX_RELIEF_DETAILS => &["tax_relief_details"],
+        RAW_TIN_1 | RAW_TIN_2 | RAW_TIN_3 | RAW_BRANCH_CODE => &["tin"],
+        RAW_RDO_CODE => &["rdo_code"],
+        RAW_TAXPAYER_NAME => &["taxpayer_name"],
+        RAW_TAXPAYER_ADDRESS => &["registered_address"],
+        RAW_TAXPAYER_ZIP => &["zip_code"],
+        RAW_TAXPAYER_CONTACT_NUMBER => &["contact_number"],
+        RAW_TAXPAYER_EMAIL_ADDRESS => &["email"],
+        ITEM_18 => &["item_18_paid_on_previous_return"],
+        ITEM_19_DESCRIPTION => &["item_19_description"],
+        ITEM_19 => &["item_19_other_credit_or_payment"],
+        ITEM_22 => &["item_22_surcharge"],
+        ITEM_23 => &["item_23_interest"],
+        ITEM_24 => &["item_24_compromise"],
+        ITEM_31A => &["item_31a_vatable_sales"],
+        ITEM_32A => &["item_32a_zero_rated_sales"],
+        ITEM_33A => &["item_33a_exempt_sales"],
+        ITEM_35B => &["item_35b_less_output_vat_uncollected"],
+        ITEM_36B => &["item_36b_add_output_vat_recovered"],
+        ITEM_38B => &["item_38b_input_tax_carried"],
+        ITEM_40B => &["item_40b_transitional_input_tax"],
+        ITEM_41B => &["item_41b_presumptive_input_tax"],
+        ITEM_42_DESCRIPTION => &["item_42_description"],
+        ITEM_42B => &["item_42b_other_input_tax"],
+        ITEM_44A => &["item_44a_domestic_purchases"],
+        ITEM_44B => &["item_44b_domestic_input_tax"],
+        ITEM_45A => &["item_45a_nonresident_services"],
+        ITEM_45B => &["item_45b_nonresident_service_input_tax"],
+        ITEM_46A => &["item_46a_importations"],
+        ITEM_46B => &["item_46b_import_input_tax"],
+        ITEM_47_DESCRIPTION => &["item_47_description"],
+        ITEM_47A => &["item_47a_other_purchases"],
+        ITEM_47B => &["item_47b_other_input_tax"],
+        ITEM_48A => &["item_48a_domestic_purchases_no_input_tax"],
+        ITEM_49A => &["item_49a_vat_exempt_importations"],
+        ITEM_54B => &["item_54b_vat_refund_or_tcc_claimed"],
+        ITEM_55B => &["item_55b_input_vat_on_unpaid_payables"],
+        ITEM_56_DESCRIPTION => &["item_56_description"],
+        ITEM_56B => &["item_56b_other_deduction"],
+        ITEM_58B => &["item_58b_input_vat_on_settled_payables"],
+        SCHEDULE_2_DIRECT => &["schedule_2.input_tax_directly_attributable"],
+        SCHEDULE_2_EXEMPT_SALES => &["schedule_2.vat_exempt_sales", "schedule_2.total_sales"],
+        SCHEDULE_2_NOT_DIRECT => &[
+            "schedule_2.input_tax_not_directly_attributable",
+            "schedule_2.total_sales",
+        ],
+        TAX_AGENT_ISSUE => &["local_print_fields.tax_agent_date_of_issue"],
+        TAX_AGENT_EXPIRY => &["local_print_fields.tax_agent_date_of_expiry"],
+        CASH_AMOUNT => &["local_print_fields.cash_or_bank_debit_advice_amount"],
+        CHECK_DATE => &["local_print_fields.check_date"],
+        CHECK_AMOUNT => &["local_print_fields.check_amount"],
+        TDM_DATE => &["local_print_fields.tax_debit_memo_date"],
+        TDM_AMOUNT => &["local_print_fields.tax_debit_memo_amount"],
+        OTHER_PAYMENT_DATE => &["local_print_fields.other_payment_date"],
+        OTHER_PAYMENT_AMOUNT => &["local_print_fields.other_payment_amount"],
+        _ => &[],
+    }
+}
+
+/// Why the Queue button is disabled, as one short line (`None` when it is
+/// enabled or the draft is simply not editable).
+fn queue_blocked_reason(
+    editor_is_editable: bool,
+    error_count: usize,
+    validation_state: &Form2550QDiagnosticState,
+) -> Option<String> {
+    if !editor_is_editable {
+        return None;
+    }
+    if error_count > 0 {
+        return Some(format!(
+            "{error_count} item(s) need review before queueing."
+        ));
+    }
+    if !matches!(validation_state, Form2550QDiagnosticState::Incomplete(_)) {
+        return Some("Run Validate first; queueing needs a completed validation.".to_string());
+    }
+    None
 }
 
 fn singleton_raw_key(ui_key: &str) -> &'static str {
