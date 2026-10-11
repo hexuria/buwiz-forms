@@ -251,10 +251,14 @@ impl Form1600WpDraft {
     pub const FORM_CODE: &'static str = "1600WP";
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+        let month = month.clamp(1, 12);
+        // The official page fills Item 1's day with today's date
+        // (`year.getDate()`); keep it inside the chosen month.
+        let today = chrono::Datelike::day(&chrono::Local::now().date_naive()) as u8;
         let mut draft = Self {
             id: None,
-            month: month.clamp(1, 12),
-            day: 1,
+            month,
+            day: today.min(days_in_month(month, year)),
             year,
             is_amended: false,
             number_of_attached_sheets: 0,

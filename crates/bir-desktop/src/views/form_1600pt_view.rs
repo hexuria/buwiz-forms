@@ -32,6 +32,8 @@ use crate::views::form_controls::{
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
+
 impl EventEmitter<QueueableFormEvent> for Form1600PtView {}
 
 /// Width classes the page lays out for.
@@ -634,19 +636,41 @@ impl Form1600PtView {
     /// A read-only value with its validation message (for `error_keys`)
     /// directly underneath.
     fn readonly(&self, label: &str, value: String, error_keys: &[&str]) -> AnyElement {
-        let row = div()
+        let row = self.readonly_value(label, value, error_keys);
+        with_field_error(row, self.error_for(error_keys))
+    }
+
+    /// A read-only value whose label turns red when `error_keys` fail; the
+    /// message itself is placed by the caller.
+    fn readonly_value(&self, label: &str, value: String, error_keys: &[&str]) -> AnyElement {
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let label = if self.has_error(error_keys) {
+            label.text_color(gpui::red())
+        } else {
+            label
+        };
+        div()
             .flex()
             .flex_col()
             .gap_1()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
+            .child(label)
             .child(div().font_weight(FontWeight::BOLD).child(value))
+            .into_any_element()
+    }
+
+    /// Items 5 and 6 come from the taxpayer profile: when either fails, say
+    /// where to fix them and put their messages under the note.
+    fn profile_note(&self, cx: &App) -> Option<AnyElement> {
+        let message = self.error_for(&["tin", "rdo_code"])?;
+        let note = div()
+            .text_xs()
+            .text_color(cx.theme().muted_foreground)
+            .child(PROFILE_NOTE)
             .into_any_element();
-        with_field_error(row, self.error_for(error_keys))
+        Some(with_field_error(note, Some(message)))
     }
 
     fn choice(
@@ -839,9 +863,9 @@ impl Form1600PtView {
             ))
         })
         .collect();
-        let children = vec![
-            self.readonly("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
-            self.readonly("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
+        let mut children = vec![
+            self.readonly_value("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
+            self.readonly_value("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
             self.text_field("name", layout, !editable),
             self.text_field("address", layout, !editable),
             self.text_field("zip", layout, !editable),
@@ -862,6 +886,9 @@ impl Form1600PtView {
             ),
             self.text_field("relief_spec", layout, !editable || !d.tax_relief),
         ];
+        if let Some(note) = self.profile_note(cx) {
+            children.insert(2, note);
+        }
         self.section(
             "Part I — Background Information",
             vec![self.grid(layout, children)],

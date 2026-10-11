@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1600wp::{
-    FORM_1600WP_SCHEDULE_ROWS, Form1600WpAgentCategory, Form1600WpDraft, Form1600WpScheduleRow,
-    form_1600wp_atc, form_1600wp_popup,
+    FORM_1600WP_ATC_OPTIONS, FORM_1600WP_SCHEDULE_ROWS, Form1600WpAgentCategory, Form1600WpDraft,
+    Form1600WpScheduleRow, form_1600wp_atc, form_1600wp_popup,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -23,9 +23,14 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
-use crate::views::form_controls::{messages_for, with_field_error};
+use crate::views::form_controls::{
+    messages_for, new_select_state, on_select, select_field, sync_select, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
 
 impl EventEmitter<QueueableFormEvent> for Form1600WpView {}
 
@@ -150,7 +155,21 @@ pub struct Form1600WpView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// One ATC select per Schedule II row.
+    schedule_atc_selects: Vec<Entity<ComboboxState>>,
     _subscriptions: Vec<Subscription>,
+}
+
+/// Schedule II ATC choices as `(value, label)`: every code when `category`
+/// is `None` (the event lookup), else that category's popup rows.
+fn schedule_atc_options(
+    category: Option<Form1600WpAgentCategory>,
+) -> Vec<(&'static str, &'static str)> {
+    FORM_1600WP_ATC_OPTIONS
+        .iter()
+        .filter(|option| category.is_none_or(|c| option.category == c))
+        .map(|option| (option.code, option.code))
+        .collect()
 }
 
 impl Form1600WpView {
@@ -547,19 +566,41 @@ impl Form1600WpView {
     /// A read-only value with its validation message (for `error_keys`)
     /// directly underneath.
     fn readonly(&self, label: &str, value: String, error_keys: &[&str]) -> AnyElement {
-        let row = div()
+        let row = self.readonly_value(label, value, error_keys);
+        with_field_error(row, self.error_for(error_keys))
+    }
+
+    /// A read-only value whose label turns red when `error_keys` fail; the
+    /// message itself is placed by the caller.
+    fn readonly_value(&self, label: &str, value: String, error_keys: &[&str]) -> AnyElement {
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let label = if self.has_error(error_keys) {
+            label.text_color(gpui::red())
+        } else {
+            label
+        };
+        div()
             .flex()
             .flex_col()
             .gap_1()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
+            .child(label)
             .child(div().font_weight(FontWeight::BOLD).child(value))
+            .into_any_element()
+    }
+
+    /// Items 5 and 6 come from the taxpayer profile: when either fails, say
+    /// where to fix them and put their messages under the note.
+    fn profile_note(&self, cx: &App) -> Option<AnyElement> {
+        let message = self.error_for(&["tin", "rdo_code"])?;
+        let note = div()
+            .text_xs()
+            .text_color(cx.theme().muted_foreground)
+            .child(PROFILE_NOTE)
             .into_any_element();
-        with_field_error(row, self.error_for(error_keys))
+        Some(with_field_error(note, Some(message)))
     }
 
     fn choice(
@@ -751,9 +792,9 @@ impl Form1600WpView {
             ))
         })
         .collect();
-        let children = vec![
-            self.readonly("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
-            self.readonly("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
+        let mut children = vec![
+            self.readonly_value("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
+            self.readonly_value("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
             self.choice_row(
                 "Item 7 — Category of Withholding Agent",
                 &["agent_category"],
@@ -764,6 +805,9 @@ impl Form1600WpView {
             self.text_field("zip", layout, !editable),
             self.text_field("email", layout, !editable),
         ];
+        if let Some(note) = self.profile_note(cx) {
+            children.insert(2, note);
+        }
         self.section(
             "Part I — Background Information",
             vec![self.grid(layout, children)],
@@ -865,6 +909,9 @@ impl Form1600WpView {
         let editable =
             self.draft.lifecycle.is_editable() && self.draft.taxes_withheld == Some(true);
         let category = self.draft.agent_category;
+        let options = category
+            .map(|c| schedule_atc_options(Some(c)))
+            .unwrap_or_default();
         let mut children = Vec::new();
         for row in 0..FORM_1600WP_SCHEDULE_ROWS {
             let entry = self.draft.schedule.get(row).cloned().unwrap_or_default();
@@ -872,34 +919,6 @@ impl Form1600WpView {
                 .iter()
                 .map(|(column, _)| self.text_field(&schedule_key(row, column), layout, !editable))
                 .collect();
-            let atcs: Vec<Button> = category
-                .map(|category| {
-                    form_1600wp_popup(category)
-                        .enumerate()
-                        .map(|(index, option)| {
-                            let code = option.code;
-                            Self::choice(
-                                ("1600wp_sched_atc", row * 10 + index),
-                                code,
-                                entry.atc_code == code,
-                                !editable,
-                            )
-                            .small()
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| {
-                                    this.edit_rows(window, cx, |d| {
-                                        if d.schedule.len() <= row {
-                                            d.schedule.resize_with(row + 1, Default::default);
-                                        }
-                                        d.schedule[row].atc_code = code.to_string();
-                                        Ok(())
-                                    })
-                                },
-                            ))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
             children.push(
                 div()
                     .flex()
@@ -910,10 +929,15 @@ impl Form1600WpView {
                     .border_color(cx.theme().border)
                     .rounded_md()
                     .child(self.grid(layout, fields))
-                    .child(self.choice_row(
+                    .child(select_field(
                         &format!("Sequence {} — ATC", row + 1),
-                        &[&format!("schedule[{row}].atc_code")],
-                        atcs,
+                        &self.schedule_atc_selects[row],
+                        &options,
+                        (!entry.atc_code.is_empty()).then_some(entry.atc_code.as_str()),
+                        !editable || category.is_none(),
+                        self.error_for(&[&format!("schedule[{row}].atc_code")])
+                            .as_deref(),
+                        cx,
                     ))
                     .child(self.computed(
                         &format!("Sequence {} — Tax withheld", row + 1),
@@ -957,6 +981,28 @@ impl QueueableFormView for Form1600WpView {
             ));
             inputs.insert(key, input);
         }
+        let all_atcs = schedule_atc_options(None);
+        let schedule_atc_selects: Vec<_> = (0..FORM_1600WP_SCHEDULE_ROWS)
+            .map(|row| {
+                let state = new_select_state(&[], window, cx);
+                subscriptions.push(on_select(
+                    &state,
+                    &all_atcs,
+                    window,
+                    cx,
+                    move |this: &mut Self, code, window, cx| {
+                        this.edit_rows(window, cx, |d| {
+                            if d.schedule.len() <= row {
+                                d.schedule.resize_with(row + 1, Default::default);
+                            }
+                            d.schedule[row].atc_code = code;
+                            Ok(())
+                        })
+                    },
+                ));
+                state
+            })
+            .collect();
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -967,6 +1013,7 @@ impl QueueableFormView for Form1600WpView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            schedule_atc_selects,
             _subscriptions: subscriptions,
         }
     }
@@ -1183,6 +1230,20 @@ impl FormViewTrait for Form1600WpView {
 
 impl Render for Form1600WpView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let options = self
+            .draft
+            .agent_category
+            .map(|c| schedule_atc_options(Some(c)))
+            .unwrap_or_default();
+        for (row, state) in self.schedule_atc_selects.iter().enumerate() {
+            let code = self
+                .draft
+                .schedule
+                .get(row)
+                .map(|entry| entry.atc_code.as_str())
+                .filter(|code| !code.is_empty());
+            sync_select(state, &options, code, window, cx);
+        }
         let layout = Layout::for_width(window.viewport_size().width);
         let phone = layout == Layout::Phone;
         let error_count = self.parse_errors.len() + self.validation_errors.len();

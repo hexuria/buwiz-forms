@@ -928,7 +928,7 @@ impl FormValidator for Form1600PtDraft {
         } else if email.len() > 112 || !email.contains('@') || email.contains(char::is_whitespace) {
             err(
                 "email",
-                "Enter the email address BIR sends the filing confirmation to.",
+                "Please enter a valid e-mail address on page 1 item 10",
             );
         }
         if self.tax_relief && self.tax_relief_specify.trim().is_empty() {
@@ -1336,6 +1336,10 @@ mod tests {
         check(
             &|d| d.email.clear(),
             "E-mail address on page 1 item 11 is required.",
+        );
+        check(
+            &|d| d.email = "not-an-email".into(),
+            "Please enter a valid e-mail address on page 1 item 10",
         );
         check(
             &|d| d.tax_relief = true,
