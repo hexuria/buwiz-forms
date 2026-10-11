@@ -401,10 +401,8 @@ impl Form1702MXView {
         }
         draft.registered_name_lines[0] = draft.taxpayer_name.clone();
         draft.registered_address_lines[0] = draft.registered_address.clone();
-        match self.input_text("year", cx).trim().parse::<u16>() {
-            Ok(year) if (2000..=2099).contains(&year) => draft.taxable_year = year,
-            _ => parse_errors.push(("year".into(), "Item 2 year must be YYYY.".into())),
-        }
+        // The year is chosen by the library tile and is read-only; keep the
+        // draft's existing taxable_year.
         for (key, label) in [
             ("rate34", "Schedule 1 Item 4B"),
             ("rate14b", "Schedule 2 Item 14B"),
@@ -616,6 +614,39 @@ impl Form1702MXView {
         button.disabled(disabled).min_w_0().max_w_full()
     }
 
+    /// Label then bold value; stacks on phone.
+    fn read_only_row(layout: Layout, label: &str, value: &str) -> AnyElement {
+        let label = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div()
+            .text_sm()
+            .font_weight(FontWeight::BOLD)
+            .child(value.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value)
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(label)
+                .child(value)
+                .into_any_element()
+        }
+    }
+
     fn choice_row(layout: Layout, title: &str, buttons: Vec<Button>) -> AnyElement {
         if layout == Layout::Phone {
             return div()
@@ -780,7 +811,11 @@ impl Form1702MXView {
                 )
                 .child(months)
                 .into_any_element(),
-            self.text("year", layout),
+            Self::read_only_row(
+                layout,
+                "Item 2 — Year ended: year (YYYY)",
+                &d.taxable_year.to_string(),
+            ),
             Self::choice_row(
                 layout,
                 "Item 3 — Amended return?",

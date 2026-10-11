@@ -639,7 +639,8 @@ impl Form1702qView {
         }
         let mut parse_errors = Vec::new();
         let mut draft = self.draft.clone();
-        for text in TEXTS {
+        // The year is locked to the library tile; keep the draft's value.
+        for text in TEXTS.iter().filter(|t| t.key != "year") {
             (text.set)(&mut draft, self.input_text(text.key, cx));
         }
         for money in all_money() {
@@ -848,6 +849,39 @@ impl Form1702qView {
         button.small().disabled(disabled)
     }
 
+    /// Label then bold value; stacks on phone.
+    fn read_only_row(layout: Layout, label: &str, value: &str) -> AnyElement {
+        let label = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div()
+            .text_sm()
+            .font_weight(FontWeight::BOLD)
+            .child(value.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value)
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(label)
+                .child(value)
+                .into_any_element()
+        }
+    }
+
     fn choice_row(&self, label: &str, buttons: Vec<Button>) -> AnyElement {
         div()
             .flex()
@@ -981,21 +1015,16 @@ impl Form1702qView {
                 .collect();
             children.push(self.choice_row("Item 2 — Month the fiscal year ends", months));
         }
-        children.push(self.field("year", TEXTS[0].label, layout, !editable));
-        let quarters = (1..=3u8)
-            .map(|quarter| {
-                Self::choice(
-                    ("1702q_qtr", quarter as usize),
-                    format!("Q{quarter}"),
-                    d.quarter == quarter,
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.edit(window, cx, |d| d.quarter = quarter)
-                }))
-            })
-            .collect();
-        children.push(self.choice_row("Item 3 — Quarter", quarters));
+        children.push(Self::read_only_row(
+            layout,
+            TEXTS[0].label,
+            &d.taxable_year.to_string(),
+        ));
+        children.push(Self::read_only_row(
+            layout,
+            "Item 3 — Quarter",
+            &format!("Q{}", d.quarter),
+        ));
         children.push(self.choice_row(
             "Item 4 — Amended return?",
             vec![
