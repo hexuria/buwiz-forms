@@ -54,7 +54,6 @@ const MONTHS: [&str; 12] = [
 
 /// Single text inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
-    ("year", "Item 1 — Year", "YYYY"),
     ("sheets", "Item 3 — No. of sheets attached", "0"),
     ("name", "Item 6 — Taxpayer's Name", ""),
     ("address", "Item 7 — Registered Address", ""),
@@ -142,7 +141,6 @@ impl Form2000View {
     /// Editor text for one input from the draft.
     fn initial(draft: &Form2000Draft, key: &str) -> String {
         match key {
-            "year" => draft.taxable_year.to_string(),
             "sheets" => draft.number_of_attached_sheets.to_string(),
             "name" => draft.taxpayer_name.clone(),
             "address" => draft.registered_address.clone(),
@@ -219,13 +217,6 @@ impl Form2000View {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         if let Some(sheets) = number("sheets", "Item 3", cx) {
             draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
                 sheets as u16
@@ -566,6 +557,17 @@ impl Form2000View {
         .into_any_element()
     }
 
+    /// Read-only label and text value (period chosen by the library tile).
+    fn static_value(&self, label: &str, value: String, cx: &Context<Self>) -> AnyElement {
+        rsx! {
+            <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{value}</div>
+            </div>
+        }
+        .into_any_element()
+    }
+
     /// Label plus choice chips. On phones the label takes its own line
     /// (full width) and the chips wrap beneath it.
     fn label_row(label: &str, layout: Layout) -> Div {
@@ -605,35 +607,17 @@ impl Form2000View {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("2000_month", index),
-                    *name,
-                    self.draft.month == month,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month))),
-            );
-        }
+        let month_name = MONTHS
+            .get(usize::from(self.draft.month).wrapping_sub(1))
+            .copied()
+            .unwrap_or("—");
         let amended = self.draft.is_amended;
         let children = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 1 — For the month of"),
-                )
-                .child(months)
-                .into_any_element(),
-            self.field("year", "Item 1 — Year", layout, !editable),
+            self.static_value(
+                "Item 1 — For the month of",
+                format!("{month_name} {}", self.draft.taxable_year),
+                cx,
+            ),
             Self::label_row("Item 2 — Amended return?", layout)
                 .child(
                     Self::choice("2000_amended_yes", "Yes", amended, !editable).on_click(

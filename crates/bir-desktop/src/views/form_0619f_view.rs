@@ -54,7 +54,6 @@ const MONTHS: [&str; 12] = [
 
 /// Text inputs: (key, label).
 const TEXT_INPUTS: &[(&str, &str)] = &[
-    ("year", "Item 1 — Year"),
     ("due_day", "Item 2 — Due day"),
     ("name", "Item 8 — Withholding Agent's Name"),
     ("lob", "Line of Business"),
@@ -112,7 +111,6 @@ pub struct Form0619FView {
 impl Form0619FView {
     fn initial(draft: &Form0619FDraft, key: &str) -> String {
         match key {
-            "year" => draft.taxable_year.to_string(),
             "due_day" => draft.due_day.map(|d| d.to_string()).unwrap_or_default(),
             "name" => draft.taxpayer_name.clone(),
             "lob" => draft.line_of_business.clone(),
@@ -156,13 +154,6 @@ impl Form0619FView {
             }
             parsed
         };
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         let due = self.input_text("due_day", cx);
         if due.trim().is_empty() {
             draft.due_day = None;
@@ -397,22 +388,19 @@ impl Form0619FView {
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let months: Vec<Button> = MONTHS
-            .iter()
-            .enumerate()
-            .map(|(index, name)| {
-                let month = index as u8 + 1;
-                Self::choice(("0619f_month", index), *name, d.month == month, !editable)
-                    .small()
-                    .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month)))
-            })
-            .collect();
+        let month_name = MONTHS
+            .get(usize::from(d.month).wrapping_sub(1))
+            .copied()
+            .unwrap_or("—");
         let (due_month, due_year) = d.due_month_and_year();
         let amended = d.is_amended;
         let withheld = d.any_taxes_withheld;
         let children = vec![
-            Self::choice_row("Item 1 — Month", months),
-            self.field("year", layout, false),
+            self.fixed(
+                "Item 1 — For the month",
+                format!("{month_name} {}", d.taxable_year),
+                cx,
+            ),
             self.fixed(
                 "Item 2 — Due month / year",
                 format!("{due_month:02} / {due_year}"),
