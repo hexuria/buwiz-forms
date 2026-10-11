@@ -55,10 +55,14 @@ const MONTHS: [&str; 12] = [
 
 /// Text inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
-    ("year", "Item 2 — Year ended", "YYYY"),
-    ("sheets", "Item 5 — No. of sheets attached", "0"),
+    ("year", "Item 2 — Year ended: year", "YYYY"),
+    ("sheets", "Item 5 — Number of sheets attached", "0"),
     ("lob", "Item 8 — Line of Business/Occupation", ""),
-    ("name", "Item 9 — Taxpayer's Name", ""),
+    (
+        "name",
+        "Item 9 — Taxpayer's Name (For Individual) / (For Non-individual)",
+        "",
+    ),
     ("phone", "Item 10 — Telephone Number", "digits only"),
     ("address", "Item 11 — Registered Address", ""),
     ("zip", "Item 12 — Zip Code", ""),
@@ -69,7 +73,7 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
 const MONEY_INPUTS: &[(&str, &str)] = &[
     (
         "prev",
-        "20A — Tax paid in return previously filed (amended only)",
+        "20A — Tax paid in return previously filed if this is an Amended Return",
     ),
     ("cwt", "20B — Creditable tax withheld per BIR Form 2307"),
     ("sur", "22A — Surcharge"),
@@ -473,7 +477,7 @@ impl Form2553View {
                 .flex_wrap()
                 .items_center()
                 .gap_2()
-                .child(caption.flex_1())
+                .child(caption.flex_1().min_w(px(220.)))
                 .children(buttons)
                 .into_any_element()
         }
@@ -505,7 +509,12 @@ impl Form2553View {
             .map(|quarter| {
                 Self::choice(
                     ("2553_qtr", quarter as usize),
-                    format!("Q{quarter}"),
+                    match quarter {
+                        1 => "1st",
+                        2 => "2nd",
+                        3 => "3rd",
+                        _ => "4th",
+                    },
                     self.draft.quarter == quarter,
                     !editable,
                 )
@@ -516,7 +525,7 @@ impl Form2553View {
         let children = vec![
             Self::choice_row(
                 layout,
-                "Item 1 —",
+                "Item 1 — For the (Calendar or Fiscal)",
                 vec![
                     Self::choice("2553_calendar", "Calendar", !fiscal, !editable).on_click(
                         cx.listener(|this, _, _, cx| {
@@ -545,11 +554,11 @@ impl Form2553View {
                         .max_w_full()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("Item 2 — Month the year ends"),
+                        .child("Item 2 — Year ended: month"),
                 )
                 .child(months.w_full())
                 .into_any_element(),
-            self.field("year", "Item 2 — Year ended", layout, !editable),
+            self.field("year", "Item 2 — Year ended: year", layout, !editable),
             Self::choice_row(layout, "Item 3 — Quarter", quarters),
             Self::choice_row(
                 layout,
@@ -565,7 +574,7 @@ impl Form2553View {
             ),
             self.field(
                 "sheets",
-                "Item 5 — No. of sheets attached",
+                "Item 5 — Number of sheets attached",
                 layout,
                 !editable,
             ),
@@ -612,12 +621,16 @@ impl Form2553View {
                 )
                 .into_any_element(),
         ];
-        for (key, label, _) in TEXT_INPUTS.iter().skip(2) {
+        for (key, label, _) in TEXT_INPUTS.iter().skip(2).filter(|(k, _, _)| *k != "email") {
             fields.push(self.field(key, label, layout, !editable));
         }
+        let email = TEXT_INPUTS
+            .iter()
+            .find(|(k, _, _)| *k == "email")
+            .map(|(key, label, _)| self.field(key, label, layout, !editable));
         let treaty_row = Self::choice_row(
             layout,
-            "Item 13 — Availing of tax relief under a Special Law or International Tax Treaty?",
+            "Item 13 — Are you availing of tax relief under Special Law or International Tax Treaty?",
             vec![
                 Self::choice(
                     "2553_treaty_no",
@@ -652,7 +665,10 @@ impl Form2553View {
         );
         self.section(
             "Part I — Background Information",
-            vec![self.grid(layout, fields), treaty_row],
+            std::iter::once(self.grid(layout, fields))
+                .chain(std::iter::once(treaty_row))
+                .chain(email)
+                .collect(),
             cx,
         )
     }
@@ -810,13 +826,14 @@ impl Form2553View {
             );
         }
         children.push(self.computed("19 — Total tax due", self.draft.total_tax_due, cx));
-        self.section("Part II — Computation of Tax (Items 14–19)", children, cx)
+        children.extend(self.render_totals(layout, cx));
+        self.section("Part II — Computation of Tax", children, cx)
     }
 
-    fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> Vec<AnyElement> {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let mut children = vec![
+        let credits = vec![
             self.field(
                 "prev",
                 MONEY_INPUTS[0].1,
@@ -826,25 +843,28 @@ impl Form2553View {
             self.field("cwt", MONEY_INPUTS[1].1, layout, !editable),
             self.computed("20C — Total tax credits/payments", d.total_tax_credits, cx),
             self.computed("21 — Tax payable (overpayment)", d.tax_payable, cx),
+        ];
+        let penalties = vec![
             self.field("sur", MONEY_INPUTS[2].1, layout, !editable),
             self.field("int", MONEY_INPUTS[3].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[4].1, layout, !editable),
             self.computed("22D — Total penalties", d.total_penalties, cx),
-            self.computed(
-                "23 — Total amount payable (overpayment)",
-                d.total_amount_payable,
-                cx,
-            ),
         ];
+        let total = self.computed(
+            "23 — Total amount payable (overpayment)",
+            d.total_amount_payable,
+            cx,
+        );
+        let mut overpayment = Vec::new();
         if d.total_amount_payable < 0.0 {
             let over = d.overpayment;
-            children.push(Self::choice_row(
+            overpayment.push(Self::choice_row(
                 layout,
-                "If overpayment, mark one:",
+                "If overpayment, mark one box only:",
                 vec![
                     Self::choice(
                         "2553_refund",
-                        "To be refunded",
+                        "To be Refunded",
                         over == Form2553Overpayment::Refund,
                         !editable,
                     )
@@ -865,11 +885,22 @@ impl Form2553View {
                 ],
             ));
         }
-        self.section(
-            "Part II — Tax Credits, Penalties and Amount Payable",
-            vec![self.grid(layout, children)],
-            cx,
-        )
+        let caption = |text: &str| {
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child(text.to_string())
+                .into_any_element()
+        };
+        let mut out = vec![
+            caption("20 Less: Tax Credits/Payments"),
+            self.grid(layout, credits),
+            caption("22 Add: Penalties"),
+            self.grid(layout, penalties),
+            total,
+        ];
+        out.extend(overpayment);
+        out
     }
 }
 
@@ -1310,7 +1341,6 @@ impl Render for Form2553View {
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_schedule(layout, cx));
-        body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
