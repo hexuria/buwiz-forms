@@ -26,6 +26,7 @@ use gpui_rsx::rsx;
 
 use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -707,11 +708,43 @@ impl Form2200PView {
         .into_any_element()
     }
 
-    fn has_error(&self, key: &str) -> bool {
-        self.validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")))
+    /// Validator keys (`Form2200PDraft::validate`) behind input `key`.
+    fn model_keys(key: &str) -> &'static [&'static str] {
+        match key {
+            "day" => &["day"],
+            "year" => &["year"],
+            "sheets" => &["number_of_attached_sheets"],
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "phone" => &["contact_number"],
+            "email" => &["email"],
+            "relief" => &["tax_relief_specify"],
+            "other" => &["other_scheme_description"],
+            "bal" => &["balance_carried_over"],
+            "cred" => &["creditable_excise_tax"],
+            "prev" => &["previous_payment"],
+            "sur" => &["surcharge"],
+            "int" => &["interest"],
+            "comp" => &["compromise"],
+            "dep" => &["tax_deposit"],
+            _ => &[],
+        }
+    }
+
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built control.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
     }
 
     fn label(&self, text: &str, error: bool) -> Div {
@@ -754,12 +787,16 @@ impl Form2200PView {
             .inputs
             .get(key)
             .expect("editor input registry is complete");
-        self.labelled(
+        let mut keys = vec![key];
+        keys.extend_from_slice(Self::model_keys(key));
+        let message = self.errors_for(&keys);
+        let row = self.labelled(
             label,
-            self.has_error(key),
+            message.is_some(),
             Input::new(input).disabled(disabled).into_any_element(),
             layout,
-        )
+        );
+        with_field_error(row, message)
     }
 
     /// Two columns on desktop, one otherwise.
@@ -853,14 +890,15 @@ impl Form2200PView {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let read_only_row = |label: &str, value: String| {
-            div()
+        let read_only_row = |label: &str, value: String, key: &str| {
+            let shown = div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(self.label(label, false))
+                .child(self.label(label, self.errors_for(&[key]).is_some()))
                 .child(div().font_weight(FontWeight::BOLD).child(value))
-                .into_any_element()
+                .into_any_element();
+            self.with_errors(shown, &[key])
         };
         let month_name = MONTHS
             .get((self.draft.month as usize).wrapping_sub(1))
@@ -868,9 +906,9 @@ impl Form2200PView {
             .unwrap_or("-");
         let amended = self.draft.is_amended;
         let children = vec![
-            read_only_row("Item 1 — Month", month_name.to_string()),
+            read_only_row("Item 1 — Month", month_name.to_string(), "month"),
             self.field("day", "Item 1 — Day", layout, !editable),
-            read_only_row("Item 1 — Year", self.draft.year.to_string()),
+            read_only_row("Item 1 — Year", self.draft.year.to_string(), "year"),
             self.choice_row(
                 "Item 2 — Amended return?",
                 false,
@@ -901,7 +939,7 @@ impl Form2200PView {
             PlaceItem::Production => "place_of_production",
             PlaceItem::Removal => "place_of_removal",
         };
-        let error = self.has_error(key);
+        let message = self.errors_for(&[key]);
         let select = |state: &GeoSelect, placeholder: &'static str| {
             Select::new(state)
                 .placeholder(placeholder)
@@ -918,23 +956,27 @@ impl Form2200PView {
             .child(select(&selects.province, "(Select Province)"))
             .child(select(&selects.city, "(Select City)"))
             .into_any_element();
-        self.labelled(title, error, body, layout)
+        with_field_error(
+            self.labelled(title, message.is_some(), body, layout),
+            message,
+        )
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let static_value = |label: &str, value: String| {
-            div()
+        let static_value = |label: &str, value: String, key: &str| {
+            let shown = div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(self.label(label, false))
+                .child(self.label(label, self.errors_for(&[key]).is_some()))
                 .child(div().font_weight(FontWeight::BOLD).child(value))
-                .into_any_element()
+                .into_any_element();
+            self.with_errors(shown, &[key])
         };
         let mut fields = vec![
-            static_value("Item 4 — TIN", format_tin(&self.draft.tin)),
-            static_value("Item 5 — RDO Code", self.draft.rdo_code.clone()),
+            static_value("Item 4 — TIN", format_tin(&self.draft.tin), "tin"),
+            static_value("Item 5 — RDO Code", self.draft.rdo_code.clone(), "rdo_code"),
         ];
         for (key, label, _) in TEXT_INPUTS.iter().skip(3).take(5) {
             fields.push(self.field(key, label, layout, !editable));
@@ -946,9 +988,10 @@ impl Form2200PView {
         ));
         fields.push(self.place_block(PlaceItem::Removal, "Item 11 — Place of Removal", layout));
         let relief = self.draft.tax_relief;
+        let relief_error = self.errors_for(&["tax_relief"]);
         let relief_row = self.choice_row(
             "Item 12 — Availing of tax relief under a Special Law or International Tax Treaty?",
-            self.has_error("tax_relief"),
+            relief_error.is_some(),
             layout,
             vec![
                 Self::choice("2200p_relief_yes", "Yes", relief == Some(true), !editable).on_click(
@@ -959,7 +1002,10 @@ impl Form2200PView {
                 ),
             ],
         );
-        let mut children = vec![self.grid(layout, fields), relief_row];
+        let mut children = vec![
+            self.grid(layout, fields),
+            with_field_error(relief_row, relief_error),
+        ];
         if relief == Some(true) {
             children.push(self.field("relief", "Item 12A — If yes, specify", layout, !editable));
         }
@@ -974,9 +1020,10 @@ impl Form2200PView {
                 this.edit(cx, |d| d.manner_of_payment = payment)
             })
         };
-        let mut children = vec![self.choice_row(
+        let mop_error = self.errors_for(&["manner_of_payment"]);
+        let mop_row = self.choice_row(
             "Manner of payment",
-            self.has_error("manner_of_payment"),
+            mop_error.is_some(),
             layout,
             vec![
                 Self::choice(
@@ -1006,7 +1053,8 @@ impl Form2200PView {
                 )
                 .on_click(pick(Form2200PPayment::OtherScheme)),
             ],
-        )];
+        );
+        let mut children = vec![with_field_error(mop_row, mop_error)];
         if mop == Form2200PPayment::OtherScheme {
             children.push(self.field(
                 "other",
@@ -1059,20 +1107,30 @@ impl Form2200PView {
             .filter(|(column, _)| column_exists(row, column))
             .map(|(column, label)| {
                 let key = row_key(row, column);
-                let error = self.has_error(&key) || self.has_error(&format!("schedule[{row}]"));
+                let cell_key = match *column {
+                    "atc" => format!("schedule[{row}].atc_digits"),
+                    "desc" => format!("schedule[{row}].description"),
+                    "unit" => format!("schedule[{row}].unit_of_measure"),
+                    "rate" => format!("schedule[{row}].applicable_rate"),
+                    "place" => format!("schedule[{row}].place_of_removal"),
+                    _ => String::new(),
+                };
+                let message = self.errors_for(&[key.as_str(), cell_key.as_str()]);
                 let input = self
                     .inputs
                     .get(&key)
                     .expect("editor input registry is complete");
-                self.labelled(
+                let cell = self.labelled(
                     label,
-                    error,
+                    message.is_some(),
                     Input::new(input).disabled(!editable).into_any_element(),
                     layout,
-                )
+                );
+                with_field_error(cell, message)
             })
             .collect();
-        div()
+        let row_error = format!("schedule[{row}]");
+        let card = div()
             .flex()
             .flex_col()
             .gap_2()
@@ -1082,7 +1140,8 @@ impl Form2200PView {
             .rounded_md()
             .child(heading)
             .child(self.grid(layout, fields))
-            .into_any_element()
+            .into_any_element();
+        self.with_errors(card, &[row_error.as_str()])
     }
 
     fn render_schedule(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -1106,10 +1165,13 @@ impl Form2200PView {
             .on_click(cx.listener(|this, _, window, cx| this.edit_rows(window, cx, Self::add_row)))
             .into_any_element(),
         );
-        children.push(self.computed(
-            "TOTAL TAX DUE (To Part III, Item 16)",
-            self.draft.schedule_total,
-            cx,
+        children.push(self.with_errors(
+            self.computed(
+                "TOTAL TAX DUE (To Part III, Item 16)",
+                self.draft.schedule_total,
+                cx,
+            ),
+            &["schedule"],
         ));
         self.section(
             "Part V — Schedule 1: Removals and Excise Tax Due",
@@ -1146,10 +1208,13 @@ impl Form2200PView {
             self.field("dep", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("23B — Penalties", d.penalties_paid, cx),
             self.computed("23C — Total payment made today", d.total_payment, cx),
-            self.computed(
-                "24 — Balance to be carried over to next return",
-                d.balance_to_carry_over,
-                cx,
+            self.with_errors(
+                self.computed(
+                    "24 — Balance to be carried over to next return",
+                    d.balance_to_carry_over,
+                    cx,
+                ),
+                &["balance_to_carry_over"],
             ),
         ];
         self.section(
@@ -1448,6 +1513,7 @@ impl Render for Form2200PView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let open_issues = self.validation_errors.len() + self.parse_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -1505,6 +1571,12 @@ impl Render for Form2200PView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && open_issues > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {open_issues} {} to queue (see Needs review).",
+                                if open_issues == 1 { "item" } else { "items" }
+                            )))
                         })
                         .child(
                             Button::new("2200p_submit")
