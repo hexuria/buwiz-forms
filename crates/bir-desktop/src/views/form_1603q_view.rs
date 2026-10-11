@@ -23,6 +23,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -78,6 +79,27 @@ const MONEY_INPUTS: &[(&str, &str)] = &[
     ("int", "20 — Interest"),
     ("comp", "21 — Compromise"),
 ];
+
+/// Model validation keys (`Form1603QDraft::validate`) behind one input key.
+fn model_error_keys(key: &str) -> &'static [&'static str] {
+    match key {
+        "year" => &["taxable_year"],
+        "sheets" => &["number_of_attached_sheets"],
+        "name" => &["taxpayer_name"],
+        "address" => &["registered_address"],
+        "zip" => &["zip_code"],
+        "phone" => &["contact_number"],
+        "other_specify" => &["other_remittances_specify"],
+        "value0" => &["monetary_value[0]", "monetary_value"],
+        "value1" => &["monetary_value[1]", "monetary_value"],
+        "prev" => &["tax_remitted_previous"],
+        "other" => &["other_remittances"],
+        "sur" => &["surcharge"],
+        "int" => &["interest"],
+        "comp" => &["compromise"],
+        _ => &[],
+    }
+}
 
 /// Accepts `1,234.56`, `1234.5`, blank (zero).
 fn parse_amount(value: &str) -> Option<f64> {
@@ -327,21 +349,19 @@ impl Form1603QView {
             return div().into_any_element();
         };
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let mut keys: Vec<&str> = vec![key];
+        keys.extend_from_slice(model_error_keys(key));
+        let message = self.error_for(&keys);
         let label = div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if error {
+        let label = if message.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -356,8 +376,24 @@ impl Form1603QView {
                 .w_full()
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
-        }
-        .into_any_element()
+        };
+        with_field_error(row.into_any_element(), message)
+    }
+
+    /// Messages (input parse errors and model validation) recorded for any of
+    /// `keys`, joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built row.
+    fn with_errors(&self, row: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(row, self.error_for(keys))
     }
 
     /// Two columns on desktop, one otherwise.
@@ -488,15 +524,21 @@ impl Form1603QView {
         let amended = self.draft.is_amended;
         let withheld = self.draft.any_tax_withheld;
         let children = vec![
-            Self::read_only_row(
-                layout,
-                "Item 1 — For the Year",
-                self.draft.taxable_year.to_string(),
+            self.with_errors(
+                Self::read_only_row(
+                    layout,
+                    "Item 1 — For the Year",
+                    self.draft.taxable_year.to_string(),
+                ),
+                &["taxable_year", "year"],
             ),
-            Self::read_only_row(
-                layout,
-                "Item 2 — Quarter",
-                format!("Q{}", self.draft.quarter),
+            self.with_errors(
+                Self::read_only_row(
+                    layout,
+                    "Item 2 — Quarter",
+                    format!("Q{}", self.draft.quarter),
+                ),
+                &["quarter"],
             ),
             Self::labelled_row(
                 layout,
@@ -514,31 +556,34 @@ impl Form1603QView {
                         .into_any_element(),
                 ],
             ),
-            Self::labelled_row(
-                layout,
-                "Item 4 — Any taxes withheld?",
-                vec![
-                    Self::choice(
-                        "1603q_withheld_yes",
-                        "Yes",
-                        withheld == Some(true),
-                        !editable,
-                    )
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.set_withheld(true, window, cx)),
-                    )
-                    .into_any_element(),
-                    Self::choice(
-                        "1603q_withheld_no",
-                        "No",
-                        withheld == Some(false),
-                        !editable,
-                    )
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.set_withheld(false, window, cx)),
-                    )
-                    .into_any_element(),
-                ],
+            self.with_errors(
+                Self::labelled_row(
+                    layout,
+                    "Item 4 — Any taxes withheld?",
+                    vec![
+                        Self::choice(
+                            "1603q_withheld_yes",
+                            "Yes",
+                            withheld == Some(true),
+                            !editable,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.set_withheld(true, window, cx)),
+                        )
+                        .into_any_element(),
+                        Self::choice(
+                            "1603q_withheld_no",
+                            "No",
+                            withheld == Some(false),
+                            !editable,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.set_withheld(false, window, cx)),
+                        )
+                        .into_any_element(),
+                    ],
+                ),
+                &["any_tax_withheld"],
             ),
             self.field(
                 "sheets",
@@ -554,67 +599,76 @@ impl Form1603QView {
         let editable = self.draft.lifecycle.is_editable();
         let category = self.draft.category;
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 7 — RDO Code"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            self.with_errors(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Item 6 — TIN"),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format_tin(&self.draft.tin)),
+                    )
+                    .into_any_element(),
+                &["tin"],
+            ),
+            self.with_errors(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Item 7 — RDO Code"),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(self.draft.rdo_code.clone()),
+                    )
+                    .into_any_element(),
+                &["rdo_code"],
+            ),
         ];
         for (key, label, _) in TEXT_INPUTS.iter().skip(2).take(6) {
             fields.push(self.field(key, label, layout, !editable));
         }
-        let category_row = Self::labelled_row(
-            layout,
-            "Item 11 — Category of withholding agent",
-            vec![
-                Self::choice(
-                    "1603q_category_private",
-                    "Private",
-                    category == Some(Form1603QCategory::Private),
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.category = Some(Form1603QCategory::Private))
-                }))
-                .into_any_element(),
-                Self::choice(
-                    "1603q_category_government",
-                    "Government",
-                    category == Some(Form1603QCategory::Government),
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.category = Some(Form1603QCategory::Government))
-                }))
-                .into_any_element(),
-            ],
+        let category_row = self.with_errors(
+            Self::labelled_row(
+                layout,
+                "Item 11 — Category of withholding agent",
+                vec![
+                    Self::choice(
+                        "1603q_category_private",
+                        "Private",
+                        category == Some(Form1603QCategory::Private),
+                        !editable,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| d.category = Some(Form1603QCategory::Private))
+                    }))
+                    .into_any_element(),
+                    Self::choice(
+                        "1603q_category_government",
+                        "Government",
+                        category == Some(Form1603QCategory::Government),
+                        !editable,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| d.category = Some(Form1603QCategory::Government))
+                    }))
+                    .into_any_element(),
+                ],
+            ),
+            &["category"],
         );
         let relief = self.draft.tax_relief;
         let pick = |id: &'static str, label: &'static str, value: Option<Form1603QTaxRelief>| {
@@ -633,22 +687,25 @@ impl Form1603QView {
             ],
         )];
         if relief.is_some() {
-            relief_rows.push(Self::labelled_row(
-                layout,
-                "Item 13A — If yes, specify",
-                vec![
-                    pick(
-                        "1603q_relief_special",
-                        "Special Rate",
-                        Some(Form1603QTaxRelief::SpecialRate),
-                    ),
-                    pick(
-                        "1603q_relief_treaty",
-                        "International Tax Treaty",
-                        Some(Form1603QTaxRelief::InternationalTaxTreaty),
-                    ),
-                    pick("1603q_relief_both", "Both", Some(Form1603QTaxRelief::Both)),
-                ],
+            relief_rows.push(self.with_errors(
+                Self::labelled_row(
+                    layout,
+                    "Item 13A — If yes, specify",
+                    vec![
+                        pick(
+                            "1603q_relief_special",
+                            "Special Rate",
+                            Some(Form1603QTaxRelief::SpecialRate),
+                        ),
+                        pick(
+                            "1603q_relief_treaty",
+                            "International Tax Treaty",
+                            Some(Form1603QTaxRelief::InternationalTaxTreaty),
+                        ),
+                        pick("1603q_relief_both", "Both", Some(Form1603QTaxRelief::Both)),
+                    ],
+                ),
+                &["tax_relief"],
             ));
         }
         let mut children = vec![self.grid(layout, fields), category_row];
@@ -732,7 +789,10 @@ impl Form1603QView {
             self.field("int", MONEY_INPUTS[5].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("22 — Total penalties", d.total_penalties, cx),
-            self.computed("23 — Total amount still due", d.total_amount_due, cx),
+            self.with_errors(
+                self.computed("23 — Total amount still due", d.total_amount_due, cx),
+                &["total_amount_due"],
+            ),
         ]);
         self.section(
             "Part II — Computation of Tax (Items 14–23)",
@@ -1012,6 +1072,7 @@ impl Render for Form1603QView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let blocked_count = self.validation_errors.len() + self.parse_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -1023,67 +1084,77 @@ impl Render for Form1603QView {
             })
             .collect();
 
-        let toolbar =
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .px(pad)
-                .py_3()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(Button::new("1603q_back").label("← Back").on_click(
+        let toolbar = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px(pad)
+            .py_3()
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(
+                Button::new("1603q_back").label("← Back").on_click(
                     cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
-                ))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("1603q_preview")
-                                .label("Print preview")
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Button::new("1603q_preview")
+                            .label("Print preview")
+                            .outline()
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("1603q_save")
+                            .label("Save draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                            ),
+                    )
+                    .when(is_queued, |row| {
+                        row.child(
+                            Button::new("1603q_cancel")
+                                .label("Cancel queue")
                                 .outline()
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("1603q_save")
-                                .label("Save draft")
-                                .outline()
-                                .disabled(!is_draft)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                                ),
-                        )
-                        .when(is_queued, |row| {
-                            row.child(
-                                Button::new("1603q_cancel")
-                                    .label("Cancel queue")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx)
-                                    })),
-                            )
-                        })
-                        .child(
-                            Button::new("1603q_submit")
-                                .label("Queue for submission")
-                                .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
+                                    this.revert_to_draft(window, cx)
                                 })),
-                        ),
-                );
+                        )
+                    })
+                    .when(is_draft && (blocked_count > 0), |row| {
+                        row.child(div().text_xs().text_color(cx.theme().danger).child(
+                            if blocked_count == 1 {
+                                "Fix 1 problem listed under Needs review".to_string()
+                            } else {
+                                format!("Fix {blocked_count} problems listed under Needs review")
+                            },
+                        ))
+                    })
+                    .child(
+                        Button::new("1603q_submit")
+                            .label("Queue for submission")
+                            .primary()
+                            .disabled(
+                                !is_draft
+                                    || !self.validation_errors.is_empty()
+                                    || !self.parse_errors.is_empty(),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.mark_submitted(window, cx)),
+                            ),
+                    ),
+            );
 
         let mut body = div()
             .w_full()

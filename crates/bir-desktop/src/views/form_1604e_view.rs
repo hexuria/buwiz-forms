@@ -25,6 +25,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -383,12 +384,13 @@ impl Form1604eView {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
+        let message = self.error_for(&[key, error_key]);
         let label = if self.has_error(key) || self.has_error(error_key) {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -403,8 +405,24 @@ impl Form1604eView {
                 .w_full()
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
-        }
-        .into_any_element()
+        };
+        with_field_error(row.into_any_element(), message)
+    }
+
+    /// Messages (input parse errors and model validation) recorded for any of
+    /// `keys`, joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built row.
+    fn with_errors(&self, row: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(row, self.error_for(keys))
     }
 
     /// Two columns on desktop, one otherwise.
@@ -527,7 +545,10 @@ impl Form1604eView {
         let editable = self.draft.lifecycle.is_editable();
         let amended = self.draft.is_amended;
         let children = vec![
-            Self::readonly(TEXT_INPUTS[0].1, self.draft.taxable_year.to_string()),
+            self.with_errors(
+                Self::readonly(TEXT_INPUTS[0].1, self.draft.taxable_year.to_string()),
+                &["taxable_year", "year"],
+            ),
             Self::choice_row(
                 layout,
                 "Item 2 — Amended return?",
@@ -556,8 +577,11 @@ impl Form1604eView {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut fields = vec![
-            Self::readonly("Item 4 — TIN", format_tin(&d.tin)),
-            Self::readonly("Item 5 — RDO Code", d.rdo_code.clone()),
+            self.with_errors(Self::readonly("Item 4 — TIN", format_tin(&d.tin)), &["tin"]),
+            self.with_errors(
+                Self::readonly("Item 5 — RDO Code", d.rdo_code.clone()),
+                &["rdo_code"],
+            ),
         ];
         for (key, label, error_key) in [
             ("name", TEXT_INPUTS[2].1, "taxpayer_name"),
@@ -570,32 +594,35 @@ impl Form1604eView {
             fields.push(self.field(key, label, error_key, layout, !editable));
         }
         let category = d.agent_category;
-        let category_row = Self::choice_row(
-            layout,
-            "Item 8 — Category of withholding agent",
-            self.has_error("agent_category"),
-            vec![
-                Self::choice(
-                    "1604e_private",
-                    "Private",
-                    category == Form1604eAgentCategory::Private,
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.agent_category = Form1604eAgentCategory::Private)
-                })),
-                Self::choice(
-                    "1604e_government",
-                    "Government",
-                    category == Form1604eAgentCategory::Government,
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| {
-                        d.agent_category = Form1604eAgentCategory::Government
-                    })
-                })),
-            ],
+        let category_row = self.with_errors(
+            Self::choice_row(
+                layout,
+                "Item 8 — Category of withholding agent",
+                self.has_error("agent_category"),
+                vec![
+                    Self::choice(
+                        "1604e_private",
+                        "Private",
+                        category == Form1604eAgentCategory::Private,
+                        !editable,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| d.agent_category = Form1604eAgentCategory::Private)
+                    })),
+                    Self::choice(
+                        "1604e_government",
+                        "Government",
+                        category == Form1604eAgentCategory::Government,
+                        !editable,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| {
+                            d.agent_category = Form1604eAgentCategory::Government
+                        })
+                    })),
+                ],
+            ),
+            &["agent_category"],
         );
         let top = d.top_withholding_agent;
         let top_row = Self::choice_row(
@@ -697,7 +724,10 @@ impl Form1604eView {
             vec![
                 self.computed("Total taxes withheld", totals.taxes_withheld, cx),
                 self.computed("Total penalties", totals.penalties, cx),
-                self.computed("Total amount remitted", totals.total_remitted, cx),
+                self.with_errors(
+                    self.computed("Total amount remitted", totals.total_remitted, cx),
+                    &["totals"],
+                ),
             ],
         ));
         self.section(title, children, cx)
@@ -994,6 +1024,7 @@ impl Render for Form1604eView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let blocked_count = self.validation_errors.len() + self.parse_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -1005,67 +1036,77 @@ impl Render for Form1604eView {
             })
             .collect();
 
-        let toolbar =
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .px(pad)
-                .py_3()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(Button::new("1604e_back").label("← Back").on_click(
+        let toolbar = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px(pad)
+            .py_3()
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(
+                Button::new("1604e_back").label("← Back").on_click(
                     cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
-                ))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("1604e_preview")
-                                .label("Print preview")
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Button::new("1604e_preview")
+                            .label("Print preview")
+                            .outline()
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("1604e_save")
+                            .label("Save draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                            ),
+                    )
+                    .when(is_queued, |row| {
+                        row.child(
+                            Button::new("1604e_cancel")
+                                .label("Cancel queue")
                                 .outline()
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("1604e_save")
-                                .label("Save draft")
-                                .outline()
-                                .disabled(!is_draft)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                                ),
-                        )
-                        .when(is_queued, |row| {
-                            row.child(
-                                Button::new("1604e_cancel")
-                                    .label("Cancel queue")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx)
-                                    })),
-                            )
-                        })
-                        .child(
-                            Button::new("1604e_submit")
-                                .label("Queue for submission")
-                                .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
+                                    this.revert_to_draft(window, cx)
                                 })),
-                        ),
-                );
+                        )
+                    })
+                    .when(is_draft && blocked_count > 0, |row| {
+                        row.child(div().text_xs().text_color(cx.theme().danger).child(
+                            if blocked_count == 1 {
+                                "Fix 1 problem listed under Needs review".to_string()
+                            } else {
+                                format!("Fix {blocked_count} problems listed under Needs review")
+                            },
+                        ))
+                    })
+                    .child(
+                        Button::new("1604e_submit")
+                            .label("Queue for submission")
+                            .primary()
+                            .disabled(
+                                !is_draft
+                                    || !self.validation_errors.is_empty()
+                                    || !self.parse_errors.is_empty(),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.mark_submitted(window, cx)),
+                            ),
+                    ),
+            );
 
         let mut body = div()
             .w_full()
