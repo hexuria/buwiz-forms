@@ -681,16 +681,7 @@ impl Form2550QV2View {
 
         let mut subscriptions = Vec::new();
         for (input, binding) in subscribed_inputs {
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                move |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if let InputEvent::Change = event {
-                        this.raw_control_changed();
-                        this.sync_from_inputs(Some(std::slice::from_ref(&binding)), cx);
-                    }
-                },
-            ));
+            subscriptions.push(subscribe_bound_input(&input, binding, window, cx));
         }
 
         let validation_setup = Form2550QLiveValidationFacade::setup_repo_default_diagnostic();
@@ -728,8 +719,217 @@ impl Form2550QV2View {
         };
         if view.editor_state_error.is_none() {
             view.sync_from_inputs(None, cx);
+            view.refresh_schedule_1_derived(window, cx);
         }
         view
+    }
+
+    /// Show Schedule 1's computed allowable input tax and balance (disabled
+    /// on the official page, filled by `computeSched1`).
+    fn refresh_schedule_1_derived(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let rows = self.schedule_1_inputs.clone();
+        for inputs in &rows {
+            let Some(row) = self
+                .draft
+                .schedule_1
+                .iter()
+                .find(|row| row.instance_id.as_ref() == Some(&inputs.instance_id))
+            else {
+                continue;
+            };
+            for (input, value) in [
+                (
+                    &inputs.allowable_input_tax,
+                    row.allowable_input_tax_for_period,
+                ),
+                (&inputs.balance_next_period, row.balance_to_next_period),
+            ] {
+                let text = value.map(|value| format!("{value:.2}")).unwrap_or_default();
+                if input_text(input, cx) != text {
+                    set_input_value(input, &text, window, cx);
+                }
+            }
+        }
+    }
+
+    fn rebuild_semantic_targets(&mut self) {
+        match semantic_targets_from_raw_controls(&self.bound_inputs()) {
+            Ok(targets) => {
+                self.semantic_field_targets = targets;
+                self.semantic_focus_error = None;
+            }
+            Err(error) => {
+                self.semantic_field_targets = SemanticFieldTargets::default();
+                self.semantic_focus_error = Some(format!(
+                    "Validation focus mapping is unavailable: {error}. No fallback field will be focused."
+                ));
+            }
+        }
+    }
+
+    /// The official `addlistSched1/3/4`: one more row, no limit.
+    fn add_schedule_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        match family {
+            Form2550QRowFamily::Schedule1 => self
+                .draft
+                .schedule_1
+                .push(Form2550QCapitalGoodRow::default()),
+            Form2550QRowFamily::Schedule3 => self
+                .draft
+                .schedule_3
+                .push(Form2550QCreditableVatRow::default()),
+            Form2550QRowFamily::Schedule4 => self
+                .draft
+                .schedule_4
+                .push(Form2550QAdvanceVatRow::default()),
+            _ => return,
+        }
+        if let Err(error) = prepare_form_2550q_live_row_identities(&mut self.draft) {
+            match family {
+                Form2550QRowFamily::Schedule1 => {
+                    self.draft.schedule_1.pop();
+                }
+                Form2550QRowFamily::Schedule3 => {
+                    self.draft.schedule_3.pop();
+                }
+                _ => {
+                    self.draft.schedule_4.pop();
+                }
+            }
+            self.status_message = Some(format!(
+                "The new row could not get a stable identity: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+        let bound = match family {
+            Form2550QRowFamily::Schedule1 => {
+                let row = self
+                    .draft
+                    .schedule_1
+                    .last()
+                    .cloned()
+                    .expect("row just added");
+                let inputs = capital_good_inputs(&row, window, cx);
+                let bound = inputs.bound_inputs();
+                self.schedule_1_inputs.push(inputs);
+                bound
+            }
+            Form2550QRowFamily::Schedule3 => {
+                let row = self
+                    .draft
+                    .schedule_3
+                    .last()
+                    .cloned()
+                    .expect("row just added");
+                let inputs = creditable_vat_inputs(&row, window, cx);
+                let bound = inputs.bound_inputs();
+                self.schedule_3_inputs.push(inputs);
+                bound
+            }
+            _ => {
+                let row = self
+                    .draft
+                    .schedule_4
+                    .last()
+                    .cloned()
+                    .expect("row just added");
+                let inputs = advance_vat_inputs(&row, window, cx);
+                let bound = inputs.bound_inputs();
+                self.schedule_4_inputs.push(inputs);
+                bound
+            }
+        };
+        for (input, binding) in bound {
+            let subscription = subscribe_bound_input(&input, binding, window, cx);
+            self._subscriptions.push(subscription);
+        }
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+        self.refresh_schedule_1_derived(window, cx);
+    }
+
+    /// The official `deleteRowSched1` / `deleteRowSched3` / `deletelistSched4`.
+    fn remove_schedule_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        let instance_id = match family {
+            Form2550QRowFamily::Schedule1 if index < self.schedule_1_inputs.len() => {
+                let inputs = self.schedule_1_inputs.remove(index);
+                self.draft
+                    .schedule_1
+                    .retain(|row| row.instance_id.as_ref() != Some(&inputs.instance_id));
+                inputs.instance_id
+            }
+            Form2550QRowFamily::Schedule3 if index < self.schedule_3_inputs.len() => {
+                let inputs = self.schedule_3_inputs.remove(index);
+                self.draft
+                    .schedule_3
+                    .retain(|row| row.instance_id.as_ref() != Some(&inputs.instance_id));
+                inputs.instance_id
+            }
+            Form2550QRowFamily::Schedule4 if index < self.schedule_4_inputs.len() => {
+                let inputs = self.schedule_4_inputs.remove(index);
+                self.draft
+                    .schedule_4
+                    .retain(|row| row.instance_id.as_ref() != Some(&inputs.instance_id));
+                inputs.instance_id
+            }
+            _ => return,
+        };
+        self.draft
+            .raw_editor_state
+            .remove_repeated_row(family, &instance_id);
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+    }
+
+    fn remove_row_button(
+        &self,
+        family: Form2550QRowFamily,
+        id: &'static str,
+        index: usize,
+        cx: &Context<Self>,
+    ) -> gpui_component::button::Button {
+        gpui_component::button::Button::new((id, index))
+            .label("Remove")
+            .outline()
+            .disabled(!self.editor_is_editable())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.remove_schedule_row(family, index, cx);
+            }))
+    }
+
+    fn add_row_button(
+        &self,
+        family: Form2550QRowFamily,
+        id: &'static str,
+        label: &'static str,
+        cx: &Context<Self>,
+    ) -> gpui_component::button::Button {
+        gpui_component::button::Button::new(id)
+            .label(label)
+            .outline()
+            .disabled(!self.editor_is_editable())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.add_schedule_row(family, window, cx);
+            }))
     }
 
     fn bound_inputs(&self) -> Vec<(Entity<InputState>, RawControlBinding)> {
@@ -1536,17 +1736,23 @@ impl Form2550QV2View {
                     editable,
                 )}
                 {input_pair(
-                    "Allowable input tax this period (manual)",
+                    "Allowable input tax this period (computed)",
                     &row.allowable_input_tax,
-                    editable,
+                    false,
                 )}
                 {input_pair(
-                    "Balance to next period",
+                    "Balance to next period (computed)",
                     &row.balance_next_period,
-                    editable,
+                    false,
                 )}
             </div>
-        };
+        }
+        .child(self.remove_row_button(
+            Form2550QRowFamily::Schedule1,
+            "2550q_s1_remove",
+            index,
+            cx,
+        ));
         with_field_error(
             root.into_any_element(),
             self.row_error(&format!("schedule_1[{index}]")),
@@ -1576,7 +1782,13 @@ impl Form2550QV2View {
                     editable,
                 )}
             </div>
-        };
+        }
+        .child(self.remove_row_button(
+            Form2550QRowFamily::Schedule3,
+            "2550q_s3_remove",
+            index,
+            cx,
+        ));
         with_field_error(
             root.into_any_element(),
             self.row_error(&format!("schedule_3[{index}]")),
@@ -1607,7 +1819,13 @@ impl Form2550QV2View {
                 )}
                 {input_pair("Amount paid", &row.amount_paid, editable)}
             </div>
-        };
+        }
+        .child(self.remove_row_button(
+            Form2550QRowFamily::Schedule4,
+            "2550q_s4_remove",
+            index,
+            cx,
+        ));
         with_field_error(
             root.into_any_element(),
             self.row_error(&format!("schedule_4[{index}]")),
@@ -2006,25 +2224,42 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut schedule_1 = section_card(cx, "SCHEDULE 1 — CAPITAL GOODS (2 reviewed rows)")
-            .child(div().text_sm().child(
-                "Allowable input tax is manual: the reviewed source does not contain the number-of-months-in-use input required to derive it safely. Additional sheets are not yet supported.",
-            ));
+        let mut schedule_1 = section_card(cx, "SCHEDULE 1 — CAPITAL GOODS").child(
+            div().text_sm().child(
+                "Allowable input tax is computed as on the official page: input tax ÷ recognized life × 3, for purchases on or before December 31, 2021; the balance is input tax less allowable.",
+            ),
+        );
         for (index, row) in self.schedule_1_inputs.iter().enumerate() {
             schedule_1 = schedule_1.child(self.render_capital_good_row(index, row, cx));
         }
+        schedule_1 = schedule_1.child(self.add_row_button(
+            Form2550QRowFamily::Schedule1,
+            "2550q_s1_add",
+            "Add Schedule 1 row",
+            cx,
+        ));
 
-        let mut schedule_3 =
-            section_card(cx, "SCHEDULE 3 — CREDITABLE VAT WITHHELD (2 reviewed rows)");
+        let mut schedule_3 = section_card(cx, "SCHEDULE 3 — CREDITABLE VAT WITHHELD");
         for (index, row) in self.schedule_3_inputs.iter().enumerate() {
             schedule_3 = schedule_3.child(self.render_creditable_vat_row(index, row, cx));
         }
+        schedule_3 = schedule_3.child(self.add_row_button(
+            Form2550QRowFamily::Schedule3,
+            "2550q_s3_add",
+            "Add Schedule 3 row",
+            cx,
+        ));
 
-        let mut schedule_4 =
-            section_card(cx, "SCHEDULE 4 — ADVANCE VAT PAYMENTS (2 reviewed rows)");
+        let mut schedule_4 = section_card(cx, "SCHEDULE 4 — ADVANCE VAT PAYMENTS");
         for (index, row) in self.schedule_4_inputs.iter().enumerate() {
             schedule_4 = schedule_4.child(self.render_advance_vat_row(index, row, cx));
         }
+        schedule_4 = schedule_4.child(self.add_row_button(
+            Form2550QRowFamily::Schedule4,
+            "2550q_s4_add",
+            "Add Schedule 4 row",
+            cx,
+        ));
 
         let mut content = div()
             .w_full()
@@ -2302,6 +2537,25 @@ impl Render for Form2550QV2View {
             </div>
         }
     }
+}
+
+fn subscribe_bound_input(
+    input: &Entity<InputState>,
+    binding: RawControlBinding,
+    window: &mut Window,
+    cx: &mut Context<Form2550QV2View>,
+) -> Subscription {
+    cx.subscribe_in(
+        input,
+        window,
+        move |this: &mut Form2550QV2View, _, event: &InputEvent, window, cx| {
+            if let InputEvent::Change = event {
+                this.raw_control_changed();
+                this.sync_from_inputs(Some(std::slice::from_ref(&binding)), cx);
+                this.refresh_schedule_1_derived(window, cx);
+            }
+        },
+    )
 }
 
 fn semantic_targets_from_raw_controls(

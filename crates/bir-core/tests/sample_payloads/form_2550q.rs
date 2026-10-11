@@ -1,7 +1,8 @@
 use crate::dummy_profile;
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_2550q::{
-    FORM_2550Q_LAYOUT_ID, Form2550QDate, Form2550QDraft, Form2550QTaxpayerClassification,
+    Form2550QAdvanceVatRow, Form2550QCapitalGoodRow, Form2550QCreditableVatRow, Form2550QDate,
+    Form2550QDraft, Form2550QTaxpayerClassification,
 };
 use bir_core::forms::queueable::QueueableForm;
 use sha2::{Digest, Sha256};
@@ -22,7 +23,12 @@ fn sample_2550q() -> Form2550QDraft {
 
 /// [`crate::check_sample`] for 2550Q, whose upload appends
 /// `<dateFiled>yyyy/mm/dd</dateFiled>\n` after the layout's trailer.
-fn check_sample_2550q(stem: &str, plaintext: &str, official_encrypt_sha256: &str) {
+fn check_sample_2550q(
+    draft: &Form2550QDraft,
+    stem: &str,
+    plaintext: &str,
+    official_encrypt_sha256: &str,
+) {
     let (controls, date_filed) = plaintext
         .split_once("<dateFiled>")
         .expect("2550Q upload appends <dateFiled>");
@@ -30,9 +36,9 @@ fn check_sample_2550q(stem: &str, plaintext: &str, official_encrypt_sha256: &str
         .strip_suffix("</dateFiled>\n")
         .expect("<dateFiled> closes the upload");
     assert_eq!(date.len(), 10, "dateFiled is yyyy/mm/dd");
-    let layout = bir_core::official_xml::layout(FORM_2550Q_LAYOUT_ID).expect("official layout");
-    let fields =
-        bir_core::official_xml::read(layout, controls).expect("sample follows the official layout");
+    let layout = draft.official_layout().expect("official layout");
+    let fields = bir_core::official_xml::read(&layout, controls)
+        .expect("sample follows the official layout");
     assert!(!fields.is_empty());
 
     let encrypted = compress_and_encrypt(plaintext.as_bytes(), BIR_IAF_PASSPHRASE)
@@ -83,8 +89,140 @@ fn form_2550q_sample_payload_is_current() {
         .official_payload()
         .unwrap_or_else(|errors| panic!("dummy 2550Q must validate: {errors:?}"));
     check_sample_2550q(
+        &draft,
         "2550Q-122025Q1",
         &payload,
         "bb3a8b4412d8dc50ae619bd3249f0d47de01418a4a46a358239fb51ee9dd8d3f",
+    );
+}
+
+fn date(year: u16, month: u8, day: u8) -> Option<Form2550QDate> {
+    Some(Form2550QDate::new(year, month, day).expect("valid date"))
+}
+
+/// The 2550Q sample with three rows in each of Schedules 1, 3 and 4, entered
+/// through the official `addlistSched1/3/4` modals.
+fn sample_2550q_schedules() -> Form2550QDraft {
+    let mut draft = sample_2550q();
+    let capital = |d, code: &str, what: &str, amount, tax, est, rec| Form2550QCapitalGoodRow {
+        purchase_or_import_date: d,
+        source_code: code.to_string(),
+        description: what.to_string(),
+        purchase_or_import_amount: Some(amount),
+        input_tax: Some(tax),
+        estimated_life_months: Some(est),
+        recognized_life_months: Some(rec),
+        ..Form2550QCapitalGoodRow::default()
+    };
+    draft.schedule_1 = vec![
+        capital(
+            date(2021, 1, 15),
+            "D",
+            "OFFICE BUILDING",
+            1_000_000.0,
+            120_000.0,
+            60,
+            60,
+        ),
+        capital(
+            date(2020, 6, 30),
+            "I",
+            "FORKLIFT",
+            500_000.0,
+            60_000.0,
+            48,
+            48,
+        ),
+        capital(
+            date(2019, 11, 2),
+            "D",
+            "GENERATOR SET",
+            250_000.5,
+            30_000.06,
+            36,
+            40,
+        ),
+    ];
+    let creditable = |from, to, agent: &str, income, tax| Form2550QCreditableVatRow {
+        period_from: from,
+        period_to: to,
+        withholding_agent_name: agent.to_string(),
+        income_payment: Some(income),
+        tax_withheld: Some(tax),
+        ..Form2550QCreditableVatRow::default()
+    };
+    draft.schedule_3 = vec![
+        creditable(
+            date(2025, 1, 1),
+            date(2025, 1, 31),
+            "ABC GOVERNMENT AGENCY",
+            100_000.0,
+            5_000.0,
+        ),
+        creditable(
+            date(2025, 2, 1),
+            date(2025, 2, 28),
+            "XYZ STATE COLLEGE",
+            200_000.0,
+            10_000.0,
+        ),
+        creditable(
+            date(2025, 3, 1),
+            date(2025, 3, 31),
+            "DEPARTMENT OF EDUCATION",
+            50_000.25,
+            2_500.01,
+        ),
+    ];
+    let advance = |from, to, miller: &str, receipt: &str, amount| Form2550QAdvanceVatRow {
+        period_from: from,
+        period_to: to,
+        miller_name: miller.to_string(),
+        taxpayer_name: "SAMPLE DUMMY TAXPAYER".to_string(),
+        official_receipt_number: receipt.to_string(),
+        amount_paid: Some(amount),
+        ..Form2550QAdvanceVatRow::default()
+    };
+    draft.schedule_4 = vec![
+        advance(
+            date(2025, 1, 5),
+            date(2025, 1, 20),
+            "PRIME RICE MILL",
+            "OR12345",
+            15_000.0,
+        ),
+        advance(
+            date(2025, 2, 3),
+            date(2025, 2, 18),
+            "GOLDEN GRAIN MILL",
+            "OR22222",
+            8_500.5,
+        ),
+        advance(
+            date(2025, 3, 10),
+            date(2025, 3, 25),
+            "NORTH SUGAR MILL",
+            "A1B2C3",
+            1_200.75,
+        ),
+    ];
+    draft
+        .ensure_repeating_row_ids()
+        .expect("rows get stable identities");
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_2550q_schedule_rows_sample_payload_is_current() {
+    let draft = sample_2550q_schedules();
+    let payload = draft
+        .official_payload()
+        .unwrap_or_else(|errors| panic!("2550Q with schedule rows must validate: {errors:?}"));
+    check_sample_2550q(
+        &draft,
+        "2550Q-122025Q1-schedules",
+        &payload,
+        "6c689c3c28fe65e8ff0e973203ff62370a38cd2be8f1bda212f6d471883f0a14",
     );
 }

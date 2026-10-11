@@ -2897,3 +2897,242 @@ mod tests {
         }
     }
 }
+
+/// Schedule 1 modal row controls (`addlistSched1`), in DOM order. A row's
+/// id is the member followed by its index: `txtDatePurchase1` + `0`.
+const SCHEDULE_1_MODAL_MEMBERS: [&str; 9] = [
+    "txtDatePurchase1",
+    "txtSourceCode1",
+    "txtDescription1",
+    "txtAmountPurchase1",
+    "txtInputTax1",
+    "txtEstimatedLife1",
+    "txtRecognizedLife1",
+    "txtAllowedInputTax1",
+    "txtBalanceInputTax1",
+];
+/// Schedule 3 modal row controls (`addlistSched3`).
+const SCHEDULE_3_MODAL_MEMBERS: [&str; 5] = [
+    "txtDateCovered3",
+    "txtDateCovered3To",
+    "txtNameWithHoldingAgent3",
+    "txtIncomePayment3",
+    "txtTotalTaxWithHeld3",
+];
+/// Schedule 4 modal row controls (`addlistSched4`).
+const SCHEDULE_4_MODAL_MEMBERS: [&str; 6] = [
+    "txtDate4",
+    "txtDate4To",
+    "txtNameOfMiller4",
+    "txtNameOfTaxpayer4",
+    "txtOfficialReceiptNumber4",
+    "txtAmountPaid4",
+];
+
+/// One schedule's official "Add" list as the page saves it.
+///
+/// Opening a schedule's modal (`showNewSched1/3/4`) empties the two disabled
+/// rows of the main table, and `addlistSched1/3/4` builds the rows inside the
+/// modal, ahead of its total box. The page has no row limit. A schedule with
+/// rows is therefore written as its modal rows `<member><index>` (from 0) just
+/// before the anchor, and its two static rows are gone; an unused schedule
+/// keeps the two static rows at their page defaults.
+pub(crate) struct Form2550QModalSchedule {
+    pub members: &'static [&'static str],
+    /// The modal's first total box; the rows sit right before it.
+    pub anchor: &'static str,
+    /// Each used row's values, in member order.
+    pub rows: Vec<Vec<String>>,
+}
+
+fn money_text(value: Option<f64>) -> String {
+    value.map(format_money).unwrap_or_default()
+}
+
+impl Form2550QDraft {
+    /// Schedules 1, 3 and 4 that hold rows, as the official modals save them.
+    pub(crate) fn official_modal_schedules(&self) -> Vec<Form2550QModalSchedule> {
+        let date = |value: Option<Form2550QDate>| value.map(|d| d.to_string()).unwrap_or_default();
+        // `blockletterWithout2Decimal`: whole months.
+        let life = |value: Option<u16>| value.map(|m| m.to_string()).unwrap_or_default();
+        let mut schedules = Vec::new();
+        let rows_1: Vec<Vec<String>> = self
+            .schedule_1
+            .iter()
+            .filter(|row| !row.is_empty())
+            .map(|row| {
+                vec![
+                    date(row.purchase_or_import_date),
+                    row.source_code.clone(),
+                    row.description.clone(),
+                    money_text(row.purchase_or_import_amount),
+                    money_text(row.input_tax),
+                    life(row.estimated_life_months),
+                    life(row.recognized_life_months),
+                    money_text(row.allowable_input_tax_for_period),
+                    money_text(row.balance_to_next_period),
+                ]
+            })
+            .collect();
+        if !rows_1.is_empty() {
+            schedules.push(Form2550QModalSchedule {
+                members: &SCHEDULE_1_MODAL_MEMBERS,
+                anchor: "txtTotalAmountOfBalanceofInputTaxFromPrevious",
+                rows: rows_1,
+            });
+        }
+        let rows_3: Vec<Vec<String>> = self
+            .schedule_3
+            .iter()
+            .filter(|row| !row.is_empty())
+            .map(|row| {
+                vec![
+                    date(row.period_from),
+                    date(row.period_to),
+                    row.withholding_agent_name.clone(),
+                    money_text(row.income_payment),
+                    money_text(row.tax_withheld),
+                ]
+            })
+            .collect();
+        if !rows_3.is_empty() {
+            schedules.push(Form2550QModalSchedule {
+                members: &SCHEDULE_3_MODAL_MEMBERS,
+                anchor: "txtTotalAmountofIncomePayment",
+                rows: rows_3,
+            });
+        }
+        let rows_4: Vec<Vec<String>> = self
+            .schedule_4
+            .iter()
+            .filter(|row| !row.is_empty())
+            .map(|row| {
+                vec![
+                    date(row.period_from),
+                    date(row.period_to),
+                    row.miller_name.clone(),
+                    row.taxpayer_name.clone(),
+                    row.official_receipt_number.clone(),
+                    money_text(row.amount_paid),
+                ]
+            })
+            .collect();
+        if !rows_4.is_empty() {
+            schedules.push(Form2550QModalSchedule {
+                members: &SCHEDULE_4_MODAL_MEMBERS,
+                anchor: "txtAmountPaidSched4",
+                rows: rows_4,
+            });
+        }
+        schedules
+    }
+
+    /// The controls `saveEncryptedProfile` walks, keyed by official element
+    /// id: the reviewed map, with each used schedule's static rows replaced by
+    /// its modal rows. The static rows are disabled on the official page, so
+    /// they always keep the page defaults.
+    pub(crate) fn official_control_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        fields.remove("dateFiled");
+        for members in [
+            &SCHEDULE_1_MODAL_MEMBERS[..],
+            &SCHEDULE_3_MODAL_MEMBERS[..],
+            &SCHEDULE_4_MODAL_MEMBERS[..],
+        ] {
+            for member in members {
+                for index in 0..2 {
+                    fields.remove(&format!("{member}{index}"));
+                }
+            }
+        }
+        for schedule in self.official_modal_schedules() {
+            for (index, row) in schedule.rows.iter().enumerate() {
+                for (member, value) in schedule.members.iter().zip(row) {
+                    fields.insert(format!("{member}{index}"), value.clone());
+                }
+            }
+        }
+        fields
+    }
+
+    /// The generated layout with each used schedule's two static rows taken
+    /// out and its modal rows spliced in before the modal's total box, where
+    /// `addlistSched1/3/4` puts them.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use crate::official_xml::{Entry, Part};
+        let base = crate::official_xml::layout(super::form_2550q::FORM_2550Q_LAYOUT_ID)
+            .map_err(|e| e.to_string())?;
+        let key_of = |entry: &Entry| match entry {
+            Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+        };
+        let mut layout = base.clone();
+        for schedule in self.official_modal_schedules() {
+            let mut templates = Vec::new();
+            for member in schedule.members {
+                let key = format!("{member}0");
+                let template = layout
+                    .entries
+                    .iter()
+                    .find(|entry| key_of(entry) == key)
+                    .cloned()
+                    .ok_or_else(|| format!("no template entry {key}"))?;
+                templates.push((key, template));
+            }
+            let statics: Vec<String> = schedule
+                .members
+                .iter()
+                .flat_map(|member| (0..2).map(move |index| format!("{member}{index}")))
+                .collect();
+            layout
+                .entries
+                .retain(|entry| !statics.contains(&key_of(entry)));
+            let at = layout
+                .entries
+                .iter()
+                .position(|entry| key_of(entry) == schedule.anchor)
+                .ok_or_else(|| format!("no anchor entry {}", schedule.anchor))?;
+            let mut rows = Vec::new();
+            for index in 0..schedule.rows.len() {
+                for (member, (template_key, template)) in schedule.members.iter().zip(&templates) {
+                    let new_key = format!("{member}{index}");
+                    rows.push(match template.clone() {
+                        Entry::Bool { default, after, .. } => Entry::Bool {
+                            key: new_key,
+                            default,
+                            after,
+                        },
+                        Entry::Value {
+                            parts,
+                            default,
+                            number,
+                            after,
+                            ..
+                        } => Entry::Value {
+                            key: new_key.clone(),
+                            number,
+                            parts: parts
+                                .into_iter()
+                                .map(|part| match part {
+                                    Part::Source {
+                                        source,
+                                        codec,
+                                        uppercase,
+                                    } if source == *template_key => Part::Source {
+                                        source: new_key.clone(),
+                                        codec,
+                                        uppercase,
+                                    },
+                                    other => other,
+                                })
+                                .collect(),
+                            default,
+                            after,
+                        },
+                    });
+                }
+            }
+            layout.entries.splice(at..at, rows);
+        }
+        Ok(layout)
+    }
+}
