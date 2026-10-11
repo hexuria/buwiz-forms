@@ -20,6 +20,11 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
+};
 use crate::views::queueable_forms::QueueableFormEvent;
 
 /// Width classes the page lays out for.
@@ -111,6 +116,11 @@ pub struct EditorState {
     /// errors belong to it (the model field names). `None` keeps the plain
     /// editor-key match.
     pub error_keys: Option<fn(&str) -> Vec<String>>,
+    /// The shared header's menu, status-box and snapshot state.
+    pub header: FormHeaderState,
+    /// Bumped on every edit; Validate records the revision it passed at.
+    pub revision: u64,
+    pub validated_at: Option<u64>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -129,6 +139,9 @@ impl EditorState {
             release_claim_confirm_open: false,
             scroll_handle: ScrollHandle::new(),
             error_keys: None,
+            header: FormHeaderState::new(),
+            revision: 0,
+            validated_at: None,
             _subscriptions: Vec::new(),
         };
         state.ensure_inputs(specs, window, cx);
@@ -154,12 +167,18 @@ impl EditorState {
                 window,
                 |this: &mut V, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        this.kit_mut().revision += 1;
                         sync(this, cx);
                     }
                 },
             ));
             self.inputs.insert(key, input);
         }
+    }
+
+    /// Validate passed at the current entries.
+    pub fn validated(&self) -> bool {
+        self.validated_at == Some(self.revision)
     }
 
     pub fn text(&self, key: &str, cx: &App) -> String {
@@ -318,6 +337,7 @@ pub fn edit<V: KitView>(this: &mut V, cx: &mut Context<V>, change: impl FnOnce(&
         return;
     }
     change(this.draft_mut());
+    this.kit_mut().revision += 1;
     this.draft_mut().compute();
     let errors = QueueableForm::validate(this.draft());
     let kit = this.kit_mut();
@@ -352,6 +372,7 @@ pub fn edit_rows<V: KitView>(
     }
     sync(this, cx);
     change(this);
+    this.kit_mut().revision += 1;
     let specs = specs(this);
     this.kit_mut().ensure_inputs(specs, window, cx);
     reload_inputs(this, window, cx);
@@ -491,9 +512,8 @@ pub fn queue<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>)
         cx.notify();
         return;
     }
-    let filename = this.draft().submission_filename();
-    this.kit_mut().status_message =
-        Some(format!("Queued for background submission as {filename}."));
+    // D5C: the toast and the stepper are the only confirmation.
+    this.kit_mut().status_message = None;
     notify::<V>(
         notification::NotificationType::Success,
         format!("Form {} queued.", V::CODE),
@@ -502,6 +522,65 @@ pub fn queue<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>)
     );
     cx.emit(QueueableFormEvent::Saved);
     bir_core::background_cron::wake();
+    cx.notify();
+}
+
+/// The header's Validate: read the editors, run the form's checks and
+/// record that they ran at the current entries.
+pub fn validate<V: KitView>(this: &mut V, _window: &mut Window, cx: &mut Context<V>) {
+    sync(this, cx);
+    let kit = this.kit_mut();
+    kit.validated_at = Some(kit.revision);
+    kit.status_message = None;
+    kit.header.reset_dismissal();
+    cx.notify();
+}
+
+/// The header's "Revert to Draft" (D7A + D8A). A claimed Queued return
+/// keeps the release-claim confirmation; everything else goes through
+/// `Database::revert_queueable_for_amendment`.
+pub fn revert<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>) {
+    let status = this.draft().lifecycle().status.clone();
+    if !bir_core::forms::queueable::can_user_revert(&status) {
+        return;
+    }
+    if matches!(status, FilingStatus::Queued) && !this.draft().lifecycle().is_unclaimed() {
+        cancel(this, window, cx);
+        return;
+    }
+    match revert_for_amendment(&this.db(), this.draft()) {
+        Ok(reverted) => {
+            *this.draft_mut() = reverted.draft;
+            reload_inputs(this, window, cx);
+            let errors = QueueableForm::validate(this.draft());
+            let db = this.db();
+            let kit = this.kit_mut();
+            kit.validation_errors = errors;
+            kit.parse_errors.clear();
+            kit.validated_at = None;
+            kit.revision += 1;
+            kit.status_message = reverted
+                .snapshot_id
+                .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+            if reverted.snapshot_id.is_some() {
+                let draft = this.draft().clone();
+                this.kit_mut().header.load_sent_snapshot(&db, &draft);
+            }
+            notify::<V>(
+                notification::NotificationType::Success,
+                format!("Form {} reverted to Draft.", V::CODE),
+                window,
+                cx,
+            );
+            cx.emit(QueueableFormEvent::Saved);
+        }
+        Err(error) => notify::<V>(
+            notification::NotificationType::Error,
+            format!("Could not revert to Draft: {error}"),
+            window,
+            cx,
+        ),
+    }
     cx.notify();
 }
 
@@ -646,26 +725,31 @@ pub fn simulate_confirmation<V: KitView>(this: &mut V, window: &mut Window, cx: 
     cx.notify();
 }
 
-/// The Dev Mode button for a Submitted return; `None` otherwise and in
-/// release builds.
-fn simulate_confirmation_button<V: KitView>(this: &V, cx: &mut Context<V>) -> Option<Button> {
-    #[cfg(debug_assertions)]
-    {
-        matches!(this.draft().lifecycle().status, FilingStatus::Submitted).then(|| {
-            crate::dev_mode::simulate_confirmation_button(element_id(
-                V::SLUG,
-                "dev_simulate_confirmation",
-            ))
-            .on_click(
-                cx.listener(|this: &mut V, _, window, cx| simulate_confirmation(this, window, cx)),
-            )
-        })
+/// The kit's header callbacks.
+fn header_actions<V: KitView>() -> FormHeaderActions<V> {
+    FormHeaderActions {
+        state: |this: &mut V| &mut this.kit_mut().header,
+        state_ref: |this: &V| &this.kit().header,
+        blocking_errors: |this: &V| {
+            this.kit().parse_errors.len() + this.kit().validation_errors.len()
+        },
+        on_validate: validate::<V>,
+        on_submit: |this: &mut V, window, cx| this.mark_submitted(window, cx),
+        on_save: |this: &mut V, window, cx| this.save_draft(window, cx),
+        on_print: |this: &mut V, window, cx| this.preview_pdf(window, cx),
+        on_revert: revert::<V>,
+        on_simulate: simulate_action::<V>(),
     }
-    #[cfg(not(debug_assertions))]
-    {
-        let _ = (this, cx);
-        None
-    }
+}
+
+#[cfg(debug_assertions)]
+fn simulate_action<V: KitView>() -> Option<crate::views::form_header::Action<V>> {
+    Some(simulate_confirmation::<V>)
+}
+
+#[cfg(not(debug_assertions))]
+fn simulate_action<V: KitView>() -> Option<crate::views::form_header::Action<V>> {
+    None
 }
 
 /// Print preview from the frozen official HTML, when this build has it.
@@ -1015,8 +1099,6 @@ pub fn render_page<V: KitView>(
     let phone = layout == Layout::Phone;
     let slug = V::SLUG;
     let kit = this.kit();
-    let is_draft = this.draft().lifecycle().is_editable();
-    let is_queued = matches!(this.draft().lifecycle().status, FilingStatus::Queued);
     let pad = match layout {
         Layout::Phone => px(12.),
         Layout::Tablet => px(20.),
@@ -1035,12 +1117,36 @@ pub fn render_page<V: KitView>(
                 .into_any_element()
         })
         .collect();
-    let can_submit = is_draft && kit.validation_errors.is_empty() && kit.parse_errors.is_empty();
-    let simulate_button = simulate_confirmation_button(this, cx);
+    kit.header.ensure_sent_snapshot(&this.db(), this.draft());
+    let blocking = kit.parse_errors.len() + kit.validation_errors.len();
+    let props = FormHeaderProps {
+        slug,
+        status: this.draft().lifecycle().status.clone(),
+        editor_safe: true,
+        validated: kit.validated(),
+        blocking_errors: blocking,
+        first_error: kit
+            .parse_errors
+            .iter()
+            .chain(kit.validation_errors.iter())
+            .next()
+            .map(|(_, message)| message.replace('\n', " ")),
+        success_text: V::VALIDATION_SUCCESS.unwrap_or(DEFAULT_SUCCESS_MESSAGE),
+        message: kit.status_message.clone(),
+        separate_validate: separate_validate_button(&this.db()),
+    };
+    let actions = header_actions::<V>();
+    let header_buttons = render_header_buttons(this, &props, actions, phone, cx);
+    let status_box = render_status_box(this, &props, actions, cx);
+    // Phone: no pinned stepper, so the box sits under the titles instead.
+    let (status_box, phone_status_box) = if phone {
+        (None, status_box)
+    } else {
+        (status_box, None)
+    };
 
     let toolbar = div()
         .flex()
-        .flex_wrap()
         .items_center()
         .justify_between()
         .when(phone, |d| d.gap_1().py_2())
@@ -1054,66 +1160,7 @@ pub fn render_page<V: KitView>(
                 .when(phone, |b| b.small())
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard))),
         )
-        .child(
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .when(phone, |d| d.gap_1())
-                .when(!phone, |d| d.gap_2())
-                .child(
-                    // The only "Print preview" control on the page; the header
-                    // below shows titles only.
-                    Button::new(element_id(slug, "preview"))
-                        .label("Print preview")
-                        .outline()
-                        .when(phone, |b| b.small())
-                        .on_click(
-                            cx.listener(|this: &mut V, _, window, cx| this.preview_pdf(window, cx)),
-                        ),
-                )
-                .child(
-                    Button::new(element_id(slug, "save"))
-                        .label("Save draft")
-                        .outline()
-                        .when(phone, |b| b.small())
-                        .disabled(!is_draft)
-                        .on_click(
-                            cx.listener(|this: &mut V, _, window, cx| this.save_draft(window, cx)),
-                        ),
-                )
-                .children(simulate_button.map(|b| b.when(phone, |b| b.small())))
-                .when(is_queued, |row| {
-                    row.child(
-                        Button::new(element_id(slug, "cancel"))
-                            .label("Cancel queue")
-                            .outline()
-                            .when(phone, |b| b.small())
-                            .on_click(cx.listener(|this: &mut V, _, window, cx| {
-                                this.revert_to_draft(window, cx)
-                            })),
-                    )
-                })
-                .child(
-                    Button::new(element_id(slug, "submit"))
-                        .label("Queue for submission")
-                        .primary()
-                        .when(phone, |b| b.small())
-                        .disabled(!can_submit)
-                        .on_click(cx.listener(|this: &mut V, _, window, cx| {
-                            this.mark_submitted(window, cx)
-                        })),
-                )
-                .when(is_draft && !can_submit, |row| {
-                    let count = kit.parse_errors.len() + kit.validation_errors.len();
-                    row.child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().danger)
-                            .child(format!("Fix {count} item(s) under Needs review to queue.")),
-                    )
-                }),
-        );
+        .child(header_buttons);
 
     let mut body = div()
         .w_full()
@@ -1122,16 +1169,6 @@ pub fn render_page<V: KitView>(
         .flex()
         .flex_col()
         .gap_5()
-        .when_some(kit.status_message.clone(), |col, message| {
-            col.child(
-                div()
-                    .p_3()
-                    .rounded_md()
-                    .bg(cx.theme().muted)
-                    .text_sm()
-                    .child(message),
-            )
-        })
         .when(kit.release_claim_confirm_open, |col| {
             col.child(
                 div()
@@ -1160,12 +1197,6 @@ pub fn render_page<V: KitView>(
         .children(sections);
     if !issues.is_empty() {
         body = body.child(section("Needs review", issues, cx));
-    } else if let Some(success) = V::VALIDATION_SUCCESS.filter(|_| is_draft) {
-        body = body.child(section(
-            "Needs review",
-            vec![div().text_sm().child(success).into_any_element()],
-            cx,
-        ));
     }
 
     div()
@@ -1184,7 +1215,8 @@ pub fn render_page<V: KitView>(
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(this.render_header_titles(cx))
-                    .child(div().mt_4().child(this.render_status_pipeline(cx))),
+                    .child(div().mt_4().child(this.render_status_pipeline(cx)))
+                    .children(status_box.map(|b| div().mt_3().child(b))),
             )
         })
         .child(
@@ -1198,6 +1230,7 @@ pub fn render_page<V: KitView>(
                 // Phone: only the toolbar is sticky; the header scrolls away.
                 .when(phone, |d| {
                     d.child(div().pb_3().child(this.render_header_titles(cx)))
+                        .children(phone_status_box.map(|b| div().pb_3().child(b)))
                 })
                 .child(body),
         )

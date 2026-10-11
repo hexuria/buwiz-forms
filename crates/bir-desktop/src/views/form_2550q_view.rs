@@ -34,6 +34,12 @@ use crate::components::form_engine::FormViewTrait;
 use crate::components::form_validation::SemanticFieldTargets;
 use crate::views::event_form_kit::Layout;
 use crate::views::form_controls::{messages_for, with_field_error};
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
+};
+use bir_core::forms::queueable::can_user_revert;
 
 const YEAR_END_MONTH: &str = "year_end_month";
 const RAW_TAXABLE_YEAR: &str = "raw_taxable_year";
@@ -465,6 +471,8 @@ pub struct Form2550QV2View {
     /// The raw identity controls sit behind an "Advanced" toggle; they open
     /// by themselves when the draft already carries raw text.
     show_raw_identity: bool,
+    /// The shared header's menu, status-box and snapshot state.
+    header: FormHeaderState,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -882,6 +890,7 @@ impl Form2550QV2View {
             semantic_field_targets,
             semantic_focus_error,
             show_raw_identity,
+            header: FormHeaderState::new(),
             _subscriptions: subscriptions,
         };
         if view.editor_state_error.is_none() {
@@ -2059,24 +2068,6 @@ impl Form2550QV2View {
         self.error_for(&keys)
     }
 
-    /// Dev Mode "Simulate BIR confirmation" on a Submitted return. Debug
-    /// builds only; release builds render nothing.
-    fn render_simulate_confirmation_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        #[cfg(debug_assertions)]
-        {
-            matches!(self.draft.lifecycle.status, FilingStatus::Submitted).then(|| {
-                crate::dev_mode::simulate_confirmation_button("2550q_dev_simulate_confirmation")
-                    .on_click(cx.listener(|this, _, _, cx| this.simulate_bir_confirmation(cx)))
-                    .into_any_element()
-            })
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            let _ = cx;
-            None
-        }
-    }
-
     #[cfg(debug_assertions)]
     fn simulate_bir_confirmation(&mut self, cx: &mut Context<Self>) {
         use bir_core::forms::queueable::QueueableForm;
@@ -2248,19 +2239,8 @@ impl Form2550QV2View {
     }
 
     fn render_validation_diagnostic(&self, cx: &Context<Self>) -> AnyElement {
+        // "Validation successful." shows in the header's status box.
         let mut root = div().flex().flex_col().gap_4();
-        if self.validated_at_current_revision && self.validation_errors.is_empty() {
-            root = root.child(
-                div()
-                    .p_3()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(cx.theme().success)
-                    .bg(cx.theme().success.opacity(0.1))
-                    .font_weight(FontWeight::BOLD)
-                    .child("Validation successful."),
-            );
-        }
         if crate::dev_mode::form_diagnostics() {
             root = root.child(self.render_candidate_diagnostic_box(cx));
         }
@@ -2600,10 +2580,8 @@ impl FormViewTrait for Form2550QV2View {
                 return;
             }
         }
-        self.status_message = Some(format!(
-            "Queued for background submission as {}.",
-            QueueableForm::submission_filename(&self.draft)
-        ));
+        // D5C: the toast and the stepper are the only confirmation.
+        self.status_message = None;
         self.notify(
             window,
             cx,
@@ -2621,18 +2599,40 @@ impl FormViewTrait for Form2550QV2View {
         cx.notify();
     }
 
+    /// D7A + D8A: Queued reverts plainly; Submitted/Confirmed keeps a
+    /// snapshot of what BIR received and marks the return amended.
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.draft.revert_to_draft() {
-            Ok(()) => self.save_draft(window, cx),
-            Err(error) => {
-                self.status_message = Some(error.clone());
+        if !can_user_revert(&self.draft.lifecycle.status) {
+            return;
+        }
+        match revert_for_amendment(&self.db, &self.draft) {
+            Ok(reverted) => {
+                self.draft = reverted.draft;
+                self.validated_at_current_revision = false;
+                if reverted.marked_amended {
+                    // Keep the Amended radio's raw text in step with the draft.
+                    self.apply_choice(ChoiceAction::Amended(true), window, cx);
+                }
+                self.status_message = reverted
+                    .snapshot_id
+                    .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+                if reverted.snapshot_id.is_some() {
+                    self.header.load_sent_snapshot(&self.db, &self.draft);
+                }
                 self.notify(
                     window,
                     cx,
-                    gpui_component::notification::NotificationType::Error,
-                    error,
+                    gpui_component::notification::NotificationType::Success,
+                    "Form 2550Q reverted to Draft.",
                 );
+                cx.emit(Form2550QV2Event::Saved);
             }
+            Err(error) => self.notify(
+                window,
+                cx,
+                gpui_component::notification::NotificationType::Error,
+                format!("Could not revert to Draft: {error}"),
+            ),
         }
         cx.notify();
     }
@@ -2727,19 +2727,13 @@ impl Render for Form2550QV2View {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let editor_is_editable = self.editor_is_editable();
-        let queue_reason = match queue_blocked_reason(
-            editor_is_editable,
-            self.validation_errors.len(),
-            self.validated_at_current_revision,
-        ) {
-            Some(text) => div()
-                .text_xs()
-                .text_color(cx.theme().danger)
-                .child(text)
-                .into_any_element(),
-            None => div().into_any_element(),
-        };
+        self.header.ensure_sent_snapshot(&self.db, &self.draft);
+        let props = self.header_props();
+        let header_buttons =
+            render_header_buttons(self, &props, HEADER_ACTIONS, layout == Layout::Phone, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)
+            .map(|b| div().mt_3().child(b).into_any_element())
+            .unwrap_or_else(|| div().into_any_element());
         let mut basis_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [
             ("Calendar", Form2550QFilingBasis::Calendar),
@@ -2891,15 +2885,6 @@ impl Render for Form2550QV2View {
                     ))),
             );
         }
-        if let Some(message) = &self.status_message {
-            content = content.child(
-                div()
-                    .p_3()
-                    .rounded_md()
-                    .bg(cx.theme().muted.opacity(0.5))
-                    .child(message.clone()),
-            );
-        }
         content = content
             .child(self.render_validation_diagnostic(cx))
             .child(self.render_error_summary(cx))
@@ -3031,51 +3016,18 @@ impl Render for Form2550QV2View {
 
         rsx! {
             <div flex flex_col w_full h_full bg={cx.theme().background}>
-                <div flex items_center justify_between flex_wrap gap_2 px={pad} py_4 border_b_1 border_color={cx.theme().border}>
+                <div flex items_center justify_between gap_2 px={pad} py_4 border_b_1 border_color={cx.theme().border}>
                     {gpui_component::button::Button::new("2550q_back")
                         .label("← Back")
                         .on_click(cx.listener(|_, _, _, cx| {
                             cx.emit(Form2550QV2Event::BackToDashboard);
                         }))}
-                    <div flex items_center flex_wrap gap_3>
-                        {gpui_component::button::Button::new("2550q_validate")
-                            .label("Validate")
-                            .outline()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.run_validation_diagnostic(cx);
-                            }))}
-                        {gpui_component::button::Button::new("2550q_save")
-                            .label("Save Draft")
-                            .outline()
-                            .disabled(!editor_is_editable)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.save_draft(window, cx);
-                            }))}
-                        {gpui_component::button::Button::new("2550q_revert")
-                            .label("Revert to Draft")
-                            .outline()
-                            .disabled(!revert_button_enabled(&self.draft.lifecycle.status))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.revert_to_draft(window, cx);
-                            }))}
-                        {self.render_simulate_confirmation_button(cx).unwrap_or_else(|| div().into_any_element())}
-                        {queue_reason}
-                        {gpui_component::button::Button::new("2550q_queue")
-                            .label(QUEUE_BUTTON_LABEL)
-                            .primary()
-                            .disabled(!queue_button_enabled(
-                                editor_is_editable,
-                                !self.validation_errors.is_empty(),
-                                self.validated_at_current_revision,
-                            ))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.mark_submitted(window, cx);
-                            }))}
-                    </div>
+                    {header_buttons}
                 </div>
                 <div p={pad} border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
-                    {self.render_header_with_preview(cx)}
+                    {self.render_header_titles(cx)}
                     <div mt_6>{self.render_status_pipeline(cx)}</div>
+                    {status_box}
                 </div>
                 <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p={pad}>
                     {content}
@@ -3590,27 +3542,6 @@ fn model_error_keys(ui_key: &str) -> &'static [&'static str] {
     }
 }
 
-/// Why the Queue button is disabled, as one short line (`None` when it is
-/// enabled or the draft is simply not editable).
-fn queue_blocked_reason(
-    editor_is_editable: bool,
-    error_count: usize,
-    validated: bool,
-) -> Option<String> {
-    if !editor_is_editable {
-        return None;
-    }
-    if error_count > 0 {
-        return Some(format!(
-            "{error_count} item(s) need review before queueing."
-        ));
-    }
-    if !validated {
-        return Some("Click Validate first; queueing needs the form's checks to pass on the current entries.".to_string());
-    }
-    None
-}
-
 fn singleton_raw_key(ui_key: &str) -> &'static str {
     singleton_raw_key_if_known(ui_key)
         .unwrap_or_else(|| panic!("2550Q input {ui_key} has no reviewed raw-state binding"))
@@ -4118,26 +4049,52 @@ fn format_optional_money(value: Option<f64>) -> String {
     )
 }
 
-/// Toolbar label for the generic queue action.
-const QUEUE_BUTTON_LABEL: &str = "Queue for submission";
+impl Form2550QV2View {
+    /// What the shared header shows. Submit keeps the 2550Q rule: an
+    /// editable, safe draft with no blocking errors after Validate ran at
+    /// the current input revision.
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "2550q",
+            status: self.draft.lifecycle.status.clone(),
+            editor_safe: self.editor_state_error.is_none(),
+            validated: self.validated_at_current_revision,
+            blocking_errors: self.validation_errors.len(),
+            first_error: self
+                .validation_errors
+                .first()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
 
-/// The queue button is enabled only for an editable draft with no blocking
-/// validation errors after Validate ran at the current input revision,
-/// matching the 2551Q and 1601-C pages. The candidate rules diagnostic does
-/// not gate it.
-fn queue_button_enabled(
-    editor_is_editable: bool,
-    has_blocking_errors: bool,
-    validated_at_current_revision: bool,
-) -> bool {
-    editor_is_editable && !has_blocking_errors && validated_at_current_revision
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.run_validation_diagnostic(cx);
+    }
+
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.simulate_bir_confirmation(cx);
+    }
 }
 
-/// Revert pulls a Queued return back before the worker sends it. Once
-/// Submitted (or later) the filing may already be at BIR, so it stays disabled.
-fn revert_button_enabled(status: &FilingStatus) -> bool {
-    matches!(status, FilingStatus::Queued)
-}
+const HEADER_ACTIONS: FormHeaderActions<Form2550QV2View> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.validation_errors.len(),
+    on_validate: Form2550QV2View::header_validate,
+    on_submit: Form2550QV2View::mark_submitted,
+    on_save: Form2550QV2View::save_draft,
+    on_print: Form2550QV2View::preview_pdf,
+    on_revert: Form2550QV2View::revert_to_draft,
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form2550QV2View::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
 
 #[cfg(test)]
 mod tests {
@@ -4147,42 +4104,35 @@ mod tests {
         FILING_BASIS_FISCAL, Form2550QDiagnosticState, Form2550QFilingBasis,
         Form2550QLiveValidationFacade, Form2550QQuarter, Form2550QRawFieldKey, Form2550QRowFamily,
         Form2550QTaxpayerClassification, ITEM_18, ITEM_19_DESCRIPTION, ITEM_31A, ITEM_47B,
-        InputRevision, QUARTER_1, QUARTER_2, QUARTER_3, QUARTER_4, QUEUE_BUTTON_LABEL,
-        RAW_BRANCH_CODE, RAW_RDO_CODE, RAW_TAXABLE_YEAR, RAW_TAXPAYER_ADDRESS,
-        RAW_TAXPAYER_CONTACT_NUMBER, RAW_TAXPAYER_EMAIL_ADDRESS, RAW_TAXPAYER_NAME,
-        RAW_TAXPAYER_ZIP, RAW_TIN_1, RAW_TIN_2, RAW_TIN_3, RETURN_PERIOD_FROM, RawControlBinding,
-        RawValue, SHORT_PERIOD_NO, SHORT_PERIOD_YES, SIGNATORY, StableInstanceId, TAX_RELIEF_NO,
-        TAX_RELIEF_YES, YEAR_END_MONTH, advance_input_revision, candidate_radio_raw_is_selected,
+        InputRevision, QUARTER_1, QUARTER_2, QUARTER_3, QUARTER_4, RAW_BRANCH_CODE, RAW_RDO_CODE,
+        RAW_TAXABLE_YEAR, RAW_TAXPAYER_ADDRESS, RAW_TAXPAYER_CONTACT_NUMBER,
+        RAW_TAXPAYER_EMAIL_ADDRESS, RAW_TAXPAYER_NAME, RAW_TAXPAYER_ZIP, RAW_TIN_1, RAW_TIN_2,
+        RAW_TIN_3, RETURN_PERIOD_FROM, RawControlBinding, RawValue, SHORT_PERIOD_NO,
+        SHORT_PERIOD_YES, SIGNATORY, StableInstanceId, TAX_RELIEF_NO, TAX_RELIEF_YES,
+        YEAR_END_MONTH, advance_input_revision, candidate_radio_raw_is_selected,
         candidate_radio_ui_key, candidate_radio_values, diagnostic_state_from_setup,
-        queue_blocked_reason, queue_button_enabled, raw_text_override, repeated_member_is_parsed,
-        revert_button_enabled, should_capture_raw, singleton_is_parsed, singleton_raw_key,
-        stable_parse_path,
+        raw_text_override, repeated_member_is_parsed, should_capture_raw, singleton_is_parsed,
+        singleton_raw_key, stable_parse_path,
     };
 
     #[test]
-    fn toolbar_offers_enabled_queue_action_instead_of_external_filing() {
-        assert_eq!(QUEUE_BUTTON_LABEL, "Queue for submission");
+    fn header_submit_runs_the_queue_action_and_keeps_the_validate_gate() {
+        use crate::views::form_header::{header_visibility, submit_enabled};
+        use bir_core::forms::FilingStatus;
         let src = include_str!("form_2550q_view.rs");
         assert!(!src.contains(concat!("Manual / External", " Filing")));
-        assert!(src.contains(concat!("this.mark_", "submitted(window, cx)")));
-        assert!(queue_button_enabled(true, false, true));
-        assert!(!queue_button_enabled(true, true, true));
-        assert!(!queue_button_enabled(false, false, true));
-        assert!(!queue_button_enabled(true, false, false));
-        // The candidate diagnostic no longer gates the reason line either.
-        assert_eq!(queue_blocked_reason(true, 0, true), None);
-        assert!(queue_blocked_reason(true, 0, false).is_some());
-        assert!(queue_blocked_reason(true, 2, true).is_some());
-        assert_eq!(queue_blocked_reason(false, 0, false), None);
-        assert!(revert_button_enabled(
-            &bir_core::forms::FilingStatus::Queued
-        ));
-        assert!(!revert_button_enabled(
-            &bir_core::forms::FilingStatus::Submitted
-        ));
-        assert!(!revert_button_enabled(
-            &bir_core::forms::FilingStatus::Draft
-        ));
+        assert!(src.contains(concat!("on_submit: Form2550QV2View::mark_", "submitted")));
+        assert_eq!(src.matches(concat!(".evaluate", "(")).count(), 1);
+        // Separate Validate button: Submit needs Validate at the current
+        // revision and no blocking errors.
+        assert!(submit_enabled(true, true, 0));
+        assert!(!submit_enabled(true, false, 0));
+        assert!(!submit_enabled(true, true, 1));
+        // An unsafe editor hides Validate and Submit.
+        let locked = header_visibility(&FilingStatus::Draft, false);
+        assert!(!locked.validate && !locked.submit);
+        assert!(header_visibility(&FilingStatus::Submitted, true).revert);
+        assert!(!header_visibility(&FilingStatus::Paid, true).revert);
     }
 
     #[test]

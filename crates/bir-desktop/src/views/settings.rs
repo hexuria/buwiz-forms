@@ -30,6 +30,8 @@ pub struct SettingsView {
     show_totp_secret_text: bool,
     hide_tax_profiles: bool,
     enable_profile_pins: bool,
+    /// D2A "Separate Validate button" (default On).
+    separate_validate: bool,
     hotkey_recorder: Entity<HotkeyRecorder>,
     /// "7 days" etc.; the stored value is `log_retention_days`.
     log_retention: Entity<ComboboxState>,
@@ -94,6 +96,7 @@ impl SettingsView {
             state
         });
 
+        let separate_validate = crate::views::form_header::separate_validate_button(&db);
         let hotkey_recorder = cx.new(|cx| HotkeyRecorder::new(global_hotkey, window, cx));
         let retention_days = db
             .lock()
@@ -133,6 +136,7 @@ impl SettingsView {
             show_totp_secret_text: false,
             hide_tax_profiles,
             enable_profile_pins,
+            separate_validate,
             hotkey_recorder: hotkey_recorder.clone(),
             log_retention: log_retention.clone(),
             google_calendar_configured: calendar_connection.configured,
@@ -644,6 +648,25 @@ impl Render for SettingsView {
                                             cx.notify();
                                         }))}
                                 </div>
+                            </div>
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
+                            <div flex w_full justify_between items_center>
+                                <div flex flex_col gap_1>
+                                    <div font_weight={FontWeight::SEMIBOLD}>{"Separate Validate button"}</div>
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {"On: return pages show Validate next to Submit, and Submit waits for a passing Validate. Off: Submit validates first and only queues a return with no errors."}
+                                    </div>
+                                </div>
+                                {Switch::new("separate_validate_switch")
+                                    .checked(self.separate_validate)
+                                    .on_click(cx.listener(|this, checked, _window, cx| {
+                                        this.separate_validate = *checked;
+                                        crate::views::form_header::set_separate_validate_button(&this.db, *checked);
+                                        cx.notify();
+                                    }))}
                             </div>
                         </div>
                     })

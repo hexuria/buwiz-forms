@@ -50,6 +50,7 @@ pub mod form_2551q_view;
 pub mod form_2552_view;
 pub mod form_2553_view;
 pub mod form_controls;
+pub mod form_header;
 pub mod form_html_preview_launcher;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub mod frozen_html_preview;
