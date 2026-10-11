@@ -1020,12 +1020,13 @@ impl QueueableFormView for Form2200ANView {
         }
     }
 
-    fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2200ANDraft {
-        Form2200ANDraft::new_from_profile(profile, year)
+    fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form2200ANDraft {
+        Form2200ANDraft::new_from_profile(profile, year, period)
     }
 
-    /// One return per Item 1 date (`MMDD`). Reopen this year's latest saved
-    /// return, else start a new one.
+    /// One return per Item 1 date (`MMDD`). Reopen the latest saved return
+    /// dated in the tile's month (read-only once queued or filed), else start
+    /// a new one for that month. Never another month's return.
     fn load_draft(
         db: &Database,
         profile: &TaxpayerProfile,
@@ -1033,8 +1034,9 @@ impl QueueableFormView for Form2200ANView {
         period: u8,
     ) -> Form2200ANDraft {
         let tin = profile.tin.full();
-        (1..=12i64)
-            .flat_map(|month| (1..=31i64).map(move |day| month * 100 + day))
+        let month = i64::from(period.clamp(1, 12));
+        (1..=31i64)
+            .map(|day| month * 100 + day)
             .filter_map(|key| {
                 db.get_queueable_draft::<Form2200ANDraft>(&tin, year, key)
                     .ok()

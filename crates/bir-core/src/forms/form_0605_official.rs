@@ -661,8 +661,8 @@ impl Form0605Draft {
                 "Enter the email address BIR sends the filing confirmation to.",
             );
         }
-        if !(1..=12).contains(&self.month) {
-            err("month", "Open-ended persistence slot must be from 1 to 12");
+        if self.month == 0 {
+            err("month", "Open-ended persistence slot must be at least 1");
         }
 
         let mut expected = self.clone();

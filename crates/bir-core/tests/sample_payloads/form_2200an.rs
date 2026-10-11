@@ -6,7 +6,7 @@ use bir_core::forms::form_2200an::{
 
 fn sample_2200an() -> Form2200ANDraft {
     let mut draft =
-        Form2200ANDraft::new_from_profile(&dummy_profile("2200ANv2018", "Corporation"), 2025);
+        Form2200ANDraft::new_from_profile(&dummy_profile("2200ANv2018", "Corporation"), 2025, 6);
     draft.month = 6;
     draft.day = 30;
     draft.is_amended = true;
