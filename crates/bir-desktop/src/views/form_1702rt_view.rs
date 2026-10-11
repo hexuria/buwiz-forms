@@ -653,6 +653,8 @@ impl Form1702RTView {
         let disabled = disabled || !self.draft.lifecycle.is_editable();
         let body = div().child(Input::new(input).disabled(disabled));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -716,8 +718,8 @@ impl Form1702RTView {
     fn computed(&self, label: &str, value: WholePeso, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{value.format_bir()}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{value.format_bir()}</div>
             </div>
         }
         .into_any_element()
@@ -743,18 +745,29 @@ impl Form1702RTView {
         button.disabled(disabled)
     }
 
-    fn choice_row(title: &str, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(title: &str, buttons: Vec<Button>, layout: Layout) -> AnyElement {
+        let text = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(title.to_string());
+        if layout == Layout::Phone {
+            return div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(text)
+                .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+                .into_any_element();
+        }
         div()
             .flex()
             .flex_wrap()
             .items_center()
             .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(title.to_string()),
-            )
+            .child(text.flex_1())
             .children(buttons)
             .into_any_element()
     }
@@ -841,6 +854,7 @@ impl Form1702RTView {
                         }),
                     ),
                 ],
+                layout,
             ),
             div()
                 .flex()
@@ -865,6 +879,7 @@ impl Form1702RTView {
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
                     ),
                 ],
+                layout,
             ),
             Self::choice_row(
                 "Item 4 — Short period return?",
@@ -876,6 +891,7 @@ impl Form1702RTView {
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_short_period = false)),
                     ),
                 ],
+                layout,
             ),
         ];
         let mcit_note = if d.atc.printed_mcit_selected {
@@ -931,7 +947,7 @@ impl Form1702RTView {
         let children = vec![
             self.grid(layout, period),
             div().text_sm().child(mcit_note).into_any_element(),
-            Self::choice_row("Item 5 — Other ATC", other_atc),
+            Self::choice_row("Item 5 — Other ATC", other_atc, layout),
             self.grid(layout, background),
             Self::choice_row(
                 "Item 13 — Method of deductions",
@@ -959,6 +975,7 @@ impl Form1702RTView {
                         })
                     })),
                 ],
+                layout,
             ),
         ];
         self.section("Page 1 — Return period and background", children, cx)
@@ -1021,6 +1038,7 @@ impl Form1702RTView {
                         Form1702RTOverpaymentDisposition::CarryOver,
                     ),
                 ],
+                layout,
             ));
         }
         children.push(self.grid(
