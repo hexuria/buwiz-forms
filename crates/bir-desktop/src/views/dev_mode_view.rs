@@ -184,10 +184,11 @@ impl DevModeView {
             .await;
             let _ = this.update(cx, |this, cx| {
                 match result {
-                    Ok(saved) => {
+                    Ok(Some(saved)) => {
                         this.message = Some((true, saved.message()));
                         this.last_export = Some(saved);
                     }
+                    Ok(None) => {}
                     Err(error) => {
                         this.message = Some((false, error));
                         this.last_export = None;
