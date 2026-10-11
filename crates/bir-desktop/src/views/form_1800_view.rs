@@ -14,6 +14,8 @@ use bir_core::forms::form_1800::{
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
+use gpui_component::Disableable;
+use gpui_component::button::Button;
 
 use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
@@ -77,6 +79,10 @@ pub struct Form1800View {
     draft: Form1800Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// Schedule A / B rows on screen: never fewer than five or than the
+    /// draft holds ("Add" on the official page has no limit).
+    personal_rows: usize,
+    real_rows: usize,
 }
 
 impl EventEmitter<QueueableFormEvent> for Form1800View {}
@@ -115,14 +121,16 @@ impl Form1800View {
                         return donee.tin;
                     }
                 }
-                for row in 0..FORM_1800_SCHEDULE_ROWS {
-                    let a = d.personal_properties.get(row).cloned().unwrap_or_default();
+                for row in 0..d.personal_properties.len() {
+                    let a = d.personal_properties[row].clone();
                     if k == key("pp", row, "desc") {
                         return a.particulars;
                     }
                     if k == key("pp", row, "fmv") {
                         return money_text(a.fair_market_value);
                     }
+                }
+                for row in 0..d.real_properties.len() {
                     let b = d.real_properties.get(row).cloned().unwrap_or_default();
                     let texts = [
                         ("oct", b.title_number.clone()),
@@ -155,7 +163,11 @@ impl Form1800View {
         }
     }
 
-    fn input_specs(d: &Form1800Draft) -> Vec<InputSpec> {
+    fn specs(&self) -> Vec<InputSpec> {
+        Self::input_specs(&self.draft, self.personal_rows, self.real_rows)
+    }
+
+    fn input_specs(d: &Form1800Draft, personal_rows: usize, real_rows: usize) -> Vec<InputSpec> {
         let mut keys: Vec<(String, String)> = TEXT_INPUTS
             .iter()
             .map(|(k, _, p)| (k.to_string(), p.to_string()))
@@ -169,9 +181,11 @@ impl Form1800View {
             keys.push((key("donee", row, "name"), String::new()));
             keys.push((key("donee", row, "tin"), "digits".to_string()));
         }
-        for row in 0..FORM_1800_SCHEDULE_ROWS {
+        for row in 0..personal_rows {
             keys.push((key("pp", row, "desc"), String::new()));
             keys.push((key("pp", row, "fmv"), "0.00".to_string()));
+        }
+        for row in 0..real_rows {
             for (part, _) in REAL_FIELDS {
                 keys.push((key("rp", row, part), String::new()));
             }
@@ -319,11 +333,71 @@ impl Form1800View {
         )
     }
 
+    /// Row caption with "Remove"; removing never drops another row.
+    fn row_heading(&self, schedule: &'static str, row: usize, cx: &Context<Self>) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable();
+        let remove = Button::new((SharedString::from(format!("1800_{schedule}_remove")), row))
+            .disabled(disabled)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                kit::edit_rows(
+                    this,
+                    window,
+                    cx,
+                    |v| v.remove_row(schedule, row),
+                    Self::specs,
+                )
+            }));
+        let letter = if schedule == "a" { "A" } else { "B" };
+        kit::row_heading(&format!("Row {letter}{}", row + 1), remove)
+    }
+
+    fn add_row(&self, schedule: &'static str, cx: &Context<Self>) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable();
+        kit::add_row_button(SharedString::from(format!("1800_{schedule}_add")), disabled)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                kit::edit_rows(
+                    this,
+                    window,
+                    cx,
+                    |v| {
+                        if schedule == "a" {
+                            v.personal_rows += 1;
+                        } else {
+                            v.real_rows += 1;
+                        }
+                    },
+                    Self::specs,
+                )
+            }))
+            .into_any_element()
+    }
+
+    fn remove_row(&mut self, schedule: &str, row: usize) {
+        if schedule == "a" {
+            if row < self.draft.personal_properties.len() {
+                self.draft.personal_properties.remove(row);
+            }
+            self.personal_rows = self
+                .personal_rows
+                .saturating_sub(1)
+                .max(FORM_1800_SCHEDULE_ROWS);
+        } else {
+            if row < self.draft.real_properties.len() {
+                self.draft.real_properties.remove(row);
+            }
+            self.real_rows = self
+                .real_rows
+                .saturating_sub(1)
+                .max(FORM_1800_SCHEDULE_ROWS);
+        }
+    }
+
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let d = &self.draft;
         let mut children =
             vec![kit::label("Schedule A — Donated personal property").into_any_element()];
-        for row in 0..FORM_1800_SCHEDULE_ROWS {
+        for row in 0..self.personal_rows {
+            children.push(self.row_heading("a", row, cx));
             children.push(grid(
                 layout,
                 vec![
@@ -340,9 +414,11 @@ impl Form1800View {
                 ],
             ));
         }
+        children.push(self.add_row("a", cx));
         children.push(computed("Total (Item 25)", d.total_personal, cx));
         children.push(kit::label("Schedule B — Donated real property").into_any_element());
-        for row in 0..FORM_1800_SCHEDULE_ROWS {
+        for row in 0..self.real_rows {
+            children.push(self.row_heading("b", row, cx));
             let mut cells: Vec<AnyElement> = REAL_FIELDS
                 .iter()
                 .map(|(part, caption)| {
@@ -360,6 +436,7 @@ impl Form1800View {
             ));
             children.push(grid(layout, cells));
         }
+        children.push(self.add_row("b", cx));
         children.push(computed("Total (Item 26)", d.total_real, cx));
         section("Part V — Schedules", children, cx)
     }
@@ -534,12 +611,15 @@ impl KitView for Form1800View {
         d.donees = donees;
         let mut personal = Vec::new();
         let mut real = Vec::new();
-        for row in 0..FORM_1800_SCHEDULE_ROWS {
-            let label = format!("Schedule row {}", row + 1);
+        for row in 0..self.personal_rows {
+            let label = format!("Schedule A row {}", row + 1);
             personal.push(Form1800PersonalProperty {
                 particulars: r.text(&key("pp", row, "desc")),
                 fair_market_value: r.amount(&key("pp", row, "fmv"), &label).unwrap_or(0.0),
             });
+        }
+        for row in 0..self.real_rows {
+            let label = format!("Schedule B row {}", row + 1);
             real.push(Form1800RealProperty {
                 title_number: r.text(&key("rp", row, "oct")),
                 tax_declaration_number: r.text(&key("rp", row, "td")),
@@ -606,8 +686,21 @@ impl QueueableFormView for Form1800View {
         cx: &mut Context<Self>,
     ) -> Self {
         let errors = bir_core::forms::queueable::QueueableForm::validate(&draft);
-        let kit = EditorState::new(Self::input_specs(&draft), errors, window, cx);
-        Self { draft, db, kit }
+        let personal_rows = draft.personal_properties.len().max(FORM_1800_SCHEDULE_ROWS);
+        let real_rows = draft.real_properties.len().max(FORM_1800_SCHEDULE_ROWS);
+        let kit = EditorState::new(
+            Self::input_specs(&draft, personal_rows, real_rows),
+            errors,
+            window,
+            cx,
+        );
+        Self {
+            draft,
+            db,
+            kit,
+            personal_rows,
+            real_rows,
+        }
     }
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1800Draft {
@@ -665,7 +758,41 @@ impl Render for Form1800View {
 
 #[cfg(test)]
 mod tests {
-    use super::{AMOUNTS, Form1800View, TEXT_INPUTS};
+    use super::{AMOUNTS, Form1800PersonalProperty, Form1800View, TEXT_INPUTS, key};
+    use bir_core::forms::form_1800::Form1800Draft;
+
+    /// Every stored row gets an editor holding its value, so read-back keeps
+    /// rows past the first five.
+    #[test]
+    fn every_stored_row_has_an_editor() {
+        let profile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Sample Taxpayer",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "789", "branch": "00000"},
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09170000000",
+            "email": "sample@example.com",
+            "default_form_type": "1800v2018",
+            "taxpayer_type": "Individual",
+            "withholds_compensation": false,
+            "has_employees": false
+        }))
+        .expect("profile");
+        let mut draft = Form1800Draft::new_from_profile(&profile, 2025, 1);
+        draft.personal_properties = (0..9)
+            .map(|k| Form1800PersonalProperty {
+                particulars: format!("Item {k}"),
+                fair_market_value: 0.0,
+            })
+            .collect();
+        let specs = Form1800View::input_specs(&draft, 9, 5);
+        let last = key("pp", 8, "desc");
+        let spec = specs.iter().find(|(k, _, _)| *k == last).expect("row 9");
+        assert_eq!(spec.2, "Item 8");
+    }
 
     #[test]
     fn every_input_has_a_label() {

@@ -8,11 +8,13 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
 use bir_core::forms::form_1801::{
-    Form1801Business, Form1801Draft, Form1801Frequency, Form1801Particular, Form1801RealProperty,
-    Form1801Shares, Form1801Split,
+    FORM_1801_SCHEDULE_ROWS, Form1801Business, Form1801Draft, Form1801Frequency,
+    Form1801Particular, Form1801RealProperty, Form1801Shares, Form1801Split,
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
+use gpui_component::Disableable;
+use gpui_component::button::Button;
 
 use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
@@ -105,9 +107,17 @@ const SHARES: [(&str, &str); 5] = [
     ("per", "FMV / book value per share"),
 ];
 
-/// Rows offered per Part V schedule (the page opens with two; "Add row"
-/// appends more).
-const SCHEDULE_UI_ROWS: usize = 6;
+/// Part V tables in page order. Each opens with two rows
+/// ([`FORM_1801_SCHEDULE_ROWS`]); "Add row" (`addRow_*`) appends more without
+/// a limit.
+const SCHEDULES: [&str; 6] = ["s1", "s1a", "s2", "s2a", "s3", "s4"];
+
+fn schedule_index(schedule: &str) -> usize {
+    SCHEDULES
+        .iter()
+        .position(|s| *s == schedule)
+        .expect("Part V schedule")
+}
 
 fn k(schedule: &str, row: usize, part: &str) -> String {
     format!("{schedule}_{row}_{part}")
@@ -124,6 +134,9 @@ pub struct Form1801View {
     draft: Form1801Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// Rows on screen per Part V table ([`SCHEDULES`] order): never fewer
+    /// than two or than the draft holds.
+    rows: [usize; 6],
 }
 
 impl EventEmitter<QueueableFormEvent> for Form1801View {}
@@ -142,10 +155,27 @@ impl Form1801View {
         }
     }
 
-    fn row_texts(d: &Form1801Draft) -> Vec<(String, String)> {
+    /// Rows each table holds in the draft.
+    fn stored_rows(d: &Form1801Draft) -> [usize; 6] {
+        [
+            d.real_properties.len(),
+            d.family_homes.len(),
+            d.shares.len(),
+            d.other_personal.len(),
+            d.taxable_transfers.len(),
+            d.business_interests.len(),
+        ]
+    }
+
+    /// Rows to show for a draft: what it holds, at least the page's two.
+    fn shown_rows(d: &Form1801Draft) -> [usize; 6] {
+        Self::stored_rows(d).map(|n| n.max(FORM_1801_SCHEDULE_ROWS))
+    }
+
+    fn row_texts(d: &Form1801Draft, counts: [usize; 6]) -> Vec<(String, String)> {
         let mut out = Vec::new();
-        for row in 0..SCHEDULE_UI_ROWS {
-            for (schedule, rows) in [("s1", &d.real_properties), ("s1a", &d.family_homes)] {
+        for (schedule, rows) in [("s1", &d.real_properties), ("s1a", &d.family_homes)] {
+            for row in 0..counts[schedule_index(schedule)] {
                 let r = rows.get(row).cloned().unwrap_or_default();
                 for (part, value) in [
                     ("oct", r.title_number),
@@ -162,6 +192,8 @@ impl Form1801View {
                     out.push((k(schedule, row, part), value));
                 }
             }
+        }
+        for row in 0..counts[2] {
             let s = d.shares.get(row).cloned().unwrap_or_default();
             for (part, value) in [
                 ("corp", s.corporation),
@@ -174,12 +206,16 @@ impl Form1801View {
             ] {
                 out.push((k("s2", row, part), value));
             }
-            for (schedule, rows) in [("s2a", &d.other_personal), ("s3", &d.taxable_transfers)] {
+        }
+        for (schedule, rows) in [("s2a", &d.other_personal), ("s3", &d.taxable_transfers)] {
+            for row in 0..counts[schedule_index(schedule)] {
                 let p = rows.get(row).cloned().unwrap_or_default();
                 out.push((k(schedule, row, "desc"), p.particulars));
                 out.push((k(schedule, row, "exc"), money_text(p.value.exclusive)));
                 out.push((k(schedule, row, "conj"), money_text(p.value.conjugal)));
             }
+        }
+        for row in 0..counts[5] {
             let b = d.business_interests.get(row).cloned().unwrap_or_default();
             for (part, value) in [
                 ("name", b.name),
@@ -227,7 +263,7 @@ impl Form1801View {
             "surcharge" => money_text(d.surcharge),
             "interest" => money_text(d.interest),
             "compromise" => money_text(d.compromise),
-            _ => Self::row_texts(d)
+            _ => Self::row_texts(d, Self::stored_rows(d))
                 .into_iter()
                 .find(|(key2, _)| key2 == key)
                 .map(|(_, v)| v)
@@ -235,7 +271,11 @@ impl Form1801View {
         }
     }
 
-    fn input_specs(d: &Form1801Draft) -> Vec<InputSpec> {
+    fn specs(&self) -> Vec<InputSpec> {
+        Self::input_specs(&self.draft, self.rows)
+    }
+
+    fn input_specs(d: &Form1801Draft, rows: [usize; 6]) -> Vec<InputSpec> {
         let mut specs: Vec<InputSpec> = TEXT_INPUTS
             .iter()
             .map(|(key, _, p)| (key.to_string(), p.to_string(), Self::text_value(d, key)))
@@ -243,7 +283,7 @@ impl Form1801View {
         for (key, _) in AMOUNTS {
             specs.push((key.to_string(), "0.00".into(), Self::text_value(d, key)));
         }
-        for (key, value) in Self::row_texts(d) {
+        for (key, value) in Self::row_texts(d, rows) {
             specs.push((key, String::new(), value));
         }
         specs
@@ -428,6 +468,59 @@ impl Form1801View {
         )
     }
 
+    /// Row caption with "Remove"; removing never drops another row.
+    fn row_heading(&self, schedule: &'static str, row: usize, cx: &Context<Self>) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable();
+        let remove = Button::new((SharedString::from(format!("1801_{schedule}_remove")), row))
+            .disabled(disabled)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                kit::edit_rows(
+                    this,
+                    window,
+                    cx,
+                    |v| v.remove_row(schedule, row),
+                    Self::specs,
+                )
+            }));
+        kit::row_heading(&format!("Row {}", row + 1), remove)
+    }
+
+    fn add_row(&self, schedule: &'static str, cx: &Context<Self>) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable();
+        kit::add_row_button(SharedString::from(format!("1801_{schedule}_add")), disabled)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                kit::edit_rows(
+                    this,
+                    window,
+                    cx,
+                    |v| v.rows[schedule_index(schedule)] += 1,
+                    Self::specs,
+                )
+            }))
+            .into_any_element()
+    }
+
+    fn remove_row(&mut self, schedule: &str, row: usize) {
+        fn take<T>(list: &mut Vec<T>, row: usize) {
+            if row < list.len() {
+                list.remove(row);
+            }
+        }
+        let d = &mut self.draft;
+        match schedule {
+            "s1" => take(&mut d.real_properties, row),
+            "s1a" => take(&mut d.family_homes, row),
+            "s2" => take(&mut d.shares, row),
+            "s2a" => take(&mut d.other_personal, row),
+            "s3" => take(&mut d.taxable_transfers, row),
+            _ => take(&mut d.business_interests, row),
+        }
+        let index = schedule_index(schedule);
+        self.rows[index] = self.rows[index]
+            .saturating_sub(1)
+            .max(FORM_1801_SCHEDULE_ROWS);
+    }
+
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let d = &self.draft;
         let mut children = Vec::new();
@@ -449,7 +542,8 @@ impl Form1801View {
             ("s1a", "Schedule 1A — Family home", "sched1A"),
         ] {
             children.push(kit::label(title).into_any_element());
-            for row in 0..SCHEDULE_UI_ROWS {
+            for row in 0..self.rows[schedule_index(schedule)] {
+                children.push(self.row_heading(schedule, row, cx));
                 let mut cells: Vec<AnyElement> = REAL
                     .iter()
                     .filter(|(part, _)| schedule == "s1" || *part != "lot")
@@ -473,10 +567,12 @@ impl Form1801View {
                 ));
                 children.push(grid(layout, cells));
             }
+            children.push(self.add_row(schedule, cx));
             children.push(totals(total_name, "Total exclusive / conjugal"));
         }
         children.push(kit::label("Schedule 2 — Shares of stock").into_any_element());
-        for row in 0..SCHEDULE_UI_ROWS {
+        for row in 0..self.rows[2] {
+            children.push(self.row_heading("s2", row, cx));
             let mut cells: Vec<AnyElement> = SHARES
                 .iter()
                 .map(|(part, caption)| {
@@ -499,13 +595,15 @@ impl Form1801View {
             ));
             children.push(grid(layout, cells));
         }
+        children.push(self.add_row("s2", cx));
         children.push(totals("sched2", "Total exclusive / conjugal"));
         for (schedule, title, total_name) in [
             ("s2a", "Schedule 2A — Other personal properties", "sched2A"),
             ("s3", "Schedule 3 — Taxable transfers", "sched3"),
         ] {
             children.push(kit::label(title).into_any_element());
-            for row in 0..SCHEDULE_UI_ROWS {
+            for row in 0..self.rows[schedule_index(schedule)] {
+                children.push(self.row_heading(schedule, row, cx));
                 children.push(grid(
                     layout,
                     vec![
@@ -527,10 +625,12 @@ impl Form1801View {
                     ],
                 ));
             }
+            children.push(self.add_row(schedule, cx));
             children.push(totals(total_name, "Total exclusive / conjugal"));
         }
         children.push(kit::label("Schedule 4 — Business interest").into_any_element());
-        for row in 0..SCHEDULE_UI_ROWS {
+        for row in 0..self.rows[5] {
+            children.push(self.row_heading("s4", row, cx));
             let cells = [
                 ("name", "Trade / business name"),
                 ("addr", "Registered address"),
@@ -549,6 +649,7 @@ impl Form1801View {
             .collect();
             children.push(grid(layout, cells));
         }
+        children.push(self.add_row("s4", cx));
         children.push(totals("sched4", "Total exclusive / conjugal"));
         children.push(kit::label("Schedule 5 — Ordinary deductions").into_any_element());
         let mut ordinary = Vec::new();
@@ -730,8 +831,9 @@ impl KitView for Form1801View {
         let mut other = Vec::new();
         let mut transfers = Vec::new();
         let mut business = Vec::new();
-        for row in 0..SCHEDULE_UI_ROWS {
-            for (schedule, list) in [("s1", &mut real), ("s1a", &mut family)] {
+        let counts = self.rows;
+        for (schedule, list) in [("s1", &mut real), ("s1a", &mut family)] {
+            for row in 0..counts[schedule_index(schedule)] {
                 list.push(Form1801RealProperty {
                     title_number: r.text(&k(schedule, row, "oct")),
                     tax_declaration_number: r.text(&k(schedule, row, "td")),
@@ -744,6 +846,8 @@ impl KitView for Form1801View {
                     value: split(schedule, row, &mut r),
                 });
             }
+        }
+        for row in 0..counts[2] {
             shares.push(Form1801Shares {
                 corporation: r.text(&k("s2", row, "corp")),
                 listing: r.trimmed(&k("s2", row, "listing")),
@@ -752,12 +856,16 @@ impl KitView for Form1801View {
                 value_per_share: r.text(&k("s2", row, "per")),
                 value: split("s2", row, &mut r),
             });
-            for (schedule, list) in [("s2a", &mut other), ("s3", &mut transfers)] {
+        }
+        for (schedule, list) in [("s2a", &mut other), ("s3", &mut transfers)] {
+            for row in 0..counts[schedule_index(schedule)] {
                 list.push(Form1801Particular {
                     particulars: r.text(&k(schedule, row, "desc")),
                     value: split(schedule, row, &mut r),
                 });
             }
+        }
+        for row in 0..counts[5] {
             business.push(Form1801Business {
                 name: r.text(&k("s4", row, "name")),
                 address: r.text(&k("s4", row, "addr")),
@@ -847,8 +955,14 @@ impl QueueableFormView for Form1801View {
         cx: &mut Context<Self>,
     ) -> Self {
         let errors = bir_core::forms::queueable::QueueableForm::validate(&draft);
-        let kit = EditorState::new(Self::input_specs(&draft), errors, window, cx);
-        Self { draft, db, kit }
+        let rows = Self::shown_rows(&draft);
+        let kit = EditorState::new(Self::input_specs(&draft, rows), errors, window, cx);
+        Self {
+            draft,
+            db,
+            kit,
+            rows,
+        }
     }
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1801Draft {
@@ -911,6 +1025,45 @@ impl Render for Form1801View {
 #[cfg(test)]
 mod tests {
     use super::{AMOUNTS, Form1801View, TEXT_INPUTS};
+    use bir_core::forms::form_1801::{Form1801Draft, Form1801Particular};
+
+    /// Every stored row gets an editor holding its value, so read-back keeps
+    /// rows past the old six-row page.
+    #[test]
+    fn every_stored_row_has_an_editor() {
+        let profile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Sample Taxpayer",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "789", "branch": "00000"},
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09170000000",
+            "email": "sample@example.com",
+            "default_form_type": "1801v2018",
+            "taxpayer_type": "Individual",
+            "withholds_compensation": false,
+            "has_employees": false
+        }))
+        .expect("profile");
+        let mut draft = Form1801Draft::new_from_profile(&profile, 2025, 1);
+        draft.taxable_transfers = (0..25)
+            .map(|k| Form1801Particular {
+                particulars: format!("Transfer {k}"),
+                ..Default::default()
+            })
+            .collect();
+        let rows = super::Form1801View::shown_rows(&draft);
+        assert_eq!(rows, [2, 2, 2, 2, 25, 2]);
+        let specs = super::Form1801View::input_specs(&draft, rows);
+        let last = super::k("s3", 24, "desc");
+        let spec = specs
+            .iter()
+            .find(|(key, _, _)| *key == last)
+            .expect("row 25");
+        assert_eq!(spec.2, "Transfer 24");
+    }
 
     #[test]
     fn every_input_has_a_label() {

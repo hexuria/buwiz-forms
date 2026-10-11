@@ -61,3 +61,51 @@ fn form_1800_sample_payload_is_current() {
         "d0af2bdd25f0b116bafe609bcbbc39ecf8b40fd07d9ee49f8f58c9b88abc06b3",
     );
 }
+
+/// More than five rows in Schedules A and B: `addScheduleA`,
+/// `addScheduleB1` and `addScheduleB2` have no row limit, so rows 6 onwards
+/// follow row 5 of their table.
+fn sample_1800_many_rows() -> Form1800Draft {
+    let mut draft = sample_1800();
+    draft.donation_day = 11;
+    for k in 3..=8u32 {
+        draft.personal_properties.push(Form1800PersonalProperty {
+            particulars: format!("Item {k} jewelry"),
+            fair_market_value: f64::from(k) * 10_000.125,
+        });
+    }
+    for k in 2..=7u32 {
+        draft.real_properties.push(Form1800RealProperty {
+            title_number: format!("T-{k}{k}{k}"),
+            tax_declaration_number: format!("TD-00{k}"),
+            location: format!("Lot {k}, Sample Subd., Pasig City"),
+            lot_or_improvement: "Improvement".into(),
+            classification: "CR".into(),
+            area: format!("{}", k * 10),
+            fmv_per_tax_declaration: format!("{}", k * 100_000),
+            fmv_per_zonal_value: format!("{}", k * 120_000),
+            fair_market_value: f64::from(k) * 120_000.0,
+        });
+    }
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1800_sample_with_many_rows_is_current() {
+    let draft = sample_1800_many_rows();
+    assert_eq!(
+        (draft.personal_properties.len(), draft.real_properties.len()),
+        (8, 7)
+    );
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1800 must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1800-03112025",
+        &layout,
+        &payload,
+        "aa28d62fa9873c7a6522e44e7717bd76ff5141878f4347b5469d43646fdd16d4",
+    );
+}
