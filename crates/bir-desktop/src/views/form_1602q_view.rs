@@ -359,9 +359,7 @@ impl Form1602QView {
             return;
         }
         self.draft.set_availing_tax_relief(availing);
-        if availing && self.draft.tax_relief == Form1602QTaxRelief::Unspecified {
-            self.draft.tax_relief = Form1602QTaxRelief::SpecialRate;
-        }
+        // Item 13A starts unselected; validation requires an explicit choice.
         self.reload_inputs(window, cx);
         self.sync_from_inputs(cx);
     }
