@@ -292,8 +292,15 @@ impl Form2553View {
     }
 
     fn clear_atc(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
-        self.draft.clear_atc(row);
-        // Rows after the cleared one keep their place; reload their editors.
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        // Later rows shift up so no empty card is left in the middle.
+        if row < self.draft.schedule.len() {
+            self.draft.schedule.remove(row);
+        }
+        self.draft.clear_atc(FORM_2553_ATC_ROWS);
+        // Rows after the removed one moved up; reload their editors.
         for index in 0..FORM_2553_ATC_ROWS {
             for key in [amount_key(index), rate_key(index)] {
                 if let Some(input) = self.inputs.get(&key) {
@@ -303,6 +310,29 @@ impl Form2553View {
             }
         }
         self.sync_from_inputs(cx);
+    }
+
+    /// On blur, write the official currency format back into a money box,
+    /// like the official page's `formatCurrency`. A blank or unparsable box is
+    /// left as typed.
+    fn reformat_money(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let text = self.input_text(key, cx);
+        let Some(value) = parse_amount(&text) else {
+            return;
+        };
+        if text.trim().is_empty() {
+            return;
+        }
+        let formatted = official_amount(value);
+        if formatted == text {
+            return;
+        }
+        if let Some(input) = self.inputs.get(key) {
+            input.update(cx, |state, cx| state.set_value(formatted, window, cx));
+        }
     }
 
     fn notify(
@@ -633,7 +663,15 @@ impl Form2553View {
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
                     ),
                     Self::choice("2553_amended_no", "No", !amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(cx, |d| d.is_amended = false);
+                            // recompute() zeroes 20A; clear the greyed box too.
+                            if let Some(input) = this.inputs.get("prev") {
+                                input.update(cx, |state, cx| {
+                                    state.set_value(String::new(), window, cx)
+                                });
+                            }
+                        }),
                     ),
                 ],
             ),
@@ -860,6 +898,7 @@ impl Form2553View {
     fn render_schedule(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let mut children: Vec<AnyElement> = (0..self.draft.schedule.len().min(FORM_2553_ATC_ROWS))
+            .filter(|row| !self.draft.schedule[*row].is_empty())
             .map(|row| self.render_atc_row(row, layout, cx))
             .collect();
         let next = self
@@ -876,12 +915,14 @@ impl Form2553View {
                     .schedule
                     .iter()
                     .any(|r| r.atc_code == option.code && r.description == option.description);
+                if taken {
+                    continue;
+                }
                 picks = picks.child(
                     Button::new(("2553_add_atc", index))
                         .label(format!("{} — {}", option.code, option.description))
                         .outline()
                         .small()
-                        .disabled(taken)
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.pick_atc(next, index, window, cx)
                         })),
@@ -1033,13 +1074,15 @@ impl QueueableFormView for Form2553View {
         for (key, placeholder, value) in keys {
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
+            let money_key = key.starts_with("amt") || MONEY_INPUTS.iter().any(|(k, _)| *k == key);
+            let blur_key = key.clone();
             subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
+                move |this: &mut Self, _, event: &InputEvent, window, cx| match event {
+                    InputEvent::Change => this.sync_from_inputs(cx),
+                    InputEvent::Blur if money_key => this.reformat_money(&blur_key, window, cx),
+                    _ => {}
                 },
             ));
             inputs.insert(key, input);
@@ -1057,7 +1100,17 @@ impl QueueableFormView for Form2553View {
                 // Fiscal years cannot end in December (`dateyear`); a refused
                 // pick re-renders the draft's month back into the box.
                 let fiscal = this.draft.tax_period_basis == TaxPeriodBasis::Fiscal;
-                if !fiscal || month == 12 {
+                if !fiscal {
+                    cx.notify();
+                    return;
+                }
+                if month == 12 {
+                    // Show the official input-019 alert that core returns.
+                    let mut probe = this.draft.clone();
+                    probe.year_end_month = 12;
+                    this.status_message = probe
+                        .set_tax_period_basis(TaxPeriodBasis::Fiscal)
+                        .map(str::to_string);
                     cx.notify();
                     return;
                 }
@@ -1085,13 +1138,10 @@ impl QueueableFormView for Form2553View {
         }
     }
 
-    fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2553Draft {
-        let today = chrono::Local::now().date_naive();
-        let quarter = if i32::from(year) == chrono::Datelike::year(&today) {
-            ((chrono::Datelike::month(&today) - 1) / 3 + 1) as u8
-        } else {
-            4
-        };
+    fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form2553Draft {
+        // The library tile names the quarter; the period lock stays. Anything
+        // else leaves Item 3 blank so validation asks for it.
+        let quarter = if (1..=4).contains(&period) { period } else { 0 };
         Form2553Draft::new_from_profile(profile, year, quarter)
     }
 
@@ -1352,13 +1402,14 @@ impl Render for Form2553View {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
             })
             .collect();
 
+        let issue_count = issues.len();
+        let blocked = is_draft && issue_count > 0;
         let toolbar =
             div()
                 .flex()
@@ -1379,6 +1430,11 @@ impl Render for Form2553View {
                         .flex_wrap()
                         .items_center()
                         .gap_2()
+                        .when(blocked, |row| {
+                            row.child(div().text_sm().text_color(cx.theme().danger).child(format!(
+                                "Queue is off: {issue_count} item(s) under Needs review."
+                            )))
+                        })
                         .child(
                             Button::new("2553_preview")
                                 .label("Print preview")

@@ -162,6 +162,8 @@ pub struct Form2552View {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// (table, row) of a Remove waiting for the user's confirmation.
+    pending_remove: Option<(&'static str, usize)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -415,6 +417,40 @@ impl Form2552View {
         cx.notify();
     }
 
+    /// True when any editor in the row has something typed in it.
+    fn row_has_content(&self, table: &str, row: usize, cx: &App) -> bool {
+        let prefix = format!("{table}{row}_");
+        self.inputs
+            .iter()
+            .any(|(key, input)| key.starts_with(&prefix) && !input.read(cx).value().is_empty())
+    }
+
+    fn remove_row(
+        &mut self,
+        table: &'static str,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.edit(window, cx, |d| match table {
+            "exempt" => {
+                if row < d.exempt_transactions.len() {
+                    d.exempt_transactions.remove(row);
+                }
+            }
+            "share" => {
+                if row < d.schedule.len() {
+                    d.schedule.remove(row);
+                }
+            }
+            _ => {
+                if row < d.non_taxable_transactions.len() {
+                    d.non_taxable_transactions.remove(row);
+                }
+            }
+        });
+    }
+
     /// A choice or row change; editors are reloaded from the result.
     fn edit(
         &mut self,
@@ -426,6 +462,7 @@ impl Form2552View {
             return;
         }
         self.sync_from_inputs(cx);
+        self.pending_remove = None;
         change(&mut self.draft);
         self.draft.recompute();
         let mut inputs = std::mem::take(&mut self.inputs);
@@ -893,19 +930,45 @@ impl Form2552View {
                     .small()
                     .disabled(!editable)
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.edit(window, cx, |d| match table {
-                            "exempt" => {
-                                d.exempt_transactions.remove(row);
-                            }
-                            "share" => {
-                                d.schedule.remove(row);
-                            }
-                            _ => {
-                                d.non_taxable_transactions.remove(row);
-                            }
-                        })
+                        if this.row_has_content(table, row, cx) {
+                            this.pending_remove = Some((table, row));
+                            cx.notify();
+                        } else {
+                            this.remove_row(table, row, window, cx);
+                        }
                     })),
             );
+        let confirm = (self.pending_remove == Some((table, row)) && editable).then(|| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .text_sm()
+                        .child(format!("Remove row {} and what is typed in it?", row + 1)),
+                )
+                .child(
+                    Button::new((SharedString::from(format!("2552_remove_yes_{table}")), row))
+                        .label("Remove row")
+                        .danger()
+                        .small()
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.remove_row(table, row, window, cx)
+                        })),
+                )
+                .child(
+                    Button::new((SharedString::from(format!("2552_remove_no_{table}")), row))
+                        .label("Keep row")
+                        .outline()
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.pending_remove = None;
+                            cx.notify();
+                        })),
+                )
+        });
         let fields: Vec<AnyElement> = columns
             .iter()
             .map(|(column, label)| {
@@ -927,6 +990,7 @@ impl Form2552View {
             .border_color(cx.theme().border)
             .rounded_md()
             .child(heading)
+            .children(confirm)
             .children(self.errors_for(&[error_key.as_str()]).map(field_error))
             .child(self.grid(layout, fields))
             .when_some(footer, |d, footer| d.child(footer))
@@ -1211,6 +1275,7 @@ impl QueueableFormView for Form2552View {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            pending_remove: None,
             _subscriptions: subscriptions,
         }
     }
@@ -1476,10 +1541,12 @@ impl Render for Form2552View {
             Layout::Desktop => px(32.),
         };
         let error_count = self.parse_errors.len() + self.validation_errors.len();
+        // Validation messages come in the official rule order; number-format
+        // messages follow them.
         let issues: Vec<AnyElement> = self
-            .parse_errors
+            .validation_errors
             .iter()
-            .chain(self.validation_errors.iter())
+            .chain(self.parse_errors.iter())
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()

@@ -52,6 +52,9 @@ impl Layout {
     }
 }
 
+/// Where Items 4 and 5 (TIN, RDO) are fixed: they have no input on this page.
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
+
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
@@ -945,10 +948,19 @@ impl Form2000View {
                     .child(self.draft.rdo_code.clone()),
             )
             .into_any_element();
-        let mut fields = vec![
-            self.with_errors(tin, &["tin"]),
-            self.with_errors(rdo, &["rdo_code"]),
-        ];
+        let tin_rdo = self.grid(
+            layout,
+            vec![
+                self.with_errors(tin, &["tin"]),
+                self.with_errors(rdo, &["rdo_code"]),
+            ],
+        );
+        let profile_note = div()
+            .text_sm()
+            .text_color(cx.theme().muted_foreground)
+            .child(PROFILE_NOTE)
+            .into_any_element();
+        let mut fields = Vec::new();
         for key in ["name", "address", "zip", "phone", "email"] {
             let label = TEXT_INPUTS
                 .iter()
@@ -973,6 +985,8 @@ impl Form2000View {
             );
         }
         let mut children = vec![
+            tin_rdo,
+            profile_note,
             self.grid(layout, fields),
             self.with_errors(party_row.into_any_element(), &["other_party"]),
         ];
@@ -1371,6 +1385,27 @@ impl QueueableFormView for Form2000View {
             chrono::Datelike::month(&chrono::Local::now().date_naive()) as u8
         };
         Form2000Draft::new_from_profile(profile, year, month)
+    }
+
+    /// The saved draft, with the read-only TIN and RDO re-read from the
+    /// profile while it is still editable, so a value fixed in Profile
+    /// Settings reaches it.
+    fn load_draft(
+        db: &Database,
+        profile: &TaxpayerProfile,
+        year: u16,
+        period: u8,
+    ) -> Form2000Draft {
+        let mut draft = db
+            .get_queueable_draft::<Form2000Draft>(&profile.tin.full(), year, i64::from(period))
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Self::new_draft(profile, year, period));
+        if draft.lifecycle.is_editable() {
+            draft.tin = profile.tin.full();
+            draft.rdo_code = profile.rdo_code.clone();
+        }
+        draft
     }
 }
 
