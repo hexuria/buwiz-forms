@@ -603,6 +603,10 @@ impl Form1700View {
         let mut parse_errors = Vec::new();
         let mut draft = self.draft.clone();
         for text in TEXTS {
+            // The tax year is fixed by the library tile; never re-parse it.
+            if text.key == "year" {
+                continue;
+            }
             (text.set)(&mut draft, self.input_text(text.key, cx));
         }
         for who in [Who::Taxpayer, Who::Spouse] {
@@ -833,6 +837,25 @@ impl Form1700View {
             button.outline()
         };
         button.small().disabled(disabled)
+    }
+
+    /// Read-only label + value row (the period the library tile chose).
+    fn static_value(&self, label: &str, value: String) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .w_full()
+            .child(
+                div()
+                    .min_w_0()
+                    .max_w_full()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(label.to_string()),
+            )
+            .child(div().font_weight(FontWeight::BOLD).child(value))
+            .into_any_element()
     }
 
     fn choice_row(&self, label: &str, buttons: Vec<Button>) -> AnyElement {
@@ -1098,7 +1121,7 @@ impl Form1700View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let children = vec![
-            self.text_field("year", "taxable_year", layout, false),
+            self.static_value(text("year").label, d.taxable_year.to_string()),
             self.choice_row(
                 "Item 2 — Amended return?",
                 vec![
