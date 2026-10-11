@@ -24,6 +24,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form1600WpView {}
@@ -459,7 +460,7 @@ impl Form1600WpView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -475,7 +476,19 @@ impl Form1600WpView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, self.error_for(&keys))
+    }
+
+    /// Messages recorded for any of `keys` (validation and parse errors),
+    /// joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
     }
 
     fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
@@ -531,8 +544,10 @@ impl Form1600WpView {
             .into_any_element()
     }
 
-    fn readonly(&self, label: &str, value: String) -> AnyElement {
-        div()
+    /// A read-only value with its validation message (for `error_keys`)
+    /// directly underneath.
+    fn readonly(&self, label: &str, value: String, error_keys: &[&str]) -> AnyElement {
+        let row = div()
             .flex()
             .flex_col()
             .gap_1()
@@ -543,7 +558,8 @@ impl Form1600WpView {
                     .child(label.to_string()),
             )
             .child(div().font_weight(FontWeight::BOLD).child(value))
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
     fn choice(
@@ -577,13 +593,14 @@ impl Form1600WpView {
         } else {
             title
         };
-        div()
+        let row = div()
             .flex()
             .flex_col()
             .gap_1()
             .child(title)
             .child(div().flex().flex_wrap().gap_2().children(buttons))
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
     fn yes_no(
@@ -656,9 +673,13 @@ impl Form1600WpView {
         let editable = self.draft.lifecycle.is_editable();
         let withheld = self.draft.taxes_withheld;
         let children = vec![
-            self.readonly("Item 1 — Month", format!("{:02}", self.draft.month)),
+            self.readonly(
+                "Item 1 — Month",
+                format!("{:02}", self.draft.month),
+                &["month"],
+            ),
             self.text_field("day", layout, !editable),
-            self.readonly("Item 1 — Year", self.draft.year.to_string()),
+            self.readonly("Item 1 — Year", self.draft.year.to_string(), &["year"]),
             self.yes_no(
                 "1600wp_amended",
                 "Item 2 — Amended return?",
@@ -731,8 +752,8 @@ impl Form1600WpView {
         })
         .collect();
         let children = vec![
-            self.readonly("Item 5 — TIN", format_tin(&d.tin)),
-            self.readonly("Item 6 — RDO Code", d.rdo_code.clone()),
+            self.readonly("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
+            self.readonly("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
             self.choice_row(
                 "Item 7 — Category of Withholding Agent",
                 &["agent_category"],
@@ -772,14 +793,16 @@ impl Form1600WpView {
                     }))
                 })
                 .collect();
-            children.push(self.choice_row("ATCs (tap to add or remove)", &["atc_rows"], picks));
+            let mut keys: Vec<String> = vec!["atc_rows".to_string()];
+            keys.extend((0..d.atc_rows.len()).map(|i| format!("atc_rows[{i}].atc_code")));
+            let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+            children.push(self.choice_row("ATCs (tap to add or remove)", &keys, picks));
         } else {
-            children.push(
-                div()
-                    .text_sm()
-                    .child("Answer Item 4 Yes and Item 7 to pick ATCs.")
-                    .into_any_element(),
-            );
+            let note = div()
+                .text_sm()
+                .child("Answer Item 4 Yes and Item 7 to pick ATCs.")
+                .into_any_element();
+            children.push(with_field_error(note, self.error_for(&["atc_rows"])));
         }
         for (row, entry) in d.atc_rows.iter().enumerate().take(2) {
             let option = form_1600wp_atc(&entry.atc_code);
@@ -825,10 +848,13 @@ impl Form1600WpView {
             self.text_field("int", layout, !editable),
             self.text_field("comp", layout, !editable),
             self.computed("15D — Total penalties", d.total_penalties, cx),
-            self.computed(
-                "16 — Total amount still due/(overremittance)",
-                d.total_amount_due,
-                cx,
+            with_field_error(
+                self.computed(
+                    "16 — Total amount still due/(overremittance)",
+                    d.total_amount_due,
+                    cx,
+                ),
+                self.error_for(&["total_amount_due"]),
             ),
         ];
         children.push(self.grid(layout, totals));
@@ -897,7 +923,10 @@ impl Form1600WpView {
                     .into_any_element(),
             );
         }
-        children.push(self.computed("Total tax withheld", self.draft.schedule_total, cx));
+        children.push(with_field_error(
+            self.computed("Total tax withheld", self.draft.schedule_total, cx),
+            self.error_for(&["schedule"]),
+        ));
         self.section("Schedule II — Winners", children, cx)
     }
 }
@@ -1156,6 +1185,7 @@ impl Render for Form1600WpView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
         let phone = layout == Layout::Phone;
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1163,7 +1193,7 @@ impl Render for Form1600WpView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let mut issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -1176,6 +1206,15 @@ impl Render for Form1600WpView {
                     .into_any_element()
             })
             .collect();
+        if error_count > issues.len() {
+            issues.push(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().danger)
+                    .child(format!("and {} more", error_count - issues.len()))
+                    .into_any_element(),
+            );
+        }
 
         let toolbar = div()
             .flex()
@@ -1232,6 +1271,11 @@ impl Render for Form1600WpView {
                                     this.revert_to_draft(window, cx)
                                 })),
                         )
+                    })
+                    .when(is_draft && error_count > 0, |row| {
+                        row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                            "Fix {error_count} item(s) under Needs review to queue."
+                        )))
                     })
                     .child(
                         Button::new("1600wp_submit")

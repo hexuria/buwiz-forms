@@ -10,14 +10,20 @@ use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
-use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
+use bir_core::forms::form_1601c::{
+    FORM_1601C_ATC, Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS,
+};
 use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
 use crate::components::tax_relief_select::{
     TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
 };
 use crate::views::event_form_kit::Layout;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use gpui_component::select::{Select, SelectEvent};
 
 pub enum Form1601CEvent {
@@ -29,6 +35,9 @@ pub enum Form1601CEvent {
 }
 
 impl EventEmitter<Form1601CEvent> for Form1601CView {}
+
+/// Item 5 ATC: the one code this form accepts (value, label).
+const ATC_OPTIONS: &[(&str, &str)] = &[(FORM_1601C_ATC, FORM_1601C_ATC)];
 
 const SCAFFOLD_MESSAGE: &str = "1601-C January 2018 is available for draft preparation only in this build. Electronic queue submission remains unavailable.";
 
@@ -140,6 +149,8 @@ pub struct Form1601CView {
     category_of_agent: String,
     number_of_sheets: Entity<InputState>,
     atc: Entity<InputState>,
+    /// Item 5 ATC picker; the only ATC the form allows is `FORM_1601C_ATC`.
+    atc_select: Entity<ComboboxState>,
     tax_relief: bool,
     tax_relief_specification: Entity<TaxReliefSelectState>,
 
@@ -340,6 +351,20 @@ impl Form1601CView {
             },
         ));
 
+        let atc_select = form_controls::new_select_state(ATC_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &atc_select,
+            ATC_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                this.atc
+                    .update(cx, |input, cx| input.set_value(value, window, cx));
+                this.is_validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
+
         for input in inputs {
             subscriptions.push(cx.subscribe_in(
                 &input,
@@ -397,6 +422,7 @@ impl Form1601CView {
 
             number_of_sheets,
             atc,
+            atc_select,
             tax_relief,
             tax_relief_specification,
             schedule_row_inputs,
@@ -1297,6 +1323,8 @@ impl Render for Form1601CView {
                     .child(submit_blocked_reason(self.validation_errors.len()))
             });
         let needs_review = self.render_needs_review(cx);
+        let atc_field = self.render_atc_select(window, cx);
+        let profile_errors = self.render_profile_errors();
 
         div()
             .flex()
@@ -1415,6 +1443,7 @@ impl Render for Form1601CView {
                                     "Address: {}",
                                     self.draft.registered_address
                                 )}</div>
+                                {profile_errors}
                             </div>
                         </div>
                         {self.render_schedule_section(layout, is_draft, cx)}
@@ -1516,9 +1545,10 @@ impl Render for Form1601CView {
                                             .child(div().id(crate::agent::ids::FORM_1601C_SHEETS).child(self.render_input_row(layout,
                                                 "Number of Sheets Attached",
                                                 &self.number_of_sheets,
+                                                &["number_of_sheets"],
                                                 cx,
                                             )))
-                                            .child(self.render_input_row(layout,"ATC", &self.atc, cx))
+                                            .child(atc_field)
                                             .child(self.render_category_of_agent(layout, cx))
                                             .child(rsx! {
                                                 <div flex flex_wrap gap_2 items_center>
@@ -1588,6 +1618,7 @@ impl Render for Form1601CView {
                                 {div().id(crate::agent::ids::FORM_1601C_TAX_14).child(self.render_input_row(layout,
                                     "14 Total Amount of Compensation",
                                     &self.tax_14_total_compensation,
+                                    &["tax_14_total_compensation"],
                                     cx,
                                 ))}
                                 <div text_lg font_weight={FontWeight::SEMIBOLD} mt_4>
@@ -1596,88 +1627,105 @@ impl Render for Form1601CView {
                                 {self.render_input_row(layout,
                                     "15 Statutory Minimum Wage",
                                     &self.tax_15_statutory_minimum_wage,
+                                    &["tax_15_statutory_minimum_wage"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "16 Holiday Pay, Overtime Pay, Night Shift",
                                     &self.tax_16_holiday_pay,
+                                    &["tax_16_holiday_pay"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "17 13th Month Pay and Other Benefits",
                                     &self.tax_17_13th_month_pay,
+                                    &["tax_17_13th_month_pay"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "18 De Minimis Benefits",
                                     &self.tax_18_de_minimis,
+                                    &["tax_18_de_minimis"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "19 SSS, GSIS, PHIC, HDMF Contributions",
                                     &self.tax_19_sss_gsis,
+                                    &["tax_19_sss_gsis"],
                                     cx,
                                 )}
                                 {self.render_input_with_text_row(layout,
                                     "20 Other Non-Taxable Compensation",
                                     &self.tax_20_other_name,
                                     &self.tax_20_other_amount,
+                                    &["tax_20_other_amount"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "21 Total Non-Taxable Compensation",
                                     self.draft.tax_21_total_non_taxable,
+                                    &["tax_21_total_non_taxable"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "22 Total Taxable Compensation (14 - 21)",
                                     self.draft.tax_22_total_taxable,
+                                    &["tax_22_total_taxable"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "23 Less: Taxable comp not subject to withholding",
                                     &self.tax_23_not_subject,
+                                    &["tax_23_not_subject"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "24 Net Taxable Compensation (22 - 23)",
                                     self.draft.tax_24_net_taxable,
+                                    &["tax_24_net_taxable"],
                                     cx,
                                 )}
                                 {div().id(crate::agent::ids::FORM_1601C_TAX_25).child(self.render_input_row(layout,
                                     "25 Total Taxes Withheld",
                                     &self.tax_25_total_taxes_withheld,
+                                    &["tax_25_total_taxes_withheld"],
                                     cx,
                                 ))}
                                 {self.render_computed_row(layout,
                                     "26 Add/Less: Adjustment from Schedule I",
                                     self.draft.tax_26_adjustment,
+                                    &["tax_26_adjustment"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "27 Taxes Withheld for Remittance",
                                     self.draft.tax_27_taxes_withheld_for_remittance,
+                                    &["tax_27_taxes_withheld_for_remittance"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "28 Less: Tax Remitted in Return Previously Filed",
                                     &self.tax_28_tax_remitted_previously,
+                                    &["tax_28_tax_remitted_previously"],
                                     cx,
                                 )}
                                 {self.render_input_with_text_row(layout,
                                     "29 Other Remittances Made",
                                     &self.tax_29_other_remittances_name,
                                     &self.tax_29_other_remittances_amount,
+                                    &["tax_29_other_remittances_amount"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "30 Total Tax Remittances Made",
                                     self.draft.tax_30_total_tax_remittances,
+                                    &["tax_30_total_tax_remittances"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "31 Tax Still Due/(Overremittance)",
                                     self.draft.tax_31_tax_still_due,
+                                    &["tax_31_tax_still_due"],
                                     cx,
                                 )}
                             </div>
@@ -1693,21 +1741,25 @@ impl Render for Form1601CView {
                                 {self.render_input_row(layout,
                                     "32 Surcharge",
                                     &self.tax_32_surcharge,
+                                    &["tax_32_surcharge"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "33 Interest",
                                     &self.tax_33_interest,
+                                    &["tax_33_interest"],
                                     cx,
                                 )}
                                 {self.render_input_row(layout,
                                     "34 Compromise",
                                     &self.tax_34_compromise,
+                                    &["tax_34_compromise"],
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
                                     "35 Total Penalties",
                                     self.draft.tax_35_total_penalties,
+                                    &["tax_35_total_penalties"],
                                     cx,
                                 )}
                             </div>
@@ -1730,6 +1782,10 @@ impl Render for Form1601CView {
                                         self.draft.tax_36_total_amount_payable
                                     )}
                                 </div>
+                                {div().px_6().pb_4().children(
+                                    self.error_for(&["tax_36_total_amount_payable"])
+                                        .map(field_error),
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1757,6 +1813,11 @@ impl Form1601CView {
                     .get(index)
                     .map(|row| row.adjustment)
                     .unwrap_or(0.0);
+                // Row-level messages (month, date, bank, reference, adjustment)
+                // are keyed by the row; the two money inputs also have parse keys.
+                let row_key = format!("schedule_1_row_{}", index + 1);
+                let tax_paid_key = format!("schedule_1_row_{}_tax_paid", index + 1);
+                let should_be_key = format!("schedule_1_row_{}_should_be_tax_due", index + 1);
                 rsx! {
                     <div flex flex_col gap_3 p_4 border_1
                         border_color={cx.theme().border}
@@ -1789,32 +1850,38 @@ impl Form1601CView {
                         {self.render_input_row(layout,
                             "1 Previous Month (MM/YYYY)",
                             &inputs.previous_month,
+                            &[],
                             cx,
                         )}
-                        {self.render_input_row(layout,"2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, cx)}
+                        {self.render_input_row(layout,"2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, &[], cx)}
                         {self.render_input_row(layout,
                             "3 Drawee Bank / Bank Code / Agency",
                             &inputs.drawee_bank_code_or_agency,
+                            &[],
                             cx,
                         )}
                         {self.render_input_row(layout,
                             "4 Payment Reference Number",
                             &inputs.payment_number,
+                            &[],
                             cx,
                         )}
                         {self.render_input_row(layout,
                             "5 Tax Paid (excluding penalties)",
                             &inputs.tax_paid,
+                            &[tax_paid_key.as_str()],
                             cx,
                         )}
                         {self.render_input_row(layout,
                             "6 Should Be Tax Due for the Month",
                             &inputs.should_be_tax_due,
+                            &[should_be_key.as_str()],
                             cx,
                         )}
                         {self.render_computed_row(layout,
                             "7 Adjustment (Item 6 less Item 5)",
                             adjustment,
+                            &[row_key.as_str()],
                             cx,
                         )}
                     </div>
@@ -1866,6 +1933,7 @@ impl Form1601CView {
                     {self.render_computed_row(layout,
                         "4 Total Adjustment (to Part II, Item 26)",
                         self.draft.tax_26_adjustment,
+                        &["schedule_1"],
                         cx,
                     )}
                 </div>
@@ -1890,9 +1958,58 @@ impl Form1601CView {
         }
     }
 
+    /// Messages recorded for any of `keys`, joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(self.validation_errors.iter(), keys)
+    }
+
+    /// Put the messages for `keys` directly under an already-built row.
+    fn with_errors(&self, row: impl IntoElement, keys: &[&str]) -> AnyElement {
+        with_field_error(row.into_any_element(), self.error_for(keys))
+    }
+
+    /// Messages for the values this page shows read-only or not at all (they
+    /// come from the taxpayer profile), one line each under the profile block.
+    fn render_profile_errors(&self) -> AnyElement {
+        const LINES: [(&str, &[&str]); 9] = [
+            ("Period", &["taxable_year", "month"]),
+            ("TIN", &["tin"]),
+            ("RDO", &["rdo_code"]),
+            ("Name", &["taxpayer_name"]),
+            ("Address", &["registered_address", "registered_address_2"]),
+            ("ZIP code", &["zip_code"]),
+            ("Telephone", &["contact_number"]),
+            ("Email address", &["email_address"]),
+            ("Line of business", &["line_of_business"]),
+        ];
+        let mut column = div().flex().flex_col().gap_1().mt_2();
+        for (label, keys) in LINES {
+            if let Some(message) = self.error_for(keys) {
+                column = column.child(field_error(format!("{label}: {message}")));
+            }
+        }
+        column.into_any_element()
+    }
+
+    /// Item 5 ATC: a searchable select over the one allowed code.
+    fn render_atc_select(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let editable = matches!(self.draft.status, FilingStatus::Draft);
+        let shown = (!self.draft.atc.is_empty()).then_some(self.draft.atc.as_str());
+        form_controls::sync_select(&self.atc_select, ATC_OPTIONS, shown, window, cx);
+        select_field(
+            "ATC",
+            &self.atc_select,
+            ATC_OPTIONS,
+            shown,
+            !editable,
+            self.error_for(&["atc"]).as_deref(),
+            cx,
+        )
+    }
+
     fn render_tax_relief_row(&self, layout: Layout) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        Self::pair_row(layout)
+        let row = Self::pair_row(layout)
             .child(
                 Self::half(layout)
                     .text_sm()
@@ -1905,25 +2022,29 @@ impl Form1601CView {
                         .placeholder("Choose Special Rate, Treaty, or Both")
                         .disabled(is_disabled),
                 ),
-            )
+            );
+        self.with_errors(row, &["tax_relief_specification"])
     }
 
+    /// A labelled input row with the messages for `keys` under it.
     fn render_input_row(
         &self,
         layout: Layout,
         label: &str,
         input: &Entity<InputState>,
+        keys: &[&str],
         _cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        Self::pair_row(layout)
+        let row = Self::pair_row(layout)
             .child(
                 Self::half(layout)
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),
             )
-            .child(Self::half(layout).child(Input::new(input).disabled(is_disabled)))
+            .child(Self::half(layout).child(Input::new(input).disabled(is_disabled)));
+        self.with_errors(row, keys)
     }
 
     fn render_input_with_text_row(
@@ -1932,6 +2053,7 @@ impl Form1601CView {
         label: &str,
         text_input: &Entity<InputState>,
         amount_input: &Entity<InputState>,
+        keys: &[&str],
         _cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
@@ -1951,18 +2073,22 @@ impl Form1601CView {
         } else {
             div().flex().justify_between().items_center().gap_4()
         };
-        row.child(label_and_text)
-            .child(Self::half(layout).child(Input::new(amount_input).disabled(is_disabled)))
+        let row = row
+            .child(label_and_text)
+            .child(Self::half(layout).child(Input::new(amount_input).disabled(is_disabled)));
+        self.with_errors(row, keys)
     }
 
+    /// A computed row; the messages for `keys` appear under it.
     fn render_computed_row(
         &self,
         layout: Layout,
         label: &str,
         value: f64,
+        keys: &[&str],
         cx: &Context<Self>,
     ) -> impl IntoElement {
-        Self::pair_row(layout)
+        let row = Self::pair_row(layout)
             .p_2()
             .bg(cx.theme().muted.opacity(0.5))
             .rounded_md()
@@ -1977,7 +2103,8 @@ impl Form1601CView {
                     .when(layout != Layout::Phone, |d| d.text_right())
                     .font_weight(FontWeight::BOLD)
                     .child(format!("{:.2}", value)),
-            )
+            );
+        self.with_errors(row, keys)
     }
 
     fn render_category_of_agent(&self, layout: Layout, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1988,7 +2115,7 @@ impl Form1601CView {
         } else {
             div().flex().gap_4().items_center()
         };
-        outer
+        let row = outer
             .child(div().child("11 Category of Withholding Agent"))
             .child(
                 div()
@@ -2011,7 +2138,8 @@ impl Form1601CView {
                         "G",
                         cx,
                     )),
-            )
+            );
+        self.with_errors(row, &["category_of_agent"])
     }
 
     fn category_choice_chip(
