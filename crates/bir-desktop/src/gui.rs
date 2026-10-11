@@ -381,6 +381,9 @@ pub fn run_gui() {
                 }),
                 window_bounds: Some(WindowBounds::Maximized(bounds)),
                 window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
+                // X11 WM_CLASS / Wayland app_id; must match StartupWMClass in
+                // assets/linux/ebirforms.desktop so docks group the window.
+                app_id: Some("ebirforms".into()),
                 ..Default::default()
             };
 
@@ -605,5 +608,26 @@ mod startup_tests {
     #[::core::prelude::v1::test]
     fn persistent_log_appender_writes_under_the_app_data_dir() {
         assert!(persistent_log_appender().is_some());
+    }
+
+    #[::core::prelude::v1::test]
+    fn linux_desktop_entry_has_required_keys_and_is_packaged() {
+        let entry = include_str!("../../../assets/linux/ebirforms.desktop");
+        let mut lines = entry.lines();
+        assert_eq!(lines.next(), Some("[Desktop Entry]"));
+        let keys: std::collections::HashMap<&str, &str> =
+            lines.filter_map(|l| l.split_once('=')).collect();
+        assert_eq!(keys.get("Type"), Some(&"Application"));
+        assert_eq!(keys.get("Name"), Some(&"eBIRForms"));
+        assert_eq!(keys.get("Exec"), Some(&"ebirforms"));
+        assert_eq!(keys.get("Icon"), Some(&"ebirforms"));
+        assert_eq!(keys.get("StartupWMClass"), Some(&"ebirforms"));
+        assert!(keys.get("Categories").is_some_and(|c| c.ends_with(';')));
+
+        let cargo = include_str!("../Cargo.toml");
+        assert!(cargo.contains(
+            r#"["../../assets/linux/ebirforms.desktop", "usr/share/applications/ebirforms.desktop", "644"]"#
+        ));
+        assert!(cargo.contains("usr/share/icons/hicolor/"));
     }
 }

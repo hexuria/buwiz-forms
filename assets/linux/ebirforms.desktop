@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=eBIRForms
+GenericName=BIR Tax Forms
+Comment=Philippine BIR tax return filing
+Exec=ebirforms
+Icon=ebirforms
+Terminal=false
+Categories=Office;Finance;
+Keywords=BIR;tax;eBIRForms;
+StartupNotify=true
+StartupWMClass=ebirforms
