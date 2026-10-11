@@ -32,7 +32,11 @@ pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
     "57ccf9d8132c490d54bceaf5c55fc2b4bec01b780951a63600402c61a595cdbe";
 
 const VAT_RATE: f64 = 0.12;
-const FIXED_SCHEDULE_ROW_COUNT: usize = 2;
+/// `computeSched1`: "Only dates on or before December 31, 2021 are allowed."
+fn is_after_schedule_1_cutoff(date: Form2550QDate) -> bool {
+    date.as_naive()
+        .is_some_and(|date| date > chrono::NaiveDate::from_ymd_opt(2021, 12, 31).expect("date"))
+}
 const FIRST_REPEATED_ROW_ORDINAL: u64 = 1;
 const LEGACY_FLAT_SHAPE_ANCHORS: [&str; 11] = [
     "opt_short_prd1",
@@ -443,6 +447,21 @@ impl Form2550QRawEditorState {
             .entry(instance_id)
             .or_default()
             .insert(field_key.into(), value);
+    }
+
+    /// Forget a removed row's buffers and malformed notes, so a row taken
+    /// out of Schedule 1, 3 or 4 leaves no orphan raw state behind.
+    pub fn remove_repeated_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        instance_id: &StableInstanceId,
+    ) {
+        if let Some(instances) = self.repeated_fields.get_mut(&family) {
+            instances.remove(instance_id);
+        }
+        let marker = format!("/{instance_id}/");
+        self.malformed_fields
+            .retain(|path, _| !path.contains(&marker));
     }
 
     pub(crate) fn mark_malformed(
@@ -1394,6 +1413,30 @@ impl Form2550QDraft {
             p4.item_35b_less_output_vat_uncollected,
         );
 
+        // Official `computeSched1`: each row's allowable input tax is
+        // `formatCurrency(input tax / recognized life * 3)` and its balance
+        // `formatCurrency(input tax - allowable)`, for purchase dates on or
+        // before December 31, 2021.
+        for row in &mut self.schedule_1 {
+            if row.is_empty() {
+                continue;
+            }
+            let (Some(date), Some(input_tax), Some(life)) = (
+                row.purchase_or_import_date,
+                row.input_tax,
+                row.recognized_life_months,
+            ) else {
+                continue;
+            };
+            if life == 0 || is_after_schedule_1_cutoff(date) {
+                continue;
+            }
+            let allowable = format_currency_cents(input_tax / f64::from(life) * 3.0);
+            row.allowable_input_tax_for_period = Some(allowable);
+            row.balance_to_next_period = Some(format_currency_cents(input_tax - allowable));
+        }
+        let p4 = &mut self.part_iv;
+
         let schedule_1_previous = sum_money(
             &self
                 .schedule_1
@@ -2025,6 +2068,13 @@ fn legacy_advance_vat_row(
     }
 }
 
+/// The official `formatCurrency` rounding: `Math.floor(|x| * 100 +
+/// 0.50000000001)` cents, sign restored.
+fn format_currency_cents(value: f64) -> f64 {
+    let cents = (value.abs() * 100.0 + 0.500_000_000_01).floor() / 100.0;
+    if value < 0.0 { -cents } else { cents }
+}
+
 fn money(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
@@ -2192,16 +2242,8 @@ fn validate_required_non_negative_money(
 }
 
 fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, String)>) {
-    if draft.schedule_1.len() != FIXED_SCHEDULE_ROW_COUNT
-        || draft.schedule_3.len() != FIXED_SCHEDULE_ROW_COUNT
-        || draft.schedule_4.len() != FIXED_SCHEDULE_ROW_COUNT
-    {
-        errors.push((
-            "schedules".to_string(),
-            "The reviewed 2550Q editable-save contract contains exactly two rows in each schedule"
-                .to_string(),
-        ));
-    }
+    // Schedules 1, 3 and 4 are the official `addlistSched1/3/4` lists: any
+    // number of rows, no limit on the official page.
     for (index, row) in draft.schedule_1.iter().enumerate() {
         if row.is_empty() {
             continue;
@@ -2217,6 +2259,22 @@ fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, Stri
                 field.clone(),
                 "A used Schedule 1 row requires date, source code, description, and useful-life fields"
                     .to_string(),
+            ));
+        }
+        // Official `computeSched1` / `validateEstimatedLife` alerts.
+        if row
+            .purchase_or_import_date
+            .is_some_and(is_after_schedule_1_cutoff)
+        {
+            errors.push((
+                format!("{field}.purchase_or_import_date"),
+                "Only dates on or before December 31, 2021 are allowed.".to_string(),
+            ));
+        }
+        if row.estimated_life_months.is_some_and(|months| months > 60) {
+            errors.push((
+                format!("{field}.estimated_life_months"),
+                "Invalid Input it should be 1 to 60".to_string(),
             ));
         }
         if !row.source_code.trim().is_empty()
@@ -2544,10 +2602,10 @@ impl super::queueable::QueueableForm for Form2550QDraft {
     }
     /// The official controls `saveEncryptedProfile` walks. `dateFiled` is not
     /// a control: it is appended after the trailer by [`Self::official_payload`].
+    /// A schedule with rows is written as its official modal rows
+    /// (`addlistSched1/3/4`), see [`Self::official_layout`].
     fn field_map(&self) -> BTreeMap<String, String> {
-        let mut fields = self.to_bir_field_map();
-        fields.remove("dateFiled");
-        fields
+        self.official_control_map()
     }
     /// `saveEncryptedProfile(true)`: the control loop, the trailer, then
     /// `<dateFiled>yyyy/mm/dd</dateFiled>` and a newline.
@@ -2556,9 +2614,10 @@ impl super::queueable::QueueableForm for Form2550QDraft {
         if !errors.is_empty() {
             return Err(errors);
         }
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID)
-            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
-        let mut payload = crate::official_xml::write(layout, &self.field_map())
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        let mut payload = crate::official_xml::write(&layout, &self.field_map())
             .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
         let date_filed = self.date_filed.map_or_else(
             || chrono::Local::now().format("%Y/%m/%d").to_string(),
@@ -3530,5 +3589,124 @@ mod tests {
             Some((2026, FilingPeriod::Quarterly(2)))
         );
         assert!(Form2550QDraft::parse_period_code("122026Q5").is_none());
+    }
+
+    fn capital_row(year: u16, input_tax: f64, life: u16) -> Form2550QCapitalGoodRow {
+        Form2550QCapitalGoodRow {
+            purchase_or_import_date: Form2550QDate::new(year, 1, 15).ok(),
+            source_code: "D".to_string(),
+            description: "EQUIPMENT".to_string(),
+            purchase_or_import_amount: Some(input_tax * 10.0),
+            input_tax: Some(input_tax),
+            estimated_life_months: Some(life),
+            recognized_life_months: Some(life),
+            ..Form2550QCapitalGoodRow::default()
+        }
+    }
+
+    fn errors_for(draft: &Form2550QDraft, field: &str) -> Vec<String> {
+        draft
+            .validate()
+            .into_iter()
+            .filter(|(key, _)| key == field)
+            .map(|(_, message)| message)
+            .collect()
+    }
+
+    #[test]
+    fn schedule_1_purchase_after_2021_uses_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.schedule_1 = vec![capital_row(2022, 1_200.0, 60)];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "schedule_1[0].purchase_or_import_date"),
+            vec!["Only dates on or before December 31, 2021 are allowed.".to_string()]
+        );
+    }
+
+    #[test]
+    fn schedule_1_estimated_life_over_60_uses_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.schedule_1 = vec![capital_row(2021, 1_200.0, 61)];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "schedule_1[0].estimated_life_months"),
+            vec!["Invalid Input it should be 1 to 60".to_string()]
+        );
+    }
+
+    #[test]
+    fn schedule_1_allowable_and_balance_follow_compute_sched1() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.schedule_1 = vec![capital_row(2019, 30_000.06, 40)];
+        draft.recompute();
+        let row = &draft.schedule_1[0];
+        assert_eq!(row.allowable_input_tax_for_period, Some(2_250.0));
+        assert_eq!(row.balance_to_next_period, Some(27_750.06));
+    }
+
+    #[test]
+    fn schedules_hold_any_number_of_rows_and_write_the_modal_layout() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.schedule_1 = (0..5).map(|_| capital_row(2021, 1_200.0, 60)).collect();
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "schedules" && !field.starts_with("schedule_1")),
+            "{:?}",
+            draft.validate()
+        );
+        let fields = draft.official_control_map();
+        assert_eq!(fields["txtDatePurchase14"], "1/15/2021");
+        assert_eq!(fields["txtEstimatedLife14"], "60");
+        assert_eq!(fields["txtAllowedInputTax14"], "60.00");
+        // Unused schedules keep the disabled static rows at page defaults.
+        assert!(!fields.contains_key("txtDate40"));
+        let layout = draft.official_layout().unwrap();
+        let keys: Vec<String> = layout
+            .entries
+            .iter()
+            .map(|entry| match entry {
+                crate::official_xml::Entry::Bool { key, .. }
+                | crate::official_xml::Entry::Value { key, .. } => key.clone(),
+            })
+            .collect();
+        let anchor = keys
+            .iter()
+            .position(|key| key == "txtTotalAmountOfBalanceofInputTaxFromPrevious")
+            .unwrap();
+        assert_eq!(keys[anchor - 1], "txtBalanceInputTax14");
+        assert_eq!(
+            keys.iter()
+                .filter(|key| key.starts_with("txtDatePurchase1"))
+                .count(),
+            5
+        );
+        assert!(keys.iter().any(|key| key == "txtDate40"));
+        crate::official_xml::write(&layout, &fields).unwrap();
+    }
+
+    #[test]
+    fn removing_a_row_forgets_its_raw_buffers() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.schedule_3.push(Form2550QCreditableVatRow::default());
+        draft.ensure_repeating_row_ids().unwrap();
+        let id = draft.schedule_3[2].instance_id.clone().unwrap();
+        draft.raw_editor_state.set_repeated(
+            Form2550QRowFamily::Schedule3,
+            id.clone(),
+            "txtNameWithHoldingAgent3",
+            RawValue::Text("AGENT".to_string()),
+        );
+        draft.schedule_3.pop();
+        draft
+            .raw_editor_state
+            .remove_repeated_row(Form2550QRowFamily::Schedule3, &id);
+        assert!(errors_for(&draft, "raw_editor_state.bindings").is_empty());
     }
 }
