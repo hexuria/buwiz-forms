@@ -1675,6 +1675,21 @@ impl Render for Form1702qView {
             vec![self.grid(layout, vec![attachments])],
             cx,
         ));
+        body = body.children(
+            crate::views::event_form_kit::declaration_and_payment_with_text(
+                layout == Layout::Phone,
+                "We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by us, and to the best of our knowledge and belief, are true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.",
+                "Part III – Details of Payment",
+                &[
+                    "27 Cash/Bank Debit Memo",
+                    "28 Check",
+                    "29 Tax Debit Memo",
+                    "30 Others (specify below)",
+                ],
+                crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
+                cx,
+            ),
+        );
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

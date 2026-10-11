@@ -815,7 +815,7 @@ impl FormViewTrait for Form1706View {
 impl Render for Form1706View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
-        let sections = vec![
+        let mut sections = vec![
             self.render_header_items(layout, cx),
             self.render_parties(layout, cx),
             self.render_property(layout, cx),
@@ -824,6 +824,24 @@ impl Render for Form1706View {
             self.render_computation(layout, cx),
             self.render_schedule(layout, cx),
         ];
+        sections.extend(super::event_form_kit::declaration_and_payment_with_text(
+            layout == Layout::Phone,
+            "We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.",
+            "Part III – Details of Payment",
+            &[
+                "19 Cash/Bank Debit Memo",
+                "20 Check",
+                "21 Tax Debit Memo",
+                "22 Others (Specify below)",
+            ],
+            &[
+                "Drawee Bank/Bank Code/Agency",
+                "Number",
+                "Date (MM/DD/YYYY)",
+                "Amount",
+            ],
+            cx,
+        ));
         kit::render_page(self, sections, window, cx)
     }
 }
