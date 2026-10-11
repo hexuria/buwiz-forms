@@ -344,6 +344,130 @@ pub const FORM_0605_ATCS: &[(&str, &str)] = &[
     ),
 ];
 
+/// The official `validate()` alert for an Item 4 (`item == 4`) or Item 7
+/// date typed as `MM/DD/YYYY`, following the page's branches in order: the
+/// early format / day / leap-year / month-length checks, then the later
+/// month, day, date and year checks. `None` when the text is a valid date,
+/// or blank (blank Item 4 is optional; blank Item 7 is reported by
+/// `official_errors`). The official page has one numeric box per part; a
+/// part that is not digits gets the format alert.
+pub fn form_0605_typed_date_alert(item: u8, text: &str) -> Option<&'static str> {
+    let item7 = item == 7;
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut parts = text.split('/');
+    let month = parts.next().unwrap_or("").trim();
+    let day = parts.next().unwrap_or("").trim();
+    let year = parts.next().unwrap_or("").trim();
+    let format = if item7 {
+        "Please enter a valid day/month on item 7. Format should be MM/DD/YYYY."
+    } else {
+        "Please enter a valid day/month on item 4. Format should be MM/DD/YYYY."
+    };
+    if parts.next().is_some()
+        || [month, day, year]
+            .iter()
+            .any(|p| p.len() > 4 || !p.chars().all(|c| c.is_ascii_digit()))
+    {
+        return Some(format);
+    }
+    // JavaScript coerces "" to 0 in these comparisons.
+    let num = |p: &str| p.parse::<u32>().unwrap_or(0);
+    let (m, d, y) = (num(month), num(day), num(year));
+    let invalid_entry = if item7 {
+        "Invalid date entry on item 7."
+    } else {
+        "Invalid date entry on item 4."
+    };
+    if item7 && (month.is_empty() || day.is_empty() || year.is_empty()) {
+        return Some("Please enter a valid Return Period on Item 7.");
+    }
+    if month.len() == 1 || day.len() == 1 {
+        return Some(format);
+    }
+    if d < 1 {
+        return Some(invalid_entry);
+    }
+    // new Date(year, 1, 29).getMonth() == 1; years 0-99 map to 1900-1999.
+    let js_year = if y < 100 { 1900 + y } else { y };
+    let gregorian_leap =
+        |y: u32| y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400));
+    let is_leap = gregorian_leap(js_year);
+    if !is_leap && m == 2 && d == 29 {
+        return Some("Filing year is not a leap year.");
+    }
+    if m == 2 && d > 29 {
+        return Some(invalid_entry);
+    }
+    const MONTH31: [&str; 7] = ["01", "03", "05", "07", "08", "10", "12"];
+    const MONTH30: [&str; 4] = ["04", "06", "09", "11"];
+    if (MONTH31.contains(&month) && d > 31) || (MONTH30.contains(&month) && d > 30) {
+        return Some(invalid_entry);
+    }
+    let month31 = matches!(m, 1 | 3 | 5 | 7 | 8 | 10 | 12);
+    let month30 = matches!(m, 4 | 6 | 9 | 11);
+    let feb_max = if gregorian_leap(y) { 29 } else { 28 };
+    if item7 {
+        if month.is_empty() || !(1..=12).contains(&m) {
+            return Some("Please enter a valid month on item 7.");
+        }
+        if day.is_empty() || (month31 && !(1..=31).contains(&d)) {
+            return Some("Please enter a valid day on item 7.");
+        }
+        if month30 && !(1..=30).contains(&d) {
+            return Some("Please enter a valid date on item 7.");
+        }
+        if m == 2 {
+            if year.is_empty() {
+                return Some("Please enter a valid year on item 7.");
+            }
+            if !(1..=feb_max).contains(&d) {
+                return Some("Please enter a valid date on item 7.");
+            }
+        }
+        if year.is_empty() {
+            return Some("Please enter a valid year on item 7.");
+        }
+        if !(1904..=3000).contains(&y) {
+            return Some("Please enter a valid date on item 7.");
+        }
+    } else {
+        if month.is_empty() || !(1..=12).contains(&m) {
+            return Some("Please enter valid month on item 4.");
+        }
+        if month31 {
+            if day.is_empty() {
+                return Some("Please enter a valid day on item 4.");
+            }
+            if !(1..=31).contains(&d) {
+                return Some("Please enter a valid date on item 4.");
+            }
+        }
+        if m == 2 {
+            if day.is_empty() {
+                return Some("Please enter a valid day on item 4.");
+            }
+            if !(1..=feb_max).contains(&d) {
+                return Some("Please enter a valid date on item 4.");
+            }
+        }
+        if year.is_empty() {
+            return Some("Please enter valid year on item 4.");
+        }
+        if !(1904..=3000).contains(&y) {
+            return Some("Please enter a valid date on item 4.");
+        }
+    }
+    // Branches the page leaves open (e.g. 04/31 on Item 4) still cannot be
+    // stored as a calendar date.
+    if Form0605Date::new(y as u16, m as u8, d as u8).is_err() {
+        return Some(invalid_entry);
+    }
+    None
+}
+
 /// The official tax type at a 1-based `TaxTypeCode<n>` index.
 pub fn form_0605_tax_type(code: &str) -> Option<Form0605IndexedCode> {
     FORM_0605_TAX_TYPES
@@ -1196,5 +1320,53 @@ mod tests {
         assert!(draft.revalidate_queued_before_submission().is_err());
         assert_eq!(draft.lifecycle.status, FilingStatus::Draft);
         assert_eq!(draft.period_column(), 1);
+    }
+
+    #[test]
+    fn typed_date_alerts_follow_the_official_branches() {
+        use super::form_0605_typed_date_alert as alert;
+        assert_eq!(alert(4, ""), None);
+        assert_eq!(alert(7, "03/31/2025"), None);
+        assert_eq!(
+            alert(7, "2/05/2025"),
+            Some("Please enter a valid day/month on item 7. Format should be MM/DD/YYYY.")
+        );
+        assert_eq!(
+            alert(4, "02/29/2025"),
+            Some("Filing year is not a leap year.")
+        );
+        assert_eq!(
+            alert(7, "02/29/2025"),
+            Some("Filing year is not a leap year.")
+        );
+        assert_eq!(alert(7, "02/29/2024"), None);
+        assert_eq!(
+            alert(7, "00/10/2025"),
+            Some("Please enter a valid month on item 7.")
+        );
+        assert_eq!(
+            alert(4, "13/10/2025"),
+            Some("Please enter valid month on item 4.")
+        );
+        assert_eq!(
+            alert(4, "01/32/2025"),
+            Some("Invalid date entry on item 4.")
+        );
+        assert_eq!(
+            alert(7, "04/00/2025"),
+            Some("Invalid date entry on item 7.")
+        );
+        assert_eq!(
+            alert(4, "01/10/"),
+            Some("Please enter valid year on item 4.")
+        );
+        assert_eq!(
+            alert(7, "01/10/1800"),
+            Some("Please enter a valid date on item 7.")
+        );
+        assert_eq!(
+            alert(7, "01/10"),
+            Some("Please enter a valid Return Period on Item 7.")
+        );
     }
 }

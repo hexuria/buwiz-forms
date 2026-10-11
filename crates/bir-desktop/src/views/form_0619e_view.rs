@@ -12,6 +12,7 @@ use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_0619e::{
     ATC_CODE, Form0619EDraft, TAX_TYPE_CODE, WithholdingAgentCategory,
 };
+use bir_core::forms::form_0619e_official::FORM_0619E_AMENDED_ALERT;
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
 use bir_core::official_xml::official_amount;
@@ -189,15 +190,35 @@ impl Form0619EView {
         cx.notify();
     }
 
-    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form0619EDraft)) {
+    fn edit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form0619EDraft),
+    ) {
         if !self.draft.lifecycle.is_editable() {
             return;
         }
         change(&mut self.draft);
         self.draft.recompute();
+        self.write_back_amounts(window, cx);
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// Put each recomputed amount back into its editor when the editor no
+    /// longer holds it (a toggle cleared a now-disabled box).
+    fn write_back_amounts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for (key, _) in MONEY_INPUTS {
+            let value = Self::initial(&self.draft, key);
+            let current = self.input_text(key, cx);
+            if parse_amount(&current) != parse_amount(&value) {
+                if let Some(input) = self.inputs.get(*key) {
+                    input.update(cx, |state, cx| state.set_value(value, window, cx));
+                }
+            }
+        }
     }
 
     fn notify(
@@ -428,6 +449,23 @@ impl Form0619EView {
             .into_any_element()
     }
 
+    /// A filed month opens read-only, so instead of an amendment branch the
+    /// page shows the official amended-return alert (0619e saveXML).
+    fn amended_notice(&self, cx: &Context<Self>) -> AnyElement {
+        let filed = matches!(
+            self.draft.lifecycle.status,
+            FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+        );
+        if !filed {
+            return div().into_any_element();
+        }
+        div()
+            .text_sm()
+            .text_color(cx.theme().warning)
+            .child(FORM_0619E_AMENDED_ALERT)
+            .into_any_element()
+    }
+
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
@@ -457,24 +495,29 @@ impl Form0619EView {
                 "Item 3 — Amended form?",
                 vec![
                     Self::choice("0619e_amended_yes", "Yes", amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = true)
+                        }),
                     ),
                     Self::choice("0619e_amended_no", "No", !amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = false)
+                        }),
                     ),
                 ],
             ),
+            self.amended_notice(cx),
             Self::choice_row(
                 "Item 4 — Any taxes withheld?",
                 vec![
                     Self::choice("0619e_withheld_yes", "Yes", withheld, !editable).on_click(
-                        cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.any_taxes_withheld = true)
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.any_taxes_withheld = true)
                         }),
                     ),
                     Self::choice("0619e_withheld_no", "No", !withheld, !editable).on_click(
-                        cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.any_taxes_withheld = false)
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.any_taxes_withheld = false)
                         }),
                     ),
                 ],
@@ -512,15 +555,15 @@ impl Form0619EView {
             "Item 12 — Category of withholding agent",
             vec![
                 Self::choice("0619e_private", "Private", !government, !editable).on_click(
-                    cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| {
+                    cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| {
                             d.withholding_agent_category = WithholdingAgentCategory::Private
                         })
                     }),
                 ),
                 Self::choice("0619e_government", "Government", government, !editable).on_click(
-                    cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| {
+                    cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| {
                             d.withholding_agent_category = WithholdingAgentCategory::Government
                         })
                     }),

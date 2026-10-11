@@ -491,7 +491,8 @@ impl Form0605Draft {
             taxable_year: year,
             month: period_slot.max(1),
             filing_basis: Form0605FilingBasis::Calendar,
-            quarter: period_slot.clamp(1, 4),
+            // The official page opens with no quarter ticked.
+            quarter: 0,
             year_end_month: 12,
             due_date: None,
             return_period: None,
