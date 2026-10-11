@@ -436,13 +436,7 @@ impl Form1701View {
             }
             parsed
         };
-        if let Some(year) = number(self.text("year", cx), "Item 1 year", &mut errors) {
-            d.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
+        // Item 1 year is fixed by the library tile; keep the draft's value.
         if d.is_short_period
             && let Some(month) = number(self.text("month", cx), "Item 1 month", &mut errors)
         {
@@ -696,6 +690,18 @@ impl Form1701View {
         .into_any_element()
     }
 
+    /// Read-only label + value row (the period the library tile chose).
+    fn static_value(label: &str, value: String) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .w_full()
+            .child(Self::label(label))
+            .child(div().font_weight(FontWeight::BOLD).child(value))
+            .into_any_element()
+    }
+
     fn text_field(&self, key: &str, layout: Layout) -> AnyElement {
         let label = TEXT_INPUTS
             .iter()
@@ -945,7 +951,7 @@ impl Form1701View {
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let d = &self.draft;
         let mut children = vec![
-            self.text_field("year", layout),
+            Self::static_value("Item 1 — Year", d.taxable_year.to_string()),
             self.yes_no(
                 layout,
                 "1701_amended",
