@@ -1,8 +1,8 @@
 use crate::dummy_profile;
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_2550q::{
-    Form2550QAdvanceVatRow, Form2550QCapitalGoodRow, Form2550QCreditableVatRow, Form2550QDate,
-    Form2550QDraft, Form2550QTaxpayerClassification,
+    Form2550QAdditionalItemRow, Form2550QAdvanceVatRow, Form2550QCapitalGoodRow,
+    Form2550QCreditableVatRow, Form2550QDate, Form2550QDraft, Form2550QTaxpayerClassification,
 };
 use bir_core::forms::queueable::QueueableForm;
 use sha2::{Digest, Sha256};
@@ -224,5 +224,56 @@ fn form_2550q_schedule_rows_sample_payload_is_current() {
         "2550Q-122025Q1-schedules",
         &payload,
         "6c689c3c28fe65e8ff0e973203ff62370a38cd2be8f1bda212f6d471883f0a14",
+    );
+}
+
+/// The 2550Q sample with rows in the item 19, 42, 47 and 56 "(Add more...)"
+/// popups, entered through the official `addTblSpecifyNo*` / `addColNo*` /
+/// `saveAndCloseNo*` functions.
+fn sample_2550q_specify() -> Form2550QDraft {
+    let mut draft = sample_2550q();
+    let rows = |rows: &[(&str, f64)]| {
+        rows.iter()
+            .map(|(description, amount)| Form2550QAdditionalItemRow {
+                instance_id: None,
+                description: (*description).to_string(),
+                amount: Some(*amount),
+            })
+            .collect::<Vec<_>>()
+    };
+    draft.item_19_additional_rows = rows(&[
+        ("REFUND APPLIED", 100.0),
+        ("TAX CREDIT CERTIFICATE", 2_200.5),
+        ("OTHER PAYMENT", 3.25),
+    ]);
+    draft.item_42_additional_rows = rows(&[("INPUT TAX A", 1_000.0), ("INPUT TAX B", 234.56)]);
+    draft.item_47_additional_rows = rows(&[
+        ("PURCHASE A", 5_000.0),
+        ("PURCHASE B", 1_234.5),
+        ("PURCHASE C", 10.05),
+    ]);
+    draft.item_56_additional_rows = rows(&[
+        ("DEDUCTION A", 300.0),
+        ("DEDUCTION B", 45.67),
+        ("DEDUCTION C", 1_000.01),
+    ]);
+    draft
+        .ensure_repeating_row_ids()
+        .expect("rows get stable identities");
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_2550q_specify_popup_rows_sample_payload_is_current() {
+    let draft = sample_2550q_specify();
+    let payload = draft
+        .official_payload()
+        .unwrap_or_else(|errors| panic!("2550Q with popup rows must validate: {errors:?}"));
+    check_sample_2550q(
+        &draft,
+        "2550Q-122025Q1-specify",
+        &payload,
+        "a3a4649262a958bbff252db21cbe92e6abe51f24e7521f3a204ef83bbe071498",
     );
 }

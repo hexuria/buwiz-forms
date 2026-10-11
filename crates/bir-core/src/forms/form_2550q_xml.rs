@@ -782,6 +782,33 @@ impl Form2550QDraft {
         // This binds here, at the point XML is produced, rather than in
         // `validate()`, which also serves print preview.
         errors.extend(normalized.missing_required_raw_authority_errors());
+        for (field, rows) in [
+            (
+                "item_19_additional_rows",
+                &normalized.item_19_additional_rows,
+            ),
+            (
+                "item_42_additional_rows",
+                &normalized.item_42_additional_rows,
+            ),
+            (
+                "item_47_additional_rows",
+                &normalized.item_47_additional_rows,
+            ),
+            (
+                "item_56_additional_rows",
+                &normalized.item_56_additional_rows,
+            ),
+        ] {
+            if !rows.is_empty() {
+                errors.push((
+                    field.to_string(),
+                    "Popup rows are written only by the official upload \
+                     (QueueableForm::official_payload), not by this reviewed projection"
+                        .to_string(),
+                ));
+            }
+        }
         if errors.is_empty() {
             Ok(crate::bir_xml::generate_bir_xml(
                 &normalized.to_reviewed_field_map(),
@@ -3052,7 +3079,57 @@ impl Form2550QDraft {
                 }
             }
         }
+        for popup in self.official_specify_popups() {
+            for (index, row) in popup.rows.iter().enumerate() {
+                fields.insert(
+                    format!(
+                        "frm2550qv2024:totalTaxPayableNo{}Description{index}",
+                        popup.item
+                    ),
+                    row.description.clone(),
+                );
+                fields.insert(
+                    format!("frm2550qv2024:totalTaxPayableNo{}Amount{index}", popup.item),
+                    money_text(row.amount),
+                );
+            }
+            fields.insert(popup.subtotal_key(), money_text(popup.subtotal));
+        }
         fields
+    }
+
+    /// Items 19, 42, 47 and 56 whose "(Add more...)" popup holds rows.
+    pub(crate) fn official_specify_popups(&self) -> Vec<Form2550QSpecifyPopup<'_>> {
+        [
+            (
+                19,
+                &self.item_19_additional_rows,
+                self.part_ii.item_19_other_credit_or_payment,
+            ),
+            (
+                42,
+                &self.item_42_additional_rows,
+                self.part_iv.item_42b_other_input_tax,
+            ),
+            (
+                47,
+                &self.item_47_additional_rows,
+                self.part_iv.item_47a_other_purchases,
+            ),
+            (
+                56,
+                &self.item_56_additional_rows,
+                self.part_iv.item_56b_other_deduction,
+            ),
+        ]
+        .into_iter()
+        .filter(|(_, rows, _)| !rows.is_empty())
+        .map(|(item, rows, subtotal)| Form2550QSpecifyPopup {
+            item,
+            rows,
+            subtotal,
+        })
+        .collect()
     }
 
     /// The generated layout with each used schedule's two static rows taken
@@ -3133,6 +3210,58 @@ impl Form2550QDraft {
             }
             layout.entries.splice(at..at, rows);
         }
+        for popup in self.official_specify_popups() {
+            let anchor = popup.subtotal_key();
+            let at = layout
+                .entries
+                .iter()
+                .position(|entry| key_of(entry) == anchor)
+                .ok_or_else(|| format!("no anchor entry {anchor}"))?;
+            let after = match &layout.entries[at] {
+                Entry::Bool { after, .. } | Entry::Value { after, .. } => after.clone(),
+            };
+            let mut rows = Vec::new();
+            for index in 0..popup.rows.len() {
+                for (member, default) in [("Description", ""), ("Amount", "0.00")] {
+                    let key = format!(
+                        "frm2550qv2024:totalTaxPayableNo{}{member}{index}",
+                        popup.item
+                    );
+                    rows.push(Entry::Value {
+                        parts: vec![Part::Source {
+                            source: key.clone(),
+                            codec: crate::official_xml::Codec::Raw,
+                            uppercase: false,
+                        }],
+                        key,
+                        default: default.to_string(),
+                        number: None,
+                        after: after.clone(),
+                    });
+                }
+            }
+            layout.entries.splice(at..at, rows);
+        }
         Ok(layout)
+    }
+}
+
+/// One item's "(Add more...)" popup as `saveEncryptedProfile` walks it.
+///
+/// `showModalNo19/42/47/56` and `addColNo19/42/47/56` build the rows inside
+/// the item's modal, ahead of its subtotal box `resultOtherCreditsNo<item>`,
+/// as `frm2550qv2024:totalTaxPayableNo<item>Description<i>` and `...Amount<i>`
+/// (from 0). The rows stay in the page after the popup closes, so they are
+/// written right before the subtotal, and the subtotal holds the rows' total.
+/// The static line keeps its place (`VARIOUS` and the total).
+pub(crate) struct Form2550QSpecifyPopup<'a> {
+    pub item: u8,
+    pub rows: &'a [super::form_2550q::Form2550QAdditionalItemRow],
+    pub subtotal: Option<f64>,
+}
+
+impl Form2550QSpecifyPopup<'_> {
+    fn subtotal_key(&self) -> String {
+        format!("resultOtherCreditsNo{}", self.item)
     }
 }

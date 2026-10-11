@@ -711,12 +711,11 @@ impl Form2550QAdvanceVatRow {
     }
 }
 
-/// Preservation-only row shape for the four unimplemented additional-item
-/// families observed in the v1 inventory.
-///
-/// These rows are persisted so future UI work has stable identity and raw
-/// storage. They are intentionally excluded from recomputation and from the
-/// reviewed 160-field editable XML projection.
+/// One line of an item 19, 42, 47 or 56 "(Add more...)" popup
+/// (`addTblSpecifyNo19/42/47/56`): rows 19.1, 19.2, ... with a description
+/// and an amount. When an item has popup rows, its static line shows
+/// `VARIOUS` (more than one row) or the single row's description, and the
+/// rows' total, as `closeModalNo19/42/47/56` sets them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Form2550QAdditionalItemRow {
@@ -1397,6 +1396,7 @@ impl Form2550QDraft {
             Ok(false) => {}
             Ok(true) | Err(_) => return,
         }
+        self.apply_specify_popup_rows();
         let p4 = &mut self.part_iv;
         p4.item_31b_output_tax = p4
             .item_31a_vatable_sales
@@ -1697,20 +1697,7 @@ impl FormValidator for Form2550QDraft {
             ));
         }
         errors.extend(self.raw_editor_coherence_errors());
-        for (field, rows) in [
-            ("item_19_additional_rows", &self.item_19_additional_rows),
-            ("item_42_additional_rows", &self.item_42_additional_rows),
-            ("item_47_additional_rows", &self.item_47_additional_rows),
-            ("item_56_additional_rows", &self.item_56_additional_rows),
-        ] {
-            if !rows.is_empty() {
-                errors.push((
-                    field.to_string(),
-                    "Additional-item rows are preserved in the draft but have no reviewed 2550Q XML projection"
-                        .to_string(),
-                ));
-            }
-        }
+        validate_specify_popup_rows(self, &mut errors);
         validate_identity(self, &mut errors);
         validate_period(self, &mut errors);
 
@@ -2073,6 +2060,91 @@ fn legacy_advance_vat_row(
 fn format_currency_cents(value: f64) -> f64 {
     let cents = (value.abs() * 100.0 + 0.500_000_000_01).floor() / 100.0;
     if value < 0.0 { -cents } else { cents }
+}
+
+/// `saveAndCloseNo19/42/47/56`: every popup row needs a description and an
+/// amount greater than zero.
+pub const SPECIFY_ROW_SAVE_ALERT: &str =
+    "Please fill up all required fields and ensure amounts are greater than zero.";
+/// `validationSpecify19/42/47/56`, checked by "Add Row" (`addColNo19/42/47/56`).
+pub const SPECIFY_ROW_ADD_ALERT: &str = "Empty fields are not allowed";
+/// The popup row description box's `maxlength`.
+pub const SPECIFY_ROW_DESCRIPTION_MAX: usize = 50;
+
+/// The official `validationSpecify19/42/47/56` before "Add Row": no row may
+/// have an empty description or a `0.00` amount.
+pub fn specify_add_row_alert(rows: &[Form2550QAdditionalItemRow]) -> Option<&'static str> {
+    rows.iter()
+        .any(|row| {
+            row.description.is_empty() || row.amount.is_none_or(|amount| money(amount) == 0.0)
+        })
+        .then_some(SPECIFY_ROW_ADD_ALERT)
+}
+
+fn validate_specify_popup_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, String)>) {
+    for (field, rows) in [
+        ("item_19_additional_rows", &draft.item_19_additional_rows),
+        ("item_42_additional_rows", &draft.item_42_additional_rows),
+        ("item_47_additional_rows", &draft.item_47_additional_rows),
+        ("item_56_additional_rows", &draft.item_56_additional_rows),
+    ] {
+        for (index, row) in rows.iter().enumerate() {
+            // `manualTrim`, then `description === "" || amount <= 0`.
+            if row.description.trim().is_empty() || row.amount.is_none_or(|amount| amount <= 0.0) {
+                errors.push((
+                    format!("{field}[{index}]"),
+                    SPECIFY_ROW_SAVE_ALERT.to_string(),
+                ));
+            }
+            if row.description.chars().count() > SPECIFY_ROW_DESCRIPTION_MAX {
+                errors.push((
+                    format!("{field}[{index}].description"),
+                    format!("Use at most {SPECIFY_ROW_DESCRIPTION_MAX} characters."),
+                ));
+            }
+        }
+    }
+}
+
+impl Form2550QDraft {
+    /// `closeModalNo19/42/47/56`: an item with popup rows shows `VARIOUS`
+    /// (or the one row's description) and `formatCurrency` of the rows' sum.
+    fn apply_specify_popup_rows(&mut self) {
+        fn summary(rows: &[Form2550QAdditionalItemRow]) -> Option<(String, Option<f64>)> {
+            let first = rows.first()?;
+            let description = if rows.len() > 1 {
+                "VARIOUS".to_string()
+            } else {
+                first.description.clone()
+            };
+            let total: f64 = rows
+                .iter()
+                .map(|row| row.amount.map_or(0.0, format_currency_cents))
+                .sum();
+            Some((description, Some(format_currency_cents(total))))
+        }
+        if let Some((description, total)) = summary(&self.item_19_additional_rows) {
+            self.part_ii.item_19_description = description;
+            self.part_ii.item_19_other_credit_or_payment = total;
+        }
+        let p4 = &mut self.part_iv;
+        if let Some((description, total)) = summary(&self.item_42_additional_rows) {
+            p4.item_42_description = description;
+            p4.item_42b_other_input_tax = total;
+        }
+        if let Some((description, total)) = summary(&self.item_47_additional_rows) {
+            p4.item_47_description = description;
+            p4.item_47a_other_purchases = total;
+            // A popup row amount's blur also runs `compute47AB`: 47B is
+            // `formatCurrency(47A * 0.12)`.
+            p4.item_47b_other_input_tax =
+                total.map(|total| format_currency_cents(total * VAT_RATE));
+        }
+        if let Some((description, total)) = summary(&self.item_56_additional_rows) {
+            p4.item_56_description = description;
+            p4.item_56b_other_deduction = total;
+        }
+    }
 }
 
 fn money(value: f64) -> f64 {
@@ -3206,10 +3278,11 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "raw_editor_state.version")
         );
+        // A complete popup row is a valid item 19 line now.
         assert!(
-            errors
+            !errors
                 .iter()
-                .any(|(field, _)| field == "item_19_additional_rows")
+                .any(|(field, _)| field.starts_with("item_19_additional_rows"))
         );
     }
 
@@ -3305,12 +3378,7 @@ mod tests {
                 .filter(|binding| !binding.has_live_editor_controls())
                 .map(|binding| binding.family())
                 .collect::<Vec<_>>(),
-            vec![
-                Form2550QRowFamily::Item19Additional,
-                Form2550QRowFamily::Item42Additional,
-                Form2550QRowFamily::Item47Additional,
-                Form2550QRowFamily::Item56Additional,
-            ]
+            Vec::<Form2550QRowFamily>::new()
         );
     }
 
@@ -3340,7 +3408,7 @@ mod tests {
                 .iter()
                 .filter(|gap| matches!(gap, Form2550QCaptureGap::NoLiveEditorControls { .. }))
                 .count(),
-            4
+            0
         );
         assert_eq!(source.excluded_local_print_buffer_count(), 0);
     }
@@ -3836,5 +3904,94 @@ mod tests {
             .raw_editor_state
             .remove_repeated_row(Form2550QRowFamily::Schedule3, &id);
         assert!(errors_for(&draft, "raw_editor_state.bindings").is_empty());
+    }
+
+    fn specify_row(description: &str, amount: f64) -> Form2550QAdditionalItemRow {
+        Form2550QAdditionalItemRow {
+            instance_id: None,
+            description: description.to_string(),
+            amount: Some(amount),
+        }
+    }
+
+    #[test]
+    fn specify_popup_save_with_an_incomplete_row_uses_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.item_42_additional_rows = vec![specify_row("INPUT A", 10.0), specify_row("", 5.0)];
+        draft.item_56_additional_rows = vec![specify_row("DEDUCTION", 0.0)];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "item_42_additional_rows[1]"),
+            vec![SPECIFY_ROW_SAVE_ALERT.to_string()]
+        );
+        assert_eq!(
+            errors_for(&draft, "item_56_additional_rows[0]"),
+            vec![
+                "Please fill up all required fields and ensure amounts are greater than zero."
+                    .to_string()
+            ]
+        );
+        assert!(errors_for(&draft, "item_42_additional_rows[0]").is_empty());
+    }
+
+    #[test]
+    fn specify_popup_add_row_with_an_empty_field_uses_the_official_alert() {
+        assert_eq!(
+            specify_add_row_alert(&[specify_row("CREDIT", 1.0), specify_row("", 2.0)]),
+            Some("Empty fields are not allowed")
+        );
+        assert_eq!(
+            specify_add_row_alert(&[specify_row("CREDIT", 0.0)]),
+            Some("Empty fields are not allowed")
+        );
+        assert_eq!(specify_add_row_alert(&[specify_row("CREDIT", 1.0)]), None);
+        assert_eq!(specify_add_row_alert(&[]), None);
+    }
+
+    #[test]
+    fn specify_popup_rows_set_various_total_and_47b_like_close_modal() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.item_19_additional_rows = vec![specify_row("A", 100.0), specify_row("B", 2_200.5)];
+        draft.item_47_additional_rows = vec![
+            specify_row("P1", 5_000.0),
+            specify_row("P2", 1_234.5),
+            specify_row("P3", 10.05),
+        ];
+        draft.item_56_additional_rows = vec![specify_row("ONLY", 45.67)];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(draft.part_ii.item_19_description, "VARIOUS");
+        assert_eq!(draft.part_ii.item_19_other_credit_or_payment, Some(2_300.5));
+        assert_eq!(draft.part_iv.item_47a_other_purchases, Some(6_244.55));
+        assert_eq!(draft.part_iv.item_47b_other_input_tax, Some(749.35));
+        assert_eq!(draft.part_iv.item_56_description, "ONLY");
+        assert_eq!(draft.part_iv.item_56b_other_deduction, Some(45.67));
+
+        let fields = draft.official_control_map();
+        assert_eq!(fields["frm2550qv2024:totalTaxPayableNo19Description1"], "B");
+        assert_eq!(
+            fields["frm2550qv2024:totalTaxPayableNo19Amount1"],
+            "2,200.50"
+        );
+        assert_eq!(fields["resultOtherCreditsNo19"], "2,300.50");
+        assert_eq!(fields["frm2550qv2024:totalTaxPayableNo56Amount0"], "45.67");
+        assert_eq!(fields["resultOtherCreditsNo42"], "0.00");
+        let layout = draft.official_layout().unwrap();
+        let keys: Vec<String> = layout
+            .entries
+            .iter()
+            .map(|entry| match entry {
+                crate::official_xml::Entry::Bool { key, .. }
+                | crate::official_xml::Entry::Value { key, .. } => key.clone(),
+            })
+            .collect();
+        let anchor = keys
+            .iter()
+            .position(|key| key == "resultOtherCreditsNo47")
+            .unwrap();
+        assert_eq!(keys[anchor - 1], "frm2550qv2024:totalTaxPayableNo47Amount2");
+        assert!(!keys.iter().any(|key| key.contains("totalTaxPayableNo42")));
+        crate::official_xml::write(&layout, &fields).unwrap();
     }
 }
