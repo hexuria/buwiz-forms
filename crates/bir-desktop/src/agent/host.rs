@@ -516,7 +516,7 @@ impl BirAgentHost {
     pub fn form_1601c_any_taxes_withheld(&self) -> Option<bool> {
         self.form_1601c
             .as_ref()
-            .map(|form| form.draft.any_taxes_withheld)
+            .and_then(|form| form.draft.taxes_withheld_answer())
     }
 
     pub(crate) fn form_1601c_category_of_agent(&self) -> Option<Agent1601CCategory> {
@@ -1535,7 +1535,8 @@ impl BirAgentHost {
                 if !form.draft.is_editable() {
                     return Err("this return is no longer a draft".into());
                 }
-                form.draft.any_taxes_withheld = parse_withheld_flag(&Value::String(value.into()))?;
+                form.draft
+                    .set_any_taxes_withheld(parse_withheld_flag(&Value::String(value.into()))?);
                 form.draft.compute();
                 form.validated = false;
             }
@@ -1607,7 +1608,7 @@ impl BirAgentHost {
             ids::FORM_1601C_WITHHELD => self
                 .form_1601c
                 .as_ref()
-                .map(|form| withheld_snapshot_value(form.draft.any_taxes_withheld))
+                .map(|form| withheld_snapshot_value(form.draft.taxes_withheld_answer()))
                 .unwrap_or_default(),
             ids::FORM_1601C_CATEGORY => self
                 .form_1601c
@@ -1678,7 +1679,7 @@ impl BirAgentHost {
                     .ok_or("select a taxpayer profile before opening a form")?;
                 let profile = self.load_profile(&tin)?;
                 let now = chrono::Local::now().date_naive();
-                let mut draft = Form1601CDraft::new_from_profile(
+                let mut draft = Form1601CDraft::new_unanswered_from_profile(
                     &profile,
                     now.year() as u16,
                     now.month() as u8,
@@ -1751,7 +1752,7 @@ impl BirAgentHost {
                 .ok_or("select a taxpayer profile before opening a form")?;
             let profile = self.load_profile(&tin)?;
             let month = period.clamp(1, 12);
-            let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
+            let mut draft = Form1601CDraft::new_unanswered_from_profile(&profile, year, month);
             if let Some(db) = &self.db
                 && let Ok(guard) = db.lock()
                 && let Ok(Some(existing)) = guard.get_1601c_draft(&tin, year, month)
@@ -2081,12 +2082,14 @@ impl BirAgentHost {
         if !form.draft.is_editable() {
             return Err("this return is no longer a draft".into());
         }
-        form.draft.any_taxes_withheld = !form.draft.any_taxes_withheld;
+        // Unanswered Item 3 toggles to Yes, then flips Yes/No.
+        let next = !form.draft.taxes_withheld_answer().unwrap_or(false);
+        form.draft.set_any_taxes_withheld(next);
         form.draft.compute();
         form.validated = false;
         Ok(DispatchResult::json(json!({
             "form": "1601C",
-            "any_taxes_withheld": form.draft.any_taxes_withheld,
+            "any_taxes_withheld": next,
             "queued": false,
             "filed": false,
         })))
@@ -2101,6 +2104,7 @@ impl BirAgentHost {
         if !form.draft.is_editable() {
             return Err("this return is no longer a draft".into());
         }
+        // Unanswered Item 11 toggles to Private, then flips P/G.
         form.draft.category_of_agent = if form.draft.category_of_agent == "P" {
             "G".to_string()
         } else {
@@ -3075,8 +3079,8 @@ impl BirAgentHost {
             ));
             page = page.with_child(
                 UiNode::new(ids::FORM_1601C_WITHHELD, "checkbox", "Any Taxes Withheld")
-                    .with_checked(draft.any_taxes_withheld)
-                    .with_value(withheld_snapshot_value(draft.any_taxes_withheld))
+                    .with_checked(draft.taxes_withheld_answer() == Some(true))
+                    .with_value(withheld_snapshot_value(draft.taxes_withheld_answer()))
                     .with_enabled(draft.is_editable()),
             );
             page = page.with_child(
@@ -3683,7 +3687,7 @@ fn form_1601c_fields(draft: &Form1601CDraft) -> Vec<Value> {
         field_desc(
             "any_taxes_withheld",
             true,
-            &withheld_snapshot_value(draft.any_taxes_withheld),
+            &withheld_snapshot_value(draft.taxes_withheld_answer()),
             false,
             true,
         ),
@@ -3772,7 +3776,7 @@ fn is_1601c_fillable(key: &str) -> bool {
 fn apply_1601c_fill(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Result<(), String> {
     match key {
         "any_taxes_withheld" | ids::FORM_1601C_WITHHELD | "form-1601c-withheld" => {
-            draft.any_taxes_withheld = parse_withheld_flag(value)?;
+            draft.set_any_taxes_withheld(parse_withheld_flag(value)?);
             return Ok(());
         }
         "category_of_agent" | ids::FORM_1601C_CATEGORY | "form-1601c-category" => {
@@ -3858,10 +3862,16 @@ fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, S
     Ok(fields)
 }
 
-fn withheld_snapshot_value(withheld: bool) -> String {
-    if withheld { "Yes".into() } else { "No".into() }
+/// Item 3 as the snapshot shows it: "Yes", "No", or "" while unanswered.
+fn withheld_snapshot_value(withheld: Option<bool>) -> String {
+    match withheld {
+        Some(true) => "Yes".into(),
+        Some(false) => "No".into(),
+        None => String::new(),
+    }
 }
 
+/// Item 11 as the snapshot shows it: "P", "G", or "" while unanswered.
 fn category_snapshot_value(category: &str) -> String {
     category.to_string()
 }
@@ -4453,6 +4463,21 @@ mod tests {
         assert!(!due.id.chars().all(|c| c.is_ascii_digit()));
     }
 
+    /// New 1601C returns open with Items 3 and 11 unanswered (as the
+    /// official page does); answer them Yes / Private explicitly.
+    fn answer_1601c_items_3_and_11(host: &mut BirAgentHost) {
+        let answered = handle_request(
+            host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": "Yes", "category_of_agent": "P" }),
+            }),
+            None,
+            None,
+        );
+        assert!(answered.ok, "{:?}", answered.error);
+    }
+
     #[test]
     fn form_1601c_queue_requires_confirm_then_queues() {
         let mut host = fixture_host();
@@ -4467,6 +4492,7 @@ mod tests {
             None,
         );
         assert!(opened.ok, "{:?}", opened.error);
+        answer_1601c_items_3_and_11(&mut host);
         handle_request(
             &mut host,
             req(Op::SetValue {
@@ -4573,6 +4599,7 @@ mod tests {
             None,
         );
         assert!(started.ok, "{:?}", started.error);
+        answer_1601c_items_3_and_11(&mut host);
         handle_request(
             &mut host,
             req(Op::SetValue {
@@ -4659,6 +4686,7 @@ mod tests {
             None,
         );
         assert!(started.ok, "{:?}", started.error);
+        answer_1601c_items_3_and_11(&mut host);
         handle_request(
             &mut host,
             req(Op::SetValue {
@@ -5864,10 +5892,10 @@ mod tests {
         assert!(filled.ok, "{:?}", filled.error);
 
         let patch = host.form_1601c_host_patch();
-        let mut view_flag = true;
+        let mut view_flag = Some(true);
         let mut view_category = "P".to_string();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
-        view_draft.any_taxes_withheld = true;
+        view_draft.set_any_taxes_withheld(true);
         view_draft.category_of_agent = "P".to_string();
 
         assert!(
@@ -5879,7 +5907,7 @@ mod tests {
             ),
             "first apply changes the view"
         );
-        assert!(!view_flag);
+        assert_eq!(view_flag, Some(false));
         assert_eq!(view_category, "G");
         assert!(
             !apply_1601c_host_header_patch(
@@ -6303,6 +6331,7 @@ mod tests {
             None,
         );
         assert!(opened.ok, "{:?}", opened.error);
+        answer_1601c_items_3_and_11(&mut host);
         let filled = handle_request(
             &mut host,
             req(Op::Invoke {
@@ -6500,10 +6529,18 @@ mod tests {
             .find(ids::FORM_1601C_WITHHELD)
             .expect("withheld_btn in 1601-C tree");
         assert_eq!(withheld.role, "checkbox");
-        assert_eq!(withheld.checked, Some(true));
-        assert_eq!(withheld.value.as_deref(), Some("Yes"));
+        // A new return opens with Item 3 unanswered, like the official page.
+        assert_eq!(withheld.checked, Some(false));
+        assert_eq!(withheld.value.as_deref().unwrap_or_default(), "");
         assert!(withheld.enabled);
-        assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        assert_eq!(
+            host.form_1601c
+                .as_ref()
+                .unwrap()
+                .draft
+                .taxes_withheld_answer(),
+            None
+        );
 
         let off = handle_request(
             &mut host,
@@ -6515,7 +6552,14 @@ mod tests {
             None,
         );
         assert!(off.ok, "{:?}", off.error);
-        assert!(!host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        assert_eq!(
+            host.form_1601c
+                .as_ref()
+                .unwrap()
+                .draft
+                .taxes_withheld_answer(),
+            Some(false)
+        );
         let tree = host.tree();
         let withheld = tree.find(ids::FORM_1601C_WITHHELD).unwrap();
         assert_eq!(withheld.checked, Some(false));
@@ -6591,7 +6635,8 @@ mod tests {
         assert!(opened.ok, "{:?}", opened.error);
 
         // Painted view still has Yes until apply_host runs (Mac regression).
-        let mut view_flag = true;
+        // New returns open unanswered, so the painted Yes is set explicitly.
+        let mut view_flag = Some(true);
         let mut view_category = host
             .form_1601c
             .as_ref()
@@ -6600,7 +6645,8 @@ mod tests {
             .category_of_agent
             .clone();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
-        assert!(view_draft.any_taxes_withheld);
+        assert_eq!(view_draft.taxes_withheld_answer(), None);
+        view_draft.set_any_taxes_withheld(true);
 
         let filled = handle_request(
             &mut host,
@@ -6615,15 +6661,15 @@ mod tests {
         let patch = host.form_1601c_host_patch();
         assert_eq!(patch.any_taxes_withheld, Some(false));
         apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_category, &mut view_draft);
-        assert!(!view_flag);
-        assert!(!view_draft.any_taxes_withheld);
+        assert_eq!(view_flag, Some(false));
+        assert_eq!(view_draft.taxes_withheld_answer(), Some(false));
         assert!(!apply_1601c_host_header_patch(
             &Agent1601CHostPatch::default(),
             &mut view_flag,
             &mut view_category,
             &mut view_draft
         ));
-        assert!(!view_flag);
+        assert_eq!(view_flag, Some(false));
 
         // Next request: snapshot_host reloads from the view/draft validate reads.
         host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
@@ -6691,12 +6737,13 @@ mod tests {
             .find(ids::FORM_1601C_CATEGORY)
             .expect("category_btn in 1601-C tree");
         assert_eq!(category.role, "checkbox");
-        assert_eq!(category.checked, Some(true));
-        assert_eq!(category.value.as_deref(), Some("P"));
+        // A new return opens with Item 11 unanswered, like the official page.
+        assert_eq!(category.checked, Some(false));
+        assert_eq!(category.value.as_deref().unwrap_or_default(), "");
         assert!(category.enabled);
         assert_eq!(
             host.form_1601c.as_ref().unwrap().draft.category_of_agent,
-            "P"
+            ""
         );
 
         let listed = handle_request(
@@ -6717,7 +6764,7 @@ mod tests {
             .expect("category_of_agent field");
         assert_eq!(category_field["fillable"], true);
         assert_eq!(category_field["required"], true);
-        assert_eq!(category_field["value"], "P");
+        assert_eq!(category_field["value"], "");
 
         let government = handle_request(
             &mut host,
@@ -6806,10 +6853,16 @@ mod tests {
         );
         assert!(opened.ok, "{:?}", opened.error);
 
-        let mut view_flag = host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld;
-        let mut view_category = "P".to_string();
+        let mut view_flag = host
+            .form_1601c
+            .as_ref()
+            .unwrap()
+            .draft
+            .taxes_withheld_answer();
+        // New returns open with Item 11 unanswered, as the official page does.
+        let mut view_category = String::new();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
-        assert_eq!(view_draft.category_of_agent, "P");
+        assert_eq!(view_draft.category_of_agent, "");
 
         let filled = handle_request(
             &mut host,
@@ -6856,7 +6909,7 @@ mod tests {
             .expect("category_of_agent field");
         assert_eq!(category_field["value"], "G");
 
-        view_draft.any_taxes_withheld = false;
+        view_draft.set_any_taxes_withheld(false);
         view_draft.compute();
         host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
         let validated = handle_request(

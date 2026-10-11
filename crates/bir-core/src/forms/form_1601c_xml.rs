@@ -31,7 +31,14 @@ impl Form1601CDraft {
         );
 
         insert_bool_1_2(&mut fields, "frm1601c:AmendedRtn", self.is_amended);
-        insert_bool_1_2(&mut fields, "frm1601c:TaxWithheld", self.any_taxes_withheld);
+        match self.taxes_withheld_answer() {
+            Some(value) => insert_bool_1_2(&mut fields, "frm1601c:TaxWithheld", value),
+            // Unanswered Item 3: both radios unchecked, as the page opens.
+            None => {
+                insert(&mut fields, "frm1601c:TaxWithheld_1", "false".to_string());
+                insert(&mut fields, "frm1601c:TaxWithheld_2", "false".to_string());
+            }
+        }
 
         insert(
             &mut fields,
@@ -320,7 +327,19 @@ impl Form1601CDraft {
         let month = parse_required::<u8>(fields, "frm1601c:txtMonth", &mut errors);
         let taxable_year = parse_required::<u16>(fields, "frm1601c:txtYear", &mut errors);
         let is_amended = parse_bool_pair(fields, "frm1601c:AmendedRtn", &mut errors);
-        let any_taxes_withheld = parse_bool_pair(fields, "frm1601c:TaxWithheld", &mut errors);
+        // Both Item 3 radios unchecked is the page's unanswered state.
+        let any_taxes_withheld_unanswered = matches!(
+            (
+                field(fields, "frm1601c:TaxWithheld_1"),
+                field(fields, "frm1601c:TaxWithheld_2"),
+            ),
+            ("false", "false")
+        );
+        let any_taxes_withheld = if any_taxes_withheld_unanswered {
+            Some(false)
+        } else {
+            parse_bool_pair(fields, "frm1601c:TaxWithheld", &mut errors)
+        };
         let tax_relief = parse_bool_pair(fields, "frm1601c:SpecialTax", &mut errors);
 
         let category_private = parse_bool(fields, "frm1601c:CatAgent_P", &mut errors);
@@ -328,6 +347,8 @@ impl Form1601CDraft {
         let category_of_agent = match (category_private, category_government) {
             (Some(true), Some(false)) => Some("P".to_string()),
             (Some(false), Some(true)) => Some("G".to_string()),
+            // Unanswered Item 11, as the page opens.
+            (Some(false), Some(false)) => Some(String::new()),
             (Some(_), Some(_)) => {
                 errors.push((
                     "category_of_agent".to_string(),
@@ -400,6 +421,7 @@ impl Form1601CDraft {
             month: month.unwrap_or_default(),
             is_amended: is_amended.unwrap_or(false),
             any_taxes_withheld: any_taxes_withheld.unwrap_or(false),
+            any_taxes_withheld_unanswered,
             number_of_sheets: parse_optional::<u32>(fields, "frm1601c:txtSheets", &mut errors),
             atc: field(fields, "frm1601c:txtATC").to_string(),
             rdo_code: field(fields, "frm1601c:txtRDOCode").to_string(),

@@ -1465,7 +1465,7 @@ impl FormViewTrait for Form2200AView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "2200a-2020",
             &fields,
@@ -1501,7 +1501,6 @@ impl Render for Form2200AView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1557,9 +1556,9 @@ impl Render for Form2200AView {
                         })
                         .when(is_draft && open_issues > 0, |row| {
                             row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
-                                "Fix {open_issues} {} to queue (see Needs review).",
-                                if open_issues == 1 { "item" } else { "items" }
-                            )))
+                            "Fix {open_issues} {} to queue (listed under Needs review at the top).",
+                            if open_issues == 1 { "item" } else { "items" }
+                        )))
                         })
                         .child(
                             Button::new("2200a_submit")
@@ -1576,6 +1575,7 @@ impl Render for Form2200AView {
                         ),
                 );
 
+        let has_issues = !issues.is_empty();
         let mut body = div()
             .w_full()
             .max_w(px(1180.))
@@ -1583,6 +1583,9 @@ impl Render for Form2200AView {
             .flex()
             .flex_col()
             .gap_5()
+            .when(has_issues, |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
             .when_some(self.status_message.clone(), |col, message| {
                 col.child(
                     div()
@@ -1630,10 +1633,6 @@ impl Render for Form2200AView {
             crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
             cx,
         ));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
-
         div()
             .flex()
             .flex_col()

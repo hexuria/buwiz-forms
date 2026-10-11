@@ -1705,7 +1705,7 @@ impl AppState {
                     }
                     Ok(None) => {
                         tracing::info!(tin = %tin, year, month, "Creating new 1601C draft from profile");
-                        bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                        bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
                             profile, year, month,
                         )
                     }
@@ -1720,7 +1720,7 @@ impl AppState {
                         return;
                     }
                 },
-                Err(_) => bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                Err(_) => bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
                     profile, year, month,
                 ),
             };
