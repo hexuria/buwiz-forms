@@ -13,13 +13,14 @@ use bir_core::forms::form_1801::{
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
-use gpui_component::Disableable;
 use gpui_component::button::Button;
+use gpui_component::{ActiveTheme, Disableable};
 
 use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
     computed, field, format_tin, grid, money_text, section, yes_no,
 };
+use super::form_controls::{messages_for, with_field_error};
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -121,6 +122,43 @@ fn schedule_index(schedule: &str) -> usize {
 
 fn k(schedule: &str, row: usize, part: &str) -> String {
     format!("{schedule}_{row}_{part}")
+}
+
+/// The model's list field behind a Part V table (row messages use
+/// `<list>[<row>]`).
+fn schedule_list(schedule: &str) -> &'static str {
+    match schedule {
+        "s1" => "real_properties",
+        "s1a" => "family_homes",
+        "s2" => "shares",
+        "s2a" => "other_personal",
+        "s3" => "taxable_transfers",
+        _ => "business_interests",
+    }
+}
+
+/// Every validation key whose message belongs under the editor `editor_key`:
+/// its own key (malformed numbers) and the model's field name.
+fn error_keys(editor_key: &str) -> Vec<String> {
+    let model: &[&str] = match editor_key {
+        "month" | "day" | "year" => &["death_date"],
+        "rdo" => &["rdo_code"],
+        "name" => &["estate_name"],
+        "address" => &["residence_address"],
+        "admin_name" => &["administrator_name"],
+        "admin_tin" => &["administrator_tin"],
+        "contact" => &["contact_number"],
+        "relief" => &["tax_relief"],
+        "freq_other" => &["installment_frequency_other"],
+        "inst_year" => &["installment_year"],
+        "std_ded" => &["standard_deduction"],
+        "fam_ded" => &["family_home_deduction"],
+        "prev" => &["tax_paid_previous"],
+        _ => &[],
+    };
+    let mut keys = vec![editor_key.to_string()];
+    keys.extend(model.iter().map(|k| k.to_string()));
+    keys
 }
 
 fn split_text(split: &Form1801Split, part: &str) -> String {
@@ -299,24 +337,75 @@ impl Form1801View {
             .unwrap_or("")
     }
 
+    /// Messages (malformed input and validation) for any of `keys`.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.kit
+                .parse_errors
+                .iter()
+                .chain(self.kit.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// `element` with the messages for `keys` directly under it.
+    fn with_errors(&self, element: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(element, self.errors_for(keys))
+    }
+
+    /// An input with its own messages directly under it.
+    fn with_input_errors(&self, input: AnyElement, key: &str) -> AnyElement {
+        let keys = error_keys(key);
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        self.with_errors(input, &keys)
+    }
+
+    /// A read-only profile value with its messages under it, plus a pointer
+    /// to Profile Settings when there are any.
+    fn with_profile_note(
+        &self,
+        element: AnyElement,
+        keys: &[&str],
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let element = self.with_errors(element, keys);
+        if self.errors_for(keys).is_none() {
+            return element;
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(element)
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("This comes from your taxpayer profile. Edit it in Profile Settings."),
+            )
+            .into_any_element()
+    }
+
     fn f(&self, key: &str, layout: Layout, disabled: bool) -> AnyElement {
-        field(
+        let input = field(
             &self.kit,
             key,
             Self::label(key),
             layout,
             disabled || !self.draft.lifecycle.is_editable(),
-        )
+        );
+        self.with_input_errors(input, key)
     }
 
     fn cell(&self, key: String, caption: String, layout: Layout) -> AnyElement {
-        field(
+        let input = field(
             &self.kit,
             &key,
             &caption,
             layout,
             !self.draft.lifecycle.is_editable(),
-        )
+        );
+        self.with_input_errors(input, &key)
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -369,6 +458,7 @@ impl Form1801View {
                     .child(format_tin(&d.tin)),
             )
             .into_any_element();
+        let tin = self.with_profile_note(tin, &["tin"], cx);
         let mut children = vec![
             self.f("month", layout, false),
             self.f("day", layout, false),
@@ -380,14 +470,17 @@ impl Form1801View {
             self.f("rdo", layout, false),
             self.f("name", layout, false),
             self.f("address", layout, false),
-            yes_no::<Self>(
-                layout,
-                "1801_nra",
-                "Item 9 — Non-resident alien?",
-                d.non_resident_alien,
-                !editable,
-                cx,
-                |d, yes| d.non_resident_alien = Some(yes),
+            self.with_errors(
+                yes_no::<Self>(
+                    layout,
+                    "1801_nra",
+                    "Item 9 — Non-resident alien?",
+                    d.non_resident_alien,
+                    !editable,
+                    cx,
+                    |d, yes| d.non_resident_alien = Some(yes),
+                ),
+                &["non_resident_alien"],
             ),
             self.f("admin_name", layout, false),
             self.f("admin_tin", layout, false),
@@ -456,7 +549,10 @@ impl Form1801View {
                 }))
             })
             .collect();
-            children.push(choice_row(layout, "15D — Frequency of payment", freqs));
+            children.push(self.with_errors(
+                choice_row(layout, "15D — Frequency of payment", freqs),
+                &["installment_frequency"],
+            ));
             if d.installment_frequency == Some(Form1801Frequency::Others) {
                 children.push(self.f("freq_other", layout, false));
             }
@@ -482,7 +578,9 @@ impl Form1801View {
                     Self::specs,
                 )
             }));
-        kit::row_heading(&format!("Row {}", row + 1), remove)
+        let heading = kit::row_heading(&format!("Row {}", row + 1), remove);
+        let list_key = format!("{}[{row}]", schedule_list(schedule));
+        self.with_errors(heading, &[list_key.as_str()])
     }
 
     fn add_row(&self, schedule: &'static str, cx: &Context<Self>) -> AnyElement {
@@ -541,7 +639,8 @@ impl Form1801View {
             ("s1", "Schedule 1 — Real properties", "sched1"),
             ("s1a", "Schedule 1A — Family home", "sched1A"),
         ] {
-            children.push(kit::label(title).into_any_element());
+            children
+                .push(self.with_errors(kit::label(title).into_any_element(), &["classification"]));
             for row in 0..self.rows[schedule_index(schedule)] {
                 children.push(self.row_heading(schedule, row, cx));
                 let mut cells: Vec<AnyElement> = REAL
@@ -570,7 +669,10 @@ impl Form1801View {
             children.push(self.add_row(schedule, cx));
             children.push(totals(total_name, "Total exclusive / conjugal"));
         }
-        children.push(kit::label("Schedule 2 — Shares of stock").into_any_element());
+        children.push(self.with_errors(
+            kit::label("Schedule 2 — Shares of stock").into_any_element(),
+            &["shares"],
+        ));
         for row in 0..self.rows[2] {
             children.push(self.row_heading("s2", row, cx));
             let mut cells: Vec<AnyElement> = SHARES
@@ -1024,8 +1126,20 @@ impl Render for Form1801View {
 
 #[cfg(test)]
 mod tests {
-    use super::{AMOUNTS, Form1801View, TEXT_INPUTS};
+    use super::{AMOUNTS, Form1801View, TEXT_INPUTS, error_keys, schedule_list};
     use bir_core::forms::form_1801::{Form1801Draft, Form1801Particular};
+
+    /// Each message the model records lands under the editor it names.
+    #[test]
+    fn model_error_keys_reach_their_editors() {
+        assert!(error_keys("day").contains(&"death_date".to_string()));
+        assert!(error_keys("name").contains(&"estate_name".to_string()));
+        assert!(error_keys("address").contains(&"residence_address".to_string()));
+        assert!(error_keys("admin_name").contains(&"administrator_name".to_string()));
+        assert_eq!(error_keys("s1_0_oct"), ["s1_0_oct"]);
+        assert_eq!(schedule_list("s3"), "taxable_transfers");
+        assert_eq!(schedule_list("s4"), "business_interests");
+    }
 
     /// Every stored row gets an editor holding its value, so read-back keeps
     /// rows past the old six-row page.
