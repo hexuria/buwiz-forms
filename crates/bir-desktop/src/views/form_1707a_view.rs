@@ -255,13 +255,24 @@ impl Form1707AView {
                     .child(format_tin(&d.tin)),
             )
             .into_any_element();
+        let year_row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(kit::label("Item 2 — Year ended"))
+            .child(
+                div()
+                    .font_weight(FontWeight::BOLD)
+                    .child(d.year_end_year.to_string()),
+            )
+            .into_any_element();
         let mut children = vec![basis];
         if d.fiscal {
             children.push(self.f("month", layout, false));
             children.push(self.f("day", layout, false));
         }
         children.extend([
-            self.f("year", layout, false),
+            year_row,
             amended,
             self.f("sheets", layout, false),
             atc,
@@ -410,9 +421,7 @@ impl KitView for Form1707AView {
                 d.year_end_day = v;
             }
         }
-        if let Some(v) = r.whole::<u16>("year", "Item 2 year", 9999) {
-            d.year_end_year = v;
-        }
+        // "Item 2 — Year ended" year comes from the library tile (read-only); keep the draft's value.
         if let Some(v) = r.whole::<u16>("sheets", "Item 4", 999) {
             d.number_of_attached_sheets = v;
         }
