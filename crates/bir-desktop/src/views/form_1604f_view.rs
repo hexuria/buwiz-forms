@@ -24,6 +24,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -344,7 +345,7 @@ impl Form1604fView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -360,7 +361,14 @@ impl Form1604fView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(
+            row,
+            messages_for(
+                self.parse_errors.iter().chain(&self.validation_errors),
+                &[key, error_key],
+            ),
+        )
     }
 
     /// Two columns on desktop, one otherwise.
@@ -437,7 +445,22 @@ impl Form1604fView {
         button.disabled(disabled)
     }
 
-    fn choice_row(layout: Layout, label: &str, error: bool, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(
+        layout: Layout,
+        label: &str,
+        error: Option<String>,
+        buttons: Vec<Button>,
+    ) -> AnyElement {
+        let row = Self::choice_row_inner(layout, label, error.is_some(), buttons);
+        with_field_error(row, error)
+    }
+
+    fn choice_row_inner(
+        layout: Layout,
+        label: &str,
+        error: bool,
+        buttons: Vec<Button>,
+    ) -> AnyElement {
         let caption = div()
             .min_w_0()
             .max_w_full()
@@ -477,7 +500,7 @@ impl Form1604fView {
             Self::choice_row(
                 layout,
                 "Item 2 — Amended return?",
-                false,
+                None,
                 vec![
                     Self::choice("1604f_amended_yes", "Yes", amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
@@ -539,7 +562,7 @@ impl Form1604fView {
         let category_row = Self::choice_row(
             layout,
             "Item 8 — Category of withholding agent",
-            self.has_error("agent_category"),
+            messages_for(&self.validation_errors, &["agent_category"]),
             vec![
                 Self::choice(
                     "1604f_private",
@@ -568,7 +591,7 @@ impl Form1604fView {
             Self::choice_row(
                 layout,
                 "Item 8A — If private, top withholding agent?",
-                false,
+                None,
                 vec![
                     Self::choice("1604f_top_yes", "Yes", top, !editable).on_click(cx.listener(
                         |this, _, _, cx| this.edit(cx, |d| d.top_withholding_agent = true),
@@ -582,7 +605,7 @@ impl Form1604fView {
         let relief_row = Self::choice_row(
             layout,
             "Item 11 — Payees availing of tax relief under a Special Law or International Tax Treaty?",
-            false,
+            None,
             vec![
                 Self::choice("1604f_relief_yes", "Yes", relief, !editable).on_click(
                     cx.listener(|this, _, window, cx| this.set_tax_relief(true, window, cx)),
@@ -969,13 +992,13 @@ impl Render for Form1604fView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
             })
             .collect();
 
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let toolbar =
             div()
                 .flex()
@@ -1022,6 +1045,11 @@ impl Render for Form1604fView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && (error_count > 0), |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) need review before queuing."
+                            )))
                         })
                         .child(
                             Button::new("1604f_submit")
