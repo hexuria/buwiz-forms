@@ -88,9 +88,21 @@ fn fill_by_name_with_cells(
             let mut ordered = indices.clone();
             ordered.sort_by_key(|&index| tags[index].slot.unwrap_or(usize::MAX));
             let chars: Vec<char> = print.chars().collect();
+            // An email (or a `derived:line:` print value) longer than its
+            // comb prints whole on one line across the comb instead of losing
+            // the characters past the last box.
+            let whole_line = is_email_key(name) || name.starts_with("derived:line:");
+            let overflow = (whole_line && chars.len() > ordered.len())
+                .then(|| comb_overflow_line(html, input_name, print, chars.len()))
+                .flatten();
+            let spread = overflow.is_none();
+            if let Some((at, line)) = overflow {
+                replacements.push((at, at, line));
+            }
             for (offset, index) in ordered.into_iter().enumerate() {
                 let ch = chars
                     .get(offset)
+                    .filter(|_| spread)
                     .copied()
                     .map(|c| c.to_string())
                     .unwrap_or_default();
@@ -1171,6 +1183,26 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
+/// holding `text` left-aligned in a font small enough to fit. Returns the
+/// insert position just inside the cell and the input tag.
+fn comb_overflow_line(html: &str, cell: &str, text: &str, len: usize) -> Option<(usize, String)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let close = open + html[open..].find('>')?;
+    let tag = &html[open..close];
+    let width_at = tag.find(";width:")? + ";width:".len();
+    let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
+    // Arimo averages about 0.55 em per character; keep a small margin.
+    let size = (width / (len as f64 * 0.58)).clamp(4.0, 9.0);
+    Some((
+        close + 1,
+        format!(
+            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\">",
+            html_escape(text)
+        ),
+    ))
+}
+
 /// Email inputs (`txtEmail`, `txtI11Email`, `txtPg1Pt1I12Email`, ...) are
 /// never uppercased on print; matched case-insensitively on "email".
 fn is_email_key(name: &str) -> bool {
@@ -1687,6 +1719,20 @@ mod tests {
         assert!(is_email_key("txtEmail"));
         assert!(is_email_key("frm1700:txtI11Email"));
         assert!(!is_email_key("txtTaxpayerName"));
+    }
+
+    #[test]
+    fn email_longer_than_its_comb_prints_whole() {
+        let long = "Andrea.Mae.Galang.Accounting@Example-Company.com.ph";
+        let mut fields = BTreeMap::new();
+        fields.insert("txtEmail".to_string(), long.to_string());
+        let html = filled_document("2200an-2018", &fields).unwrap();
+        assert!(html.contains(&format!("readonly value=\"{long}\"")));
+        assert_eq!(comb_text(&html, "p1c35"), "");
+        fields.insert("txtEmail".to_string(), "juan@example.com".to_string());
+        let html = filled_document("2200an-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c35"), "juan@example.com");
+        assert!(!html.contains("readonly value="));
     }
 
     #[test]

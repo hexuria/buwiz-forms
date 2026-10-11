@@ -109,6 +109,18 @@ fn quarter_state_from_db(status: &str) -> QuarterState {
     }
 }
 
+/// How far a return has gone, for picking one state per month tile.
+fn state_rank(state: &QuarterState) -> u8 {
+    match state {
+        QuarterState::NotStarted => 0,
+        QuarterState::Draft => 1,
+        QuarterState::Queued => 2,
+        QuarterState::Submitted => 3,
+        QuarterState::Confirmed => 4,
+        QuarterState::Paid => 5,
+    }
+}
+
 fn counts_as_started_or_filed(state: &QuarterState) -> bool {
     matches!(
         state,
@@ -2732,6 +2744,7 @@ impl Database {
         year: u16,
     ) -> Result<FormFilingProgress, DbError> {
         let mut progress = FormFilingProgress::new_empty(form_code, year);
+        let monthly = matches!(frequency_for_form(form_code), FilingFrequency::Monthly);
 
         let mut stmt = self.conn.prepare(
             "SELECT quarter, period_key, status FROM form_drafts
@@ -2760,6 +2773,15 @@ impl Database {
                 }
                 FilingPeriod::Annual => {
                     progress.annual_status = state;
+                }
+                // A monthly form keyed by its Item 1 date (`MMDD`, e.g.
+                // 2200-AN) shows on its month's tile; the most advanced
+                // return of that month wins.
+                FilingPeriod::OpenEnded(mmdd) if monthly && (1..=12).contains(&(mmdd / 100)) => {
+                    let idx = (mmdd / 100 - 1) as usize;
+                    if state_rank(&state) > state_rank(&progress.months[idx]) {
+                        progress.months[idx] = state;
+                    }
                 }
                 FilingPeriod::OpenEnded(_) => {
                     if counts_as_started_or_filed(&state) {
@@ -5937,6 +5959,34 @@ mod tests {
 
         assert_eq!(annual.annual_status, QuarterState::Submitted);
         assert_eq!(open_ended.open_ended_count, 1);
+    }
+
+    #[test]
+    fn monthly_form_keyed_by_item_one_date_shows_on_its_month() {
+        let db = test_db();
+        for (mmdd, status) in [
+            (315, FilingStatus::Draft),
+            (320, FilingStatus::Draft),
+            (1105, FilingStatus::Draft),
+        ] {
+            db.save_form_draft_v2(
+                "123456789000",
+                "2200AN",
+                2026,
+                &FilingPeriod::OpenEnded(mmdd),
+                &status,
+                &TestDraft { value: 1 },
+            )
+            .unwrap();
+        }
+        let progress = db
+            .get_form_filing_progress("123456789000", "2200AN", 2026)
+            .unwrap();
+        assert_eq!(progress.months[2], QuarterState::Draft);
+        assert_eq!(progress.months[10], QuarterState::Draft);
+        assert_eq!(progress.months[0], QuarterState::NotStarted);
+        assert_eq!(progress.open_ended_count, 0);
+        assert!(state_rank(&QuarterState::Queued) > state_rank(&QuarterState::Draft));
     }
 
     #[test]

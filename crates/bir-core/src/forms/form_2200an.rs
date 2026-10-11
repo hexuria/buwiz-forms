@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::excise_places::{ExcisePlace, is_official_place};
+use super::excise_places::{ExcisePlace, is_official_place, place_name};
 use super::form_2000::{
     amount_in_official_range, cents, digits_only, has_cent_precision, split_tin, tin_error,
 };
@@ -469,6 +469,36 @@ impl Form2200ANDraft {
         self.balance_carried_forward = cents(self.amount_payable - self.total_payment);
     }
 
+    /// The field map plus the print-only `derived:line:` values the printed
+    /// sheet needs (`html-frozen/2200an-2018/writer-cells.json`): the Item 10
+    /// and 11 region, province and city names (the upload carries codes).
+    /// A region prints its short name (`REGION IV-A`, `NCR`). Never submitted.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        for (item, place) in [
+            (10, &self.place_of_production),
+            (11, &self.place_of_removal),
+        ] {
+            for (level, code) in [
+                ("region", &place.region),
+                ("province", &place.province),
+                ("city", &place.city),
+            ] {
+                let Some(name) = place_name(code.trim()).filter(|_| !code.trim().is_empty()) else {
+                    continue;
+                };
+                let name = if level == "region" {
+                    name.split(" - ").next().unwrap_or(name)
+                } else {
+                    name
+                };
+                let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+                fields.insert(format!("derived:line:item{item}_{level}"), name);
+            }
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
@@ -857,6 +887,22 @@ mod tests {
         draft.surcharge = 100.0;
         draft.recompute();
         draft
+    }
+
+    #[test]
+    fn print_map_names_the_places_and_keeps_the_upload_codes() {
+        let draft = sample();
+        let print = draft.to_print_field_map();
+        assert_eq!(print["derived:line:item10_region"], "NCR");
+        assert!(!print["derived:line:item10_province"].is_empty());
+        assert!(!print["derived:line:item11_city"].is_empty());
+        assert_eq!(print["frm2200ANv2018optRegion"], "130000000");
+        assert!(
+            !draft
+                .to_bir_field_map()
+                .keys()
+                .any(|key| key.starts_with("derived:"))
+        );
     }
 
     fn messages(draft: &Form2200ANDraft) -> Vec<String> {

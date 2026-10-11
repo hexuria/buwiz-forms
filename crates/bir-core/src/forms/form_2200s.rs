@@ -191,6 +191,14 @@ fn parse_amount(text: &str) -> f64 {
 }
 
 /// A typed amount as the field holds it after its blur.
+/// The official alert when a Schedule 1 row's Basic Excise Tax Due passes
+/// the field's 18 characters (BIR-Form2200S.hta `computeBasicTaxDue`).
+pub const FORM_2200S_BASIC_TAX_LIMIT_ALERT: &str =
+    "Exceeded maximum amount of 999,999,999,999.99 on Basic Excise Tax Due.";
+
+/// `999,999,999,999.99`: anything longer than its 18 characters alerts.
+const BASIC_TAX_DUE_MAX: f64 = 999_999_999_999.99;
+
 fn typed(value: f64) -> f64 {
     parse_amount(&round_down_input_text(value))
 }
@@ -480,6 +488,15 @@ impl Form2200SDraft {
 
     /// The official compute chain.
     pub fn recompute(&mut self) {
+        self.recompute_reporting();
+    }
+
+    /// [`Self::recompute`], returning true when a Schedule 1 row's Basic
+    /// Excise Tax Due passed 999,999,999,999.99 and the row was reset, as
+    /// `computeBasicTaxDue` / `computeSched1BasicTaxDue` do after their alert
+    /// ([`FORM_2200S_BASIC_TAX_LIMIT_ALERT`]).
+    pub fn recompute_reporting(&mut self) -> bool {
+        let mut reset = false;
         let actual = self.manner == Form2200SManner::ActualRemoval;
         if !actual {
             // Schedule 1 belongs to a payment on actual removal.
@@ -508,6 +525,12 @@ impl Form2200SDraft {
             row.sales_value = typed(row.sales_value);
             row.volume = typed(row.volume);
             row.basic_tax_due = computed(beverage.rate * row.volume);
+            if row.basic_tax_due > BASIC_TAX_DUE_MAX {
+                row.sales_value = 0.0;
+                row.volume = 0.0;
+                row.basic_tax_due = 0.0;
+                reset = true;
+            }
         }
         for row in self.beverages.iter().take(9) {
             total += row.basic_tax_due;
@@ -518,6 +541,13 @@ impl Form2200SDraft {
             other.sales_value = typed(other.sales_value);
             other.volume = typed(other.volume);
             other.basic_tax_due = computed(other.rate * other.volume);
+            if other.basic_tax_due > BASIC_TAX_DUE_MAX {
+                *other = Form2200SOtherRow {
+                    atc: "XB".to_string(),
+                    ..Form2200SOtherRow::default()
+                };
+                reset = true;
+            }
             total += other.basic_tax_due;
         }
         self.schedule_total = computed(total);
@@ -543,6 +573,7 @@ impl Form2200SDraft {
         };
         self.total_payment = computed(self.tax_payment + self.penalties_paid);
         self.balance_carried_forward = computed(self.amount_payable - self.total_payment);
+        reset
     }
 
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
@@ -730,6 +761,74 @@ impl Form2200SDraft {
         chrono::DateTime::parse_from_rfc3339(&stamp)
             .map(|time| time.with_timezone(&manila).format("%H%M%S").to_string())
             .unwrap_or_else(|_| "000000".to_string())
+    }
+}
+
+impl Form2200SDraft {
+    /// `initialValidateBeforeSave` (BIR-Form2200S.hta): the first official
+    /// Save alert and the key it concerns, or `None`. The app still saves
+    /// the draft and shows this alert as a message after saving.
+    pub fn save_alert(&self) -> Option<(&'static str, &'static str)> {
+        let leap = chrono::NaiveDate::from_ymd_opt(i32::from(self.year), 2, 29).is_some();
+        if !leap && self.month == 2 && self.day > 28 {
+            return Some(("day", "Filing year is not a leap year."));
+        }
+        if leap && self.month == 2 && self.day > 29 {
+            return Some(("day", "Invalid date entry."));
+        }
+        if self.day == 0 {
+            return Some(("day", "Please enter valid day on item 1."));
+        }
+        if self.year == 0 {
+            return Some(("year", "Please enter valid year on item 1."));
+        }
+        if self.year < 1900 {
+            return Some((
+                "year",
+                "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+            ));
+        }
+        if self.day > 31 {
+            return Some(("day", "Please indicate a valid Day."));
+        }
+        let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
+        if [tin1, tin2, tin3, branch]
+            .iter()
+            .any(|part| part.is_empty())
+        {
+            return Some(("tin", "Please enter a valid TIN number on Item 4."));
+        }
+        if self.rdo_code.trim().trim_start_matches('0').is_empty() {
+            return Some(("rdo_code", "Please enter a valid RDO Code on Item 5."));
+        }
+        if self.taxpayer_name.is_empty() {
+            return Some((
+                "taxpayer_name",
+                "Please enter a valid Taxpayer Name on Item 6.",
+            ));
+        }
+        if self.registered_address.is_empty() {
+            return Some((
+                "registered_address",
+                "Please enter a valid Registered Address on Item 7.",
+            ));
+        }
+        if self.zip_code.chars().count() < 4 {
+            return Some(("zip_code", "Please enter Taxpayer's Zip Code on Item 7A."));
+        }
+        if self.contact_number.is_empty() {
+            return Some((
+                "contact_number",
+                "Please enter a valid Contact Number on Item 8.",
+            ));
+        }
+        if self.line_of_business.is_empty() {
+            return Some((
+                "line_of_business",
+                "Please enter a valid Main Line of Business on Item 9.",
+            ));
+        }
+        None
     }
 }
 
@@ -966,23 +1065,12 @@ impl FormValidator for Form2200SDraft {
                 break;
             }
         }
-        if !self.is_amended && self.previous_payment != 0.0 {
-            err(
-                "previous_payment",
-                "Item 21 applies only to an amended return.",
-            );
-        }
         if self.other_scheme_text.chars().count() > 50 {
             err("other_scheme_text", "Item 17 takes up to 50 characters.");
         }
-        let mut expected = self.clone();
-        expected.recompute();
-        if expected != *self {
-            err(
-                "balance_carried_forward",
-                "Totals are out of date. Recompute the return.",
-            );
-        }
+        // Item 21 on an original return and stale totals are not checked
+        // here: recompute() clears/refreshes them, and queue() recomputes
+        // before the payload, so the official page has nothing to alert.
         errors
     }
 }
@@ -1162,6 +1250,118 @@ mod tests {
             .into_iter()
             .map(|(_, message)| message)
             .collect()
+    }
+
+    #[test]
+    fn basic_tax_due_over_the_limit_resets_the_row() {
+        let mut draft = sample();
+        assert!(!draft.recompute_reporting());
+        // XB010 is 6.00 per liter: 200 billion liters is 1.2 trillion pesos.
+        draft.beverages[0].sales_value = 5.0;
+        draft.beverages[0].volume = 200_000_000_000.0;
+        assert!(draft.recompute_reporting());
+        assert_eq!(draft.beverages[0].sales_value, 0.0);
+        assert_eq!(draft.beverages[0].volume, 0.0);
+        assert_eq!(draft.beverages[0].basic_tax_due, 0.0);
+        assert_eq!(draft.beverages[2].sales_value, 500_000.0);
+        draft.others.push(Form2200SOtherRow {
+            atc: "XB099".into(),
+            description: "Other".into(),
+            tax_bracket: "x".into(),
+            rate: 12.0,
+            sales_value: 1.0,
+            volume: 100_000_000_000.0,
+            basic_tax_due: 0.0,
+        });
+        assert!(draft.recompute_reporting());
+        assert_eq!(
+            draft.others[0],
+            Form2200SOtherRow {
+                atc: "XB".into(),
+                ..Form2200SOtherRow::default()
+            }
+        );
+        assert_eq!(
+            FORM_2200S_BASIC_TAX_LIMIT_ALERT,
+            "Exceeded maximum amount of 999,999,999,999.99 on Basic Excise Tax Due."
+        );
+    }
+
+    #[test]
+    fn save_alerts_follow_initial_validate_before_save() {
+        let draft = sample();
+        assert_eq!(draft.save_alert(), None);
+        let alert = |change: &dyn Fn(&mut Form2200SDraft)| {
+            let mut d = sample();
+            change(&mut d);
+            d.save_alert().map(|(_, message)| message)
+        };
+        assert_eq!(
+            alert(&|d| {
+                d.month = 2;
+                d.day = 29;
+            }),
+            Some("Filing year is not a leap year.")
+        );
+        assert_eq!(
+            alert(&|d| {
+                d.year = 2024;
+                d.month = 2;
+                d.day = 30;
+            }),
+            Some("Invalid date entry.")
+        );
+        assert_eq!(
+            alert(&|d| d.day = 0),
+            Some("Please enter valid day on item 1.")
+        );
+        assert_eq!(
+            alert(&|d| d.year = 1899),
+            Some("Invalid date entry on Item no.1. Entry should not be lower than 1900.")
+        );
+        assert_eq!(alert(&|d| d.day = 32), Some("Please indicate a valid Day."));
+        assert_eq!(
+            alert(&|d| d.tin = "12345".into()),
+            Some("Please enter a valid TIN number on Item 4.")
+        );
+        assert_eq!(
+            alert(&|d| d.rdo_code = "000".into()),
+            Some("Please enter a valid RDO Code on Item 5.")
+        );
+        assert_eq!(
+            alert(&|d| d.taxpayer_name.clear()),
+            Some("Please enter a valid Taxpayer Name on Item 6.")
+        );
+        assert_eq!(
+            alert(&|d| d.registered_address.clear()),
+            Some("Please enter a valid Registered Address on Item 7.")
+        );
+        assert_eq!(
+            alert(&|d| d.zip_code = "110".into()),
+            Some("Please enter Taxpayer's Zip Code on Item 7A.")
+        );
+        assert_eq!(
+            alert(&|d| d.contact_number.clear()),
+            Some("Please enter a valid Contact Number on Item 8.")
+        );
+        assert_eq!(
+            alert(&|d| d.line_of_business.clear()),
+            Some("Please enter a valid Main Line of Business on Item 9.")
+        );
+        // Save is sparse: Validate-only items such as the email raise no
+        // Save alert. (The editor saves the draft either way and shows the
+        // alert afterwards; queueing blocks through validate().)
+        assert_eq!(alert(&|d| d.email.clear()), None);
+    }
+
+    #[test]
+    fn stale_or_amended_only_values_raise_no_app_text() {
+        let mut draft = sample();
+        draft.previous_payment = 10.0;
+        draft.balance_carried_forward = 123.0;
+        let messages = messages(&draft);
+        assert!(!messages.iter().any(|m| m.contains("Item 21 applies")));
+        assert!(!messages.iter().any(|m| m.contains("out of date")));
     }
 
     #[test]

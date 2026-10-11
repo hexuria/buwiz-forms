@@ -769,18 +769,22 @@ impl Form2200ANView {
             let value = (!value.is_empty()).then_some(value);
             select_field(label, state, &options, value, disabled, None, cx)
         };
+        let title = div()
+            .min_w_0()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(title.to_string());
+        let title = if self.errors_for(&[error_key]).is_some() {
+            title.text_color(gpui::red())
+        } else {
+            title
+        };
         let body = div()
             .flex()
             .flex_col()
             .gap_2()
             .w_full()
-            .child(
-                div()
-                    .min_w_0()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(title.to_string()),
-            )
+            .child(title)
             .child(level(
                 "Region",
                 &selects.region,
@@ -1284,8 +1288,7 @@ impl FormViewTrait for Form2200ANView {
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !can_queue_for_submission(Form2200ANDraft::FORM_CODE) {
-            self.status_message =
-                Some("2200-AN is not enabled for in-app submission in this build.".into());
+            self.status_message = Some(QUEUE_UNAVAILABLE.into());
             cx.notify();
             return;
         }
@@ -1405,7 +1408,7 @@ impl FormViewTrait for Form2200ANView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "2200an-2018",
             &fields,
@@ -1426,6 +1429,10 @@ impl FormViewTrait for Form2200ANView {
     }
 }
 
+/// Why Queue for submission is off: the registry leaves 2200-AN unqueueable
+/// (the official PROD SFTP map has no 2200ANv2018 folder).
+const QUEUE_UNAVAILABLE: &str = "In-app submission isn't available for 2200-AN in this build.";
+
 impl Render for Form2200ANView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
@@ -1433,6 +1440,7 @@ impl Render for Form2200ANView {
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let open_issues = self.validation_errors.len() + self.parse_errors.len();
+        let queue_supported = can_queue_for_submission(Form2200ANDraft::FORM_CODE);
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1442,7 +1450,6 @@ impl Render for Form2200ANView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1496,7 +1503,15 @@ impl Render for Form2200ANView {
                                     })),
                             )
                         })
-                        .when(is_draft && open_issues > 0, |row| {
+                        .when(is_draft && !queue_supported, |row| {
+                            row.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(QUEUE_UNAVAILABLE),
+                            )
+                        })
+                        .when(is_draft && queue_supported && open_issues > 0, |row| {
                             row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
                                 "Fix {open_issues} {} to queue (see Needs review).",
                                 if open_issues == 1 { "item" } else { "items" }
@@ -1508,6 +1523,7 @@ impl Render for Form2200ANView {
                                 .primary()
                                 .disabled(
                                     !is_draft
+                                        || !queue_supported
                                         || !self.validation_errors.is_empty()
                                         || !self.parse_errors.is_empty(),
                                 )
@@ -1517,6 +1533,7 @@ impl Render for Form2200ANView {
                         ),
                 );
 
+        let needs_review = (!issues.is_empty()).then(|| self.section("Needs review", issues, cx));
         let mut body = div()
             .w_full()
             .max_w(px(1180.))
@@ -1559,6 +1576,7 @@ impl Render for Form2200ANView {
                         ),
                 )
             })
+            .children(needs_review)
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_manner(layout, cx));
@@ -1571,9 +1589,6 @@ impl Render for Form2200ANView {
             crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
             cx,
         ));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
