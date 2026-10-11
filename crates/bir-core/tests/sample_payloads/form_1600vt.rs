@@ -1,4 +1,4 @@
-use crate::{check_sample, dummy_profile};
+use crate::{check_sample, check_sample_with_layout, dummy_profile};
 use bir_core::forms::form_1600vt::{
     Form1600VtAgentCategory, Form1600VtDraft, Form1600VtScheduleRow, form_1600vt_atc_index,
 };
@@ -90,5 +90,59 @@ fn form_1600vt_private_sample_payload_is_current() {
         "1600vt-v2018-private",
         &payload,
         "597795b4e6382a69401893c9385ad8b582d98e05e0ae775f5b6e13f9fdce5a37",
+    );
+}
+
+/// More than five ATCs: the sixth onward go to the "Other Selected ATC"
+/// table, written after `hPartIITableSize`.
+fn sample_1600vt_other_atcs() -> Form1600VtDraft {
+    let mut draft =
+        Form1600VtDraft::new_from_profile(&dummy_profile("1600VT", "Corporation"), 2025, 8);
+    draft.set_agent_category(Form1600VtAgentCategory::Private);
+    draft.set_taxes_withheld(true);
+    for (code, rate) in [
+        ("WV110", "12.0"),
+        ("WV050", "12.0"),
+        ("WV060", "12.0"),
+        ("WV070", "12.0"),
+        ("WV012", "12.0"),
+        ("WV014", "12.0"),
+        ("WV080", "12.0"),
+        ("WV100", "12.0"),
+    ] {
+        draft
+            .toggle_atc(form_1600vt_atc_index(code, rate).unwrap())
+            .unwrap();
+    }
+    let bases = [
+        123_456.785,
+        1_000.0,
+        77_777.77,
+        50_000.005,
+        3_333.335,
+        45_000.25,
+        8_333.33,
+        99.995,
+    ];
+    for (row, base) in draft.atc_rows.iter_mut().zip(bases) {
+        row.tax_base = base;
+    }
+    draft.other_payments = 500.0;
+    draft.interest = 12.5;
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1600vt_other_atcs_sample_payload_is_current() {
+    let draft = sample_1600vt_other_atcs();
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1600VT must validate: {errors:?}"));
+    check_sample_with_layout(
+        "1600VT-082025",
+        &draft.official_layout().unwrap(),
+        &payload,
+        "704d89591bcd7a8adc3a62dc4a080815d9d193eab41accfa024463924f71169f",
     );
 }
