@@ -117,12 +117,34 @@ impl EditorState {
         window: &mut Window,
         cx: &mut Context<V>,
     ) -> Self {
-        let mut inputs = BTreeMap::new();
-        let mut subscriptions = Vec::new();
+        let mut state = Self {
+            inputs: BTreeMap::new(),
+            validation_errors,
+            parse_errors: Vec::new(),
+            status_message: None,
+            release_claim_confirm_open: false,
+            scroll_handle: ScrollHandle::new(),
+            _subscriptions: Vec::new(),
+        };
+        state.ensure_inputs(specs, window, cx);
+        state
+    }
+
+    /// Add an editor for every spec whose key has none yet (schedule rows
+    /// added at run time). Existing editors are left as they are.
+    pub fn ensure_inputs<V: KitView>(
+        &mut self,
+        specs: Vec<InputSpec>,
+        window: &mut Window,
+        cx: &mut Context<V>,
+    ) {
         for (key, placeholder, value) in specs {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
+            self._subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
                 |this: &mut V, _, event: &InputEvent, _, cx| {
@@ -131,16 +153,7 @@ impl EditorState {
                     }
                 },
             ));
-            inputs.insert(key, input);
-        }
-        Self {
-            inputs,
-            validation_errors,
-            parse_errors: Vec::new(),
-            status_message: None,
-            release_claim_confirm_open: false,
-            scroll_handle: ScrollHandle::new(),
-            _subscriptions: subscriptions,
+            self.inputs.insert(key, input);
         }
     }
 
@@ -304,6 +317,49 @@ pub fn edit_and_reload<V: KitView>(
 ) {
     edit(this, cx, change);
     reload_inputs(this, window, cx);
+}
+
+/// Add or remove schedule rows: read the editors into the draft, apply
+/// `change` (which may grow or shrink the view's row lists), create editors
+/// for any new row from `specs`, then reload every editor from the draft.
+pub fn edit_rows<V: KitView>(
+    this: &mut V,
+    window: &mut Window,
+    cx: &mut Context<V>,
+    change: impl FnOnce(&mut V),
+    specs: fn(&V) -> Vec<InputSpec>,
+) {
+    if !this.draft().lifecycle().is_editable() {
+        return;
+    }
+    sync(this, cx);
+    change(this);
+    let specs = specs(this);
+    this.kit_mut().ensure_inputs(specs, window, cx);
+    reload_inputs(this, window, cx);
+    sync(this, cx);
+    this.kit_mut().status_message = None;
+}
+
+/// "Add row" under a growable schedule.
+pub fn add_row_button(id: impl Into<ElementId>, disabled: bool) -> Button {
+    Button::new(id)
+        .label("Add row")
+        .outline()
+        .small()
+        .disabled(disabled)
+}
+
+/// A schedule row's caption with its "Remove" control.
+pub fn row_heading(caption: &str, remove: Button) -> AnyElement {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .child(label(caption).font_weight(FontWeight::BOLD))
+        .child(remove.label("Remove").outline().small())
+        .into_any_element()
 }
 
 /// Reset every editor's text from the draft.
