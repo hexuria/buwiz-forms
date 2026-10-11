@@ -1,7 +1,7 @@
 {
  "form_id": "2200p-v2020",
  "html_slug": "2200p-2020",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins. Part IV rows 25-28 are 33-slot combs spanning all columns, so those row keys stay blank. Schedule 1: the 25 printed product rows carry ATC codes XP010 to XP220 that match the layout ATC1-25 defaults, so each row maps its ten fillable cells (Place of Removal through Basic Excise Tax Due) by column caption; the two Others rows (26, 27) take description, unit, rate and the ten amount cells. The printed description, unit and rate of the product rows, and the ATC cells, have no fillable cells and stay blank. Item 8 contact and item 9 email share one 40-slot comb and stay blank; the region/province/city keys hold option codes and stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins. Part IV rows 25-28 are 33-slot combs spanning all columns, so those row keys stay blank. Schedule 1: the 25 printed product rows carry ATC codes XP010 to XP220 that match the layout ATC1-25 defaults, so each row maps its ten fillable cells (Place of Removal through Basic Excise Tax Due) by column caption; the two Others rows (26, 27) take description, unit, rate and the ten amount cells. The printed description, unit and rate of the product rows, and the ATC cells, have no fillable cells and stay blank. Item 8 contact and item 9 email share one 40-slot comb, and each of items 10 and 11 has one 40-slot comb for its region, province and city codes; each comb takes one derived print-map line (to_print_field_map) with the values placed under their own captions.",
  "joins": [
   {
    "writer_key": "frm2200P:txtPg1I1Month",
@@ -1874,6 +1874,24 @@
    "html_id": "p2c403",
    "printed": "Others row 27, Basic Excise Tax Due column",
    "reason": "Others row cell under the column caption"
+  },
+  {
+   "writer_key": "derived:contact_email",
+   "html_id": "p1c34",
+   "printed": "8 Contact Number / 9 Email Address",
+   "reason": "one 40-slot comb under both captions: the print map puts the contact number from slot 0 (caption x 27pt) and the email from slot 12 (caption x 200.7pt, pitch 14.52pt from x 16.32pt)"
+  },
+  {
+   "writer_key": "derived:place_of_production",
+   "html_id": "p1c39",
+   "printed": "10 Place of Production: Region / Province / City",
+   "reason": "one 40-slot comb under the three captions: region code from slot 0, province code from slot 10 (caption x 94pt; a 9-digit region code needs slots 0-8), city code from slot 24 (caption x 369pt)"
+  },
+  {
+   "writer_key": "derived:place_of_removal",
+   "html_id": "p1c44",
+   "printed": "11 Place of Removal: Region / Province / City",
+   "reason": "one 40-slot comb under the three captions: region code from slot 0, province code from slot 10, city code from slot 24"
   }
  ],
  "money_joins": [],
@@ -1922,18 +1940,6 @@
   }
  ],
  "left_out": [
-  {
-   "html_id": "p1c34",
-   "reason": "one 40-slot comb under both the item 8 Contact Number and item 9 Email Address captions; cannot tell which item it carries, so txtPg1Pt1I8ContactNumber and txtPg1Pt1I9Email stay blank"
-  },
-  {
-   "html_id": "p1c39",
-   "reason": "Region / Province / City comb under item 10 holds the option codes with no separate cell per code; left blank"
-  },
-  {
-   "html_id": "p1c44",
-   "reason": "Region / Province / City comb under item 11 holds the option codes with no separate cell per code; left blank"
-  },
   {
    "html_id": "p1c107",
    "reason": "Part IV row 25 (Cash/Bank Debit Memo) is one 33-slot comb across the Drawee Bank, Number, Date and Amount columns; no separate cell per column, so the row keys stay blank"

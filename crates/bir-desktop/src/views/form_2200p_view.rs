@@ -32,6 +32,9 @@ use bir_core::profile::TaxpayerProfile;
 
 impl EventEmitter<QueueableFormEvent> for Form2200PView {}
 
+/// Where Items 4 and 5 (TIN, RDO) are fixed: they have no input on this page.
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
+
 /// Width classes the page lays out for.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Layout {
@@ -354,11 +357,9 @@ impl Form2200PView {
                 parsed
             };
             if let Some(day) = number("day", "Item 1 day") {
-                draft.day = if (0.0..=31.0).contains(&day) {
-                    day as u8
-                } else {
-                    0
-                };
+                // An out-of-range day is kept (capped to the field's range)
+                // so validate() raises the official valid-date alert.
+                draft.day = day.clamp(0.0, f64::from(u8::MAX)) as u8;
             }
             if let Some(sheets) = number("sheets", "Item 3") {
                 draft.number_of_attached_sheets = if (0.0..=9999.0).contains(&sheets) {
@@ -978,6 +979,15 @@ impl Form2200PView {
             static_value("Item 4 — TIN", format_tin(&self.draft.tin), "tin"),
             static_value("Item 5 — RDO Code", self.draft.rdo_code.clone(), "rdo_code"),
         ];
+        if self.errors_for(&["tin", "rdo_code"]).is_some() {
+            fields.push(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(PROFILE_NOTE)
+                    .into_any_element(),
+            );
+        }
         for (key, label, _) in TEXT_INPUTS.iter().skip(3).take(5) {
             fields.push(self.field(key, label, layout, !editable));
         }
@@ -1482,7 +1492,7 @@ impl FormViewTrait for Form2200PView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "2200p-2020",
             &fields,
@@ -1514,6 +1524,12 @@ impl Render for Form2200PView {
             Layout::Desktop => px(32.),
         };
         let open_issues = self.validation_errors.len() + self.parse_errors.len();
+        let first_issue = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter())
+            .next()
+            .map(|(_, message)| message.replace('\n', " "));
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -1572,21 +1588,29 @@ impl Render for Form2200PView {
                                     })),
                             )
                         })
-                        .when(is_draft && open_issues > 0, |row| {
-                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
-                                "Fix {open_issues} {} to queue (see Needs review).",
-                                if open_issues == 1 { "item" } else { "items" }
-                            )))
+                        .when_some(first_issue.filter(|_| is_draft), |row, first| {
+                            row.child(
+                                div()
+                                    .max_w(px(420.))
+                                    .text_xs()
+                                    .text_color(cx.theme().danger)
+                                    .child(if open_issues == 1 {
+                                        first
+                                    } else {
+                                        format!(
+                                            "{first} (+{} more under Needs review)",
+                                            open_issues - 1
+                                        )
+                                    }),
+                            )
                         })
                         .child(
                             Button::new("2200p_submit")
                                 .label("Queue for submission")
                                 .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
+                                // Stays clickable: with open items the click
+                                // explains why instead of queueing.
+                                .disabled(!is_draft)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.mark_submitted(window, cx)
                                 })),

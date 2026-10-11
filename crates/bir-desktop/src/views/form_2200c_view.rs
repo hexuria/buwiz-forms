@@ -30,6 +30,9 @@ impl EventEmitter<QueueableFormEvent> for Form2200CView {}
 
 const PLACE_FORM: &str = "2200C";
 
+/// Where Items 5 and 6 (TIN, RDO) are fixed: they have no input on this page.
+const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
+
 /// Width classes the page lays out for.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Layout {
@@ -204,14 +207,7 @@ impl Form2200CView {
                     .parse::<usize>()
                     .ok()
                     .and_then(|row| draft.schedule.get(row))
-                    .map(|row| {
-                        let value = row_value(row, prefix);
-                        if value == 0.0 {
-                            String::new()
-                        } else {
-                            format!("{value}")
-                        }
-                    })
+                    .map(|row| money_text(row_value(row, prefix)))
                     .unwrap_or_default()
             }
         }
@@ -243,11 +239,9 @@ impl Form2200CView {
         };
         let mut draft = self.draft.clone();
         if let Some(day) = number("day", "Item 1 day", cx) {
-            draft.day = if (0.0..=99.0).contains(&day) {
-                day as u8
-            } else {
-                0
-            };
+            // An out-of-range day is kept (capped to the field's range) so
+            // validate() raises the official valid-date alert, not "required".
+            draft.day = day.clamp(0.0, f64::from(u8::MAX)) as u8;
         }
         // Item 1 month and year come from the library tile (read-only).
         for (key, label) in MONEY_INPUTS {
@@ -518,12 +512,27 @@ impl Form2200CView {
         let mut keys = vec![key];
         keys.extend_from_slice(Self::model_keys(key));
         let message = self.errors_for(&keys);
+        // A Schedule 1 row message sits under its row card; its inputs only
+        // turn red so the failing row is easy to find.
+        let row_flagged = key
+            .chars()
+            .last()
+            .and_then(|c| c.to_digit(10))
+            .filter(|_| {
+                ROW_INPUTS
+                    .iter()
+                    .any(|(p, _)| key.len() == p.len() + 1 && key.starts_with(p))
+            })
+            .is_some_and(|row| {
+                let row_key = format!("schedule[{row}]");
+                self.errors_for(&[row_key.as_str()]).is_some()
+            });
         let label = div()
             .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if message.is_some() {
+        let label = if message.is_some() || row_flagged {
             label.text_color(gpui::red())
         } else {
             label
@@ -812,6 +821,15 @@ impl Form2200CView {
                 &["rdo_code"],
             ),
         ];
+        if self.errors_for(&["tin", "rdo_code"]).is_some() {
+            fields.push(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(PROFILE_NOTE)
+                    .into_any_element(),
+            );
+        }
         for key in ["name", "address", "zip", "phone", "email"] {
             let label = TEXT_INPUTS
                 .iter()
@@ -1020,12 +1038,14 @@ impl QueueableFormView for Form2200CView {
         }
     }
 
-    fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2200CDraft {
-        Form2200CDraft::new_from_profile(profile, year)
+    /// The library tile's month (`period`) sets Item 1; Month stays locked.
+    fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form2200CDraft {
+        Form2200CDraft::new_for_month(profile, year, period)
     }
 
-    /// One return per Item 1 date (`MMDD`). Reopen this year's latest saved
-    /// return, else start a new one.
+    /// One return per Item 1 date (`MMDD`). Reopen the latest saved return
+    /// in the tile's month (any month when the tile has none), else start a
+    /// new one in that month.
     fn load_draft(
         db: &Database,
         profile: &TaxpayerProfile,
@@ -1033,7 +1053,12 @@ impl QueueableFormView for Form2200CView {
         period: u8,
     ) -> Form2200CDraft {
         let tin = profile.tin.full();
-        (1..=12i64)
+        let months = if (1..=12).contains(&period) {
+            i64::from(period)..=i64::from(period)
+        } else {
+            1..=12i64
+        };
+        months
             .flat_map(|month| (1..=31i64).map(move |day| month * 100 + day))
             .filter_map(|key| {
                 db.get_queueable_draft::<Form2200CDraft>(&tin, year, key)
@@ -1239,7 +1264,7 @@ impl FormViewTrait for Form2200CView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "2200c-2018",
             &fields,
@@ -1267,6 +1292,12 @@ impl Render for Form2200CView {
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let open_issues = self.validation_errors.len() + self.parse_errors.len();
+        let first_issue = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter())
+            .next()
+            .map(|(_, message)| message.replace('\n', " "));
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1337,21 +1368,29 @@ impl Render for Form2200CView {
                                     })),
                             )
                         })
-                        .when(is_draft && open_issues > 0, |row| {
-                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
-                                "Fix {open_issues} {} to queue (see Needs review).",
-                                if open_issues == 1 { "item" } else { "items" }
-                            )))
+                        .when_some(first_issue.filter(|_| is_draft), |row, first| {
+                            row.child(
+                                div()
+                                    .max_w(px(420.))
+                                    .text_xs()
+                                    .text_color(cx.theme().danger)
+                                    .child(if open_issues == 1 {
+                                        first
+                                    } else {
+                                        format!(
+                                            "{first} (+{} more under Needs review)",
+                                            open_issues - 1
+                                        )
+                                    }),
+                            )
                         })
                         .child(
                             Button::new("2200c_submit")
                                 .label("Queue for submission")
                                 .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
+                                // Stays clickable: with open items the click
+                                // explains why instead of queueing.
+                                .disabled(!is_draft)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.mark_submitted(window, cx)
                                 })),

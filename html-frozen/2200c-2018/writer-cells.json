@@ -1,7 +1,7 @@
 {
  "form_id": "2200c-v2018",
  "html_slug": "2200c-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs (MM, DD, YYYY). Item 6 RDO takes the 4-slot comb to the right of its caption (txtPg1I6RDO; rdoPg1Pt1I6RDO carries the same value and is not joined). Items 9 and 10 share one full-width 40-slot comb, and Item 11 Region, Province and City share another, so those keys stay blank. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins, not money_joins. Part IV rows 25-28 are 33-slot combs spanning the Drawee Bank, Number, Date and Amount columns, so those row keys stay blank. Schedule 1 (page 2) has ten rows numbered by position, top to bottom, and columns A-J whose captions sit directly above each cell: A exempt, B excisable, C non-excisable (CPP), D net of VAT, E excisable net, F excisable VAT exempt, G non-excisable (GR), H excise tax, I VAT, J total billed (AC). The total cell on the TOTAL EXCISE TAX DUE row joins to ACexciseTotal. Keys with no fillable cell (TIN parts and the second name line on page 2, signature names, Part IV name fields) stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs (MM, DD, YYYY). Item 6 RDO takes the 4-slot comb to the right of its caption (txtPg1I6RDO; rdoPg1Pt1I6RDO carries the same value and is not joined). Items 9 and 10 share one full-width 40-slot comb, and Item 11 Region, Province and City share another; each takes one derived print-map line (to_print_field_map) with the values placed under their own captions. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins, not money_joins. Part IV rows 25-28 are 33-slot combs spanning the Drawee Bank, Number, Date and Amount columns, so those row keys stay blank. Schedule 1 (page 2) has ten rows numbered by position, top to bottom, and columns A-J whose captions sit directly above each cell: A exempt, B excisable, C non-excisable (CPP), D net of VAT, E excisable net, F excisable VAT exempt, G non-excisable (GR), H excise tax, I VAT, J total billed (AC). The total cell on the TOTAL EXCISE TAX DUE row joins to ACexciseTotal. Keys with no fillable cell (TIN parts and the second name line on page 2, signature names, Part IV name fields) stay blank.",
  "joins": [
   {
    "writer_key": "frm2200C:txtPg1I1Month",
@@ -818,6 +818,18 @@
    "html_id": "p2c126",
    "printed": "TOTAL EXCISE TAX DUE (To Part III, Item 16)",
    "reason": "row label \"TOTAL EXCISE TAX DUE\" on the same row; the cell sits in column H (Excise Tax)"
+  },
+  {
+   "writer_key": "derived:contact_email",
+   "html_id": "p1c36",
+   "printed": "9 Contact Number / 10 Email Address",
+   "reason": "one 40-slot comb under both captions: the print map puts the contact number from slot 0 (caption x 27pt) and the email from slot 13 (caption x 206pt, pitch 14.52pt from x 16.32pt)"
+  },
+  {
+   "writer_key": "derived:place",
+   "html_id": "p1c41",
+   "printed": "11 Region / Province / City",
+   "reason": "one 40-slot comb under the three captions: the print map puts the region code from slot 0, the province code from slot 10 (caption x 94pt; a 9-digit region code needs slots 0-8) and the city code from slot 24 (caption x 369pt)"
   }
  ],
  "money_joins": [],
@@ -866,14 +878,6 @@
   }
  ],
  "left_out": [
-  {
-   "html_id": "p1c36",
-   "reason": "one full-width 40-slot comb (x 16-595pt) under both the item 9 Contact Number caption (x 27pt) and the item 10 Email Address caption (x 206pt); a join fills the whole comb with one value, so txtPg1Pt1I9ContactNumber and txtPg1Pt1I10Email stay blank"
-  },
-  {
-   "html_id": "p1c41",
-   "reason": "one full-width 40-slot comb under the item 11 Region (x 37pt), Province (x 94pt) and City (x 369pt) captions; a join fills the whole comb with one value, so txtPg1Pt1I11Region, txtPg1Pt1I11Province and txtPg1Pt1I11City stay blank"
-  },
   {
    "html_id": "p1c104",
    "reason": "Part IV row 25 (Cash/Bank Debit Memo) is one 33-slot comb across the Drawee Bank, Number, Date and Amount columns; no separate cell per column, so the row keys (txtPg1Pt3I25CashC1-C3) stay blank"
