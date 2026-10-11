@@ -719,7 +719,7 @@ impl Form2200PView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     /// Phone stacks the label above a full-width wrapping chip row; other
@@ -916,7 +916,12 @@ impl Form2200PView {
             ],
         )];
         if mop == Form2200PPayment::OtherScheme {
-            children.push(self.field("other", "Item 15 — Specify the scheme", layout, !editable));
+            children.push(self.field(
+                "other",
+                "Other Similar Schemes (specify)",
+                layout,
+                !editable,
+            ));
         }
         self.section("Part II — Manner of Payment", children, cx)
     }
@@ -943,10 +948,10 @@ impl Form2200PView {
                     .font_weight(FontWeight::BOLD)
                     .child(format!("Row #{} — {atc}", row + 1)),
             )
-            .child(div().text_sm().child(match rate {
-                Some(rate) => format!("{description} · rate {rate}"),
-                None => description,
-            }));
+            .child(div().min_w_0().text_sm().child(description))
+            .when_some(rate, |d, rate| {
+                d.child(div().min_w_0().text_sm().child(format!("Rate: {rate}")))
+            });
         let fields: Vec<AnyElement> = ROW_COLUMNS
             .iter()
             .filter(|(column, _)| column_exists(row, column))
@@ -991,7 +996,7 @@ impl Form2200PView {
             children.push(self.render_row(row, layout, cx));
         }
         children.push(self.computed(
-            "Total basic excise tax due (to Part III, Item 16)",
+            "TOTAL TAX DUE (To Part III, Item 16)",
             self.draft.schedule_total,
             cx,
         ));
@@ -1026,7 +1031,7 @@ impl Form2200PView {
             self.field("int", MONEY_INPUTS[4].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[5].1, layout, !editable),
             self.computed("21D — Total penalties", d.total_penalties, cx),
-            self.computed("22 — Total amount payable", d.amount_payable, cx),
+            self.computed("22 — Amount Payable/(Overpayment)", d.amount_payable, cx),
             self.field("dep", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("23B — Penalties", d.penalties_paid, cx),
             self.computed("23C — Total payment made today", d.total_payment, cx),
@@ -1463,8 +1468,8 @@ impl Render for Form2200PView {
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_part_two(layout, cx))
+            .child(self.render_part_three(layout, cx))
             .child(self.render_schedule(layout, cx));
-        body = body.child(self.render_part_three(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
