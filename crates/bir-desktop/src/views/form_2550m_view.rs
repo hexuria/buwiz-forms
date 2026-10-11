@@ -956,6 +956,7 @@ impl Form2550MView {
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
         let label = div()
+            .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -1025,8 +1026,8 @@ impl Form2550MView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -1052,20 +1053,34 @@ impl Form2550MView {
         button.disabled(disabled)
     }
 
-    fn choice_row(label: &str, buttons: Vec<Button>) -> AnyElement {
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
-            .children(buttons)
-            .into_any_element()
+    /// On Phone the label sits on its own line with the chips wrapping in a
+    /// full-width row below it.
+    fn choice_row(label: &str, layout: Layout, buttons: Vec<Button>) -> AnyElement {
+        let text = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(text)
+                .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(text.flex_1())
+                .children(buttons)
+                .into_any_element()
+        }
     }
 
     fn info(label: &str, value: String) -> AnyElement {
@@ -1075,6 +1090,7 @@ impl Form2550MView {
             .gap_1()
             .child(
                 div()
+                    .min_w_0()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),
@@ -1119,6 +1135,7 @@ impl Form2550MView {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 1 — For the month of"),
@@ -1128,6 +1145,7 @@ impl Form2550MView {
             self.text_field("year", layout),
             Self::choice_row(
                 "Item 2 — Amended return?",
+                layout,
                 vec![
                     Self::choice("2550m_amended_yes", "Yes", amended, !editable).on_click(
                         cx.listener(|this, _, window, cx| {
@@ -1166,6 +1184,7 @@ impl Form2550MView {
             self.grid(layout, fields),
             Self::choice_row(
                 "Item 11 — Availing of tax relief under a Special Law or International Tax Treaty?",
+                layout,
                 vec![
                     pick("2550m_relief_no", "No", Form2550MTaxRelief::No),
                     pick(
@@ -1205,7 +1224,7 @@ impl Form2550MView {
                         .flex()
                         .flex_col()
                         .child(div().font_weight(FontWeight::BOLD).child(code.clone()))
-                        .child(div().text_sm().child(description.to_string())),
+                        .child(div().min_w_0().text_sm().child(description.to_string())),
                 )
                 .child(
                     Button::new(("2550m_remove_atc", index))
@@ -1270,6 +1289,7 @@ impl Form2550MView {
                     .gap_2()
                     .child(
                         div()
+                            .min_w_0()
                             .text_sm()
                             .font_weight(FontWeight::MEDIUM)
                             .child("Add an ATC"),
@@ -1473,6 +1493,7 @@ impl Form2550MView {
         let s5_open = d.schedule_5.is_some();
         let mut children = vec![Self::choice_row(
             "Schedule 4 — Input tax on sale to Government closed to expense (20B)",
+            layout,
             vec![
                 Self::choice(
                     "2550m_s4",
@@ -1503,6 +1524,7 @@ impl Form2550MView {
         }
         children.push(Self::choice_row(
             "Schedule 5 — Input tax allocable to exempt sales (20C)",
+            layout,
             vec![
                 Self::choice(
                     "2550m_s5",

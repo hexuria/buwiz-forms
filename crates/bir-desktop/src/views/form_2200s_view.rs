@@ -383,6 +383,7 @@ impl Form2200SView {
             .chain(self.parse_errors.iter())
             .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
         let label = div()
+            .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -441,20 +442,41 @@ impl Form2200SView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{round_down_computation_text(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{round_down_computation_text(value)}</div>
             </div>
         }
         .into_any_element()
     }
 
-    fn label_row(label: &str) -> Div {
-        div().flex().flex_wrap().items_center().gap_2().child(
+    /// A question label with its choice chips. On Phone the label sits on its
+    /// own line and the chips wrap in a full-width row below it.
+    fn label_row(label: &str, layout: Layout, chips: Vec<AnyElement>) -> AnyElement {
+        let text = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        if layout == Layout::Phone {
             div()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .child(label.to_string()),
-        )
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(text)
+                .child(div().flex().flex_wrap().gap_2().w_full().children(chips))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(text.flex_1())
+                .children(chips)
+                .into_any_element()
+        }
     }
 
     fn choice(
@@ -501,6 +523,7 @@ impl Form2200SView {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 1 — Month"),
@@ -509,18 +532,22 @@ impl Form2200SView {
                 .into_any_element(),
             self.field("day", "Item 1 — Day", layout, !editable),
             self.field("year", "Item 1 — Year", layout, !editable),
-            Self::label_row("Item 2 — Amended return?")
-                .child(
-                    Self::choice("2200s_amended_yes", "Yes", amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
-                    ),
-                )
-                .child(
-                    Self::choice("2200s_amended_no", "No", !amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
-                    ),
-                )
-                .into_any_element(),
+            Self::label_row(
+                "Item 2 — Amended return?",
+                layout,
+                vec![
+                    Self::choice("2200s_amended_yes", "Yes", amended, !editable)
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
+                        )
+                        .into_any_element(),
+                    Self::choice("2200s_amended_no", "No", !amended, !editable)
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
+                        )
+                        .into_any_element(),
+                ],
+            ),
         ];
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
@@ -545,6 +572,7 @@ impl Form2200SView {
         let base = usize::from(item) * 10;
         let mut body = div().flex().flex_col().gap_2().child(
             div()
+                .min_w_0()
                 .text_sm()
                 .font_weight(FontWeight::MEDIUM)
                 .child(title.to_string()),
@@ -631,6 +659,7 @@ impl Form2200SView {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 4 — TIN"),
@@ -647,6 +676,7 @@ impl Form2200SView {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 5 — RDO Code"),
@@ -666,7 +696,7 @@ impl Form2200SView {
                 .unwrap_or(key);
             fields.push(self.field(key, label, layout, !editable));
         }
-        let mut relief_row = Self::label_row("Item 14 — Tax relief under a Special Law or Treaty?");
+        let mut relief_chips: Vec<AnyElement> = Vec::new();
         for (index, (value, label)) in [
             (Form2200STaxRelief::No, "No"),
             (Form2200STaxRelief::SpecialLaw, "Yes — Special Law"),
@@ -678,19 +708,26 @@ impl Form2200SView {
         .into_iter()
         .enumerate()
         {
-            relief_row = relief_row.child(
-                Self::choice(("2200s_relief", index), label, relief == value, !editable).on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.tax_relief = value)),
-                ),
+            relief_chips.push(
+                Self::choice(("2200s_relief", index), label, relief == value, !editable)
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.tax_relief = value)),
+                    )
+                    .into_any_element(),
             );
         }
+        let relief_row = Self::label_row(
+            "Item 14 — Tax relief under a Special Law or Treaty?",
+            layout,
+            relief_chips,
+        );
         self.section(
             "Part I — Background Information",
             vec![
                 self.grid(layout, fields),
                 self.render_place(12, cx),
                 self.render_place(13, cx),
-                relief_row.into_any_element(),
+                relief_row,
             ],
             cx,
         )
@@ -699,7 +736,7 @@ impl Form2200SView {
     fn render_manner(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let manner = self.draft.manner;
-        let mut row = Self::label_row("Manner of payment");
+        let mut chips: Vec<AnyElement> = Vec::new();
         for (index, (value, label)) in [
             (Form2200SManner::ActualRemoval, "Payment on Actual Removal"),
             (Form2200SManner::Prepayment, "Prepayment/Advance Deposit"),
@@ -707,28 +744,28 @@ impl Form2200SView {
         .into_iter()
         .enumerate()
         {
-            row = row.child(
-                Self::choice(("2200s_manner", index), label, manner == value, !editable).on_click(
-                    cx.listener(move |this, _, window, cx| {
+            chips.push(
+                Self::choice(("2200s_manner", index), label, manner == value, !editable)
+                    .on_click(cx.listener(move |this, _, window, cx| {
                         this.edit_and_reload(window, cx, |d| d.manner = value)
-                    }),
-                ),
-            );
-        }
-        let mut children = vec![row.into_any_element()];
-        if manner == Form2200SManner::Prepayment {
-            let scheme = self.draft.other_scheme;
-            children.push(
-                Self::label_row("Item 17 — Other similar schemes?")
-                    .child(
-                        Self::choice("2200s_scheme", "Yes", scheme, !editable).on_click(
-                            cx.listener(move |this, _, _, cx| {
-                                this.edit(cx, |d| d.other_scheme = !scheme)
-                            }),
-                        ),
-                    )
+                    }))
                     .into_any_element(),
             );
+        }
+        let mut children = vec![Self::label_row("Manner of payment", layout, chips)];
+        if manner == Form2200SManner::Prepayment {
+            let scheme = self.draft.other_scheme;
+            children.push(Self::label_row(
+                "Item 17 — Other similar schemes?",
+                layout,
+                vec![
+                    Self::choice("2200s_scheme", "Yes", scheme, !editable)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.edit(cx, |d| d.other_scheme = !scheme)
+                        }))
+                        .into_any_element(),
+                ],
+            ));
             if scheme {
                 children.push(self.field("scheme", TEXT_INPUTS[9].1, layout, !editable));
             }
@@ -794,18 +831,22 @@ impl Form2200SView {
             .border_1()
             .border_color(cx.theme().border)
             .rounded_md()
-            .child(Self::label_row("Others (specify)").child(
-                Self::choice("2200s_others", "Include", others.is_some(), !editable).on_click(
-                    cx.listener(move |this, _, window, cx| {
-                        let include = this.draft.others.is_none();
-                        this.edit_and_reload(window, cx, |d| {
-                            d.others = include.then(|| Form2200SOtherRow {
-                                atc: "XB".into(),
-                                ..Default::default()
-                            });
-                        })
-                    }),
-                ),
+            .child(Self::label_row(
+                "Others (specify)",
+                layout,
+                vec![
+                    Self::choice("2200s_others", "Include", others.is_some(), !editable)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            let include = this.draft.others.is_none();
+                            this.edit_and_reload(window, cx, |d| {
+                                d.others = include.then(|| Form2200SOtherRow {
+                                    atc: "XB".into(),
+                                    ..Default::default()
+                                });
+                            })
+                        }))
+                        .into_any_element(),
+                ],
             ));
         if let Some(other) = &others {
             let fields = ["oatc", "odesc", "obracket"]
