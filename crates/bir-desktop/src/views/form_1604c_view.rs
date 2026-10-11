@@ -22,7 +22,9 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{self, messages_for, select_field, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -75,8 +77,20 @@ const ROW_FIELDS: [(&str, &str, &str); 6] = [
     ("pen", "Penalties", "0.00"),
 ];
 
-const MONTHS_SHORT: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+/// Item 13 options: (stored month number, label).
+const MONTH_OPTIONS: &[(&str, &str)] = &[
+    ("1", "January"),
+    ("2", "February"),
+    ("3", "March"),
+    ("4", "April"),
+    ("5", "May"),
+    ("6", "June"),
+    ("7", "July"),
+    ("8", "August"),
+    ("9", "September"),
+    ("10", "October"),
+    ("11", "November"),
+    ("12", "December"),
 ];
 
 fn row_key(month: usize, field: &str) -> String {
@@ -113,6 +127,7 @@ pub struct Form1604cView {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    month_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -351,12 +366,13 @@ impl Form1604cView {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
+        let message = self.error_for(&[key, error_key]);
         let label = if self.has_error(key) || self.has_error(error_key) {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -371,8 +387,24 @@ impl Form1604cView {
                 .w_full()
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
-        }
-        .into_any_element()
+        };
+        with_field_error(row.into_any_element(), message)
+    }
+
+    /// Messages (input parse errors and model validation) recorded for any of
+    /// `keys`, joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built row.
+    fn with_errors(&self, row: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(row, self.error_for(keys))
     }
 
     /// Two columns on desktop, one otherwise.
@@ -524,8 +556,11 @@ impl Form1604cView {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut fields = vec![
-            Self::readonly("Item 4 — TIN", format_tin(&d.tin)),
-            Self::readonly("Item 5 — RDO Code", d.rdo_code.clone()),
+            self.with_errors(Self::readonly("Item 4 — TIN", format_tin(&d.tin)), &["tin"]),
+            self.with_errors(
+                Self::readonly("Item 5 — RDO Code", d.rdo_code.clone()),
+                &["rdo_code"],
+            ),
         ];
         for (key, label, error_key) in [
             ("name", TEXT_INPUTS[2].1, "taxpayer_name"),
@@ -537,32 +572,35 @@ impl Form1604cView {
             fields.push(self.field(key, label, error_key, layout, !editable));
         }
         let category = d.agent_category;
-        let category_row = Self::choice_row(
-            layout,
-            "Item 8 — Category of withholding agent",
-            self.has_error("agent_category"),
-            vec![
-                Self::choice(
-                    "1604c_private",
-                    "Private",
-                    category == Form1604cAgentCategory::Private,
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.agent_category = Form1604cAgentCategory::Private)
-                })),
-                Self::choice(
-                    "1604c_government",
-                    "Government",
-                    category == Form1604cAgentCategory::Government,
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| {
-                        d.agent_category = Form1604cAgentCategory::Government
-                    })
-                })),
-            ],
+        let category_row = self.with_errors(
+            Self::choice_row(
+                layout,
+                "Item 8 — Category of withholding agent",
+                self.has_error("agent_category"),
+                vec![
+                    Self::choice(
+                        "1604c_private",
+                        "Private",
+                        category == Form1604cAgentCategory::Private,
+                        !editable,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| d.agent_category = Form1604cAgentCategory::Private)
+                    })),
+                    Self::choice(
+                        "1604c_government",
+                        "Government",
+                        category == Form1604cAgentCategory::Government,
+                        !editable,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| {
+                            d.agent_category = Form1604cAgentCategory::Government
+                        })
+                    })),
+                ],
+            ),
+            &["agent_category"],
         );
         let top = d.top_withholding_agent;
         let top_row =
@@ -595,22 +633,8 @@ impl Form1604cView {
         );
         let mut children = vec![self.grid(layout, fields), category_row, top_row, refund_row];
         if released {
-            let mut months = div().flex().flex_wrap().gap_1();
-            for (index, name) in MONTHS_SHORT.iter().enumerate() {
-                let month = index as u8 + 1;
-                months = months.child(
-                    Self::choice(
-                        ("1604c_crediting_month", index),
-                        *name,
-                        d.first_crediting_month == month,
-                        !editable,
-                    )
-                    .small()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| d.first_crediting_month = month)
-                    })),
-                );
-            }
+            let shown_month = d.first_crediting_month.to_string();
+            let shown_month = (d.first_crediting_month != 0).then_some(shown_month.as_str());
             children.push(self.grid(
                 layout,
                 vec![
@@ -630,24 +654,15 @@ impl Form1604cView {
                     ),
                 ],
             ));
-            let caption = div()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .child("Item 13 — Month of first crediting of overremittance");
-            let caption = if self.has_error("first_crediting_month") {
-                caption.text_color(gpui::red())
-            } else {
-                caption
-            };
-            children.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(caption)
-                    .child(months)
-                    .into_any_element(),
-            );
+            children.push(select_field(
+                "Item 13 — Month of first crediting of overremittance",
+                &self.month_select,
+                MONTH_OPTIONS,
+                shown_month,
+                !editable,
+                self.error_for(&["first_crediting_month"]).as_deref(),
+                cx,
+            ));
         }
         self.section("Part I — Background Information", children, cx)
     }
@@ -710,10 +725,13 @@ impl Form1604cView {
                 self.computed("Total taxes withheld", d.total_taxes_withheld, cx),
                 self.computed("Total adjustment", d.total_adjustment, cx),
                 self.computed("Total penalties", d.total_penalties, cx),
-                self.computed(
-                    "Total amount remitted (positive months)",
-                    d.total_remitted,
-                    cx,
+                self.with_errors(
+                    self.computed(
+                        "Total amount remitted (positive months)",
+                        d.total_remitted,
+                        cx,
+                    ),
+                    &["total_remitted"],
                 ),
             ],
         ));
@@ -767,12 +785,25 @@ impl QueueableFormView for Form1604cView {
             ));
             inputs.insert(key, input);
         }
+        let month_select = form_controls::new_select_state(MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &month_select,
+            MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(cx, |d| d.first_crediting_month = month);
+                }
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            month_select,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1013,6 +1044,10 @@ impl Render for Form1604cView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let blocked_count = self.validation_errors.len() + self.parse_errors.len();
+        let shown_month = self.draft.first_crediting_month.to_string();
+        let shown_month = (self.draft.first_crediting_month != 0).then_some(shown_month.as_str());
+        form_controls::sync_select(&self.month_select, MONTH_OPTIONS, shown_month, window, cx);
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
@@ -1024,67 +1059,77 @@ impl Render for Form1604cView {
             })
             .collect();
 
-        let toolbar =
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .px(pad)
-                .py_3()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(Button::new("1604c_back").label("← Back").on_click(
+        let toolbar = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px(pad)
+            .py_3()
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(
+                Button::new("1604c_back").label("← Back").on_click(
                     cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
-                ))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("1604c_preview")
-                                .label("Print preview")
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Button::new("1604c_preview")
+                            .label("Print preview")
+                            .outline()
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("1604c_save")
+                            .label("Save draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                            ),
+                    )
+                    .when(is_queued, |row| {
+                        row.child(
+                            Button::new("1604c_cancel")
+                                .label("Cancel queue")
                                 .outline()
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("1604c_save")
-                                .label("Save draft")
-                                .outline()
-                                .disabled(!is_draft)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                                ),
-                        )
-                        .when(is_queued, |row| {
-                            row.child(
-                                Button::new("1604c_cancel")
-                                    .label("Cancel queue")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx)
-                                    })),
-                            )
-                        })
-                        .child(
-                            Button::new("1604c_submit")
-                                .label("Queue for submission")
-                                .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
+                                    this.revert_to_draft(window, cx)
                                 })),
-                        ),
-                );
+                        )
+                    })
+                    .when(is_draft && blocked_count > 0, |row| {
+                        row.child(div().text_xs().text_color(cx.theme().danger).child(
+                            if blocked_count == 1 {
+                                "Fix 1 problem listed under Needs review".to_string()
+                            } else {
+                                format!("Fix {blocked_count} problems listed under Needs review")
+                            },
+                        ))
+                    })
+                    .child(
+                        Button::new("1604c_submit")
+                            .label("Queue for submission")
+                            .primary()
+                            .disabled(
+                                !is_draft
+                                    || !self.validation_errors.is_empty()
+                                    || !self.parse_errors.is_empty(),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.mark_submitted(window, cx)),
+                            ),
+                    ),
+            );
 
         let mut body = div()
             .w_full()
