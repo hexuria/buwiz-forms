@@ -16,7 +16,6 @@ use bir_core::forms::form_1702q::{
 use bir_core::forms::form_2551q::TaxPeriodBasis;
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
-use bir_core::official_xml::official_amount;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
@@ -548,6 +547,26 @@ fn other_amount_key(row: usize) -> String {
     format!("other_amount{row}")
 }
 
+/// Display-only whole pesos with thousands separators. The printed form says
+/// "DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up".
+/// Stored values and the field map keep their full precision.
+fn whole_pesos(value: f64) -> String {
+    let rounded = value.round();
+    let rounded = if rounded == 0.0 { 0.0 } else { rounded };
+    let digits = format!("{:.0}", rounded.abs());
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    if rounded < 0.0 {
+        out.insert(0, '-');
+    }
+    out
+}
+
 /// Accepts `1,234.56`, `1234.5`, blank (zero).
 fn parse_amount(value: &str) -> Option<f64> {
     let cleaned: String = value
@@ -587,7 +606,7 @@ impl Form1702qView {
         if value == 0.0 {
             String::new()
         } else {
-            official_amount(value)
+            whole_pesos(value)
         }
     }
 
@@ -640,7 +659,8 @@ impl Form1702qView {
         let mut parse_errors = Vec::new();
         let mut draft = self.draft.clone();
         // The year is locked to the library tile; keep the draft's value.
-        for text in TEXTS.iter().filter(|t| t.key != "year") {
+        // Line of business is not rendered; it keeps the profile value.
+        for text in TEXTS.iter().filter(|t| t.key != "year" && t.key != "lob") {
             (text.set)(&mut draft, self.input_text(text.key, cx));
         }
         for money in all_money() {
@@ -823,7 +843,7 @@ impl Form1702qView {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
                 <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{whole_pesos(value)}</div>
             </div>
         }
         .into_any_element()
@@ -1108,7 +1128,7 @@ impl Form1702qView {
                 )))
                 .into_any_element(),
         ];
-        for text in &TEXTS[1..7] {
+        for text in &TEXTS[1..6] {
             fields.push(self.field(text.key, text.label, layout, !editable));
         }
         fields.push(self.choice_row(
@@ -1692,8 +1712,15 @@ impl Render for Form1702qView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Form1702qView, Layout, format_tin, parse_amount};
+    use super::{Form1702qView, Layout, format_tin, parse_amount, whole_pesos};
     use gpui::px;
+
+    #[test]
+    fn whole_pesos_round_half_up_with_separators() {
+        assert_eq!(whole_pesos(1234567.49), "1,234,567");
+        assert_eq!(whole_pesos(1234567.50), "1,234,568");
+        assert_eq!(whole_pesos(0.0), "0");
+    }
 
     #[test]
     fn layout_breakpoints() {
