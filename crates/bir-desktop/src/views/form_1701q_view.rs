@@ -362,6 +362,8 @@ impl Form1701QView {
         let editable = self.draft.lifecycle.is_editable();
         let body = div().child(Input::new(input).disabled(disabled || !editable));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -425,8 +427,8 @@ impl Form1701QView {
     fn computed(&self, label: &str, value: Option<f64>, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value.unwrap_or(0.0))}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value.unwrap_or(0.0))}</div>
             </div>
         }
         .into_any_element()
@@ -452,7 +454,24 @@ impl Form1701QView {
         button.disabled(disabled)
     }
 
-    fn choice_row(title: &str, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(layout: Layout, title: &str, buttons: Vec<Button>) -> AnyElement {
+        if layout == Layout::Phone {
+            return div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(
+                    div()
+                        .min_w_0()
+                        .max_w_full()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(title.to_string()),
+                )
+                .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+                .into_any_element();
+        }
         div()
             .flex()
             .flex_wrap()
@@ -460,6 +479,9 @@ impl Form1701QView {
             .gap_2()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
+                    .max_w_full()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(title.to_string()),
@@ -493,8 +515,9 @@ impl Form1701QView {
         let amended = d.is_amended;
         let children = vec![
             self.text("year", layout),
-            Self::choice_row("Item 2 — Quarter", quarters),
+            Self::choice_row(layout, "Item 2 — Quarter", quarters),
             Self::choice_row(
+                layout,
                 "Item 3 — Amended return?",
                 vec![
                     Self::choice("1701q_amended_yes", "Yes", amended, !editable).on_click(
@@ -575,10 +598,11 @@ impl Form1701QView {
             .collect();
         let foreign = d.claims_foreign_tax_credits;
         let mut rows = vec![
-            Self::choice_row("Item 7 — Taxpayer/Filer type", filer),
-            Self::choice_row("Item 8 — ATC", atcs),
+            Self::choice_row(layout, "Item 7 — Taxpayer/Filer type", filer),
+            Self::choice_row(layout, "Item 8 — ATC", atcs),
             self.grid(layout, fields),
             Self::choice_row(
+                layout,
                 "Item 15 — Claiming foreign tax credits?",
                 vec![
                     Self::choice("1701q_ftc_yes", "Yes", foreign == Some(true), !editable)
@@ -618,7 +642,11 @@ impl Form1701QView {
                     }))
                 })
                 .collect();
-            rows.push(Self::choice_row("Item 16A — Method of deduction", methods));
+            rows.push(Self::choice_row(
+                layout,
+                "Item 16A — Method of deduction",
+                methods,
+            ));
         }
         self.section(
             "Part I — Background Information on Taxpayer/Filer",
@@ -636,6 +664,7 @@ impl Form1701QView {
         );
         let active = self.spouse_active();
         let mut rows = vec![Self::choice_row(
+            layout,
             "Part II — Spouse information?",
             vec![
                 Self::choice("1701q_spouse_yes", "Yes", active, !editable || estate)
@@ -679,8 +708,8 @@ impl Form1701QView {
                 })
                 .collect();
             let foreign = d.spouse_claims_foreign_tax_credits;
-            rows.push(Self::choice_row("Item 19 — Spouse type", kinds));
-            rows.push(Self::choice_row("Item 20 — Spouse ATC", atcs));
+            rows.push(Self::choice_row(layout, "Item 19 — Spouse type", kinds));
+            rows.push(Self::choice_row(layout, "Item 20 — Spouse ATC", atcs));
             rows.push(self.grid(
                 layout,
                 vec![
@@ -692,6 +721,7 @@ impl Form1701QView {
                 ],
             ));
             rows.push(Self::choice_row(
+                layout,
                 "Item 24 — Claiming foreign tax credits?",
                 vec![
                     Self::choice("1701q_sftc_yes", "Yes", foreign == Some(true), !editable)
@@ -720,7 +750,11 @@ impl Form1701QView {
                         }))
                     })
                     .collect();
-                rows.push(Self::choice_row("Item 25A — Method of deduction", methods));
+                rows.push(Self::choice_row(
+                    layout,
+                    "Item 25A — Method of deduction",
+                    methods,
+                ));
             }
         }
         self.section("Part II — Background Information on Spouse", rows, cx)
