@@ -40,86 +40,109 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("month", "Item 1 — Month of transaction", "MM"),
     ("day", "Item 1 — Day", "DD"),
     ("year", "Item 1 — Year", "YYYY"),
-    ("sheets", "Item 3 — No. of sheets attached", "0"),
-    ("buyer_tin", "Item 7 — Buyer TIN", "000-000-000"),
-    ("buyer_branch", "Item 7 — Buyer branch code", "00000"),
-    ("buyer_rdo", "Item 8 — Buyer RDO code", "e.g. 040"),
-    ("seller_name", "Item 9 — Seller's name", ""),
-    ("buyer_name", "Item 10 — Buyer's name", ""),
+    ("sheets", "Item 4 — No. of sheets attached", "0"),
+    ("buyer_tin", "Item 7A — Buyer TIN", "000-000-000"),
+    ("buyer_branch", "Item 7A — Buyer branch code", "00000"),
+    ("buyer_rdo", "Buyer RDO code", "e.g. 040"),
+    ("seller_name", "Item 6A — Seller's name", ""),
+    ("buyer_name", "Item 7A — Buyer's name", ""),
     (
         "seller_address",
-        "Item 11 — Seller's registered address",
+        "Item 6A — Seller's registered address",
         "",
     ),
-    ("buyer_address", "Item 12 — Buyer's registered address", ""),
+    ("buyer_address", "Item 7A — Buyer's registered address", ""),
     (
         "seller_residence",
-        "Item 13 — Seller's residence address (individuals)",
+        "Seller's residence address (individuals)",
         "",
     ),
-    ("location", "Item 14 — Location of property", ""),
+    ("location", "Schedule 1 — Location of property", ""),
     (
         "property_rdo",
-        "Item 14A — RDO code of the property",
+        "Item 5 — RDO code of the location of the property",
         "e.g. 039",
     ),
-    ("class_other", "Item 15 — Other classification", ""),
-    ("tct", "Item 16 — TCT/OCT/CCT No.", "T-000000"),
-    ("area", "Item 16 — Area sold (sq. m)", ""),
-    ("tax_dec", "Item 16 — Tax Dec. No.", ""),
-    ("property_other", "Item 16 — Others", ""),
+    ("class_other", "Schedule 1 — Other classification", ""),
+    ("tct", "Schedule 1 — OCT/TCT/CCT No.", "T-000000"),
+    ("area", "Schedule 1 — Area (sq. m)", ""),
+    ("tax_dec", "Schedule 1 — Tax Declaration No.", ""),
+    ("property_other", "Schedule 1 — Others", ""),
     (
         "txn_description",
-        "Item 21 — If exempt or others, specify",
+        "Schedule 2 — If exempt or others, specify",
         "",
     ),
-    ("inst_date_month", "28 — Date of installment (MM)", "MM"),
-    ("inst_date_day", "28 — Day (DD)", "DD"),
-    ("inst_date_year", "28 — Year (YYYY)", "YYYY"),
-    ("others_description", "30F — Others (specify)", ""),
+    (
+        "inst_date_month",
+        "Schedule 2 Item 7 — Date of installment (MM)",
+        "MM",
+    ),
+    ("inst_date_day", "Schedule 2 Item 7 — Day (DD)", "DD"),
+    ("inst_date_year", "Schedule 2 Item 7 — Year (YYYY)", "YYYY"),
+    (
+        "others_description",
+        "Schedule 4 Item E — Others (specify)",
+        "",
+    ),
     ("email", "Email address for the BIR confirmation", ""),
 ];
 
 /// Optional amounts (blank stays blank on the official page).
 const OPTIONAL_AMOUNTS: &[(&str, &str)] = &[
-    ("inst_selling", "22 — Selling price"),
-    ("inst_cost", "23 — Cost and other expenses"),
-    ("inst_mortgage", "24 — Mortgage assumed"),
+    ("inst_selling", "Schedule 2 Item 1 — Selling price"),
+    ("inst_cost", "Schedule 2 Item 2 — Cost and expenses"),
+    ("inst_mortgage", "Schedule 2 Item 3 — Mortgage assumed"),
     (
         "inst_initial",
-        "25 — Total payments during the initial year",
+        "Schedule 2 Item 4 — Total payments during the initial year",
     ),
-    ("inst_month_amount", "26 — Amount of installment this month"),
-    ("inst_count", "27 — No. of installments in the contract"),
+    (
+        "inst_month_amount",
+        "Schedule 2 Item 5 — Amount of periodic payment",
+    ),
+    (
+        "inst_count",
+        "Schedule 2 Item 6 — No. of installments in the contract",
+    ),
     (
         "fmv_land_td",
-        "29A — FMV of land per latest tax declaration",
+        "Schedule 1 — FMV of land per latest tax declaration",
     ),
     (
         "fmv_improvements_td",
-        "29B — FMV of improvements per latest tax declaration",
+        "Schedule 1 — FMV of improvements per latest tax declaration",
     ),
-    ("fmv_land_zonal", "29C — FMV of land per BIR zonal value"),
+    (
+        "fmv_land_zonal",
+        "Schedule 1 — FMV of land per BIR zonal value",
+    ),
     (
         "fmv_improvements_bir",
-        "29D — FMV of improvements per BIR rules",
+        "Schedule 1 — FMV of improvements per BIR rules",
     ),
-    ("gross", "30A — Gross selling price"),
-    ("bid", "30B — Bid price (foreclosure sale)"),
-    ("installment", "30D — Taxable installment collected"),
-    ("unutilized", "30E — Unutilized portion of sales proceeds"),
-    ("others_amount", "30F — Others amount"),
+    ("gross", "Schedule 4 Item A — Gross selling price"),
+    ("bid", "Schedule 4 Item A — Bid price (foreclosure sale)"),
+    (
+        "installment",
+        "Schedule 4 Item D — Installment collected (Schedule 2 Item 5)",
+    ),
+    (
+        "unutilized",
+        "Schedule 4 Item C — Unutilized portion of sales proceeds",
+    ),
+    ("others_amount", "Schedule 4 Item E — Others amount"),
 ];
 
 /// Amounts where blank is zero.
 const AMOUNTS: &[(&str, &str)] = &[
     (
         "less",
-        "33 — Tax paid in return previously filed (amended only)",
+        "Item 15 — Tax paid in return previously filed (amended only)",
     ),
-    ("surcharge", "35A — Surcharge"),
-    ("interest", "35B — Interest"),
-    ("compromise", "35C — Compromise"),
+    ("surcharge", "Item 17A — Surcharge"),
+    ("interest", "Item 17B — Interest"),
+    ("compromise", "Item 17C — Compromise"),
 ];
 
 fn schedule_key(index: usize) -> String {
@@ -287,7 +310,7 @@ impl Form1706View {
         );
         let seller_type = choice_row(
             layout,
-            "Item 4 — ATC",
+            "Item 3 — ATC",
             vec![
                 choice(
                     "1706_atc_ii420",
@@ -340,8 +363,8 @@ impl Form1706View {
                 .into_any_element()
         };
         let children = vec![
-            fixed("Item 5 — Seller TIN", format_tin(&d.tin)),
-            fixed("Item 6 — Seller RDO code", d.rdo_code.clone()),
+            fixed("Item 6A — Seller TIN", format_tin(&d.tin)),
+            fixed("Seller RDO code", d.rdo_code.clone()),
             self.f("buyer_tin", layout),
             self.f("buyer_branch", layout),
             self.f("buyer_rdo", layout),
@@ -399,7 +422,7 @@ impl Form1706View {
             questions.push(yes_no::<Self>(
                 layout,
                 "1706_item17",
-                "Item 17 — Is the property being sold your principal residence?",
+                "Item 8 — Is the property being sold your principal residence?",
                 d.principal_residence,
                 !editable,
                 cx,
@@ -408,7 +431,7 @@ impl Form1706View {
             questions.push(yes_no::<Self>(
                 layout,
                 "1706_item18",
-                "Item 18 — Do you intend to construct or acquire a new principal residence within 18 months?",
+                "Item 9 — Do you intend to construct or acquire a new principal residence within 18 months?",
                 d.new_residence_within_18_months,
                 !editable,
                 cx,
@@ -418,7 +441,7 @@ impl Form1706View {
         questions.push(yes_no::<Self>(
             layout,
             "1706_item19",
-            "Item 19 — Does the selling price cover more than one property?",
+            "Item 10 — Does the selling price cover more than one property?",
             d.covers_multiple_properties,
             !editable,
             cx,
@@ -445,14 +468,14 @@ impl Form1706View {
         .collect();
         questions.push(choice_row(
             layout,
-            "Item 20 — Availing of tax relief under an International Tax Treaty or Special Law?",
+            "Item 11 — Availing of tax relief under an International Tax Treaty or Special Law?",
             reliefs,
         ));
         section(
-            "Part I — Property (Items 14–20)",
+            "Part I — Property (Item 5, Schedule 1, Items 8–11)",
             vec![
                 grid(layout, head),
-                choice_row(layout, "Item 15 — Classification of property", classes),
+                choice_row(layout, "Schedule 1 — Classification of property", classes),
                 grid(layout, fields),
                 grid(layout, questions),
             ],
@@ -481,7 +504,7 @@ impl Form1706View {
             .collect();
         let mut children = vec![choice_row(
             layout,
-            "Item 21 — Description of transaction",
+            "Schedule 2 — Description of transaction",
             kinds,
         )];
         if d.transaction_type.is_some_and(|t| t.needs_description()) {
@@ -504,7 +527,7 @@ impl Form1706View {
                 keys.iter().map(|key| self.f(key, layout)).collect(),
             ));
         }
-        section("Transaction (Items 21–28)", children, cx)
+        section("Schedule 2 — Transaction", children, cx)
     }
 
     fn render_taxable_base(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -562,17 +585,21 @@ impl Form1706View {
             amounts.push(self.f("unutilized", layout));
         }
         amounts.push(kit::computed_text(
-            "30C — FMV of land and improvement (higher pair of Item 29)",
+            "Schedule 4 Item B — Total FMV of land and improvement (higher pair in Schedule 1)",
             optional_money_text(d.fair_market_value),
             cx,
         ));
         section(
-            "Valuation and taxable base (Items 29–30)",
+            "Valuation and taxable base (Schedules 1 and 4)",
             vec![
-                kit::label("Item 29 — Fair market value at the time of the contract")
+                kit::label("Schedule 1 — Fair market value at the time of the contract")
                     .into_any_element(),
                 fmv,
-                choice_row(layout, "Item 30 — Determination of taxable base", options),
+                choice_row(
+                    layout,
+                    "Schedule 4 — Determination of taxable base",
+                    options,
+                ),
                 grid(layout, amounts),
             ],
             cx,
@@ -583,8 +610,8 @@ impl Form1706View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut children = vec![
-            computed("31 — Taxable base", d.taxable_base, cx),
-            computed("32 — 6% tax due", d.tax_due, cx),
+            computed("12 — Taxable base", d.taxable_base, cx),
+            computed("14 — Tax due (6%)", d.tax_due, cx),
             field(
                 &self.kit,
                 "less",
@@ -592,13 +619,13 @@ impl Form1706View {
                 layout,
                 !editable || !d.is_amended,
             ),
-            computed("34 — Tax payable (overpayment)", d.tax_payable, cx),
+            computed("16 — Tax payable (overpayment)", d.tax_payable, cx),
             self.f("surcharge", layout),
             self.f("interest", layout),
             self.f("compromise", layout),
-            computed("35D — Total penalties", d.total_penalties, cx),
+            computed("17D — Total penalties", d.total_penalties, cx),
             computed(
-                "36 — Total amount payable (overpayment)",
+                "18 — Total amount payable (overpayment)",
                 d.total_amount_payable,
                 cx,
             ),
@@ -634,7 +661,7 @@ impl Form1706View {
         }
         children.push(self.f("email", layout));
         section(
-            "Part II — Computation of tax (Items 31–36)",
+            "Part II — Computation of tax (Items 12–18)",
             vec![grid(layout, children)],
             cx,
         )
@@ -702,7 +729,7 @@ impl KitView for Form1706View {
         if let Some(year) = reader.whole::<u16>("year", "Item 1 year", 9999) {
             d.transaction_year = year;
         }
-        if let Some(sheets) = reader.whole::<u16>("sheets", "Item 3", 999) {
+        if let Some(sheets) = reader.whole::<u16>("sheets", "Item 4", 999) {
             d.number_of_attached_sheets = sheets;
         }
         d.buyer_tin = reader.trimmed("buyer_tin");
@@ -731,16 +758,16 @@ impl KitView for Form1706View {
                 Self::set_optional_amount(d, key, value);
             }
         }
-        if let Some(value) = reader.amount("less", "Item 33") {
+        if let Some(value) = reader.amount("less", "Item 15") {
             d.tax_paid_previous = value;
         }
-        if let Some(value) = reader.amount("surcharge", "Item 35A") {
+        if let Some(value) = reader.amount("surcharge", "Item 17A") {
             d.surcharge = value;
         }
-        if let Some(value) = reader.amount("interest", "Item 35B") {
+        if let Some(value) = reader.amount("interest", "Item 17B") {
             d.interest = value;
         }
-        if let Some(value) = reader.amount("compromise", "Item 35C") {
+        if let Some(value) = reader.amount("compromise", "Item 17C") {
             d.compromise = value;
         }
         let cells: Vec<String> = (0..FORM_1706_SCHEDULE_1_CELLS)
