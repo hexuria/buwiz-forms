@@ -668,7 +668,8 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     };
 
-    let skip_email_poll = transport.session_source(&session).is_dry_run();
+    let session_source = transport.session_source(&session);
+    let skip_email_poll = session_source.is_dry_run();
     let put_marked = {
         let db_guard = match db.lock() {
             Ok(guard) => guard,
@@ -741,6 +742,11 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                                 &db_guard,
                             );
                         }
+                        crate::dev_mode::maybe_auto_confirm(
+                            &db_guard,
+                            session_source,
+                            &submitted_file,
+                        );
                     }
                     Err(error) => warn!(
                         "Cron: 1601C {} was transmitted but its submission claim could not be finalized: {}",
@@ -1048,7 +1054,8 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
         }
     };
 
-    let skip_email_poll = transport.session_source(&session).is_dry_run();
+    let session_source = transport.session_source(&session);
+    let skip_email_poll = session_source.is_dry_run();
     let put_marked = db
         .lock()
         .ok()
@@ -1131,6 +1138,11 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
                                 &db_guard,
                             );
                         }
+                        crate::dev_mode::maybe_auto_confirm(
+                            &db_guard,
+                            session_source,
+                            &submitted_file,
+                        );
                     }
                     Err(error) => warn!(
                         "Cron: {} {} was transmitted but its submission claim could not be finalized: {}",
@@ -1537,6 +1549,11 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                                             &db_guard,
                                         );
                                     }
+                                    crate::dev_mode::maybe_auto_confirm(
+                                        &db_guard,
+                                        session_source,
+                                        &filename,
+                                    );
                                 }
                                 Err(error) => warn!(
                                     "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
@@ -2853,6 +2870,31 @@ mod tests {
             stored_test_form(&db, &queued).lifecycle.status,
             FilingStatus::Confirmed
         );
+    }
+
+    #[tokio::test]
+    async fn dev_mode_simulated_confirmation_uses_the_email_path() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+        let submitted = stored_test_form(&db, &queued);
+        assert_eq!(submitted.lifecycle.status, FilingStatus::Submitted);
+        let filename = submitted.lifecycle.submission_filename.clone().unwrap();
+        let outcome =
+            crate::dev_mode::simulate_bir_confirmation(&db.lock().unwrap(), &filename).unwrap();
+        assert_eq!(outcome, crate::db::ReceiptConfirmationOutcome::Confirmed);
+        let confirmed = stored_test_form(&db, &queued);
+        assert_eq!(confirmed.lifecycle.status, FilingStatus::Confirmed);
+        assert!(confirmed.lifecycle.receipt_id.is_some());
     }
 
     #[tokio::test]

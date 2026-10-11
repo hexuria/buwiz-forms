@@ -41,30 +41,7 @@ where
 #[cfg(feature = "dev-tools")]
 fn export_live_database_for_diagnostics(destination: &std::path::Path) -> Result<(), String> {
     let source = bir_core::db::default_database_path();
-
-    let file_name = destination
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| "Destination must have a valid UTF-8 file name".to_string())?;
-    let temporary = destination.with_file_name(format!(
-        ".{file_name}.{}.tmp",
-        uuid::Uuid::new_v4().simple()
-    ));
-
-    if let Err(error) = bir_core::export_existing_database_zip(&source, &temporary) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(format!("Could not export database: {error}"));
-    }
-
-    if let Err(error) = std::fs::rename(&temporary, destination) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(format!(
-            "Could not atomically install {}: {error}",
-            destination.display()
-        ));
-    }
-
-    Ok(())
+    crate::dev_mode::export_database_copy(&source, destination)
 }
 
 #[cfg(feature = "dev-tools")]
@@ -197,10 +174,13 @@ pub fn run_gui() {
     ipc::prevent_multiple_instances();
     platform::enforce_single_instance();
 
+    // `DEVELOPER_MODE=true` (any build), or the Dev Mode "Verbose logs"
+    // switch (debug builds; read here, so it takes effect on next start).
     let developer_mode = std::env::var("DEVELOPER_MODE")
         .unwrap_or_else(|_| "false".to_string())
         .to_lowercase()
-        == "true";
+        == "true"
+        || bir_core::dev_mode::verbose_logs().value;
 
     // Initialize structured logging. The native-output diagnostic intentionally
     // remains stdout-only because its external driver captures that stream and
@@ -293,6 +273,9 @@ pub fn run_gui() {
                             std::process::exit(1);
                         }
                     };
+                    // Dev Mode values (debug builds) before anything resolves them.
+                    bir_core::dev_mode::load_saved(&db);
+                    crate::dev_mode::set_opened_database_path(db_path.clone());
                     if let Some(backup_path) = recovered_backup {
                         eprintln!(
                             "Recovered unreadable database at {} by moving it to {}",

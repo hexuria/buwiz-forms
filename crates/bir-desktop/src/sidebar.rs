@@ -15,6 +15,65 @@ use crate::app::{ActiveView, AppState, AppThemeMode, ProfileTargetAction};
 use bir_core::profile::TaxpayerProfile;
 
 impl AppState {
+    /// Orange "Dev Mode" button beside Settings. Debug builds only; release
+    /// builds render nothing.
+    fn render_dev_mode_button(&self, is_mini: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
+        #[cfg(debug_assertions)]
+        {
+            let orange = crate::dev_mode::dev_orange();
+            let active = self.dev_mode_view.is_some();
+            Some(
+                div()
+                    .id("dev_mode_sidebar_btn")
+                    .flex()
+                    .items_center()
+                    .w_full()
+                    .cursor_pointer()
+                    .border_1()
+                    .border_color(orange)
+                    .when(active, |this| this.bg(orange.opacity(0.2)))
+                    .hover(move |s| s.bg(orange.opacity(0.15)))
+                    .when(is_mini, |this| {
+                        this.justify_center()
+                            .size(px(48.))
+                            .flex_shrink_0()
+                            .rounded_full()
+                    })
+                    .when(!is_mini, |this| {
+                        this.justify_start().h_10().px_3().gap_3().rounded_md()
+                    })
+                    .on_click(cx.listener(|this, _ev, window, cx| {
+                        if this.dev_mode_view.is_some() {
+                            this.dev_mode_view = None;
+                            cx.notify();
+                        } else {
+                            this.open_dev_mode(window, cx);
+                        }
+                    }))
+                    .child(
+                        Icon::new(IconName::SquareTerminal)
+                            .size(px(20.))
+                            .text_color(orange),
+                    )
+                    .when(!is_mini, |this| {
+                        this.child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(orange)
+                                .child("Dev Mode"),
+                        )
+                    })
+                    .into_any_element(),
+            )
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = (is_mini, cx);
+            None
+        }
+    }
+
     /// Writes the archived flag for one profile. Callers must already have
     /// cleared the administrator gate - `AppState::request_profile_lifecycle`
     /// is the only supported entry point.
@@ -704,6 +763,7 @@ impl AppState {
                                 this.child(rsx! { <div text_sm text_color={cx.theme().foreground}>{"Settings"}</div> })
                             })
                     }
+                    {self.render_dev_mode_button(is_mini, cx).unwrap_or_else(|| div().into_any_element())}
                 </div>
             </div>
         }

@@ -604,6 +604,70 @@ pub fn release_claim<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Con
     cx.notify();
 }
 
+/// Dev Mode "Simulate BIR confirmation": move this Submitted return to
+/// Confirmed through the email-confirmation path, then reload it. Debug
+/// builds only. Other views reuse `crate::dev_mode::simulate_confirmation`.
+#[cfg(debug_assertions)]
+pub fn simulate_confirmation<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>) {
+    let (tin, year, column, filename) = {
+        let draft = this.draft();
+        (
+            draft.tin().to_string(),
+            draft.taxable_year(),
+            period_column(&draft.filing_period()),
+            draft.lifecycle().submission_filename.clone(),
+        )
+    };
+    match crate::dev_mode::simulate_confirmation(&this.db(), filename.as_deref()) {
+        Ok(()) => {
+            if let Ok(db) = this.db().lock()
+                && let Ok(Some(current)) = db.get_queueable_draft::<V::Draft>(&tin, year, column)
+            {
+                *this.draft_mut() = current;
+            }
+            notify::<V>(
+                notification::NotificationType::Success,
+                format!(
+                    "{} marked Confirmed (simulated, nothing was sent to BIR).",
+                    V::CODE
+                ),
+                window,
+                cx,
+            );
+            cx.emit(QueueableFormEvent::Saved);
+        }
+        Err(error) => notify::<V>(
+            notification::NotificationType::Error,
+            format!("Simulated confirmation failed: {error}"),
+            window,
+            cx,
+        ),
+    }
+    cx.notify();
+}
+
+/// The Dev Mode button for a Submitted return; `None` otherwise and in
+/// release builds.
+fn simulate_confirmation_button<V: KitView>(this: &V, cx: &mut Context<V>) -> Option<Button> {
+    #[cfg(debug_assertions)]
+    {
+        matches!(this.draft().lifecycle().status, FilingStatus::Submitted).then(|| {
+            crate::dev_mode::simulate_confirmation_button(element_id(
+                V::SLUG,
+                "dev_simulate_confirmation",
+            ))
+            .on_click(
+                cx.listener(|this: &mut V, _, window, cx| simulate_confirmation(this, window, cx)),
+            )
+        })
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = (this, cx);
+        None
+    }
+}
+
 /// Print preview from the frozen official HTML, when this build has it.
 pub fn preview<V: KitView>(this: &mut V, frozen_slug: &str, cx: &mut Context<V>) {
     sync(this, cx);
@@ -972,6 +1036,7 @@ pub fn render_page<V: KitView>(
         })
         .collect();
     let can_submit = is_draft && kit.validation_errors.is_empty() && kit.parse_errors.is_empty();
+    let simulate_button = simulate_confirmation_button(this, cx);
 
     let toolbar = div()
         .flex()
@@ -1017,6 +1082,7 @@ pub fn render_page<V: KitView>(
                             cx.listener(|this: &mut V, _, window, cx| this.save_draft(window, cx)),
                         ),
                 )
+                .children(simulate_button.map(|b| b.when(phone, |b| b.small())))
                 .when(is_queued, |row| {
                     row.child(
                         Button::new(element_id(slug, "cancel"))

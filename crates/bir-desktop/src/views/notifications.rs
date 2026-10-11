@@ -87,10 +87,11 @@ impl NotificationsView {
         // means waiting for a genuine failure — and an empty screen does not
         // distinguish "working" from "broken".
         //
-        // Env-gated rather than automatic so ordinary debug runs stay clean,
+        // Opt-in rather than automatic so ordinary debug runs stay clean,
         // and `debug_assertions` on the seeder means it cannot ship at all.
+        // `BIR_SEED_EXAMPLE_ALERTS` (env) or the Dev Mode switch.
         #[cfg(debug_assertions)]
-        if std::env::var_os("BIR_SEED_EXAMPLE_ALERTS").is_some()
+        if bir_core::dev_mode::example_alerts().value
             && let Ok(db) = view.db.lock()
         {
             let _ = db.seed_example_alerts(view.active_session_tin.as_deref());
