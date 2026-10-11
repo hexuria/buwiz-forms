@@ -86,19 +86,19 @@ const SCHEDULE_5_ITEMS: [&str; 25] = [
 
 /// Free-text inputs: (key, label).
 const TEXT_INPUTS: &[(&str, &str)] = &[
-    ("year", "Item 2 — Year ended (YYYY)"),
-    ("name", "Item 9 — Registered Name"),
-    ("address", "Item 10 — Registered Address"),
-    ("zip", "ZIP Code"),
+    ("year", "Item 2 — Year ended: year (YYYY)"),
+    ("name", "Item 8 — Registered Name"),
+    ("address", "Item 9 — Registered Address"),
+    ("zip", "Item 9A — ZIP Code"),
     ("phone", "Item 11 — Contact Number"),
     ("email", "Item 12 — Email Address"),
-    ("incorp", "Date of Incorporation (MM/DD/YYYY)"),
+    ("incorp", "Item 10 — Date of Incorporation (MM/DD/YYYY)"),
     ("rate34", "Schedule 1 Item 4B — Special tax rate (%)"),
     ("rate14b", "Schedule 2 Item 14B — Special tax rate (%)"),
     ("rate14c", "Schedule 2 Item 14C — Regular tax rate (%)"),
     ("d30", "Schedule 3 Item 30 — Others (specify)"),
     ("d31", "Schedule 3 Item 31 — Others (specify)"),
-    ("attachments", "Item 23 — Number of attachments"),
+    ("attachments", "Item 22 — Number of attachments"),
 ];
 
 /// Accepts `1,234`, `(1,234)`, blank (zero). Whole pesos.
@@ -524,6 +524,7 @@ impl Form1702MXView {
         let label = div()
             .min_w_0()
             .max_w_full()
+            .whitespace_normal()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -611,7 +612,8 @@ impl Form1702MXView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel instead of running past its edge.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     fn choice_row(layout: Layout, title: &str, buttons: Vec<Button>) -> AnyElement {
@@ -747,7 +749,7 @@ impl Form1702MXView {
         let children = vec![
             Self::choice_row(
                 layout,
-                "Item 1 —",
+                "Item 1 — For (Calendar or Fiscal year)",
                 vec![
                     Self::choice("1702mx_calendar", "Calendar", !fiscal, !editable).on_click(
                         cx.listener(|this, _, _, cx| {
@@ -774,7 +776,7 @@ impl Form1702MXView {
                     div()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("Item 2 — Month the year ends"),
+                        .child("Item 2 — Year ended: month (MM)"),
                 )
                 .child(months)
                 .into_any_element(),
@@ -830,9 +832,9 @@ impl Form1702MXView {
             self.text("name", layout),
             self.text("address", layout),
             self.text("zip", layout),
+            self.text("incorp", layout),
             self.text("phone", layout),
             self.text("email", layout),
-            self.text("incorp", layout),
         ];
         let mut atc_buttons = vec![
             Self::choice(
@@ -865,8 +867,8 @@ impl Form1702MXView {
         }
         let method = d.deduction_method;
         let rows = vec![
-            self.grid(layout, fields),
             Self::choice_row(layout, "Item 5 — ATC", atc_buttons),
+            self.grid(layout, fields),
             Self::choice_row(
                 layout,
                 "Item 13 — Method of deduction",
@@ -1024,27 +1026,25 @@ impl Form1702MXView {
             self.computed_row("12 Optional standard deduction", &s2[11], cx),
             self.computed_row("13 Net taxable income", &s2[12], cx),
         ];
+        // Items 14-19 in official order: inputs sit between the computed rows.
         rows.push(self.grid(
             layout,
-            vec![
-                self.text("rate14b", layout),
-                self.text("rate14c", layout),
-                self.field(
-                    "s2.15.1",
-                    "16B — Less: share of other government agencies",
-                    layout,
-                    false,
-                ),
-                self.field(
-                    "s2.17.2",
-                    "18C — MCIT (2% of gross income)",
-                    layout,
-                    !self.draft.atc.mcit_selected,
-                ),
-            ],
+            vec![self.text("rate14b", layout), self.text("rate14c", layout)],
         ));
         rows.push(self.computed_row("15 Income tax due", &s2[14], cx));
+        rows.push(self.field(
+            "s2.15.1",
+            "16B — Less: share of other government agencies",
+            layout,
+            false,
+        ));
         rows.push(self.computed_row("17 Net income tax due", &s2[16], cx));
+        rows.push(self.field(
+            "s2.17.2",
+            "18C — MCIT (2% of gross income)",
+            layout,
+            !self.draft.atc.mcit_selected,
+        ));
         rows.push(self.computed_row("19 Tax due", &s2[18], cx));
         self.section("Schedule 2 — Computation of Tax", rows, cx)
     }
@@ -1415,7 +1415,6 @@ impl Form1702MXView {
                     .0,
                 cx,
             ),
-            self.text("attachments", layout),
         ];
         if p2.item_16_net_tax_payable_or_overpayment.0 < 0 {
             let over = p2.overpayment_disposition;
@@ -1878,7 +1877,12 @@ impl Render for Form1702MXView {
             .child(self.render_nolco("n7", "Schedules 7 / 7.1 — NOLCO (regular rate)", layout, cx))
             .child(self.render_nolco("n8", "Schedules 8 / 8.1 — NOLCO (special rate)", layout, cx))
             .child(self.render_schedule_9(layout, cx))
-            .child(self.render_schedule_10(layout, cx));
+            .child(self.render_schedule_10(layout, cx))
+            .child(self.section(
+                "Attachments",
+                vec![self.grid(layout, vec![self.text("attachments", layout)])],
+                cx,
+            ));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

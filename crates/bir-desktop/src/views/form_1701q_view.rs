@@ -550,9 +550,11 @@ impl Form1701QView {
                 .child(div().font_weight(FontWeight::BOLD).child(value))
                 .into_any_element()
         };
-        let fields = vec![
+        let head_fields = vec![
             fixed("Item 5 — TIN", format_tin(&d.tin)),
             fixed("Item 6 — RDO Code", d.rdo_code.clone()),
+        ];
+        let fields = vec![
             self.text("name", layout),
             self.text("address", layout),
             self.text("zip", layout),
@@ -598,6 +600,7 @@ impl Form1701QView {
             .collect();
         let foreign = d.claims_foreign_tax_credits;
         let mut rows = vec![
+            self.grid(layout, head_fields),
             Self::choice_row(layout, "Item 7 — Taxpayer/Filer type", filer),
             Self::choice_row(layout, "Item 8 — ATC", atcs),
             self.grid(layout, fields),
@@ -1298,8 +1301,8 @@ impl Render for Form1701QView {
             .child(self.render_period(layout, cx))
             .child(self.render_taxpayer(layout, cx))
             .child(self.render_spouse(layout, cx))
-            .child(self.render_schedules(layout, cx))
-            .child(self.render_part_three(layout, cx));
+            .child(self.render_part_three(layout, cx))
+            .child(self.render_schedules(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

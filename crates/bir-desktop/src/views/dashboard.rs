@@ -51,6 +51,14 @@ const TABLET_2_COL_MIN_CONTENT: f32 = 750.0; // 365 * 2 + 20 * 1
 
 /// Shared by Tax Form Library cards and the Calendar tab's three columns so
 /// both tabs wrap at the same window widths.
+/// 1701Q and 1702Q have only Q1-Q3 (the fourth quarter is the annual return).
+fn quarter_count(code: &str) -> usize {
+    match code {
+        "1701Q" | "1702Q" => 3,
+        _ => 4,
+    }
+}
+
 fn tax_form_grid_columns(window_width: f32, sidebar_width: f32) -> usize {
     let available_content_width = window_width - sidebar_width - CONTENT_PADDING_X;
     if available_content_width >= DESKTOP_3_COL_MIN_CONTENT {
@@ -767,7 +775,8 @@ impl Render for DashboardView {
 
                         // Interactive quarter dots — each one is clickable
                         let mut quarter_dots = div().flex().gap_2().w_full();
-                        for (idx, q_state) in quarters.iter().enumerate() {
+                        for (idx, q_state) in quarters.iter().enumerate().take(quarter_count(&code))
+                        {
                             let q_num = (idx + 1) as u8;
                             let should_dim =
                                 has_quarter_filter && !active_quarters.contains(&q_num);

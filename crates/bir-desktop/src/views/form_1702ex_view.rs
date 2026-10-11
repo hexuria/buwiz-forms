@@ -254,7 +254,7 @@ const PART_II_COMPUTED: &[Computed] = &[
 const TEXTS: &[Text] = &[
     Text {
         key: "year",
-        label: "Item 2 — Year ended (YYYY)",
+        label: "Item 2 — Year ended: year (YYYY)",
         placeholder: "YYYY",
         get: |d| d.taxable_year.to_string(),
         set: |d, v| d.taxable_year = v.trim().parse().unwrap_or(0),
@@ -809,6 +809,42 @@ impl Form1702ExView {
         }
     }
 
+    /// Inputs and computed rows interleaved by the leading item number in
+    /// their labels (stable, so equal numbers keep input-before-computed).
+    fn money_by_item(
+        &self,
+        moneys: &[Money],
+        computed: &[Computed],
+        layout: Layout,
+        cx: &Context<Self>,
+    ) -> Vec<AnyElement> {
+        fn item_no(label: &str) -> u32 {
+            label
+                .split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(u32::MAX)
+        }
+        let editable = self.draft.lifecycle.is_editable();
+        let mut rows: Vec<(u32, AnyElement)> = moneys
+            .iter()
+            .map(|m| {
+                (
+                    item_no(m.label),
+                    self.field(m.key, m.label, layout, !editable || !(m.open)(&self.draft)),
+                )
+            })
+            .collect();
+        rows.extend(computed.iter().map(|c| {
+            (
+                item_no(c.label),
+                self.computed(c.label, (c.get)(&self.draft), cx),
+            )
+        }));
+        rows.sort_by_key(|(n, _)| *n);
+        rows.into_iter().map(|(_, el)| el).collect()
+    }
+
     fn money_section(
         &self,
         title: &str,
@@ -817,16 +853,7 @@ impl Form1702ExView {
         layout: Layout,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let editable = self.draft.lifecycle.is_editable();
-        let mut children: Vec<AnyElement> = moneys
-            .iter()
-            .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(&self.draft)))
-            .collect();
-        children.extend(
-            computed
-                .iter()
-                .map(|c| self.computed(c.label, (c.get)(&self.draft), cx)),
-        );
+        let children = self.money_by_item(moneys, computed, layout, cx);
         self.section(title, vec![self.grid(layout, children)], cx)
     }
 
@@ -835,7 +862,7 @@ impl Form1702ExView {
         let d = &self.draft;
         let fiscal = d.tax_period_basis == TaxPeriodBasis::Fiscal;
         let mut children = vec![self.choice_row(
-            "Item 1 — For the",
+            "Item 1 — For (Calendar or Fiscal year)",
             vec![
                 Self::choice("1702ex_calendar", "Calendar", !fiscal, !editable).on_click(
                     cx.listener(|this, _, window, cx| {
@@ -870,7 +897,7 @@ impl Form1702ExView {
                     }))
                 })
                 .collect();
-            children.push(self.choice_row("Item 2 — Month the year ends", months));
+            children.push(self.choice_row("Item 2 — Year ended: month (MM)", months));
         }
         children.push(self.field("year", TEXTS[0].label, layout, !editable));
         children.push(self.choice_row(
@@ -926,31 +953,41 @@ impl Form1702ExView {
                     })),
                 ],
         ));
-        children.push(self.choice_row(
+        self.section("Return period", vec![self.grid(layout, children)], cx)
+    }
+
+    fn deduction_row(&self, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        self.choice_row(
             "Item 13 — Method of deduction",
             vec![
-                    Self::choice(
-                        "1702ex_itemized",
-                        "Itemized deductions",
-                        d.deduction == Form1702ExDeduction::Itemized,
-                        !editable,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.edit(window, cx, |d| d.deduction = Form1702ExDeduction::Itemized)
-                    })),
-                    Self::choice(
-                        "1702ex_osd",
-                        "Optional standard deduction (40%)",
-                        d.deduction == Form1702ExDeduction::Osd,
-                        !editable || d.atc == Form1702ExAtc::IC011,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.edit(window, cx, |d| d.deduction = Form1702ExDeduction::Osd)
-                    })),
-                ],
-        ));
-        children.push(self.field("sheets", TEXTS[13].label, layout, !editable));
-        self.section("Return period", vec![self.grid(layout, children)], cx)
+                Self::choice(
+                    "1702ex_itemized",
+                    "Itemized deductions",
+                    d.deduction == Form1702ExDeduction::Itemized,
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit(window, cx, |d| d.deduction = Form1702ExDeduction::Itemized)
+                })),
+                Self::choice(
+                    "1702ex_osd",
+                    "Optional standard deduction (40%)",
+                    d.deduction == Form1702ExDeduction::Osd,
+                    !editable || d.atc == Form1702ExAtc::IC011,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit(window, cx, |d| d.deduction = Form1702ExDeduction::Osd)
+                })),
+            ],
+        )
+    }
+
+    fn render_attachments(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let field = self.field("sheets", TEXTS[13].label, layout, !editable);
+        self.section("Attachments", vec![self.grid(layout, vec![field])], cx)
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -974,7 +1011,12 @@ impl Form1702ExView {
                 )))
                 .into_any_element(),
         ];
-        for text in &TEXTS[1..13] {
+        // Items 8-12 and line of business, then Item 13, then Items 14-17.
+        for text in &TEXTS[1..8] {
+            fields.push(self.field(text.key, text.label, layout, !editable));
+        }
+        fields.push(self.deduction_row(cx));
+        for text in &TEXTS[8..13] {
             fields.push(self.field(text.key, text.label, layout, !editable));
         }
         self.section(
@@ -1009,15 +1051,7 @@ impl Form1702ExView {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let itemized = d.itemized_open();
-        let mut part_iv: Vec<AnyElement> = PART_IV
-            .iter()
-            .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(d)))
-            .collect();
-        part_iv.extend(
-            PART_IV_COMPUTED
-                .iter()
-                .map(|c| self.computed(c.label, (c.get)(d), cx)),
-        );
+        let part_iv = self.money_by_item(PART_IV, PART_IV_COMPUTED, layout, cx);
         let mut credits: Vec<AnyElement> = CREDITS
             .iter()
             .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(d)))
@@ -1118,15 +1152,7 @@ impl Form1702ExView {
     fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let mut children: Vec<AnyElement> = PART_II
-            .iter()
-            .map(|m| self.field(m.key, m.label, layout, !editable))
-            .collect();
-        children.extend(
-            PART_II_COMPUTED
-                .iter()
-                .map(|c| self.computed(c.label, (c.get)(d), cx)),
-        );
+        let children = self.money_by_item(PART_II, PART_II_COMPUTED, layout, cx);
         let mut sections = vec![self.grid(layout, children)];
         if d.overpayment_open() {
             let options = [
@@ -1554,8 +1580,9 @@ impl Render for Form1702ExView {
             })
             .child(self.render_header_items(layout, cx))
             .child(self.render_part_one(layout, cx))
+            .child(self.render_totals(layout, cx))
             .child(self.render_schedules(layout, cx))
-            .child(self.render_totals(layout, cx));
+            .child(self.render_attachments(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
