@@ -591,7 +591,8 @@ impl Form2552View {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel instead of running into its border.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     fn choice_row(layout: Layout, label: &str, buttons: Vec<Button>) -> AnyElement {
@@ -736,7 +737,7 @@ impl Form2552View {
             self.grid(layout, fields),
             Self::choice_row(
                 layout,
-                "Item 10 — Availing of tax relief under a Special Law or International Tax Treaty?",
+                "Item 10 — Are you availing of tax relief under Special Law or International Tax Treaty?",
                 vec![
                     Self::choice("2552_relief_yes", "Yes", relief, !editable).on_click(
                         cx.listener(|this, _, window, cx| {
@@ -766,12 +767,12 @@ impl Form2552View {
                     ),
                     pick(
                         "2552_kind_primary",
-                        "11B — IPO, primary",
+                        "11B — Initial Public Offering: Primary",
                         Form2552Transaction::PrimaryOffering,
                     ),
                     pick(
                         "2552_kind_secondary",
-                        "11B — IPO, secondary",
+                        "11B — Initial Public Offering: Secondary",
                         Form2552Transaction::SecondaryOffering,
                     ),
                 ],
@@ -983,6 +984,11 @@ impl Form2552View {
             self.computed("14 — Tax due, Schedule 2 (PT 201)", d.tax_due_primary, cx),
             self.computed("15 — Tax due, Schedule 3 (PT 202)", d.tax_due_secondary, cx),
             self.computed("16 — Total tax due", d.total_tax_due, cx),
+            div()
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .child("Less: Tax Credits/Payments")
+                .into_any_element(),
             self.field(
                 "prev",
                 MONEY_INPUTS[0].1,
@@ -999,6 +1005,11 @@ impl Form2552View {
             ),
             self.computed("19 — Total tax credits/payments", d.total_tax_credits, cx),
             self.computed("20 — Tax still due/(overpayment)", d.tax_still_due, cx),
+            div()
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .child("Add: Penalties")
+                .into_any_element(),
             self.field("sur", MONEY_INPUTS[2].1, "surcharge", layout, !editable),
             self.field("int", MONEY_INPUTS[3].1, "interest", layout, !editable),
             self.field("comp", MONEY_INPUTS[4].1, "compromise", layout, !editable),
@@ -1516,9 +1527,9 @@ impl Render for Form2552View {
             })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
-            .child(self.render_part_five(layout, cx))
             .child(self.render_part_two(layout, cx))
             .child(self.render_part_four(layout, cx))
+            .child(self.render_part_five(layout, cx))
             .child(self.render_part_six(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
