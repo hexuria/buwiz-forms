@@ -119,8 +119,7 @@ fn atc_matches(options: &[Form1601FqAtcOption], filter: &str) -> Vec<usize> {
 }
 
 /// Official confirm text from the BIR page (`cancelAllCompute`), verbatim.
-const WITHHELD_NO_QUESTION: &str =
-    "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II. ";
+const WITHHELD_NO_QUESTION: &str = "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II. ";
 
 pub struct Form1601FqView {
     draft: Form1601FqDraft,
@@ -707,9 +706,9 @@ impl Form1601FqView {
                         withheld == Some(false),
                         !editable,
                     )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.request_withheld_no(window, cx)
-                    }))
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.request_withheld_no(window, cx)),
+                    )
                     .into_any_element(),
                 ],
             ),

@@ -345,9 +345,9 @@ impl Form1601EqView {
                             Button::new("1601eq_wipe_yes")
                                 .label("Yes, remove")
                                 .danger()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.apply_wipe(wipe, cx)
-                                })),
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.apply_wipe(wipe, cx)),
+                                ),
                         )
                         .child(
                             Button::new("1601eq_wipe_cancel")
@@ -649,9 +649,11 @@ impl Form1601EqView {
                         withheld == Some(false),
                         !editable,
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.request_wipe(PendingWipe::WithheldNo, cx)
-                    }))
+                    .on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.request_wipe(PendingWipe::WithheldNo, cx)
+                        }),
+                    )
                     .into_any_element(),
                 ],
             ),

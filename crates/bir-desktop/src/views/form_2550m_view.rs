@@ -49,7 +49,6 @@ impl Layout {
     }
 }
 
-
 /// Text inputs: (key, label, placeholder, validation field).
 const TEXT_INPUTS: &[(&str, &str, &str, &str)] = &[
     ("year", "Item 1 — Year", "YYYY", "taxable_year"),
