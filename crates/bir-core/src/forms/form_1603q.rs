@@ -520,9 +520,8 @@ impl Form1603QDraft {
                 "Item 5 holds at most two digits.",
             );
         }
-        if self.tax_relief == Some(Form1603QTaxRelief::Unspecified) {
-            err("tax_relief", "Specify the tax relief on Item 13A.");
-        }
+        // Item 13A: the official validation has no 13A check; a blank choice
+        // is written as selTreaty value 0, so it does not block Queue.
         if self.any_tax_withheld == Some(false) && self.monetary_value.iter().any(|v| *v != 0.0) {
             err(
                 "monetary_value",
@@ -730,6 +729,18 @@ mod tests {
             assert!(keys.contains(key.as_str()), "{key}");
         }
         assert!(draft.to_bir_xml_payload().is_ok());
+    }
+
+    #[test]
+    fn blank_item_13a_does_not_block_like_the_official_page() {
+        let mut draft = sample();
+        draft.tax_relief = Some(Form1603QTaxRelief::Unspecified);
+        assert!(
+            !draft
+                .validate_on(today())
+                .iter()
+                .any(|(k, _)| k == "tax_relief")
+        );
     }
 
     #[test]

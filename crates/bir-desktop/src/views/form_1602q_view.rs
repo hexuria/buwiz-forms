@@ -354,15 +354,35 @@ impl Form1602QView {
         cx.notify();
     }
 
-    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1602QDraft)) {
+    fn edit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1602QDraft),
+    ) {
         if !self.draft.lifecycle.is_editable() {
             return;
         }
         change(&mut self.draft);
         self.draft.recompute();
+        self.write_back_amounts(window, cx);
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// Put each recomputed amount back into its editor when the editor no
+    /// longer holds it (an Item 3 toggle zeroed a now-disabled box).
+    fn write_back_amounts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for (key, _) in MONEY_INPUTS {
+            let value = Self::initial(&self.draft, key);
+            let current = self.input_text(key, cx);
+            if parse_amount(&current) != parse_amount(&value) {
+                if let Some(input) = self.inputs.get(*key) {
+                    input.update(cx, |state, cx| state.set_value(value, window, cx));
+                }
+            }
+        }
     }
 
     /// Item 4: like `changeTaxWitheld`, a new answer clears every amount, so
@@ -705,13 +725,13 @@ impl Form1602QView {
                 &["is_amended"],
                 vec![
                     Self::choice("1602q_amended_yes", "Yes", amended == Some(true), !editable)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.is_amended = Some(true))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = Some(true))
                         }))
                         .into_any_element(),
                     Self::choice("1602q_amended_no", "No", amended == Some(false), !editable)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.is_amended = Some(false))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = Some(false))
                         }))
                         .into_any_element(),
                 ],
@@ -795,8 +815,10 @@ impl Form1602QView {
                     category == Some(Form1602QCategory::Private),
                     !editable,
                 )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.category = Some(Form1602QCategory::Private))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit(window, cx, |d| {
+                        d.category = Some(Form1602QCategory::Private)
+                    })
                 }))
                 .into_any_element(),
                 Self::choice(
@@ -805,8 +827,10 @@ impl Form1602QView {
                     category == Some(Form1602QCategory::Government),
                     !editable,
                 )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.category = Some(Form1602QCategory::Government))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit(window, cx, |d| {
+                        d.category = Some(Form1602QCategory::Government)
+                    })
                 }))
                 .into_any_element(),
             ],
@@ -828,9 +852,9 @@ impl Form1602QView {
         if availing == Some(true) {
             let pick = |id: &'static str, label: &'static str, value: Form1602QTaxRelief| {
                 Self::choice(id, label, kind == value, !editable)
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.tax_relief = value)),
-                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit(window, cx, |d| d.tax_relief = value)
+                    }))
                     .into_any_element()
             };
             relief_rows.push(self.labelled_row(
@@ -1039,8 +1063,8 @@ impl Form1602QView {
             let over = d.over_remittance;
             let pick = |id: &'static str, label: &'static str, value: Form1602QOverRemittance| {
                 Self::choice(id, label, over == value, !editable)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| d.over_remittance = value)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit(window, cx, |d| d.over_remittance = value)
                     }))
                     .into_any_element()
             };
@@ -1383,25 +1407,15 @@ impl Render for Form1602QView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let mut issues: Vec<AnyElement> = self
+        let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
             })
             .collect();
-        if error_count > issues.len() {
-            issues.push(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(format!("and {} more", error_count - issues.len()))
-                    .into_any_element(),
-            );
-        }
 
         let toolbar =
             div()
@@ -1511,14 +1525,15 @@ impl Render for Form1602QView {
                                 })),
                         ),
                 )
-            })
+            });
+        if !issues.is_empty() {
+            body = body.child(self.section("Needs review", issues, cx));
+        }
+        body = body
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_schedule(layout, cx));
         body = body.child(self.render_totals(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
