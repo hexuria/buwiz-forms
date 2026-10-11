@@ -846,6 +846,8 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         revision: "2018",
         // `form_id` is the official formType (filename segment). PROD
         // `ftpTargetFolder` has no `2200Mv2018` key; see form_2200m.
+        // Queueing stays off: ftpTargetFolder.PROD has no '2200Mv2018' folder
+        // (getFtpFolder returns undefined), so the SFTP target is unconfirmed.
         form_id: "2200Mv2018",
         // The desktop editor is views::form_2200m_view; print preview fills the
         // two-page frozen 2200m-2018 sheet through its writer-cells map.
@@ -854,7 +856,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
-            queue_submission: true,
+            queue_submission: false,
             editor: true,
             render_contract: true,
             html_component: true,
@@ -868,6 +870,8 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         code: "2200P",
         revision: "2020",
         // `form_id` is the official formType (filename segment).
+        // Queueing stays off: ftpTargetFolder.PROD has no '2200Pv2020' folder
+        // (getFtpFolder returns undefined), so the SFTP target is unconfirmed.
         form_id: "2200Pv2020",
         // The desktop editor is views::form_2200p_view.
         capabilities: FormCapabilities {
@@ -875,7 +879,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
-            queue_submission: true,
+            queue_submission: false,
             editor: true,
             render_contract: true,
             html_component: true,
@@ -889,6 +893,8 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         code: "2200A",
         revision: "2020",
         // `form_id` is the official formType (filename segment).
+        // Queueing stays off: ftpTargetFolder.PROD has no '2200Av2020' folder
+        // (getFtpFolder returns undefined), so the SFTP target is unconfirmed.
         form_id: "2200Av2020",
         // The desktop editor is views::form_2200a_view.
         capabilities: FormCapabilities {
@@ -896,7 +902,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
-            queue_submission: true,
+            queue_submission: false,
             editor: true,
             render_contract: true,
             html_component: true,
@@ -1214,6 +1220,11 @@ mod tests {
         assert_eq!(queue_authorized_form_type_id("2550Q"), Some("2550Qv2024"));
         assert!(!can_queue_for_submission("9999"), "9999 must fail closed");
         assert_eq!(queue_authorized_form_type_id("9999"), None);
+        // No PROD ftpTargetFolder key for these formTypes: queueing stays off.
+        for code in ["2200AN", "2200M", "2200P", "2200A"] {
+            assert!(!can_queue_for_submission(code), "{code} must not queue");
+            assert_eq!(queue_authorized_form_type_id(code), None, "{code}");
+        }
     }
 
     #[test]

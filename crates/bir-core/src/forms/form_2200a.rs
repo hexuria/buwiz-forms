@@ -1354,8 +1354,8 @@ impl QueueableForm for Form2200ADraft {
     const FORM_CODE: &'static str = "2200A";
     /// Official `formType` and filename segment. `ftpTargetFolder.PROD` has
     /// no `2200Av2020` key (only `2200A` → `2200Av2013`); the official page
-    /// passes `undefined` as the SFTP folder in PROD, so the dispatcher must
-    /// resolve the folder from this.
+    /// passes `undefined` as the SFTP folder in PROD, so queueing stays off in
+    /// support_level until the real folder is confirmed.
     const FORM_TYPE: &'static str = "2200Av2020";
     const LAYOUT_ID: &'static str = FORM_2200A_FORM_ID;
 

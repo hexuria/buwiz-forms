@@ -1344,8 +1344,7 @@ impl FormViewTrait for Form2200AView {
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !can_queue_for_submission(Form2200ADraft::FORM_CODE) {
-            self.status_message =
-                Some("2200A is not enabled for in-app submission in this build.".into());
+            self.status_message = Some(QUEUE_UNAVAILABLE.into());
             cx.notify();
             return;
         }
@@ -1486,12 +1485,17 @@ impl FormViewTrait for Form2200AView {
     }
 }
 
+/// Why Queue for submission is off: the registry leaves 2200-A unqueueable
+/// (the official PROD SFTP map has no 2200Av2020 folder).
+const QUEUE_UNAVAILABLE: &str = "In-app submission isn't available for 2200-A in this build.";
+
 impl Render for Form2200AView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let open_issues = self.validation_errors.len() + self.parse_errors.len();
+        let queue_supported = can_queue_for_submission(Form2200ADraft::FORM_CODE);
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1554,7 +1558,15 @@ impl Render for Form2200AView {
                                     })),
                             )
                         })
-                        .when(is_draft && open_issues > 0, |row| {
+                        .when(is_draft && !queue_supported, |row| {
+                            row.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(QUEUE_UNAVAILABLE),
+                            )
+                        })
+                        .when(is_draft && queue_supported && open_issues > 0, |row| {
                             row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
                             "Fix {open_issues} {} to queue (listed under Needs review at the top).",
                             if open_issues == 1 { "item" } else { "items" }
@@ -1566,6 +1578,7 @@ impl Render for Form2200AView {
                                 .primary()
                                 .disabled(
                                     !is_draft
+                                        || !queue_supported
                                         || !self.validation_errors.is_empty()
                                         || !self.parse_errors.is_empty(),
                                 )

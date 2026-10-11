@@ -1363,8 +1363,7 @@ impl FormViewTrait for Form2200MView {
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !can_queue_for_submission(Form2200MDraft::FORM_CODE) {
-            self.status_message =
-                Some("2200M is not enabled for in-app submission in this build.".into());
+            self.status_message = Some(QUEUE_UNAVAILABLE.into());
             cx.notify();
             return;
         }
@@ -1505,12 +1504,17 @@ impl FormViewTrait for Form2200MView {
     }
 }
 
+/// Why Queue for submission is off: the registry leaves 2200-M unqueueable
+/// (the official PROD SFTP map has no 2200Mv2018 folder).
+const QUEUE_UNAVAILABLE: &str = "In-app submission isn't available for 2200-M in this build.";
+
 impl Render for Form2200MView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let open_issues = self.validation_errors.len() + self.parse_errors.len();
+        let queue_supported = can_queue_for_submission(Form2200MDraft::FORM_CODE);
         let first_issue = self
             .parse_errors
             .iter()
@@ -1580,29 +1584,40 @@ impl Render for Form2200MView {
                                     })),
                             )
                         })
-                        .when_some(first_issue.filter(|_| is_draft), |row, first| {
+                        .when(is_draft && !queue_supported, |row| {
                             row.child(
                                 div()
-                                    .max_w(px(420.))
                                     .text_xs()
-                                    .text_color(cx.theme().danger)
-                                    .child(if open_issues == 1 {
-                                        first
-                                    } else {
-                                        format!(
-                                            "{first} (+{} more under Needs review)",
-                                            open_issues - 1
-                                        )
-                                    }),
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(QUEUE_UNAVAILABLE),
                             )
                         })
+                        .when_some(
+                            first_issue.filter(|_| is_draft && queue_supported),
+                            |row, first| {
+                                row.child(
+                                    div()
+                                        .max_w(px(420.))
+                                        .text_xs()
+                                        .text_color(cx.theme().danger)
+                                        .child(if open_issues == 1 {
+                                            first
+                                        } else {
+                                            format!(
+                                                "{first} (+{} more under Needs review)",
+                                                open_issues - 1
+                                            )
+                                        }),
+                                )
+                            },
+                        )
                         .child(
                             Button::new("2200m_submit")
                                 .label("Queue for submission")
                                 .primary()
-                                // Stays clickable: with open items the click
-                                // explains why instead of queueing.
-                                .disabled(!is_draft)
+                                // Stays clickable while queueing is supported: with
+                                // open items the click explains why instead of queueing.
+                                .disabled(!is_draft || !queue_supported)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.mark_submitted(window, cx)
                                 })),
