@@ -1107,7 +1107,86 @@ fn status_tone(message: &str, is_submission_error: bool) -> StatusTone {
     }
 }
 
+/// Error keys that have no input on this page; they come from the taxpayer profile.
+const PROFILE_SOURCED_FIELDS: [&str; 4] = [
+    "email_address",
+    "zip_code",
+    "contact_number",
+    "line_of_business",
+];
+
+fn is_profile_sourced(field: &str) -> bool {
+    PROFILE_SOURCED_FIELDS.contains(&field)
+}
+
+fn submit_blocked_reason(error_count: usize) -> String {
+    if error_count == 1 {
+        "Fix 1 problem listed under Needs review".to_string()
+    } else {
+        format!("Fix {error_count} problems listed under Needs review")
+    }
+}
+
 impl Form1601CView {
+    /// "Needs review" list: current validation messages, or "No problems
+    /// found" once Validate has run clean. Hidden until there is something to say.
+    fn render_needs_review(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let theme = cx.theme();
+        if self.validation_errors.is_empty() {
+            if !self.is_validated {
+                return None;
+            }
+            return Some(
+                div()
+                    .id("form-1601c-needs-review")
+                    .p_4()
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded_lg()
+                    .text_sm()
+                    .child("No problems found")
+                    .into_any_element(),
+            );
+        }
+        let has_profile_error = self
+            .validation_errors
+            .iter()
+            .any(|(field, _)| is_profile_sourced(field));
+        let mut list = div()
+            .id("form-1601c-needs-review")
+            .flex()
+            .flex_col()
+            .gap_1()
+            .p_4()
+            .border_1()
+            .border_color(theme.danger.opacity(0.4))
+            .rounded_lg()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child("Needs review"),
+            );
+        for (field, message) in &self.validation_errors {
+            let suffix = if is_profile_sourced(field) {
+                " (from your taxpayer profile)"
+            } else {
+                ""
+            };
+            list = list.child(div().text_sm().child(format!("• {message}{suffix}")));
+        }
+        if has_profile_error {
+            list = list.child(
+                div()
+                    .mt_2()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child("These come from your taxpayer profile. Edit them in Profile Settings."),
+            );
+        }
+        Some(list.into_any_element())
+    }
+
     /// One line above the form, as wide as the form's own content column,
     /// with a close button when the message is dismissible.
     fn render_status_banner(
@@ -1209,6 +1288,16 @@ impl Render for Form1601CView {
             div().into_any_element()
         };
 
+        let submit_hint =
+            (queue_supported && is_draft && !self.validation_errors.is_empty()).then(|| {
+                div()
+                    .id("form-1601c-submit-blocked-reason")
+                    .text_sm()
+                    .text_color(cx.theme().danger)
+                    .child(submit_blocked_reason(self.validation_errors.len()))
+            });
+        let needs_review = self.render_needs_review(cx);
+
         div()
             .flex()
             .flex_col()
@@ -1260,6 +1349,7 @@ impl Render for Form1601CView {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.mark_submitted(window, cx);
                             }))}
+                        {div().children(submit_hint)}
                         {queue_actions}
                     </div>
                 </div>
@@ -1300,6 +1390,7 @@ impl Render for Form1601CView {
                     track_scroll={&self.scroll_handle}
                     p={pad}>
                     <div max_w={px(800.)} w_full mx_auto flex flex_col gap_6>
+                        {div().children(needs_review)}
                         <div bg={cx.theme().background}
                             border_1
                             border_color={cx.theme().border}
