@@ -468,6 +468,9 @@ impl KitView for Form1707AView {
     fn draft_mut(&mut self) -> &mut Form1707ADraft {
         &mut self.draft
     }
+    fn print_field_map(&self) -> std::collections::BTreeMap<String, String> {
+        self.draft.to_print_field_map()
+    }
     fn db(&self) -> Arc<Mutex<Database>> {
         Arc::clone(&self.db)
     }

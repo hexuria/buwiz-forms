@@ -78,13 +78,16 @@ const SHARE_FIELDS: [(&str, &str); 4] = [
     ("price", "Taxable base / selling price"),
 ];
 /// Schedule 2/3 rows always shown: A–D. "Add row" appends the official
-/// "More" list (D.1, D.2, …), which has no row limit.
+/// "More" list, which has no row limit. Labels follow the printed sheet:
+/// with four rows the last is D; once rows are added, D is the OTHERS
+/// subtotal and the rows from the fourth on are D.1, D.2, … (the official
+/// pop-up numbering, form_1707.rs writes index 3 as entry 1).
 const SCHEDULE_MIN_ROWS: usize = FORM_1707_SCHEDULE_ROWS;
 
-fn row_label(row: usize) -> String {
+fn row_label(row: usize, rows: usize) -> String {
     match row {
         0..=2 => ["A", "B", "C"][row].to_string(),
-        3 => "D".to_string(),
+        3 if rows <= SCHEDULE_MIN_ROWS => "D".to_string(),
         _ => format!("D.{}", row - 2),
     }
 }
@@ -571,7 +574,9 @@ impl Form1707View {
                 children.push(
                     kit::label("Schedule 2 — Description of shares of stock").into_any_element(),
                 );
-                for (row, letter) in (0..self.share_rows).map(|row| (row, row_label(row))) {
+                for (row, letter) in
+                    (0..self.share_rows).map(|row| (row, row_label(row, self.share_rows)))
+                {
                     children.push(self.row_heading("s2", row, &letter, cx));
                     let shares_key = format!("shares[{row}].number_of_shares");
                     let price_key = format!("shares[{row}].selling_price");
@@ -601,7 +606,9 @@ impl Form1707View {
                 children.push(
                     kit::label("Schedule 3 — Cost and other allowable expenses").into_any_element(),
                 );
-                for (row, letter) in (0..self.expense_rows).map(|row| (row, row_label(row))) {
+                for (row, letter) in
+                    (0..self.expense_rows).map(|row| (row, row_label(row, self.expense_rows)))
+                {
                     children.push(self.row_heading("s3", row, &letter, cx));
                     let amount_key = format!("expenses[{row}].amount");
                     let cells = vec![
@@ -777,7 +784,9 @@ impl KitView for Form1707View {
         {
             let mut shares = Vec::new();
             let mut expenses = Vec::new();
-            for (row, letter) in (0..self.share_rows).map(|row| (row, row_label(row))) {
+            for (row, letter) in
+                (0..self.share_rows).map(|row| (row, row_label(row, self.share_rows)))
+            {
                 let number = r
                     .optional_amount(
                         &share_key(row, "shares"),
@@ -797,7 +806,9 @@ impl KitView for Form1707View {
                     selling_price: price,
                 });
             }
-            for (row, letter) in (0..self.expense_rows).map(|row| (row, row_label(row))) {
+            for (row, letter) in
+                (0..self.expense_rows).map(|row| (row, row_label(row, self.expense_rows)))
+            {
                 let amount = r
                     .amount(
                         &expense_key(row, "amount"),
@@ -919,6 +930,16 @@ impl Render for Form1707View {
 mod tests {
     use super::{AMOUNTS, Form1707Expense, Form1707View, TEXT_INPUTS, expense_key};
     use bir_core::forms::form_1707::Form1707Draft;
+
+    /// Printed-sheet labels: D alone with four rows, D.1 onward once the
+    /// official "More" list is in use.
+    #[test]
+    fn row_labels_follow_printed_sheet() {
+        let four: Vec<_> = (0..4).map(|r| super::row_label(r, 4)).collect();
+        assert_eq!(four, ["A", "B", "C", "D"]);
+        let six: Vec<_> = (0..6).map(|r| super::row_label(r, 6)).collect();
+        assert_eq!(six, ["A", "B", "C", "D.1", "D.2", "D.3"]);
+    }
 
     /// Every stored row gets an editor holding its value, so read-back keeps
     /// rows past the first ten.

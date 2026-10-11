@@ -1,7 +1,7 @@
 {
  "form_id": "1707a-v2021",
  "html_slug": "1707a-2021",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. The sheet numbers items differently from the layout keys, so items are matched by caption text, not by key names. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb where the sheet has one, otherwise one text cell. Booleans fill X in the box left of the printed option. Left out: MM and DD of Year Ended (no labels), the TIN branch comb, the shared item 10/11 comb, the MM/DD/YYYY date combs, the Part III grid (unnamed keys), and items with no fillable cell on the sheet.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. The sheet numbers items differently from the layout keys, so items are matched by caption text, not by key names. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb where the sheet has one, otherwise one text cell. Booleans fill X in the box left of the printed option. Left out: MM and DD of Year Ended (no labels), the TIN branch comb, the MM/DD/YYYY date combs, the Part III grid (unnamed keys), and items with no fillable cell on the sheet.",
  "joins": [
   {
    "writer_key": "frm1707Av2021:txtI1YearEndYear",
@@ -314,6 +314,12 @@
    "html_id": "p2c104",
    "printed": "5 TOTAL (E) Capital Loss",
    "reason": "TOTAL row of the Schedule 2 continuation, column (E)"
+  },
+  {
+   "writer_key": "derived:contact_email",
+   "html_id": "p1c39",
+   "printed": "10 Contact Number / 11 Email Address",
+   "reason": "one 40-slot comb under both captions: the print map puts the contact number from slot 0 (caption x 23.04pt) and the email from slot 12 (caption text x 189.02pt; comb from x 17.64pt, pitch 14.4pt)"
   }
  ],
  "money_joins": [
@@ -491,14 +497,6 @@
   {
    "writer_key": "frm1707Av2021:txtLineOfBusiness",
    "reason": "no line-of-business item on this sheet"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtI7TelNo",
-   "reason": "10 Contact Number and 11 Email Address share one full-width 40-slot comb (p1c39); not split"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtI11Email",
-   "reason": "11 Email Address shares the full-width 40-slot comb p1c39 with item 10; not split"
   },
   {
    "writer_key": "frm1707Av2021:txtI11ASpecify",
@@ -741,10 +739,6 @@
   {
    "html_id": "p1c35",
    "reason": "item 9 address line 2: the layout has no second address key"
-  },
-  {
-   "html_id": "p1c39",
-   "reason": "item 10 contact / item 11 email shared comb; not split"
   },
   {
    "html_id": "p1c119",

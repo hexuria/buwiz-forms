@@ -452,6 +452,36 @@
    "html_id": "p2c99",
    "printed": "C Others (Specify)",
    "reason": "Schedule 2 item C description right of the Others caption"
+  },
+  {
+   "writer_key": "derived:transaction_mm",
+   "html_id": "p1c7",
+   "printed": "1 Date of Transaction (MM)",
+   "reason": "2-slot MM comb of the item 1 date; the print map splits txtTransactionDate (MM/DD/YYYY)"
+  },
+  {
+   "writer_key": "derived:transaction_dd",
+   "html_id": "p1c8",
+   "printed": "1 Date of Transaction (DD)",
+   "reason": "2-slot DD comb of the item 1 date; the print map splits txtTransactionDate"
+  },
+  {
+   "writer_key": "derived:transaction_yyyy",
+   "html_id": "p1c9",
+   "printed": "1 Date of Transaction (YYYY)",
+   "reason": "4-slot YYYY comb of the item 1 date; the print map splits txtTransactionDate"
+  },
+  {
+   "writer_key": "derived:tin",
+   "html_id": "p1c18",
+   "printed": "5 Taxpayer Identification Number (TIN)",
+   "reason": "one 14-slot comb under the item 5 TIN caption; the print map joins txtTIN1-3 and txtBranchCode (9 digits + 5-digit branch)"
+  },
+  {
+   "writer_key": "derived:pg2_tin",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "one 14-slot comb under the page 2 TIN caption; the print map joins txtPg2TIN1-3 and txtPg2BranchCode"
   }
  ],
  "money_joins": [
@@ -618,22 +648,6 @@
  ],
  "left_out": [
   {
-   "html_id": "p1c7",
-   "reason": "Transaction date is one key (txtTransactionDate) over three date combs (MM/DD/YYYY); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c8",
-   "reason": "Transaction date is one key (txtTransactionDate) over three date combs (MM/DD/YYYY); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c9",
-   "reason": "Transaction date is one key (txtTransactionDate) over three date combs (MM/DD/YYYY); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c18",
-   "reason": "one 14-slot comb under the item 5 TIN caption; the layout splits the TIN into txtTIN1-3 and txtBranchCode, which cannot be split across one cell, so left blank"
-  },
-  {
    "html_id": "p1c37",
    "reason": "second row beside the item 11B TIN with no printed caption; cannot confirm it is the txtOtherName2 line"
   },
@@ -756,10 +770,6 @@
   {
    "html_id": "p1c153",
    "reason": "2000OT layout has no writer key for the Tax Agent block or the Part III payment rows (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others); left blank"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "one 14-slot comb under the page 2 TIN caption; the TIN parts (txtPg2TIN1-3, txtPg2BranchCode) have no separate cells, so left blank"
   }
  ]
 }

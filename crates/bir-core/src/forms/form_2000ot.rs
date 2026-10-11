@@ -417,6 +417,31 @@ impl Form2000OTDraft {
         self.total_amount_payable = fixed_cents(self.tax_still_due.max(0.0) + self.total_penalties);
     }
 
+    /// Print preview fields: the upload map plus the combs the sheet prints
+    /// as one cell each: the Item 1 date as MM, DD and YYYY, and the Item 5
+    /// and page 2 TIN as one 14-slot value (9 digits + 5-digit branch).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut put = |key: &str, value: String| {
+            if !value.trim().is_empty() {
+                fields.insert(format!("derived:{key}"), value);
+            }
+        };
+        let date: Vec<&str> = self.transaction_date.trim().split('/').collect();
+        if let [month, day, year] = date.as_slice() {
+            put("transaction_mm", month.trim().to_string());
+            put("transaction_dd", day.trim().to_string());
+            put("transaction_yyyy", year.trim().to_string());
+        }
+        let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
+        if !tin1.is_empty() {
+            let tin = format!("{tin1}{tin2}{tin3}{branch}");
+            put("tin", tin.clone());
+            put("pg2_tin", tin);
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
@@ -917,6 +942,32 @@ impl QueueableForm for Form2000OTDraft {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn print_map_splits_the_date_and_joins_the_tin() {
+        let fields = sample().to_print_field_map();
+        assert_eq!(fields["derived:transaction_mm"], "06");
+        assert_eq!(fields["derived:transaction_dd"], "15");
+        assert_eq!(fields["derived:transaction_yyyy"], "2025");
+        assert_eq!(fields["derived:tin"], "12345678800000");
+        assert_eq!(fields["derived:pg2_tin"], "12345678800000");
+        assert_eq!(fields["txtEmail"], "sample.taxpayer@example.com");
+    }
+
+    /// Item 17 follows the official v2018 page: DO102 floors per P200 block
+    /// and DO122 Math.round()s per P1,000 block (BIR-Form2000OTv2018.hta).
+    #[test]
+    fn tax_due_matches_the_official_block_formulas() {
+        let mut draft = sample();
+        draft.nature = Form2000OTNature::SharesOfStock;
+        draft.atc = Form2000OTAtc::Do102;
+        draft.shares = vec![Form2000OTShareRow {
+            par_value: 250.0,
+            ..Default::default()
+        }];
+        draft.recompute();
+        assert_eq!(draft.tax_due, 1.50);
+    }
 
     pub(crate) fn sample() -> Form2000OTDraft {
         let mut draft = Form2000OTDraft {
