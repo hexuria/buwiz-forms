@@ -154,7 +154,7 @@ fn launch_frozen_html<T: 'static>(
             }
             Err(error) => {
                 let path = write_frozen_html_document(&html)?;
-                open::that(&path).map_err(|open_error| {
+                open::that_detached(&path).map_err(|open_error| {
                     format!("{error}; also failed to open {path:?}: {open_error}")
                 })?;
                 Ok(HtmlPreviewLaunchKind::FrozenHtmlDocument)
@@ -166,7 +166,8 @@ fn launch_frozen_html<T: 'static>(
     {
         let _ = (title, cx);
         let path = write_frozen_html_document(&html)?;
-        open::that(&path).map_err(|error| format!("frozen HTML could not be opened: {error}"))?;
+        open::that_detached(&path)
+            .map_err(|error| format!("frozen HTML could not be opened: {error}"))?;
         Ok(HtmlPreviewLaunchKind::FrozenHtmlDocument)
     }
 }

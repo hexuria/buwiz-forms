@@ -580,11 +580,11 @@ impl CronTasksView {
     }
 
     fn email_support(&mut self, cx: &mut Context<'_, Self>) {
-        let _ = open::that(
+        let _ = open::that_detached(
             "mailto:support@goldcoders.dev?subject=eBIRForms%20Bug%20Report&body=Please%20attach%20the%20log%20file.",
         );
         let logs_dir = bir_core::platform::data_dir().join("logs");
-        let _ = open::that(&logs_dir);
+        let _ = open::that_detached(&logs_dir);
         cx.notify();
     }
 

@@ -1089,7 +1089,7 @@ impl AppState {
             }
         };
 
-        if let Err(error) = open::that(&path) {
+        if let Err(error) = open::that_detached(&path) {
             // The file is still on disk and importable by hand, so say where.
             push_notification(
                 "error",

@@ -408,7 +408,7 @@ impl SettingsView {
                         .label("Open official Google OAuth guide")
                         .ghost()
                         .on_click(|_, _, _| {
-                            let _ = open::that(
+                            let _ = open::that_detached(
                                 "https://developers.google.com/identity/protocols/oauth2/native-app",
                             );
                         })}
