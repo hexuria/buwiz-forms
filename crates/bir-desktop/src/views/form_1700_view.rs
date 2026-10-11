@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1700::{
-    FORM_1700_ATC, FORM_1700_EMPLOYER_ROWS, Form1700CivilStatus, Form1700Column, Form1700Draft,
-    Form1700Employer, Form1700FilingStatus, Form1700TaxpayerType,
+    FORM_1700_ATC, FORM_1700_EMPLOYER_ROWS, FORM_1700_MAX_EMPLOYERS, Form1700CivilStatus,
+    Form1700Column, Form1700Draft, Form1700Employer, Form1700FilingStatus, Form1700TaxpayerType,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -479,8 +479,9 @@ const EMPLOYER_FIELDS: &[(&str, &str)] = &[
     ("withheld", "e — Tax withheld"),
 ];
 
-/// Employer rows the editor offers: Items 1–4 and the add-more popup rows.
-const EDITOR_EMPLOYER_ROWS: usize = 12;
+/// Employer rows the editor offers: Items 1–4 and the add-more popup rows,
+/// up to the form's limit. Only the stored rows plus one empty row show.
+const EDITOR_EMPLOYER_ROWS: usize = FORM_1700_MAX_EMPLOYERS;
 
 fn employer_key(row: usize, field: &str) -> String {
     format!("emp{row}:{field}")
@@ -1172,24 +1173,33 @@ impl Form1700View {
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let mut fields = vec![
+        let id_keys = ["tin", "rdo_code"];
+        let id_label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child("Item 4 — TIN / Item 5 — RDO");
+        let id_label = if id_keys.iter().any(|k| self.has_error(k)) {
+            id_label.text_color(gpui::red())
+        } else {
+            id_label
+        };
+        let mut fields = vec![with_field_error(
             div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 4 — TIN / Item 5 — RDO"),
-                )
+                .child(id_label)
                 .child(div().font_weight(FontWeight::BOLD).child(format!(
                     "{}  ·  RDO {}",
                     format_tin(&d.tin),
                     d.rdo_code
                 )))
                 .into_any_element(),
-        ];
+            messages_for(
+                self.parse_errors.iter().chain(&self.validation_errors),
+                &id_keys,
+            ),
+        )];
         for (key, error_key) in [
             ("name", "taxpayer_name"),
             ("address", "registered_address"),
@@ -1425,6 +1435,16 @@ impl Form1700View {
                     .into_any_element(),
             );
         }
+        rows.push(
+            div()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(format!(
+                    "{} of {EDITOR_EMPLOYER_ROWS} employer rows used. A new row appears when the last one is filled.",
+                    d.employers.len()
+                ))
+                .into_any_element(),
+        );
         if d.schedule_is_folded() {
             // Item 4 on the return reads OTHERS with these subtotals.
             let [c, dd, e] = d.popup_subtotals();

@@ -137,6 +137,15 @@ fn schedule_list(schedule: &str) -> &'static str {
     }
 }
 
+/// Item 1 parts left blank (0) show as an empty box.
+fn blank_zero<T: Into<u32>>(value: T, text: String) -> String {
+    if value.into() == 0 {
+        String::new()
+    } else {
+        text
+    }
+}
+
 /// Every validation key whose message belongs under the editor `editor_key`:
 /// its own key (malformed numbers) and the model's field name.
 fn error_keys(editor_key: &str) -> Vec<String> {
@@ -275,9 +284,9 @@ impl Form1801View {
 
     fn text_value(d: &Form1801Draft, key: &str) -> String {
         match key {
-            "month" => format!("{:02}", d.death_month),
-            "day" => format!("{:02}", d.death_day),
-            "year" => d.death_year.to_string(),
+            "month" => blank_zero(d.death_month, format!("{:02}", d.death_month)),
+            "day" => blank_zero(d.death_day, format!("{:02}", d.death_day)),
+            "year" => blank_zero(d.death_year, d.death_year.to_string()),
             "sheets" => d.number_of_attached_sheets.to_string(),
             "rdo" => d.rdo_code.clone(),
             "name" => d.estate_name.clone(),
@@ -851,6 +860,8 @@ impl KitView for Form1801View {
     type Draft = Form1801Draft;
     const SLUG: &'static str = "1801";
     const CODE: &'static str = "1801";
+    const VALIDATION_SUCCESS: Option<&'static str> =
+        Some("Validation successful. Click on Edit if you wish to modify your entries.");
 
     fn kit(&self) -> &EditorState {
         &self.kit
@@ -872,6 +883,9 @@ impl KitView for Form1801View {
     }
     fn initial_text(&self, key: &str) -> String {
         Self::text_value(&self.draft, key)
+    }
+    fn print_field_map(&self) -> std::collections::BTreeMap<String, String> {
+        self.draft.to_print_field_map()
     }
 
     fn read_inputs(&mut self, cx: &mut Context<Self>) -> Vec<(String, String)> {
@@ -1058,7 +1072,8 @@ impl QueueableFormView for Form1801View {
     ) -> Self {
         let errors = bir_core::forms::queueable::QueueableForm::validate(&draft);
         let rows = Self::shown_rows(&draft);
-        let kit = EditorState::new(Self::input_specs(&draft, rows), errors, window, cx);
+        let mut kit = EditorState::new(Self::input_specs(&draft, rows), errors, window, cx);
+        kit.error_keys = Some(error_keys);
         Self {
             draft,
             db,
@@ -1069,6 +1084,25 @@ impl QueueableFormView for Form1801View {
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1801Draft {
         Form1801Draft::new_from_profile(profile, year, u32::from(period.max(1)))
+    }
+
+    /// The saved draft, with the read-only TIN re-read from the profile while
+    /// it is still editable, so a TIN fixed in Profile Settings reaches it.
+    fn load_draft(
+        db: &Database,
+        profile: &TaxpayerProfile,
+        year: u16,
+        period: u8,
+    ) -> Form1801Draft {
+        let mut draft = db
+            .get_queueable_draft::<Form1801Draft>(&profile.tin.full(), year, i64::from(period))
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Self::new_draft(profile, year, period));
+        if draft.lifecycle.is_editable() {
+            draft.tin = profile.tin.full();
+        }
+        draft
     }
 }
 

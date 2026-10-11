@@ -107,6 +107,10 @@ pub struct EditorState {
     pub status_message: Option<String>,
     pub release_claim_confirm_open: bool,
     pub scroll_handle: ScrollHandle,
+    /// Optional map from an editor key to the extra validation keys whose
+    /// errors belong to it (the model field names). `None` keeps the plain
+    /// editor-key match.
+    pub error_keys: Option<fn(&str) -> Vec<String>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -124,6 +128,7 @@ impl EditorState {
             status_message: None,
             release_claim_confirm_open: false,
             scroll_handle: ScrollHandle::new(),
+            error_keys: None,
             _subscriptions: Vec::new(),
         };
         state.ensure_inputs(specs, window, cx);
@@ -165,13 +170,19 @@ impl EditorState {
     }
 
     fn has_error(&self, key: &str) -> bool {
+        let keys = match self.error_keys {
+            Some(map) => map(key),
+            None => vec![key.to_string()],
+        };
         self.validation_errors
             .iter()
             .chain(self.parse_errors.iter())
             .any(|(field, _)| {
-                field == key
-                    || field.starts_with(&format!("{key}["))
-                    || field.starts_with(&format!("{key}."))
+                keys.iter().any(|key| {
+                    field == key
+                        || field.starts_with(&format!("{key}["))
+                        || field.starts_with(&format!("{key}."))
+                })
             })
     }
 }
@@ -261,6 +272,9 @@ pub trait KitView:
     const SLUG: &'static str;
     /// Form code shown in messages, e.g. `"1707A"`.
     const CODE: &'static str;
+    /// The official "Validation successful" alert, shown under Needs review
+    /// while an editable draft has no messages. `None` shows nothing.
+    const VALIDATION_SUCCESS: Option<&'static str> = None;
 
     fn kit(&self) -> &EditorState;
     fn kit_mut(&mut self) -> &mut EditorState;
@@ -272,6 +286,10 @@ pub trait KitView:
     fn read_inputs(&mut self, cx: &mut Context<Self>) -> Vec<(String, String)>;
     /// Editor text for `key` from the draft.
     fn initial_text(&self, key: &str) -> String;
+    /// Fields for the print preview; the upload's field map by default.
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.draft().field_map()
+    }
 }
 
 fn element_id(slug: &str, suffix: &str) -> ElementId {
@@ -597,7 +615,7 @@ pub fn preview<V: KitView>(this: &mut V, frozen_slug: &str, cx: &mut Context<V>)
         ));
         return;
     }
-    let fields = this.draft().field_map();
+    let fields = this.print_field_map();
     let title = format!("{} — Print Preview", V::CODE);
     match super::form_html_preview_launcher::launch_frozen_form_preview(
         frozen_slug,
@@ -1076,6 +1094,12 @@ pub fn render_page<V: KitView>(
         .children(sections);
     if !issues.is_empty() {
         body = body.child(section("Needs review", issues, cx));
+    } else if let Some(success) = V::VALIDATION_SUCCESS.filter(|_| is_draft) {
+        body = body.child(section(
+            "Needs review",
+            vec![div().text_sm().child(success).into_any_element()],
+            cx,
+        ));
     }
 
     div()

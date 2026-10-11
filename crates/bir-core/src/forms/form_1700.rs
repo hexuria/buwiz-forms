@@ -36,7 +36,9 @@ use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
 use crate::profile::TaxpayerProfile;
 
-/// Rule-package id of the official layout.
+/// Rule-package id of the official layout. Only a lookup key: the layout it
+/// names is the January 2018 (ENCS) page (`formType` `1700v2018`), which is
+/// the revision the header shows and the upload uses.
 pub const FORM_1700_FORM_ID: &str = "1700-v2013";
 /// Schedule 1 employer rows (Items 1–4).
 pub const FORM_1700_EMPLOYER_ROWS: usize = 4;
@@ -992,6 +994,11 @@ impl Form1700Draft {
         const AMOUNT_SLOTS: usize = 8;
         const WITHHELD_SLOTS: usize = 7;
         let mut fields = self.to_bir_field_map();
+        // The upload keeps the e-mail in capitals; the sheet shows it as typed.
+        fields.insert(
+            "frm1700:txtPg1I10Email".to_string(),
+            self.email.trim().to_string(),
+        );
         let mut derived = BTreeMap::new();
         let whole = |value: f64, slots: usize| -> Option<String> {
             let value = fixed0(value);
@@ -1151,7 +1158,14 @@ impl Form1700Draft {
         if !tin_is_valid(&self.tin) || split_tin(&self.tin).3.len() < 3 {
             err("tin", "Please enter a valid TIN number on Item 4.");
         } else if !check_digit_ok(&self.tin) {
-            err("tin", crate::validation::OFFICIAL_INVALID_TIN_MESSAGE);
+            // The official getChkTinErrDesc(...) + " on Item N." pattern.
+            err(
+                "tin",
+                &format!(
+                    "{} on Item 4.",
+                    crate::validation::OFFICIAL_INVALID_TIN_MESSAGE
+                ),
+            );
         }
         if !crate::validation::rdo_code_is_official_option(self.rdo_code.trim()) {
             err("rdo_code", "Please enter a valid RDO Code on Item 5.");
@@ -1234,7 +1248,7 @@ impl Form1700Draft {
                             // no tax base without it.
                             err(
                                 "spouse.taxpayer_type",
-                                "Please select Taxpayer Type on Item no. 20",
+                                "Select the spouse's taxpayer type (Item 20).",
                             );
                         }
                     }
@@ -1709,6 +1723,10 @@ mod tests {
                 ..Form1700Spouse::default()
             };
         };
+        check(
+            &|d| d.tin = "12345678900000".into(),
+            "You have entered an incorrect TIN on Item 4.",
+        );
         check(
             &|d| {
                 joint(d);

@@ -192,14 +192,14 @@ impl Form1800Draft {
     pub const FORM_CODE: &'static str = "1800";
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
-        let today = chrono::Local::now().date_naive();
         let mut draft = Self {
             id: None,
             filing_year: year,
             open_ended_key,
-            donation_month: chrono::Datelike::month(&today) as u8,
-            donation_day: chrono::Datelike::day(&today) as u8,
-            donation_year: year,
+            // Item 1 starts blank like the official txtMonth/txtDate/txtYear.
+            donation_month: 0,
+            donation_day: 0,
+            donation_year: 0,
             is_amended: false,
             number_of_attached_sheets: 0,
             tin: profile.tin.full(),
@@ -501,6 +501,17 @@ impl Form1800Draft {
             }
         }
         extend_layout(base, &insertions)
+    }
+
+    /// The field map for the print preview: the upload's map, except the
+    /// e-mail is printed as typed (the upload keeps it in capitals).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        fields.insert(
+            "frm1800v2018:txtEmail".to_string(),
+            self.email.trim().to_string(),
+        );
+        fields
     }
 
     /// The exact official submit plaintext.
@@ -848,6 +859,14 @@ mod tests {
             "12345678800000-1800v2018-03102025#sample.taxpayer@example.com#.xml"
         );
         assert_eq!(split_address(&"x".repeat(120)).1, "x".repeat(20));
+    }
+
+    #[test]
+    fn print_map_shows_the_email_as_typed_and_the_upload_keeps_capitals() {
+        let d = sample();
+        let key = "frm1800v2018:txtEmail";
+        assert_eq!(d.to_bir_field_map()[key], "SAMPLE.TAXPAYER@EXAMPLE.COM");
+        assert_eq!(d.to_print_field_map()[key], "sample.taxpayer@example.com");
     }
 
     #[test]

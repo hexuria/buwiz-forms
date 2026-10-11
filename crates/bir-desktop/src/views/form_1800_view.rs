@@ -87,6 +87,15 @@ fn row_of(editor_key: &str, prefix: &str) -> Option<usize> {
         .ok()
 }
 
+/// Item 1 parts left blank (0) show as an empty box.
+fn blank_zero<T: Into<u32>>(value: T, text: String) -> String {
+    if value.into() == 0 {
+        String::new()
+    } else {
+        text
+    }
+}
+
 /// Every validation key whose message belongs under the editor `editor_key`:
 /// its own key (malformed numbers) and the model's field name.
 fn error_keys(editor_key: &str) -> Vec<String> {
@@ -129,9 +138,9 @@ impl EventEmitter<QueueableFormEvent> for Form1800View {}
 impl Form1800View {
     fn text_value(d: &Form1800Draft, k: &str) -> String {
         match k {
-            "month" => format!("{:02}", d.donation_month),
-            "day" => format!("{:02}", d.donation_day),
-            "year" => d.donation_year.to_string(),
+            "month" => blank_zero(d.donation_month, format!("{:02}", d.donation_month)),
+            "day" => blank_zero(d.donation_day, format!("{:02}", d.donation_day)),
+            "year" => blank_zero(d.donation_year, d.donation_year.to_string()),
             "sheets" => d.number_of_attached_sheets.to_string(),
             "rdo" => d.rdo_code.clone(),
             "name" => d.donor_name.clone(),
@@ -616,13 +625,30 @@ impl Form1800View {
                         kit::label("Items 28–32 — Deductions").into_any_element(),
                         &["deductions"],
                     ),
+                    entry_note(DEDUCTIONS_NOTE, cx),
                     grid(layout, deductions),
                     grid(layout, part_four_rest),
+                    entry_note(EXEMPTION_NOTE, cx),
                 ],
                 cx,
             ),
         ]
     }
+}
+
+/// Shown before any figure is typed: the official page cannot carry
+/// Items 28-32 into Item 33, so such a return is filed with the RDO.
+const DEDUCTIONS_NOTE: &str = "Items 28 to 32 are not carried into Item 33 by the official 1800 page. If you claim a deduction, file this return with your RDO.";
+/// Shown before any figure is typed: the official page gives a negative
+/// tax due when net gifts fall within the P250,000 exemption.
+const EXEMPTION_NOTE: &str = "If total net gifts (Item 36) are within the P250,000 exemption, the official page reports a negative tax due. File such a return with your RDO.";
+
+fn entry_note<V: 'static>(text: &'static str, cx: &Context<V>) -> AnyElement {
+    div()
+        .text_xs()
+        .text_color(cx.theme().muted_foreground)
+        .child(text)
+        .into_any_element()
 }
 
 fn computed_atc<V: 'static>(cx: &Context<V>) -> AnyElement {
@@ -633,6 +659,8 @@ impl KitView for Form1800View {
     type Draft = Form1800Draft;
     const SLUG: &'static str = "1800";
     const CODE: &'static str = "1800";
+    const VALIDATION_SUCCESS: Option<&'static str> =
+        Some("Validation successful. Click on 'Edit' if you wish to modify your entries.");
 
     fn kit(&self) -> &EditorState {
         &self.kit
@@ -654,6 +682,9 @@ impl KitView for Form1800View {
     }
     fn initial_text(&self, k: &str) -> String {
         Self::text_value(&self.draft, k)
+    }
+    fn print_field_map(&self) -> std::collections::BTreeMap<String, String> {
+        self.draft.to_print_field_map()
     }
 
     fn read_inputs(&mut self, cx: &mut Context<Self>) -> Vec<(String, String)> {
@@ -788,12 +819,13 @@ impl QueueableFormView for Form1800View {
         let errors = bir_core::forms::queueable::QueueableForm::validate(&draft);
         let personal_rows = draft.personal_properties.len().max(FORM_1800_SCHEDULE_ROWS);
         let real_rows = draft.real_properties.len().max(FORM_1800_SCHEDULE_ROWS);
-        let kit = EditorState::new(
+        let mut kit = EditorState::new(
             Self::input_specs(&draft, personal_rows, real_rows),
             errors,
             window,
             cx,
         );
+        kit.error_keys = Some(error_keys);
         Self {
             draft,
             db,
@@ -805,6 +837,25 @@ impl QueueableFormView for Form1800View {
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1800Draft {
         Form1800Draft::new_from_profile(profile, year, u32::from(period.max(1)))
+    }
+
+    /// The saved draft, with the read-only TIN re-read from the profile while
+    /// it is still editable, so a TIN fixed in Profile Settings reaches it.
+    fn load_draft(
+        db: &Database,
+        profile: &TaxpayerProfile,
+        year: u16,
+        period: u8,
+    ) -> Form1800Draft {
+        let mut draft = db
+            .get_queueable_draft::<Form1800Draft>(&profile.tin.full(), year, i64::from(period))
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Self::new_draft(profile, year, period));
+        if draft.lifecycle.is_editable() {
+            draft.tin = profile.tin.full();
+        }
+        draft
     }
 }
 

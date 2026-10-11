@@ -365,9 +365,10 @@ impl Form1801Draft {
             id: None,
             filing_year: year,
             open_ended_key,
-            death_month: 1,
-            death_day: 1,
-            death_year: year,
+            // Item 1 starts blank like the official txtDateMonth/Day/Year.
+            death_month: 0,
+            death_day: 0,
+            death_year: 0,
             is_amended: false,
             number_of_attached_sheets: 0,
             tin: profile.tin.full(),
@@ -842,6 +843,17 @@ impl Form1801Draft {
             }
         }
         extend_layout(base, &insertions)
+    }
+
+    /// The field map for the print preview: the upload's map, except the
+    /// e-mail is printed as typed (the upload keeps it in capitals).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        fields.insert(
+            "frm1801v2018:txtEmail".to_string(),
+            self.email.trim().to_string(),
+        );
+        fields
     }
 
     /// The exact official submit plaintext.
@@ -1363,6 +1375,14 @@ mod tests {
             "69,000.00"
         );
         assert!(messages(&d).is_empty(), "{:?}", messages(&d));
+    }
+
+    #[test]
+    fn print_map_shows_the_email_as_typed_and_the_upload_keeps_capitals() {
+        let d = sample();
+        let key = "frm1801v2018:txtEmail";
+        assert_eq!(d.to_bir_field_map()[key], "SAMPLE.TAXPAYER@EXAMPLE.COM");
+        assert_eq!(d.to_print_field_map()[key], "sample.taxpayer@example.com");
     }
 
     #[test]
