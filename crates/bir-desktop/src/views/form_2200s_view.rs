@@ -58,6 +58,7 @@ const MONTHS: [&str; 12] = [
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("day", "Item 1 — Day", "DD"),
     ("year", "Item 1 — Year", "YYYY"),
+    ("sheets", "Item 3 — Number of Sheet/s Attached", "0"),
     ("name", "Item 6 — Taxpayer's Name", ""),
     ("address", "Item 7 — Registered Address", ""),
     ("zip", "Item 7A — Zip Code", "4 digits"),
@@ -139,6 +140,7 @@ impl Form2200SView {
         match key {
             "day" => format!("{:02}", draft.day),
             "year" => draft.year.to_string(),
+            "sheets" => draft.number_of_attached_sheets.to_string(),
             "name" => draft.taxpayer_name.clone(),
             "address" => draft.registered_address.clone(),
             "zip" => draft.zip_code.clone(),
@@ -208,6 +210,14 @@ impl Form2200SView {
         if let Some(year) = number("year", "Item 1 year", cx) {
             draft.year = if (0.0..=9999.0).contains(&year) {
                 year as u16
+            } else {
+                0
+            };
+        }
+        if let Some(sheets) = number("sheets", "Item 3", cx) {
+            // `txtSheets` has maxlength 2.
+            draft.number_of_attached_sheets = if (0.0..=99.0).contains(&sheets) {
+                sheets as u16
             } else {
                 0
             };
@@ -532,6 +542,12 @@ impl Form2200SView {
                 .into_any_element(),
             self.field("day", "Item 1 — Day", layout, !editable),
             self.field("year", "Item 1 — Year", layout, !editable),
+            self.field(
+                "sheets",
+                "Item 3 — Number of Sheet/s Attached",
+                layout,
+                !editable,
+            ),
             Self::label_row(
                 "Item 2 — Amended return?",
                 layout,
@@ -696,41 +712,58 @@ impl Form2200SView {
                 .unwrap_or(key);
             fields.push(self.field(key, label, layout, !editable));
         }
-        let mut relief_chips: Vec<AnyElement> = Vec::new();
-        for (index, (value, label)) in [
-            (Form2200STaxRelief::No, "No"),
-            (Form2200STaxRelief::SpecialLaw, "Yes — Special Law"),
-            (
-                Form2200STaxRelief::InternationalTaxTreaty,
-                "Yes — International Tax Treaty",
-            ),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            relief_chips.push(
-                Self::choice(("2200s_relief", index), label, relief == value, !editable)
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.tax_relief = value)),
-                    )
-                    .into_any_element(),
-            );
-        }
+        let relief_yes = relief != Form2200STaxRelief::No;
         let relief_row = Self::label_row(
-            "Item 14 — Tax relief under a Special Law or Treaty?",
+            "Item 14 — Are you availing of tax relief under a Special Law or International Tax Treaty?",
             layout,
-            relief_chips,
-        );
-        self.section(
-            "Part I — Background Information",
             vec![
-                self.grid(layout, fields),
-                self.render_place(12, cx),
-                self.render_place(13, cx),
-                relief_row,
+                Self::choice("2200s_relief_yes", "Yes", relief_yes, !editable)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !relief_yes {
+                            this.edit(cx, |d| d.tax_relief = Form2200STaxRelief::YesUnspecified)
+                        }
+                    }))
+                    .into_any_element(),
+                Self::choice("2200s_relief_no", "No", !relief_yes, !editable)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| d.tax_relief = Form2200STaxRelief::No)
+                    }))
+                    .into_any_element(),
             ],
-            cx,
-        )
+        );
+        let mut children = vec![
+            self.grid(layout, fields),
+            self.render_place(12, cx),
+            self.render_place(13, cx),
+            relief_row,
+        ];
+        if relief_yes {
+            let mut specify: Vec<AnyElement> = Vec::new();
+            for (index, (value, label)) in [
+                (Form2200STaxRelief::SpecialLaw, "Special Law"),
+                (
+                    Form2200STaxRelief::InternationalTaxTreaty,
+                    "International Tax Treaty",
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                specify.push(
+                    Self::choice(("2200s_relief", index), label, relief == value, !editable)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.edit(cx, |d| d.tax_relief = value)
+                        }))
+                        .into_any_element(),
+                );
+            }
+            children.push(Self::label_row(
+                "Item 14A — If yes, specify",
+                layout,
+                specify,
+            ));
+        }
+        self.section("Part I — Background Information", children, cx)
     }
 
     fn render_manner(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -738,8 +771,14 @@ impl Form2200SView {
         let manner = self.draft.manner;
         let mut chips: Vec<AnyElement> = Vec::new();
         for (index, (value, label)) in [
-            (Form2200SManner::ActualRemoval, "Payment on Actual Removal"),
-            (Form2200SManner::Prepayment, "Prepayment/Advance Deposit"),
+            (
+                Form2200SManner::ActualRemoval,
+                "15 — Payment on Actual Removal",
+            ),
+            (
+                Form2200SManner::Prepayment,
+                "16 — Prepayment/Advance Deposit",
+            ),
         ]
         .into_iter()
         .enumerate()
@@ -767,7 +806,7 @@ impl Form2200SView {
                 ],
             ));
             if scheme {
-                children.push(self.field("scheme", TEXT_INPUTS[9].1, layout, !editable));
+                children.push(self.field("scheme", TEXT_INPUTS[10].1, layout, !editable));
             }
         }
         self.section("Part II — Manner of Payment", children, cx)
@@ -797,10 +836,13 @@ impl Form2200SView {
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .child(div().font_weight(FontWeight::BOLD).child(format!(
-                        "{} — {} ({rate})",
-                        beverage.atc, beverage.description
-                    )))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format!("{} — {}", beverage.atc, beverage.description)),
+                    )
+                    .child(div().min_w_0().text_sm().child(format!("Rate: {rate}")))
                     .child(self.grid(
                         layout,
                         vec![
@@ -876,8 +918,12 @@ impl Form2200SView {
             others_box = others_box.child(self.grid(layout, fields));
         }
         children.push(others_box.into_any_element());
-        children.push(self.computed("Total tax due (to Item 18)", self.draft.schedule_total, cx));
-        self.section("Schedule 1 — Computation of Excise Tax", children, cx)
+        children.push(self.computed(
+            "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
+            self.draft.schedule_total,
+            cx,
+        ));
+        self.section("Part V — Schedule 1", children, cx)
     }
 
     fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -975,12 +1021,12 @@ impl QueueableFormView for Form2200SView {
         }
     }
 
-    fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2200SDraft {
-        Form2200SDraft::new_from_profile(profile, year)
+    fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form2200SDraft {
+        Form2200SDraft::new_from_profile(profile, year, period)
     }
 
-    /// One return per Item 1 date (`MMDD`). Reopen this year's latest saved
-    /// return, else start a new one.
+    /// One return per Item 1 date (`MMDD`). Reopen the latest saved return
+    /// dated in the tile's month, else start a new one for that month.
     fn load_draft(
         db: &Database,
         profile: &TaxpayerProfile,
@@ -988,8 +1034,9 @@ impl QueueableFormView for Form2200SView {
         period: u8,
     ) -> Form2200SDraft {
         let tin = profile.tin.full();
-        (1..=12i64)
-            .flat_map(|month| (1..=31i64).map(move |day| month * 100 + day))
+        let month = i64::from(period.clamp(1, 12));
+        (1..=31i64)
+            .map(|day| month * 100 + day)
             .filter_map(|key| {
                 db.get_queueable_draft::<Form2200SDraft>(&tin, year, key)
                     .ok()
@@ -1023,7 +1070,7 @@ impl FormViewTrait for Form2200SView {
         "Excise Tax Return for Sweetened Beverages"
     }
     fn form_version(&self) -> &'static str {
-        "January 2018 (ENCS)"
+        "January 2018"
     }
     fn current_status(&self) -> FilingStatus {
         self.draft.lifecycle.status.clone()
@@ -1342,11 +1389,11 @@ impl Render for Form2200SView {
             })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
-            .child(self.render_manner(layout, cx));
+            .child(self.render_manner(layout, cx))
+            .child(self.render_totals(layout, cx));
         if self.draft.manner == Form2200SManner::ActualRemoval {
             body = body.child(self.render_schedule(layout, cx));
         }
-        body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

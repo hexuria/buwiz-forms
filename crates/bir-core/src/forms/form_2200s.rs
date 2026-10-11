@@ -206,6 +206,19 @@ fn has_cent_precision(value: f64) -> bool {
 
 // ── Model ──
 
+fn last_day_of_month(year: u16, month: u8) -> u8 {
+    use chrono::Datelike;
+    let (next_year, next_month) = if month >= 12 {
+        (i32::from(year) + 1, 1)
+    } else {
+        (i32::from(year), u32::from(month) + 1)
+    };
+    chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1)
+        .and_then(|first| first.pred_opt())
+        .map(|last| last.day() as u8)
+        .unwrap_or(28)
+}
+
 /// Item 14 — tax relief under a Special Law or International Tax Treaty.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -275,6 +288,9 @@ pub struct Form2200SDraft {
     pub year: u16,
     /// Item 2.
     pub is_amended: bool,
+    /// Item 3 — number of sheet/s attached (`txtSheets`, two digits).
+    #[serde(default)]
+    pub number_of_attached_sheets: u16,
     /// Item 4: 9-digit TIN then the 5-digit branch code.
     pub tin: String,
     /// Item 5.
@@ -375,15 +391,16 @@ pub struct Form2200SDraft {
 impl Form2200SDraft {
     pub const FORM_CODE: &'static str = "2200S";
 
-    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16) -> Self {
+    /// A new return for the dashboard month. Item 1 defaults to the last day
+    /// of that month, or today when the month is the current one.
+    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+        use chrono::Datelike;
+        let month = month.clamp(1, 12);
         let today = chrono::Local::now().date_naive();
-        let (month, day) = if i32::from(year) == chrono::Datelike::year(&today) {
-            (
-                chrono::Datelike::month(&today) as u8,
-                chrono::Datelike::day(&today) as u8,
-            )
+        let day = if i32::from(year) == today.year() && u32::from(month) == today.month() {
+            today.day() as u8
         } else {
-            (1, 1)
+            last_day_of_month(year, month)
         };
         let mut draft = Self {
             id: None,
@@ -391,6 +408,7 @@ impl Form2200SDraft {
             day,
             year,
             is_amended: false,
+            number_of_attached_sheets: 0,
             tin: profile.tin.full(),
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
@@ -521,7 +539,7 @@ impl Form2200SDraft {
         put("txtForYr", self.year.to_string());
         put("amendedRtn_1", flag(self.is_amended));
         put("amendedRtn_2", flag(!self.is_amended));
-        put("txtSheets", "0".to_string());
+        put("txtSheets", self.number_of_attached_sheets.to_string());
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
         put("txtTIN1", tin1.clone());
         put("txtTIN2", tin2.clone());
@@ -982,6 +1000,7 @@ mod tests {
             day: 30,
             year: 2025,
             is_amended: false,
+            number_of_attached_sheets: 0,
             tin: "12345678800000".into(),
             rdo_code: "039".into(),
             taxpayer_name: "Sample Beverages Inc".into(),
@@ -1238,5 +1257,20 @@ mod tests {
             },
             "Please enter a valid Applicable rate in \"Others\" at Row 1.",
         );
+    }
+
+    #[test]
+    fn tile_month_defaults_to_its_last_day() {
+        assert_eq!(last_day_of_month(2025, 12), 31);
+        assert_eq!(last_day_of_month(2024, 2), 29);
+        assert_eq!(last_day_of_month(2025, 6), 30);
+    }
+
+    #[test]
+    fn sheets_go_to_txt_sheets() {
+        let mut draft = sample();
+        assert_eq!(draft.to_bir_field_map()["frm2200S:txtSheets"], "0");
+        draft.number_of_attached_sheets = 3;
+        assert_eq!(draft.to_bir_field_map()["frm2200S:txtSheets"], "3");
     }
 }
