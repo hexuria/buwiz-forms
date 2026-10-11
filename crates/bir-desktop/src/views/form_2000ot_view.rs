@@ -906,7 +906,8 @@ impl QueueableFormView for Form2000OTView {
     }
 
     /// One return per transaction date (`MMDD`). Reopen this year's latest
-    /// saved return, else start a new one.
+    /// editable draft; once every saved return is queued or filed, start a new
+    /// one, since each 2000-OT is a separate transaction.
     fn load_draft(
         db: &Database,
         profile: &TaxpayerProfile,
@@ -914,16 +915,23 @@ impl QueueableFormView for Form2000OTView {
         period: u8,
     ) -> Form2000OTDraft {
         let tin = profile.tin.full();
-        (0..=12i64)
+        let saved = (0..=12i64)
             .flat_map(|month| (0..=31i64).map(move |day| month * 100 + day))
             .filter_map(|key| {
                 db.get_queueable_draft::<Form2000OTDraft>(&tin, year, key)
                     .ok()
                     .flatten()
-            })
-            .max_by(|a, b| a.lifecycle.updated_at.cmp(&b.lifecycle.updated_at))
-            .unwrap_or_else(|| Self::new_draft(profile, year, period))
+            });
+        latest_editable(saved).unwrap_or_else(|| Self::new_draft(profile, year, period))
     }
+}
+
+/// The most recently updated editable draft, if any. Queued and filed returns
+/// are never reopened from the tile.
+fn latest_editable(saved: impl Iterator<Item = Form2000OTDraft>) -> Option<Form2000OTDraft> {
+    saved
+        .filter(|draft| draft.lifecycle.is_editable())
+        .max_by(|a, b| a.lifecycle.updated_at.cmp(&b.lifecycle.updated_at))
 }
 
 fn format_tin(tin: &str) -> String {
@@ -1313,8 +1321,38 @@ impl Render for Form2000OTView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, format_tin, parse_amount};
+    use super::{Layout, format_tin, latest_editable, parse_amount};
+    use bir_core::forms::FilingStatus;
+    use bir_core::forms::form_2000ot::Form2000OTDraft;
+    use bir_core::profile::TaxpayerProfile;
     use gpui::px;
+
+    fn draft(updated_at: &str, status: FilingStatus) -> Form2000OTDraft {
+        let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Sample", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "", "registered_address": "", "zip_code": "",
+            "phone": "", "email": "", "default_form_type": "2000OT",
+            "taxpayer_type": "Corporation"
+        }))
+        .unwrap();
+        let mut draft = Form2000OTDraft::new_from_profile(&profile, 2025);
+        draft.lifecycle.updated_at = updated_at.into();
+        draft.lifecycle.status = status;
+        draft
+    }
+
+    #[test]
+    fn tile_never_reopens_a_queued_or_filed_return() {
+        let queued = draft("2025-06-02", FilingStatus::Queued);
+        assert!(latest_editable([queued.clone()].into_iter()).is_none());
+        let older = draft("2025-06-01", FilingStatus::Draft);
+        let picked = latest_editable([older, queued].into_iter()).unwrap();
+        assert_eq!(picked.lifecycle.updated_at, "2025-06-01");
+        let newer = draft("2025-06-03", FilingStatus::Draft);
+        let picked = latest_editable([newer].into_iter()).unwrap();
+        assert_eq!(picked.lifecycle.updated_at, "2025-06-03");
+    }
 
     #[test]
     fn layout_breakpoints() {

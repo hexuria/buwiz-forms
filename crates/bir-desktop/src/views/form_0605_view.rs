@@ -939,7 +939,7 @@ impl QueueableFormView for Form0605View {
     }
 
     /// The dashboard's open-ended key is the next payment number; the draft
-    /// stores it as its `month` slot (1–12), as the pre-generic editor did.
+    /// stores it as its `month` slot (1, 2, ... — payment 13 gets slot 13).
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form0605Draft {
         Form0605Draft::new_from_profile(profile, year, period)
     }
@@ -953,7 +953,7 @@ impl QueueableFormView for Form0605View {
         period: u8,
     ) -> Form0605Draft {
         let tin = profile.tin.full();
-        let slot = period.clamp(1, 12);
+        let slot = period.max(1);
         db.get_queueable_draft::<Form0605Draft>(&tin, year, i64::from(slot))
             .ok()
             .flatten()

@@ -211,6 +211,19 @@ fn put_row(fields: &mut BTreeMap<String, String>, prefix: &str, row: &Form2200AN
     put("TaxDue", official_amount(row.tax_due));
 }
 
+fn last_day_of_month(year: u16, month: u8) -> u8 {
+    use chrono::Datelike;
+    let (next_year, next_month) = if month >= 12 {
+        (i32::from(year) + 1, 1)
+    } else {
+        (i32::from(year), u32::from(month) + 1)
+    };
+    chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1)
+        .and_then(|first| first.pred_opt())
+        .map(|last| last.day() as u8)
+        .unwrap_or(28)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Form2200ANDraft {
     #[serde(default)]
@@ -320,15 +333,16 @@ pub struct Form2200ANDraft {
 impl Form2200ANDraft {
     pub const FORM_CODE: &'static str = "2200AN";
 
-    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16) -> Self {
+    /// A new return for the dashboard month. Item 1 defaults to the last day
+    /// of that month, or today when the month is the current one.
+    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+        use chrono::Datelike;
+        let month = month.clamp(1, 12);
         let today = chrono::Local::now().date_naive();
-        let (month, day) = if i32::from(year) == chrono::Datelike::year(&today) {
-            (
-                chrono::Datelike::month(&today) as u8,
-                chrono::Datelike::day(&today) as u8,
-            )
+        let day = if i32::from(year) == today.year() && u32::from(month) == today.month() {
+            today.day() as u8
         } else {
-            (12, 31)
+            last_day_of_month(year, month)
         };
         let mut draft = Self {
             id: None,
@@ -819,7 +833,7 @@ mod tests {
             "default_form_type": "2200ANv2018", "taxpayer_type": "Corporation"
         }))
         .unwrap();
-        let mut draft = Form2200ANDraft::new_from_profile(&profile, 2025);
+        let mut draft = Form2200ANDraft::new_from_profile(&profile, 2025, 6);
         draft.month = 6;
         draft.day = 30;
         draft.place_of_production = place();
@@ -962,5 +976,21 @@ mod tests {
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn tile_month_sets_item_1_month() {
+        assert_eq!(last_day_of_month(2025, 12), 31);
+        assert_eq!(last_day_of_month(2024, 2), 29);
+        let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Sample Motors Inc", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Automobiles", "registered_address": "1 Sample St",
+            "zip_code": "1100", "phone": "0281234567", "email": "sample.taxpayer@example.com",
+            "default_form_type": "2200ANv2018", "taxpayer_type": "Corporation"
+        }))
+        .unwrap();
+        let draft = Form2200ANDraft::new_from_profile(&profile, 2020, 2);
+        assert_eq!((draft.month, draft.day), (2, 29));
     }
 }

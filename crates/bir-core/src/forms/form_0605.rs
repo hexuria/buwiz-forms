@@ -382,8 +382,9 @@ impl Form0605IndexedCode {
 pub struct Form0605Draft {
     pub id: Option<i64>,
 
-    // Database/open-ended filing slot. It is not used to derive official
-    // dates, quarter, or year-ended fields.
+    // Database/open-ended filing slot: the payment number in the year (1, 2,
+    // ...; not capped at 12). It is not used to derive official dates,
+    // quarter, or year-ended fields.
     pub tin: String,
     pub taxable_year: u16,
     pub month: u8,
@@ -484,7 +485,7 @@ impl Form0605Draft {
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
-            month: period_slot.clamp(1, 12),
+            month: period_slot.max(1),
             filing_basis: Form0605FilingBasis::Calendar,
             quarter: period_slot.clamp(1, 4),
             year_end_month: 12,
@@ -669,6 +670,15 @@ mod tests {
         assert_eq!(draft.item_20d_total_penalties, 1_030.0);
         assert_eq!(draft.item_21_total_amount_payable, 2_030.0);
         assert_eq!(draft.lifecycle.updated_at, "fixed");
+    }
+
+    #[test]
+    fn thirteenth_payment_gets_its_own_slot() {
+        let mut draft = valid_draft();
+        draft.month = 13;
+        draft.recompute();
+        assert_eq!(draft.filing_period(), FilingPeriod::OpenEnded(13));
+        assert!(!draft.validate().iter().any(|(field, _)| field == "month"));
     }
 
     #[test]
