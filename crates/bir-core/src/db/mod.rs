@@ -13,7 +13,9 @@
 //! - `notices` — BIR notices, announcements, deadlines, penalties
 
 mod alerts;
+mod amendment_snapshots;
 pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
+pub use amendment_snapshots::{AmendmentSnapshot, SnapshotPayloadSource};
 mod drafts;
 pub use drafts::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Claim1601CSubmissionResult,
@@ -31,7 +33,7 @@ mod profiles;
 mod providers;
 mod queueable;
 mod receipts;
-pub use queueable::ClaimQueueableResult;
+pub use queueable::{ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};

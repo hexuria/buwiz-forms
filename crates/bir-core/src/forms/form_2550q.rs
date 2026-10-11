@@ -2659,6 +2659,13 @@ impl super::queueable::QueueableForm for Form2550QDraft {
     fn lifecycle_mut(&mut self) -> &mut SubmissionLifecycle {
         &mut self.lifecycle
     }
+
+    /// Item "Amended Return?" = Yes, as the editor sets it.
+    fn mark_amended(&mut self) -> bool {
+        self.is_amended = true;
+        self.compute();
+        true
+    }
     fn draft_id(&self) -> Option<i64> {
         self.id
     }

@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 18;
+const CURRENT_MIGRATION_VERSION: i32 = 19;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -323,6 +323,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             updated_at TEXT NOT NULL
         );
         ",
+        // v19: Read-only copies of what BIR received, kept when a Submitted or
+        // Confirmed return is reverted to Draft for an amendment.
+        "SELECT 1; -- v19 marker: amendment snapshots (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -380,6 +383,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 18 {
                 ensure_inbox_oauth_tokens_table(conn)?;
             }
+
+            if version == 19 {
+                ensure_amendment_snapshots_table(conn)?;
+            }
         } else {
             break;
         }
@@ -410,6 +417,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // idempotent; the poller must never keep using a sibling profile's dead
     // refresh token after reconnect wrote a shared inbox row.
     ensure_inbox_oauth_tokens_table(conn)?;
+
+    // Heal partially upgraded v19 databases. Idempotent.
+    ensure_amendment_snapshots_table(conn)?;
 
     Ok(())
 }
@@ -503,6 +513,32 @@ fn migrate_v17_exact_form_rule_identity(conn: &Connection) -> Result<(), DbError
 /// Several taxpayer profiles can point at the same mailbox. The confirmation
 /// poller must read this row rather than the first matching `profiles` row,
 /// otherwise a reconnect on Jane leaves Alejandro's dead refresh token in use.
+/// One row per Submitted or Confirmed return reverted for amendment. Rows are
+/// never updated or deleted by the app.
+fn ensure_amendment_snapshots_table(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS amendment_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_code TEXT NOT NULL,
+            tin TEXT NOT NULL,
+            taxable_year INTEGER NOT NULL,
+            period_key TEXT NOT NULL,
+            status_at_revert TEXT NOT NULL,
+            submitted_at TEXT,
+            confirmed_at TEXT,
+            receipt_id INTEGER,
+            submission_filename TEXT,
+            submitted_xml TEXT,
+            payload_source TEXT NOT NULL,
+            draft_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_amendment_snapshots_return
+            ON amendment_snapshots(tin, form_code, taxable_year, period_key);",
+    )?;
+    Ok(())
+}
+
 fn ensure_inbox_oauth_tokens_table(conn: &Connection) -> Result<(), DbError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS inbox_oauth_tokens (
