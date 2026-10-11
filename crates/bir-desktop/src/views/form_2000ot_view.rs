@@ -157,6 +157,19 @@ fn parse_amount(value: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
+/// Item 4 as typed: blank is 0, otherwise digits only (no sign, no
+/// decimals), up to 999. Anything else is a parse error, never cast.
+fn parse_sheet_count(text: &str) -> Option<u16> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Some(0);
+    }
+    if !text.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<u16>().ok().filter(|n| *n <= 999)
+}
+
 fn money_text(value: f64) -> String {
     if value == 0.0 {
         String::new()
@@ -252,6 +265,17 @@ impl Form2000OTView {
             return;
         }
         let mut parse_errors = Vec::new();
+        let mut draft = self.draft.clone();
+        // Item 4 is a count: anything but digits (2.5, -1) is reported and
+        // the stored value is left unchanged, never cast.
+        let sheets_text = self.input_text("sheets", cx);
+        match parse_sheet_count(&sheets_text) {
+            Some(sheets) => draft.number_of_attached_sheets = sheets,
+            None => parse_errors.push((
+                "sheets".to_string(),
+                format!("Item 4: \"{}\" is not a whole number.", sheets_text.trim()),
+            )),
+        }
         let mut number = |key: &str, label: &str, cx: &App| -> Option<f64> {
             let text = self.input_text(key, cx);
             let parsed = parse_amount(&text);
@@ -263,14 +287,6 @@ impl Form2000OTView {
             }
             parsed
         };
-        let mut draft = self.draft.clone();
-        if let Some(sheets) = number("sheets", "Item 4", cx) {
-            draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
-                sheets as u16
-            } else {
-                999
-            };
-        }
         for (key, label) in MONEY_INPUTS {
             if let Some(value) = number(key, label, cx) {
                 match *key {
@@ -1423,7 +1439,7 @@ impl FormViewTrait for Form2000OTView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "2000-ot-2018",
             &fields,
@@ -1457,6 +1473,18 @@ impl Render for Form2000OTView {
             cx,
         );
         let open_issues = self.validation_errors.len() + self.parse_errors.len();
+        // Why Queue is off, shown beside the button: the first blocking
+        // message, plus a count of the rest (all are under Needs review).
+        let queue_off_reason = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter())
+            .next()
+            .filter(|_| is_draft)
+            .map(|(_, first)| match open_issues {
+                1 => format!("Can't queue: {first}"),
+                n => format!("Can't queue: {first} (+{} more in Needs review)", n - 1),
+            });
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1520,11 +1548,14 @@ impl Render for Form2000OTView {
                                     })),
                             )
                         })
-                        .when(is_draft && open_issues > 0, |row| {
-                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
-                                "Fix {open_issues} {} to queue (see Needs review).",
-                                if open_issues == 1 { "item" } else { "items" }
-                            )))
+                        .when_some(queue_off_reason, |row, reason| {
+                            row.child(
+                                div()
+                                    .max_w(px(420.))
+                                    .text_xs()
+                                    .text_color(cx.theme().danger)
+                                    .child(reason),
+                            )
                         })
                         .child(
                             Button::new("2000ot_submit")
@@ -1630,6 +1661,15 @@ impl Render for Form2000OTView {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sheet_count_rejects_fractions_and_negatives() {
+        assert_eq!(super::parse_sheet_count(""), Some(0));
+        assert_eq!(super::parse_sheet_count(" 12 "), Some(12));
+        assert_eq!(super::parse_sheet_count("2.5"), None);
+        assert_eq!(super::parse_sheet_count("-1"), None);
+        assert_eq!(super::parse_sheet_count("1000"), None);
+    }
+
     use super::{Layout, format_tin, latest_editable, parse_amount};
     use bir_core::forms::FilingStatus;
     use bir_core::forms::form_2000ot::Form2000OTDraft;

@@ -520,6 +520,34 @@ impl Form1707ADraft {
         extend_layout(base, &insertions)
     }
 
+    /// Print preview fields: the upload map plus Items 10 and 11, which the
+    /// sheet prints in one 40-slot comb (p1c39): the contact number from
+    /// slot 0 and the email, as typed, from slot 12 under its caption. An
+    /// email longer than the rest of the comb is kept whole so the filler
+    /// prints the line in full instead of cutting it.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        const EMAIL_SLOT: usize = 12;
+        const WIDTH: usize = 40;
+        let mut fields = self.to_bir_field_map();
+        let email = self.email.trim();
+        let line = if EMAIL_SLOT + email.chars().count() > WIDTH {
+            let lead = super::excise_places::shared_comb_line(
+                &[(0, self.contact_number.trim()), (EMAIL_SLOT, "")],
+                EMAIL_SLOT,
+            );
+            format!("{lead:<width$}{email}", width = EMAIL_SLOT)
+        } else {
+            super::excise_places::shared_comb_line(
+                &[(0, self.contact_number.trim()), (EMAIL_SLOT, email)],
+                WIDTH,
+            )
+        };
+        if !line.trim().is_empty() {
+            fields.insert("derived:contact_email".to_string(), line);
+        }
+        fields
+    }
+
     /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
@@ -1136,6 +1164,21 @@ mod tests {
             gain_or_loss: 0.0,
             tax_paid,
         }
+    }
+
+    #[test]
+    fn print_map_shares_the_item_10_11_comb() {
+        let mut draft = sample();
+        draft.contact_number = "09171234567".into();
+        draft.email = "Me@Example.ph".into();
+        let fields = draft.to_print_field_map();
+        assert_eq!(fields["derived:contact_email"], "09171234567 Me@Example.ph");
+        draft.email = "Andrea.Mae.Galang.Accounting@Example-Company.com.ph".into();
+        let fields = draft.to_print_field_map();
+        assert_eq!(
+            fields["derived:contact_email"],
+            "09171234567 Andrea.Mae.Galang.Accounting@Example-Company.com.ph"
+        );
     }
 
     pub(crate) fn sample() -> Form1707ADraft {

@@ -1722,6 +1722,42 @@ mod tests {
     }
 
     #[test]
+    fn sheet_2000ot_prints_date_tin_and_whole_email() {
+        let long = "Andrea.Mae.Galang.Accounting@Example.ph";
+        let mut fields = BTreeMap::new();
+        fields.insert("txtEmail".to_string(), long.to_string());
+        for (key, value) in [
+            ("derived:transaction_mm", "06"),
+            ("derived:transaction_dd", "15"),
+            ("derived:transaction_yyyy", "2025"),
+            ("derived:tin", "12345678800000"),
+            ("derived:pg2_tin", "12345678800000"),
+        ] {
+            fields.insert(key.to_string(), value.to_string());
+        }
+        let html = filled_document("2000-ot-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c7"), "06");
+        assert_eq!(comb_text(&html, "p1c8"), "15");
+        assert_eq!(comb_text(&html, "p1c9"), "2025");
+        assert_eq!(comb_text(&html, "p1c18"), "12345678800000");
+        assert_eq!(comb_text(&html, "p2c5"), "12345678800000");
+        // 39 characters over the 24-slot comb: printed whole, as typed.
+        assert!(html.contains(&format!("readonly value=\"{long}\"")));
+        assert_eq!(comb_text(&html, "p1c31"), "");
+    }
+
+    #[test]
+    fn sheet_1707a_shares_the_contact_email_comb() {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "derived:contact_email".to_string(),
+            "09171234567 Me@Example.ph".to_string(),
+        );
+        let html = filled_document("1707a-2021", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c39"), "09171234567 Me@Example.ph");
+    }
+
+    #[test]
     fn email_longer_than_its_comb_prints_whole() {
         let long = "Andrea.Mae.Galang.Accounting@Example-Company.com.ph";
         let mut fields = BTreeMap::new();
