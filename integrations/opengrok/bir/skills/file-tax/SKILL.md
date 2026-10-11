@@ -10,6 +10,10 @@ Prepare a **draft** of BIR form `<FORM>` (`2551Q` quarterly percentage tax, or
 with the user. The user watches the form in BIR while you work, and can type in
 any box at any time.
 
+The BIR app runs on **the user's own computer**, not on your box: the `bir_*`
+tools reach it there. Say "on your computer" when you talk about it, never
+"on my box".
+
 Several BIR apps can be running at once (for example the user's real BIR
 window and a demo on a test database). You work on exactly one, and **the
 user picks it**.
