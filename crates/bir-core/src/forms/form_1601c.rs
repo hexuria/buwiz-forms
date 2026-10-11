@@ -997,13 +997,13 @@ impl FormValidator for Form1601CDraft {
             if self.tax_14_total_compensation <= 0.0 {
                 errors.push((
                     "tax_14_total_compensation".to_string(),
-                    "Invalid amount in Item 14. Value must be greater than zero(0) when Any Taxes Withheld is YES.".to_string(),
+                    "Invalid amount in Item no.14. Value must be greater than zero(0).".to_string(),
                 ));
             }
             if self.tax_25_total_taxes_withheld <= 0.0 {
                 errors.push((
                     "tax_25_total_taxes_withheld".to_string(),
-                    "Invalid amount in Item 25. Value must be greater than zero(0) when Any Taxes Withheld is YES.".to_string(),
+                    "Invalid amount in Item no.25. Value must be greater than zero(0).".to_string(),
                 ));
             }
         }
@@ -1542,6 +1542,28 @@ mod tests {
                 .validate()
                 .iter()
                 .any(|(field, _)| field == "tax_relief_specification")
+        );
+    }
+
+    #[test]
+    fn zero_items_14_and_25_use_the_official_alerts() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = true;
+        draft.compute();
+        let errors = draft.validate();
+        let message = |field: &str| {
+            errors
+                .iter()
+                .find(|(f, _)| f == field)
+                .map(|(_, m)| m.as_str())
+        };
+        assert_eq!(
+            message("tax_14_total_compensation"),
+            Some("Invalid amount in Item no.14. Value must be greater than zero(0).")
+        );
+        assert_eq!(
+            message("tax_25_total_taxes_withheld"),
+            Some("Invalid amount in Item no.25. Value must be greater than zero(0).")
         );
     }
 }

@@ -187,8 +187,14 @@ fn selected_atc_values(draft: &Form1601FqDraft) -> Vec<String> {
 /// Official confirm text from the BIR page (`cancelAllCompute`), verbatim.
 const WITHHELD_NO_QUESTION: &str = "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II. ";
 
+/// Official Item 13 "No" confirm text (`confirmDisableTreaty`), verbatim.
+const RELIEF_NO_QUESTION: &str =
+    "Warning: pressing OK will clear all values in Schedule 1.\nPress OK to do so.";
+
 pub struct Form1601FqView {
     draft: Form1601FqDraft,
+    /// Item 13 "No" waiting for the user's answer (Schedule 1 would be cleared).
+    relief_no_pending: bool,
     /// Item 4 "No" waiting for the user's answer in the inline confirmation.
     withheld_no_pending: bool,
     db: Arc<Mutex<Database>>,
@@ -198,6 +204,8 @@ pub struct Form1601FqView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// The official submit confirm is open (OK queues, Cancel changes nothing).
+    submit_confirm_open: bool,
     /// Schedule 1 editors to reload from the draft on the next render (a new
     /// ATC brings its own rate, like `getATCdrpTaxRate`).
     refresh_schedule1: bool,
@@ -549,9 +557,24 @@ impl Form1601FqView {
         if !self.draft.lifecycle.is_editable() {
             return;
         }
+        self.relief_no_pending = false;
         self.draft.set_tax_relief(relief);
         self.reload_schedule1_inputs(window, cx);
         self.sync_from_inputs(cx);
+    }
+
+    /// Item 13 "No": when Yes is set, ask first (official `confirmDisableTreaty`);
+    /// Cancel keeps Yes and every Schedule 1 row.
+    fn request_relief_no(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        if self.draft.tax_relief.is_some() {
+            self.relief_no_pending = true;
+            cx.notify();
+        } else {
+            self.set_relief(None, window, cx);
+        }
     }
 
     fn notify(
@@ -1163,9 +1186,49 @@ impl Form1601FqView {
             &["schedule1"],
             vec![
                 pick("1601fq_relief_yes", "Yes", Some(relief.unwrap_or_default())),
-                pick("1601fq_relief_no", "No", None),
+                Self::choice("1601fq_relief_no", "No", relief.is_none(), !editable)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.request_relief_no(window, cx)
+                    }))
+                    .into_any_element(),
             ],
         )];
+        if self.relief_no_pending && relief.is_some() {
+            children.push(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .p_3()
+                    .rounded_md()
+                    .bg(cx.theme().muted)
+                    .child(div().text_sm().child(RELIEF_NO_QUESTION))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_2()
+                            .child(
+                                Button::new("1601fq_relief_no_ok")
+                                    .label("OK")
+                                    .danger()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.set_relief(None, window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("1601fq_relief_no_cancel")
+                                    .label("Cancel")
+                                    .outline()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.relief_no_pending = false;
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .into_any_element(),
+            );
+        }
         if relief.is_some() {
             let kind = |id: &'static str, label: &'static str, value: Form1601FqTaxRelief| {
                 Self::choice(id, label, relief == Some(value), !editable)
@@ -1354,7 +1417,9 @@ impl QueueableFormView for Form1601FqView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            submit_confirm_open: false,
             withheld_no_pending: false,
+            relief_no_pending: false,
             refresh_schedule1: false,
             atc_select,
             treaty_selects,
@@ -1466,6 +1531,7 @@ impl FormViewTrait for Form1601FqView {
     }
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
         if !can_queue_for_submission(Form1601FqDraft::FORM_CODE) {
             self.status_message =
                 Some("1601-FQ is not enabled for in-app submission in this build.".into());
@@ -1598,7 +1664,10 @@ impl FormViewTrait for Form1601FqView {
             Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
                 "info".into(),
                 "Print preview".into(),
-                format!("{} No filing state was changed.", kind.status_message()),
+                format!(
+                    "{} This preview uses the September 2020 printed sheet (no January 2018 sheet is available). No filing state was changed.",
+                    kind.status_message()
+                ),
             )),
             Err(error) => cx.emit(QueueableFormEvent::PushNotification(
                 "error".into(),
@@ -1608,6 +1677,38 @@ impl FormViewTrait for Form1601FqView {
         }
     }
 }
+
+impl Form1601FqView {
+    /// Queue for submission: the same checks as queueing, then the official
+    /// confirm prompt. Nothing changes until the filer clicks OK.
+    fn request_submit(&mut self, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
+        if !can_queue_for_submission(Form1601FqDraft::FORM_CODE) {
+            self.status_message =
+                Some("This form is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        self.submit_confirm_open = true;
+        cx.notify();
+    }
+}
+
+/// The official submit prompt (rule 1601fq-final-001, `openAlertEmail`), verbatim.
+const SUBMIT_CONFIRM_TEXT: &str = "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?";
 
 impl Render for Form1601FqView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1653,25 +1754,15 @@ impl Render for Form1601FqView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let mut issues: Vec<AnyElement> = self
+        let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
             })
             .collect();
-        if error_count > issues.len() {
-            issues.push(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(format!("and {} more", error_count - issues.len()))
-                    .into_any_element(),
-            );
-        }
 
         let toolbar =
             div()
@@ -1734,9 +1825,7 @@ impl Render for Form1601FqView {
                                         || !self.validation_errors.is_empty()
                                         || !self.parse_errors.is_empty(),
                                 )
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
-                                })),
+                                .on_click(cx.listener(|this, _, _, cx| this.request_submit(cx))),
                         ),
                 );
 
@@ -1783,14 +1872,50 @@ impl Render for Form1601FqView {
                         ),
                 )
             })
+            .when(self.submit_confirm_open && is_draft, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .child(div().text_sm().child(SUBMIT_CONFIRM_TEXT))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .child(
+                                    Button::new("1601fq_submit_confirm")
+                                        .label("OK")
+                                        .primary()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.mark_submitted(window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("1601fq_submit_cancel")
+                                        .label("Cancel")
+                                        .outline()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.submit_confirm_open = false;
+                                            cx.notify();
+                                        })),
+                                ),
+                        ),
+                )
+            })
+            .when(!issues.is_empty(), |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_relief(layout, cx))
             .child(schedule);
         body = body.child(self.render_totals(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
@@ -1825,6 +1950,25 @@ impl Render for Form1601FqView {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn submit_confirm_is_the_official_text() {
+        let rules: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../rules/forms/1601fq-v2018/validations.json"
+        ))
+        .expect("rules json");
+        let rules = rules
+            .as_array()
+            .or_else(|| rules.get("rules").and_then(|r| r.as_array()))
+            .expect("rule list");
+        let official = rules
+            .iter()
+            .find(|rule| rule["rule_id"] == "1601fq-final-001")
+            .and_then(|rule| rule["exact_message"].as_str())
+            .expect("final-copy rule")
+            .replace("\\n", "\n");
+        assert_eq!(super::SUBMIT_CONFIRM_TEXT, official);
+    }
+
     use super::{Layout, atc_pairs, format_tin, parse_amount, schedule1_atc_pairs, treaty_pairs};
     use bir_core::forms::form_1601fq::FORM_1601FQ_PRIVATE_ATCS;
     use gpui::px;
