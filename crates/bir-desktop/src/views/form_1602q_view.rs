@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1602q::{
-    FORM_1602Q_SCHEDULE1_ITEMS, Form1602QCategory, Form1602QDraft, Form1602QOverRemittance,
-    Form1602QTaxRelief,
+    FORM_1602Q_SCHEDULE1_ITEMS, FORM_1602Q_SCHEDULE2_ATCS, Form1602QCategory, Form1602QDraft,
+    Form1602QOverRemittance, Form1602QTaxRelief,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -24,7 +24,11 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -104,6 +108,33 @@ fn parse_amount(value: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
+/// Schedule 2 ATC choices: blank (row unused), then exactly the codes
+/// `validateATC` accepts, each with its Schedule 1 nature of payment.
+fn schedule2_atc_pairs() -> Vec<(String, String)> {
+    let mut pairs = vec![(String::new(), "— none —".to_string())];
+    pairs.extend(FORM_1602Q_SCHEDULE2_ATCS.iter().map(|code| {
+        let nature = FORM_1602Q_SCHEDULE1_ITEMS
+            .iter()
+            .find(|item| item.atc_code == *code)
+            .map(|item| item.nature)
+            .unwrap_or("");
+        let label = if nature.is_empty() {
+            (*code).to_string()
+        } else {
+            format!("{code} — {nature}")
+        };
+        ((*code).to_string(), label)
+    }));
+    pairs
+}
+
+fn as_refs(pairs: &[(String, String)]) -> Vec<(&str, &str)> {
+    pairs
+        .iter()
+        .map(|(v, l)| (v.as_str(), l.as_str()))
+        .collect()
+}
+
 pub struct Form1602QView {
     draft: Form1602QDraft,
     db: Arc<Mutex<Database>>,
@@ -113,6 +144,9 @@ pub struct Form1602QView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// Schedule 2 ATC selects, one per row. They write into the hidden
+    /// `s2_atc_<row>` editors.
+    s2_atc_selects: Vec<Entity<ComboboxState>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -354,6 +388,18 @@ impl Form1602QView {
         }
     }
 
+    /// Write a Schedule 2 ATC select's choice into its editor and re-read the page.
+    fn set_s2_atc(&mut self, row: usize, code: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        if let Some(input) = self.inputs.get(&s2_key("atc", row)) {
+            let code = code.to_string();
+            input.update(cx, |state, cx| state.set_value(code, window, cx));
+        }
+        self.sync_from_inputs(cx);
+    }
+
     fn set_relief(&mut self, availing: bool, window: &mut Window, cx: &mut Context<Self>) {
         if !self.draft.lifecycle.is_editable() {
             return;
@@ -436,21 +482,19 @@ impl Form1602QView {
             return div().into_any_element();
         };
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let keys = Self::error_keys(key);
+        let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let error = self.error_for(&key_refs);
         let label = div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if error {
+        let label = if error.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -466,7 +510,60 @@ impl Form1602QView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, error)
+    }
+
+    /// The model error keys an editor key feeds (plus the key itself, which
+    /// carries the "not a number" parse error).
+    fn error_keys(key: &str) -> Vec<String> {
+        let model = match key {
+            "year" => "taxable_year",
+            "sheets" => "number_of_attached_sheets",
+            "name" => "taxpayer_name",
+            "address" => "registered_address",
+            "zip" => "zip_code",
+            "phone" => "contact_number",
+            "email" => "email",
+            "rem1" => "remittance_first_month",
+            "rem2" => "remittance_second_month",
+            "prev" => "tax_remitted_previous",
+            "over" => "over_remittance_previous_quarter",
+            "sur" => "surcharge",
+            "int" => "interest_penalty",
+            "comp" => "compromise",
+            _ => "",
+        };
+        let mut keys = vec![key.to_string()];
+        if !model.is_empty() {
+            keys.push(model.to_string());
+        } else if let Some((prefix, index)) = key.rsplit_once('_')
+            && index.parse::<usize>().is_ok()
+        {
+            let mapped = match prefix {
+                "s1_amt" => Some(format!("schedule1_amount[{index}]")),
+                "s1_bsp" => Some(format!("bsp_rate[{index}]")),
+                "s2_treaty" => Some(format!("schedule2[{index}].treaty_code")),
+                "s2_atc" => Some(format!("schedule2[{index}].atc_code")),
+                "s2_interest" => Some(format!("schedule2[{index}].interest")),
+                "s2_rate" => Some(format!("schedule2[{index}].tax_rate")),
+                "s3_ipa" => Some(format!("schedule3[{index}].ipa_code")),
+                _ => None,
+            };
+            keys.extend(mapped);
+        }
+        keys
+    }
+
+    /// Messages recorded for any of `keys` (validation and parse errors),
+    /// joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
     }
 
     /// Two columns on desktop, one otherwise.
@@ -528,8 +625,15 @@ impl Form1602QView {
         button.disabled(disabled)
     }
 
-    fn labelled_row(label: &str, choices: Vec<AnyElement>) -> AnyElement {
-        div()
+    /// A labelled row of choice buttons with its validation message (for
+    /// `error_keys`) directly underneath.
+    fn labelled_row(
+        &self,
+        label: &str,
+        error_keys: &[&str],
+        choices: Vec<AnyElement>,
+    ) -> AnyElement {
+        let row = div()
             .flex()
             .flex_wrap()
             .items_center()
@@ -541,17 +645,25 @@ impl Form1602QView {
                     .child(label.to_string()),
             )
             .children(choices)
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
-    /// Plain label + value for an item the library tile decides.
-    fn read_only_row(layout: Layout, label: &str, value: String) -> AnyElement {
+    /// Plain label + value for an item the library tile decides, with its
+    /// validation message (for `error_keys`) underneath.
+    fn read_only_row(
+        &self,
+        layout: Layout,
+        label: &str,
+        value: String,
+        error_keys: &[&str],
+    ) -> AnyElement {
         let label = div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
         let value = div().font_weight(FontWeight::BOLD).child(value);
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -567,7 +679,8 @@ impl Form1602QView {
                 .child(label.w(relative(0.45)))
                 .child(value.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -575,18 +688,21 @@ impl Form1602QView {
         let amended = self.draft.is_amended;
         let withheld = self.draft.any_tax_withheld;
         let children = vec![
-            Self::read_only_row(
+            self.read_only_row(
                 layout,
                 "Item 1 — For the Year",
                 self.draft.taxable_year.to_string(),
+                &["taxable_year"],
             ),
-            Self::read_only_row(
+            self.read_only_row(
                 layout,
                 "Item 2 — Quarter",
                 format!("Q{}", self.draft.quarter),
+                &["quarter"],
             ),
-            Self::labelled_row(
+            self.labelled_row(
                 "Item 3 — Amended return?",
+                &["is_amended"],
                 vec![
                     Self::choice("1602q_amended_yes", "Yes", amended == Some(true), !editable)
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -600,8 +716,9 @@ impl Form1602QView {
                         .into_any_element(),
                 ],
             ),
-            Self::labelled_row(
+            self.labelled_row(
                 "Item 4 — Any taxes withheld?",
+                &["any_tax_withheld"],
                 vec![
                     Self::choice(
                         "1602q_withheld_yes",
@@ -638,39 +755,28 @@ impl Form1602QView {
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let category = self.draft.category;
+        let tile = |label: &str, value: String, keys: &[&str]| {
+            let row = div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(label.to_string()),
+                )
+                .child(div().font_weight(FontWeight::BOLD).child(value))
+                .into_any_element();
+            with_field_error(row, self.error_for(keys))
+        };
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 7 — RDO Code"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            tile("Item 6 — TIN", format_tin(&self.draft.tin), &["tin"]),
+            tile(
+                "Item 7 — RDO Code",
+                self.draft.rdo_code.clone(),
+                &["rdo_code"],
+            ),
         ];
         for (key, label, _) in TEXT_INPUTS.iter().skip(2).filter(|(k, _, _)| *k != "email") {
             fields.push(self.field(key, label, layout, !editable));
@@ -679,8 +785,9 @@ impl Form1602QView {
             .iter()
             .find(|(k, _, _)| *k == "email")
             .map(|(key, label, _)| self.field(key, label, layout, !editable));
-        let category_row = Self::labelled_row(
+        let category_row = self.labelled_row(
             "Item 11 — Category of withholding agent",
+            &["category"],
             vec![
                 Self::choice(
                     "1602q_category_private",
@@ -706,8 +813,9 @@ impl Form1602QView {
         );
         let availing = self.draft.availing_tax_relief;
         let kind = self.draft.tax_relief;
-        let mut relief_rows = vec![Self::labelled_row(
+        let mut relief_rows = vec![self.labelled_row(
             "Item 13 — Payees availing of tax relief under a Special Law or Tax Treaty?",
+            &["availing_tax_relief"],
             vec![
                 Self::choice("1602q_relief_yes", "Yes", availing == Some(true), !editable)
                     .on_click(cx.listener(|this, _, window, cx| this.set_relief(true, window, cx)))
@@ -725,8 +833,9 @@ impl Form1602QView {
                     )
                     .into_any_element()
             };
-            relief_rows.push(Self::labelled_row(
+            relief_rows.push(self.labelled_row(
                 "Item 13A — If yes, specify",
+                &["tax_relief"],
                 vec![
                     pick(
                         "1602q_relief_special",
@@ -785,10 +894,29 @@ impl Form1602QView {
             );
         }
         s1.push(self.computed("16 — Schedule 1 total (Item 14)", d.schedule1_total, cx));
+        s1.extend(
+            self.error_for(&["schedule1_amount"])
+                .map(|message| field_error(message).into_any_element()),
+        );
         let treaty_editable = editable && d.availing_tax_relief == Some(true);
         let mut s2 = Vec::new();
+        let atc_options = schedule2_atc_pairs();
         for index in 0..2 {
             let row = index + 1;
+            let atc_keys = Self::error_keys(&s2_key("atc", index));
+            let atc_keys: Vec<&str> = atc_keys.iter().map(String::as_str).collect();
+            let atc_field = match self.s2_atc_selects.get(index) {
+                Some(state) => select_field(
+                    &format!("Row {row} — ATC"),
+                    state,
+                    &as_refs(&atc_options),
+                    Some(d.schedule2[index].atc_code.as_str()),
+                    !treaty_editable,
+                    self.error_for(&atc_keys).as_deref(),
+                    cx,
+                ),
+                None => div().into_any_element(),
+            };
             let fields = vec![
                 self.field(
                     &s2_key("treaty", index),
@@ -796,12 +924,7 @@ impl Form1602QView {
                     layout,
                     !treaty_editable,
                 ),
-                self.field(
-                    &s2_key("atc", index),
-                    &format!("Row {row} — ATC"),
-                    layout,
-                    !treaty_editable,
-                ),
+                atc_field,
                 self.field(
                     &s2_key("interest", index),
                     &format!("Row {row} — interest"),
@@ -823,6 +946,10 @@ impl Form1602QView {
             s2.push(self.grid(layout, fields));
         }
         s2.push(self.computed("Schedule 2 total (Item 15)", d.schedule2_total, cx));
+        s2.extend(
+            self.error_for(&["schedule2"])
+                .map(|message| field_error(message).into_any_element()),
+        );
         let mut s3 = Vec::new();
         for index in 0..2 {
             let row = index + 1;
@@ -872,6 +999,11 @@ impl Form1602QView {
     fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
+        let item28_keys: &[&str] = if d.item28 < 0.0 {
+            &["item28", "amounts"]
+        } else {
+            &["item28", "amounts", "over_remittance"]
+        };
         let mut children = vec![
             self.computed("14 — Taxes withheld (regular rates)", d.item14, cx),
             self.computed("15 — Taxes withheld (treaty rates)", d.item15, cx),
@@ -892,10 +1024,15 @@ impl Form1602QView {
             self.field("int", MONEY_INPUTS[5].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("27 — Total penalties", d.item27, cx),
-            self.computed(
-                "28 — Total amount still due/(over-remittance)",
-                d.item28,
-                cx,
+            // Item 28 also carries the page-wide amount and totals messages,
+            // and the over-remittance message while its marks are hidden.
+            with_field_error(
+                self.computed(
+                    "28 — Total amount still due/(over-remittance)",
+                    d.item28,
+                    cx,
+                ),
+                self.error_for(item28_keys),
             ),
         ];
         if d.item28 < 0.0 {
@@ -907,8 +1044,9 @@ impl Form1602QView {
                     }))
                     .into_any_element()
             };
-            children.push(Self::labelled_row(
+            children.push(self.labelled_row(
                 "If over-remittance, mark one:",
+                &["over_remittance"],
                 vec![
                     pick(
                         "1602q_refund",
@@ -946,6 +1084,20 @@ impl QueueableFormView for Form1602QView {
         cx: &mut Context<Self>,
     ) -> Self {
         let validation_errors = draft.validate();
+        let atc_list = schedule2_atc_pairs();
+        let mut subscriptions = Vec::new();
+        let mut s2_atc_selects = Vec::new();
+        for row in 0..2 {
+            let state = form_controls::new_select_state(&as_refs(&atc_list), window, cx);
+            subscriptions.push(form_controls::on_select(
+                &state,
+                &as_refs(&atc_list),
+                window,
+                cx,
+                move |this: &mut Self, value, window, cx| this.set_s2_atc(row, &value, window, cx),
+            ));
+            s2_atc_selects.push(state);
+        }
         let mut view = Self {
             draft,
             db,
@@ -955,7 +1107,8 @@ impl QueueableFormView for Form1602QView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
-            _subscriptions: Vec::new(),
+            s2_atc_selects,
+            _subscriptions: subscriptions,
         };
         for (key, _, placeholder) in TEXT_INPUTS {
             view.ensure_input(key.to_string(), placeholder, window, cx);
@@ -1212,6 +1365,17 @@ impl FormViewTrait for Form1602QView {
 impl Render for Form1602QView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let atc_list = schedule2_atc_pairs();
+        for (state, row) in self.s2_atc_selects.iter().zip(self.draft.schedule2.iter()) {
+            form_controls::sync_select(
+                state,
+                &as_refs(&atc_list),
+                Some(row.atc_code.as_str()),
+                window,
+                cx,
+            );
+        }
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1219,7 +1383,7 @@ impl Render for Form1602QView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let mut issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -1229,6 +1393,15 @@ impl Render for Form1602QView {
                     .into_any_element()
             })
             .collect();
+        if error_count > issues.len() {
+            issues.push(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().danger)
+                    .child(format!("and {} more", error_count - issues.len()))
+                    .into_any_element(),
+            );
+        }
 
         let toolbar =
             div()
@@ -1276,6 +1449,11 @@ impl Render for Form1602QView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {error_count} item(s) under Needs review to queue."
+                            )))
                         })
                         .child(
                             Button::new("1602q_submit")
@@ -1375,8 +1553,24 @@ impl Render for Form1602QView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, format_tin, parse_amount};
+    use super::{Layout, format_tin, parse_amount, schedule2_atc_pairs};
+    use bir_core::forms::form_1602q::FORM_1602Q_SCHEDULE2_ATCS;
     use gpui::px;
+
+    #[test]
+    fn schedule2_atc_select_offers_exactly_the_accepted_codes() {
+        let pairs = schedule2_atc_pairs();
+        assert_eq!(pairs.len(), 1 + FORM_1602Q_SCHEDULE2_ATCS.len());
+        assert_eq!(pairs.len(), 14);
+        assert_eq!(pairs[0].0, "");
+        let codes: Vec<&str> = pairs[1..].iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(codes, FORM_1602Q_SCHEDULE2_ATCS);
+        let mut labels: Vec<&String> = pairs.iter().map(|(_, l)| l).collect();
+        labels.sort();
+        labels.dedup();
+        assert_eq!(labels.len(), pairs.len());
+        assert!(pairs[1].1.starts_with("WI161"));
+    }
 
     #[test]
     fn layout_breakpoints() {
