@@ -11,12 +11,13 @@ the user watches the form. Three pieces:
   default and MCP Streamable HTTP with `--http 127.0.0.1:PORT`; OpenGrok only
   dials HTTP, so it uses the second. Both modes share one dispatcher and one
   allow-list.
-- `SKILL.md`: the `/file-tax <FORM>` skill that tells the model how to use
-  those tools (ground every value, state its source, never guess an election,
-  never overwrite a box the user typed, never submit).
-- `plugin.json` + `mcp.json`: an OpenGrok operator plugin (Agent Plugins
-  format, `https://agent-plugins.org/schemas/1.0.0/`) whose one MCP server is
-  `bir-mcp` over `streamable-http` on loopback.
+- This folder is one OpenGrok plugin named `bir` (Agent Plugins format,
+  `https://agent-plugins.org/schemas/1.0.0/`):
+  - `plugin.json` + `mcp.json`: its one MCP server, `bir-mcp` over
+    `streamable-http` on loopback;
+  - `skills/file-tax/SKILL.md`: the `/file-tax <FORM>` skill that tells the
+    model how to use those tools (ground every value, state its source, never
+    guess an election, never overwrite a box the user typed, never submit).
 
 ## Build
 
@@ -133,22 +134,17 @@ the one running `bir-headless`, else `127.0.0.1:17421`.
 
 OpenGrok does **not** launch stdio MCP servers (a plugin's `stdio` entry is
 reported as an unsupported transport) and does **not** read
-`~/.cursor/skills`, `.claude/skills` or a `~/.cursor/mcp.json`. MCP servers
-come from plugins; skills come from its `/skills` API (or from the `skills/`
-folder of a plugin installed from a registry, which must be public `https` and
-so cannot reach a loopback `bir-mcp`).
-
-### 1. The MCP server: an operator plugin
-
-Install `bir` as an **operator plugin**: a folder under the directory named by
-`OG_PLUGINS_DIR` on the OpenGrok server, holding `plugin.json` and `mcp.json`.
-Operator plugins may point at a loopback URL; plugins an account installs from
-the catalogue may not.
+`~/.cursor/skills`, `.claude/skills` or a `~/.cursor/mcp.json`. A plugin an
+account installs from the marketplace must name a public `https` server, so it
+cannot reach a loopback `bir-mcp`. Install `bir` as an **operator plugin**
+instead: a folder under the directory named by `OG_PLUGINS_DIR` on the
+OpenGrok server.
 
 ```sh
 PLUGIN="$OG_PLUGINS_DIR/bir"
 mkdir -p "$PLUGIN"
-cp integrations/opengrok/file-tax/plugin.json integrations/opengrok/file-tax/mcp.json "$PLUGIN/"
+cp -R integrations/opengrok/bir/plugin.json integrations/opengrok/bir/mcp.json \
+  integrations/opengrok/bir/skills "$PLUGIN/"
 chmod 600 "$PLUGIN/mcp.json"
 ```
 
@@ -165,21 +161,16 @@ makes OpenGrok drop the server instead of sending it. Never put the real token
 into the tracked `mcp.json`.
 
 Restart OpenGrok (operator plugins are read once at boot). The tools appear as
-`bir.bir-mcp.<tool>`.
+`bir.bir-mcp.<tool>`. Turn the `bir` plugin on for the Bot (its tool ceiling;
+operator plugins start off and @mentions don't enable them). Each tool can be
+set to always, ask or never on its own.
 
-Then turn the `bir` plugin on in the Bot's Tools settings: operator plugins
-are off in a Bot's tool ceiling until switched on there, and @mentions don't
-enable operator plugins.
-
-### 2. The skill: `POST /skills`
-
-The operator plugin loader reads only `plugin.json` and `mcp.json`, so upload
-the skill through the server's API: `POST /skills` with the whole `SKILL.md`
-(frontmatter included) as `body`. The frontmatter `name` (`file-tax`) and
-`description` are used when the request does not give them. An uploaded skill
-is live as soon as it is created (`POST /skills` with `source: "uploaded"`
-answered `enabled: true, draft: false`); attach it to the Bot that has the
-`bir` plugin turned on. Then open a chat and type `/file-tax 2551Q`.
+The skill ships in the plugin's `skills/` folder. An OpenGrok server that
+loads skills from operator plugins offers `/file-tax` wherever the `bir`
+plugin is on. An older server reads only `plugin.json` and `mcp.json`; there,
+upload the skill through `POST /skills` with the whole
+`skills/file-tax/SKILL.md` (frontmatter included) as `body` and
+`source: "uploaded"`.
 
 ## Verify
 

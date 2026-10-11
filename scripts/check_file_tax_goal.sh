@@ -10,7 +10,7 @@
 #   4. an end-to-end smoke: bir-headless serve (temp DB + temp gpui-agent
 #      runtime dir), then bir_list_apps -> bir_connect -> the draft flow over
 #      bir-mcp stdio (scripts/file_tax_smoke.py);
-#   5. integrations/opengrok/file-tax/ holds the skill and the MCP config.
+#   5. integrations/opengrok/bir/ is the OpenGrok plugin: its MCP config and its skills/file-tax skill.
 #
 # Test outcomes are read from cargo's own output (`test ... ok|FAILED` and
 # `test result:` lines), never from a wrapper's exit code. Cargo is called
@@ -44,7 +44,7 @@ NAMED_FEATURE_TESTS=(
 BIR_MCP_NO_FORBIDDEN_TOOL_TEST=tools_list_has_no_submit_queue_file_or_pay_tool
 
 MCP_CRATE_DIR=crates/bir-mcp
-INTEGRATION_DIR=integrations/opengrok/file-tax
+INTEGRATION_DIR=integrations/opengrok/bir
 
 FAILURES=()
 fail() {
@@ -195,10 +195,10 @@ echo "== 5. $INTEGRATION_DIR"
 if [[ ! -d "$INTEGRATION_DIR" ]]; then
   fail "$INTEGRATION_DIR is missing (increment 7 not landed)"
 else
-  if [[ -s "$INTEGRATION_DIR/SKILL.md" ]]; then
-    pass "skill: $INTEGRATION_DIR/SKILL.md"
+  if [[ -s "$INTEGRATION_DIR/skills/file-tax/SKILL.md" ]]; then
+    pass "skill: $INTEGRATION_DIR/skills/file-tax/SKILL.md"
   else
-    fail "$INTEGRATION_DIR/SKILL.md (the /file-tax skill) is missing or empty"
+    fail "$INTEGRATION_DIR/skills/file-tax/SKILL.md (the /file-tax skill) is missing or empty"
   fi
   mcp_config=""
   for candidate in "$INTEGRATION_DIR"/*.json; do
