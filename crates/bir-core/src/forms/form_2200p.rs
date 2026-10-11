@@ -39,12 +39,12 @@ pub const FORM_2200P_FIXED_ROWS: [(&str, &str, &str, &str); 25] = [
     ("XP010", "Lubricating Oils", "Per Liter", "10.00"),
     ("XP020", "Greases", "Per Kg", "10.00"),
     ("XP030", "Processed Gas", "Per Liter", "10.00"),
-    ("XP040", "Waxes and Petroleum", "Per Kg", "10.00"),
+    ("XP040", "Waxes and Petrolatum", "Per Kg", "10.00"),
     (
         "XP050",
         "Denatured Alcohol used for motive power",
         "Per Liter",
-        "10.0",
+        "10.00",
     ),
     ("XP060", "Unleaded Premium Gasoline", "Per Liter", "10.00"),
     ("XP080", "Regular Gasoline", "Per Liter", "10.00"),
@@ -58,7 +58,7 @@ pub const FORM_2200P_FIXED_ROWS: [(&str, &str, &str, &str); 25] = [
     ),
     (
         "XP105",
-        "Naphtha and Pyrolysis gasoline, when used as a raw material in the production or in the refining of petroleum products, or as a replacement for natural-gas-fired combined cycle power plant",
+        "Naphtha and Pyrolysis gasoline, when used as a raw material in the production of petrochemical products or in the refining of petroleum products, or as a replacement fuel for natural-gas-fired combined cycle power plant",
         "Per Liter",
         "0.00",
     ),

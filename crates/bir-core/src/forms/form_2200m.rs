@@ -69,10 +69,10 @@ pub const FORM_2200M_FIXED_ROWS: [(&str, &str, &str); 8] = [
     ("XM020", "Non-metallic minerals and quarry resources", "4%"),
     ("XM030", "Copper and other Metallic Minerals", "4%"),
     ("XM040", "Gold and Chromite", "4%"),
-    ("XM050", "Indegenous Petroleum", "6%"),
+    ("XM050", "Indigenous Petroleum", "6%"),
     (
         "XM051",
-        "Natural Gas or Liquified Natural Gas (Locally extracted)",
+        "Natural Gas or Liquefied Natural Gas (Locally extracted)",
         "0%",
     ),
 ];
