@@ -714,7 +714,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
     },
     FormDefinition {
         code: "2200C",
-        title: "Excise Tax Return for Coal and Coke",
+        title: "Excise Tax Return for Cosmetic Procedures",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
         taxpayer_types: &[

@@ -185,7 +185,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "2A_2020A",
         "XA062",
-        "2.) Wines a.) Sparkling wines/champagnes, NRP per 750 ml bottle more than Php 500.00 Per Liter",
+        "2.) Wines a.) Sparkling wines/champagnes where the NRP (excluding the excise and VAT) per bottle of 750 ml volume capacity, regardless of proof is: More than Php 500.00 Per Liter",
         "Effective January 1, 2020",
         "921.15",
         921.15,
@@ -193,7 +193,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "2A_2020B2",
         "XA062",
-        "2.) Wines a.) Sparkling wines/champagnes, NRP per 750 ml bottle more than Php 500.00 Per Liter",
+        "2.) Wines a.) Sparkling wines/champagnes where the NRP (excluding the excise and VAT) per bottle of 750 ml volume capacity, regardless of proof is: More than Php 500.00 Per Liter",
         "Effective January 23, 2020",
         "50.00",
         50.0,
@@ -201,7 +201,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "2A_2021B",
         "XA062",
-        "2.) Wines a.) Sparkling wines/champagnes, NRP per 750 ml bottle more than Php 500.00 Per Liter",
+        "2.) Wines a.) Sparkling wines/champagnes where the NRP (excluding the excise and VAT) per bottle of 750 ml volume capacity, regardless of proof is: More than Php 500.00 Per Liter",
         "Effective January 1, 2021",
         "53.00",
         53.0,
@@ -209,7 +209,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "2A_2022B",
         "XA062",
-        "2.) Wines a.) Sparkling wines/champagnes, NRP per 750 ml bottle more than Php 500.00 Per Liter",
+        "2.) Wines a.) Sparkling wines/champagnes where the NRP (excluding the excise and VAT) per bottle of 750 ml volume capacity, regardless of proof is: More than Php 500.00 Per Liter",
         "Effective January 1, 2022",
         "56.18",
         56.18,
@@ -217,7 +217,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "2A_2023B",
         "XA062",
-        "2.) Wines a.) Sparkling wines/champagnes, NRP per 750 ml bottle more than Php 500.00 Per Liter",
+        "2.) Wines a.) Sparkling wines/champagnes where the NRP (excluding the excise and VAT) per bottle of 750 ml volume capacity, regardless of proof is: More than Php 500.00 Per Liter",
         "Effective January 1, 2023",
         "59.55",
         59.55,
@@ -225,7 +225,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "2A_2024B",
         "XA062",
-        "2.) Wines a.) Sparkling wines/champagnes, NRP per 750 ml bottle more than Php 500.00 Per Liter",
+        "2.) Wines a.) Sparkling wines/champagnes where the NRP (excluding the excise and VAT) per bottle of 750 ml volume capacity, regardless of proof is: More than Php 500.00 Per Liter",
         "Effective January 1, 2024",
         "63.12",
         63.12,
@@ -425,7 +425,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "3A_2020A",
         "XA056",
-        "3.) Fermented Liquors a.) XA056 row (the official page prints: Php 50.60 and below) Per Liter",
+        "3.) Fermented Liquors a.) If the NRP (excluding the excise and VAT) per liter of volume capacity is: Php 50.60 and below Per Liter",
         "Effective January 1, 2020",
         "26.43",
         26.43,
@@ -433,7 +433,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "3B_2020B2",
         "XA056",
-        "3.) Fermented Liquors a.) XA056 row (the official page prints: Php 50.60 and below) Per Liter",
+        "3.) Fermented Liquors a.) If the NRP (excluding the excise and VAT) per liter of volume capacity is: Php 50.60 and below Per Liter",
         "Effective January 23, 2020",
         "35.00",
         35.0,
@@ -441,7 +441,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "3A_2021B",
         "XA056",
-        "3.) Fermented Liquors a.) XA056 row (the official page prints: Php 50.60 and below) Per Liter",
+        "3.) Fermented Liquors a.) If the NRP (excluding the excise and VAT) per liter of volume capacity is: Php 50.60 and below Per Liter",
         "Effective January 1, 2021",
         "37.00",
         37.0,
@@ -449,7 +449,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "3A_2022B",
         "XA056",
-        "3.) Fermented Liquors a.) XA056 row (the official page prints: Php 50.60 and below) Per Liter",
+        "3.) Fermented Liquors a.) If the NRP (excluding the excise and VAT) per liter of volume capacity is: Php 50.60 and below Per Liter",
         "Effective January 1, 2022",
         "39.00",
         39.0,
@@ -457,7 +457,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "3A_2023B",
         "XA056",
-        "3.) Fermented Liquors a.) XA056 row (the official page prints: Php 50.60 and below) Per Liter",
+        "3.) Fermented Liquors a.) If the NRP (excluding the excise and VAT) per liter of volume capacity is: Php 50.60 and below Per Liter",
         "Effective January 1, 2023",
         "41.00",
         41.0,
@@ -465,7 +465,7 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
     (
         "3A_2024B",
         "XA056",
-        "3.) Fermented Liquors a.) XA056 row (the official page prints: Php 50.60 and below) Per Liter",
+        "3.) Fermented Liquors a.) If the NRP (excluding the excise and VAT) per liter of volume capacity is: Php 50.60 and below Per Liter",
         "Effective January 1, 2024",
         "43.00",
         43.0,
