@@ -22,6 +22,7 @@ use super::event_form_kit::{
     computed, field, format_tin, grid, money_text, section,
 };
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 /// Plain inputs: (key, label, placeholder).
@@ -234,14 +235,71 @@ impl Form1707View {
             .unwrap_or("")
     }
 
-    fn f(&self, key: &str, layout: Layout) -> AnyElement {
-        field(
-            &self.kit,
-            key,
-            Self::label(key),
-            layout,
-            !self.draft.lifecycle.is_editable(),
+    /// Validator keys (`Form1707Draft::validate`) that belong to input `key`.
+    fn model_keys(key: &str) -> &'static [&'static str] {
+        match key {
+            "month" => &["transaction_month"],
+            "day" => &["transaction_day"],
+            "year" => &["transaction_year"],
+            "sheets" => &["number_of_attached_sheets"],
+            "rdo" => &["rdo_code"],
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "contact" => &["contact_number"],
+            "email" => &["email"],
+            "relief" => &["tax_relief"],
+            "txn_description" => &["transaction_description"],
+            "inst_count" => &["installment.number_of_installments"],
+            "inst_date" => &["installment.collection_date"],
+            "inst_sell" => &["installment.selling_price"],
+            "inst_cost" => &["installment.cost_and_expenses"],
+            "inst_mortgage" => &["installment.mortgage_assumed"],
+            "inst_amount" => &["installment.installment_amount"],
+            "inst_total" => &["installment.total_collection"],
+            "less" => &["tax_paid_previous"],
+            "surcharge" => &["surcharge"],
+            "interest" => &["interest"],
+            "compromise" => &["compromise"],
+            _ => &[],
+        }
+    }
+
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.kit
+                .parse_errors
+                .iter()
+                .chain(self.kit.validation_errors.iter()),
+            keys,
         )
+    }
+
+    /// Put the messages for `keys` directly under an already-built control.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
+    }
+
+    /// A labelled input with its own messages (its input key plus `model`)
+    /// shown under it.
+    fn field_at(&self, key: &str, label_text: &str, layout: Layout, model: &[&str]) -> AnyElement {
+        let mut keys = vec![key];
+        keys.extend_from_slice(model);
+        self.with_errors(
+            field(
+                &self.kit,
+                key,
+                label_text,
+                layout,
+                !self.draft.lifecycle.is_editable(),
+            ),
+            &keys,
+        )
+    }
+
+    fn f(&self, key: &str, layout: Layout) -> AnyElement {
+        self.field_at(key, Self::label(key), layout, Self::model_keys(key))
     }
 
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -284,24 +342,28 @@ impl Form1707View {
             )
         })
         .collect();
-        let fixed = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(kit::label("TIN (header, no item number)"))
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child(format_tin(&d.tin)),
-            )
-            .into_any_element();
+        let fixed = self.with_errors(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(kit::label("TIN (header, no item number)"))
+                .child(
+                    div()
+                        .font_weight(FontWeight::BOLD)
+                        .child(format_tin(&d.tin)),
+                )
+                .into_any_element(),
+            &["tin"],
+        );
+        let atc_row = self.with_errors(choice_row(layout, "Item 3 — ATC", atcs), &["atc"]);
         let children = vec![
             fixed,
             self.f("month", layout),
             self.f("day", layout),
             self.f("year", layout),
             amended,
-            choice_row(layout, "Item 3 — ATC", atcs),
+            atc_row,
             self.f("sheets", layout),
             self.f("rdo", layout),
             self.f("name", layout),
@@ -325,11 +387,17 @@ impl Form1707View {
         layout: Layout,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let disabled = !self.draft.lifecycle.is_editable();
+        let model = if kind == "seller" {
+            "sellers"
+        } else {
+            "buyers"
+        };
         let rows: Vec<AnyElement> = (0..FORM_1707_PARTY_ROWS)
             .map(|row| {
                 let number = if kind == "seller" { 6 } else { 7 };
                 let who = if kind == "seller" { "Seller" } else { "Buyer" };
+                let row_key = format!("{model}[{row}]");
+                let tin_key = format!("{model}[{row}].tin");
                 let cells: Vec<AnyElement> = PARTY_FIELDS
                     .iter()
                     .zip(['A', 'B', 'C'])
@@ -339,16 +407,23 @@ impl Form1707View {
                             "addr" => "Registered address",
                             _ => *caption,
                         };
-                        field(
-                            &self.kit,
+                        let tin_only = [tin_key.as_str()];
+                        let model_keys: &[&str] = if *part == "tin" { &tin_only } else { &[] };
+                        self.field_at(
                             &party_key(kind, row, part),
                             &format!("{number}{letter} — {who}'s {caption} (row {})", row + 1),
                             layout,
-                            disabled,
+                            model_keys,
                         )
                     })
                     .collect();
-                grid(layout, cells)
+                // Row-level messages ("complete Item #n", length limits); the
+                // first row also carries the whole-list message.
+                let mut keys = vec![row_key.as_str()];
+                if row == 0 {
+                    keys.push(model);
+                }
+                self.with_errors(grid(layout, cells), &keys)
             })
             .collect();
         section(title, rows, cx)
@@ -397,10 +472,9 @@ impl Form1707View {
         if d.tax_relief.is_some() {
             children.push(self.f("relief", layout));
         }
-        children.push(choice_row(
-            layout,
-            "Item 9 — Description of transaction",
-            kinds,
+        children.push(self.with_errors(
+            choice_row(layout, "Item 9 — Description of transaction", kinds),
+            &["transaction_type"],
         ));
         if d.transaction_type == Some(Form1707TransactionType::Others) {
             children.push(self.f("txn_description", layout));
@@ -467,7 +541,6 @@ impl Form1707View {
     }
 
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
-        let disabled = !self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut children = Vec::new();
         match d.transaction_type {
@@ -500,19 +573,28 @@ impl Form1707View {
                 );
                 for (row, letter) in (0..self.share_rows).map(|row| (row, row_label(row))) {
                     children.push(self.row_heading("s2", row, &letter, cx));
+                    let shares_key = format!("shares[{row}].number_of_shares");
+                    let price_key = format!("shares[{row}].selling_price");
                     let cells = SHARE_FIELDS
                         .iter()
                         .map(|(part, caption)| {
-                            field(
-                                &self.kit,
+                            let own = [shares_key.as_str()];
+                            let own_price = [price_key.as_str()];
+                            let model: &[&str] = match *part {
+                                "shares" => &own,
+                                "price" => &own_price,
+                                _ => &[],
+                            };
+                            self.field_at(
                                 &share_key(row, part),
                                 &format!("{letter} — {caption}"),
                                 layout,
-                                disabled,
+                                model,
                             )
                         })
                         .collect();
-                    children.push(grid(layout, cells));
+                    let row_key = format!("shares[{row}]");
+                    children.push(self.with_errors(grid(layout, cells), &[row_key.as_str()]));
                 }
                 children.push(self.add_row("s2", cx));
                 children.push(computed("Total taxable base", d.total_selling_price, cx));
@@ -521,23 +603,23 @@ impl Form1707View {
                 );
                 for (row, letter) in (0..self.expense_rows).map(|row| (row, row_label(row))) {
                     children.push(self.row_heading("s3", row, &letter, cx));
+                    let amount_key = format!("expenses[{row}].amount");
                     let cells = vec![
-                        field(
-                            &self.kit,
+                        self.field_at(
                             &expense_key(row, "part"),
                             &format!("{letter} — Particulars"),
                             layout,
-                            disabled,
+                            &[],
                         ),
-                        field(
-                            &self.kit,
+                        self.field_at(
                             &expense_key(row, "amount"),
                             &format!("{letter} — Amount"),
                             layout,
-                            disabled,
+                            &[amount_key.as_str()],
                         ),
                     ];
-                    children.push(grid(layout, cells));
+                    let row_key = format!("expenses[{row}]");
+                    children.push(self.with_errors(grid(layout, cells), &[row_key.as_str()]));
                 }
                 children.push(self.add_row("s3", cx));
                 children.push(computed("Total cost and expenses", d.total_expenses, cx));
@@ -568,22 +650,28 @@ impl Form1707View {
                 d.tax_due_this_period,
                 cx,
             ),
-            field(
-                &self.kit,
-                "less",
-                Self::label("less"),
-                layout,
-                !editable || !d.is_amended,
+            self.with_errors(
+                field(
+                    &self.kit,
+                    "less",
+                    Self::label("less"),
+                    layout,
+                    !editable || !d.is_amended,
+                ),
+                &["less", "tax_paid_previous"],
             ),
             computed("17 — Tax payable (overpayment)", d.tax_payable, cx),
             self.f("surcharge", layout),
             self.f("interest", layout),
             self.f("compromise", layout),
             computed("18D — Total penalties", d.total_penalties, cx),
-            computed(
-                "19 — Total amount payable (overpayment)",
-                d.total_amount_payable,
-                cx,
+            self.with_errors(
+                computed(
+                    "19 — Total amount payable (overpayment)",
+                    d.total_amount_payable,
+                    cx,
+                ),
+                &["total_amount_payable"],
             ),
         ];
         section(

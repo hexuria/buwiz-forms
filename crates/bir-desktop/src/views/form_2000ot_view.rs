@@ -25,8 +25,35 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{self, messages_for, select_field, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+
+/// Item 3 options: (stored value, label).
+const ATC_OPTIONS: &[(&str, &str)] = &[
+    ("DO102", "DO102 — shares with par value (P1.50 / P200)"),
+    ("DO122", "DO122 — real property (P15 / P1,000)"),
+    ("DO125", "DO125 — stock without par value (50% of DST paid)"),
+];
+
+fn atc_value(atc: Form2000OTAtc) -> Option<&'static str> {
+    match atc {
+        Form2000OTAtc::Do102 => Some("DO102"),
+        Form2000OTAtc::Do122 => Some("DO122"),
+        Form2000OTAtc::Do125 => Some("DO125"),
+        Form2000OTAtc::Unanswered => None,
+    }
+}
+
+fn atc_from_value(value: &str) -> Option<Form2000OTAtc> {
+    match value {
+        "DO102" => Some(Form2000OTAtc::Do102),
+        "DO122" => Some(Form2000OTAtc::Do122),
+        "DO125" => Some(Form2000OTAtc::Do125),
+        _ => None,
+    }
+}
 
 impl EventEmitter<QueueableFormEvent> for Form2000OTView {}
 
@@ -150,6 +177,8 @@ pub struct Form2000OTView {
     /// Rows opened per schedule: Schedule 1.A, then 1.B. Blank trailing rows
     /// are not kept in the draft, so the page remembers them.
     visible_rows: [usize; 2],
+    /// Item 3 ATC dropdown.
+    atc_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -570,11 +599,11 @@ impl Form2000OTView {
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let mut keys = vec![key.to_string()];
+        keys.extend(Self::model_keys(key));
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let message = self.errors_for(&keys);
+        let error = message.is_some();
         let label = div()
             .min_w_0()
             .text_sm()
@@ -585,7 +614,7 @@ impl Form2000OTView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -601,7 +630,60 @@ impl Form2000OTView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
+    }
+
+    /// Validator keys (`Form2000OTDraft::validate`) behind input `key`.
+    fn model_keys(key: &str) -> Vec<String> {
+        let fixed: &[&str] = match key {
+            "date" => &["transaction_date"],
+            "sheets" => &["number_of_attached_sheets"],
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "phone" => &["contact_number"],
+            "oname" => &["other_party_name"],
+            "otin" => &["other_party_tin"],
+            "loc" => &["real_property_location"],
+            "others" => &["others_description"],
+            "othamt" => &["others_amount"],
+            "gsp" => &["gross_selling_price"],
+            "prev" => &["tax_paid_previous"],
+            "sur" => &["surcharge"],
+            "int" => &["interest"],
+            "comp" => &["compromise"],
+            _ => &[],
+        };
+        if !fixed.is_empty() {
+            return fixed.iter().map(|k| k.to_string()).collect();
+        }
+        match split_row_key(key) {
+            Some(("ptct" | "ptd" | "ploc" | "plot" | "pcls" | "parea", row)) => {
+                vec![format!("properties[{row}].location")]
+            }
+            Some(("pfmv1" | "pfmv2", row)) => vec![format!("properties[{row}].fmv_per_td")],
+            Some(("scorp" | "sno" | "scert", row)) => {
+                vec![format!("shares[{row}].corporation")]
+            }
+            Some(("spar" | "sdst", row)) => vec![format!("shares[{row}].par_value")],
+            _ => Vec::new(),
+        }
+    }
+
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built control.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
     }
 
     /// Two columns on desktop, one otherwise.
@@ -706,27 +788,16 @@ impl Form2000OTView {
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let amended = self.draft.is_amended;
-        let atc = self.draft.atc;
-        let mut atc_choices = Vec::new();
-        for (index, (value, label)) in [
-            (
-                Form2000OTAtc::Do102,
-                "DO102 — shares with par value (P1.50 / P200)",
-            ),
-            (Form2000OTAtc::Do122, "DO122 — real property (P15 / P1,000)"),
-            (
-                Form2000OTAtc::Do125,
-                "DO125 — stock without par value (50% of DST paid)",
-            ),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            atc_choices.push(
-                Self::choice(("2000ot_atc", index), label, atc == value, !editable)
-                    .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.atc = value))),
-            );
-        }
+        let atc_error = self.errors_for(&["atc"]);
+        let atc_field = select_field(
+            "Item 3 — ATC",
+            &self.atc_select,
+            ATC_OPTIONS,
+            atc_value(self.draft.atc),
+            !editable,
+            atc_error.as_deref(),
+            cx,
+        );
         let children = vec![
             self.field(
                 "date",
@@ -746,7 +817,7 @@ impl Form2000OTView {
                     ),
                 ],
             ),
-            Self::choice_row("Item 3 — ATC", layout, atc_choices),
+            atc_field,
             self.field(
                 "sheets",
                 "Item 4 — No. of sheets attached",
@@ -762,40 +833,46 @@ impl Form2000OTView {
         let party = self.draft.other_party;
         let nature = self.draft.nature;
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 5 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — RDO Code of Location of the Property"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            self.with_errors(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Item 5 — TIN"),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format_tin(&self.draft.tin)),
+                    )
+                    .into_any_element(),
+                &["tin"],
+            ),
+            self.with_errors(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Item 6 — RDO Code of Location of the Property"),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(self.draft.rdo_code.clone()),
+                    )
+                    .into_any_element(),
+                &["rdo_code"],
+            ),
         ];
         for key in ["name", "address", "zip", "phone", "email"] {
             let label = TEXT_INPUTS
@@ -845,10 +922,13 @@ impl Form2000OTView {
         }
         let mut children = vec![
             self.grid(layout, fields),
-            Self::choice_row(
-                "Item 11 — Other party to the transaction",
-                layout,
-                party_choices,
+            self.with_errors(
+                Self::choice_row(
+                    "Item 11 — Other party to the transaction",
+                    layout,
+                    party_choices,
+                ),
+                &["other_party"],
             ),
             self.grid(
                 layout,
@@ -857,7 +937,10 @@ impl Form2000OTView {
                     self.field("otin", "Item 11B — Other party's TIN", layout, !editable),
                 ],
             ),
-            Self::choice_row("Item 12 — Nature of transaction", layout, nature_choices),
+            self.with_errors(
+                Self::choice_row("Item 12 — Nature of transaction", layout, nature_choices),
+                &["nature"],
+            ),
         ];
         if nature.is_real_property() {
             children.push(self.field(
@@ -933,7 +1016,7 @@ impl Form2000OTView {
                 cx,
             ));
         }
-        children.push(self.add_row_controls(0, cx));
+        children.push(self.with_errors(self.add_row_controls(0, cx), &["properties"]));
         children.push(self.computed(
             "Total fair market value",
             self.draft.total_fair_market_value,
@@ -983,7 +1066,7 @@ impl Form2000OTView {
                 self.row_box(format!("Shares {}", row + 1), 1, row, fields, layout, cx)
             })
             .collect();
-        children.push(self.add_row_controls(1, cx));
+        children.push(self.with_errors(self.add_row_controls(1, cx), &["shares"]));
         self.section("Schedule 1.B — Shares of Stock", children, cx)
     }
 
@@ -1017,7 +1100,7 @@ impl Form2000OTView {
                 )
                 .child(div().font_weight(FontWeight::BOLD).child(rate))
                 .into_any_element(),
-            self.computed("17 — Tax due", d.tax_due, cx),
+            self.with_errors(self.computed("17 — Tax due", d.tax_due, cx), &["tax_due"]),
             self.field(
                 "prev",
                 MONEY_INPUTS[2].1,
@@ -1029,10 +1112,13 @@ impl Form2000OTView {
             self.field("int", MONEY_INPUTS[4].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[5].1, layout, !editable),
             self.computed("20D — Total penalties", d.total_penalties, cx),
-            self.computed(
-                "21 — Total amount payable/(overpayment)",
-                d.total_amount_payable,
-                cx,
+            self.with_errors(
+                self.computed(
+                    "21 — Total amount payable/(overpayment)",
+                    d.total_amount_payable,
+                    cx,
+                ),
+                &["total_amount_payable"],
             ),
         ];
         self.section(
@@ -1082,6 +1168,18 @@ impl QueueableFormView for Form2000OTView {
             ));
             inputs.insert(key, input);
         }
+        let atc_select = form_controls::new_select_state(ATC_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &atc_select,
+            ATC_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(atc) = atc_from_value(&value) {
+                    this.edit(cx, |d| d.atc = atc);
+                }
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -1093,6 +1191,7 @@ impl QueueableFormView for Form2000OTView {
             status_message: None,
             release_claim_confirm_open: false,
             visible_rows: [FORM_2000OT_REAL_PROPERTY_ROWS, FORM_2000OT_SHARE_ROWS],
+            atc_select,
             _subscriptions: subscriptions,
         }
     }
@@ -1350,6 +1449,14 @@ impl Render for Form2000OTView {
         let layout = Layout::for_width(window.viewport_size().width);
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        form_controls::sync_select(
+            &self.atc_select,
+            ATC_OPTIONS,
+            atc_value(self.draft.atc),
+            window,
+            cx,
+        );
+        let open_issues = self.validation_errors.len() + self.parse_errors.len();
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1412,6 +1519,12 @@ impl Render for Form2000OTView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && open_issues > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {open_issues} {} to queue (see Needs review).",
+                                if open_issues == 1 { "item" } else { "items" }
+                            )))
                         })
                         .child(
                             Button::new("2000ot_submit")
