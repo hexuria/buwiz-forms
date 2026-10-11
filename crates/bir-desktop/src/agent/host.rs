@@ -6380,9 +6380,10 @@ mod tests {
         assert!(!html.contains(FIXTURE_NAME));
         assert!(html.contains("OLONGAPO"));
         assert!(!html.contains("Olongapo"));
-        assert!(html.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
-        assert!(!html.contains(FIXTURE_EMAIL));
-        assert!(html.contains("1000.00"));
+        // Print previews keep the email as typed (owner decision 7A).
+        assert!(html.contains(FIXTURE_EMAIL));
+        assert!(!html.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
+        assert!(html.contains("1,000.00"));
         assert!(html.contains("100.00"));
         assert!(
             html.split("<input").any(|tag| {
@@ -6448,8 +6449,8 @@ mod tests {
         assert!(!html_q.contains(FIXTURE_NAME));
         assert!(html_q.contains("OLONGAPO"));
         assert!(!html_q.contains("Olongapo"));
-        assert!(html_q.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
-        assert!(!html_q.contains(FIXTURE_EMAIL));
+        assert!(html_q.contains(FIXTURE_EMAIL));
+        assert!(!html_q.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
         assert!(html_q.contains("500.00"));
         assert!(html_q.contains(&year.to_string()));
         assert!(
