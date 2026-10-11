@@ -44,6 +44,10 @@ impl ProfileManagerView {
                     .id(crate::agent::ids::PROFILE_TIN)
                     .child(self.tin_input.clone()),
             )
+            .when(
+                self.tin_duplicate_error.is_none() && self.errors.iter().any(|e| e.field == "tin"),
+                |this| this.child(self.field_error("tin", cx)),
+            )
             .when(self.tin_duplicate_error.is_some(), |this| {
                 let msg = self.tin_duplicate_error.clone().unwrap_or_default();
                 this.child(rsx! {

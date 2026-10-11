@@ -4212,8 +4212,30 @@ impl ProfileManagerView {
             ));
         }
 
-        if !self.errors.is_empty() {
-            self.save_message = None;
+        if let Some(first) = self.errors.first() {
+            let label = match first.field {
+                "tin" => "TIN".to_string(),
+                "rdo_code" => "RDO".to_string(),
+                "line_of_business" => "Line of business".to_string(),
+                "full_name" => "Taxpayer name".to_string(),
+                "registered_address" => "Registered address".to_string(),
+                "zip_code" => "ZIP code".to_string(),
+                "phone" => "Telephone".to_string(),
+                "email" => "Email".to_string(),
+                "birth_date" => "Date of birth".to_string(),
+                "business_start_date" => "Business start date".to_string(),
+                other => other.replace('_', " "),
+            };
+            let more = self.errors.len() - 1;
+            let suffix = if more > 0 {
+                format!(" (+{more} more)")
+            } else {
+                String::new()
+            };
+            self.save_message = Some(format!(
+                "Fix the highlighted fields before saving: {label} — {}{suffix}",
+                first.message
+            ));
             cx.notify();
             return;
         }
