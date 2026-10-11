@@ -252,7 +252,7 @@ const SCHEDULE_2: &[Money] = &[
     },
     Money {
         key: "s2_deductions",
-        label: "6 — Less: deductions (itemized)",
+        label: "6 — Deductions: itemized",
         get: |d| d.deductions,
         set: |d, v| d.deductions = v,
         open: itemized,
@@ -276,7 +276,7 @@ const SCHEDULE_2_COMPUTED: &[Computed] = &[
         get: |d| d.total_gross_income,
     },
     Computed {
-        label: "6 — Deductions (OSD: 40% of Item 5)",
+        label: "6 — Deductions: OSD (40% of Item 5)",
         get: |d| d.deductions,
     },
     Computed {
@@ -300,6 +300,15 @@ const SCHEDULE_2_COMPUTED: &[Computed] = &[
         get: |d| d.income_tax_due,
     },
 ];
+
+/// Leading item number of a row label ("11A — ..." is 11).
+fn label_item_no(label: &str) -> u32 {
+    label
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(u32::MAX)
+}
 
 fn mcit_open(d: &Draft) -> bool {
     d.mcit_open()
@@ -893,17 +902,41 @@ impl Form1702qView {
         layout: Layout,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let editable = self.draft.lifecycle.is_editable();
-        let mut children: Vec<AnyElement> = moneys
-            .iter()
-            .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(&self.draft)))
+        let children = self
+            .money_rows(moneys, computed, layout, cx)
+            .into_iter()
+            .map(|(_, el)| el)
             .collect();
-        children.extend(
-            computed
-                .iter()
-                .map(|c| self.computed(c.label, (c.get)(&self.draft), cx)),
-        );
         self.section(title, vec![self.grid(layout, children)], cx)
+    }
+
+    /// Inputs and computed rows keyed by the leading item number in their
+    /// labels, sorted stably (input before computed on equal numbers).
+    fn money_rows(
+        &self,
+        moneys: &[Money],
+        computed: &[Computed],
+        layout: Layout,
+        cx: &Context<Self>,
+    ) -> Vec<(u32, AnyElement)> {
+        let editable = self.draft.lifecycle.is_editable();
+        let mut rows: Vec<(u32, AnyElement)> = moneys
+            .iter()
+            .map(|m| {
+                (
+                    label_item_no(m.label),
+                    self.field(m.key, m.label, layout, !editable || !(m.open)(&self.draft)),
+                )
+            })
+            .collect();
+        rows.extend(computed.iter().map(|c| {
+            (
+                label_item_no(c.label),
+                self.computed(c.label, (c.get)(&self.draft), cx),
+            )
+        }));
+        rows.sort_by_key(|(n, _)| *n);
+        rows
     }
 
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -978,46 +1011,6 @@ impl Form1702qView {
                 ),
             ],
         ));
-        children.push(self.choice_row(
-            "Item 12 — Method of deductions",
-            vec![
-                Self::choice(
-                    "1702q_itemized",
-                    "Itemized deductions",
-                    d.deduction == Form1702qDeduction::Itemized,
-                    !editable,
-                )
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.edit(window, cx, |d| d.deduction = Form1702qDeduction::Itemized)
-                })),
-                Self::choice(
-                    "1702q_osd",
-                    "Optional standard deduction (40%)",
-                    d.deduction == Form1702qDeduction::Osd,
-                    !editable || !d.osd_allowed(),
-                )
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.edit(window, cx, |d| d.deduction = Form1702qDeduction::Osd)
-                })),
-            ],
-        ));
-        children.push(self.choice_row(
-            "Item 13 — Availing of tax relief under a special law/treaty?",
-            vec![
-                Self::choice("1702q_relief_yes", "Yes", d.tax_relief, !editable).on_click(
-                    cx.listener(|this, _, window, cx| {
-                        this.edit(window, cx, |d| d.tax_relief = true)
-                    }),
-                ),
-                Self::choice("1702q_relief_no", "No", !d.tax_relief, !editable).on_click(
-                    cx.listener(|this, _, window, cx| {
-                        this.edit(window, cx, |d| d.tax_relief = false)
-                    }),
-                ),
-            ],
-        ));
-        children.push(self.field("relief", TEXTS[7].label, layout, !editable || !d.tax_relief));
-        children.push(self.field("sheets", TEXTS[10].label, layout, !editable));
         let mut sections =
             vec![self.section("Return period", vec![self.grid(layout, children)], cx)];
 
@@ -1089,6 +1082,45 @@ impl Form1702qView {
         for text in &TEXTS[1..7] {
             fields.push(self.field(text.key, text.label, layout, !editable));
         }
+        fields.push(self.choice_row(
+            "Item 12 — Method of deductions",
+            vec![
+                Self::choice(
+                    "1702q_itemized",
+                    "Itemized deductions",
+                    d.deduction == Form1702qDeduction::Itemized,
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit(window, cx, |d| d.deduction = Form1702qDeduction::Itemized)
+                })),
+                Self::choice(
+                    "1702q_osd",
+                    "Optional standard deduction (40%)",
+                    d.deduction == Form1702qDeduction::Osd,
+                    !editable || !d.osd_allowed(),
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit(window, cx, |d| d.deduction = Form1702qDeduction::Osd)
+                })),
+            ],
+        ));
+        fields.push(self.choice_row(
+            "Item 13 — Availing of tax relief under a special law/treaty?",
+            vec![
+                Self::choice("1702q_relief_yes", "Yes", d.tax_relief, !editable).on_click(
+                    cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| d.tax_relief = true)
+                    }),
+                ),
+                Self::choice("1702q_relief_no", "No", !d.tax_relief, !editable).on_click(
+                    cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| d.tax_relief = false)
+                    }),
+                ),
+            ],
+        ));
+        fields.push(self.field("relief", TEXTS[7].label, layout, !editable || !d.tax_relief));
         self.section(
             "Part I — Background Information",
             vec![self.grid(layout, fields)],
@@ -1115,43 +1147,32 @@ impl Form1702qView {
                 cx,
             ),
         ];
-        let mut s2: Vec<AnyElement> = SCHEDULE_2
-            .iter()
-            .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(d)))
-            .collect();
+        let mut s2 = self.money_rows(SCHEDULE_2, SCHEDULE_2_COMPUTED, layout, cx);
         let rate_text = match d.forced_regular_rate() {
             Some(rate) => self.computed_text("10 — Applicable income tax rate (%)", rate, cx),
             None => self.field("s2_rate", TEXTS[8].label, layout, !editable),
         };
-        s2.push(rate_text);
-        s2.extend(
-            SCHEDULE_2_COMPUTED
-                .iter()
-                .map(|c| self.computed(c.label, (c.get)(d), cx)),
-        );
+        s2.push((10, rate_text));
+        s2.sort_by_key(|(n, _)| *n);
         sections.push(self.section(
             "Schedule 2 — Regular/normal rate",
-            vec![self.grid(layout, s2)],
+            vec![self.grid(layout, s2.into_iter().map(|(_, el)| el).collect())],
             cx,
         ));
-        let mut s3: Vec<AnyElement> = SCHEDULE_3
-            .iter()
-            .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(d)))
-            .collect();
+        let mut s3 = self.money_rows(SCHEDULE_3, SCHEDULE_3_COMPUTED, layout, cx);
         let rate_open = d.mcit_open() && form_1702q_mcit_rate(d.taxable_year, d.year_end_month).1;
-        s3.push(if rate_open {
-            self.field("s3_rate", TEXTS[9].label, layout, !editable)
-        } else {
-            self.computed_text("5 — MCIT rate (%)", &d.mcit_rate_display(), cx)
-        });
-        s3.extend(
-            SCHEDULE_3_COMPUTED
-                .iter()
-                .map(|c| self.computed(c.label, (c.get)(d), cx)),
-        );
+        s3.push((
+            5,
+            if rate_open {
+                self.field("s3_rate", TEXTS[9].label, layout, !editable)
+            } else {
+                self.computed_text("5 — MCIT rate (%)", &d.mcit_rate_display(), cx)
+            },
+        ));
+        s3.sort_by_key(|(n, _)| *n);
         sections.push(self.section(
             "Schedule 3 — Minimum corporate income tax (needs both Item 5 boxes)",
-            vec![self.grid(layout, s3)],
+            vec![self.grid(layout, s3.into_iter().map(|(_, el)| el).collect())],
             cx,
         ));
         let mut s4: Vec<AnyElement> = SCHEDULE_4
@@ -1594,6 +1615,17 @@ impl Render for Form1702qView {
                 layout,
                 cx,
             ));
+        let attachments = self.field(
+            "sheets",
+            TEXTS[10].label,
+            layout,
+            !self.draft.lifecycle.is_editable(),
+        );
+        body = body.child(self.section(
+            "Attachments",
+            vec![self.grid(layout, vec![attachments])],
+            cx,
+        ));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

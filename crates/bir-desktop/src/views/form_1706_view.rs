@@ -14,13 +14,26 @@ use bir_core::forms::form_1706::{
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
+use gpui_component::button::Button;
 
 use super::event_form_kit::{
-    self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
-    computed, field, format_tin, grid, money_text, optional_money_text, section, yes_no,
+    self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice_row, computed, field,
+    format_tin, grid, money_text, optional_money_text, section, yes_no,
 };
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+
+/// Kit choice chip that may shrink and wrap inside its card on narrow widths.
+fn choice(
+    id: impl Into<ElementId>,
+    label_text: impl Into<SharedString>,
+    selected: bool,
+    disabled: bool,
+) -> Button {
+    kit::choice(id, label_text, selected, disabled)
+        .min_w_0()
+        .max_w_full()
+}
 
 /// Plain text inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
@@ -304,8 +317,8 @@ impl Form1706View {
             self.f("month", layout),
             self.f("day", layout),
             self.f("year", layout),
-            self.f("sheets", layout),
             amended,
+            self.f("sheets", layout),
             seller_type,
         ];
         section(
@@ -369,7 +382,8 @@ impl Form1706View {
                 }))
             })
             .collect();
-        let mut fields = vec![self.f("location", layout), self.f("property_rdo", layout)];
+        let head = vec![self.f("location", layout), self.f("property_rdo", layout)];
+        let mut fields = Vec::new();
         if d.property_class == Some(Form1706PropertyClass::Others) {
             fields.push(self.f("class_other", layout));
         }
@@ -437,6 +451,7 @@ impl Form1706View {
         section(
             "Part I — Property (Items 14–20)",
             vec![
+                grid(layout, head),
                 choice_row(layout, "Item 15 — Classification of property", classes),
                 grid(layout, fields),
                 grid(layout, questions),

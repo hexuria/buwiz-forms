@@ -97,7 +97,7 @@ const FIELDS: &[(&str, &str, bool)] = &[
     ("addr0", "Item 9 — Registered address", false),
     ("addr1", "Item 9 — Registered address (line 2)", false),
     ("addr2", "Item 9 — Registered address (line 3)", false),
-    ("zip", "ZIP code", false),
+    ("zip", "Item 9A — ZIP code", false),
     (
         "incorp",
         "Item 10 — Date of incorporation (MM/DD/YYYY)",
@@ -742,7 +742,8 @@ impl Form1702RTView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel instead of running past its edge.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     fn choice_row(title: &str, buttons: Vec<Button>, layout: Layout) -> AnyElement {
@@ -833,7 +834,7 @@ impl Form1702RTView {
             .collect();
         let period = vec![
             Self::choice_row(
-                "Item 1 —",
+                "Item 1 — For (Calendar or Fiscal year)",
                 vec![
                     Self::choice("1702rt_calendar", "Calendar", !fiscal, !editable).on_click(
                         cx.listener(|this, _, _, cx| {
@@ -1260,7 +1261,6 @@ impl Form1702RTView {
                         cx,
                     ),
                     self.computed("3 — Net operating loss", s3.item_3_net_operating_loss, cx),
-                    self.computed("4 — Current year's NOL (Column A)", s3.rows[0].amount, cx),
                 ],
             ),
         ];
@@ -1286,8 +1286,9 @@ impl Form1702RTView {
                     self.computed("E — Unapplied balance", s3.rows[i].unapplied_balance, cx),
                 ],
             );
-            children.push(self.row_card(format!("Schedule IIIA Item {}", i + 4), body, cx));
+            children.push(self.row_card(format!("Schedule IIIA Item {}", i + 3), body, cx));
         }
+        children.push(self.computed("7 — Current year's NOL (Column A)", s3.rows[0].amount, cx));
         children.push(self.computed(
             "8 — Total NOLCO applied (Item 36)",
             s3.item_8_total_applied_current_year,
