@@ -340,15 +340,42 @@ impl Form1701QView {
         cx.notify();
     }
 
-    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1701QDraft)) {
+    /// Apply a choice: read the editors first, apply it, recompute, then put
+    /// every recomputed amount back into its editor so a box a radio rule
+    /// disabled or cleared never shows a figure the draft does not hold.
+    fn edit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1701QDraft),
+    ) {
         if !self.draft.lifecycle.is_editable() {
             return;
         }
+        self.sync_from_inputs(cx);
         change(&mut self.draft);
         self.draft.recompute();
+        self.write_back_amounts(window, cx);
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// Put each recomputed amount back into its editor when the editor no
+    /// longer holds it.
+    fn write_back_amounts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for (item, _) in AMOUNT_INPUTS {
+            for party in [Form1701QParty::Taxpayer, Form1701QParty::Spouse] {
+                let key = amount_key(*item, party);
+                let value = Self::initial(&self.draft, &key);
+                let current = self.input_text(&key, cx);
+                if parse_amount(&current) != parse_amount(&value) {
+                    if let Some(input) = self.inputs.get(&key) {
+                        input.update(cx, |state, cx| state.set_value(value, window, cx));
+                    }
+                }
+            }
+        }
     }
 
     fn notify(
@@ -631,10 +658,14 @@ impl Form1701QView {
                 "Item 3 — Amended return?",
                 vec![
                     Self::choice("1701q_amended_yes", "Yes", amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = true)
+                        }),
                     ),
                     Self::choice("1701q_amended_no", "No", !amended, !editable).on_click(
-                        cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = false)
+                        }),
                     ),
                 ],
             ),
@@ -686,9 +717,9 @@ impl Form1701QView {
                     d.filer_type == Some(kind),
                     !editable,
                 )
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.filer_type = Some(kind))),
-                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.edit(window, cx, |d| d.filer_type = Some(kind))
+                }))
             })
             .collect();
         let estate = matches!(
@@ -719,12 +750,12 @@ impl Form1701QView {
                 "Item 15 — Claiming foreign tax credits?",
                 vec![
                     Self::choice("1701q_ftc_yes", "Yes", foreign == Some(true), !editable)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.claims_foreign_tax_credits = Some(true))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.claims_foreign_tax_credits = Some(true))
                         })),
                     Self::choice("1701q_ftc_no", "No", foreign == Some(false), !editable).on_click(
-                        cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.claims_foreign_tax_credits = Some(false))
+                        cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.claims_foreign_tax_credits = Some(false))
                         }),
                     ),
                 ],
@@ -753,8 +784,8 @@ impl Form1701QView {
                         d.deduction_method == Some(method),
                         !editable,
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| d.deduction_method = Some(method))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit(window, cx, |d| d.deduction_method = Some(method))
                     }))
                 })
                 .collect();
@@ -819,11 +850,14 @@ impl Form1701QView {
             layout,
             "Part II — Spouse information?",
             vec![
-                Self::choice("1701q_spouse_yes", "Yes", active, !editable || estate)
-                    .on_click(cx.listener(|this, _, _, cx| this.edit(cx, |d| d.has_spouse = true))),
-                Self::choice("1701q_spouse_no", "No", !active, !editable).on_click(
-                    cx.listener(|this, _, _, cx| this.edit(cx, |d| d.has_spouse = false)),
+                Self::choice("1701q_spouse_yes", "Yes", active, !editable || estate).on_click(
+                    cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| d.has_spouse = true)
+                    }),
                 ),
+                Self::choice("1701q_spouse_no", "No", !active, !editable).on_click(cx.listener(
+                    |this, _, window, cx| this.edit(window, cx, |d| d.has_spouse = false),
+                )),
             ],
         )];
         if active {
@@ -837,8 +871,8 @@ impl Form1701QView {
                         d.spouse_type == Some(kind),
                         !editable,
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| d.spouse_type = Some(kind))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit(window, cx, |d| d.spouse_type = Some(kind))
                     }))
                 })
                 .collect();
@@ -874,12 +908,16 @@ impl Form1701QView {
                 "Item 24 — Claiming foreign tax credits?",
                 vec![
                     Self::choice("1701q_sftc_yes", "Yes", foreign == Some(true), !editable)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.spouse_claims_foreign_tax_credits = Some(true))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| {
+                                d.spouse_claims_foreign_tax_credits = Some(true)
+                            })
                         })),
                     Self::choice("1701q_sftc_no", "No", foreign == Some(false), !editable)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.spouse_claims_foreign_tax_credits = Some(false))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| {
+                                d.spouse_claims_foreign_tax_credits = Some(false)
+                            })
                         })),
                 ],
             ));
@@ -894,9 +932,11 @@ impl Form1701QView {
                             d.spouse_deduction_method == Some(method),
                             !editable,
                         )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.edit(cx, |d| d.spouse_deduction_method = Some(method))
-                        }))
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                this.edit(window, cx, |d| d.spouse_deduction_method = Some(method))
+                            },
+                        ))
                     })
                     .collect();
                 rows.push(self.with_err(
@@ -1108,12 +1148,12 @@ impl QueueableFormView for Form1701QView {
             &option_refs(&all_taxpayer),
             window,
             cx,
-            |this: &mut Self, value, _, cx| {
+            |this: &mut Self, value, window, cx| {
                 if let Some(atc) = Form1701QAtc::TAXPAYER_CHOICES
                     .into_iter()
                     .find(|a| a.code() == value)
                 {
-                    this.edit(cx, |d| d.atc = Some(atc));
+                    this.edit(window, cx, |d| d.atc = Some(atc));
                 }
             },
         ));
@@ -1124,12 +1164,12 @@ impl QueueableFormView for Form1701QView {
             &option_refs(&all_spouse),
             window,
             cx,
-            |this: &mut Self, value, _, cx| {
+            |this: &mut Self, value, window, cx| {
                 if let Some(atc) = Form1701QAtc::SPOUSE_CHOICES
                     .into_iter()
                     .find(|a| a.code() == value)
                 {
-                    this.edit(cx, |d| d.spouse_atc = Some(atc));
+                    this.edit(window, cx, |d| d.spouse_atc = Some(atc));
                 }
             },
         ));
@@ -1508,6 +1548,23 @@ impl Render for Form1701QView {
             .child(self.render_spouse(layout, cx))
             .child(self.render_part_three(layout, cx))
             .child(self.render_schedules(layout, cx));
+        // Decision 4B: the printed declaration and Items 32-35 "Details of
+        // Payment" are shown read-only; they are filled in at payment.
+        body = body.children(
+            crate::views::event_form_kit::declaration_and_payment_with_text(
+                layout == Layout::Phone,
+                "I declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me, and to the best of my knowledge and belief, are true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I give my consent to the processing of my information as contemplated under the **Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.",
+                "Part IV – Details of Payment",
+                &[
+                    "32 Cash/Bank Debit Memo",
+                    "33 Check",
+                    "34 Tax Debit Memo",
+                    "35 Others (specify)",
+                ],
+                crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
+                cx,
+            ),
+        );
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         } else {

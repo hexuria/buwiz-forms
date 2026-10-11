@@ -11,7 +11,7 @@ use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Databa
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1701ms::{
     Form1701MsCivilStatus, Form1701MsColumn, Form1701MsDeduction, Form1701MsDraft,
-    Form1701MsFiling, Form1701MsSource, Form1701MsTaxOption,
+    Form1701MsFiling, Form1701MsScheduleRow, Form1701MsSource, Form1701MsTaxOption,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -23,6 +23,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use super::event_form_kit as kit;
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::form_controls::{
@@ -188,7 +189,7 @@ const SCHEDULE_B1: &[Money] = &[
         label: "10A — Allowable itemized deductions (schedule total)",
         get: |c| c.itemized_deductions,
         set: |c, v| c.itemized_deductions = v,
-        open: Form1701MsColumn::itemized_open,
+        open: itemized_total_open,
     },
     Money {
         id: "special_allowable_deductions",
@@ -298,6 +299,28 @@ const SCHEDULE_B2_COMPUTED: &[Computed] = &[
 
 fn always(_: &Form1701MsColumn) -> bool {
     true
+}
+
+/// Item 10A takes a typed total until "View Details" rows exist; then it is
+/// their total (`computeOtherSched410A`).
+fn itemized_total_open(c: &Form1701MsColumn) -> bool {
+    c.itemized_open() && c.itemized_rows.is_empty()
+}
+
+/// Editor key of one Schedule IV 10A row cell (`desc` or `amt`).
+fn row_key(who: Who, index: usize, cell: &str) -> String {
+    format!("10a:{}:{index}:{cell}", who.prefix())
+}
+
+/// `(who, index, cell)` of a 10A row key.
+fn parse_row_key(key: &str) -> Option<(Who, usize, &str)> {
+    let rest = key.strip_prefix("10a:")?;
+    let (prefix, rest) = rest.split_once(':')?;
+    let (index, cell) = rest.split_once(':')?;
+    let who = [Who::Taxpayer, Who::Spouse]
+        .into_iter()
+        .find(|w| w.prefix() == prefix)?;
+    Some((who, index.parse().ok()?, cell))
 }
 
 const PART_V: &[Money] = &[
@@ -557,6 +580,16 @@ impl Form1701MsView {
 
     /// Editor text for one input from the draft.
     fn initial(draft: &Form1701MsDraft, key: &str) -> String {
+        if let Some((who, index, cell)) = parse_row_key(key) {
+            let Some(row) = who.column(draft).itemized_rows.get(index) else {
+                return String::new();
+            };
+            return if cell == "desc" {
+                row.description.clone()
+            } else {
+                Self::money_text(row.amount)
+            };
+        }
         for who in [Who::Taxpayer, Who::Spouse] {
             let Some(id) = key.strip_prefix(&format!("{}:", who.prefix())) else {
                 continue;
@@ -607,6 +640,41 @@ impl Form1701MsView {
             }
         }
         keys
+    }
+
+    /// Editor keys of every 10A "View Details" row the draft holds.
+    fn row_keys(draft: &Form1701MsDraft) -> Vec<(String, String)> {
+        let mut keys = Vec::new();
+        for who in [Who::Taxpayer, Who::Spouse] {
+            for index in 0..who.column(draft).itemized_rows.len() {
+                keys.push((row_key(who, index, "desc"), String::new()));
+                keys.push((row_key(who, index, "amt"), "0".to_string()));
+            }
+        }
+        keys
+    }
+
+    fn new_input(
+        draft: &Form1701MsDraft,
+        key: &str,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<InputState>, Subscription) {
+        let value = Self::initial(draft, key);
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.sync_from_inputs(cx);
+                }
+            },
+        );
+        (input, subscription)
     }
 
     fn input_text(&self, key: &str, cx: &App) -> String {
@@ -660,6 +728,19 @@ impl Form1701MsView {
             column.registered_activity = activity;
             column.effectivity_from = from.trim().to_string();
             column.effectivity_to = to.trim().to_string();
+            for index in 0..who.column(&draft).itemized_rows.len() {
+                let description = self.input_text(&row_key(who, index, "desc"), cx);
+                let amount = number(
+                    &row_key(who, index, "amt"),
+                    &format!("10A row {}", index + 1),
+                    cx,
+                );
+                let row = &mut who.column_mut(&mut draft).itemized_rows[index];
+                row.description = description;
+                if let Some(value) = amount {
+                    row.amount = value;
+                }
+            }
         }
         if let Some(value) = number("refund", "Item 31 to be refunded", cx) {
             draft.refund_amount = value;
@@ -701,7 +782,10 @@ impl Form1701MsView {
         self.sync_from_inputs(cx);
         change(&mut self.draft);
         self.draft.recompute();
-        for (key, _) in Self::all_keys() {
+        for (key, _) in Self::all_keys()
+            .into_iter()
+            .chain(Self::row_keys(&self.draft))
+        {
             if let Some(input) = self.inputs.get(&key) {
                 let value = Self::initial(&self.draft, &key);
                 if input.read(cx).value() != value.as_str() {
@@ -712,6 +796,111 @@ impl Form1701MsView {
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// 10A ADD ROW / Remove: read the page, change the rows, create editors
+    /// for new rows, then show every editor again from the draft so nothing
+    /// shifts into the wrong row.
+    fn edit_rows(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1701MsDraft),
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.sync_from_inputs(cx);
+        change(&mut self.draft);
+        self.draft.recompute();
+        for (key, placeholder) in Self::row_keys(&self.draft) {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let (input, subscription) =
+                Self::new_input(&self.draft, &key, &placeholder, window, cx);
+            self.inputs.insert(key, input);
+            self._subscriptions.push(subscription);
+        }
+        let updates: Vec<(Entity<InputState>, String)> = self
+            .inputs
+            .iter()
+            .map(|(key, input)| (input.clone(), Self::initial(&self.draft, key)))
+            .collect();
+        for (input, value) in updates {
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
+        self.status_message = None;
+    }
+
+    /// Schedule IV 10A "View Details": every row with its Remove, then ADD
+    /// ROW. The first row starts from the typed Item 10A total.
+    fn render_10a_rows(&self, who: Who, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let column = who.column(&self.draft);
+        let open = editable && column.itemized_open();
+        let field = match who {
+            Who::Taxpayer => "taxpayer",
+            Who::Spouse => "spouse",
+        };
+        let mut children = vec![
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child("10A — View Details")
+                .into_any_element(),
+        ];
+        for index in 0..column.itemized_rows.len() {
+            let remove = Button::new((
+                SharedString::from(format!("1701ms_10a_{}_remove", who.prefix())),
+                index,
+            ))
+            .disabled(!open)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.edit_rows(window, cx, |d| {
+                    let rows = &mut who.column_mut(d).itemized_rows;
+                    if index < rows.len() {
+                        rows.remove(index);
+                    }
+                })
+            }));
+            children.push(kit::row_heading(&format!("10A.{}", index + 1), remove));
+            let error_key = format!("{field}.itemized_rows[{index}]");
+            children.push(self.field(
+                &row_key(who, index, "desc"),
+                &error_key,
+                "Description",
+                layout,
+                !open,
+            ));
+            children.push(self.field(&row_key(who, index, "amt"), "", "Amount", layout, !open));
+        }
+        children.push(
+            kit::add_row_button(
+                SharedString::from(format!("1701ms_10a_{}_add", who.prefix())),
+                !open,
+            )
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.edit_rows(window, cx, |d| {
+                    let column = who.column_mut(d);
+                    if column.itemized_rows.is_empty() && column.itemized_deductions != 0.0 {
+                        column.itemized_rows.push(Form1701MsScheduleRow {
+                            description: String::new(),
+                            amount: column.itemized_deductions,
+                        });
+                    }
+                    column.itemized_rows.push(Form1701MsScheduleRow::default());
+                })
+            }))
+            .into_any_element(),
+        );
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .children(children)
+            .into_any_element()
     }
 
     fn notify(
@@ -1375,22 +1564,25 @@ impl Form1701MsView {
         // The Item 16 special rate sits between Items 15 and 17.
         let b1 = block(SCHEDULE_B1, SCHEDULE_B1_COMPUTED, &|who| {
             let column = who.column(&self.draft);
-            vec![(
-                16,
-                self.field(
-                    &money_key(who, "rate"),
-                    &format!(
-                        "{}.special_rate",
-                        match who {
-                            Who::Taxpayer => "taxpayer",
-                            Who::Spouse => "spouse",
-                        }
+            vec![
+                (10, self.render_10a_rows(who, layout, cx)),
+                (
+                    16,
+                    self.field(
+                        &money_key(who, "rate"),
+                        &format!(
+                            "{}.special_rate",
+                            match who {
+                                Who::Taxpayer => "taxpayer",
+                                Who::Spouse => "spouse",
+                            }
+                        ),
+                        COLUMN_TEXT[5].1,
+                        layout,
+                        !editable || !column.relief_items_open(),
                     ),
-                    COLUMN_TEXT[5].1,
-                    layout,
-                    !editable || !column.relief_items_open(),
                 ),
-            )]
+            ]
         });
         sections.push(self.section(
             "Part IV Schedule B1 — Business income (graduated, exempt or special rate)",
@@ -1598,6 +1790,11 @@ impl QueueableFormView for Form1701MsView {
                     }
                 },
             ));
+            inputs.insert(key, input);
+        }
+        for (key, placeholder) in Self::row_keys(&draft) {
+            let (input, subscription) = Self::new_input(&draft, &key, &placeholder, window, cx);
+            subscriptions.push(subscription);
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();
