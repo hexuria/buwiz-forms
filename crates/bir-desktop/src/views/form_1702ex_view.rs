@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1702ex::{
-    FORM_1702EX_ORDINARY_ITEMS, FORM_1702EX_OTHER_DEDUCTION_ROWS,
+    FORM_1702EX_MAX_ROWS, FORM_1702EX_ORDINARY_ITEMS, FORM_1702EX_OTHER_DEDUCTION_ROWS,
     FORM_1702EX_SPECIAL_DEDUCTION_ROWS, Form1702ExAtc, Form1702ExDeduction, Form1702ExDraft,
     Form1702ExOverpayment, Form1702ExRow, Form1702ExSpecialRow,
 };
@@ -357,6 +357,9 @@ struct RowList {
     key: &'static str,
     label: &'static str,
     rows: usize,
+    /// Whether the list can grow past `rows` (the model keeps only 2 other
+    /// credits, so that list cannot).
+    grows: bool,
     get: fn(&Draft) -> &Vec<Form1702ExRow>,
     get_mut: fn(&mut Draft) -> &mut Vec<Form1702ExRow>,
     open: fn(&Draft) -> bool,
@@ -367,6 +370,7 @@ const ROW_LISTS: &[RowList] = &[
         key: "credit",
         label: "48–49 — Other tax credits/payments",
         rows: 2,
+        grows: false,
         get: |d| &d.other_credits,
         get_mut: |d| &mut d.other_credits,
         open: always,
@@ -375,6 +379,7 @@ const ROW_LISTS: &[RowList] = &[
         key: "s1other",
         label: "Schedule 1 Items 17D–17I — Others",
         rows: FORM_1702EX_OTHER_DEDUCTION_ROWS,
+        grows: true,
         get: |d| &d.other_deductions,
         get_mut: |d| &mut d.other_deductions,
         open: itemized,
@@ -383,6 +388,7 @@ const ROW_LISTS: &[RowList] = &[
         key: "s3nondeduct",
         label: "Schedule 3 Items 2–3 — Non-deductible expenses/taxable other income",
         rows: 2,
+        grows: true,
         get: |d| &d.non_deductible,
         get_mut: |d| &mut d.non_deductible,
         open: always,
@@ -391,6 +397,7 @@ const ROW_LISTS: &[RowList] = &[
         key: "s3nontax",
         label: "Schedule 3 Items 5–6 — Non-taxable income and income subject to final tax",
         rows: 2,
+        grows: true,
         get: |d| &d.non_taxable_income,
         get_mut: |d| &mut d.non_taxable_income,
         open: always,
@@ -399,6 +406,7 @@ const ROW_LISTS: &[RowList] = &[
         key: "s3special",
         label: "Schedule 3 Items 7–8 — Special deductions",
         rows: 2,
+        grows: true,
         get: |d| &d.special_deductions_s3,
         get_mut: |d| &mut d.special_deductions_s3,
         open: always,
@@ -407,6 +415,32 @@ const ROW_LISTS: &[RowList] = &[
 
 fn row_key(list: &str, row: usize, field: &str) -> String {
     format!("{list}{row}:{field}")
+}
+
+/// Key of the special-deductions rows (Schedule 2) in `visible_rows`.
+const SPECIAL_LIST: &str = "s2";
+
+/// Split a row editor key (`s1other7:desc`) into list, row and field.
+fn split_list_key(key: &str) -> Option<(&'static str, usize, &str)> {
+    let (head, field) = key.split_once(':')?;
+    ROW_LISTS
+        .iter()
+        .map(|list| list.key)
+        .chain(std::iter::once(SPECIAL_LIST))
+        .find_map(|list| {
+            let row = head.strip_prefix(list)?.parse::<usize>().ok()?;
+            Some((list, row, field))
+        })
+}
+
+/// Editor keys (with placeholders) for one row of a list.
+fn list_row_keys(list: &str, row: usize) -> Vec<(String, String)> {
+    let mut keys = vec![(row_key(list, row, "desc"), "Description".to_string())];
+    if list == SPECIAL_LIST {
+        keys.push((row_key(list, row, "basis"), "Legal basis".to_string()));
+    }
+    keys.push((row_key(list, row, "amount"), "0.00".to_string()));
+    keys
 }
 
 fn ordinary_key(index: usize) -> String {
@@ -445,6 +479,9 @@ pub struct Form1702ExView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// Rows the user has opened per list (see `ROW_LISTS` keys and
+    /// `SPECIAL_LIST`). Blank trailing rows are not kept in the draft.
+    visible_rows: BTreeMap<&'static str, usize>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -481,6 +518,120 @@ impl Form1702ExView {
         keys
     }
 
+    /// Rows a list holds in the draft.
+    fn held_rows(draft: &Draft, list_key: &str) -> usize {
+        if list_key == SPECIAL_LIST {
+            draft.special_rows.len()
+        } else {
+            ROW_LISTS
+                .iter()
+                .find(|list| list.key == list_key)
+                .map_or(0, |list| (list.get)(draft).len())
+        }
+    }
+
+    /// Rows to show for a list: the default, every row the draft holds, and
+    /// any row the user has opened.
+    fn row_count(&self, list_key: &'static str, default: usize) -> usize {
+        default
+            .max(Self::held_rows(&self.draft, list_key))
+            .max(self.visible_rows.get(list_key).copied().unwrap_or(0))
+    }
+
+    /// Keys for the rows a draft holds beyond the default count.
+    fn grown_keys(draft: &Draft) -> Vec<(String, String)> {
+        let mut keys = Vec::new();
+        for list in ROW_LISTS.iter().filter(|list| list.grows) {
+            for row in list.rows..Self::held_rows(draft, list.key) {
+                keys.extend(list_row_keys(list.key, row));
+            }
+        }
+        for row in FORM_1702EX_SPECIAL_DEDUCTION_ROWS..Self::held_rows(draft, SPECIAL_LIST) {
+            keys.extend(list_row_keys(SPECIAL_LIST, row));
+        }
+        keys
+    }
+
+    /// Create the editors for one row of a list on demand.
+    fn ensure_row_inputs(
+        &mut self,
+        list: &str,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for (key, placeholder) in list_row_keys(list, row) {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let value = Self::initial(&self.draft, &key);
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            self._subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+            self.inputs.insert(key, input);
+        }
+    }
+
+    fn add_row(
+        &mut self,
+        list: &'static str,
+        default: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let count = self.row_count(list, default);
+        if count >= FORM_1702EX_MAX_ROWS {
+            return;
+        }
+        self.ensure_row_inputs(list, count, window, cx);
+        self.visible_rows.insert(list, count + 1);
+        cx.notify();
+    }
+
+    /// Delete a row beyond the default count; later rows move up.
+    fn remove_row(
+        &mut self,
+        list: &'static str,
+        default: usize,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let count = self.row_count(list, default);
+        if row < default || row >= count {
+            return;
+        }
+        // `edit` reads every editor first, so no typed row is lost.
+        self.edit(window, cx, |draft| {
+            if list == SPECIAL_LIST {
+                if row < draft.special_rows.len() {
+                    draft.special_rows.remove(row);
+                }
+            } else if let Some(entry) = ROW_LISTS.iter().find(|entry| entry.key == list) {
+                let rows = (entry.get_mut)(draft);
+                if row < rows.len() {
+                    rows.remove(row);
+                }
+            }
+        });
+        self.visible_rows.insert(list, (count - 1).max(default));
+        cx.notify();
+    }
+
     /// Editor text for one input from the draft.
     fn initial(draft: &Draft, key: &str) -> String {
         if let Some(text) = TEXTS.iter().find(|t| t.key == key) {
@@ -497,27 +648,23 @@ impl Form1702ExView {
                 return Self::money_text(draft.ordinary_items[index]);
             }
         }
-        for list in ROW_LISTS {
-            for row in 0..list.rows {
+        if let Some((list_key, row, field)) = split_list_key(key) {
+            if list_key == SPECIAL_LIST {
+                let entry = draft.special_rows.get(row).cloned().unwrap_or_default();
+                return match field {
+                    "desc" => entry.description,
+                    "basis" => entry.legal_basis,
+                    "amount" => Self::money_text(entry.amount),
+                    _ => String::new(),
+                };
+            }
+            if let Some(list) = ROW_LISTS.iter().find(|list| list.key == list_key) {
                 let entry = (list.get)(draft).get(row).cloned().unwrap_or_default();
-                if key == row_key(list.key, row, "desc") {
-                    return entry.description;
-                }
-                if key == row_key(list.key, row, "amount") {
-                    return Self::money_text(entry.amount);
-                }
-            }
-        }
-        for row in 0..FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
-            let entry = draft.special_rows.get(row).cloned().unwrap_or_default();
-            if key == row_key("s2", row, "desc") {
-                return entry.description;
-            }
-            if key == row_key("s2", row, "basis") {
-                return entry.legal_basis;
-            }
-            if key == row_key("s2", row, "amount") {
-                return Self::money_text(entry.amount);
+                return match field {
+                    "desc" => entry.description,
+                    "amount" => Self::money_text(entry.amount),
+                    _ => String::new(),
+                };
             }
         }
         String::new()
@@ -558,7 +705,7 @@ impl Form1702ExView {
         }
         for list in ROW_LISTS {
             let mut rows = Vec::new();
-            for row in 0..list.rows {
+            for row in 0..self.row_count(list.key, list.rows) {
                 let amount = number(&row_key(list.key, row, "amount"), list.label, cx);
                 rows.push(Form1702ExRow {
                     description: String::new(),
@@ -568,7 +715,7 @@ impl Form1702ExView {
             *(list.get_mut)(&mut draft) = rows;
         }
         let mut special = Vec::new();
-        for row in 0..FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
+        for row in 0..self.row_count(SPECIAL_LIST, FORM_1702EX_SPECIAL_DEDUCTION_ROWS) {
             let amount = number(&row_key("s2", row, "amount"), "Schedule 2", cx);
             special.push(Form1702ExSpecialRow {
                 description: String::new(),
@@ -611,7 +758,8 @@ impl Form1702ExView {
         self.sync_from_inputs(cx);
         change(&mut self.draft);
         self.draft.recompute();
-        for (key, _) in Self::all_keys() {
+        let keys: Vec<String> = self.inputs.keys().cloned().collect();
+        for key in keys {
             if let Some(input) = self.inputs.get(&key) {
                 let value = Self::initial(&self.draft, &key);
                 if input.read(cx).value() != value.as_str() {
@@ -1058,7 +1206,85 @@ impl Form1702ExView {
         )
     }
 
-    fn row_list(&self, list: &RowList, layout: Layout) -> AnyElement {
+    /// "Add row" button and "Up to N rows" hint under a growable list.
+    fn add_row_controls(
+        &self,
+        list: &'static str,
+        default: usize,
+        disabled: bool,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let at_max = self.row_count(list, default) >= FORM_1702EX_MAX_ROWS;
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                Button::new(format!("1702ex_add_row_{list}"))
+                    .label("Add row")
+                    .outline()
+                    .small()
+                    .disabled(disabled || at_max)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.add_row(list, default, window, cx)
+                    })),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!("Up to {FORM_1702EX_MAX_ROWS} rows")),
+            )
+            .into_any_element()
+    }
+
+    /// A row beyond the default count: heading with Remove, then its fields.
+    fn extra_row(
+        &self,
+        list: &'static str,
+        default: usize,
+        row: usize,
+        content: AnyElement,
+        disabled: bool,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_md()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format!("Row {}", row + 1)),
+                    )
+                    .child(
+                        Button::new(format!("1702ex_remove_row_{list}_{row}"))
+                            .label("Remove")
+                            .outline()
+                            .small()
+                            .disabled(disabled)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.remove_row(list, default, row, window, cx)
+                            })),
+                    ),
+            )
+            .child(content)
+            .into_any_element()
+    }
+
+    fn row_list(&self, list: &RowList, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let open = (list.open)(&self.draft);
         let mut fields = Vec::new();
@@ -1076,7 +1302,84 @@ impl Form1702ExView {
                 !editable || !open,
             ));
         }
-        self.grid(layout, fields)
+        let grid = self.grid(layout, fields);
+        if !list.grows {
+            return grid;
+        }
+        let disabled = !editable || !open;
+        let mut body = div().flex().flex_col().gap_3().w_full().child(grid);
+        for row in list.rows..self.row_count(list.key, list.rows) {
+            let pair = vec![
+                self.field(
+                    &row_key(list.key, row, "desc"),
+                    &format!("{} — row {} description", list.label, row + 1),
+                    layout,
+                    disabled,
+                ),
+                self.field(
+                    &row_key(list.key, row, "amount"),
+                    &format!("{} — row {} amount", list.label, row + 1),
+                    layout,
+                    disabled,
+                ),
+            ];
+            body = body.child(self.extra_row(
+                list.key,
+                list.rows,
+                row,
+                self.grid(layout, pair),
+                disabled,
+                cx,
+            ));
+        }
+        body.child(self.add_row_controls(list.key, list.rows, disabled, cx))
+            .into_any_element()
+    }
+
+    /// Schedule 2 rows: the default rows as before, extra rows boxed with a
+    /// Remove button, then "Add row".
+    fn special_rows_block(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable() || !self.draft.itemized_open();
+        let default = FORM_1702EX_SPECIAL_DEDUCTION_ROWS;
+        let row_fields = |row: usize| -> Vec<AnyElement> {
+            [
+                ("desc", "description"),
+                ("basis", "legal basis"),
+                ("amount", "amount"),
+            ]
+            .into_iter()
+            .map(|(field, label)| {
+                self.field(
+                    &row_key(SPECIAL_LIST, row, field),
+                    &format!("Item {} — {label}", row + 1),
+                    layout,
+                    disabled,
+                )
+            })
+            .collect()
+        };
+        let mut first = Vec::new();
+        for row in 0..default {
+            first.extend(row_fields(row));
+        }
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .w_full()
+            .child(self.grid(layout, first));
+        for row in default..self.row_count(SPECIAL_LIST, default) {
+            body = body.child(self.extra_row(
+                SPECIAL_LIST,
+                default,
+                row,
+                self.grid(layout, row_fields(row)),
+                disabled,
+                cx,
+            ));
+        }
+        body.child(self.add_row_controls(SPECIAL_LIST, default, disabled, cx))
+            .into_any_element()
     }
 
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -1088,7 +1391,7 @@ impl Form1702ExView {
             .iter()
             .map(|m| self.field(m.key, m.label, layout, !editable || !(m.open)(d)))
             .collect();
-        credits.push(self.row_list(&ROW_LISTS[0], layout));
+        credits.push(self.row_list(&ROW_LISTS[0], layout, cx));
         credits.push(self.computed("50 — Total tax credits/payments", d.total_credits, cx));
         credits.push(self.computed("51 — Net tax payable (overpayment)", d.net_payable, cx));
         let mut part_v: Vec<AnyElement> = PART_V
@@ -1103,27 +1406,13 @@ impl Form1702ExView {
                 self.field(&ordinary_key(index), label, layout, !editable || !itemized)
             })
             .collect();
-        s1.push(self.row_list(&ROW_LISTS[1], layout));
+        s1.push(self.row_list(&ROW_LISTS[1], layout, cx));
         s1.push(self.computed(
             "18 — Total ordinary allowable itemized deductions",
             d.ordinary_deductions,
             cx,
         ));
-        let mut s2 = Vec::new();
-        for row in 0..FORM_1702EX_SPECIAL_DEDUCTION_ROWS {
-            for (field, label) in [
-                ("desc", "description"),
-                ("basis", "legal basis"),
-                ("amount", "amount"),
-            ] {
-                s2.push(self.field(
-                    &row_key("s2", row, field),
-                    &format!("Item {} — {label}", row + 1),
-                    layout,
-                    !editable || !itemized,
-                ));
-            }
-        }
+        let mut s2 = vec![self.special_rows_block(layout, cx)];
         s2.push(self.computed(
             "5 — Total special allowable itemized deductions",
             d.special_deductions,
@@ -1135,10 +1424,10 @@ impl Form1702ExView {
             layout,
             !editable,
         )];
-        s3.push(self.row_list(&ROW_LISTS[2], layout));
+        s3.push(self.row_list(&ROW_LISTS[2], layout, cx));
         s3.push(self.computed("4 — Total", d.reconciliation_total, cx));
-        s3.push(self.row_list(&ROW_LISTS[3], layout));
-        s3.push(self.row_list(&ROW_LISTS[4], layout));
+        s3.push(self.row_list(&ROW_LISTS[3], layout, cx));
+        s3.push(self.row_list(&ROW_LISTS[4], layout, cx));
         s3.push(self.computed("9 — Total", d.reconciliation_less, cx));
         s3.push(self.computed(
             "10 — Net taxable income (must equal Item 39)",
@@ -1162,11 +1451,7 @@ impl Form1702ExView {
                 vec![self.grid(layout, s1)],
                 cx,
             ),
-            self.section(
-                "Schedule 2 — Special allowable itemized deductions",
-                vec![self.grid(layout, s2)],
-                cx,
-            ),
+            self.section("Schedule 2 — Special allowable itemized deductions", s2, cx),
             self.section(
                 "Schedule 3 — Reconciliation of net income per books",
                 s3,
@@ -1236,7 +1521,9 @@ impl QueueableFormView for Form1702ExView {
     ) -> Self {
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
-        for (key, placeholder) in Self::all_keys() {
+        let mut keys = Self::all_keys();
+        keys.extend(Self::grown_keys(&draft));
+        for (key, placeholder) in keys {
             let value = Self::initial(&draft, &key);
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
@@ -1261,6 +1548,7 @@ impl QueueableFormView for Form1702ExView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            visible_rows: BTreeMap::new(),
             _subscriptions: subscriptions,
         }
     }

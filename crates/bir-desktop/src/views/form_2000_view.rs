@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_2000::{
-    FORM_2000_ATC_OPTIONS, FORM_2000_ROWS, Form2000AffixtureMode, Form2000Draft,
-    Form2000OtherParty, Form2000PaymentRow, Form2000RemittanceRow,
+    FORM_2000_ATC_OPTIONS, FORM_2000_MAX_ROWS, FORM_2000_ROWS, Form2000AffixtureMode,
+    Form2000Draft, Form2000OtherParty, Form2000PaymentRow, Form2000RemittanceRow,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -134,6 +134,9 @@ pub struct Form2000View {
     release_claim_confirm_open: bool,
     /// Schedule 1 row whose ATC list is open.
     picking_row: Option<usize>,
+    /// Rows the user has opened per schedule (index 0 = Schedule 1). Blank
+    /// trailing rows are not kept in the draft, so the page remembers them.
+    visible_rows: [usize; 4],
     _subscriptions: Vec<Subscription>,
 }
 
@@ -165,9 +168,9 @@ impl Form2000View {
     }
 
     fn initial_row(draft: &Form2000Draft, key: &str) -> Option<String> {
-        // Row keys end in the row digit (three rows per schedule).
-        let (prefix, index) = key.split_at(key.len().checked_sub(1)?);
-        let row: usize = index.parse().ok()?;
+        // Row keys end in the row number (up to FORM_2000_MAX_ROWS rows).
+        let prefix = key.trim_end_matches(|c: char| c.is_ascii_digit());
+        let row: usize = key[prefix.len()..].parse().ok()?;
         let payment = |rows: &Vec<Form2000PaymentRow>, field: &str| {
             rows.get(row).map(|r| match field {
                 "date" => r.date.clone(),
@@ -241,7 +244,7 @@ impl Form2000View {
                 }
             }
         }
-        for row in 0..draft.schedule1.len().min(FORM_2000_ROWS) {
+        for row in 0..draft.schedule1.len() {
             if let Some(value) = number(&row_key("s1base", row), "Schedule 1 tax base", cx) {
                 draft.schedule1[row].tax_base = value;
             }
@@ -255,7 +258,7 @@ impl Form2000View {
         for (schedule, enabled) in [(2u8, sched2), (3u8, sched3)] {
             let mut rows = Vec::new();
             if enabled {
-                for row in 0..FORM_2000_ROWS {
+                for row in 0..self.row_count(schedule as usize) {
                     let amount = number(
                         &payment_key(schedule, "amt", row),
                         &format!("Schedule {schedule} amount"),
@@ -289,7 +292,7 @@ impl Form2000View {
         }
         let mut remittances = Vec::new();
         if sched4 {
-            for row in 0..FORM_2000_ROWS {
+            for row in 0..self.row_count(4) {
                 let amount = number(&row_key("s4amt", row), "Schedule 4 amount", cx).unwrap_or(0.0);
                 let text = |prefix: &str| {
                     self.input_text(&row_key(prefix, row), cx)
@@ -355,6 +358,170 @@ impl Form2000View {
                 input.update(cx, |state, cx| state.set_value(value, window, cx));
             }
         }
+    }
+
+    /// Rows to show for schedule 1..=4: the default, every row the draft
+    /// holds, and any row the user has opened.
+    fn row_count(&self, schedule: usize) -> usize {
+        let held = match schedule {
+            1 => self.draft.schedule1.len(),
+            2 => self.draft.schedule2.len(),
+            3 => self.draft.schedule3.len(),
+            _ => self.draft.schedule4.len(),
+        };
+        FORM_2000_ROWS
+            .max(held)
+            .max(self.visible_rows[schedule.saturating_sub(1).min(3)])
+    }
+
+    /// Editor keys (with placeholders) for one row index across schedules.
+    fn row_input_keys(row: usize) -> Vec<(String, String)> {
+        let mut keys = Vec::new();
+        for (prefix, _, money) in SCHED1_INPUTS.iter().chain(REMIT_INPUTS) {
+            keys.push((
+                row_key(prefix, row),
+                if *money { "0.00" } else { "" }.into(),
+            ));
+        }
+        for schedule in [2u8, 3u8] {
+            for (prefix, _, money) in PAYMENT_INPUTS {
+                let placeholder = if *money {
+                    "0.00"
+                } else if *prefix == "date" {
+                    "MM/DD/YYYY"
+                } else {
+                    ""
+                };
+                keys.push((payment_key(schedule, prefix, row), placeholder.into()));
+            }
+        }
+        keys
+    }
+
+    /// Create the editors for one row index on demand.
+    fn ensure_row_inputs(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
+        for (key, placeholder) in Self::row_input_keys(row) {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let value = Self::initial(&self.draft, &key);
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            self._subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+            self.inputs.insert(key, input);
+        }
+    }
+
+    fn add_row(&mut self, schedule: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let count = self.row_count(schedule);
+        if count >= FORM_2000_MAX_ROWS {
+            return;
+        }
+        self.ensure_row_inputs(count, window, cx);
+        self.visible_rows[schedule - 1] = count + 1;
+        cx.notify();
+    }
+
+    /// Delete a row beyond the default count; later rows move up.
+    fn remove_row(
+        &mut self,
+        schedule: usize,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let count = self.row_count(schedule);
+        if row < FORM_2000_ROWS || row >= count {
+            return;
+        }
+        match schedule {
+            1 if row < self.draft.schedule1.len() => {
+                self.draft.schedule1.remove(row);
+            }
+            2 if row < self.draft.schedule2.len() => {
+                self.draft.schedule2.remove(row);
+            }
+            3 if row < self.draft.schedule3.len() => {
+                self.draft.schedule3.remove(row);
+            }
+            4 if row < self.draft.schedule4.len() => {
+                self.draft.schedule4.remove(row);
+            }
+            _ => {}
+        }
+        self.visible_rows[schedule - 1] = (count - 1).max(FORM_2000_ROWS);
+        self.picking_row = None;
+        self.draft.recompute();
+        self.reload_row_inputs(window, cx);
+        self.sync_from_inputs(cx);
+    }
+
+    fn row_heading(&self, schedule: usize, row: usize, cx: &Context<Self>) -> Div {
+        let editable = self.draft.lifecycle.is_editable();
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(
+                div()
+                    .font_weight(FontWeight::BOLD)
+                    .child(format!("Row {}", row + 1)),
+            )
+            .when(row >= FORM_2000_ROWS, |d| {
+                d.child(
+                    Button::new(("2000_remove_row", schedule * 1000 + row))
+                        .label("Remove")
+                        .outline()
+                        .small()
+                        .disabled(!editable)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.remove_row(schedule, row, window, cx)
+                        })),
+                )
+            })
+    }
+
+    fn add_row_controls(&self, schedule: usize, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let at_max = self.row_count(schedule) >= FORM_2000_MAX_ROWS;
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                Button::new(("2000_add_row", schedule))
+                    .label("Add row")
+                    .outline()
+                    .small()
+                    .disabled(!editable || at_max)
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| this.add_row(schedule, window, cx)),
+                    ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!("Up to {FORM_2000_MAX_ROWS} rows")),
+            )
+            .into_any_element()
     }
 
     fn pick_atc(&mut self, row: usize, option: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -791,6 +958,18 @@ impl Form2000View {
                                     this.clear_atc(row, window, cx)
                                 })),
                         )
+                    })
+                    .when(row >= FORM_2000_ROWS, |d| {
+                        d.child(
+                            Button::new(("2000_delete_row", row))
+                                .label("Delete row")
+                                .outline()
+                                .small()
+                                .disabled(!editable)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.remove_row(1, row, window, cx)
+                                })),
+                        )
                     }),
             );
         let mut body = div().flex().flex_col().gap_2().child(heading);
@@ -876,9 +1055,10 @@ impl Form2000View {
     }
 
     fn render_schedule1(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
-        let mut children: Vec<AnyElement> = (0..FORM_2000_ROWS)
+        let mut children: Vec<AnyElement> = (0..self.row_count(1))
             .map(|row| self.render_atc_row(row, layout, cx))
             .collect();
+        children.push(self.add_row_controls(1, cx));
         children.push(self.computed("Total tax due (to Item 14)", self.draft.tax_due, cx));
         self.section("Schedule 1 — Computation of Tax Due", children, cx)
     }
@@ -904,7 +1084,7 @@ impl Form2000View {
             )
         };
         let mut children = Vec::new();
-        for row in 0..FORM_2000_ROWS {
+        for row in 0..self.row_count(schedule as usize) {
             let fields = PAYMENT_INPUTS
                 .iter()
                 .map(|(prefix, label, _)| {
@@ -925,15 +1105,12 @@ impl Form2000View {
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child(format!("Row {}", row + 1)),
-                    )
+                    .child(self.row_heading(schedule as usize, row, cx))
                     .child(self.grid(layout, fields))
                     .into_any_element(),
             );
         }
+        children.push(self.add_row_controls(schedule as usize, cx));
         children.push(self.computed(&format!("Total payments (to Item {item})"), total, cx));
         self.section(title, children, cx)
     }
@@ -941,7 +1118,7 @@ impl Form2000View {
     fn render_schedule4(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let mut children = Vec::new();
-        for row in 0..FORM_2000_ROWS {
+        for row in 0..self.row_count(4) {
             let fields = REMIT_INPUTS
                 .iter()
                 .map(|(prefix, label, _)| {
@@ -957,15 +1134,12 @@ impl Form2000View {
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child(format!("Row {}", row + 1)),
-                    )
+                    .child(self.row_heading(4, row, cx))
                     .child(self.grid(layout, fields))
                     .into_any_element(),
             );
         }
+        children.push(self.add_row_controls(4, cx));
         children.push(self.computed("Total remittance (to Item 19)", self.draft.stamps_sold, cx));
         self.section(
             "Schedule 4 — Documentary Stamps Remitted / Loose Stamps",
@@ -1038,25 +1212,15 @@ impl QueueableFormView for Form2000View {
         for (key, _) in MONEY_INPUTS {
             keys.push((key.to_string(), "0.00".into()));
         }
-        for row in 0..FORM_2000_ROWS {
-            for (prefix, _, money) in SCHED1_INPUTS.iter().chain(REMIT_INPUTS) {
-                keys.push((
-                    row_key(prefix, row),
-                    if *money { "0.00" } else { "" }.into(),
-                ));
-            }
-            for schedule in [2u8, 3u8] {
-                for (prefix, _, money) in PAYMENT_INPUTS {
-                    let placeholder = if *money {
-                        "0.00"
-                    } else if *prefix == "date" {
-                        "MM/DD/YYYY"
-                    } else {
-                        ""
-                    };
-                    keys.push((payment_key(schedule, prefix, row), placeholder.into()));
-                }
-            }
+        let held = [
+            draft.schedule1.len(),
+            draft.schedule2.len(),
+            draft.schedule3.len(),
+            draft.schedule4.len(),
+        ];
+        let initial_rows = held.iter().copied().fold(FORM_2000_ROWS, usize::max);
+        for row in 0..initial_rows {
+            keys.extend(Self::row_input_keys(row));
         }
         for (key, placeholder) in keys {
             let value = Self::initial(&draft, &key);
@@ -1084,6 +1248,7 @@ impl QueueableFormView for Form2000View {
             status_message: None,
             release_claim_confirm_open: false,
             picking_row: None,
+            visible_rows: [FORM_2000_ROWS; 4],
             _subscriptions: subscriptions,
         }
     }

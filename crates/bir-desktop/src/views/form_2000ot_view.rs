@@ -10,8 +10,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_2000ot::{
-    FORM_2000OT_REAL_PROPERTY_ROWS, FORM_2000OT_SHARE_ROWS, Form2000OTAtc, Form2000OTDraft,
-    Form2000OTNature, Form2000OTOtherParty, Form2000OTPropertyRow, Form2000OTShareRow,
+    FORM_2000OT_MAX_ROWS, FORM_2000OT_REAL_PROPERTY_ROWS, FORM_2000OT_SHARE_ROWS, Form2000OTAtc,
+    Form2000OTDraft, Form2000OTNature, Form2000OTOtherParty, Form2000OTPropertyRow,
+    Form2000OTShareRow,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -105,6 +106,18 @@ fn row_key(prefix: &str, row: usize) -> String {
     format!("{prefix}{row}")
 }
 
+/// Split a row editor key into its prefix and row index. Some prefixes end
+/// in a digit (`pfmv1`), so match against the known prefixes.
+fn split_row_key(key: &str) -> Option<(&'static str, usize)> {
+    PROPERTY_INPUTS
+        .iter()
+        .chain(SHARE_INPUTS)
+        .find_map(|(prefix, _, _)| {
+            let row = key.strip_prefix(prefix)?.parse::<usize>().ok()?;
+            Some((*prefix, row))
+        })
+}
+
 /// Accepts `1,234.56`, `1234.5`, blank (zero).
 fn parse_amount(value: &str) -> Option<f64> {
     let cleaned: String = value
@@ -134,6 +147,9 @@ pub struct Form2000OTView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// Rows opened per schedule: Schedule 1.A, then 1.B. Blank trailing rows
+    /// are not kept in the draft, so the page remembers them.
+    visible_rows: [usize; 2],
     _subscriptions: Vec<Subscription>,
 }
 
@@ -159,8 +175,7 @@ impl Form2000OTView {
             "int" => money_text(draft.interest),
             "comp" => money_text(draft.compromise),
             _ => {
-                let (prefix, index) = key.split_at(key.len().saturating_sub(1));
-                let Ok(row) = index.parse::<usize>() else {
+                let Some((prefix, row)) = split_row_key(key) else {
                     return String::new();
                 };
                 if let Some(p) = draft.properties.get(row) {
@@ -240,7 +255,7 @@ impl Form2000OTView {
             }
         }
         let mut properties = Vec::new();
-        for row in 0..FORM_2000OT_REAL_PROPERTY_ROWS {
+        for row in 0..self.property_row_count() {
             let text = |prefix: &str| {
                 self.input_text(&row_key(prefix, row), cx)
                     .trim()
@@ -269,7 +284,7 @@ impl Form2000OTView {
             properties.pop();
         }
         let mut shares = Vec::new();
-        for row in 0..FORM_2000OT_SHARE_ROWS {
+        for row in 0..self.share_row_count() {
             let text = |prefix: &str| {
                 self.input_text(&row_key(prefix, row), cx)
                     .trim()
@@ -321,6 +336,165 @@ impl Form2000OTView {
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// Schedule 1.A rows to show: the default, every row the draft holds, and
+    /// any row the user has opened.
+    fn property_row_count(&self) -> usize {
+        FORM_2000OT_REAL_PROPERTY_ROWS
+            .max(self.draft.properties.len())
+            .max(self.visible_rows[0])
+    }
+
+    /// Schedule 1.B rows to show.
+    fn share_row_count(&self) -> usize {
+        FORM_2000OT_SHARE_ROWS
+            .max(self.draft.shares.len())
+            .max(self.visible_rows[1])
+    }
+
+    /// Editor keys (with placeholders) for one row index of a schedule
+    /// (`0` = Schedule 1.A, otherwise 1.B).
+    fn row_input_keys(schedule: usize, row: usize) -> Vec<(String, String)> {
+        let inputs = if schedule == 0 {
+            PROPERTY_INPUTS
+        } else {
+            SHARE_INPUTS
+        };
+        inputs
+            .iter()
+            .map(|(prefix, _, money)| {
+                (
+                    row_key(prefix, row),
+                    if *money { "0.00" } else { "" }.to_string(),
+                )
+            })
+            .collect()
+    }
+
+    /// Create the editors for one row index on demand.
+    fn ensure_row_inputs(
+        &mut self,
+        schedule: usize,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for (key, placeholder) in Self::row_input_keys(schedule, row) {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let value = Self::initial(&self.draft, &key);
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+            self._subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+            self.inputs.insert(key, input);
+        }
+    }
+
+    fn schedule_count(&self, schedule: usize) -> usize {
+        if schedule == 0 {
+            self.property_row_count()
+        } else {
+            self.share_row_count()
+        }
+    }
+
+    fn schedule_default(schedule: usize) -> usize {
+        if schedule == 0 {
+            FORM_2000OT_REAL_PROPERTY_ROWS
+        } else {
+            FORM_2000OT_SHARE_ROWS
+        }
+    }
+
+    fn add_row(&mut self, schedule: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let count = self.schedule_count(schedule);
+        if count >= FORM_2000OT_MAX_ROWS {
+            return;
+        }
+        self.ensure_row_inputs(schedule, count, window, cx);
+        self.visible_rows[schedule] = count + 1;
+        cx.notify();
+    }
+
+    /// Delete a row beyond the default count; later rows move up.
+    fn remove_row(
+        &mut self,
+        schedule: usize,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let count = self.schedule_count(schedule);
+        let default = Self::schedule_default(schedule);
+        if row < default || row >= count {
+            return;
+        }
+        if schedule == 0 {
+            if row < self.draft.properties.len() {
+                self.draft.properties.remove(row);
+            }
+        } else if row < self.draft.shares.len() {
+            self.draft.shares.remove(row);
+        }
+        self.visible_rows[schedule] = (count - 1).max(default);
+        self.draft.recompute();
+        // Reload every row editor from the draft, then read them back.
+        let keys: Vec<String> = self
+            .inputs
+            .keys()
+            .filter(|key| split_row_key(key).is_some())
+            .cloned()
+            .collect();
+        for key in keys {
+            let value = Self::initial(&self.draft, &key);
+            if let Some(input) = self.inputs.get(&key) {
+                input.update(cx, |state, cx| state.set_value(value, window, cx));
+            }
+        }
+        self.sync_from_inputs(cx);
+    }
+
+    fn add_row_controls(&self, schedule: usize, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let at_max = self.schedule_count(schedule) >= FORM_2000OT_MAX_ROWS;
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                Button::new(("2000ot_add_row", schedule))
+                    .label("Add row")
+                    .outline()
+                    .small()
+                    .disabled(!editable || at_max)
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| this.add_row(schedule, window, cx)),
+                    ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!("Up to {FORM_2000OT_MAX_ROWS} rows")),
+            )
+            .into_any_element()
     }
 
     fn notify(
@@ -699,10 +873,32 @@ impl Form2000OTView {
     fn row_box(
         &self,
         title: String,
+        schedule: usize,
+        row: usize,
         fields: Vec<AnyElement>,
         layout: Layout,
         cx: &Context<Self>,
     ) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let heading = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(div().min_w_0().font_weight(FontWeight::BOLD).child(title))
+            .when(row >= Self::schedule_default(schedule), |d| {
+                d.child(
+                    Button::new(("2000ot_remove_row", schedule * 1000 + row))
+                        .label("Remove")
+                        .outline()
+                        .small()
+                        .disabled(!editable)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.remove_row(schedule, row, window, cx)
+                        })),
+                )
+            });
         div()
             .flex()
             .flex_col()
@@ -711,7 +907,7 @@ impl Form2000OTView {
             .border_1()
             .border_color(cx.theme().border)
             .rounded_md()
-            .child(div().min_w_0().font_weight(FontWeight::BOLD).child(title))
+            .child(heading)
             .child(self.grid(layout, fields))
             .into_any_element()
     }
@@ -719,7 +915,7 @@ impl Form2000OTView {
     fn render_real_property(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let mut children = Vec::new();
-        for row in 0..FORM_2000OT_REAL_PROPERTY_ROWS {
+        for row in 0..self.property_row_count() {
             let mut fields: Vec<AnyElement> = PROPERTY_INPUTS
                 .iter()
                 .map(|(prefix, label, _)| {
@@ -728,8 +924,16 @@ impl Form2000OTView {
                 .collect();
             let fmv = self.draft.properties.get(row).map(|r| r.fmv).unwrap_or(0.0);
             fields.push(self.computed("Fair market value (higher of 1 and 2)", fmv, cx));
-            children.push(self.row_box(format!("Property {}", row + 1), fields, layout, cx));
+            children.push(self.row_box(
+                format!("Property {}", row + 1),
+                0,
+                row,
+                fields,
+                layout,
+                cx,
+            ));
         }
+        children.push(self.add_row_controls(0, cx));
         children.push(self.computed(
             "Total fair market value",
             self.draft.total_fair_market_value,
@@ -768,7 +972,7 @@ impl Form2000OTView {
 
     fn render_shares(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let children = (0..FORM_2000OT_SHARE_ROWS)
+        let mut children: Vec<AnyElement> = (0..self.share_row_count())
             .map(|row| {
                 let fields = SHARE_INPUTS
                     .iter()
@@ -776,9 +980,10 @@ impl Form2000OTView {
                         self.field(&row_key(prefix, row), label, layout, !editable)
                     })
                     .collect();
-                self.row_box(format!("Shares {}", row + 1), fields, layout, cx)
+                self.row_box(format!("Shares {}", row + 1), 1, row, fields, layout, cx)
             })
             .collect();
+        children.push(self.add_row_controls(1, cx));
         self.section("Schedule 1.B — Shares of Stock", children, cx)
     }
 
@@ -856,21 +1061,11 @@ impl QueueableFormView for Form2000OTView {
         for (key, _) in MONEY_INPUTS {
             keys.push((key.to_string(), "0.00".into()));
         }
-        for row in 0..FORM_2000OT_REAL_PROPERTY_ROWS {
-            for (prefix, _, money) in PROPERTY_INPUTS {
-                keys.push((
-                    row_key(prefix, row),
-                    if *money { "0.00" } else { "" }.into(),
-                ));
-            }
+        for row in 0..FORM_2000OT_REAL_PROPERTY_ROWS.max(draft.properties.len()) {
+            keys.extend(Self::row_input_keys(0, row));
         }
-        for row in 0..FORM_2000OT_SHARE_ROWS {
-            for (prefix, _, money) in SHARE_INPUTS {
-                keys.push((
-                    row_key(prefix, row),
-                    if *money { "0.00" } else { "" }.into(),
-                ));
-            }
+        for row in 0..FORM_2000OT_SHARE_ROWS.max(draft.shares.len()) {
+            keys.extend(Self::row_input_keys(1, row));
         }
         for (key, placeholder) in keys {
             let value = Self::initial(&draft, &key);
@@ -897,6 +1092,7 @@ impl QueueableFormView for Form2000OTView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            visible_rows: [FORM_2000OT_REAL_PROPERTY_ROWS, FORM_2000OT_SHARE_ROWS],
             _subscriptions: subscriptions,
         }
     }
