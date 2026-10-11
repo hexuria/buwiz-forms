@@ -228,13 +228,6 @@ impl Form1604eView {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         if let Some(sheets) = number("sheets", "Item 3", cx) {
             draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
                 sheets as u16
@@ -534,7 +527,7 @@ impl Form1604eView {
         let editable = self.draft.lifecycle.is_editable();
         let amended = self.draft.is_amended;
         let children = vec![
-            self.field("year", TEXT_INPUTS[0].1, "taxable_year", layout, !editable),
+            Self::readonly(TEXT_INPUTS[0].1, self.draft.taxable_year.to_string()),
             Self::choice_row(
                 layout,
                 "Item 2 — Amended return?",
