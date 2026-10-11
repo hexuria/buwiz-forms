@@ -165,6 +165,7 @@ impl Form1707AView {
         let d = &self.draft;
         let individual = d.atc == Some(Form1707AAtc::Individual);
         let basis = choice_row(
+            layout,
             "Item 1 — For the",
             vec![
                 choice("1707a_calendar", "Calendar year", !d.fiscal, !editable).on_click(
@@ -184,6 +185,7 @@ impl Form1707AView {
             ],
         );
         let amended = choice_row(
+            layout,
             "Item 2 — Amended return?",
             vec![
                 choice("1707a_amended_yes", "Yes", d.is_amended, !editable).on_click(cx.listener(
@@ -199,6 +201,7 @@ impl Form1707AView {
             ],
         );
         let atc = choice_row(
+            layout,
             "Item 4 — ATC",
             vec![
                 choice(
@@ -222,6 +225,7 @@ impl Form1707AView {
             ],
         );
         let relief = choice_row(
+            layout,
             "Item 12 — Availing of tax relief under Special Law or International Tax Treaty?",
             vec![
                 choice("1707a_relief_yes", "Yes", d.tax_relief.is_some(), !editable).on_click(

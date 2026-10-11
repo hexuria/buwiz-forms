@@ -222,6 +222,7 @@ impl Form1800View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let amended = choice_row(
+            layout,
             "Item 2 — Amended return?",
             vec![
                 choice("1800_amended_yes", "Yes", d.is_amended, !editable).on_click(cx.listener(
@@ -237,6 +238,7 @@ impl Form1800View {
             ],
         );
         let relief = choice_row(
+            layout,
             "Item 13 — Availing of tax relief under a Special Law / International Tax Treaty?",
             vec![
                 choice("1800_relief_yes", "Yes", d.tax_relief.is_some(), !editable).on_click(

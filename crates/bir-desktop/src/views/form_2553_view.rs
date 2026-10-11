@@ -362,6 +362,7 @@ impl Form2553View {
             .chain(self.parse_errors.iter())
             .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
         let label = div()
+            .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -399,10 +400,10 @@ impl Form2553View {
                     .flex()
                     .gap_6()
                     .w_full()
-                    .child(div().flex_1().child(left));
+                    .child(div().flex_1().min_w_0().max_w_full().child(left));
                 row = match iter.next() {
-                    Some(right) => row.child(div().flex_1().child(right)),
-                    None => row.child(div().flex_1()),
+                    Some(right) => row.child(div().flex_1().min_w_0().max_w_full().child(right)),
+                    None => row.child(div().flex_1().min_w_0()),
                 };
                 rows = rows.child(row);
             }
@@ -421,8 +422,8 @@ impl Form2553View {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -448,6 +449,36 @@ impl Form2553View {
         button.disabled(disabled)
     }
 
+    /// A caption and its choice buttons. On phones the caption sits on its own
+    /// line with the buttons in a full-width wrapping row below it.
+    fn choice_row(layout: Layout, label: &str, buttons: Vec<Button>) -> AnyElement {
+        let caption = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(caption)
+                .child(div().flex().flex_wrap().w_full().gap_2().children(buttons))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(caption.flex_1())
+                .children(buttons)
+                .into_any_element()
+        }
+    }
+
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let basis = self.draft.tax_period_basis;
@@ -470,41 +501,28 @@ impl Form2553View {
                 ),
             );
         }
-        let mut quarters = div().flex().flex_wrap().gap_2();
-        for quarter in 1..=4u8 {
-            quarters = quarters.child(
+        let quarters: Vec<Button> = (1..=4u8)
+            .map(|quarter| {
                 Self::choice(
                     ("2553_qtr", quarter as usize),
                     format!("Q{quarter}"),
                     self.draft.quarter == quarter,
                     !editable,
                 )
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.quarter = quarter)),
-                ),
-            );
-        }
+                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.quarter = quarter)))
+            })
+            .collect();
         let amended = self.draft.is_amended;
         let children = vec![
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 1 —"),
-                )
-                .child(
+            Self::choice_row(
+                layout,
+                "Item 1 —",
+                vec![
                     Self::choice("2553_calendar", "Calendar", !fiscal, !editable).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.edit(cx, |d| d.set_tax_period_basis(TaxPeriodBasis::Calendar))
                         }),
                     ),
-                )
-                .child(
                     Self::choice("2553_fiscal", "Fiscal", fiscal, !editable).on_click(cx.listener(
                         |this, _, _, cx| {
                             this.edit(cx, |d| {
@@ -515,56 +533,36 @@ impl Form2553View {
                             })
                         },
                     )),
-                )
-                .into_any_element(),
+                ],
+            ),
             div()
                 .flex()
                 .flex_col()
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
+                        .max_w_full()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 2 — Month the year ends"),
                 )
-                .child(months)
+                .child(months.w_full())
                 .into_any_element(),
             self.field("year", "Item 2 — Year ended", layout, !editable),
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 3 — Quarter"),
-                )
-                .child(quarters)
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 4 — Amended return?"),
-                )
-                .child(
+            Self::choice_row(layout, "Item 3 — Quarter", quarters),
+            Self::choice_row(
+                layout,
+                "Item 4 — Amended return?",
+                vec![
                     Self::choice("2553_amended_yes", "Yes", amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
                     ),
-                )
-                .child(
                     Self::choice("2553_amended_no", "No", !amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
                     ),
-                )
-                .into_any_element(),
+                ],
+            ),
             self.field(
                 "sheets",
                 "Item 5 — No. of sheets attached",
@@ -585,6 +583,7 @@ impl Form2553View {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 6 — TIN"),
@@ -601,6 +600,7 @@ impl Form2553View {
                 .gap_1()
                 .child(
                     div()
+                        .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child("Item 7 — RDO Code"),
@@ -615,55 +615,41 @@ impl Form2553View {
         for (key, label, _) in TEXT_INPUTS.iter().skip(2) {
             fields.push(self.field(key, label, layout, !editable));
         }
-        let treaty_row = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
-                "Item 13 — Availing of tax relief under a Special Law or International Tax Treaty?",
-            ))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(
-                        Self::choice(
-                            "2553_treaty_no",
-                            "No",
-                            treaty == Form2553TaxTreaty::No,
-                            !editable,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.tax_treaty = Form2553TaxTreaty::No)
-                        })),
-                    )
-                    .child(
-                        Self::choice(
-                            "2553_treaty_special",
-                            "Yes — Special Rate",
-                            treaty == Form2553TaxTreaty::SpecialRate,
-                            !editable,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.tax_treaty = Form2553TaxTreaty::SpecialRate)
-                        })),
-                    )
-                    .child(
-                        Self::choice(
-                            "2553_treaty_intl",
-                            "Yes — International Tax Treaty",
-                            treaty == Form2553TaxTreaty::InternationalTaxTreaty,
-                            !editable,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| {
-                                d.tax_treaty = Form2553TaxTreaty::InternationalTaxTreaty
-                            })
-                        })),
-                    ),
-            )
-            .into_any_element();
+        let treaty_row = Self::choice_row(
+            layout,
+            "Item 13 — Availing of tax relief under a Special Law or International Tax Treaty?",
+            vec![
+                Self::choice(
+                    "2553_treaty_no",
+                    "No",
+                    treaty == Form2553TaxTreaty::No,
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.edit(cx, |d| d.tax_treaty = Form2553TaxTreaty::No)
+                })),
+                Self::choice(
+                    "2553_treaty_special",
+                    "Yes — Special Rate",
+                    treaty == Form2553TaxTreaty::SpecialRate,
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.edit(cx, |d| d.tax_treaty = Form2553TaxTreaty::SpecialRate)
+                })),
+                Self::choice(
+                    "2553_treaty_intl",
+                    "Yes — International Tax Treaty",
+                    treaty == Form2553TaxTreaty::InternationalTaxTreaty,
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.edit(cx, |d| {
+                        d.tax_treaty = Form2553TaxTreaty::InternationalTaxTreaty
+                    })
+                })),
+            ],
+        );
         self.section(
             "Part I — Background Information",
             vec![self.grid(layout, fields), treaty_row],
@@ -720,12 +706,15 @@ impl Form2553View {
                 .gap_2()
                 .child(
                     div()
+                        .min_w_0()
+                        .flex_1()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .child(format!("{item}D — Tax rate")),
                 )
                 .child(
                     div()
+                        .flex_none()
                         .font_weight(FontWeight::BOLD)
                         .child(format!("{}%", option.map(|o| o.rate_text).unwrap_or("?"))),
                 )
@@ -810,6 +799,8 @@ impl Form2553View {
                     .gap_2()
                     .child(
                         div()
+                            .min_w_0()
+                            .max_w_full()
                             .text_sm()
                             .font_weight(FontWeight::MEDIUM)
                             .child(format!("Add an ATC (Item {})", 14 + next)),
@@ -847,44 +838,32 @@ impl Form2553View {
         ];
         if d.total_amount_payable < 0.0 {
             let over = d.overpayment;
-            children.push(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child("If overpayment, mark one:"),
+            children.push(Self::choice_row(
+                layout,
+                "If overpayment, mark one:",
+                vec![
+                    Self::choice(
+                        "2553_refund",
+                        "To be refunded",
+                        over == Form2553Overpayment::Refund,
+                        !editable,
                     )
-                    .child(
-                        Self::choice(
-                            "2553_refund",
-                            "To be refunded",
-                            over == Form2553Overpayment::Refund,
-                            !editable,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.overpayment = Form2553Overpayment::Refund)
-                        })),
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| d.overpayment = Form2553Overpayment::Refund)
+                    })),
+                    Self::choice(
+                        "2553_tcc",
+                        "To be issued a Tax Credit Certificate",
+                        over == Form2553Overpayment::TaxCreditCertificate,
+                        !editable,
                     )
-                    .child(
-                        Self::choice(
-                            "2553_tcc",
-                            "To be issued a Tax Credit Certificate",
-                            over == Form2553Overpayment::TaxCreditCertificate,
-                            !editable,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| {
-                                d.overpayment = Form2553Overpayment::TaxCreditCertificate
-                            })
-                        })),
-                    )
-                    .into_any_element(),
-            );
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.edit(cx, |d| {
+                            d.overpayment = Form2553Overpayment::TaxCreditCertificate
+                        })
+                    })),
+                ],
+            ));
         }
         self.section(
             "Part II — Tax Credits, Penalties and Amount Payable",

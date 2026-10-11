@@ -237,6 +237,7 @@ impl Form1707View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let amended = choice_row(
+            layout,
             "Item 2 — Amended return?",
             vec![
                 choice("1707_amended_yes", "Yes", d.is_amended, !editable).on_click(cx.listener(
@@ -289,7 +290,7 @@ impl Form1707View {
             self.f("year", layout),
             self.f("sheets", layout),
             amended,
-            choice_row("Item 3 — ATC", atcs),
+            choice_row(layout, "Item 3 — ATC", atcs),
             fixed,
             self.f("rdo", layout),
             self.f("name", layout),
@@ -338,6 +339,7 @@ impl Form1707View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let relief = choice_row(
+            layout,
             "Item 8 — Availing of tax relief under Special Law or International Tax Treaty?",
             vec![
                 choice("1707_relief_yes", "Yes", d.tax_relief.is_some(), !editable).on_click(
@@ -376,7 +378,11 @@ impl Form1707View {
         if d.tax_relief.is_some() {
             children.push(self.f("relief", layout));
         }
-        children.push(choice_row("Item 9 — Description of transaction", kinds));
+        children.push(choice_row(
+            layout,
+            "Item 9 — Description of transaction",
+            kinds,
+        ));
         if d.transaction_type == Some(Form1707TransactionType::Others) {
             children.push(self.f("txn_description", layout));
         }
