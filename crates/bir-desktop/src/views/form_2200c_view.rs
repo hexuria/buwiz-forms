@@ -21,7 +21,9 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::{ComboboxEvent, ComboboxState};
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{self, messages_for, select_field, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form2200CView {}
@@ -49,13 +51,23 @@ impl Layout {
 }
 
 const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
 
 /// Text inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("day", "Item 1 — Day", "DD"),
-    ("year", "Item 1 — Year", "YYYY"),
     ("name", "Item 7 — Taxpayer's Name", ""),
     ("address", "Item 8 — Registered Address", ""),
     ("zip", "Item 8A — Zip Code", ""),
@@ -139,12 +151,19 @@ fn set_row_value(row: &mut Form2200CRow, prefix: &str, value: f64) {
     }
 }
 
-/// Which level of Item 11 is being picked.
+/// Level of the Item 11 place dropdowns.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum PlacePick {
+enum PlaceLevel {
     Region,
     Province,
     City,
+}
+
+/// Region, province and city dropdowns for Item 11.
+struct PlaceSelects {
+    region: Entity<ComboboxState>,
+    province: Entity<ComboboxState>,
+    city: Entity<ComboboxState>,
 }
 
 pub struct Form2200CView {
@@ -152,11 +171,11 @@ pub struct Form2200CView {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    place: PlaceSelects,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
-    picking: Option<PlacePick>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -230,13 +249,7 @@ impl Form2200CView {
                 0
             };
         }
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
+        // Item 1 month and year come from the library tile (read-only).
         for (key, label) in MONEY_INPUTS {
             let Some(value) = number(key, label, cx) else {
                 continue;
@@ -314,6 +327,90 @@ impl Form2200CView {
         self.sync_from_inputs(cx);
     }
 
+    /// The official choices for one level, given the levels above it.
+    fn place_options(place: &ExcisePlace, level: PlaceLevel) -> Vec<(&'static str, &'static str)> {
+        match level {
+            PlaceLevel::Region => excise_places::regions(PLACE_FORM),
+            PlaceLevel::Province => excise_places::provinces(PLACE_FORM, &place.region),
+            PlaceLevel::City => excise_places::cities(PLACE_FORM, &place.region, &place.province),
+        }
+    }
+
+    /// A new region clears province and city; a new province clears the city.
+    fn pick_place(&mut self, level: PlaceLevel, label: &str, cx: &mut Context<Self>) {
+        let Some(code) = Self::place_options(&self.draft.place, level)
+            .into_iter()
+            .find(|(_, option)| *option == label)
+            .map(|(code, _)| code)
+        else {
+            return;
+        };
+        self.edit(cx, |d| match level {
+            PlaceLevel::Region => {
+                d.place = ExcisePlace {
+                    region: code.to_string(),
+                    ..Default::default()
+                }
+            }
+            PlaceLevel::Province => {
+                d.place.province = code.to_string();
+                d.place.city.clear();
+            }
+            PlaceLevel::City => d.place.city = code.to_string(),
+        });
+    }
+
+    fn new_place_select(
+        level: PlaceLevel,
+        place: &ExcisePlace,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<ComboboxState>, Subscription) {
+        let state = form_controls::new_select_state(&Self::place_options(place, level), window, cx);
+        let subscription = cx.subscribe_in(
+            &state,
+            window,
+            move |this: &mut Self, _, event: &ComboboxEvent, _, cx| {
+                if let Some(label) = event.selected.as_deref() {
+                    this.pick_place(level, label, cx);
+                }
+            },
+        );
+        (state, subscription)
+    }
+
+    fn new_place_selects(
+        place: &ExcisePlace,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        subscriptions: &mut Vec<Subscription>,
+    ) -> PlaceSelects {
+        let mut make = |level| {
+            let (state, subscription) = Self::new_place_select(level, place, window, cx);
+            subscriptions.push(subscription);
+            state
+        };
+        PlaceSelects {
+            region: make(PlaceLevel::Region),
+            province: make(PlaceLevel::Province),
+            city: make(PlaceLevel::City),
+        }
+    }
+
+    /// Make every dropdown show the draft's current value and choices.
+    fn sync_controls(&self, window: &mut Window, cx: &mut App) {
+        let place = &self.draft.place;
+        for (state, level, value) in [
+            (&self.place.region, PlaceLevel::Region, &place.region),
+            (&self.place.province, PlaceLevel::Province, &place.province),
+            (&self.place.city, PlaceLevel::City, &place.city),
+        ] {
+            let options = Self::place_options(place, level);
+            let value = (!value.is_empty()).then_some(value.as_str());
+            form_controls::sync_select(state, &options, value, window, cx);
+        }
+    }
+
     fn notify(
         &self,
         kind: notification::NotificationType,
@@ -380,28 +477,58 @@ impl Form2200CView {
         .into_any_element()
     }
 
+    /// Validator keys (`Form2200CDraft::validate`) behind input `key`.
+    fn model_keys(key: &str) -> &'static [&'static str] {
+        match key {
+            "day" => &["day"],
+            "year" => &["year"],
+            "name" => &["taxpayer_name"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "phone" => &["contact_number"],
+            "email" => &["email"],
+            "relief" => &["tax_relief_specify"],
+            "other" => &["manner_other"],
+            // The whole-number rule ("amounts") is shown once per section.
+            _ => &[],
+        }
+    }
+
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built control.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
+    }
+
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
         let input = self
             .inputs
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let mut keys = vec![key];
+        keys.extend_from_slice(Self::model_keys(key));
+        let message = self.errors_for(&keys);
         let label = div()
             .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if error {
+        let label = if message.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -417,7 +544,8 @@ impl Form2200CView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
     }
 
     fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
@@ -519,23 +647,8 @@ impl Form2200CView {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("2200c_month", index),
-                    *name,
-                    self.draft.month == month,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month))),
-            );
-        }
-        let amended = self.draft.is_amended;
-        let children = vec![
-            div()
+        let read_only_row = |label: &str, value: String, key: &str| {
+            let shown = div()
                 .flex()
                 .flex_col()
                 .gap_1()
@@ -544,12 +657,24 @@ impl Form2200CView {
                         .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("Item 1 — Month"),
+                        .when(self.errors_for(&[key]).is_some(), |d| {
+                            d.text_color(gpui::red())
+                        })
+                        .child(label.to_string()),
                 )
-                .child(months)
-                .into_any_element(),
+                .child(div().font_weight(FontWeight::BOLD).child(value))
+                .into_any_element();
+            self.with_errors(shown, &[key])
+        };
+        let month_name = MONTHS
+            .get(usize::from(self.draft.month).wrapping_sub(1))
+            .copied()
+            .unwrap_or("-");
+        let amended = self.draft.is_amended;
+        let children = vec![
+            read_only_row("Item 1 — Month", month_name.to_string(), "month"),
             self.field("day", "Item 1 — Day", layout, !editable),
-            self.field("year", "Item 1 — Year", layout, !editable),
+            read_only_row("Item 1 — Year", self.draft.year.to_string(), "year"),
             Self::label_row(
                 "Item 2 — Amended return?",
                 layout,
@@ -583,128 +708,109 @@ impl Form2200CView {
     fn render_place(&self, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let place = &self.draft.place;
-        let name = |code: &str| {
-            excise_places::place_name(code)
-                .unwrap_or("(select)")
-                .to_string()
+        // Each level reports its own validator key under its own dropdown.
+        let level = |label: &str,
+                     state: &Entity<ComboboxState>,
+                     level: PlaceLevel,
+                     value: &str,
+                     disabled: bool,
+                     error_key: &str| {
+            let options = Self::place_options(place, level);
+            let value = (!value.is_empty()).then_some(value);
+            let message = self.errors_for(&[error_key]);
+            select_field(
+                label,
+                state,
+                &options,
+                value,
+                disabled,
+                message.as_deref(),
+                cx,
+            )
         };
-        let mut body = div().flex().flex_col().gap_2().child(
-            div()
-                .min_w_0()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .child("Item 11 — Place where the invasive cosmetic procedures took place"),
-        );
-        let levels = [
-            (PlacePick::Region, "Region", name(&place.region), true),
-            (
-                PlacePick::Province,
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .w_full()
+            .child(
+                div()
+                    .min_w_0()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("Item 11 — Place where the invasive cosmetic procedures took place"),
+            )
+            .child(level(
+                "Region",
+                &self.place.region,
+                PlaceLevel::Region,
+                &place.region,
+                !editable,
+                "place.region",
+            ))
+            .child(level(
                 "Province",
-                name(&place.province),
-                !place.region.is_empty(),
-            ),
-            (
-                PlacePick::City,
+                &self.place.province,
+                PlaceLevel::Province,
+                &place.province,
+                !editable || place.region.is_empty(),
+                "place.province",
+            ))
+            .child(level(
                 "City",
-                name(&place.city),
-                !place.province.is_empty(),
-            ),
-        ];
-        let mut row = div().flex().flex_wrap().gap_2();
-        for (index, (pick, label, current, enabled)) in levels.into_iter().enumerate() {
-            row = row.child(
-                Button::new(("2200c_place", index))
-                    .label(format!("{label}: {current}"))
-                    .outline()
-                    .small()
-                    .disabled(!editable || !enabled)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.picking = if this.picking == Some(pick) {
-                            None
-                        } else {
-                            Some(pick)
-                        };
-                        cx.notify();
-                    })),
-            );
-        }
-        body = body.child(row);
-        if let Some(pick) = self.picking {
-            let options = match pick {
-                PlacePick::Region => excise_places::regions(PLACE_FORM),
-                PlacePick::Province => excise_places::provinces(PLACE_FORM, &place.region),
-                PlacePick::City => {
-                    excise_places::cities(PLACE_FORM, &place.region, &place.province)
-                }
-            };
-            let mut list = div().flex().flex_wrap().gap_1();
-            for (index, (code, label)) in options.into_iter().enumerate() {
-                list = list.child(
-                    Button::new(("2200c_place_option", index))
-                        .label(label.to_string())
-                        .outline()
-                        .small()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.picking = None;
-                            this.edit(cx, |d| match pick {
-                                PlacePick::Region => {
-                                    d.place = ExcisePlace {
-                                        region: code.to_string(),
-                                        ..Default::default()
-                                    }
-                                }
-                                PlacePick::Province => {
-                                    d.place.province = code.to_string();
-                                    d.place.city.clear();
-                                }
-                                PlacePick::City => d.place.city = code.to_string(),
-                            })
-                        })),
-                );
-            }
-            body = body.child(list);
-        }
-        body.into_any_element()
+                &self.place.city,
+                PlaceLevel::City,
+                &place.city,
+                !editable || place.province.is_empty(),
+                "place.city",
+            ))
+            .into_any_element()
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let relief = self.draft.tax_relief;
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 5 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — RDO Code"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            self.with_errors(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Item 5 — TIN"),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format_tin(&self.draft.tin)),
+                    )
+                    .into_any_element(),
+                &["tin"],
+            ),
+            self.with_errors(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Item 6 — RDO Code"),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(self.draft.rdo_code.clone()),
+                    )
+                    .into_any_element(),
+                &["rdo_code"],
+            ),
         ];
         for key in ["name", "address", "zip", "phone", "email"] {
             let label = TEXT_INPUTS
@@ -714,21 +820,26 @@ impl Form2200CView {
                 .unwrap_or(key);
             fields.push(self.field(key, label, layout, !editable));
         }
-        let relief_row = Self::label_row(
-            "Item 12 — Are you availing of tax relief under Special Law or International Tax Treaty?",
-            layout,
-            vec![
-                Self::choice("2200c_relief_yes", "Yes", relief == Some(true), !editable).on_click(
-                    cx.listener(|this, _, _, cx| this.edit(cx, |d| d.tax_relief = Some(true))),
-                ),
-                Self::choice("2200c_relief_no", "No", relief == Some(false), !editable).on_click(
-                    cx.listener(|this, _, _, cx| this.edit(cx, |d| d.tax_relief = Some(false))),
-                ),
-            ],
+        let relief_row = self.with_errors(
+            Self::label_row(
+                "Item 12 — Are you availing of tax relief under Special Law or International Tax Treaty?",
+                layout,
+                vec![
+                    Self::choice("2200c_relief_yes", "Yes", relief == Some(true), !editable)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.tax_relief = Some(true))
+                        })),
+                    Self::choice("2200c_relief_no", "No", relief == Some(false), !editable)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.tax_relief = Some(false))
+                        })),
+                ],
+            ),
+            &["tax_relief"],
         );
         let mut children = vec![self.grid(layout, fields), self.render_place(cx), relief_row];
         if relief == Some(true) {
-            children.push(self.field("relief", TEXT_INPUTS[7].1, layout, !editable));
+            children.push(self.field("relief", TEXT_INPUTS[6].1, layout, !editable));
         }
         self.section("Part I — Background Information", children, cx)
     }
@@ -759,9 +870,12 @@ impl Form2200CView {
                 ),
             );
         }
-        let mut children = vec![Self::label_row("Manner of payment", layout, buttons)];
+        let mut children = vec![self.with_errors(
+            Self::label_row("Manner of payment", layout, buttons),
+            &["manner"],
+        )];
         if manner == Form2200CManner::Other {
-            children.push(self.field("other", TEXT_INPUTS[8].1, layout, !editable));
+            children.push(self.field("other", TEXT_INPUTS[7].1, layout, !editable));
         }
         self.section("Part II — Manner of Payment", children, cx)
     }
@@ -778,25 +892,32 @@ impl Form2200CView {
             fields.push(self.computed("(H) Excise tax = (E + F) × 5%", entry.excise_tax, cx));
             fields.push(self.computed("(I) VAT = (D + E + G + H) × 12%", entry.vat, cx));
             fields.push(self.computed("(J) Total amount billed", entry.total_billed, cx));
+            let row_error = format!("schedule[{row}]");
             children.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .p_3()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child(format!("Row {}", row + 1)),
-                    )
-                    .child(self.grid(layout, fields))
-                    .into_any_element(),
+                self.with_errors(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .rounded_md()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .child(format!("Row {}", row + 1)),
+                        )
+                        .child(self.grid(layout, fields))
+                        .into_any_element(),
+                    &[row_error.as_str()],
+                ),
             );
         }
-        children.push(self.computed("Total excise tax (to Item 16)", self.draft.excise_total, cx));
+        children.push(self.with_errors(
+            self.computed("Total excise tax (to Item 16)", self.draft.excise_total, cx),
+            &["schedule", "amounts"],
+        ));
         self.section(
             "Part V — Schedule 1 – Summary of Cosmetic Procedures Performed",
             children,
@@ -828,15 +949,18 @@ impl Form2200CView {
             self.field("pay", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("23B — Penalties", d.penalties_paid, cx),
             self.computed("23C — Total payment made", d.total_payment, cx),
-            self.computed(
-                "24 — Balance to be carried over to next return",
-                d.balance_carried_forward,
-                cx,
+            self.with_errors(
+                self.computed(
+                    "24 — Balance to be carried over to next return",
+                    d.balance_carried_forward,
+                    cx,
+                ),
+                &["balance_carried_forward"],
             ),
         ];
         self.section(
             "Part III — Payments and Application",
-            vec![self.grid(layout, children)],
+            vec![self.with_errors(self.grid(layout, children), &["amounts"])],
             cx,
         )
     }
@@ -880,17 +1004,18 @@ impl QueueableFormView for Form2200CView {
             ));
             inputs.insert(key, input);
         }
+        let place = Self::new_place_selects(&draft.place, window, cx, &mut subscriptions);
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            place,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
-            picking: None,
             _subscriptions: subscriptions,
         }
     }
@@ -1138,14 +1263,16 @@ impl FormViewTrait for Form2200CView {
 impl Render for Form2200CView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        self.sync_controls(window, cx);
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        let open_issues = self.validation_errors.len() + self.parse_errors.len();
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let mut issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -1155,6 +1282,13 @@ impl Render for Form2200CView {
                     .into_any_element()
             })
             .collect();
+        if open_issues > 20 {
+            let more = format!("+{} more", open_issues - 20);
+            issues.push(
+                rsx! { <div text_sm text_color={cx.theme().danger}>{more}</div> }
+                    .into_any_element(),
+            );
+        }
 
         let toolbar =
             div()
@@ -1202,6 +1336,12 @@ impl Render for Form2200CView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && open_issues > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {open_issues} {} to queue (see Needs review).",
+                                if open_issues == 1 { "item" } else { "items" }
+                            )))
                         })
                         .child(
                             Button::new("2200c_submit")
