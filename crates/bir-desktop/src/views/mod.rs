@@ -2,6 +2,8 @@ pub mod admin_calendar_dashboard;
 pub mod cron_tasks;
 pub mod dashboard;
 pub mod debug_log_viewer;
+#[cfg(debug_assertions)]
+pub mod dev_mode_view;
 pub mod email_confirmation_view;
 pub mod event_form_kit;
 pub mod form_0605_view;

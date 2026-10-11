@@ -796,7 +796,7 @@ impl Render for DashboardView {
 
                 let support = form_support_level(&code);
                 let is_release_fileable = support.is_fileable_in_app();
-                let is_certification_draft = cfg!(any(debug_assertions, feature = "dev-tools"))
+                let is_certification_draft = crate::dev_mode::show_uncertified_forms()
                     && can_open_certification_draft(&code);
                 let is_fileable = is_release_fileable || is_certification_draft;
                 let support_label = if is_certification_draft {

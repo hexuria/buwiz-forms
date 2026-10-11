@@ -212,6 +212,9 @@ pub struct AppState {
     pub(crate) admin_os_auth_triggered: bool,
     /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
     pub(crate) active_session_tin: Option<String>,
+    /// Dev Mode panel; `Some` while it is open (debug builds only).
+    #[cfg(debug_assertions)]
+    pub(crate) dev_mode_view: Option<Entity<crate::views::dev_mode_view::DevModeView>>,
     #[cfg(feature = "agent")]
     pub(crate) agent_mailbox: Option<gpui_agent::mailbox::AgentMailbox>,
     /// Configured `GPUI_AGENT_TOKEN` from `from_env`. Never log this value.
@@ -915,6 +918,8 @@ impl AppState {
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
+            #[cfg(debug_assertions)]
+            dev_mode_view: None,
             #[cfg(feature = "agent")]
             agent_mailbox: None,
             #[cfg(feature = "agent")]
@@ -1478,7 +1483,42 @@ impl AppState {
 
     // NOTE: render_sidebar() is implemented in sidebar.rs
 
+    /// Open the Dev Mode panel over the current page (debug builds only).
+    #[cfg(debug_assertions)]
+    pub(crate) fn open_dev_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::views::dev_mode_view::{DevModeEvent, DevModeView};
+        if self.dev_mode_view.is_none() {
+            let db = Arc::clone(&self.db);
+            let view = cx.new(|cx| DevModeView::new(db, window, cx));
+            cx.subscribe(&view, |this: &mut Self, _view, event: &DevModeEvent, cx| {
+                match event {
+                    DevModeEvent::Changed => {}
+                    DevModeEvent::AlertsSeeded => {
+                        this.notifications_view.update(cx, |view, cx| {
+                            view.reload();
+                            cx.notify();
+                        });
+                    }
+                    DevModeEvent::Close => this.dev_mode_view = None,
+                }
+                this.dashboard_view.update(cx, |_, cx| cx.notify());
+                cx.notify();
+            })
+            .detach();
+            self.dev_mode_view = Some(view);
+        }
+        cx.notify();
+    }
+
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(debug_assertions)]
+        if let Some(view) = &self.dev_mode_view {
+            return div()
+                .id("dev_mode_page")
+                .size_full()
+                .child(view.clone())
+                .into_any_element();
+        }
         let page = match self.active_view {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
@@ -1609,7 +1649,7 @@ impl AppState {
         // may additionally open a semantically complete HTML draft while its
         // platform/package release evidence is still being collected.
         let support = bir_core::forms::form_support_level(form_code);
-        let is_certification_build = cfg!(any(debug_assertions, feature = "dev-tools"));
+        let is_certification_build = crate::dev_mode::show_uncertified_forms();
         let can_open = support.is_fileable_in_app()
             || (is_certification_build && bir_core::forms::can_open_certification_draft(form_code));
         if !can_open {
@@ -2048,6 +2088,7 @@ impl Render for AppState {
                 >
                     <div flex_1 flex flex_col h_full overflow_hidden relative>
                         {crate::layout_probe::bounds_probe(self.layout_probe.page.clone())}
+                        {crate::dev_mode::render_pills(cx).unwrap_or_else(|| div().into_any_element())}
                         {self.render_active_view(cx)}
                     </div>
                 </div>

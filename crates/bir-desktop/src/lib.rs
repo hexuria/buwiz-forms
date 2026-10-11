@@ -19,6 +19,7 @@ mod certification_evidence;
 mod components;
 mod cor_evidence;
 mod cor_ocr;
+pub(crate) mod dev_mode;
 pub mod events;
 mod gui;
 mod ipc;

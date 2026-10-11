@@ -2059,10 +2059,56 @@ impl Form2550QV2View {
         self.error_for(&keys)
     }
 
+    /// Dev Mode "Simulate BIR confirmation" on a Submitted return. Debug
+    /// builds only; release builds render nothing.
+    fn render_simulate_confirmation_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        #[cfg(debug_assertions)]
+        {
+            matches!(self.draft.lifecycle.status, FilingStatus::Submitted).then(|| {
+                crate::dev_mode::simulate_confirmation_button("2550q_dev_simulate_confirmation")
+                    .on_click(cx.listener(|this, _, _, cx| this.simulate_bir_confirmation(cx)))
+                    .into_any_element()
+            })
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = cx;
+            None
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn simulate_bir_confirmation(&mut self, cx: &mut Context<Self>) {
+        use bir_core::forms::queueable::QueueableForm;
+        let filename = self.draft.lifecycle.submission_filename.clone();
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                let column = bir_core::forms::queueable::period_column(&self.draft.filing_period());
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form2550QDraft>(
+                        self.draft.tin(),
+                        self.draft.taxable_year(),
+                        column,
+                    )
+                {
+                    self.draft = current;
+                }
+                cx.emit(Form2550QV2Event::Confirmed);
+            }
+            Err(error) => cx.emit(Form2550QV2Event::PushNotification(
+                "error".into(),
+                "Simulated confirmation failed".into(),
+                error,
+            )),
+        }
+        cx.notify();
+    }
+
     /// Advanced: the eleven raw identity controls, collapsed by default.
     fn render_raw_identity_block(&self, cx: &mut Context<Self>) -> AnyElement {
         // Exact-text replay for official samples only; filers never see it.
-        if !cfg!(feature = "dev-tools") {
+        // Dev Mode "Developer diagnostics" (debug builds) or `dev-tools`.
+        if !crate::dev_mode::form_diagnostics() {
             return div().into_any_element();
         }
         let open = self.show_raw_identity;
@@ -2215,14 +2261,12 @@ impl Form2550QV2View {
                     .child("Validation successful."),
             );
         }
-        #[cfg(feature = "dev-tools")]
-        {
+        if crate::dev_mode::form_diagnostics() {
             root = root.child(self.render_candidate_diagnostic_box(cx));
         }
         root.into_any_element()
     }
 
-    #[cfg(feature = "dev-tools")]
     fn render_candidate_diagnostic_box(&self, cx: &Context<Self>) -> AnyElement {
         let (title, message) = match &self.validation_state {
             Form2550QDiagnosticState::NotRun => (
@@ -2815,8 +2859,7 @@ impl Render for Form2550QV2View {
             .flex()
             .flex_col()
             .gap_6();
-        #[cfg(feature = "dev-tools")]
-        {
+        if crate::dev_mode::form_diagnostics() {
             content = content.child(
                 div()
                     .p_4()
@@ -3015,6 +3058,7 @@ impl Render for Form2550QV2View {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.revert_to_draft(window, cx);
                             }))}
+                        {self.render_simulate_confirmation_button(cx).unwrap_or_else(|| div().into_any_element())}
                         {queue_reason}
                         {gpui_component::button::Button::new("2550q_queue")
                             .label(QUEUE_BUTTON_LABEL)

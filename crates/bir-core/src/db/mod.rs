@@ -291,10 +291,13 @@ pub fn default_database_path() -> std::path::PathBuf {
 ///
 /// `BIR_DATABASE_PATH` overrides for tests / CI. Empty or unset uses
 /// [`default_database_path`] (`platform::data_dir()/bir_data.db`).
+///
+/// Debug builds: the Dev Mode "Use a separate dev database" switch picks
+/// `bir_data.dev.db` through this same function (env still wins).
 pub fn app_database_path() -> PathBuf {
     match std::env::var_os("BIR_DATABASE_PATH") {
         Some(path) if !path.is_empty() => PathBuf::from(path),
-        _ => default_database_path(),
+        _ => crate::dev_mode::dev_database_path().unwrap_or_else(default_database_path),
     }
 }
 
