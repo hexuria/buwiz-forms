@@ -239,6 +239,21 @@ impl Form1606View {
             return;
         }
         let mut parse_errors = Vec::new();
+        // The official validate() rejects a one-digit month or day (HTA 2918-2925).
+        for (key, message) in [
+            (
+                "month",
+                "Please enter a valid month on item 1. Format should be MM/DD/YYYY.",
+            ),
+            (
+                "day",
+                "Please enter a valid day on item 1. Format should be MM/DD/YYYY.",
+            ),
+        ] {
+            if self.input_text(key, cx).trim().chars().count() == 1 {
+                parse_errors.push((key.to_string(), message.to_string()));
+            }
+        }
         let mut number = |key: &str, label: &str, cx: &App| -> Option<f64> {
             let text = self.input_text(key, cx);
             let parsed = parse_amount(&text);
@@ -1370,7 +1385,6 @@ impl Render for Form1606View {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 div()
                     .text_sm()
@@ -1484,14 +1498,14 @@ impl Render for Form1606View {
                         ),
                 )
             })
+            .when(!issues.is_empty(), |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
             .child(self.render_header_items(layout, cx))
             .child(self.render_parties(layout, cx))
             .child(self.render_property(layout, cx))
             .child(self.render_transaction(layout, cx))
             .child(self.render_computation(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()

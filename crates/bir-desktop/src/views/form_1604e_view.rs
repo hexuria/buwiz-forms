@@ -1029,7 +1029,6 @@ impl Render for Form1604eView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1150,13 +1149,13 @@ impl Render for Form1604eView {
                         ),
                 )
             })
+            .when(!issues.is_empty(), |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx));
         for (schedule, count, title) in SCHEDULES {
             body = body.child(self.render_schedule(schedule, count, title, layout, cx));
-        }
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
         }
 
         div()
