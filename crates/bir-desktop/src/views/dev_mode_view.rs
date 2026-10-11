@@ -14,12 +14,17 @@ use gpui_component::switch::Switch;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
+const FOLDER_HELP: &str = "Where the upload lands on your test server. Blank = a folder named after the form type, e.g. 2550Qv2024, like BIR's server.";
+const HOST_KEY_HELP: &str =
+    "Your test server's fingerprint. Uploads only go to a server that shows it.";
+const ACCEPT_ANY_HELP: &str =
+    "Skip the fingerprint check (BIR's own app does). Use only on a trusted network.";
+
 pub enum DevModeEvent {
     /// A switch changed: re-render pills and pages that read it.
     Changed,
     /// Example alerts were seeded: reload the Notifications page.
     AlertsSeeded,
-    Close,
 }
 
 impl EventEmitter<DevModeEvent> for DevModeView {}
@@ -34,6 +39,10 @@ pub struct DevModeView {
     password: Entity<InputState>,
     password_stored: bool,
     message: Option<(bool, String)>,
+    /// The last export, for the "Open folder" button.
+    last_export: Option<crate::export_target::SavedExport>,
+    /// "Use a separate dev database" was switched on and awaits Continue.
+    confirm_separate_db: bool,
     scroll: ScrollHandle,
 }
 
@@ -63,6 +72,7 @@ impl DevModeView {
                 .masked(true)
                 .placeholder("Stored in the OS keychain")
         });
+        sync_separate_database_setting(&db);
         Self {
             db,
             host,
@@ -73,6 +83,8 @@ impl DevModeView {
             password,
             password_stored: dm::has_test_server_password(),
             message: None,
+            last_export: None,
+            confirm_separate_db: false,
             scroll: ScrollHandle::new(),
         }
     }
@@ -159,28 +171,87 @@ impl DevModeView {
         let source = crate::dev_mode::opened_database_path();
         let db = Arc::clone(&self.db);
         cx.spawn(async move |this, cx| {
-            let Some(handle) = rfd::AsyncFileDialog::new()
-                .set_title("Export a copy of the database")
-                .set_file_name("bir_data-copy.db.zip")
-                .save_file()
-                .await
-            else {
-                return;
-            };
-            if let Ok(guard) = db.lock() {
-                let _ = guard.checkpoint();
-            }
-            let destination = handle.path().to_path_buf();
-            let result = crate::dev_mode::export_database_copy(&source, &destination);
+            let result = crate::export_target::save_with_fallback(
+                "Export a copy of the database",
+                "bir_data-copy.db.zip",
+                |destination| {
+                    if let Ok(guard) = db.lock() {
+                        let _ = guard.checkpoint();
+                    }
+                    crate::dev_mode::export_database_copy(&source, destination)
+                },
+            )
+            .await;
             let _ = this.update(cx, |this, cx| {
-                this.message = Some(match result {
-                    Ok(()) => (true, format!("Exported to {}", destination.display())),
-                    Err(error) => (false, error),
-                });
+                match result {
+                    Ok(saved) => {
+                        this.message = Some((true, saved.message()));
+                        this.last_export = Some(saved);
+                    }
+                    Err(error) => {
+                        this.message = Some((false, error));
+                        this.last_export = None;
+                    }
+                }
                 cx.notify();
             });
         })
         .detach();
+    }
+
+    /// The separate-database switch. Turning it on asks first.
+    fn set_separate_database(&mut self, on: bool, cx: &mut Context<Self>) {
+        if on {
+            self.confirm_separate_db = true;
+            cx.notify();
+        } else {
+            self.confirm_separate_db = false;
+            self.save_startup_flag(keys::SEPARATE_DATABASE, false, cx);
+        }
+    }
+
+    fn render_separate_db_confirm(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_4()
+            .mx_4()
+            .my_2()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(crate::dev_mode::dev_orange())
+            .bg(cx.theme().muted)
+            .child(
+                div()
+                    .text_sm()
+                    .child("Your profiles won't show until you switch this off again. Continue?"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        Button::new("dev_separate_db_cancel")
+                            .label("Cancel")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.confirm_separate_db = false;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("dev_separate_db_continue")
+                            .label("Continue")
+                            .primary()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.confirm_separate_db = false;
+                                this.save_startup_flag(keys::SEPARATE_DATABASE, true, cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn seed_examples(&mut self, cx: &mut Context<Self>) {
@@ -196,6 +267,24 @@ impl DevModeView {
         });
         cx.emit(DevModeEvent::AlertsSeeded);
         cx.notify();
+    }
+}
+
+/// The startup-flags file decides the separate-database switch (it is what
+/// the next start reads). Bring the `dev.separate_database` setting in line
+/// with it when the two disagree.
+fn sync_separate_database_setting(db: &Arc<Mutex<Database>>) {
+    let resolved = dm::separate_database();
+    if matches!(resolved.source, Source::Env(_)) {
+        return;
+    }
+    let wanted = if resolved.value { "true" } else { "false" };
+    let saved = dm::saved_value(keys::SEPARATE_DATABASE);
+    if saved.as_deref().and_then(dm::parse_truthy) != Some(resolved.value)
+        && let Ok(db) = db.lock()
+        && let Err(error) = dm::save(&db, keys::SEPARATE_DATABASE, wanted)
+    {
+        tracing::warn!("could not sync {}: {error}", keys::SEPARATE_DATABASE);
     }
 }
 
@@ -265,11 +354,14 @@ impl DevModeView {
         // Read before the database opens, so they also go to the startup file.
         let startup = key == keys::VERBOSE_LOGS || key == keys::SEPARATE_DATABASE;
         let locked = matches!(resolved.source, Source::Env(_));
+        let pending = key == keys::SEPARATE_DATABASE && self.confirm_separate_db;
         let switch = Switch::new(id)
-            .checked(resolved.value)
+            .checked(resolved.value || pending)
             .disabled(locked)
             .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                if startup {
+                if key == keys::SEPARATE_DATABASE {
+                    this.set_separate_database(*checked, cx);
+                } else if startup {
                     this.save_startup_flag(key, *checked, cx);
                 } else {
                     this.save_flag(key, *checked, cx);
@@ -351,15 +443,24 @@ impl DevModeView {
             cx,
         )];
 
-        // Test SFTP server fields.
+        // Test SFTP server fields: only while Submission is "Test server".
+        if current != Some(SubmissionMode::TestServer) {
+            return rows;
+        }
         let fields = dm::test_server_fields();
-        let field_row = |label: &str, input: &Entity<InputState>, env: Option<&'static str>| {
+        let muted = cx.theme().muted_foreground;
+        let help_line = move |text: &'static str| div().text_xs().text_color(muted).child(text);
+        let field_row = |label: &str,
+                         input: &Entity<InputState>,
+                         env: Option<&'static str>,
+                         help: Option<&'static str>| {
             div()
                 .flex()
                 .flex_col()
                 .gap_1()
                 .child(div().text_sm().child(label.to_string()))
                 .child(Input::new(input).disabled(env.is_some()))
+                .when_some(help, |col, help| col.child(help_line(help)))
                 .when_some(env, |col, name| {
                     col.child(
                         div()
@@ -390,14 +491,25 @@ impl DevModeView {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Test SFTP server"),
                 )
-                .child(field_row("Host", &self.host, fields.host.env))
-                .child(field_row("Port", &self.port, fields.port.env))
-                .child(field_row("Username", &self.username, fields.username.env))
-                .child(field_row("Folder", &self.folder, fields.folder.env))
+                .child(field_row("Host", &self.host, fields.host.env, None))
+                .child(field_row("Port", &self.port, fields.port.env, None))
+                .child(field_row(
+                    "Username",
+                    &self.username,
+                    fields.username.env,
+                    None,
+                ))
+                .child(field_row(
+                    "Folder",
+                    &self.folder,
+                    fields.folder.env,
+                    Some(FOLDER_HELP),
+                ))
                 .child(field_row(
                     "Host-key SHA-256",
                     &self.host_key,
                     fields.host_key_sha256.env,
+                    Some(HOST_KEY_HELP),
                 ))
                 .child(
                     div()
@@ -422,25 +534,36 @@ impl DevModeView {
                 .child(
                     div()
                         .flex()
-                        .items_center()
-                        .gap_2()
+                        .flex_col()
+                        .gap_1()
                         .child(
-                            Switch::new("dev_sftp_accept_any")
-                                .checked(accept.value)
-                                .disabled(accept.env_name().is_some())
-                                .label("Accept any host key")
-                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                                    this.save_flag(keys::SFTP_ACCEPT_ANY_HOST_KEY, *checked, cx)
-                                })),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    Switch::new("dev_sftp_accept_any")
+                                        .checked(accept.value)
+                                        .disabled(accept.env_name().is_some())
+                                        .label("Accept any host key")
+                                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                            this.save_flag(
+                                                keys::SFTP_ACCEPT_ANY_HOST_KEY,
+                                                *checked,
+                                                cx,
+                                            )
+                                        })),
+                                )
+                                .when_some(env_note(accept.source), |row, note| {
+                                    row.child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(crate::dev_mode::dev_orange())
+                                            .child(note),
+                                    )
+                                }),
                         )
-                        .when_some(env_note(accept.source), |row, note| {
-                            row.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(crate::dev_mode::dev_orange())
-                                    .child(note),
-                            )
-                        }),
+                        .child(help_line(ACCEPT_ANY_HELP)),
                 )
                 .child(
                     Button::new("dev_sftp_save")
@@ -460,10 +583,31 @@ impl DevModeView {
                 "Database",
                 &path.display().to_string(),
                 None,
-                Button::new("dev_db_export")
-                    .label("Export a copy…")
-                    .outline()
-                    .on_click(cx.listener(|this, _, _, cx| this.export_copy(cx)))
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .when(self.last_export.is_some(), |row| {
+                        row.child(
+                            Button::new("dev_db_export_open")
+                                .label("Open folder")
+                                .outline()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(saved) = &this.last_export
+                                        && let Err(error) = crate::export_target::open_folder(saved)
+                                    {
+                                        this.message = Some((false, error));
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                    })
+                    .child(
+                        Button::new("dev_db_export")
+                            .label("Export a copy…")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| this.export_copy(cx))),
+                    )
                     .into_any_element(),
                 cx,
             ),
@@ -476,6 +620,9 @@ impl DevModeView {
             keys::SEPARATE_DATABASE,
             cx,
         ));
+        if self.confirm_separate_db {
+            rows.push(self.render_separate_db_confirm(cx));
+        }
         rows
     }
 
@@ -520,12 +667,6 @@ impl Render for DevModeView {
                     .font_weight(FontWeight::BOLD)
                     .text_color(orange)
                     .child("Dev Mode"),
-            )
-            .child(
-                Button::new("dev_mode_close")
-                    .label("Close")
-                    .outline()
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(DevModeEvent::Close))),
             );
 
         let mut body: Vec<AnyElement> = Vec::new();

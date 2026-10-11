@@ -14,56 +14,87 @@ use gpui_rsx::rsx;
 use crate::app::{ActiveView, AppState, AppThemeMode, ProfileTargetAction};
 use bir_core::profile::TaxpayerProfile;
 
+/// Height of one sidebar menu row (full width).
+const MENU_ROW_HEIGHT: f32 = 32.;
+/// Size of one round sidebar menu button (mini sidebar).
+const MENU_MINI_SIZE: f32 = 36.;
+/// The profile list keeps room for this many profiles.
+const MIN_VISIBLE_PROFILES: usize = 3;
+/// One full-width profile row: `py_2` plus a name and a TIN line.
+const PROFILE_ROW_HEIGHT: f32 = 8. + 24. + 20. + 8.;
+/// Gap between profile rows (`gap_2`) and the list's top padding (`pt_2`).
+const PROFILE_ROW_GAP: f32 = 8.;
+const PROFILE_LIST_TOP_PAD: f32 = 8.;
+
+/// Minimum height of the profile list that shows `rows` profiles whole.
+pub(crate) fn profile_list_min_height(rows: usize) -> f32 {
+    PROFILE_LIST_TOP_PAD
+        + rows as f32 * PROFILE_ROW_HEIGHT
+        + rows.saturating_sub(1) as f32 * PROFILE_ROW_GAP
+}
+
+/// Number of fixed rows in the bottom menu (Import, theme, Notifications,
+/// Background Tasks, Tax Calendars, Settings + Dev chip).
+const MENU_ROWS: usize = 6;
+
+/// Height the full-width sidebar spends on everything except the profile
+/// list, with a session active (Logout row shown). Mirrors `render_sidebar`.
+pub(crate) fn sidebar_fixed_height() -> f32 {
+    let padding = 16. * 2.; // py_4
+    let gap = 8.; // gap_2 between the upper sections
+    let toggle = 40. + 4.; // toggle button + mb_1
+    let logo = 40.; // h_10
+    let header = 40.; // "TAXPAYER PROFILES" + add button
+    let search = 32.;
+    let divider = 1.;
+    let logout = MENU_ROW_HEIGHT;
+    let menu = MENU_ROWS as f32 * MENU_ROW_HEIGHT + (MENU_ROWS - 1) as f32 * 4.; // gap_1
+    // Sections in the upper column: (toggle+logo), header, search, divider,
+    // list, logout, divider -> 6 gaps.
+    padding + toggle + logo + header + search + divider + logout + divider + 6. * gap + menu
+}
+
 impl AppState {
-    /// Orange "Dev Mode" button beside Settings. Debug builds only; release
+    /// Small orange "Dev" chip beside Settings. Debug builds only; release
     /// builds render nothing.
-    fn render_dev_mode_button(&self, is_mini: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn render_dev_mode_chip(&self, is_mini: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
         #[cfg(debug_assertions)]
         {
             let orange = crate::dev_mode::dev_orange();
-            let active = self.dev_mode_view.is_some();
+            let active = self.active_view == ActiveView::DevMode;
             Some(
                 div()
                     .id("dev_mode_sidebar_btn")
                     .flex()
+                    .flex_shrink_0()
                     .items_center()
-                    .w_full()
+                    .justify_center()
+                    .gap_1()
+                    .h(px(if is_mini { 24. } else { MENU_ROW_HEIGHT }))
+                    .px_2()
+                    .rounded_full()
                     .cursor_pointer()
                     .border_1()
                     .border_color(orange)
-                    .when(active, |this| this.bg(orange.opacity(0.2)))
+                    .when(active, |this| this.bg(orange.opacity(0.25)))
                     .hover(move |s| s.bg(orange.opacity(0.15)))
-                    .when(is_mini, |this| {
-                        this.justify_center()
-                            .size(px(48.))
-                            .flex_shrink_0()
-                            .rounded_full()
-                    })
-                    .when(!is_mini, |this| {
-                        this.justify_start().h_10().px_3().gap_3().rounded_md()
-                    })
                     .on_click(cx.listener(|this, _ev, window, cx| {
-                        if this.dev_mode_view.is_some() {
-                            this.dev_mode_view = None;
-                            cx.notify();
-                        } else {
-                            this.open_dev_mode(window, cx);
-                        }
+                        this.open_dev_mode(window, cx);
                     }))
-                    .child(
-                        Icon::new(IconName::SquareTerminal)
-                            .size(px(20.))
-                            .text_color(orange),
-                    )
                     .when(!is_mini, |this| {
                         this.child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(orange)
-                                .child("Dev Mode"),
+                            Icon::new(IconName::SquareTerminal)
+                                .size(px(14.))
+                                .text_color(orange),
                         )
                     })
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(orange)
+                            .child("Dev"),
+                    )
                     .into_any_element(),
             )
         }
@@ -185,7 +216,7 @@ impl AppState {
                 bg={cx.theme().background}
                 border_r_1
                 border_color={cx.theme().border}
-                when={(!is_mini, |this| this.py_6())}
+                when={(!is_mini, |this| this.py_4())}
                 when={(is_mini, |this| this.py_3())}
                 flex
                 flex_col
@@ -194,7 +225,7 @@ impl AppState {
                 {div()
                     .flex()
                     .flex_col()
-                    .gap_4()
+                    .gap_2()
                     .flex_1()
                     .overflow_hidden()
                     .child(rsx! {
@@ -210,7 +241,7 @@ impl AppState {
                                 w_full
                                 when={(!is_mini, |this| this.justify_end())}
                                 when={(is_mini, |this| this.justify_center())}
-                                mb={px(10.)}
+                                mb_1
                             >
                                 <div
                                     id="sidebar_toggle_btn"
@@ -352,7 +383,6 @@ impl AppState {
                             root.into_any_element()
                         }
                     )
-                    .child(rsx! { <div h_2/> })
                     .child(rsx! {
                         <div
                             w_full
@@ -364,6 +394,10 @@ impl AppState {
                         v_flex()
                             .id(crate::agent::ids::SIDEBAR_PROFILE_LIST)
                             .flex_1()
+                            .when(!is_mini, |this| {
+                                this.flex_shrink_0()
+                                    .min_h(px(profile_list_min_height(MIN_VISIBLE_PROFILES)))
+                            })
                             .overflow_y_scroll()
                             .track_scroll(&self.sidebar_scroll)
                             .pt_2()
@@ -563,28 +597,20 @@ impl AppState {
                                     <div
                                         id="logout_btn_full"
                                         flex
-                                        flex_col
                                         items_center
-                                        justify_center
-                                        gap_2
-                                        w_full
-                                        py_4
+                                        gap_3
+                                        mx_6
+                                        px_3
+                                        h={px(MENU_ROW_HEIGHT)}
+                                        rounded_md
                                         cursor_pointer
-                                        hover={|s| s.bg(gpui::rgba(0xef444410))}
+                                        bg={gpui::rgba(0xef444420)}
+                                        hover={|s| s.bg(gpui::rgba(0xef444440))}
                                         on_click={cx.listener(|this, _, window, cx| {
                                             this.logout(window, cx);
                                         })}
                                     >
-                                        <div
-                                            flex
-                                            items_center
-                                            justify_center
-                                            size={px(48.)}
-                                            rounded_full
-                                            bg={gpui::rgba(0xef444420)}
-                                        >
-                                            <svg src="svg/power.svg" size={px(24.)} text_color={Hsla::from(gpui::rgba(0xef4444ff))}/>
-                                        </div>
+                                        <svg src="svg/power.svg" size={px(18.)} text_color={Hsla::from(gpui::rgba(0xef4444ff))}/>
                                         <div
                                             text_sm
                                             font_weight={FontWeight::BOLD}
@@ -607,7 +633,7 @@ impl AppState {
                     })}
                 <div
                     base={v_flex()}
-                    gap_2
+                    gap_1
                     w_full
                     when={(!is_mini, |this| this.px_6())}
                     when={(is_mini, |this| this.px_3())}
@@ -620,11 +646,12 @@ impl AppState {
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted))
                             .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
                             })
                             .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
+                            .when(self.active_view == ActiveView::ImportExport, |this| this.bg(cx.theme().accent))
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 if this.block_unsaved_compliance_navigation(window, cx) {
                                     return;
@@ -645,10 +672,10 @@ impl AppState {
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted))
                             .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
                             })
                             .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 crate::theme::cycle_theme(&mut this.theme_preference, &this.db, window, cx);
@@ -679,11 +706,12 @@ impl AppState {
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted))
                             .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
                             })
                             .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
+                            .when(self.active_view == ActiveView::Notifications, |this| this.bg(cx.theme().accent))
                             .on_click(cx.listener(|this, _ev, _window, cx| {
                                 // Keep the view's profile scope current before
                                 // showing it, so switching profile then opening
@@ -708,11 +736,12 @@ impl AppState {
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted))
                             .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
                             })
                             .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
+                            .when(self.active_view == ActiveView::CronTasks, |this| this.bg(cx.theme().accent))
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 this.request_admin_access(ActiveView::CronTasks, window, cx);
                             }))
@@ -729,11 +758,12 @@ impl AppState {
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted))
                             .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
                             })
                             .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
+                            .when(self.active_view == ActiveView::AdminCalendarDashboard, |this| this.bg(cx.theme().accent))
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 this.request_admin_access(ActiveView::AdminCalendarDashboard, window, cx);
                             }))
@@ -743,18 +773,25 @@ impl AppState {
                             })
                     }
                     {div()
+                        .flex()
+                        .w_full()
+                        .gap_1()
+                        .when(is_mini, |this| this.flex_col().items_center())
+                        .when(!is_mini, |this| this.items_center())
+                        .child(div()
                             .id("settings_sidebar_btn")
                             .flex()
                             .items_center()
-                            .w_full()
+                            .when(!is_mini, |this| this.flex_1())
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted))
                             .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
                             })
                             .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
+                            .when(self.active_view == ActiveView::Settings, |this| this.bg(cx.theme().accent))
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 this.request_admin_access(ActiveView::Settings, window, cx);
                             }))
@@ -762,10 +799,60 @@ impl AppState {
                             .when(!is_mini, |this| {
                                 this.child(rsx! { <div text_sm text_color={cx.theme().foreground}>{"Settings"}</div> })
                             })
+                        )
+                        .children(self.render_dev_mode_chip(is_mini, cx))
                     }
-                    {self.render_dev_mode_button(is_mini, cx).unwrap_or_else(|| div().into_any_element())}
                 </div>
             </div>
         }
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::{
+        MENU_MINI_SIZE, MENU_ROW_HEIGHT, MIN_VISIBLE_PROFILES, PROFILE_ROW_GAP, PROFILE_ROW_HEIGHT,
+        profile_list_min_height, sidebar_fixed_height,
+    };
+    use crate::app::ActiveView;
+
+    /// Default window height before F10A sizing (and the smallest we target).
+    const DEFAULT_HEIGHT: f32 = 768.;
+
+    #[test]
+    fn three_profiles_fit_at_default_height() {
+        let room = DEFAULT_HEIGHT - sidebar_fixed_height();
+        assert!(
+            room >= profile_list_min_height(MIN_VISIBLE_PROFILES),
+            "profile list gets {room}px, needs {}",
+            profile_list_min_height(MIN_VISIBLE_PROFILES)
+        );
+    }
+
+    #[test]
+    fn min_height_counts_rows_and_gaps() {
+        assert_eq!(profile_list_min_height(1), 8. + PROFILE_ROW_HEIGHT);
+        assert_eq!(
+            profile_list_min_height(3),
+            8. + 3. * PROFILE_ROW_HEIGHT + 2. * PROFILE_ROW_GAP
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn dev_mode_is_an_active_view() {
+        let view = ActiveView::DevMode;
+        assert_ne!(view, ActiveView::Settings);
+        #[cfg(feature = "agent")]
+        assert_eq!(
+            crate::agent::ids::view_from_slug(crate::agent::ids::view_slug(view)),
+            Some(view)
+        );
+    }
+
+    #[test]
+    fn menu_rows_are_slimmer_than_before() {
+        const { assert!(MENU_ROW_HEIGHT < 40.) };
+        const { assert!(MENU_MINI_SIZE < 48.) };
     }
 }

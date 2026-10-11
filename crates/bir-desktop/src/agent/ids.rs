@@ -18,6 +18,8 @@ pub const PAGE_CRON_TASKS: &str = "page-cron-tasks";
 pub const PAGE_NOTIFICATIONS: &str = "page-notifications";
 pub const PAGE_IMPORT_EXPORT: &str = "page-import-export";
 pub const PAGE_SETTINGS: &str = "page-settings";
+#[cfg(debug_assertions)]
+pub const PAGE_DEV_MODE: &str = "page-dev-mode";
 pub const PAGE_ADMIN_CALENDAR: &str = "page-admin-calendar";
 pub const PAGE_FORM_2551Q: &str = "page-form-2551q";
 pub const PAGE_FORM_1601C: &str = "page-form-1601c";
@@ -320,6 +322,8 @@ pub fn page_root(view: ActiveView) -> &'static str {
         ActiveView::Notifications => PAGE_NOTIFICATIONS,
         ActiveView::ImportExport => PAGE_IMPORT_EXPORT,
         ActiveView::Settings => PAGE_SETTINGS,
+        #[cfg(debug_assertions)]
+        ActiveView::DevMode => PAGE_DEV_MODE,
         ActiveView::AdminCalendarDashboard => PAGE_ADMIN_CALENDAR,
         ActiveView::Form2551Q => PAGE_FORM_2551Q,
         ActiveView::Form1601C => PAGE_FORM_1601C,
@@ -337,6 +341,8 @@ pub fn view_slug(view: ActiveView) -> &'static str {
         ActiveView::Notifications => "notifications",
         ActiveView::ImportExport => "import-export",
         ActiveView::Settings => "settings",
+        #[cfg(debug_assertions)]
+        ActiveView::DevMode => "dev-mode",
         ActiveView::AdminCalendarDashboard => "admin-calendar",
         ActiveView::Form2551Q => "form-2551q",
         ActiveView::Form1601C => "form-1601c",
@@ -354,6 +360,8 @@ pub fn view_from_slug(slug: &str) -> Option<ActiveView> {
         "notifications" => Some(ActiveView::Notifications),
         "import-export" | "import" => Some(ActiveView::ImportExport),
         "settings" => Some(ActiveView::Settings),
+        #[cfg(debug_assertions)]
+        "dev-mode" | "dev_mode" => Some(ActiveView::DevMode),
         "admin-calendar" | "tax-calendars" => Some(ActiveView::AdminCalendarDashboard),
         "form-2551q" | "2551q" => Some(ActiveView::Form2551Q),
         "form-1601c" | "1601c" => Some(ActiveView::Form1601C),
