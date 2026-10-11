@@ -334,13 +334,6 @@ impl Form2200TView {
                 0
             };
         }
-        if let Some(year) = number("year", "Item 1 year") {
-            draft.year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         if let Some(sheets) = number("sheets", "Item 3") {
             draft.number_of_attached_sheets = if (0.0..=9999.0).contains(&sheets) {
                 sheets as u16
@@ -744,31 +737,24 @@ impl Form2200TView {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("2200t_month", index),
-                    *name,
-                    self.draft.month == month,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month))),
-            );
-        }
-        let amended = self.draft.is_amended;
-        let children = vec![
+        let read_only_row = |label: &str, value: String| {
             div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(self.label("Item 1 — Month", self.has_error("month")))
-                .child(months)
-                .into_any_element(),
+                .child(self.label(label, false))
+                .child(div().font_weight(FontWeight::BOLD).child(value))
+                .into_any_element()
+        };
+        let month_name = MONTHS
+            .get((self.draft.month as usize).wrapping_sub(1))
+            .copied()
+            .unwrap_or("-");
+        let amended = self.draft.is_amended;
+        let children = vec![
+            read_only_row("Item 1 — Month", month_name.to_string()),
             self.field("day", "Item 1 — Day", layout, !editable),
-            self.field("year", "Item 1 — Year", layout, !editable),
+            read_only_row("Item 1 — Year", self.draft.year.to_string()),
             self.choice_row(
                 "Item 2 — Amended return?",
                 false,
