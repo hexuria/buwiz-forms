@@ -14,13 +14,14 @@ use bir_core::forms::form_1800::{
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
-use gpui_component::Disableable;
 use gpui_component::button::Button;
+use gpui_component::{ActiveTheme, Disableable};
 
 use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
     computed, field, format_tin, grid, money_text, section,
 };
+use super::form_controls::{messages_for, with_field_error};
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -73,6 +74,44 @@ const REAL_FIELDS: [(&str, &str); 8] = [
 
 fn key(prefix: &str, row: usize, part: &str) -> String {
     format!("{prefix}{row}_{part}")
+}
+
+/// The row number in an editor key built by [`key`] (`"pp3_fmv"` is 3 for
+/// prefix `"pp"`).
+fn row_of(editor_key: &str, prefix: &str) -> Option<usize> {
+    editor_key
+        .strip_prefix(prefix)?
+        .split('_')
+        .next()?
+        .parse()
+        .ok()
+}
+
+/// Every validation key whose message belongs under the editor `editor_key`:
+/// its own key (malformed numbers) and the model's field name.
+fn error_keys(editor_key: &str) -> Vec<String> {
+    let mut keys = vec![editor_key.to_string()];
+    let model: &[&str] = match editor_key {
+        "month" | "day" | "year" => &["donation_date"],
+        "sheets" => &["number_of_attached_sheets"],
+        "rdo" => &["rdo_code"],
+        "name" => &["donor_name"],
+        "relief" => &["tax_relief"],
+        "prior_net" => &["prior_net_gifts"],
+        "credit_a" => &["prior_gift_payments"],
+        "credit_b" => &["foreign_tax_paid"],
+        "credit_c" => &["tax_paid_previous"],
+        _ => &[],
+    };
+    keys.extend(model.iter().map(|k| k.to_string()));
+    if let Some(row) = row_of(editor_key, "donee") {
+        keys.push(format!("donees[{row}]"));
+    } else if let Some(row) = row_of(editor_key, "pp").filter(|_| editor_key.ends_with("_fmv")) {
+        keys.push(format!("personal_properties[{row}].fair_market_value"));
+    } else if let Some(row) = row_of(editor_key, "rp").filter(|_| editor_key.ends_with("_fmv")) {
+        keys.push(format!("real_properties[{row}].fair_market_value"));
+    }
+    keys
 }
 
 pub struct Form1800View {
@@ -213,24 +252,75 @@ impl Form1800View {
             .unwrap_or("")
     }
 
+    /// Messages (malformed input and validation) for any of `keys`.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.kit
+                .parse_errors
+                .iter()
+                .chain(self.kit.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// `element` with the messages for `keys` directly under it.
+    fn with_errors(&self, element: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(element, self.errors_for(keys))
+    }
+
+    /// An input with its own messages directly under it.
+    fn with_input_errors(&self, input: AnyElement, k: &str) -> AnyElement {
+        let keys = error_keys(k);
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        self.with_errors(input, &keys)
+    }
+
+    /// A read-only profile value with its messages under it, plus a pointer
+    /// to Profile Settings when there are any.
+    fn with_profile_note(
+        &self,
+        element: AnyElement,
+        keys: &[&str],
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let element = self.with_errors(element, keys);
+        if self.errors_for(keys).is_none() {
+            return element;
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(element)
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("This comes from your taxpayer profile. Edit it in Profile Settings."),
+            )
+            .into_any_element()
+    }
+
     fn f(&self, k: &str, layout: Layout, disabled: bool) -> AnyElement {
-        field(
+        let input = field(
             &self.kit,
             k,
             Self::label(k),
             layout,
             disabled || !self.draft.lifecycle.is_editable(),
-        )
+        );
+        self.with_input_errors(input, k)
     }
 
     fn cell(&self, k: String, caption: String, layout: Layout) -> AnyElement {
-        field(
+        let input = field(
             &self.kit,
             &k,
             &caption,
             layout,
             !self.draft.lifecycle.is_editable(),
-        )
+        );
+        self.with_input_errors(input, &k)
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -283,6 +373,7 @@ impl Form1800View {
                     .child(format_tin(&d.tin)),
             )
             .into_any_element();
+        let tin = self.with_profile_note(tin, &["tin"], cx);
         let children = vec![
             self.f("month", layout, false),
             self.f("day", layout, false),
@@ -325,7 +416,10 @@ impl Form1800View {
             "Part I — Taxpayer information",
             vec![
                 grid(layout, children),
-                kit::label("Item 12 — Donees").into_any_element(),
+                self.with_errors(
+                    kit::label("Item 12 — Donees").into_any_element(),
+                    &["donees"],
+                ),
                 grid(layout, donees),
                 grid(layout, relief_rows),
             ],
@@ -472,10 +566,13 @@ impl Form1800View {
             self.f("prior_net", layout, false),
             computed("36 — Total net gifts", d.total_net_gifts, cx),
             computed("37 — Less: Exempt gift", FORM_1800_EXEMPT_GIFT, cx),
-            computed(
-                "38 — Total net gifts subject to tax",
-                d.net_gifts_subject_to_tax,
-                cx,
+            self.with_errors(
+                computed(
+                    "38 — Total net gifts subject to tax",
+                    d.net_gifts_subject_to_tax,
+                    cx,
+                ),
+                &["net_gifts_subject_to_tax"],
             ),
         ];
         let children = vec![
@@ -515,7 +612,10 @@ impl Form1800View {
                 "Part IV — Computation of tax (gifts and deductions)",
                 vec![
                     grid(layout, part_four),
-                    kit::label("Items 28–32 — Deductions").into_any_element(),
+                    self.with_errors(
+                        kit::label("Items 28–32 — Deductions").into_any_element(),
+                        &["deductions"],
+                    ),
                     grid(layout, deductions),
                     grid(layout, part_four_rest),
                 ],
@@ -758,8 +858,24 @@ impl Render for Form1800View {
 
 #[cfg(test)]
 mod tests {
-    use super::{AMOUNTS, Form1800PersonalProperty, Form1800View, TEXT_INPUTS, key};
+    use super::{AMOUNTS, Form1800PersonalProperty, Form1800View, TEXT_INPUTS, error_keys, key};
     use bir_core::forms::form_1800::Form1800Draft;
+
+    /// Each message the model records lands under the editor it names.
+    #[test]
+    fn model_error_keys_reach_their_editors() {
+        assert!(error_keys("month").contains(&"donation_date".to_string()));
+        assert!(error_keys("rdo").contains(&"rdo_code".to_string()));
+        assert!(error_keys("name").contains(&"donor_name".to_string()));
+        assert!(error_keys("donee3_tin").contains(&"donees[3]".to_string()));
+        assert!(
+            error_keys("pp7_fmv").contains(&"personal_properties[7].fair_market_value".to_string())
+        );
+        assert!(
+            error_keys("rp2_fmv").contains(&"real_properties[2].fair_market_value".to_string())
+        );
+        assert_eq!(error_keys("pp7_desc"), ["pp7_desc"]);
+    }
 
     /// Every stored row gets an editor holding its value, so read-back keeps
     /// rows past the first five.

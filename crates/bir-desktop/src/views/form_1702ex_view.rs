@@ -1311,10 +1311,44 @@ impl Form1702ExView {
         for text in &TEXTS[8..13] {
             fields.push(self.field(text.key, text.label, layout, !editable));
         }
-        self.section(
-            "Part I — Background Information",
-            vec![self.grid(layout, fields)],
-            cx,
+        let mut children = vec![self.grid(layout, fields)];
+        children.extend(self.render_profile_errors(cx));
+        self.section("Part I — Background Information", children, cx)
+    }
+
+    /// Messages for the hidden profile values (Telephone, Line of business):
+    /// they have no field here, so they are listed once with a pointer to
+    /// Profile Settings. `None` when there are none.
+    fn render_profile_errors(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        const LINES: [(&str, &[&str]); 2] = [
+            ("Telephone", &["contact_number"]),
+            ("Line of business", &["line_of_business"]),
+        ];
+        let lines: Vec<AnyElement> = LINES
+            .iter()
+            .filter_map(|(label, keys)| {
+                self.errors_for(keys)
+                    .map(|message| field_error(format!("{label}: {message}")).into_any_element())
+            })
+            .collect();
+        if lines.is_empty() {
+            return None;
+        }
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .children(lines)
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(
+                            "These come from your taxpayer profile. Edit them in Profile Settings.",
+                        ),
+                )
+                .into_any_element(),
         )
     }
 

@@ -23,11 +23,85 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
 impl EventEmitter<QueueableFormEvent> for Form1702qView {}
+
+/// Item 2 fiscal year-end month choices: (stored value, shown label). The
+/// fiscal year never ends in December (that is the calendar year).
+const MONTH_OPTIONS: [(&str, &str); 11] = [
+    ("1", "January"),
+    ("2", "February"),
+    ("3", "March"),
+    ("4", "April"),
+    ("5", "May"),
+    ("6", "June"),
+    ("7", "July"),
+    ("8", "August"),
+    ("9", "September"),
+    ("10", "October"),
+    ("11", "November"),
+];
+
+/// Item 5 regular/special rate ATC choices: (stored value, shown label).
+fn atc_options() -> Vec<(&'static str, &'static str)> {
+    FORM_1702Q_ATC_OPTIONS
+        .iter()
+        .map(|option| (option.value, option.label))
+        .collect()
+}
+
+/// The model's field names behind an editor key (validation uses them).
+fn model_keys(key: &str) -> &'static [&'static str] {
+    match key {
+        "year" => &["taxable_year"],
+        "name" => &["taxpayer_name"],
+        "address" => &["registered_address"],
+        "zip" => &["zip_code"],
+        "phone" => &["contact_number"],
+        "lob" => &["line_of_business"],
+        "relief" => &["tax_relief_specify"],
+        "s2_rate" => &["regular_rate_text"],
+        "s3_rate" => &["mcit_rate_text"],
+        "sheets" => &["number_of_attachments"],
+        "s1a_sales" => &["exempt.sales"],
+        "s1a_cost" => &["exempt.cost_of_sales"],
+        "s1a_other" => &["exempt.other_income"],
+        "s1a_deductions" => &["exempt.deductions"],
+        "s1b_sales" => &["special.sales"],
+        "s1b_cost" => &["special.cost_of_sales"],
+        "s1b_other" => &["special.other_income"],
+        "s1b_deductions" => &["special.deductions"],
+        "s1b_rate" => &["special.rate"],
+        "s1b_share" => &["share_of_other_agencies"],
+        "s2_sales" => &["sales"],
+        "s2_cost" => &["cost_of_sales"],
+        "s2_other" => &["other_income"],
+        "s2_deductions" => &["deductions"],
+        "s2_previous" => &["previous_quarters_taxable_income"],
+        "s4_prior" => &["prior_year_excess_credits"],
+        "s4_payments" => &["previous_quarters_payments"],
+        "s4_mcit_payments" => &["previous_quarters_mcit_payments"],
+        "s4_cwt_previous" => &["previous_quarters_cwt"],
+        "s4_cwt" => &["cwt_this_quarter"],
+        "s4_previously_filed" => &["previously_filed"],
+        "p2_prior_mcit" => &["prior_year_mcit_excess"],
+        "p2_surcharge" => &["surcharge"],
+        "p2_interest" => &["interest"],
+        "p2_compromise" => &["compromise"],
+        "other_desc0" => &["other_credits[0].description", "other_credits"],
+        "other_desc1" => &["other_credits[1].description", "other_credits"],
+        "other_amount0" => &["other_credits[0].amount"],
+        "other_amount1" => &["other_credits[1].amount"],
+        _ => &[],
+    }
+}
 
 /// Width classes the page lays out for.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -594,6 +668,8 @@ pub struct Form1702qView {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    month_select: Entity<ComboboxState>,
+    atc_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -797,18 +873,33 @@ impl Form1702qView {
         .into_any_element()
     }
 
-    /// A labelled input. On phones the label sits above the field.
+    /// Messages for any of `keys`, from malformed input and from validation.
+    fn errors_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors
+                .iter()
+                .chain(self.validation_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Put the messages for `keys` directly under an already-built element.
+    fn with_errors(&self, content: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(content, self.errors_for(keys))
+    }
+
+    /// A labelled input. On phones the label sits above the field; its
+    /// message (if any) sits directly under it.
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
         let input = self
             .inputs
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key);
+        let mut keys = vec![key];
+        keys.extend_from_slice(model_keys(key));
+        let message = self.errors_for(&keys);
+        let error = message.is_some();
         let label = div()
             .min_w_0()
             .max_w_full()
@@ -820,7 +911,7 @@ impl Form1702qView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -836,7 +927,8 @@ impl Form1702qView {
                 .child(label.w(relative(0.55)))
                 .child(body.w(relative(0.45))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, message)
     }
 
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
@@ -1020,30 +1112,26 @@ impl Form1702qView {
             ],
         )];
         if fiscal {
-            let months = (1..=11u8)
-                .map(|month| {
-                    Self::choice(
-                        ("1702q_month", month as usize),
-                        format!("{month:02}"),
-                        d.year_end_month == month,
-                        !editable,
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.edit(window, cx, |d| d.year_end_month = month)
-                    }))
-                })
-                .collect();
-            children.push(self.choice_row("Item 2 — Month the fiscal year ends", months));
+            let month = d.year_end_month.to_string();
+            children.push(select_field(
+                "Item 2 — Month the fiscal year ends",
+                &self.month_select,
+                &MONTH_OPTIONS,
+                (1..=11)
+                    .contains(&d.year_end_month)
+                    .then_some(month.as_str()),
+                !editable,
+                self.errors_for(&["year_end_month"]).as_deref(),
+                cx,
+            ));
         }
-        children.push(Self::read_only_row(
-            layout,
-            TEXTS[0].label,
-            &d.taxable_year.to_string(),
+        children.push(self.with_errors(
+            Self::read_only_row(layout, TEXTS[0].label, &d.taxable_year.to_string()),
+            &["taxable_year"],
         ));
-        children.push(Self::read_only_row(
-            layout,
-            "Item 3 — Quarter",
-            &format!("Q{}", d.quarter),
+        children.push(self.with_errors(
+            Self::read_only_row(layout, "Item 3 — Quarter", &format!("Q{}", d.quarter)),
+            &["quarter"],
         ));
         children.push(self.choice_row(
             "Item 4 — Amended return?",
@@ -1064,22 +1152,16 @@ impl Form1702qView {
             vec![self.section("Return period", vec![self.grid(layout, children)], cx)];
 
         // Item 5.
-        let atc_buttons = FORM_1702Q_ATC_OPTIONS
-            .iter()
-            .enumerate()
-            .map(|(index, option)| {
-                let value = option.value;
-                Self::choice(
-                    ("1702q_atc", index),
-                    option.label,
-                    d.atc == value,
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.edit(window, cx, |d| d.atc = value.to_string())
-                }))
-            })
-            .collect();
+        let atc_choices = atc_options();
+        let atc_field = select_field(
+            "Regular/special rate ATC",
+            &self.atc_select,
+            &atc_choices,
+            (!d.atc.is_empty()).then_some(d.atc.as_str()),
+            !editable,
+            self.errors_for(&["atc"]).as_deref(),
+            cx,
+        );
         let mcit = vec![
             Self::choice(
                 "1702q_mcit",
@@ -1093,10 +1175,7 @@ impl Form1702qView {
         ];
         sections.push(self.section(
             "Item 5 — Alphanumeric Tax Code (ATC)",
-            vec![
-                self.choice_row("MCIT", mcit),
-                self.choice_row("Regular/special rate ATC", atc_buttons),
-            ],
+            vec![self.choice_row("MCIT", mcit), atc_field],
             cx,
         ));
         div()
@@ -1110,28 +1189,27 @@ impl Form1702qView {
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — TIN / Item 7 — RDO"),
-                )
-                .child(div().font_weight(FontWeight::BOLD).child(format!(
-                    "{}  ·  RDO {}",
-                    format_tin(&d.tin),
-                    d.rdo_code
-                )))
-                .into_any_element(),
-        ];
+        let identity = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("Item 6 — TIN / Item 7 — RDO"),
+            )
+            .child(div().font_weight(FontWeight::BOLD).child(format!(
+                "{}  ·  RDO {}",
+                format_tin(&d.tin),
+                d.rdo_code
+            )))
+            .into_any_element();
+        let mut fields = vec![self.with_errors(identity, &["tin", "rdo_code"])];
         for text in &TEXTS[1..6] {
             fields.push(self.field(text.key, text.label, layout, !editable));
         }
-        fields.push(self.choice_row(
+        let deduction = self.choice_row(
             "Item 12 — Method of deductions",
             vec![
                 Self::choice(
@@ -1153,7 +1231,24 @@ impl Form1702qView {
                     this.edit(window, cx, |d| d.deduction = Form1702qDeduction::Osd)
                 })),
             ],
-        ));
+        );
+        let deduction = if d.osd_allowed() {
+            deduction
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(deduction)
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("OSD needs an ATC at 30%, 25% or 20%, or IC 021."),
+                )
+                .into_any_element()
+        };
+        fields.push(self.with_errors(deduction, &["deduction"]));
         fields.push(self.choice_row(
             "Item 13 — Availing of tax relief under a special law/treaty?",
             vec![
@@ -1170,10 +1265,31 @@ impl Form1702qView {
             ],
         ));
         fields.push(self.field("relief", TEXTS[7].label, layout, !editable || !d.tax_relief));
-        self.section(
-            "Part I — Background Information",
-            vec![self.grid(layout, fields)],
-            cx,
+        let mut children = vec![self.grid(layout, fields)];
+        children.extend(self.render_profile_errors(cx));
+        self.section("Part I — Background Information", children, cx)
+    }
+
+    /// Message for the hidden profile value (Line of business): it has no
+    /// field here, so it is listed once with a pointer to Profile Settings.
+    /// `None` when there is none.
+    fn render_profile_errors(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let message = self.errors_for(&["line_of_business"])?;
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(field_error(format!("Line of business: {message}")))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(
+                            "These come from your taxpayer profile. Edit them in Profile Settings.",
+                        ),
+                )
+                .into_any_element(),
         )
     }
 
@@ -1294,12 +1410,37 @@ impl QueueableFormView for Form1702qView {
             ));
             inputs.insert(key, input);
         }
+        let month_select = form_controls::new_select_state(&MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &month_select,
+            &MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(window, cx, |d| d.year_end_month = month);
+                }
+            },
+        ));
+        let atc_choices = atc_options();
+        let atc_select = form_controls::new_select_state(&atc_choices, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &atc_select,
+            &atc_choices,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                this.edit(window, cx, |d| d.atc = value);
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            month_select,
+            atc_select,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1539,11 +1680,29 @@ impl Render for Form1702qView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
+        let month_text = self.draft.year_end_month.to_string();
+        form_controls::sync_select(
+            &self.month_select,
+            &MONTH_OPTIONS,
+            (1..=11)
+                .contains(&self.draft.year_end_month)
+                .then_some(month_text.as_str()),
+            window,
+            cx,
+        );
+        let atc_choices = atc_options();
+        form_controls::sync_select(
+            &self.atc_select,
+            &atc_choices,
+            (!self.draft.atc.is_empty()).then_some(self.draft.atc.as_str()),
+            window,
+            cx,
+        );
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1596,6 +1755,11 @@ impl Render for Form1702qView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_sm().text_color(cx.theme().danger).child(format!(
+                                "{error_count} item(s) under Needs review block queueing."
+                            )))
                         })
                         .child(
                             Button::new("1702q_submit")
@@ -1727,8 +1891,38 @@ impl Render for Form1702qView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Form1702qView, Layout, format_tin, parse_amount, whole_pesos};
+    use super::{
+        Form1702qView, Layout, MONTH_OPTIONS, atc_options, format_tin, model_keys, parse_amount,
+        whole_pesos,
+    };
+    use bir_core::forms::form_1702q::FORM_1702Q_ATC_OPTIONS;
     use gpui::px;
+
+    #[test]
+    fn month_select_lists_january_to_november() {
+        assert_eq!(MONTH_OPTIONS.len(), 11);
+        assert_eq!(MONTH_OPTIONS[0], ("1", "January"));
+        assert_eq!(MONTH_OPTIONS[10], ("11", "November"));
+    }
+
+    #[test]
+    fn atc_select_lists_every_official_code_once() {
+        let options = atc_options();
+        assert_eq!(options.len(), FORM_1702Q_ATC_OPTIONS.len());
+        let unique: std::collections::BTreeSet<_> = options.iter().map(|(v, _)| *v).collect();
+        assert_eq!(unique.len(), options.len());
+    }
+
+    #[test]
+    fn every_editor_key_has_model_keys_or_none_to_show() {
+        // Editors whose message sits under their own key need no mapping.
+        for (key, _) in Form1702qView::all_keys() {
+            let mapped = model_keys(&key);
+            assert!(mapped.iter().all(|m| !m.is_empty()), "{key}");
+        }
+        assert_eq!(model_keys("s2_sales"), ["sales"]);
+        assert_eq!(model_keys("other_amount1"), ["other_credits[1].amount"]);
+    }
 
     #[test]
     fn whole_pesos_round_half_up_with_separators() {
