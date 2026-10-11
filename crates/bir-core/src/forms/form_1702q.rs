@@ -1012,6 +1012,9 @@ impl Form1702qDraft {
         // Both txtTelNum controls (Item 10 and the hidden profile copy).
         put("txtTelNum", self.contact_number.trim().to_string());
         put("txtLOB", upper(&self.line_of_business));
+        // saveEncryptedProfile writes the pager as the constant "1"
+        // ("set page to 1"), whatever page the filer is on.
+        put("txtCurrentPage", "1".to_string());
         put(
             "rbMthdOfDdctns_1",
             flag(self.deduction == Form1702qDeduction::Itemized),
