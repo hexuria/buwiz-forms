@@ -11,15 +11,16 @@ use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
-use crate::app::{ActiveView, AppState, AppThemeMode, ProfileTargetAction};
+use crate::app::{ActiveView, AppState, ProfileTargetAction};
 use bir_core::profile::TaxpayerProfile;
 
 /// Height of one sidebar menu row (full width).
 const MENU_ROW_HEIGHT: f32 = 32.;
 /// Size of one round sidebar menu button (mini sidebar).
 const MENU_MINI_SIZE: f32 = 36.;
-/// The profile list keeps room for this many profiles.
-const MIN_VISIBLE_PROFILES: usize = 3;
+/// The profile list keeps room for this many profiles (4 since the
+/// Notifications and theme rows moved to the top strip).
+const MIN_VISIBLE_PROFILES: usize = 4;
 /// One full-width profile row: `py_2` plus a name and a TIN line.
 const PROFILE_ROW_HEIGHT: f32 = 8. + 24. + 20. + 8.;
 /// Gap between profile rows (`gap_2`) and the list's top padding (`pt_2`).
@@ -33,9 +34,10 @@ pub(crate) fn profile_list_min_height(rows: usize) -> f32 {
         + rows.saturating_sub(1) as f32 * PROFILE_ROW_GAP
 }
 
-/// Number of fixed rows in the bottom menu (Import, theme, Notifications,
-/// Background Tasks, Tax Calendars, Settings + Dev chip).
-const MENU_ROWS: usize = 6;
+/// Number of fixed rows in the bottom menu (Import, Background Tasks, Tax
+/// Calendars, Settings + Dev chip). Notifications and the theme toggle live
+/// in the top strip (`top_bar`).
+const MENU_ROWS: usize = 4;
 
 /// Height the full-width sidebar spends on everything except the profile
 /// list, with a session active (Logout row shown). Mirrors `render_sidebar`.
@@ -665,70 +667,6 @@ impl AppState {
                             })
                     }
                     {div()
-                            .id("theme_toggle_sidebar_btn")
-                            .flex()
-                            .items_center()
-                            .w_full()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted))
-                            .when(is_mini, |this| {
-                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                            })
-                            .when(!is_mini, |this| {
-                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                            })
-                            .on_click(cx.listener(|this, _ev, window, cx| {
-                                crate::theme::cycle_theme(&mut this.theme_preference, &this.db, window, cx);
-                                cx.notify();
-                            }))
-                            .child(match self.theme_preference {
-                                AppThemeMode::Dark => Icon::new(IconName::Moon).size(px(20.)).text_color(cx.theme().foreground),
-                                AppThemeMode::Light => Icon::new(IconName::Sun).size(px(20.)).text_color(cx.theme().foreground),
-                                AppThemeMode::System => Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground),
-                            })
-                            .when(!is_mini, |this| {
-                                this.child(rsx! {
-                                    <div text_sm text_color={cx.theme().foreground}>
-                                        {match self.theme_preference {
-                                            AppThemeMode::Dark => "Dark Mode",
-                                            AppThemeMode::Light => "Light Mode",
-                                            AppThemeMode::System => "System Theme",
-                                        }}
-                                    </div>
-                                })
-                            })
-                    }
-                    {div()
-                            .id("notifications_sidebar_btn")
-                            .flex()
-                            .items_center()
-                            .w_full()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted))
-                            .when(is_mini, |this| {
-                                this.justify_center().size(px(MENU_MINI_SIZE)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                            })
-                            .when(!is_mini, |this| {
-                                this.justify_start().h(px(MENU_ROW_HEIGHT)).px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                            })
-                            .when(self.active_view == ActiveView::Notifications, |this| this.bg(cx.theme().accent))
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                // Keep the view's profile scope current before
-                                // showing it, so switching profile then opening
-                                // Notifications cannot show the previous one's.
-                                let tin = this.active_session_tin.clone();
-                                this.notifications_view.update(cx, |view, cx| {
-                                    view.set_active_session_tin(tin, cx);
-                                });
-                                this.active_view = ActiveView::Notifications;
-                                cx.notify();
-                            }))
-                            .child(Icon::new(IconName::Bell).size(px(20.)).text_color(cx.theme().foreground))
-                            .when(!is_mini, |this| {
-                                this.child(rsx! { <div text_sm text_color={cx.theme().foreground}>{"Notifications"}</div> })
-                            })
-                    }
-                    {div()
                             .id("cron_tasks_sidebar_btn")
                             .flex()
                             .items_center()
@@ -811,8 +749,8 @@ impl AppState {
 #[cfg(test)]
 mod layout_tests {
     use super::{
-        MENU_MINI_SIZE, MENU_ROW_HEIGHT, MIN_VISIBLE_PROFILES, PROFILE_ROW_GAP, PROFILE_ROW_HEIGHT,
-        profile_list_min_height, sidebar_fixed_height,
+        MENU_MINI_SIZE, MENU_ROW_HEIGHT, MENU_ROWS, MIN_VISIBLE_PROFILES, PROFILE_ROW_GAP,
+        PROFILE_ROW_HEIGHT, profile_list_min_height, sidebar_fixed_height,
     };
     use crate::app::ActiveView;
 
@@ -820,7 +758,7 @@ mod layout_tests {
     const DEFAULT_HEIGHT: f32 = 768.;
 
     #[test]
-    fn three_profiles_fit_at_default_height() {
+    fn min_visible_profiles_fit_at_default_height() {
         let room = DEFAULT_HEIGHT - sidebar_fixed_height();
         assert!(
             room >= profile_list_min_height(MIN_VISIBLE_PROFILES),
@@ -848,6 +786,16 @@ mod layout_tests {
             crate::agent::ids::view_from_slug(crate::agent::ids::view_slug(view)),
             Some(view)
         );
+    }
+
+    #[test]
+    fn menu_has_four_rows_without_notifications_or_theme() {
+        assert_eq!(MENU_ROWS, 4);
+        assert_eq!(MIN_VISIBLE_PROFILES, 4);
+        // Menu: 4 rows and 3 gaps.
+        let menu = 4. * MENU_ROW_HEIGHT + 3. * 4.;
+        let room = DEFAULT_HEIGHT - sidebar_fixed_height();
+        assert_eq!(room, DEFAULT_HEIGHT - 270. - menu);
     }
 
     #[test]

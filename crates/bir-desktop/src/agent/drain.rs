@@ -406,17 +406,8 @@ fn apply_navigation(
                 cx.notify();
             }
         }
-        ActiveView::Notifications => {
-            if app.block_unsaved_compliance_navigation(window, cx) {
-                return;
-            }
-            let tin = app.active_session_tin.clone();
-            app.notifications_view.update(cx, |view, cx| {
-                view.set_active_session_tin(tin, cx);
-            });
-            app.active_view = ActiveView::Notifications;
-            cx.notify();
-        }
+        // A drawer over the current page, so no unsaved-changes gate.
+        ActiveView::Notifications => app.open_notifications(cx),
         ActiveView::ImportExport => {
             if app.block_unsaved_compliance_navigation(window, cx) {
                 return;

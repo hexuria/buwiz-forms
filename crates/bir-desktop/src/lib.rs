@@ -29,6 +29,7 @@ mod platform;
 mod quit_guard;
 mod sidebar;
 mod theme;
+mod top_bar;
 mod views;
 mod window_geometry;
 

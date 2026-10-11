@@ -172,6 +172,10 @@ pub struct AppState {
     pub(crate) is_sidebar_hidden: bool,
     /// Painted bounds of the sidebar and the content column, for the agent tree.
     pub(crate) layout_probe: crate::layout_probe::LayoutProbe,
+    /// Notifications drawer is showing (see `top_bar`).
+    pub(crate) notifications_open: bool,
+    /// Painted bounds of the bell, so a press on it is not an outside click.
+    pub(crate) bell_bounds: crate::layout_probe::BoundsCell,
     pub(crate) theme_preference: AppThemeMode,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) is_command_palette_open: bool,
@@ -533,9 +537,11 @@ impl AppState {
                     NotificationsEvent::ReconnectGoogleAccount
                     | NotificationsEvent::OpenProfileManager => {
                         this.active_view = ActiveView::ProfileManager;
+                        this.drawer_input(crate::top_bar::DrawerInput::Close, cx);
                     }
-                    NotificationsEvent::Open => {
-                        this.active_view = ActiveView::Notifications;
+                    NotificationsEvent::Open => this.open_notifications(cx),
+                    NotificationsEvent::Close => {
+                        this.drawer_input(crate::top_bar::DrawerInput::Close, cx);
                     }
                 }
                 cx.notify();
@@ -893,6 +899,8 @@ impl AppState {
             is_mini_sidebar: false,
             is_sidebar_hidden: false,
             layout_probe: crate::layout_probe::LayoutProbe::default(),
+            notifications_open: false,
+            bell_bounds: Default::default(),
             theme_preference,
             focus_handle: cx.focus_handle(),
             is_command_palette_open: false,
@@ -1522,7 +1530,8 @@ impl AppState {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
-            ActiveView::Notifications => self.notifications_view.clone().into_any_element(),
+            // Never painted as a page; `render` turns it into the drawer.
+            ActiveView::Notifications => div().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
             #[cfg(debug_assertions)]
@@ -1918,6 +1927,13 @@ impl Render for AppState {
             );
         }
 
+        // Notifications are a drawer, not a page: anything that still sets
+        // the old page view opens the drawer over the dashboard instead.
+        if self.active_view == ActiveView::Notifications {
+            self.active_view = ActiveView::GlobalDashboard;
+            self.open_notifications(cx);
+        }
+
         let dashboard_visible = self.active_view == ActiveView::Dashboard;
         if dashboard_visible && !self.dashboard_was_visible {
             self.dashboard_view
@@ -2075,6 +2091,11 @@ impl Render for AppState {
             .on_action(cx.listener(Self::handle_minimize_window))
             .on_action(cx.listener(Self::handle_zoom_window))
             .on_action(cx.listener(Self::handle_toggle_fullscreen))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _window, cx| {
+                if this.notifications_open && ev.keystroke.key == "escape" {
+                    this.drawer_input(crate::top_bar::DrawerInput::Escape, cx);
+                }
+            }))
             .child(rsx! {
                 <div
                     flex
@@ -2096,8 +2117,11 @@ impl Render for AppState {
                 >
                     <div flex_1 flex flex_col h_full overflow_hidden relative>
                         {crate::layout_probe::bounds_probe(self.layout_probe.page.clone())}
-                        {crate::dev_mode::render_pills(cx).unwrap_or_else(|| div().into_any_element())}
-                        {self.render_active_view(cx)}
+                        {self.render_top_bar(cx)}
+                        <div flex_1 min_h_0 w_full>
+                            {self.render_active_view(cx)}
+                        </div>
+                        {...self.render_notifications_drawer(cx)}
                     </div>
                 </div>
             })

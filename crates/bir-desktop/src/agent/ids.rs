@@ -28,7 +28,8 @@ pub const PAGE_FORM_2550Q: &str = "page-form-2550q";
 pub const NAV_GLOBAL_DASHBOARD: &str = "global_dashboard_btn";
 pub const NAV_NEW_PROFILE: &str = "add_profile_mini_btn";
 pub const NAV_IMPORT_EXPORT: &str = "import_export_sidebar_btn";
-pub const NAV_NOTIFICATIONS: &str = "notifications_sidebar_btn";
+/// The bell in the top strip; it opens the notifications drawer.
+pub const NAV_NOTIFICATIONS: &str = "notifications_bell_btn";
 pub const NAV_CRON_TASKS: &str = "cron_tasks_sidebar_btn";
 pub const NAV_ADMIN_CALENDAR: &str = "admin_calendar_sidebar_btn";
 pub const NAV_SETTINGS: &str = "settings_sidebar_btn";
