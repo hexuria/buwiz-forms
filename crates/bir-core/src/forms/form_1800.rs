@@ -20,7 +20,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use super::official_inputs::{
-    cents, digits_only, has_cent_precision, split_tin, tin_is_well_formed, within_round_limit,
+    RowInsertion, cents, digits_only, extend_layout, has_cent_precision, split_tin,
+    tin_is_well_formed, within_round_limit,
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
@@ -31,7 +32,8 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1800_FORM_ID: &str = "1800-v2018";
 /// Donees A–E (Item 12).
 pub const FORM_1800_DONEES: usize = 5;
-/// Rows of Schedules A and B on the page.
+/// Rows Schedules A and B open with; `addScheduleA` / `addScheduleB1` /
+/// `addScheduleB2` append more without a limit.
 pub const FORM_1800_SCHEDULE_ROWS: usize = 5;
 /// Deductions, Items 28–32.
 pub const FORM_1800_DEDUCTIONS: usize = 5;
@@ -400,7 +402,7 @@ impl Form1800Draft {
             "TotalNetGiftsSubjectToTax",
             amount(self.net_gifts_subject_to_tax),
         );
-        for index in 0..FORM_1800_SCHEDULE_ROWS {
+        for index in 0..Self::table_rows(&self.personal_properties) {
             let a = self
                 .personal_properties
                 .get(index)
@@ -411,6 +413,8 @@ impl Form1800Draft {
                 &format!("schedA:txtFairMarketValue{index}"),
                 amount(a.fair_market_value),
             );
+        }
+        for index in 0..Self::table_rows(&self.real_properties) {
             let b = self.real_properties.get(index).cloned().unwrap_or_default();
             for (key, value) in [
                 ("schedB1:txtOCT", &b.title_number),
@@ -440,6 +444,63 @@ impl Form1800Draft {
             "IS THE TERM OF DEBT INSTRUMENT LESS THAN A YEAR?".to_string(),
         );
         fields
+    }
+
+    /// Rows a schedule table writes: the page opens with five and the Add
+    /// buttons append more.
+    fn table_rows<T>(rows: &[T]) -> usize {
+        rows.len().max(FORM_1800_SCHEDULE_ROWS)
+    }
+
+    /// The generated layout (five rows per table) with the rows the Add
+    /// buttons append spliced in after the last row of their table.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        let base = crate::official_xml::layout(FORM_1800_FORM_ID).map_err(|e| e.to_string())?;
+        let tables: [(usize, &[&str]); 3] = [
+            (
+                Self::table_rows(&self.personal_properties),
+                &[
+                    "chkscheduleADelete",
+                    "frm1800v2018:schedA:txtParticulars",
+                    "frm1800v2018:schedA:txtFairMarketValue",
+                ],
+            ),
+            (
+                Self::table_rows(&self.real_properties),
+                &[
+                    "chkScheduleB1Delete",
+                    "frm1800v2018:schedB1:txtOCT",
+                    "frm1800v2018:schedB1:txtTaxDecNo",
+                    "frm1800v2018:schedB1:txtLocation",
+                    "frm1800v2018:schedB1:txtLotImprovement",
+                    "frm1800v2018:schedB1:txtClassification",
+                ],
+            ),
+            (
+                Self::table_rows(&self.real_properties),
+                &[
+                    "chkScheduleB2Delete",
+                    "frm1800v2018:schedB2:txtArea",
+                    "frm1800v2018:schedB2:txtFTD",
+                    "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                    "frm1800v2018:schedB2:txtFairMarketValue",
+                ],
+            ),
+        ];
+        let last = FORM_1800_SCHEDULE_ROWS - 1;
+        let mut insertions = Vec::new();
+        for (rows, columns) in tables {
+            for index in FORM_1800_SCHEDULE_ROWS..rows {
+                insertions.push(RowInsertion {
+                    after: format!("{}{}", columns[columns.len() - 1], index - 1),
+                    copies: columns
+                        .iter()
+                        .map(|column| (format!("{column}{last}"), format!("{column}{index}")))
+                        .collect(),
+                });
+            }
+        }
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -546,11 +607,8 @@ impl Form1800Draft {
                 );
             }
         }
-        if self.personal_properties.len() > FORM_1800_SCHEDULE_ROWS
-            || self.real_properties.len() > FORM_1800_SCHEDULE_ROWS
-            || self.deductions.len() > FORM_1800_DEDUCTIONS
-        {
-            err("schedules", "Schedules A and B hold five rows each.");
+        if self.deductions.len() > FORM_1800_DEDUCTIONS {
+            err("deductions", "Items 28 to 32 hold five deductions.");
         }
         let mut amounts: Vec<(String, f64)> = vec![
             ("prior_net_gifts".into(), self.prior_net_gifts),
@@ -662,6 +720,18 @@ impl QueueableForm for Form1800Draft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
+    }
+    /// The upload follows [`Form1800Draft::official_layout`].
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
 

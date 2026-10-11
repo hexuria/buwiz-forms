@@ -30,8 +30,6 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1801_FORM_ID: &str = "1801-v2018";
 /// Rows the page creates for every Part V schedule.
 pub const FORM_1801_SCHEDULE_ROWS: usize = 2;
-/// Rows a schedule may hold here ("Add row" has no limit on the page).
-pub const FORM_1801_MAX_SCHEDULE_ROWS: usize = 20;
 
 /// Column keys of each Part V table, in page order, with `{}` for the row
 /// number (`addRow_*` builds `<select id= frm1801v2018:sched1Class_N'`, so
@@ -1120,23 +1118,7 @@ impl Form1801Draft {
             err("tax_relief", "Specify the tax relief on Item 14A.");
         }
 
-        // Typing limits.
-        let lists = [
-            self.real_properties.len(),
-            self.family_homes.len(),
-            self.shares.len(),
-            self.other_personal.len(),
-            self.taxable_transfers.len(),
-            self.business_interests.len(),
-        ];
-        if lists.iter().any(|n| *n > FORM_1801_MAX_SCHEDULE_ROWS) {
-            err(
-                "schedules",
-                &format!(
-                    "Each Part V schedule holds at most {FORM_1801_MAX_SCHEDULE_ROWS} rows here."
-                ),
-            );
-        }
+        // Typing limits. The Part V tables have no row limit (`addRow_*`).
         for value in self
             .real_properties
             .iter()

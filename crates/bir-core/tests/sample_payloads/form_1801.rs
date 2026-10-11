@@ -159,3 +159,90 @@ fn form_1801_sample_with_tax_due_and_added_rows_is_current() {
         "e053260aa0353fb3a9c35d87a78f719fdc520763947a2f054b02ce917359c6b3",
     );
 }
+
+/// Every Part V table past the six rows the page used to show here, and
+/// Schedule 1 past the old 20-row cap: `addRow_*` has no limit.
+fn sample_1801_many_rows() -> Form1801Draft {
+    let mut d = sample_1801();
+    d.death_month = 9;
+    d.death_day = 16;
+    d.death_year = 2025;
+    let classes = ["RR", "CR", "A", "RC", "CC", "I", "APD"];
+    for k in 2..=21usize {
+        d.real_properties.push(Form1801RealProperty {
+            title_number: format!("T-{k:05}"),
+            tax_declaration_number: format!("TD-1{k:02}"),
+            location: format!("Lot {k}, Cebu City"),
+            lot_or_improvement: if k % 2 == 0 { "Lot" } else { "Improvement" }.into(),
+            area: format!("{}", 50 + k),
+            classification: classes[k % classes.len()].into(),
+            fmv_per_tax_declaration: format!("{}", k * 90_000),
+            fmv_per_zonal_value: format!("{}", k * 100_000),
+            value: split(k as f64 * 100_000.125, 0.0),
+        });
+    }
+    for k in 2..=7usize {
+        d.family_homes.push(Form1801RealProperty {
+            title_number: format!("F-{k:03}"),
+            tax_declaration_number: format!("FD-{k:03}"),
+            location: format!("Home {k}, Pasig City"),
+            area: format!("{}", 100 + k),
+            classification: classes[(k + 1) % classes.len()].into(),
+            fmv_per_tax_declaration: format!("{}", k * 50_000),
+            fmv_per_zonal_value: format!("{}", k * 60_000),
+            value: split(0.0, k as f64 * 1_000.5),
+            ..Default::default()
+        });
+        d.shares.push(Form1801Shares {
+            corporation: format!("Corp {k}"),
+            listing: if k % 2 == 0 { "Listed" } else { "Not Listed" }.into(),
+            certificate_number: format!("C-{k}00"),
+            number_of_shares: format!("{}", k * 10),
+            value_per_share: "10.00".into(),
+            value: split(k as f64 * 100.0, 0.0),
+        });
+        d.business_interests.push(Form1801Business {
+            name: format!("Shop {k}"),
+            address: format!("Street {k}, Taguig City"),
+            rdo_code: "044".into(),
+            value: split(0.0, k as f64 * 500.0),
+        });
+        d.taxable_transfers.push(Form1801Particular {
+            particulars: format!("Transfer {k}"),
+            value: split(k as f64 * 250.0, 0.0),
+        });
+    }
+    for k in 3..=7usize {
+        d.other_personal.push(Form1801Particular {
+            particulars: format!("Item {k}"),
+            value: split(k as f64 * 75.25, 0.0),
+        });
+    }
+    d.recompute();
+    d
+}
+
+#[test]
+fn form_1801_sample_with_many_rows_is_current() {
+    let draft = sample_1801_many_rows();
+    assert_eq!(draft.real_properties.len(), 21);
+    for n in [
+        draft.family_homes.len(),
+        draft.shares.len(),
+        draft.other_personal.len(),
+        draft.taxable_transfers.len(),
+        draft.business_interests.len(),
+    ] {
+        assert_eq!(n, 7);
+    }
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1801 must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1801-09162025",
+        &layout,
+        &payload,
+        "88a21bbbba7be3539d3adda4bb49d632bcf3700dd22124d853b17e4ef1085ded",
+    );
+}
