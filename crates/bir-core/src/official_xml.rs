@@ -490,11 +490,11 @@ pub fn official_amount(value: f64) -> String {
         }
         grouped.push(ch);
     }
-    let sign = if negative && cents_total > 0.0 {
-        "-"
-    } else {
-        ""
-    };
+    // Both official formatters keep the sign of any negative value, even
+    // one whose cents round to zero: formatCurrency(-0.004) and
+    // (-0.004).toFixed(2) give "-0.00" (checked in the official runtime).
+    // -0.0 is not negative and prints "0.00", as both do.
+    let sign = if negative { "-" } else { "" };
     format!("{sign}{grouped}.{cents:02}")
 }
 
@@ -571,6 +571,17 @@ mod tests {
     }
 
     #[test]
+    fn tiny_negative_keeps_its_minus_like_the_official_formatters() {
+        // Official runtime (BIR-Form2200Tv2020.hta): formatCurrency(-0.004),
+        // amtFormat(-0.004) and formatCurrency(-1e-17) all give "-0.00";
+        // formatCurrency(-0) gives "0.00".
+        assert_eq!(official_amount(-0.004), "-0.00");
+        assert_eq!(official_amount(-1e-17), "-0.00");
+        assert_eq!(official_amount(-0.0), "0.00");
+        assert_eq!(official_amount(0.004), "0.00");
+    }
+
+    #[test]
     fn official_amount_matches_format_currency() {
         // Expected values are node running the official formatCurrency().
         for (input, expected) in [
@@ -586,6 +597,7 @@ mod tests {
             (50000.0, "50,000.00"),
             (1500.125, "1,500.13"),
             (-250.5, "-250.50"),
+            (-0.005, "-0.01"),
             (-1234.565, "-1,234.57"),
             (1_234_567.891, "1,234,567.89"),
             (100_000_000_000.01, "100,000,000,000.01"),

@@ -245,6 +245,8 @@ pub struct Form2200TView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// The official final-copy confirm prompt is showing; queueing waits on OK.
+    submit_confirm_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -1220,6 +1222,7 @@ impl QueueableFormView for Form2200TView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            submit_confirm_open: false,
             _subscriptions: subscriptions,
         }
     }
@@ -1301,6 +1304,7 @@ impl FormViewTrait for Form2200TView {
     }
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
         if !can_queue_for_submission(Form2200TDraft::FORM_CODE) {
             self.status_message =
                 Some("2200T is not enabled for in-app submission in this build.".into());
@@ -1445,6 +1449,39 @@ impl FormViewTrait for Form2200TView {
     }
 }
 
+impl Form2200TView {
+    /// Queue for submission: the same checks as queueing, then the official
+    /// final-copy confirm prompt. Nothing changes until the filer clicks OK.
+    fn request_submit(&mut self, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
+        if !can_queue_for_submission(Form2200TDraft::FORM_CODE) {
+            self.status_message =
+                Some("2200T is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        self.submit_confirm_open = true;
+        cx.notify();
+    }
+}
+
+/// The official final-copy prompt (BIR-Form2200Tv2020.hta, rule
+/// 2200t-final-038-confirmation), verbatim.
+const SUBMIT_CONFIRM_TEXT: &str = "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?";
+
 impl Render for Form2200TView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
@@ -1460,7 +1497,6 @@ impl Render for Form2200TView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1529,12 +1565,11 @@ impl Render for Form2200TView {
                                         || !self.validation_errors.is_empty()
                                         || !self.parse_errors.is_empty(),
                                 )
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
-                                })),
+                                .on_click(cx.listener(|this, _, _, cx| this.request_submit(cx))),
                         ),
                 );
 
+        let needs_review = (!issues.is_empty()).then(|| self.section("Needs review", issues, cx));
         let mut body = div()
             .w_full()
             .max_w(px(1180.))
@@ -1577,6 +1612,43 @@ impl Render for Form2200TView {
                         ),
                 )
             })
+            .when(self.submit_confirm_open && is_draft, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .child(div().text_sm().child(SUBMIT_CONFIRM_TEXT))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .child(
+                                    Button::new("2200t_submit_confirm")
+                                        .label("OK")
+                                        .primary()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.mark_submitted(window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("2200t_submit_cancel")
+                                        .label("Cancel")
+                                        .outline()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.submit_confirm_open = false;
+                                            cx.notify();
+                                        })),
+                                ),
+                        ),
+                )
+            })
+            .children(needs_review)
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_part_two(layout, cx))
@@ -1589,9 +1661,6 @@ impl Render for Form2200TView {
             crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
             cx,
         ));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
@@ -1626,8 +1695,29 @@ impl Render for Form2200TView {
 
 #[cfg(test)]
 mod tests {
-    use super::{FORM_2200T_FIXED_ROW_COUNT, Layout, format_tin, parse_amount, row_groups};
+    use super::{
+        FORM_2200T_FIXED_ROW_COUNT, Layout, SUBMIT_CONFIRM_TEXT, format_tin, parse_amount,
+        row_groups,
+    };
     use gpui::px;
+
+    #[test]
+    fn submit_confirm_is_the_official_final_copy_prompt() {
+        let rules: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../rules/forms/2200t-v2020/validations.json"
+        ))
+        .unwrap();
+        let rules = rules
+            .as_array()
+            .or_else(|| rules.get("rules").and_then(|r| r.as_array()))
+            .expect("rule list");
+        let official = rules
+            .iter()
+            .find(|rule| rule["rule_id"] == "2200t-final-038-confirmation")
+            .and_then(|rule| rule["exact_message"].as_str())
+            .expect("final-copy rule");
+        assert_eq!(SUBMIT_CONFIRM_TEXT, official);
+    }
 
     #[test]
     fn layout_breakpoints() {

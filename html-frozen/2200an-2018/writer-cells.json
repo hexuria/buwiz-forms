@@ -1,7 +1,7 @@
 {
  "form_id": "2200an-v2018",
  "html_slug": "2200an-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Part III items 16-24 pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part IV: the layout keys are numbered 24-27 and print as items 25-28; they are matched to the printed rows by their captions (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) and their Drawee Bank/Number/Amount columns. Part IV dates are three combs per row and stay blank. Schedule 1A/1B: each printed ATC code row (XG021 to XG120, plus the two Others rows) maps its five cells in print order to Exempt1, Taxable1, Exempt2, Taxable2, TaxDue; the Others rows also take the name and tax-rate cells. Region/province/city keys and lstSpecialTax hold option codes (default 00 or a code), not printable text, and stay blank. The second address line has no layout key and stays blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Part III items 16-24 pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part IV: the layout keys are numbered 24-27 and print as items 25-28; they are matched to the printed rows by their captions (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) and their Drawee Bank/Number/Amount columns. Part IV dates are three combs per row and stay blank. Schedule 1A/1B: each printed ATC code row (XG021 to XG120, plus the two Others rows) maps its five cells in print order to Exempt1, Taxable1, Exempt2, Taxable2, TaxDue; the Others rows also take the name and tax-rate cells. Region/province/city keys and lstSpecialTax hold option codes (default 00 or a code), not printable text, and stay blank. The second address line has no layout key and stays blank. Items 10 and 11 print the region, province and city names from derived:line: keys of to_print_field_map (the upload keeps the codes); a derived:line: value or an email wider than its comb prints whole on one line across the comb.",
  "joins": [
   {
    "writer_key": "frm2200ANv2018:txtMonth",
@@ -86,6 +86,48 @@
    "html_id": "p1c35",
    "printed": "9 Email Address",
    "reason": "caption above and left of the 28-slot comb"
+  },
+  {
+   "writer_key": "derived:line:item10_region",
+   "html_id": "p1c40",
+   "printed": "10 Place of Production — Region",
+   "reason": "print-only name derived by the model (to_print_field_map); the upload keeps the select code; a name wider than the comb prints whole on one line"
+  },
+  {
+   "writer_key": "derived:line:item10_province",
+   "html_id": "p1c41",
+   "printed": "10 Place of Production — Province",
+   "reason": "print-only name derived by the model (to_print_field_map); the upload keeps the select code; a name wider than the comb prints whole on one line"
+  },
+  {
+   "writer_key": "derived:line:item10_city",
+   "html_id": "p1c42",
+   "printed": "10 Place of Production — City/Municipality",
+   "reason": "print-only name derived by the model (to_print_field_map); the upload keeps the select code; a name wider than the comb prints whole on one line"
+  },
+  {
+   "writer_key": "derived:line:item11_region",
+   "html_id": "p1c47",
+   "printed": "11 Place of Removal — Region",
+   "reason": "print-only name derived by the model (to_print_field_map); the upload keeps the select code; a name wider than the comb prints whole on one line"
+  },
+  {
+   "writer_key": "derived:line:item11_province",
+   "html_id": "p1c48",
+   "printed": "11 Place of Removal — Province",
+   "reason": "print-only name derived by the model (to_print_field_map); the upload keeps the select code; a name wider than the comb prints whole on one line"
+  },
+  {
+   "writer_key": "derived:line:item11_city",
+   "html_id": "p1c49",
+   "printed": "11 Place of Removal — City/Municipality",
+   "reason": "print-only name derived by the model (to_print_field_map); the upload keeps the select code; a name wider than the comb prints whole on one line"
+  },
+  {
+   "writer_key": "frm2200ANv2018:lstSpecialTax",
+   "html_id": "p1c52",
+   "printed": "12A If yes, specify",
+   "reason": "the 12A text input (maxlength 20) prints as typed"
   },
   {
    "writer_key": "frm2200ANv2018:MannerOfPaymentOthers",
@@ -1214,34 +1256,6 @@
   {
    "html_id": "p1c29",
    "reason": "second address line; the layout has one address key (txtAddress) and it is already on p1c28"
-  },
-  {
-   "html_id": "p1c40",
-   "reason": "Region comb for item 10 (Place of Production) holds the optRegion option code (default 00), not printable text; no separate region name cell"
-  },
-  {
-   "html_id": "p1c41",
-   "reason": "Province comb for item 10 holds the optProvince option code (default 00), not printable text"
-  },
-  {
-   "html_id": "p1c42",
-   "reason": "City comb for item 10 holds the optCity option code (default 00), not printable text"
-  },
-  {
-   "html_id": "p1c47",
-   "reason": "Region comb for item 11 (Place of Removal) holds the optRegion1 option code (default 00), not printable text"
-  },
-  {
-   "html_id": "p1c48",
-   "reason": "Province comb for item 11 holds the optProvince1 option code (default 00), not printable text"
-  },
-  {
-   "html_id": "p1c49",
-   "reason": "City comb for item 11 holds the optCity1 option code (default 00), not printable text"
-  },
-  {
-   "html_id": "p1c52",
-   "reason": "12A \"If yes, specify\" holds the lstSpecialTax option code, not printable text; left blank as on the 2200S treaty cell"
   },
   {
    "html_id": "p1c147",

@@ -10,8 +10,8 @@ use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Databa
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::excise_places::{self, ExcisePlace};
 use bir_core::forms::form_2200s::{
-    FORM_2200S_BEVERAGES, Form2200SDraft, Form2200SManner, Form2200SOtherRow, Form2200STaxRelief,
-    round_down_computation_text, round_down_input_text,
+    FORM_2200S_BASIC_TAX_LIMIT_ALERT, FORM_2200S_BEVERAGES, Form2200SDraft, Form2200SManner,
+    Form2200SOtherRow, Form2200STaxRelief, round_down_computation_text, round_down_input_text,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -205,9 +205,11 @@ impl Form2200SView {
     }
 
     /// Read every editor value into the draft, then recompute and validate.
-    fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
+    /// True when a Schedule 1 row was reset for passing the Basic Excise Tax
+    /// Due limit (its editors then need [`Self::reload_schedule_inputs`]).
+    fn sync_from_inputs(&mut self, cx: &mut Context<Self>) -> bool {
         if !self.draft.lifecycle.is_editable() {
-            return;
+            return false;
         }
         let mut parse_errors = Vec::new();
         let mut number = |key: &str, label: &str, cx: &App| -> Option<f64> {
@@ -303,12 +305,48 @@ impl Form2200SView {
         draft.psic = self.input_text("psic", cx).trim().to_string();
         draft.email = self.input_text("email", cx).trim().to_string();
         draft.other_scheme_text = self.input_text("scheme", cx);
-        draft.recompute();
+        let reset = draft.recompute_reporting();
+        if reset {
+            self.status_message = Some(FORM_2200S_BASIC_TAX_LIMIT_ALERT.into());
+        }
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
+        // validateForm: a one-character day alerts after the year checks.
+        if self.input_text("day", cx).trim().chars().count() == 1
+            && !self
+                .validation_errors
+                .iter()
+                .any(|(key, _)| matches!(key.as_str(), "month" | "day" | "year"))
+        {
+            self.validation_errors
+                .insert(0, ("day".to_string(), DAY_FORMAT_ALERT.to_string()));
+        }
         self.parse_errors = parse_errors;
         self.draft = draft;
         cx.notify();
+        reset
+    }
+
+    /// Show the draft's Schedule 1 values again after a row was reset.
+    fn reload_schedule_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let keys: Vec<String> = self
+            .inputs
+            .keys()
+            .filter(|key| {
+                key.starts_with("bsales")
+                    || key.starts_with("bvol")
+                    || OTHER_COLUMNS
+                        .iter()
+                        .any(|(prefix, _, _)| key.starts_with(prefix))
+            })
+            .cloned()
+            .collect();
+        for key in keys {
+            let value = Self::initial(&self.draft, &key);
+            if let Some(input) = self.inputs.get(&key) {
+                input.update(cx, |state, cx| state.set_value(value, window, cx));
+            }
+        }
     }
 
     fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form2200SDraft)) {
@@ -355,9 +393,9 @@ impl Form2200SView {
         let subscription = cx.subscribe_in(
             &input,
             window,
-            |this: &mut Self, _, event: &InputEvent, _, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.sync_from_inputs(cx);
+            |this: &mut Self, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Change) && this.sync_from_inputs(cx) {
+                    this.reload_schedule_inputs(window, cx);
                 }
             },
         );
@@ -1118,11 +1156,15 @@ impl QueueableFormView for Form2200SView {
     type Draft = Form2200SDraft;
 
     fn new(
-        draft: Form2200SDraft,
+        mut draft: Form2200SDraft,
         db: Arc<Mutex<Database>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        // A stored draft shows its totals as the official chain leaves them.
+        if draft.lifecycle.is_editable() {
+            draft.recompute();
+        }
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
         let mut keys: Vec<(String, String)> = TEXT_INPUTS
@@ -1265,6 +1307,17 @@ impl FormViewTrait for Form2200SView {
                     window,
                     cx,
                 );
+                // initialValidateBeforeSave: the draft is saved anyway; its
+                // first official alert shows in the status line and under
+                // Needs review. Queueing still blocks on validation.
+                self.status_message = None;
+                if let Some((key, alert)) = self.draft.save_alert() {
+                    self.status_message = Some(alert.to_string());
+                    if !self.validation_errors.iter().any(|(_, m)| m == alert) {
+                        self.validation_errors
+                            .insert(0, (key.to_string(), alert.to_string()));
+                    }
+                }
                 cx.emit(QueueableFormEvent::Saved);
             }
             Err(error) => cx.emit(QueueableFormEvent::PushNotification(
@@ -1419,6 +1472,10 @@ impl FormViewTrait for Form2200SView {
     }
 }
 
+/// validateForm's alert for a one-character Item 1 day (BIR-Form2200S.hta,
+/// rule 2200s-validate-006-day-format).
+const DAY_FORMAT_ALERT: &str = "Please enter a valid day on item 1. Format should be MM/DD/YYYY.";
+
 impl Render for Form2200SView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
@@ -1435,7 +1492,6 @@ impl Render for Form2200SView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1510,6 +1566,7 @@ impl Render for Form2200SView {
                         ),
                 );
 
+        let needs_review = (!issues.is_empty()).then(|| self.section("Needs review", issues, cx));
         let mut body = div()
             .w_full()
             .max_w(px(1180.))
@@ -1552,6 +1609,7 @@ impl Render for Form2200SView {
                         ),
                 )
             })
+            .children(needs_review)
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_manner(layout, cx))
@@ -1575,9 +1633,6 @@ impl Render for Form2200SView {
                 cx,
             ),
         );
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
