@@ -2201,6 +2201,92 @@ mod tests {
         assert!(!html.contains("name=\"frm2200M:"));
     }
 
+    #[test]
+    fn filled_document_2200c_fills_item_6_and_schedule_1_rows() {
+        use bir_core::forms::form_2200c::{Form2200CDraft, Form2200CManner, Form2200CRow};
+        let mut draft = Form2200CDraft::new_from_profile(&fixture_profile("2200C"), 2025);
+        draft.month = 6;
+        draft.day = 30;
+        draft.rdo_code = "039".into();
+        // Part V is cleared until a manner of payment is picked (resetPartFive).
+        draft.manner = Form2200CManner::ActualRemoval;
+        // Row 1 is populated, rows 2-9 stay blank, row 10 is populated.
+        let mut schedule = vec![Form2200CRow {
+            exempt_procedures: 1.0,
+            excisable_procedures: 3.0,
+            non_excisable_procedures: 2.0,
+            net_of_vat: 10_000.0,
+            excisable_net: 50_010.0,
+            non_excisable: 5_000.0,
+            ..Default::default()
+        }];
+        schedule.resize(9, Form2200CRow::default());
+        schedule.push(Form2200CRow {
+            exempt_procedures: 4.0,
+            net_of_vat: 2_000.0,
+            ..Default::default()
+        });
+        draft.schedule = schedule;
+        draft.recompute();
+        let fields = draft.to_bir_field_map();
+        let html = filled_document("2200c-2018", &fields).unwrap();
+        // Item 6 RDO comb (p1c26), 4 slots.
+        assert_eq!(comb_text(&html, "p1c26"), "039");
+        // Schedule 1 row 1 runs p2c25 (A) to p2c34 (J), top to bottom.
+        let row_1 = [
+            "1.00",
+            "3.00",
+            "2.00",
+            "10,000.00",
+            "50,010.00",
+            "0.00",
+            "5,000.00",
+            "2,501.00",
+            "8,101.00",
+            "75,612.00",
+        ];
+        for (offset, value) in row_1.iter().enumerate() {
+            assert_eq!(
+                named_values(&html, &format!("p2c{}", 25 + offset)),
+                vec![value.to_string()],
+                "schedule row 1 column {offset}"
+            );
+        }
+        // Schedule 1 row 10 runs p2c115 to p2c124; its values come from the field map.
+        assert_eq!(named_values(&html, "p2c115"), vec!["4.00".to_string()]);
+        let columns = [
+            "CPPexmpt",
+            "CPPexcise",
+            "CPPnonexcise",
+            "GRnetVat",
+            "GRexciseNet",
+            "GRexciseExmpt",
+            "GRnonexcise",
+            "ACexcise",
+            "ACvat",
+            "ACtotAmountBill",
+        ];
+        for (offset, column) in columns.iter().enumerate() {
+            let key = format!("frm2200C:{column}10");
+            assert_eq!(
+                named_values(&html, &format!("p2c{}", 115 + offset)),
+                vec![fields[&key].clone()],
+                "{key}"
+            );
+        }
+        // A blank row (row 2) still prints the map's zero amounts, as the official XML does.
+        assert_eq!(named_values(&html, "p2c35"), vec!["0.00".to_string()]);
+        // TOTAL EXCISE TAX DUE (p2c126) carries the ACexciseTotal value.
+        assert_eq!(
+            named_values(&html, "p2c126"),
+            vec![fields["frm2200C:ACexciseTotal"].clone()]
+        );
+        // Items 9-11 share full-width combs (p1c36, p1c41) with several captions;
+        // they stay empty until the layout splits them.
+        assert_eq!(comb_text(&html, "p1c36"), "");
+        assert_eq!(comb_text(&html, "p1c41"), "");
+    }
+
     fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {
         serde_json::from_value(serde_json::json!({
             "id": null, "full_name": "Withholding Fixture Inc", "tin": {"segment1": "123",
