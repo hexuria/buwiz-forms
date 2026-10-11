@@ -529,17 +529,20 @@ impl Form2553View {
                 vec![
                     Self::choice("2553_calendar", "Calendar", !fiscal, !editable).on_click(
                         cx.listener(|this, _, _, cx| {
-                            this.edit(cx, |d| d.set_tax_period_basis(TaxPeriodBasis::Calendar))
+                            this.edit(cx, |d| {
+                                d.set_tax_period_basis(TaxPeriodBasis::Calendar);
+                            })
                         }),
                     ),
                     Self::choice("2553_fiscal", "Fiscal", fiscal, !editable).on_click(cx.listener(
                         |this, _, _, cx| {
+                            let mut notice = None;
                             this.edit(cx, |d| {
-                                d.set_tax_period_basis(TaxPeriodBasis::Fiscal);
-                                if d.year_end_month == 12 {
-                                    d.year_end_month = 6;
-                                }
-                            })
+                                notice = d.set_tax_period_basis(TaxPeriodBasis::Fiscal);
+                            });
+                            if let Some(notice) = notice {
+                                this.status_message = Some(notice.to_string());
+                            }
                         },
                     )),
                 ],
