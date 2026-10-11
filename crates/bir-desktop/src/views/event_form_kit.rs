@@ -774,6 +774,19 @@ pub fn declaration_and_payment<V: 'static>(
     columns: &[&str],
     cx: &Context<V>,
 ) -> Vec<AnyElement> {
+    declaration_and_payment_with_text(phone, DECLARATION_TEXT, part_title, rows, columns, cx)
+}
+
+/// Same as [`declaration_and_payment`] for sheets whose printed declaration
+/// wording differs from `DECLARATION_TEXT`.
+pub fn declaration_and_payment_with_text<V: 'static>(
+    phone: bool,
+    declaration: &str,
+    part_title: &str,
+    rows: &[&str],
+    columns: &[&str],
+    cx: &Context<V>,
+) -> Vec<AnyElement> {
     let muted = cx.theme().muted_foreground;
     let first_width = if phone { px(150.) } else { px(220.) };
     let cell_width = if phone { px(110.) } else { px(150.) };
@@ -823,7 +836,7 @@ pub fn declaration_and_payment<V: 'static>(
             .p_3()
             .text_sm()
             .text_color(muted)
-            .child(DECLARATION_TEXT)
+            .child(declaration.to_string())
             .into_any_element(),
         section(part_title, payment, cx),
     ]

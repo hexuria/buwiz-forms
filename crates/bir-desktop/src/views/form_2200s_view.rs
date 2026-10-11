@@ -1394,6 +1394,22 @@ impl Render for Form2200SView {
         if self.draft.manner == Form2200SManner::ActualRemoval {
             body = body.child(self.render_schedule(layout, cx));
         }
+        // The printed 2200S sheet uses the plural wording and items 27 to 30.
+        body = body.children(
+            crate::views::event_form_kit::declaration_and_payment_with_text(
+                layout == Layout::Phone,
+                "We declare under the penalties of perjury, that this return and all its attachments, has been made in good faith, verified by us, and to the best of our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, we give our consent to the processing of our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.",
+                "Part IV – Details of Payment",
+                &[
+                    "27 Cash/Bank Debit Memo",
+                    "28 Check",
+                    "29 Tax Debit Memo",
+                    "30 Others (specify)",
+                ],
+                crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
+                cx,
+            ),
+        );
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

@@ -1451,6 +1451,17 @@ impl Render for Form2200MView {
             .child(self.render_part_two(layout, cx))
             .child(self.render_part_three(layout, cx))
             .child(self.render_schedule(layout, cx));
+        // The printed 2200M sheet says "has been made" (not "have").
+        body = body.children(
+            crate::views::event_form_kit::declaration_and_payment_with_text(
+                layout == Layout::Phone,
+                "I/We declare under the penalties of perjury that this return, and all its attachments, has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.",
+                "Part IV – Details of Payment",
+                crate::views::event_form_kit::PAYMENT_ROWS_2200,
+                crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
+                cx,
+            ),
+        );
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
