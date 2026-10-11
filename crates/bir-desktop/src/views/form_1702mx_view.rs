@@ -25,6 +25,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -212,6 +213,10 @@ fn amount_slot<'a>(draft: &'a mut Form1702MXDraft, key: &str) -> Option<&'a mut 
             &mut draft.schedule_6.rows.get_mut(num(1)?)?.amounts,
             num(2)?,
         ),
+        &"m6" => column_mut(
+            &mut draft.schedule_6.more_rows.get_mut(num(1)?)?.amounts,
+            num(2)?,
+        ),
         &"s10" => column_mut(draft.schedule_10.items.get_mut(num(1)?)?, num(2)?),
         &"n7" | &"n8" => {
             let table = if parts[0] == "n7" {
@@ -278,6 +283,8 @@ fn text_slot<'a>(draft: &'a mut Form1702MXDraft, key: &str) -> Option<&'a mut St
                 .get_mut(num(1)?)?,
             "d6" => &mut draft.schedule_6.rows.get_mut(num(1)?)?.description,
             "l6" => &mut draft.schedule_6.rows.get_mut(num(1)?)?.legal_basis,
+            "dm6" => &mut draft.schedule_6.more_rows.get_mut(num(1)?)?.description,
+            "lm6" => &mut draft.schedule_6.more_rows.get_mut(num(1)?)?.legal_basis,
             "y7" => &mut draft.schedule_7_1.rows.get_mut(num(1)?)?.year_incurred,
             "y8" => &mut draft.schedule_8_1.rows.get_mut(num(1)?)?.year_incurred,
             "y9" => &mut draft.schedule_9.rows.get_mut(num(1)?)?.year,
@@ -310,6 +317,20 @@ fn bound_text_keys() -> Vec<String> {
         keys.push(format!("d10.{index}"));
     }
     keys
+}
+
+/// Schedule 6 Item 4 "(Add more...)" amount keys for the rows the draft holds.
+fn more_amount_keys(draft: &Form1702MXDraft) -> Vec<String> {
+    (0..draft.schedule_6.more_rows.len())
+        .flat_map(|row| (0..3).map(move |column| format!("m6.{row}.{column}")))
+        .collect()
+}
+
+/// Schedule 6 Item 4 "(Add more...)" description / legal basis keys.
+fn more_text_keys(draft: &Form1702MXDraft) -> Vec<String> {
+    (0..draft.schedule_6.more_rows.len())
+        .flat_map(|row| [format!("dm6.{row}"), format!("lm6.{row}")])
+        .collect()
 }
 
 pub struct Form1702MXView {
@@ -368,7 +389,7 @@ impl Form1702MXView {
         }
         let mut parse_errors = Vec::new();
         let mut draft = self.draft.clone();
-        for key in amount_keys() {
+        for key in amount_keys().into_iter().chain(more_amount_keys(&draft)) {
             let text = self.input_text(&key, cx);
             match parse_peso(&text) {
                 Some(value) => {
@@ -393,6 +414,7 @@ impl Form1702MXView {
         .into_iter()
         .map(String::from)
         .chain(bound_text_keys())
+        .chain(more_text_keys(&draft))
         {
             let text = self.input_text(&key, cx);
             if let Some(slot) = text_slot(&mut draft, &key) {
@@ -432,6 +454,93 @@ impl Form1702MXView {
         self.parse_errors = parse_errors;
         self.draft = draft;
         cx.notify();
+    }
+
+    fn new_input(
+        draft: &Form1702MXDraft,
+        key: &str,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<InputState>, Subscription) {
+        let value = Self::initial(draft, key);
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.sync_from_inputs(cx);
+                }
+            },
+        );
+        (input, subscription)
+    }
+
+    /// Schedule 6 Item 4 Add Row / Remove: read the page, change the rows,
+    /// create editors for new rows, then show every row again from the
+    /// draft so nothing shifts into the wrong row.
+    fn edit_rows(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1702MXDraft),
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.sync_from_inputs(cx);
+        change(&mut self.draft);
+        self.draft.recompute();
+        let keys: Vec<(String, &str)> = more_amount_keys(&self.draft)
+            .into_iter()
+            .map(|key| (key, "0"))
+            .chain(more_text_keys(&self.draft).into_iter().map(|key| (key, "")))
+            .collect();
+        for (key, placeholder) in keys {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let (input, subscription) = Self::new_input(&self.draft, &key, placeholder, window, cx);
+            self.inputs.insert(key, input);
+            self._subscriptions.push(subscription);
+        }
+        let updates: Vec<(Entity<InputState>, String)> = self
+            .inputs
+            .iter()
+            .map(|(key, input)| (input.clone(), Self::initial(&self.draft, key)))
+            .collect();
+        for (input, value) in updates {
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
+        self.status_message = None;
+    }
+
+    /// Add Row: the first click opens the modal with Item 4 as row 4.1
+    /// (`checkNullRow_OnClick_modalTablePg3Sc6`) and adds row 4.2; later
+    /// clicks add one blank row. The official modal has no row limit.
+    fn add_more_row(draft: &mut Form1702MXDraft) {
+        let s6 = &mut draft.schedule_6;
+        if s6.more_rows.is_empty() {
+            s6.more_rows.push(s6.rows[3].clone());
+        }
+        s6.more_rows.push(Default::default());
+    }
+
+    /// Remove (`deleteRow`, rows renumber). A single row left goes back to
+    /// Item 4, as `Save_modalTablePg3Sc6` does with one row.
+    fn remove_more_row(draft: &mut Form1702MXDraft, index: usize) {
+        let s6 = &mut draft.schedule_6;
+        if index >= s6.more_rows.len() {
+            return;
+        }
+        s6.more_rows.remove(index);
+        if s6.more_rows.len() == 1 {
+            s6.rows[3] = s6.more_rows.remove(0);
+        }
     }
 
     fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1702MXDraft)) {
@@ -1212,8 +1321,20 @@ impl Form1702MXView {
     }
 
     fn render_schedule_6(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let s6 = &self.draft.schedule_6;
+        let editable = self.draft.lifecycle.is_editable();
         let mut rows = Vec::new();
-        for (index, entry) in self.draft.schedule_6.rows.iter().enumerate() {
+        for (index, entry) in s6.rows.iter().enumerate() {
+            if index == 3 && s6.is_folded() {
+                // Item 4 reads OTHERS and the modal subtotals.
+                rows.push(Self::read_only_row(
+                    layout,
+                    "Item 4 — description / legal basis",
+                    "OTHERS / OTHERS",
+                ));
+                rows.push(self.computed_row("Item 4", &entry.amounts, cx));
+                continue;
+            }
             rows.push(self.grid(
                 layout,
                 vec![
@@ -1239,6 +1360,53 @@ impl Form1702MXView {
                 layout,
                 cx,
             ));
+        }
+        rows.push(
+            div()
+                .font_weight(FontWeight::BOLD)
+                .child("Item 4 — (Add more...)")
+                .into_any_element(),
+        );
+        for index in 0..s6.more_rows.len() {
+            let remove = Button::new(("1702mx_s6_remove", index))
+                .disabled(!editable)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.edit_rows(window, cx, |d| Self::remove_more_row(d, index))
+                }));
+            let caption = format!("4.{}", index + 1);
+            rows.push(kit::row_heading(&caption, remove));
+            rows.push(self.grid(
+                layout,
+                vec![
+                    self.field(&format!("dm6.{index}"), "Description", layout, false),
+                    self.field(&format!("lm6.{index}"), "Legal basis", layout, false),
+                ],
+            ));
+            rows.push(self.abc_row(
+                "m6",
+                index,
+                &caption,
+                s6.more_rows[index].amounts.total.value_or_zero().0,
+                layout,
+                cx,
+            ));
+        }
+        let item_4 = &s6.rows[3];
+        let link_open = s6.is_folded()
+            || !item_4.description.trim().is_empty()
+                && !item_4.legal_basis.trim().is_empty()
+                && item_4.amounts.total.value_or_zero().0 != 0;
+        rows.push(
+            kit::add_row_button("1702mx_s6_add", !editable || !link_open)
+                .on_click(
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_rows(window, cx, Self::add_more_row)
+                    }),
+                )
+                .into_any_element(),
+        );
+        if s6.is_folded() {
+            rows.push(self.computed_row("Item 4 subtotal", &s6.modal_subtotal(), cx));
         }
         rows.push(self.computed_row(
             "5 Total special allowable itemized deductions",
@@ -1502,21 +1670,16 @@ impl QueueableFormView for Form1702MXView {
     ) -> Self {
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
-        let money: Vec<String> = amount_keys();
-        for key in Self::all_keys() {
+        let mut money: Vec<String> = amount_keys();
+        money.extend(more_amount_keys(&draft));
+        let keys = Self::all_keys()
+            .into_iter()
+            .chain(more_amount_keys(&draft))
+            .chain(more_text_keys(&draft));
+        for key in keys {
             let placeholder = if money.contains(&key) { "0" } else { "" };
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
+            let (input, subscription) = Self::new_input(&draft, &key, placeholder, window, cx);
+            subscriptions.push(subscription);
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();

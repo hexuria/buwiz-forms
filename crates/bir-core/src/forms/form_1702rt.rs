@@ -395,6 +395,148 @@ pub struct Form1702RTSchedule5 {
     pub item_10_net_taxable_income_or_loss: WholePeso,
 }
 
+/// An item whose "(Add more...)" button opens the page's shared modal
+/// (`loadModalTable`); the modal adds rows without a limit, and with two or
+/// more saved rows the item reads OTHERS and the modal subtotal
+/// (`saveModalTable`, `othersSubtotal`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Form1702RTModal {
+    /// Part IV Item 54, other tax credits.
+    Item54,
+    /// Schedule I Item 17i, other ordinary deductions.
+    Schedule1Item17i,
+    /// Schedule II Item 4 (description, legal basis, amount).
+    Schedule2Item4,
+    /// Schedule V Item 3, other additions.
+    Schedule5Item3,
+    /// Schedule V Item 6, other non-taxable income.
+    Schedule5Item6,
+    /// Schedule V Item 8, other special deductions.
+    Schedule5Item8,
+}
+
+/// Every modal, in page DOM order.
+pub const FORM_1702RT_MODALS: [Form1702RTModal; 6] = [
+    Form1702RTModal::Schedule1Item17i,
+    Form1702RTModal::Schedule2Item4,
+    Form1702RTModal::Item54,
+    Form1702RTModal::Schedule5Item3,
+    Form1702RTModal::Schedule5Item6,
+    Form1702RTModal::Schedule5Item8,
+];
+
+impl Form1702RTModal {
+    /// The page's `rowName` (`txtPg2Pt4I54`): the item's controls are
+    /// `<rowName>C1`…, the modal's rows `<rowName>.<n>C1`….
+    pub fn row_name(self) -> &'static str {
+        match self {
+            Self::Item54 => "txtPg2Pt4I54",
+            Self::Schedule1Item17i => "txtPg3Sc1I17i",
+            Self::Schedule2Item4 => "txtPg3Sc2I4",
+            Self::Schedule5Item3 => "txtPg4Sc5I3",
+            Self::Schedule5Item6 => "txtPg4Sc5I6",
+            Self::Schedule5Item8 => "txtPg4Sc5I8",
+        }
+    }
+
+    /// `currentItem`: the item cell's text.
+    pub fn item(self) -> &'static str {
+        match self {
+            Self::Item54 => "54",
+            Self::Schedule1Item17i => "i",
+            Self::Schedule2Item4 => "4",
+            Self::Schedule5Item3 => "3",
+            Self::Schedule5Item6 => "6",
+            Self::Schedule5Item8 => "8",
+        }
+    }
+
+    /// The page the item sits on (`txtCurrentPage` in the alerts).
+    pub fn page(self) -> u8 {
+        match self {
+            Self::Item54 => 2,
+            Self::Schedule1Item17i | Self::Schedule2Item4 => 3,
+            _ => 4,
+        }
+    }
+
+    /// Schedule II rows carry a legal basis.
+    pub fn has_legal_basis(self) -> bool {
+        self == Self::Schedule2Item4
+    }
+
+    /// `maxlength` of a modal row's description.
+    pub fn description_limit(self) -> usize {
+        if self.has_legal_basis() { 26 } else { 45 }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Item54 => "Item 54 — other tax credits",
+            Self::Schedule1Item17i => "Schedule I Item 17i — other deductions",
+            Self::Schedule2Item4 => "Schedule II Item 4 — special allowable deductions",
+            Self::Schedule5Item3 => "Schedule V Item 3 — other additions",
+            Self::Schedule5Item6 => "Schedule V Item 6 — other non-taxable income",
+            Self::Schedule5Item8 => "Schedule V Item 8 — other special deductions",
+        }
+    }
+}
+
+/// The "(Add more...)" modal rows in page order. Row 1 is the item's entry
+/// the button transfers; `legal_basis` is used by Schedule II only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Form1702RTMoreRows {
+    pub item_54: Vec<Form1702RTSpecialDeductionRow>,
+    pub schedule_1_item_17i: Vec<Form1702RTSpecialDeductionRow>,
+    pub schedule_2_item_4: Vec<Form1702RTSpecialDeductionRow>,
+    pub schedule_5_item_3: Vec<Form1702RTSpecialDeductionRow>,
+    pub schedule_5_item_6: Vec<Form1702RTSpecialDeductionRow>,
+    pub schedule_5_item_8: Vec<Form1702RTSpecialDeductionRow>,
+}
+
+impl Form1702RTMoreRows {
+    pub fn rows(&self, modal: Form1702RTModal) -> &Vec<Form1702RTSpecialDeductionRow> {
+        match modal {
+            Form1702RTModal::Item54 => &self.item_54,
+            Form1702RTModal::Schedule1Item17i => &self.schedule_1_item_17i,
+            Form1702RTModal::Schedule2Item4 => &self.schedule_2_item_4,
+            Form1702RTModal::Schedule5Item3 => &self.schedule_5_item_3,
+            Form1702RTModal::Schedule5Item6 => &self.schedule_5_item_6,
+            Form1702RTModal::Schedule5Item8 => &self.schedule_5_item_8,
+        }
+    }
+
+    pub fn rows_mut(&mut self, modal: Form1702RTModal) -> &mut Vec<Form1702RTSpecialDeductionRow> {
+        match modal {
+            Form1702RTModal::Item54 => &mut self.item_54,
+            Form1702RTModal::Schedule1Item17i => &mut self.schedule_1_item_17i,
+            Form1702RTModal::Schedule2Item4 => &mut self.schedule_2_item_4,
+            Form1702RTModal::Schedule5Item3 => &mut self.schedule_5_item_3,
+            Form1702RTModal::Schedule5Item6 => &mut self.schedule_5_item_6,
+            Form1702RTModal::Schedule5Item8 => &mut self.schedule_5_item_8,
+        }
+    }
+
+    /// The rows `saveModalTable` keeps: those with a description.
+    pub fn saved(&self, modal: Form1702RTModal) -> Vec<&Form1702RTSpecialDeductionRow> {
+        self.rows(modal)
+            .iter()
+            .filter(|row| !row.description.trim().is_empty())
+            .collect()
+    }
+
+    /// Two or more saved rows: the item reads OTHERS and the subtotal.
+    pub fn is_folded(&self, modal: Form1702RTModal) -> bool {
+        self.saved(modal).len() >= 2
+    }
+
+    /// The modal subtotal (`<rowName>Subtotal`).
+    pub fn subtotal(&self, modal: Form1702RTModal) -> WholePeso {
+        WholePeso(self.saved(modal).iter().map(|row| row.amount.0).sum())
+    }
+}
+
 /// Full four-page editable draft. Transport-only modal/subtotal fields are
 /// retained separately so an imported official save can round-trip exactly.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -429,6 +571,9 @@ pub struct Form1702RTDraft {
     pub schedule_3: Form1702RTSchedule3,
     pub schedule_4: Form1702RTSchedule4,
     pub schedule_5: Form1702RTSchedule5,
+    /// The "(Add more...)" modal rows (Items 54, 17i, Schedule II Item 4,
+    /// Schedule V Items 3, 6 and 8).
+    pub more_rows: Form1702RTMoreRows,
     pub president_signature: String,
     pub treasurer_signature: String,
     /// XML `txtPg1Pt2Signatory1` is printed under "Title of Signatory".

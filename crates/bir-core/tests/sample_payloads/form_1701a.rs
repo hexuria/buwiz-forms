@@ -161,3 +161,30 @@ fn form_1701a_more_sample_payload_is_current() {
         "2b2af4f60e43676fe32b8f0d508c3684018bdb0249095fa7a01734f9568ddb5d",
     );
 }
+
+/// Part IV.A "(add more...)" with twelve rows: `addRow` has no row limit,
+/// and every row is written in DOM order with `txtCtrmodalPartIVA=12`.
+#[test]
+fn form_1701a_joint_many_rows_sample_payload_is_current() {
+    let mut draft = sample_1701a_joint();
+    draft.other_income_more = vec![more_row("Rental income", 500.0, 0.0)];
+    for n in 2..=12u32 {
+        let amount = f64::from(1000 * n + 5) + f64::from(n % 10) / 10.0;
+        draft
+            .other_income_more
+            .push(more_row(&format!("Other income {n}"), amount, 0.0));
+    }
+    draft.recompute();
+    assert_eq!(draft.other_income_more.len(), 12);
+    assert_eq!(draft.taxpayer.other_income_42, 77_560.0);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1701A must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1701A-122025-joint-many",
+        &layout,
+        &payload,
+        "1f22c121e80d3d392f0bf3e5f04b1cbac82c2c0bff0b0fa445b31b40c51f5943",
+    );
+}

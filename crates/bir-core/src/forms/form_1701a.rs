@@ -178,9 +178,6 @@ pub struct Form1701AColumn {
     pub total_amount_payable: f64,
 }
 
-/// Rows the Part IV.A / IV.B "(add more...)" modal accepts.
-pub const FORM_1701A_MAX_MORE_ROWS: usize = 100;
-
 /// One row of the Part IV.A (Item 42) or Part IV.B (Item 51)
 /// "(add more...)" modal: `txtmodalPartIV<A|B>Desc_<n>C1`, `_<n>C2`
 /// (taxpayer) and `_<n>C3` (spouse).
@@ -699,6 +696,35 @@ impl Form1701ADraft {
             fixed0(self.taxpayer.total_amount_payable + self.spouse_column.total_amount_payable);
         if !self.overpayment_open() {
             self.overpayment = Form1701AOverpayment::None;
+        }
+    }
+
+    /// Whether the Item 42 (`part_b` false) or Item 51 "(add more...)" link
+    /// can open now: its modal already holds rows, or Items 41/42 (50/51)
+    /// are complete (`disableLinkIfEmpty`).
+    pub fn more_link_available(&self, part_b: bool) -> bool {
+        let tp = &self.taxpayer;
+        let sp = &self.spouse_column;
+        if part_b {
+            !self.eight_other_income_more.is_empty()
+                || self.more_link_enabled(
+                    &self.eight_other_income_50_description,
+                    &self.eight_other_income_51_description,
+                    [
+                        (tp.eight_other_income_50, sp.eight_other_income_50),
+                        (tp.eight_other_income_51, sp.eight_other_income_51),
+                    ],
+                )
+        } else {
+            !self.other_income_more.is_empty()
+                || self.more_link_enabled(
+                    &self.other_income_41_description,
+                    &self.other_income_42_description,
+                    [
+                        (tp.other_income_41, sp.other_income_41),
+                        (tp.other_income_42, sp.other_income_42),
+                    ],
+                )
         }
     }
 
@@ -1581,9 +1607,6 @@ impl Form1701ADraft {
                         "The (add more...) list needs two or more rows; enter a single row on Item {item}."
                     ),
                 );
-            }
-            if rows.len() > FORM_1701A_MAX_MORE_ROWS {
-                err(field, &format!("At most {FORM_1701A_MAX_MORE_ROWS} rows."));
             }
             if !self.more_link_opens(part_b) {
                 err(

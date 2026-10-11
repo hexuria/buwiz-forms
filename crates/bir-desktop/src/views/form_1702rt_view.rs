@@ -11,8 +11,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1702rt::{
-    FORM_VERSION_LABEL, Form1702RTDate, Form1702RTDeductionMethod, Form1702RTDraft,
-    Form1702RTFilingBasis, Form1702RTOverpaymentDisposition, WholePeso,
+    FORM_1702RT_MODALS, FORM_VERSION_LABEL, Form1702RTDate, Form1702RTDeductionMethod,
+    Form1702RTDraft, Form1702RTFilingBasis, Form1702RTModal, Form1702RTOverpaymentDisposition,
+    Form1702RTSpecialDeductionRow, WholePeso,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingPeriod, FilingStatus, can_queue_for_submission};
@@ -24,6 +25,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -204,7 +206,66 @@ fn date_text(date: Option<Form1702RTDate>) -> String {
     date.map(|d| d.to_string()).unwrap_or_default()
 }
 
+/// An "(Add more...)" modal row key: `m<modal>_<column>_<row>` with column
+/// `d` (description), `l` (legal basis) or `a` (amount).
+fn more_key(modal: usize, column: char, row: usize) -> String {
+    format!("m{modal}_{column}_{row}")
+}
+
+fn parse_more_key(key: &str) -> Option<(Form1702RTModal, char, usize)> {
+    let rest = key.strip_prefix('m')?;
+    let mut parts = rest.split('_');
+    let modal = FORM_1702RT_MODALS.get(parts.next()?.parse::<usize>().ok()?)?;
+    let column = parts.next()?.chars().next()?;
+    let row = parts.next()?.parse().ok()?;
+    Some((*modal, column, row))
+}
+
+fn more_row_mut<'a>(
+    d: &'a mut Form1702RTDraft,
+    key: &str,
+) -> Option<(char, &'a mut Form1702RTSpecialDeductionRow)> {
+    let (modal, column, row) = parse_more_key(key)?;
+    let row = d.more_rows.rows_mut(modal).get_mut(row)?;
+    Some((column, row))
+}
+
+/// Editor keys of every modal row the draft holds.
+fn more_keys(d: &Form1702RTDraft) -> Vec<String> {
+    let mut keys = Vec::new();
+    for (index, modal) in FORM_1702RT_MODALS.iter().enumerate() {
+        for row in 0..d.more_rows.rows(*modal).len() {
+            keys.push(more_key(index, 'd', row));
+            if modal.has_legal_basis() {
+                keys.push(more_key(index, 'l', row));
+            }
+            keys.push(more_key(index, 'a', row));
+        }
+    }
+    keys
+}
+
+/// The item inputs a folded modal fills (OTHERS and the subtotal).
+fn folded_key(d: &Form1702RTDraft, key: &str) -> bool {
+    let modal = match key {
+        "d54" | "i54" => Form1702RTModal::Item54,
+        "s1od_5" | "s1oa_5" => Form1702RTModal::Schedule1Item17i,
+        "s2d_3" | "s2l_3" | "s2a_3" => Form1702RTModal::Schedule2Item4,
+        "s5ad_1" | "s5a_1" => Form1702RTModal::Schedule5Item3,
+        "s5nd_1" | "s5n_1" => Form1702RTModal::Schedule5Item6,
+        "s5sd_1" | "s5s_1" => Form1702RTModal::Schedule5Item8,
+        _ => return false,
+    };
+    d.more_rows.is_folded(modal)
+}
+
 fn money_slot<'a>(d: &'a mut Form1702RTDraft, key: &str) -> Option<&'a mut WholePeso> {
+    if key.starts_with('m') && parse_more_key(key).is_some() {
+        return match more_row_mut(d, key)? {
+            ('a', row) => Some(&mut row.amount),
+            _ => None,
+        };
+    }
     let indexed = |prefix: &str| {
         key.strip_prefix(prefix)
             .and_then(|n| n.parse::<usize>().ok())
@@ -322,6 +383,13 @@ fn money_slot<'a>(d: &'a mut Form1702RTDraft, key: &str) -> Option<&'a mut Whole
 }
 
 fn text_slot<'a>(d: &'a mut Form1702RTDraft, key: &str) -> Option<&'a mut String> {
+    if key.starts_with('m') && parse_more_key(key).is_some() {
+        return match more_row_mut(d, key)? {
+            ('d', row) => Some(&mut row.description),
+            ('l', row) => Some(&mut row.legal_basis),
+            _ => None,
+        };
+    }
     let indexed = |prefix: &str| {
         key.strip_prefix(prefix)
             .and_then(|n| n.parse::<usize>().ok())
@@ -495,7 +563,8 @@ impl Form1702RTView {
         }
         let mut parse_errors = Vec::new();
         let mut draft = self.draft.clone();
-        for key in all_keys() {
+        let keys: Vec<String> = all_keys().into_iter().chain(more_keys(&draft)).collect();
+        for key in keys {
             let text = self.input_text(&key, cx);
             if let Some(slot) = money_slot(&mut draft, &key) {
                 match parse_peso(&text) {
@@ -563,6 +632,174 @@ impl Form1702RTView {
         self.parse_errors = parse_errors;
         self.draft = draft;
         cx.notify();
+    }
+
+    fn new_input(
+        draft: &Form1702RTDraft,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<InputState>, Subscription) {
+        let value = Self::initial(draft, key);
+        let input = cx.new(|cx| InputState::new(window, cx));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.sync_from_inputs(cx);
+                }
+            },
+        );
+        (input, subscription)
+    }
+
+    /// "(Add more...)" Add Row / Remove: read the page, change the rows,
+    /// create editors for new rows, then show every row again from the
+    /// draft so nothing shifts into the wrong row.
+    fn edit_rows(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1702RTDraft),
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.sync_from_inputs(cx);
+        change(&mut self.draft);
+        self.draft.recompute();
+        for key in more_keys(&self.draft) {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let (input, subscription) = Self::new_input(&self.draft, &key, window, cx);
+            self.inputs.insert(key, input);
+            self._subscriptions.push(subscription);
+        }
+        let updates: Vec<(Entity<InputState>, String)> = self
+            .inputs
+            .iter()
+            .map(|(key, input)| (input.clone(), Self::initial(&self.draft, key)))
+            .collect();
+        for (input, value) in updates {
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
+        self.status_message = None;
+    }
+
+    /// Add Row: the first click opens the modal with the item as row 1
+    /// (`loadModalTable`) and adds row 2; later clicks add one blank row.
+    /// The official modal has no row limit.
+    fn add_more_row(d: &mut Form1702RTDraft, modal: Form1702RTModal) {
+        if d.more_rows.rows(modal).is_empty() {
+            let (description, legal_basis, amount) = d.modal_item_mut(modal);
+            let first = Form1702RTSpecialDeductionRow {
+                description: description.clone(),
+                legal_basis: legal_basis.map(|l| l.clone()).unwrap_or_default(),
+                amount: *amount,
+            };
+            d.more_rows.rows_mut(modal).push(first);
+        }
+        d.more_rows.rows_mut(modal).push(Default::default());
+    }
+
+    /// Remove (`deleteRow`, rows renumber). A single row left goes back to
+    /// the item, as `saveModalTable` does with one row.
+    fn remove_more_row(d: &mut Form1702RTDraft, modal: Form1702RTModal, index: usize) {
+        let rows = d.more_rows.rows_mut(modal);
+        if index >= rows.len() {
+            return;
+        }
+        rows.remove(index);
+        if rows.len() == 1 {
+            let last = rows.remove(0);
+            let (description, legal_basis, amount) = d.modal_item_mut(modal);
+            *description = last.description;
+            if let Some(legal_basis) = legal_basis {
+                *legal_basis = last.legal_basis;
+            }
+            *amount = last.amount;
+        }
+    }
+
+    /// One modal: every row with its Remove, Add Row, and the subtotal.
+    fn render_more(
+        &self,
+        modal: Form1702RTModal,
+        enabled: bool,
+        layout: Layout,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let index = FORM_1702RT_MODALS
+            .iter()
+            .position(|m| *m == modal)
+            .unwrap_or_default();
+        let editable = self.draft.lifecycle.is_editable() && enabled;
+        let mut children = vec![
+            div()
+                .font_weight(FontWeight::BOLD)
+                .child(format!("{} — (Add more...)", modal.title()))
+                .into_any_element(),
+        ];
+        for row in 0..self.draft.more_rows.rows(modal).len() {
+            let remove = Button::new((
+                SharedString::from(format!("1702rt_more_{index}_remove")),
+                row,
+            ))
+            .disabled(!editable)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.edit_rows(window, cx, |d| Self::remove_more_row(d, modal, row))
+            }));
+            let mut fields =
+                vec![self.field(&more_key(index, 'd', row), "Description", layout, !enabled)];
+            if modal.has_legal_basis() {
+                fields.push(self.field(
+                    &more_key(index, 'l', row),
+                    "Legal basis",
+                    layout,
+                    !enabled,
+                ));
+            }
+            fields.push(self.field(&more_key(index, 'a', row), "Amount", layout, !enabled));
+            children.push(kit::row_heading(
+                &format!("{}.{}", modal.item(), row + 1),
+                remove,
+            ));
+            children.push(self.grid(layout, fields));
+        }
+        let (description, legal_basis, amount) = {
+            let mut scratch = self.draft.clone();
+            let (d, l, a) = scratch.modal_item_mut(modal);
+            (d.clone(), l.map(|l| l.clone()), *a)
+        };
+        let complete = !description.trim().is_empty()
+            && legal_basis.is_none_or(|l| !l.trim().is_empty())
+            && amount.0 != 0;
+        let can_add = self.draft.more_rows.is_folded(modal)
+            || !self.draft.more_rows.rows(modal).is_empty()
+            || complete;
+        children.push(
+            kit::add_row_button(
+                SharedString::from(format!("1702rt_more_{index}_add")),
+                !editable || !can_add,
+            )
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.edit_rows(window, cx, |d| Self::add_more_row(d, modal))
+            }))
+            .into_any_element(),
+        );
+        if self.draft.more_rows.is_folded(modal) {
+            children.push(self.computed("Subtotal", self.draft.more_rows.subtotal(modal), cx));
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .children(children)
+            .into_any_element()
     }
 
     fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1702RTDraft)) {
@@ -646,7 +883,8 @@ impl Form1702RTView {
             .inputs
             .get(key)
             .expect("editor input registry is complete");
-        let disabled = disabled || !self.draft.lifecycle.is_editable();
+        let disabled =
+            disabled || !self.draft.lifecycle.is_editable() || folded_key(&self.draft, key);
         let body = div().child(Input::new(input).disabled(disabled));
         let label = div()
             .min_w_0()
@@ -1210,7 +1448,10 @@ impl Form1702RTView {
         ];
         self.section(
             "Page 2 — Parts IV and V",
-            vec![self.grid(layout, children)],
+            vec![
+                self.grid(layout, children),
+                self.render_more(Form1702RTModal::Item54, true, layout, cx),
+            ],
             cx,
         )
     }
@@ -1265,12 +1506,16 @@ impl Form1702RTView {
                 .child("Schedule I — Ordinary allowable itemized deductions")
                 .into_any_element(),
             self.grid(layout, s1),
+            self.render_more(Form1702RTModal::Schedule1Item17i, itemized, layout, cx),
             div()
                 .font_weight(FontWeight::BOLD)
                 .child("Schedule II — Special allowable itemized deductions")
                 .into_any_element(),
         ];
+        let s2_total = s2.pop();
         children.extend(s2);
+        children.push(self.render_more(Form1702RTModal::Schedule2Item4, itemized, layout, cx));
+        children.extend(s2_total);
         self.section("Page 3 — Schedules I and II", children, cx)
     }
 
@@ -1423,6 +1668,13 @@ impl Form1702RTView {
                 .into_any_element(),
         );
         children.push(self.grid(layout, recon));
+        for modal in [
+            Form1702RTModal::Schedule5Item3,
+            Form1702RTModal::Schedule5Item6,
+            Form1702RTModal::Schedule5Item8,
+        ] {
+            children.push(self.render_more(modal, true, layout, cx));
+        }
         self.section("Page 4 — Schedules III to V", children, cx)
     }
 }
@@ -1438,19 +1690,9 @@ impl QueueableFormView for Form1702RTView {
     ) -> Self {
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
-        for key in all_keys() {
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
+        for key in all_keys().into_iter().chain(more_keys(&draft)) {
+            let (input, subscription) = Self::new_input(&draft, &key, window, cx);
+            subscriptions.push(subscription);
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();
