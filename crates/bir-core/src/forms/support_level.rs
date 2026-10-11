@@ -512,6 +512,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // `form_id` is the official formType and PROD SFTP folder; queueing
         // goes through the generic `QueueableForm` path.
         form_id: "1601EQ",
+        // Print preview uses the 2019 sheet; print map joins fields by printed label.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -519,6 +520,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -529,6 +534,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // `form_id` is the official formType and PROD SFTP folder; queueing
         // goes through the generic `QueueableForm` path.
         form_id: "1601FQ",
+        // Print preview uses the 2020 sheet; print map joins fields by printed label.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -536,6 +542,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -567,6 +577,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         // `form_id` is the official formType and PROD SFTP folder; queueing
         // goes through the generic `QueueableForm` path.
         form_id: "1602Qv2018",
+        // Print preview uses the 2019 sheet; print map joins fields by printed label.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
@@ -574,6 +585,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -896,6 +911,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         revision: "2020",
         // `form_id` is the official formType (filename segment).
         form_id: "2200Tv2020",
+        // Print preview uses the 2022 sheet; print map joins fields by printed label.
         // The desktop editor is views::form_2200t_view.
         capabilities: FormCapabilities {
             typed_model: true,
@@ -904,6 +920,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
             persistence: true,
             queue_submission: true,
             editor: true,
+            render_contract: true,
+            html_component: true,
+            html_spec: true,
+            pagination: true,
             ..SCAFFOLD
         },
         release_ready: false,
@@ -1205,6 +1225,7 @@ mod tests {
             "1702MX", "2553", "2552", "2550M", "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q",
             "1701", "1702RT", "1702MX", "2553", "2553", "1606", "1600VT", "1600PT", "1600WP",
             "2553", "1701MS", "1702Q", "1701A", "1700", "1702EX", "1604F", "1604C", "1604E",
+            "1601EQ", "1601FQ", "1602Q", "2200T",
         ] {
             assert!(
                 can_open_certification_draft(code),
