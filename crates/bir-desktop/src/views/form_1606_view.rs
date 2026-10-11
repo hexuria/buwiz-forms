@@ -1035,11 +1035,14 @@ impl Form1606View {
                     ],
             ));
         }
+        // Official order: Item 30, then Item 31 (tax rate), then 32 onward.
+        let rest = children.split_off(1);
         self.section(
             "Part II — Computation of Tax",
             vec![
-                self.choice_row("Item 31 — Tax Rate", &["tax_rate"], rates),
                 self.grid(layout, children),
+                self.choice_row("Item 31 — Tax Rate", &["tax_rate"], rates),
+                self.grid(layout, rest),
             ],
             cx,
         )

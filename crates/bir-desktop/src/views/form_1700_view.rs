@@ -959,6 +959,59 @@ impl Form1700View {
         children
     }
 
+    /// Like `money_block`, but interleaves editable and computed rows in
+    /// official item order (the leading number in each label).
+    fn money_block_by_item(
+        &self,
+        who: Who,
+        moneys: &[Money],
+        computed: &[Computed],
+        layout: Layout,
+        cx: &Context<Self>,
+    ) -> Vec<AnyElement> {
+        fn item_no(label: &str) -> u32 {
+            label
+                .split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(u32::MAX)
+        }
+        let editable = self.draft.lifecycle.is_editable();
+        let column = who.column(&self.draft);
+        let mut rows: Vec<(u32, AnyElement)> = moneys
+            .iter()
+            .map(|money| {
+                let key = money_key(who, money.id);
+                let error_key = format!(
+                    "{}.{}",
+                    match who {
+                        Who::Taxpayer => "taxpayer",
+                        Who::Spouse => "spouse_column",
+                    },
+                    money.id
+                );
+                (
+                    item_no(money.label),
+                    self.field(
+                        &key,
+                        &error_key,
+                        money.label,
+                        layout,
+                        !editable || !(money.open)(&self.draft, who),
+                    ),
+                )
+            })
+            .collect();
+        rows.extend(computed.iter().map(|item| {
+            (
+                item_no(item.label),
+                self.computed(item.label, (item.get)(column), cx),
+            )
+        }));
+        rows.sort_by_key(|(n, _)| *n);
+        rows.into_iter().map(|(_, el)| el).collect()
+    }
+
     fn text_field(&self, key: &str, error_key: &str, layout: Layout, disabled: bool) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         self.field(
@@ -1101,9 +1154,12 @@ impl Form1700View {
         ] {
             fields.push(self.text_field(key, error_key, layout, false));
         }
+        // Official order: Items 4/5, then Item 6, then Items 7 onward.
+        let rest = fields.split_off(1);
         let mut children = vec![
             self.grid(layout, fields),
             self.type_choice(Who::Taxpayer, cx),
+            self.grid(layout, rest),
         ];
         children.push(self.yes_no(
             "1700_ftc",
@@ -1331,11 +1387,6 @@ impl Form1700View {
         ));
         let sections = vec![
             self.section(
-                "Part VI — Schedule 1: compensation and tax withheld",
-                rows,
-                cx,
-            ),
-            self.section(
                 "Part V.A — Graduated rates",
                 vec![
                     self.text_field("desc45", "other_income_description", layout, !employee),
@@ -1375,6 +1426,11 @@ impl Form1700View {
                 ],
                 cx,
             ),
+            self.section(
+                "Part VI — Schedule 1: compensation and tax withheld",
+                rows,
+                cx,
+            ),
         ];
         div()
             .flex()
@@ -1392,7 +1448,7 @@ impl Form1700View {
             .map(|who| {
                 (
                     who,
-                    self.money_block(who, PART_III, PART_III_COMPUTED, layout, cx),
+                    self.money_block_by_item(who, PART_III, PART_III_COMPUTED, layout, cx),
                 )
             })
             .collect();
@@ -1795,12 +1851,12 @@ impl Render for Form1700View {
                 )
             })
             .child(self.render_period(layout, cx))
-            .child(self.render_part_one(layout, cx))
-            .child(self.render_schedules(layout, cx));
+            .child(self.render_part_one(layout, cx));
         if self.draft.is_joint() {
             body = body.child(self.render_spouse(layout, cx));
         }
         body = body.child(self.render_totals(layout, cx));
+        body = body.child(self.render_schedules(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

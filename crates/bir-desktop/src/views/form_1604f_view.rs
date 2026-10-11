@@ -515,12 +515,32 @@ impl Form1604fView {
             ("name", TEXT_INPUTS[2].1, "taxpayer_name"),
             ("address", TEXT_INPUTS[3].1, "registered_address"),
             ("zip", TEXT_INPUTS[4].1, "zip_code"),
-            ("phone", TEXT_INPUTS[5].1, "contact_number"),
-            ("email", TEXT_INPUTS[6].1, "email"),
-            ("lob", TEXT_INPUTS[7].1, "line_of_business"),
         ] {
             fields.push(self.field(key, label, error_key, layout, !editable));
         }
+        // Line of business is Item 6 on the (commented-out) HTA block, so it
+        // sits right after the name.
+        fields.insert(
+            3,
+            self.field(
+                "lob",
+                TEXT_INPUTS[7].1,
+                "line_of_business",
+                layout,
+                !editable,
+            ),
+        );
+        // Items 9 and 10 come after Items 8 and 8A.
+        let contact_fields = vec![
+            self.field(
+                "phone",
+                TEXT_INPUTS[5].1,
+                "contact_number",
+                layout,
+                !editable,
+            ),
+            self.field("email", TEXT_INPUTS[6].1, "email", layout, !editable),
+        ];
         let category = d.agent_category;
         let category_row = Self::choice_row(
             layout,
@@ -578,7 +598,13 @@ impl Form1604fView {
                 ),
             ],
         );
-        let mut children = vec![self.grid(layout, fields), category_row, top_row, relief_row];
+        let mut children = vec![
+            self.grid(layout, fields),
+            category_row,
+            top_row,
+            self.grid(layout, contact_fields),
+            relief_row,
+        ];
         if relief {
             children.push(self.field(
                 "relief",
