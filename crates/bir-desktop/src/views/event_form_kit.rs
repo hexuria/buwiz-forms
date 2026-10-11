@@ -1019,7 +1019,16 @@ pub fn render_page<V: KitView>(
                         .on_click(cx.listener(|this: &mut V, _, window, cx| {
                             this.mark_submitted(window, cx)
                         })),
-                ),
+                )
+                .when(is_draft && !can_submit, |row| {
+                    let count = kit.parse_errors.len() + kit.validation_errors.len();
+                    row.child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().danger)
+                            .child(format!("Fix {count} item(s) under Needs review to queue.")),
+                    )
+                }),
         );
 
     let mut body = div()

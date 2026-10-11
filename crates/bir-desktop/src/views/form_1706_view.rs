@@ -20,6 +20,10 @@ use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice_row, computed, field,
     format_tin, grid, money_text, optional_money_text, section, yes_no,
 };
+use super::form_controls::{
+    messages_for, new_select_state, on_select, select_field, sync_select, with_field_error,
+};
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -149,10 +153,83 @@ fn schedule_key(index: usize) -> String {
     format!("sched{index}")
 }
 
+/// Item 15 classes as `(value, label)`; the printed label is the value.
+fn class_options() -> Vec<(&'static str, &'static str)> {
+    Form1706PropertyClass::ALL
+        .iter()
+        .map(|c| (c.label(), c.label()))
+        .collect()
+}
+
+/// Item 21 transaction kinds as `(value, label)`.
+fn transaction_options() -> Vec<(&'static str, &'static str)> {
+    Form1706TransactionType::ALL
+        .iter()
+        .map(|t| (t.label(), t.label()))
+        .collect()
+}
+
+/// Item 30 taxable-base options; the unutilized-proceeds option is listed
+/// only while it applies.
+fn base_options(unutilized_applies: bool) -> Vec<(&'static str, &'static str)> {
+    Form1706TaxableBase::ALL
+        .iter()
+        .filter(|o| unutilized_applies || **o != Form1706TaxableBase::UnutilizedProceeds)
+        .map(|o| (o.label(), o.label()))
+        .collect()
+}
+
+/// Validation keys (draft field names) behind a page input key, so each
+/// message shows under the input it belongs to.
+fn error_keys(key: &str) -> Vec<String> {
+    let mapped: &[&str] = match key {
+        "month" => &["transaction_date"],
+        "day" | "year" => &[],
+        "sheets" => &["number_of_attached_sheets"],
+        "buyer_rdo" => &["buyer_rdo_code"],
+        "seller_residence" => &["seller_residence_address"],
+        "location" => &["property_location"],
+        "property_rdo" => &["property_rdo_code"],
+        "class_other" => &["property_class_other"],
+        "tct" => &["tct_number"],
+        "area" => &["area_sold"],
+        "tax_dec" => &["tax_declaration_number"],
+        "property_other" => &["property_other_description"],
+        "txn_description" => &["transaction_description"],
+        "inst_date_month" => &["installment.date_month"],
+        "inst_date_day" => &["installment.date_day"],
+        "inst_date_year" => &["installment.date_year"],
+        "inst_selling" => &["installment.selling_price"],
+        "inst_cost" => &["installment.cost_and_expenses"],
+        "inst_mortgage" => &["installment.mortgage_assumed"],
+        "inst_initial" => &["installment.initial_year_payments"],
+        "inst_month_amount" => &["installment.installment_this_month"],
+        "inst_count" => &["installment.number_of_installments"],
+        "fmv_land_td" => &["fmv_land_tax_declaration"],
+        "fmv_improvements_td" => &["fmv_improvements_tax_declaration"],
+        "gross" => &["gross_selling_price"],
+        "bid" => &["bid_price"],
+        "installment" => &["taxable_installment"],
+        "unutilized" => &["unutilized_proceeds"],
+        "less" => &["tax_paid_previous"],
+        _ => &[],
+    };
+    let mut keys: Vec<String> = mapped.iter().map(|k| k.to_string()).collect();
+    keys.push(key.to_string());
+    if let Some(index) = key.strip_prefix("sched") {
+        keys.push(format!("schedule_1[{index}]"));
+    }
+    keys
+}
+
 pub struct Form1706View {
     draft: Form1706Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    class_select: Entity<ComboboxState>,
+    transaction_select: Entity<ComboboxState>,
+    base_select: Entity<ComboboxState>,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<QueueableFormEvent> for Form1706View {}
@@ -279,14 +356,33 @@ impl Form1706View {
             .unwrap_or("")
     }
 
+    /// The messages recorded for any of `keys`, if any.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.kit
+                .validation_errors
+                .iter()
+                .chain(self.kit.parse_errors.iter()),
+            keys,
+        )
+    }
+
+    /// `element` with the messages for `keys` directly under it.
+    fn with_err(&self, element: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(element, self.error_for(keys))
+    }
+
     fn f(&self, key: &str, layout: Layout) -> AnyElement {
-        field(
+        let element = field(
             &self.kit,
             key,
             Self::label(key),
             layout,
             !self.draft.lifecycle.is_editable(),
-        )
+        );
+        let keys = error_keys(key);
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        self.with_err(element, &keys)
     }
 
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -342,7 +438,7 @@ impl Form1706View {
             self.f("year", layout),
             amended,
             self.f("sheets", layout),
-            seller_type,
+            self.with_err(seller_type, &["seller_type"]),
         ];
         section(
             "Date of transaction and return type",
@@ -363,8 +459,8 @@ impl Form1706View {
                 .into_any_element()
         };
         let children = vec![
-            fixed("Item 6A — Seller TIN", format_tin(&d.tin)),
-            fixed("Seller RDO code", d.rdo_code.clone()),
+            self.with_err(fixed("Item 6A — Seller TIN", format_tin(&d.tin)), &["tin"]),
+            self.with_err(fixed("Seller RDO code", d.rdo_code.clone()), &["rdo_code"]),
             self.f("buyer_tin", layout),
             self.f("buyer_branch", layout),
             self.f("buyer_rdo", layout),
@@ -384,27 +480,15 @@ impl Form1706View {
     fn render_property(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let classes: Vec<_> = Form1706PropertyClass::ALL
-            .iter()
-            .enumerate()
-            .map(|(index, class)| {
-                let class = *class;
-                choice(
-                    ("1706_class", index),
-                    class.label(),
-                    d.property_class == Some(class),
-                    !editable,
-                )
-                .on_click(cx.listener(move |this: &mut Self, _, window, cx| {
-                    kit::edit_and_reload(this, window, cx, |d| {
-                        d.property_class = Some(class);
-                        if class != Form1706PropertyClass::Others {
-                            d.property_class_other.clear();
-                        }
-                    })
-                }))
-            })
-            .collect();
+        let classes = select_field(
+            "Schedule 1 — Classification of property",
+            &self.class_select,
+            &class_options(),
+            d.property_class.map(Form1706PropertyClass::label),
+            !editable,
+            self.error_for(&["property_class"]).as_deref(),
+            cx,
+        );
         let head = vec![self.f("location", layout), self.f("property_rdo", layout)];
         let mut fields = Vec::new();
         if d.property_class == Some(Form1706PropertyClass::Others) {
@@ -419,33 +503,42 @@ impl Form1706View {
         let individual = d.seller_type == Some(Form1706SellerType::Individual);
         let mut questions = Vec::new();
         if individual {
-            questions.push(yes_no::<Self>(
-                layout,
-                "1706_item17",
-                "Item 8 — Is the property being sold your principal residence?",
-                d.principal_residence,
-                !editable,
-                cx,
-                |d, yes| d.set_individual_answers(Some(yes), d.new_residence_within_18_months),
+            questions.push(self.with_err(
+                yes_no::<Self>(
+                    layout,
+                    "1706_item17",
+                    "Item 8 — Is the property being sold your principal residence?",
+                    d.principal_residence,
+                    !editable,
+                    cx,
+                    |d, yes| d.set_individual_answers(Some(yes), d.new_residence_within_18_months),
+                ),
+                &["principal_residence"],
             ));
-            questions.push(yes_no::<Self>(
-                layout,
-                "1706_item18",
-                "Item 9 — Do you intend to construct or acquire a new principal residence within 18 months?",
-                d.new_residence_within_18_months,
-                !editable,
-                cx,
-                |d, yes| d.set_individual_answers(d.principal_residence, Some(yes)),
+            questions.push(self.with_err(
+                yes_no::<Self>(
+                    layout,
+                    "1706_item18",
+                    "Item 9 — Do you intend to construct or acquire a new principal residence within 18 months?",
+                    d.new_residence_within_18_months,
+                    !editable,
+                    cx,
+                    |d, yes| d.set_individual_answers(d.principal_residence, Some(yes)),
+                ),
+                &["new_residence_within_18_months"],
             ));
         }
-        questions.push(yes_no::<Self>(
-            layout,
-            "1706_item19",
-            "Item 10 — Does the selling price cover more than one property?",
-            d.covers_multiple_properties,
-            !editable,
-            cx,
-            |d, yes| d.covers_multiple_properties = Some(yes),
+        questions.push(self.with_err(
+            yes_no::<Self>(
+                layout,
+                "1706_item19",
+                "Item 10 — Does the selling price cover more than one property?",
+                d.covers_multiple_properties,
+                !editable,
+                cx,
+                |d, yes| d.covers_multiple_properties = Some(yes),
+            ),
+            &["covers_multiple_properties"],
         ));
         let relief = d.tax_relief;
         let reliefs: Vec<_> = [
@@ -466,16 +559,19 @@ impl Form1706View {
             )
         })
         .collect();
-        questions.push(choice_row(
-            layout,
-            "Item 11 — Availing of tax relief under an International Tax Treaty or Special Law?",
-            reliefs,
+        questions.push(self.with_err(
+            choice_row(
+                layout,
+                "Item 11 — Availing of tax relief under an International Tax Treaty or Special Law?",
+                reliefs,
+            ),
+            &["tax_relief"],
         ));
         section(
             "Part I — Property (Item 5, Schedule 1, Items 8–11)",
             vec![
                 grid(layout, head),
-                choice_row(layout, "Schedule 1 — Classification of property", classes),
+                classes,
                 grid(layout, fields),
                 grid(layout, questions),
             ],
@@ -486,26 +582,14 @@ impl Form1706View {
     fn render_transaction(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let kinds: Vec<_> = Form1706TransactionType::ALL
-            .iter()
-            .enumerate()
-            .map(|(index, kind)| {
-                let kind = *kind;
-                choice(
-                    ("1706_txn", index),
-                    kind.label(),
-                    d.transaction_type == Some(kind),
-                    !editable,
-                )
-                .on_click(cx.listener(move |this: &mut Self, _, window, cx| {
-                    kit::edit_and_reload(this, window, cx, |d| d.set_transaction_type(kind))
-                }))
-            })
-            .collect();
-        let mut children = vec![choice_row(
-            layout,
+        let mut children = vec![select_field(
             "Schedule 2 — Description of transaction",
-            kinds,
+            &self.transaction_select,
+            &transaction_options(),
+            d.transaction_type.map(Form1706TransactionType::label),
+            !editable,
+            self.error_for(&["transaction_type"]).as_deref(),
+            cx,
         )];
         if d.transaction_type.is_some_and(|t| t.needs_description()) {
             children.push(self.f("txn_description", layout));
@@ -545,24 +629,15 @@ impl Form1706View {
             .map(|key| self.f(key, layout))
             .collect(),
         );
-        let options: Vec<_> = Form1706TaxableBase::ALL
-            .iter()
-            .enumerate()
-            .map(|(index, option)| {
-                let option = *option;
-                let unavailable = option == Form1706TaxableBase::UnutilizedProceeds
-                    && !d.unutilized_proceeds_apply();
-                choice(
-                    ("1706_base", index),
-                    option.label(),
-                    d.taxable_base_option == Some(option),
-                    !editable || unavailable,
-                )
-                .on_click(cx.listener(move |this: &mut Self, _, _, cx| {
-                    kit::edit(this, cx, |d| d.taxable_base_option = Some(option))
-                }))
-            })
-            .collect();
+        let options = select_field(
+            "Schedule 4 — Determination of taxable base",
+            &self.base_select,
+            &base_options(d.unutilized_proceeds_apply()),
+            d.taxable_base_option.map(Form1706TaxableBase::label),
+            !editable,
+            self.error_for(&["taxable_base_option"]).as_deref(),
+            cx,
+        );
         let mut amounts = Vec::new();
         match d.transaction_type {
             Some(Form1706TransactionType::CashSale) => {
@@ -595,11 +670,7 @@ impl Form1706View {
                 kit::label("Schedule 1 — Fair market value at the time of the contract")
                     .into_any_element(),
                 fmv,
-                choice_row(
-                    layout,
-                    "Schedule 4 — Determination of taxable base",
-                    options,
-                ),
+                options,
                 grid(layout, amounts),
             ],
             cx,
@@ -610,32 +681,42 @@ impl Form1706View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut children = vec![
-            computed("12 — Taxable base", d.taxable_base, cx),
+            self.with_err(
+                computed("12 — Taxable base", d.taxable_base, cx),
+                &["taxable_base"],
+            ),
             computed("14 — Tax due (6%)", d.tax_due, cx),
-            field(
-                &self.kit,
-                "less",
-                Self::label("less"),
-                layout,
-                !editable || !d.is_amended,
+            self.with_err(
+                field(
+                    &self.kit,
+                    "less",
+                    Self::label("less"),
+                    layout,
+                    !editable || !d.is_amended,
+                ),
+                &["tax_paid_previous", "less"],
             ),
             computed("16 — Tax payable (overpayment)", d.tax_payable, cx),
             self.f("surcharge", layout),
             self.f("interest", layout),
             self.f("compromise", layout),
             computed("17D — Total penalties", d.total_penalties, cx),
-            computed(
-                "18 — Total amount payable (overpayment)",
-                d.total_amount_payable,
-                cx,
+            self.with_err(
+                computed(
+                    "18 — Total amount payable (overpayment)",
+                    d.total_amount_payable,
+                    cx,
+                ),
+                &["total_amount_payable"],
             ),
         ];
         if d.total_amount_payable < 0.0 {
             let over = d.overpayment;
-            children.push(choice_row(
-                layout,
-                "If overpayment, mark one:",
-                vec![
+            children.push(self.with_err(
+                choice_row(
+                    layout,
+                    "If overpayment, mark one:",
+                    vec![
                     choice(
                         "1706_refund",
                         "To be refunded",
@@ -657,6 +738,8 @@ impl Form1706View {
                         })
                     })),
                 ],
+                ),
+                &["overpayment"],
             ));
         }
         children.push(self.f("email", layout));
@@ -793,7 +876,70 @@ impl QueueableFormView for Form1706View {
     ) -> Self {
         let errors = bir_core::forms::queueable::QueueableForm::validate(&draft);
         let kit = EditorState::new(Self::input_specs(&draft), errors, window, cx);
-        Self { draft, db, kit }
+        let class_options = class_options();
+        let class_select = new_select_state(&class_options, window, cx);
+        let transaction_options = transaction_options();
+        let transaction_select = new_select_state(&transaction_options, window, cx);
+        let base_options = base_options(true);
+        let base_select = new_select_state(&base_options, window, cx);
+        let subscriptions = vec![
+            on_select(
+                &class_select,
+                &class_options,
+                window,
+                cx,
+                |this: &mut Self, value, window, cx| {
+                    if let Some(class) = Form1706PropertyClass::ALL
+                        .into_iter()
+                        .find(|c| c.label() == value)
+                    {
+                        kit::edit_and_reload(this, window, cx, |d| {
+                            d.property_class = Some(class);
+                            if class != Form1706PropertyClass::Others {
+                                d.property_class_other.clear();
+                            }
+                        })
+                    }
+                },
+            ),
+            on_select(
+                &transaction_select,
+                &transaction_options,
+                window,
+                cx,
+                |this: &mut Self, value, window, cx| {
+                    if let Some(kind) = Form1706TransactionType::ALL
+                        .into_iter()
+                        .find(|t| t.label() == value)
+                    {
+                        kit::edit_and_reload(this, window, cx, |d| d.set_transaction_type(kind))
+                    }
+                },
+            ),
+            on_select(
+                &base_select,
+                &base_options,
+                window,
+                cx,
+                |this: &mut Self, value, _, cx| {
+                    if let Some(option) = Form1706TaxableBase::ALL
+                        .into_iter()
+                        .find(|o| o.label() == value)
+                    {
+                        kit::edit(this, cx, |d| d.taxable_base_option = Some(option))
+                    }
+                },
+            ),
+        ];
+        Self {
+            draft,
+            db,
+            kit,
+            class_select,
+            transaction_select,
+            base_select,
+            _subscriptions: subscriptions,
+        }
     }
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1706Draft {
@@ -842,6 +988,31 @@ impl FormViewTrait for Form1706View {
 impl Render for Form1706View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        sync_select(
+            &self.class_select,
+            &class_options(),
+            self.draft.property_class.map(Form1706PropertyClass::label),
+            window,
+            cx,
+        );
+        sync_select(
+            &self.transaction_select,
+            &transaction_options(),
+            self.draft
+                .transaction_type
+                .map(Form1706TransactionType::label),
+            window,
+            cx,
+        );
+        sync_select(
+            &self.base_select,
+            &base_options(self.draft.unutilized_proceeds_apply()),
+            self.draft
+                .taxable_base_option
+                .map(Form1706TaxableBase::label),
+            window,
+            cx,
+        );
         let mut sections = vec![
             self.render_header_items(layout, cx),
             self.render_parties(layout, cx),
