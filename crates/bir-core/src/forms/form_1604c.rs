@@ -390,6 +390,45 @@ impl Form1604cDraft {
         fields
     }
 
+    /// The field map plus print-only values the frozen 2018 sheet needs
+    /// (`derived:` keys, never submitted): Item 7 over its two comb lines
+    /// (40 + 31 slots), and Items 11A-13, which print blank unless Item 11
+    /// is "Yes" (the submitted controls hold `00` / `0.00` then).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let address: Vec<char> = self.registered_address.trim().chars().collect();
+        fields.insert(
+            "derived:address1".to_string(),
+            address.iter().take(40).collect(),
+        );
+        fields.insert(
+            "derived:address2".to_string(),
+            address.iter().skip(40).take(31).collect(),
+        );
+        let (month, day, year) = self.refund_parts();
+        let released = self.refunds_released;
+        let blank_unless = |value: String| if released { value } else { String::new() };
+        fields.insert(
+            "derived:refund_mm".to_string(),
+            blank_unless(if month == "00" { String::new() } else { month }),
+        );
+        fields.insert("derived:refund_dd".to_string(), blank_unless(day));
+        fields.insert("derived:refund_yyyy".to_string(), blank_unless(year));
+        fields.insert(
+            "derived:overremittance".to_string(),
+            blank_unless(official_amount(self.overremittance)),
+        );
+        fields.insert(
+            "derived:crediting_month".to_string(),
+            if released && (1..=12).contains(&self.first_crediting_month) {
+                format!("{:02}", self.first_crediting_month)
+            } else {
+                String::new()
+            },
+        );
+        fields
+    }
+
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()

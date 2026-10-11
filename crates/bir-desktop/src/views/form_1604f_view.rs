@@ -896,7 +896,7 @@ impl FormViewTrait for Form1604fView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = self.draft.to_print_field_map();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
             "1604f-2018",
             &fields,
