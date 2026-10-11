@@ -69,3 +69,49 @@ fn form_2200p_sample_payload_is_current() {
         "71390796ec132328c492e3da1119d3133a6580b3de702b2ed344d196eaa1b647",
     );
 }
+
+/// Rows past the page's 27: `addRowSched1` has no row limit once rows 26
+/// and 27 are complete, and each added row follows the previous one.
+fn sample_2200p_many_rows() -> Form2200PDraft {
+    let mut draft = sample_2200p();
+    draft.day = 13;
+    let row = draft.row_mut(26).unwrap();
+    row.atc_digits = "998".into();
+    row.description = "Bunker blend".into();
+    row.unit_of_measure = "Per liter".into();
+    row.applicable_rate = Some(3.0);
+    row.place_of_removal = "Cebu".into();
+    row.local_manufactured = Some(12.5);
+    row.basic_excise_tax_due = Some(37.5);
+    for (k, index) in (28..=31u32).zip(27usize..) {
+        let row = draft.row_mut(index).unwrap();
+        row.atc_digits = format!("9{k}");
+        row.description = format!("Added fuel {k}");
+        row.unit_of_measure = "Per kg".into();
+        row.applicable_rate = Some(f64::from(k) / 10.0);
+        row.place_of_removal = format!("Depot {k}");
+        row.imported = Some(f64::from(k) * 100.0);
+        row.exports = Some(1.005);
+        row.basic_excise_tax_due = Some(f64::from(k) * 10.0 + 0.25);
+    }
+    draft.recompute();
+    draft.tax_deposit = draft.tax_still_due + 100.0;
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_2200p_sample_with_many_rows_is_current() {
+    let draft = sample_2200p_many_rows();
+    assert_eq!(draft.row_count(), 31);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 2200P must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "2200P-03132025",
+        &layout,
+        &payload,
+        "140689c12e730396a14557d7c7c34c45a2352ef3d2c3f9ea960026774d5d755a",
+    );
+}

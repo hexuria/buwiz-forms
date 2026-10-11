@@ -23,6 +23,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -67,9 +68,17 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("psic", "Item 10 — PSIC", "4 to 6 digits"),
     ("email", "Item 11 — Email Address", ""),
     ("scheme", "Item 17 — Other similar scheme (specify)", ""),
+];
+
+/// Columns of an "Others" row: (key prefix, label, placeholder). The input
+/// key is the prefix plus the row index (`oatc0`, `oatc1`, ...).
+const OTHER_COLUMNS: &[(&str, &str, &str)] = &[
     ("oatc", "ATC (XB + 3 digits)", "XB"),
     ("odesc", "Description", ""),
     ("obracket", "Tax bracket / unit of measure", ""),
+    ("orate", "Applicable tax rate", "0.00"),
+    ("osales", "Sales value (in peso)", "0.00"),
+    ("ovol", "Volume of removals", "0.00"),
 ];
 
 /// Money inputs: (key, label).
@@ -84,9 +93,6 @@ const MONEY_INPUTS: &[(&str, &str)] = &[
     ("int", "23B — Interest (prepayment only)"),
     ("comp", "23C — Compromise (prepayment only)"),
     ("pay", "25A — Tax payment / deposit"),
-    ("orate", "Applicable tax rate"),
-    ("osales", "Sales value (in peso)"),
-    ("ovol", "Volume of removals"),
 ];
 
 fn row_key(prefix: &str, row: usize) -> String {
@@ -136,7 +142,21 @@ pub struct Form2200SView {
 
 impl Form2200SView {
     fn initial(draft: &Form2200SDraft, key: &str) -> String {
-        let other = draft.others.clone().unwrap_or_default();
+        if let Some((column, row)) = OTHER_COLUMNS.iter().find_map(|(prefix, _, _)| {
+            key.strip_prefix(prefix)
+                .and_then(|rest| rest.parse::<usize>().ok())
+                .map(|row| (*prefix, row))
+        }) {
+            let other = draft.others.get(row).cloned().unwrap_or_default();
+            return match column {
+                "oatc" => other.atc,
+                "odesc" => other.description,
+                "obracket" => other.tax_bracket,
+                "orate" => money_text(other.rate),
+                "osales" => money_text(other.sales_value),
+                _ => money_text(other.volume),
+            };
+        }
         match key {
             "day" => format!("{:02}", draft.day),
             "year" => draft.year.to_string(),
@@ -149,12 +169,6 @@ impl Form2200SView {
             "psic" => draft.psic.clone(),
             "email" => draft.email.clone(),
             "scheme" => draft.other_scheme_text.clone(),
-            "oatc" => other.atc.clone(),
-            "odesc" => other.description.clone(),
-            "obracket" => other.tax_bracket.clone(),
-            "orate" => money_text(other.rate),
-            "osales" => money_text(other.sales_value),
-            "ovol" => money_text(other.volume),
             "bal" => money_text(draft.balance_carried_over),
             "cred" => money_text(draft.creditable_excise_tax),
             "prev" => money_text(draft.previous_payment),
@@ -247,19 +261,37 @@ impl Form2200SView {
                     draft.beverages[row].volume = value;
                 }
             }
-            if draft.others.is_some() {
-                let rate = number("orate", "Others rate", cx).unwrap_or(0.0);
-                let sales = number("osales", "Others sales value", cx).unwrap_or(0.0);
-                let volume = number("ovol", "Others volume", cx).unwrap_or(0.0);
-                draft.others = Some(Form2200SOtherRow {
-                    atc: self.input_text("oatc", cx).trim().to_string(),
-                    description: self.input_text("odesc", cx).trim().to_string(),
-                    tax_bracket: self.input_text("obracket", cx).trim().to_string(),
+            // Every "Others" row on the page, in order.
+            for row in 0..draft.others.len() {
+                let n = row + 1;
+                let rate = number(&row_key("orate", row), &format!("Others row {n} rate"), cx)
+                    .unwrap_or(0.0);
+                let sales = number(
+                    &row_key("osales", row),
+                    &format!("Others row {n} sales value"),
+                    cx,
+                )
+                .unwrap_or(0.0);
+                let volume = number(&row_key("ovol", row), &format!("Others row {n} volume"), cx)
+                    .unwrap_or(0.0);
+                draft.others[row] = Form2200SOtherRow {
+                    atc: self
+                        .input_text(&row_key("oatc", row), cx)
+                        .trim()
+                        .to_string(),
+                    description: self
+                        .input_text(&row_key("odesc", row), cx)
+                        .trim()
+                        .to_string(),
+                    tax_bracket: self
+                        .input_text(&row_key("obracket", row), cx)
+                        .trim()
+                        .to_string(),
                     rate,
                     sales_value: sales,
                     volume,
                     basic_tax_due: 0.0,
-                });
+                };
             }
         }
         draft.taxpayer_name = self.input_text("name", cx);
@@ -305,6 +337,64 @@ impl Form2200SView {
             }
         }
         self.sync_from_inputs(cx);
+    }
+
+    /// One editor per input key, wired to [`Self::sync_from_inputs`].
+    fn new_input(
+        draft: &Form2200SDraft,
+        key: &str,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<InputState>, Subscription) {
+        let value = Self::initial(draft, key);
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.sync_from_inputs(cx);
+                }
+            },
+        );
+        (input, subscription)
+    }
+
+    /// Editors for every "Others" row the draft holds.
+    fn ensure_other_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for row in 0..self.draft.others.len() {
+            for (prefix, _, placeholder) in OTHER_COLUMNS {
+                let key = row_key(prefix, row);
+                if self.inputs.contains_key(&key) {
+                    continue;
+                }
+                let (input, subscription) =
+                    Self::new_input(&self.draft, &key, placeholder, window, cx);
+                self.inputs.insert(key, input);
+                self._subscriptions.push(subscription);
+            }
+        }
+    }
+
+    /// Add row / Remove on the "Others" rows (`addFieldsForSched1` /
+    /// `deleteFieldForSched1`): read the page first, change the rows, then
+    /// show every row again from the draft.
+    fn edit_others(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Vec<Form2200SOtherRow>),
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.sync_from_inputs(cx);
+        change(&mut self.draft.others);
+        self.ensure_other_inputs(window, cx);
+        self.edit_and_reload(window, cx, |_| {});
     }
 
     fn place_mut(draft: &mut Form2200SDraft, item: u8) -> &mut ExcisePlace {
@@ -864,60 +954,60 @@ impl Form2200SView {
                     .into_any_element(),
             );
         }
-        let others = self.draft.others.clone();
-        let mut others_box = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .p_3()
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_md()
-            .child(Self::label_row(
-                "Others (specify)",
-                layout,
-                vec![
-                    Self::choice("2200s_others", "Include", others.is_some(), !editable)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            let include = this.draft.others.is_none();
-                            this.edit_and_reload(window, cx, |d| {
-                                d.others = include.then(|| Form2200SOtherRow {
-                                    atc: "XB".into(),
-                                    ..Default::default()
-                                });
-                            })
-                        }))
-                        .into_any_element(),
-                ],
-            ));
-        if let Some(other) = &others {
-            let fields = ["oatc", "odesc", "obracket"]
+        let actual = self.draft.manner == Form2200SManner::ActualRemoval;
+        children.push(
+            div()
+                .font_weight(FontWeight::BOLD)
+                .child("Others (specify)")
+                .into_any_element(),
+        );
+        for (row, other) in self.draft.others.iter().enumerate() {
+            let remove = Button::new(("2200s_others_remove", row))
+                .disabled(!editable)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.edit_others(window, cx, |rows| {
+                        if row < rows.len() {
+                            rows.remove(row);
+                        }
+                    })
+                }));
+            let fields = OTHER_COLUMNS
                 .iter()
-                .map(|key| {
-                    let label = TEXT_INPUTS
-                        .iter()
-                        .find(|(k, _, _)| k == key)
-                        .map(|(_, l, _)| *l)
-                        .unwrap_or(key);
-                    self.field(key, label, layout, !editable)
+                .map(|(prefix, label, _)| {
+                    self.field(&row_key(prefix, row), label, layout, !editable)
                 })
-                .chain(["orate", "osales", "ovol"].iter().map(|key| {
-                    let label = MONEY_INPUTS
-                        .iter()
-                        .find(|(k, _)| k == key)
-                        .map(|(_, l)| *l)
-                        .unwrap_or(key);
-                    self.field(key, label, layout, !editable)
-                }))
                 .chain(std::iter::once(self.computed(
                     "Basic excise tax due",
                     other.basic_tax_due,
                     cx,
                 )))
                 .collect();
-            others_box = others_box.child(self.grid(layout, fields));
+            children.push(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .p_3()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_md()
+                    .child(kit::row_heading(&format!("Others row {}", row + 1), remove))
+                    .child(self.grid(layout, fields))
+                    .into_any_element(),
+            );
         }
-        children.push(others_box.into_any_element());
+        children.push(
+            kit::add_row_button("2200s_others_add", !editable || !actual)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.edit_others(window, cx, |rows| {
+                        rows.push(Form2200SOtherRow {
+                            atc: "XB".into(),
+                            ..Default::default()
+                        })
+                    })
+                }))
+                .into_any_element(),
+        );
         children.push(self.computed(
             "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
             self.draft.schedule_total,
@@ -991,19 +1081,14 @@ impl QueueableFormView for Form2200SView {
             keys.push((row_key("bsales", row), "0.00".into()));
             keys.push((row_key("bvol", row), "0.00".into()));
         }
+        for row in 0..draft.others.len() {
+            for (prefix, _, placeholder) in OTHER_COLUMNS {
+                keys.push((row_key(prefix, row), placeholder.to_string()));
+            }
+        }
         for (key, placeholder) in keys {
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
+            let (input, subscription) = Self::new_input(&draft, &key, &placeholder, window, cx);
+            subscriptions.push(subscription);
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();

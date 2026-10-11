@@ -263,7 +263,8 @@ pub struct Form2200SBeverageRow {
     pub basic_tax_due: f64,
 }
 
-/// The Schedule 1 "Others (specify)" row.
+/// One Schedule 1 "Others (specify)" row (`frm2200SadditionalSched1`; the
+/// page opens with one and `addFieldsForSched1` appends more).
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Form2200SOtherRow {
     /// `XB` + three digits, not one of the fixed rows' ATCs.
@@ -275,6 +276,24 @@ pub struct Form2200SOtherRow {
     pub volume: f64,
     #[serde(default)]
     pub basic_tax_due: f64,
+}
+
+/// `others` as saved now (a list) or before rows could be added (one
+/// optional row).
+fn others_rows<'de, D>(deserializer: D) -> Result<Vec<Form2200SOtherRow>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Stored {
+        Rows(Vec<Form2200SOtherRow>),
+        One(Option<Form2200SOtherRow>),
+    }
+    Ok(match Stored::deserialize(deserializer)? {
+        Stored::Rows(rows) => rows,
+        Stored::One(row) => row.into_iter().collect(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -331,8 +350,10 @@ pub struct Form2200SDraft {
     /// Schedule 1 fixed rows, in `FORM_2200S_BEVERAGES` order.
     #[serde(default)]
     pub beverages: Vec<Form2200SBeverageRow>,
-    #[serde(default)]
-    pub others: Option<Form2200SOtherRow>,
+    /// "Others" rows in page order; empty when the first row is untouched.
+    /// Drafts saved with a single optional row still load.
+    #[serde(default, deserialize_with = "others_rows")]
+    pub others: Vec<Form2200SOtherRow>,
     /// Schedule 1 total tax due.
     #[serde(default)]
     pub schedule_total: f64,
@@ -425,7 +446,7 @@ impl Form2200SDraft {
             other_scheme: false,
             other_scheme_text: String::new(),
             beverages: Vec::new(),
-            others: None,
+            others: Vec::new(),
             schedule_total: 0.0,
             excise_tax_due: 0.0,
             balance_carried_over: 0.0,
@@ -463,7 +484,7 @@ impl Form2200SDraft {
         if !actual {
             // Schedule 1 belongs to a payment on actual removal.
             self.beverages.clear();
-            self.others = None;
+            self.others.clear();
         }
         if self.manner != Form2200SManner::Prepayment {
             self.other_scheme = false;
@@ -491,7 +512,7 @@ impl Form2200SDraft {
         for row in self.beverages.iter().take(9) {
             total += row.basic_tax_due;
         }
-        if let Some(other) = &mut self.others {
+        for other in &mut self.others {
             other.atc = other.atc.trim().to_uppercase();
             other.rate = parse_amount(&Self::others_rate_text(other.rate));
             other.sales_value = typed(other.sales_value);
@@ -609,14 +630,36 @@ impl Form2200SDraft {
             put(&format!("txtVolumeRemovals{index}"), money(row.volume));
             put(&format!("txtBasicTaxDue{index}"), sum(row.basic_tax_due));
         }
-        if let Some(other) = &self.others {
-            put("txtsched1Atc0", other.atc.clone());
-            put("txtsched1Desc0", other.description.trim().to_string());
-            put("txtsched1TaxBracket0", other.tax_bracket.trim().to_string());
-            put("txtsched1AppTaxRate0", Self::others_rate_text(other.rate));
-            put("txtsched1SalesValue0", money(other.sales_value));
-            put("txtsched1VolumeRemovals0", money(other.volume));
-            put("txtsched1BasicTaxDue0", sum(other.basic_tax_due));
+        for (index, other) in self.others.iter().enumerate() {
+            if index > 0 {
+                // sched1Fields: an added row's checkbox starts unticked.
+                put(&format!("sched1Chk{index}"), flag(false));
+            }
+            put(&format!("txtsched1Atc{index}"), other.atc.clone());
+            put(
+                &format!("txtsched1Desc{index}"),
+                other.description.trim().to_string(),
+            );
+            put(
+                &format!("txtsched1TaxBracket{index}"),
+                other.tax_bracket.trim().to_string(),
+            );
+            put(
+                &format!("txtsched1AppTaxRate{index}"),
+                Self::others_rate_text(other.rate),
+            );
+            put(
+                &format!("txtsched1SalesValue{index}"),
+                money(other.sales_value),
+            );
+            put(
+                &format!("txtsched1VolumeRemovals{index}"),
+                money(other.volume),
+            );
+            put(
+                &format!("txtsched1BasicTaxDue{index}"),
+                sum(other.basic_tax_due),
+            );
         }
         put("totalTaxDue", sum(self.schedule_total));
 
@@ -630,6 +673,35 @@ impl Form2200SDraft {
         fields.insert("frm2200SoptCity1".into(), city);
         fields.insert("txtEmail".to_string(), self.email.trim().to_string());
         fields
+    }
+
+    /// The generated layout (one "Others" row) with every added row's
+    /// controls spliced in after the previous row's, as `addRow` appends
+    /// them to `frm2200SadditionalSched1`.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        const COLUMNS: [&str; 8] = [
+            "sched1Chk",
+            "txtsched1Atc",
+            "txtsched1Desc",
+            "txtsched1TaxBracket",
+            "txtsched1AppTaxRate",
+            "txtsched1SalesValue",
+            "txtsched1VolumeRemovals",
+            "txtsched1BasicTaxDue",
+        ];
+        let base = crate::official_xml::layout(FORM_2200S_FORM_ID).map_err(|e| e.to_string())?;
+        let key = |column: &str, n: usize| format!("frm2200S:{column}{n}");
+        let insertions: Vec<RowInsertion> = (1..self.others.len())
+            .map(|n| RowInsertion {
+                after: key("txtsched1BasicTaxDue", n - 1),
+                copies: COLUMNS
+                    .iter()
+                    .map(|column| (key(column, 0), key(column, n)))
+                    .collect(),
+            })
+            .collect();
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -777,61 +849,81 @@ impl FormValidator for Form2200SDraft {
             );
         }
         if self.manner == Form2200SManner::ActualRemoval {
-            let others_volume = self.others.as_ref().map(|o| o.volume).unwrap_or(0.0);
-            if !self.beverages.iter().any(|row| row.volume > 0.0) && others_volume <= 0.0 {
+            if !self.beverages.iter().any(|row| row.volume > 0.0)
+                && !self.others.iter().any(|o| o.volume > 0.0)
+            {
                 err("beverages", "Please fill up Schedule 1.");
             }
         }
-        if let Some(other) = &self.others {
+        // isValidDataOnSched1, row by row.
+        for (index, other) in self.others.iter().enumerate() {
+            let n = index + 1;
             let quoted = "\"Others\"";
             let atc = other.atc.trim().to_uppercase();
             if atc.is_empty() || atc == "XB" {
                 err(
-                    "others.atc",
-                    &format!("Please enter a valid ATC in {quoted} at Row 1."),
+                    &format!("others[{index}].atc"),
+                    &format!("Please enter a valid ATC in {quoted} at Row {n}."),
                 );
             } else if !atc.starts_with("XB") {
                 err(
-                    "others.atc",
-                    &format!("The supplied ATC code in {quoted} at Row 1 should start with 'XB'."),
+                    &format!("others[{index}].atc"),
+                    &format!(
+                        "The supplied ATC code in {quoted} at Row {n} should start with 'XB'."
+                    ),
                 );
             } else if FORM_2200S_BEVERAGES.iter().any(|b| b.atc == atc) {
                 err(
-                    "others.atc",
+                    &format!("others[{index}].atc"),
                     &format!(
-                        "Please enter a valid ATC code in {quoted} at Row 1.\n\nAdded ATC code should be differ from table."
+                        "Please enter a valid ATC code in {quoted} at Row {n}.\n\nAdded ATC code should be differ from table."
                     ),
                 );
             } else if atc.len() != 5 || !digits_only(&atc[2..]) {
-                err("others.atc", "Invalid ATC.");
+                err(&format!("others[{index}].atc"), "Invalid ATC.");
             }
             if other.description.trim().is_empty() {
                 err(
-                    "others.description",
-                    &format!("Please enter a Description in {quoted} at Row 1."),
+                    &format!("others[{index}].description"),
+                    &format!("Please enter a Description in {quoted} at Row {n}."),
                 );
             } else if other.tax_bracket.trim().is_empty() {
                 err(
-                    "others.tax_bracket",
-                    &format!("Please enter a Tax Bracket in {quoted} at Row 1."),
+                    &format!("others[{index}].tax_bracket"),
+                    &format!("Please enter a Tax Bracket in {quoted} at Row {n}."),
                 );
             } else if other.rate <= 0.0 || other.rate > 999.99 {
                 err(
-                    "others.rate",
-                    &format!("Please enter a valid Applicable rate in {quoted} at Row 1."),
+                    &format!("others[{index}].rate"),
+                    &format!("Please enter a valid Applicable rate in {quoted} at Row {n}."),
                 );
             } else if other.volume <= 0.0 {
                 err(
-                    "others.volume",
+                    &format!("others[{index}].volume"),
                     &format!(
-                        "Please enter a value on Volume Removals column in {quoted} at Row 1."
+                        "Please enter a value on Volume Removals column in {quoted} at Row {n}."
                     ),
+                );
+            } else if self
+                .others
+                .iter()
+                .filter(|o| {
+                    o.atc.trim().to_uppercase() == atc
+                        && Self::others_rate_text(o.rate) == Self::others_rate_text(other.rate)
+                })
+                .count()
+                > 1
+            {
+                // checkTaxRate: the same ATC and rate on two "Others" rows.
+                err(
+                    &format!("others[{index}].rate"),
+                    &format!("Please enter a unique Applicable rate in {quoted} at Row {n}."),
                 );
             }
             let allowed = |c: char| c.is_ascii_alphanumeric() || " .,#@'()_-".contains(c);
             if !other.description.chars().all(allowed) || !other.tax_bracket.chars().all(allowed) {
                 err(
-                    "others.description",
+                    &format!("others[{index}].description"),
                     "Schedule 1 Others: use letters, digits, spaces and . , # @ ' ( ) _ - only.",
                 );
             }
@@ -967,6 +1059,19 @@ impl QueueableForm for Form2200SDraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+    /// Added "Others" rows extend the page, so the plaintext follows
+    /// [`Form2200SDraft::official_layout`].
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
+    }
     /// `TIN+branch-2200S-MMDDYYYYHHMMSS#email#.xml`: `createXMLFileName`
     /// appends `getHHMMSS()` to the Item 1 date.
     fn submission_filename(&self) -> String {
@@ -1017,7 +1122,7 @@ mod tests {
             other_scheme: false,
             other_scheme_text: String::new(),
             beverages: Vec::new(),
-            others: None,
+            others: Vec::new(),
             schedule_total: 0.0,
             excise_tax_due: 0.0,
             balance_carried_over: 0.0,
@@ -1238,25 +1343,82 @@ mod tests {
         );
         check(
             &|d| {
-                d.others = Some(Form2200SOtherRow {
+                d.others = vec![Form2200SOtherRow {
                     atc: "XB010".into(),
                     ..Default::default()
-                })
+                }]
             },
             "Please enter a valid ATC code in \"Others\" at Row 1.\n\nAdded ATC code should be differ from table.",
         );
         check(
             &|d| {
-                d.others = Some(Form2200SOtherRow {
+                d.others = vec![Form2200SOtherRow {
                     atc: "XB200".into(),
                     description: "Other drink".into(),
                     tax_bracket: "Per liter".into(),
                     rate: 0.0,
                     ..Default::default()
-                })
+                }]
             },
             "Please enter a valid Applicable rate in \"Others\" at Row 1.",
         );
+        let other = |atc: &str, rate: f64| Form2200SOtherRow {
+            atc: atc.into(),
+            description: "Other drink".into(),
+            tax_bracket: "Per liter".into(),
+            rate,
+            volume: 10.0,
+            ..Default::default()
+        };
+        check(
+            &|d| d.others = vec![other("XB200", 3.0), other("XB", 3.0)],
+            "Please enter a valid ATC in \"Others\" at Row 2.",
+        );
+        check(
+            &|d| d.others = vec![other("XB200", 3.0), other("AB201", 3.0)],
+            "The supplied ATC code in \"Others\" at Row 2 should start with 'XB'.",
+        );
+        check(
+            &|d| {
+                d.others = vec![other("XB200", 3.0), other("XB201", 3.0)];
+                d.others[1].description.clear();
+            },
+            "Please enter a Description in \"Others\" at Row 2.",
+        );
+        check(
+            &|d| {
+                d.others = vec![other("XB200", 3.0), other("XB201", 3.0)];
+                d.others[1].tax_bracket.clear();
+            },
+            "Please enter a Tax Bracket in \"Others\" at Row 2.",
+        );
+        check(
+            &|d| {
+                d.others = vec![other("XB200", 3.0), other("XB201", 3.0)];
+                d.others[1].volume = 0.0;
+            },
+            "Please enter a value on Volume Removals column in \"Others\" at Row 2.",
+        );
+        check(
+            &|d| d.others = vec![other("XB200", 3.0), other("XB200", 3.0)],
+            "Please enter a unique Applicable rate in \"Others\" at Row 1.",
+        );
+    }
+
+    #[test]
+    fn drafts_saved_with_one_optional_others_row_still_load() {
+        let mut draft = sample();
+        draft.others = vec![Form2200SOtherRow {
+            atc: "XB200".into(),
+            ..Default::default()
+        }];
+        let mut json = serde_json::to_value(&draft).unwrap();
+        json["others"] = serde_json::to_value(&draft.others[0]).unwrap();
+        let loaded: Form2200SDraft = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(loaded.others, draft.others);
+        json["others"] = serde_json::Value::Null;
+        let loaded: Form2200SDraft = serde_json::from_value(json).unwrap();
+        assert!(loaded.others.is_empty());
     }
 
     #[test]

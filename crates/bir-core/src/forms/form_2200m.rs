@@ -1409,6 +1409,13 @@ mod tests {
             },
             "Input at least 1 more column in row #10",
         );
+        // An added row (11 onwards) is checked whole, even when blank.
+        check(
+            &|d| {
+                d.row_mut(10).unwrap();
+            },
+            "Description in row #11 is required.",
+        );
         check(
             &|d| d.tin = "12345678900000".into(),
             "You have entered an incorrect TIN",
