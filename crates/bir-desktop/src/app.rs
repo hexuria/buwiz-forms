@@ -128,6 +128,9 @@ impl ProfileLifecycleAction {
 }
 
 pub struct AppState {
+    /// Linux: run before a keyboard-initiated quit (Ctrl+Q / Alt+F4) so the
+    /// tray icon is removed, matching the tray Quit and close-button paths.
+    pub(crate) quit_hook: Option<std::rc::Rc<dyn Fn()>>,
     pub(crate) active_view: ActiveView,
     pub(crate) profile_manager: Entity<ProfileManagerView>,
     pub(crate) dashboard_view: Entity<DashboardView>,
@@ -850,6 +853,7 @@ impl AppState {
         .detach();
 
         Self {
+            quit_hook: None,
             active_view,
             profile_manager,
             dashboard_view,

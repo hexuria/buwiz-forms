@@ -385,14 +385,6 @@ pub fn run_gui() {
             };
 
             let _ = cx.open_window(options, move |window, cx| {
-                window.on_window_should_close(cx, |_, _cx| {
-                    // Hide is not quit: bind + live-DB owner lock stay held until
-                    // tray Quit / `gpui-agent shutdown` (request_application_quit); Cmd+Q
-                    // and the menu's Quit also hide.
-                    platform::hide_from_dock();
-                    false // Prevent window destruction
-                });
-
                 let view = cx.new(|cx| {
                     let mut state = app::AppState::new(db, profiles, window, cx);
                     #[cfg(feature = "agent")]
@@ -422,6 +414,43 @@ pub fn run_gui() {
                         cx,
                     );
                 }
+                // Shared so both the tray Quit item and the Linux close button
+                // can drop the tray icon before quitting.
+                let tray = std::rc::Rc::new(std::cell::RefCell::new(tray));
+                if platform::close_button_quits() {
+                    // Linux: there is often no StatusNotifier tray host (GNOME,
+                    // fluxbox) and no reliable way to hide a window (xdotool is
+                    // optional and X11-only), so the close button quits through
+                    // the same guarded path as tray Quit. The window stays open
+                    // only when unsaved Profile compliance changes block quitting.
+                    let entity = view.downgrade();
+                    let close_tray = tray.clone();
+                    // Ctrl+Q / Alt+F4 (QuitApplication) take the same path.
+                    let hook_tray = tray.clone();
+                    view.update(cx, |state, _| {
+                        state.quit_hook = Some(std::rc::Rc::new(move || {
+                            drop(hook_tray.borrow_mut().take());
+                        }));
+                    });
+                    window.on_window_should_close(cx, move |window, cx| {
+                        entity
+                            .update(cx, |state, cx| {
+                                state.request_application_quit(window, cx, || {
+                                    drop(close_tray.borrow_mut().take());
+                                })
+                            })
+                            .unwrap_or(false)
+                    });
+                } else {
+                    window.on_window_should_close(cx, |_, _cx| {
+                        // macOS/Windows: hide is not quit. Bind + live-DB owner lock
+                        // stay held until tray Quit / `gpui-agent shutdown`
+                        // (request_application_quit). Cmd+Q / the menu's Quit (macOS)
+                        // and Alt+F4 (Windows) also hide rather than quit.
+                        platform::hide_from_dock();
+                        false // Prevent window destruction
+                    });
+                }
                 let main_window = window.window_handle();
                 let tray_app_state = view.clone();
                 #[cfg(target_os = "macos")]
@@ -438,7 +467,7 @@ pub fn run_gui() {
                 let tray_channel = tray_icon::TrayIconEvent::receiver();
 
                 cx.spawn(async move |cx| {
-                    let mut tray = tray;
+                    let tray = tray;
 
                     // Own the global hotkey manager here so it stays alive for
                     // the app's lifetime (dropping it unregisters the hotkey).
@@ -474,7 +503,7 @@ pub fn run_gui() {
                                     match main_window.update(cx, |_, window, cx| {
                                         tray_app_state.update(cx, |state, cx| {
                                             state.request_application_quit(window, cx, || {
-                                                drop(tray.take());
+                                                drop(tray.borrow_mut().take());
                                             })
                                         })
                                     }) {

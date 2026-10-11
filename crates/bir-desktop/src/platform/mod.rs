@@ -45,6 +45,13 @@ fn resource_candidates(current_exe: &Path, name: &str) -> Vec<PathBuf> {
     candidates
 }
 
+/// Whether the main window's close (X) button quits the app (through the
+/// guarded `request_application_quit` path) instead of hiding it to the tray.
+/// True on Linux, where a tray host and window hiding are not dependable.
+pub fn close_button_quits() -> bool {
+    cfg!(target_os = "linux")
+}
+
 /// Dynamically locates application resources across local dev, macOS bundles, and Linux tarballs.
 pub fn find_resource_dir(name: &str) -> PathBuf {
     let current_exe = std::env::current_exe().unwrap_or_default();
@@ -273,6 +280,11 @@ mod resource_tests {
         assert!(target_triple_candidates.contains(&PathBuf::from(
             "/workspace/target/x86_64-unknown-linux-gnu/debug/../../../assets"
         )));
+    }
+
+    #[test]
+    fn close_button_quits_only_on_linux() {
+        assert_eq!(close_button_quits(), cfg!(target_os = "linux"));
     }
 
     #[cfg(target_os = "linux")]
