@@ -745,7 +745,8 @@ pub fn computed_text<V: 'static>(label_text: &str, value: String, cx: &Context<V
 pub const DECLARATION_TEXT: &str = "I/We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.";
 
 /// Note under the read-only payment table.
-pub const PAYMENT_NOTE: &str = "Filled in when you pay (bank, ePay or ATM). Not part of the upload.";
+pub const PAYMENT_NOTE: &str =
+    "Filled in when you pay (bank, ePay or ATM). Not part of the upload.";
 
 /// Printed rows of the 2200 family's "Details of Payment" (Items 25 to 28).
 pub const PAYMENT_ROWS_2200: &[&str] = &[
@@ -756,8 +757,12 @@ pub const PAYMENT_ROWS_2200: &[&str] = &[
 ];
 
 /// Printed columns after "Particulars" in the 2200 family.
-pub const PAYMENT_COLUMNS_2200: &[&str] =
-    &["Drawee Bank/Agency", "Number", "Date (MM/DD/YYYY)", "Amount"];
+pub const PAYMENT_COLUMNS_2200: &[&str] = &[
+    "Drawee Bank/Agency",
+    "Number",
+    "Date (MM/DD/YYYY)",
+    "Amount",
+];
 
 /// The printed declaration (muted text) followed by the read-only "Details
 /// of Payment" part. `part_title` is the printed heading (for example
@@ -791,7 +796,13 @@ pub fn declaration_and_payment_with_text<V: 'static>(
     let first_width = if phone { px(150.) } else { px(220.) };
     let cell_width = if phone { px(110.) } else { px(150.) };
     let cell = |text: String, width: Pixels, bold: bool| {
-        let cell = div().w(width).flex_none().px_2().py_1().text_sm().child(text);
+        let cell = div()
+            .w(width)
+            .flex_none()
+            .px_2()
+            .py_1()
+            .text_sm()
+            .child(text);
         if bold {
             cell.font_weight(FontWeight::BOLD)
         } else {
