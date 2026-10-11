@@ -498,6 +498,8 @@ impl Form2000View {
             .chain(self.parse_errors.iter())
             .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -557,20 +559,28 @@ impl Form2000View {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
     }
 
-    fn label_row(label: &str) -> Div {
-        div().flex().flex_wrap().items_center().gap_2().child(
-            div()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .child(label.to_string()),
-        )
+    /// Label plus choice chips. On phones the label takes its own line
+    /// (full width) and the chips wrap beneath it.
+    fn label_row(label: &str, layout: Layout) -> Div {
+        let text = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let text = if layout == Layout::Phone {
+            text.w_full()
+        } else {
+            text.flex_1()
+        };
+        div().flex().flex_wrap().items_center().gap_2().child(text)
     }
 
     fn choice(
@@ -624,7 +634,7 @@ impl Form2000View {
                 .child(months)
                 .into_any_element(),
             self.field("year", "Item 1 — Year", layout, !editable),
-            Self::label_row("Item 2 — Amended return?")
+            Self::label_row("Item 2 — Amended return?", layout)
                 .child(
                     Self::choice("2000_amended_yes", "Yes", amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
@@ -692,7 +702,7 @@ impl Form2000View {
                 .unwrap_or(key);
             fields.push(self.field(key, label, layout, !editable));
         }
-        let mut party_row = Self::label_row("Item 10 — Other party to the transaction");
+        let mut party_row = Self::label_row("Item 10 — Other party to the transaction", layout);
         for (index, (value, label)) in [
             (Form2000OtherParty::Creditor, "Creditor/Mortgagor/etc."),
             (Form2000OtherParty::Debtor, "Debtor/Mortgagee/etc."),
@@ -717,7 +727,7 @@ impl Form2000View {
                 ],
             ));
         }
-        let mut mode_row = Self::label_row("Item 13 — Mode of affixture");
+        let mut mode_row = Self::label_row("Item 13 — Mode of affixture", layout);
         for (index, (value, label)) in [
             (Form2000AffixtureMode::Edst, "eDST System"),
             (
@@ -833,37 +843,40 @@ impl Form2000View {
                         .gap_2()
                         .child(
                             div()
+                                .min_w_0()
+                                .flex_1()
                                 .text_sm()
                                 .font_weight(FontWeight::MEDIUM)
                                 .child("Tax rate"),
                         )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::BOLD)
-                                .child(if rate.is_empty() {
-                                    "—".to_string()
-                                } else {
-                                    rate
-                                }),
-                        ),
+                        .child(div().flex_none().font_weight(FontWeight::BOLD).child(
+                            if rate.is_empty() {
+                                "—".to_string()
+                            } else {
+                                rate
+                            },
+                        )),
                 )
                 .child(due);
             if entry.atc_code == "DS106" {
                 let answer = self.draft.ds106_term_under_a_year;
                 body = body.child(
-                    Self::label_row("Is the term of the debt instrument less than a year?")
-                        .child(
-                            Self::choice("2000_ds106_yes", "Yes", answer == Some(true), !editable)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.edit(cx, |d| d.ds106_term_under_a_year = Some(true))
-                                })),
-                        )
-                        .child(
-                            Self::choice("2000_ds106_no", "No", answer == Some(false), !editable)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.edit(cx, |d| d.ds106_term_under_a_year = Some(false))
-                                })),
-                        ),
+                    Self::label_row(
+                        "Is the term of the debt instrument less than a year?",
+                        layout,
+                    )
+                    .child(
+                        Self::choice("2000_ds106_yes", "Yes", answer == Some(true), !editable)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.edit(cx, |d| d.ds106_term_under_a_year = Some(true))
+                            })),
+                    )
+                    .child(
+                        Self::choice("2000_ds106_no", "No", answer == Some(false), !editable)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.edit(cx, |d| d.ds106_term_under_a_year = Some(false))
+                            })),
+                    ),
                 );
                 if answer == Some(true) {
                     body =
