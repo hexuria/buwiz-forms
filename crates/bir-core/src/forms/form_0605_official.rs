@@ -348,14 +348,15 @@ pub const FORM_0605_ATCS: &[(&str, &str)] = &[
 /// date typed as `MM/DD/YYYY`, following the page's branches in order: the
 /// early format / day / leap-year / month-length checks, then the later
 /// month, day, date and year checks. `None` when the text is a valid date,
-/// or blank (blank Item 4 is optional; blank Item 7 is reported by
-/// `official_errors`). The official page has one numeric box per part; a
+/// or blank Item 7 (reported by `official_errors`). A blank Item 4 gets
+/// "Invalid date entry on item 4." like the page, whose `day < 1` check
+/// coerces an empty day to 0. The official page has one numeric box per part; a
 /// part that is not digits gets the format alert.
 pub fn form_0605_typed_date_alert(item: u8, text: &str) -> Option<&'static str> {
     let item7 = item == 7;
     let text = text.trim();
     if text.is_empty() {
-        return None;
+        return (!item7).then_some("Invalid date entry on item 4.");
     }
     let mut parts = text.split('/');
     let month = parts.next().unwrap_or("").trim();
@@ -571,13 +572,17 @@ impl Form0605Draft {
         if self.quarter > 4 {
             err("quarter", "Item 3 quarter must be from 1 to 4.");
         }
-        // Item 4 is optional; when given it must be a real date.
-        if let Some(due) = self.due_date {
-            if due.validate().is_err() {
-                err("due_date", "Invalid date entry on item 4.");
-            } else if !(1904..=3000).contains(&due.year) {
-                err("due_date", "Please enter a valid date on item 4.");
+        // Item 4: validate() rule 016 (`txtDueDateDay.value < 1`) also
+        // rejects a blank due date, since "" coerces to 0.
+        match self.due_date {
+            None => err("due_date", "Invalid date entry on item 4."),
+            Some(due) if due.validate().is_err() => {
+                err("due_date", "Invalid date entry on item 4.")
             }
+            Some(due) if !(1904..=3000).contains(&due.year) => {
+                err("due_date", "Please enter a valid date on item 4.")
+            }
+            Some(_) => {}
         }
         if self.number_of_sheets > 99 {
             err("number_of_sheets", "Item 5 holds at most two digits.");
@@ -1112,6 +1117,7 @@ mod tests {
         let mut draft = Form0605Draft::new_from_profile(&profile(), 2025, 1);
         draft.lifecycle.created_at = "2025-12-01T01:02:03+00:00".into();
         draft.return_period = Form0605Date::new(2025, 12, 31).ok();
+        draft.due_date = Form0605Date::new(2026, 1, 25).ok();
         draft.tax_type = form_0605_tax_type("IT");
         draft.atc = form_0605_atc("II011");
         draft.manner_of_payment = Some(Form0605MannerOfPayment::SelfAssessment);
@@ -1139,6 +1145,18 @@ mod tests {
         assert_eq!(FORM_0605_TAX_TYPES.len(), 40);
         assert!(form_0605_atc_offered_for("II011", "IT"));
         assert!(!form_0605_atc_offered_for("PT010", "IT"));
+    }
+
+    #[test]
+    fn blank_item_4_due_date_gets_the_official_rule_016_alert() {
+        let mut draft = sample();
+        draft.due_date = None;
+        assert!(
+            <Form0605Draft as QueueableForm>::validate(&draft)
+                .iter()
+                .any(|(field, message)| field == "due_date"
+                    && message == "Invalid date entry on item 4.")
+        );
     }
 
     #[test]
@@ -1325,7 +1343,8 @@ mod tests {
     #[test]
     fn typed_date_alerts_follow_the_official_branches() {
         use super::form_0605_typed_date_alert as alert;
-        assert_eq!(alert(4, ""), None);
+        assert_eq!(alert(4, ""), Some("Invalid date entry on item 4."));
+        assert_eq!(alert(4, "  "), Some("Invalid date entry on item 4."));
         assert_eq!(alert(7, "03/31/2025"), None);
         assert_eq!(
             alert(7, "2/05/2025"),

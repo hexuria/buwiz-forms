@@ -1,7 +1,7 @@
 {
  "form_id": "2200a-v2020",
  "html_slug": "2200a-2020",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow printed order). Schedule 1 rows map by ATC block, the printed effective-date caption and the Export/Taxable/Due column headers. The second group of Php 50.60 blocks on page 3 is left out. Page-2/3 header repeats of tinA/branchCode/registeredName are left out because each writer key can be joined once. Address line 2, Part IV date combs and tax agent cells stay blank because the layout has no key for them.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow printed order). Schedule 1 rows map by ATC block, the printed effective-date caption and the Export/Taxable/Due column headers. The second group of Php 50.60 blocks on page 3 is left out. Page-2/3 header repeats of tinA/branchCode/registeredName are left out because each writer key can be joined once. Address line 2, Part IV date combs and tax agent cells stay blank because the layout has no key for them. Items 8-9 share one 40-slot comb, and each of items 10 and 11 has one 40-slot comb for its region, province and city codes; each comb takes one derived print-map line (to_print_field_map) with the values placed under their own captions. The three Others rows join ATC, description, tax bracket and rate by the column captions of the Schedule 1 header.",
  "joins": [
   {
    "writer_key": "frm2200Av2020:txtDateMonth",
@@ -1220,6 +1220,96 @@
    "html_id": "p3c118",
    "printed": "TOTAL TAX DUE (To Part III, Item 16)",
    "reason": "caption left of the Tax Due column cell"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others1_Atc",
+   "html_id": "p3c96",
+   "printed": "4 Others (specify), row 1 ATC",
+   "reason": "Others row cell in the column captioned ATC (digits after the printed XA, input inset 23.1pt) (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others1_Desc",
+   "html_id": "p3c97",
+   "printed": "4 Others (specify), row 1 Description",
+   "reason": "Others row cell in the column captioned Description (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others1_Bracket",
+   "html_id": "p3c98",
+   "printed": "4 Others (specify), row 1 Tax Bracket/Unit of Measure",
+   "reason": "Others row cell in the column captioned Tax Bracket/Unit of Measure (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others1_Rate",
+   "html_id": "p3c99",
+   "printed": "4 Others (specify), row 1 Tax Rate",
+   "reason": "Others row cell in the column captioned Tax Rate (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others2_Atc",
+   "html_id": "p3c103",
+   "printed": "4 Others (specify), row 2 ATC",
+   "reason": "Others row cell in the column captioned ATC (digits after the printed XA, input inset 23.1pt) (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others2_Desc",
+   "html_id": "p3c104",
+   "printed": "4 Others (specify), row 2 Description",
+   "reason": "Others row cell in the column captioned Description (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others2_Bracket",
+   "html_id": "p3c105",
+   "printed": "4 Others (specify), row 2 Tax Bracket/Unit of Measure",
+   "reason": "Others row cell in the column captioned Tax Bracket/Unit of Measure (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others2_Rate",
+   "html_id": "p3c106",
+   "printed": "4 Others (specify), row 2 Tax Rate",
+   "reason": "Others row cell in the column captioned Tax Rate (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others3_Atc",
+   "html_id": "p3c110",
+   "printed": "4 Others (specify), row 3 ATC",
+   "reason": "Others row cell in the column captioned ATC (digits after the printed XA, input inset 23.1pt) (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others3_Desc",
+   "html_id": "p3c111",
+   "printed": "4 Others (specify), row 3 Description",
+   "reason": "Others row cell in the column captioned Description (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others3_Bracket",
+   "html_id": "p3c112",
+   "printed": "4 Others (specify), row 3 Tax Bracket/Unit of Measure",
+   "reason": "Others row cell in the column captioned Tax Bracket/Unit of Measure (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_xa_others3_Rate",
+   "html_id": "p3c113",
+   "printed": "4 Others (specify), row 3 Tax Rate",
+   "reason": "Others row cell in the column captioned Tax Rate (page 2/3 header: ATC x 28.8pt, Description x 136pt, Tax Bracket/Unit of Measure x 264-271pt, Tax Rate column x 334pt)"
+  },
+  {
+   "writer_key": "derived:contact_email",
+   "html_id": "p1c34",
+   "printed": "8 Contact Number / 9 Email Address",
+   "reason": "one 40-slot comb under both captions: the print map puts the contact number from slot 0 (caption x 27pt) and the email from slot 12 (caption x 200.69pt, pitch 14.52pt from x 16.32pt)"
+  },
+  {
+   "writer_key": "derived:place_of_production",
+   "html_id": "p1c39",
+   "printed": "10 Place of Production: Region / Province / City",
+   "reason": "one 40-slot comb under the three captions: region code from slot 0, province code from slot 10 (caption x 94.1pt; a 9-digit region code needs slots 0-8), city code from slot 24 (caption x 369.07pt)"
+  },
+  {
+   "writer_key": "derived:place_of_removal",
+   "html_id": "p1c44",
+   "printed": "11 Place of Removal: Region / Province / City",
+   "reason": "one 40-slot comb under the three captions: region code from slot 0, province code from slot 10, city code from slot 24"
   }
  ],
  "money_joins": [],
@@ -1271,18 +1361,6 @@
   {
    "html_id": "p1c29",
    "reason": "second line of item 7 address; the layout has one address key (registeredAddress) and no continuation key"
-  },
-  {
-   "html_id": "p1c34",
-   "reason": "one full-width 40-slot comb sits under both the item 8 Contact Number and item 9 Email Address captions; the cell cannot be assigned to phoneNumber or txtEmail without guessing"
-  },
-  {
-   "html_id": "p1c39",
-   "reason": "one full-width 40-slot comb under the Region / Province / City captions of item 10; the three layout keys (prodRegion, prodProvince, prodCity) have no separate cells"
-  },
-  {
-   "html_id": "p1c44",
-   "reason": "one full-width 40-slot comb under the Region / Province / City captions of item 11; the three layout keys (remRegion, remProvince, remCity) have no separate cells"
   },
   {
    "html_id": "p1c96",
@@ -1391,42 +1469,6 @@
   {
    "html_id": "p3c51",
    "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c97",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c98",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c99",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c104",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c105",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c106",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c111",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c112",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
-  },
-  {
-   "html_id": "p3c113",
-   "reason": "Others row ATC / description / tax bracket / rate cell: no column caption for these x-positions"
   }
  ]
 }

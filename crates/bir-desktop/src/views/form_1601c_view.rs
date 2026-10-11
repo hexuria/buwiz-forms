@@ -98,15 +98,15 @@ pub(crate) struct Agent1601CHostPatch {
 /// Same fields the UI toggles update before `sync_from_inputs`.
 pub(crate) fn apply_1601c_host_header_patch(
     patch: &Agent1601CHostPatch,
-    any_taxes_withheld: &mut bool,
+    any_taxes_withheld: &mut Option<bool>,
     category_of_agent: &mut String,
     draft: &mut Form1601CDraft,
 ) -> bool {
     let mut dirty = false;
     if let Some(value) = patch.any_taxes_withheld {
-        if *any_taxes_withheld != value || draft.any_taxes_withheld != value {
-            *any_taxes_withheld = value;
-            draft.any_taxes_withheld = value;
+        if *any_taxes_withheld != Some(value) || draft.taxes_withheld_answer() != Some(value) {
+            *any_taxes_withheld = Some(value);
+            draft.set_any_taxes_withheld(value);
             dirty = true;
         }
     }
@@ -145,8 +145,9 @@ pub struct Form1601CView {
 
     // Header Inputs
     is_amended: bool,
-    any_taxes_withheld: bool,
-    /// Item 11: `"P"` Private or `"G"` Government.
+    /// Item 3: `None` while unanswered (the official page's start).
+    any_taxes_withheld: Option<bool>,
+    /// Item 11: `"P"` Private, `"G"` Government, `""` unanswered.
     category_of_agent: String,
     number_of_sheets: Entity<InputState>,
     atc: Entity<InputState>,
@@ -410,7 +411,7 @@ impl Form1601CView {
 
         Self {
             is_amended: draft.is_amended,
-            any_taxes_withheld: draft.any_taxes_withheld,
+            any_taxes_withheld: draft.taxes_withheld_answer(),
             category_of_agent: draft.category_of_agent.clone(),
             draft,
             db,
@@ -478,7 +479,13 @@ impl Form1601CView {
             |input: &Entity<InputState>, cx: &Context<Self>| input.read(cx).value().to_string();
 
         self.draft.is_amended = self.is_amended;
-        self.draft.any_taxes_withheld = self.any_taxes_withheld;
+        match self.any_taxes_withheld {
+            Some(value) => self.draft.set_any_taxes_withheld(value),
+            None => {
+                self.draft.any_taxes_withheld = false;
+                self.draft.any_taxes_withheld_unanswered = true;
+            }
+        }
         self.draft.category_of_agent = self.category_of_agent.clone();
         let number_of_sheets = get_text(&self.number_of_sheets, cx);
         self.draft.number_of_sheets = if number_of_sheets.trim().is_empty() {
@@ -771,7 +778,7 @@ impl Form1601CView {
         }
         self.status_message = draft.submission_error.clone();
         self.is_amended = draft.is_amended;
-        self.any_taxes_withheld = draft.any_taxes_withheld;
+        self.any_taxes_withheld = draft.taxes_withheld_answer();
         self.category_of_agent = draft.category_of_agent.clone();
         self.draft = draft.clone();
         self.is_validated = false;
@@ -835,7 +842,7 @@ impl Form1601CView {
                 draft: Some(draft), ..
             }) => {
                 self.is_amended = draft.is_amended;
-                self.any_taxes_withheld = draft.any_taxes_withheld;
+                self.any_taxes_withheld = draft.taxes_withheld_answer();
                 self.category_of_agent = draft.category_of_agent.clone();
                 self.draft = draft;
                 self.release_claim_confirm_open = false;
@@ -1474,7 +1481,7 @@ impl Render for Form1601CView {
                                                 layout,
                                                 "Amended Return?",
                                                 "amended_btn",
-                                                self.is_amended,
+                                                Some(self.is_amended),
                                                 |this, value| this.is_amended = value,
                                                 cx,
                                             ))
@@ -1483,7 +1490,7 @@ impl Render for Form1601CView {
                                                 "Any Taxes Withheld?",
                                                 crate::agent::ids::FORM_1601C_WITHHELD,
                                                 self.any_taxes_withheld,
-                                                |this, value| this.any_taxes_withheld = value,
+                                                |this, value| this.any_taxes_withheld = Some(value),
                                                 cx,
                                             ))
                                             .child(div().id(crate::agent::ids::FORM_1601C_SHEETS).child(self.render_input_row(layout,
@@ -2058,13 +2065,13 @@ impl Form1601CView {
         layout: Layout,
         label: &'static str,
         id: &'static str,
-        value: bool,
+        value: Option<bool>,
         set: fn(&mut Self, bool),
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let editable = matches!(self.draft.status, FilingStatus::Draft);
         let choice = |suffix: &'static str, text: &'static str, answer: bool| {
-            let selected = value == answer;
+            let selected = value == Some(answer);
             let button =
                 gpui_component::button::Button::new(SharedString::from(format!("{id}_{suffix}")))
                     .label(if selected {
@@ -2086,7 +2093,7 @@ impl Form1601CView {
                     }
                 }))
         };
-        div()
+        let row = div()
             .flex()
             .flex_wrap()
             .gap_2()
@@ -2103,7 +2110,16 @@ impl Form1601CView {
                     .gap_2()
                     .child(choice("yes", "Yes", true))
                     .child(choice("no", "No", false)),
-            )
+            );
+        // Item 3's "Please select an option for Item 3." shows under it.
+        self.with_errors(
+            row,
+            if id == "amended_btn" {
+                &[]
+            } else {
+                &["any_taxes_withheld"]
+            },
+        )
     }
 
     fn render_category_of_agent(&self, layout: Layout, cx: &mut Context<Self>) -> impl IntoElement {

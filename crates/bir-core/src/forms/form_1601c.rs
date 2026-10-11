@@ -85,8 +85,13 @@ pub struct Form1601CDraft {
     // === Header Options ===
     pub is_amended: bool,
     pub any_taxes_withheld: bool, // Line 3
-    pub number_of_sheets: u32,    // Line 4
-    pub atc: String,              // Line 5
+    /// Item 3 has no answer yet (`TaxWithheld_1` and `_2` both unchecked, as
+    /// the official page opens). `any_taxes_withheld` is ignored while set.
+    /// Absent in drafts saved before this field, which load as answered.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub any_taxes_withheld_unanswered: bool,
+    pub number_of_sheets: u32, // Line 4
+    pub atc: String,           // Line 5
 
     // === Part I — pre-filled from profile ===
     pub rdo_code: String,
@@ -100,7 +105,8 @@ pub struct Form1601CDraft {
     #[serde(default)]
     pub registered_address_2: String,
     pub zip_code: String,
-    pub category_of_agent: String, // Item 11: "P" for Private, "G" for Government
+    /// Item 11: "P" for Private, "G" for Government, "" while unanswered.
+    pub category_of_agent: String,
     pub email_address: String,
 
     // === Item 13 — Tax Relief / Treaty ===
@@ -241,7 +247,32 @@ pub struct Form1601CDraft {
 }
 
 impl Form1601CDraft {
-    /// Create a new draft pre-filled from a profile.
+    /// A new return as the official page opens it: pre-filled from the
+    /// profile, with Item 3 (Any Taxes Withheld) and Item 11 (Category of
+    /// Withholding Agent) unanswered, so validate() raises "Please select an
+    /// option for Item 3." / "... Item 11." until the filer picks.
+    pub fn new_unanswered_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+        let mut draft = Self::new_from_profile(profile, year, month);
+        draft.any_taxes_withheld = false;
+        draft.any_taxes_withheld_unanswered = true;
+        draft.category_of_agent.clear();
+        draft
+    }
+
+    /// Item 3's answer: `None` while unanswered.
+    pub fn taxes_withheld_answer(&self) -> Option<bool> {
+        (!self.any_taxes_withheld_unanswered).then_some(self.any_taxes_withheld)
+    }
+
+    /// Answer Item 3.
+    pub fn set_any_taxes_withheld(&mut self, value: bool) {
+        self.any_taxes_withheld = value;
+        self.any_taxes_withheld_unanswered = false;
+    }
+
+    /// Create a new draft pre-filled from a profile, with Item 3 answered
+    /// Yes and Item 11 answered Private (fixtures and tests; new returns in
+    /// the app use [`Self::new_unanswered_from_profile`]).
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {
@@ -251,6 +282,7 @@ impl Form1601CDraft {
             month,
             is_amended: false,
             any_taxes_withheld: true,
+            any_taxes_withheld_unanswered: false,
             number_of_sheets: 0,
             atc: FORM_1601C_ATC.to_string(),
             rdo_code: profile.rdo_code.clone(),
@@ -634,6 +666,14 @@ impl FormValidator for Form1601CDraft {
             ));
         }
 
+        // Official validate(): Item 3 is checked right after the period.
+        if self.any_taxes_withheld_unanswered {
+            errors.push((
+                "any_taxes_withheld".to_string(),
+                "Please select an option for Item 3.".to_string(),
+            ));
+        }
+
         if !valid_submission_tin(&self.tin) {
             errors.push((
                 "tin".to_string(),
@@ -730,7 +770,7 @@ impl FormValidator for Form1601CDraft {
         if self.category_of_agent != "P" && self.category_of_agent != "G" {
             errors.push((
                 "category_of_agent".to_string(),
-                "Please select an option for Category of Withholding Agent (Item 11)".to_string(),
+                "Please select an option for Item 11.".to_string(),
             ));
         }
 
@@ -993,7 +1033,7 @@ impl FormValidator for Form1601CDraft {
             validate_computed_money(&mut errors, field, actual, expected, message);
         }
 
-        if self.any_taxes_withheld {
+        if self.taxes_withheld_answer() == Some(true) {
             if self.tax_14_total_compensation <= 0.0 {
                 errors.push((
                     "tax_14_total_compensation".to_string(),
@@ -1245,6 +1285,63 @@ mod tests {
                 .transition_to_queued()
                 .unwrap_or_else(|errors| panic!("{tin} should be accepted: {errors:?}"));
         }
+    }
+
+    #[test]
+    fn new_returns_start_with_items_3_and_11_unanswered_like_the_official_page() {
+        let mut draft = Form1601CDraft::new_unanswered_from_profile(&test_profile(), 2026, 6);
+        assert_eq!(draft.taxes_withheld_answer(), None);
+        assert_eq!(draft.category_of_agent, "");
+        draft.compute();
+        let errors = draft.validate();
+        let item_3 = errors
+            .iter()
+            .position(|(field, message)| {
+                field == "any_taxes_withheld" && message == "Please select an option for Item 3."
+            })
+            .expect("Item 3 alert");
+        let item_11 = errors
+            .iter()
+            .position(|(field, message)| {
+                field == "category_of_agent" && message == "Please select an option for Item 11."
+            })
+            .expect("Item 11 alert");
+        assert!(item_3 < item_11, "validate() checks Item 3 before Item 11");
+        // Unanswered is not Yes: the Item 14/25 alerts stay quiet.
+        assert!(
+            errors
+                .iter()
+                .all(|(_, message)| !message.contains("Item no.14"))
+        );
+        // Both radios unchecked in the field map, and it reads back unanswered.
+        let fields = draft.to_bir_field_map();
+        assert_eq!(fields["frm1601c:TaxWithheld_1"], "false");
+        assert_eq!(fields["frm1601c:TaxWithheld_2"], "false");
+        assert_eq!(fields["frm1601c:CatAgent_P"], "false");
+        assert_eq!(fields["frm1601c:CatAgent_G"], "false");
+
+        draft.set_any_taxes_withheld(false);
+        draft.category_of_agent = "P".to_string();
+        let errors = draft.validate();
+        assert!(
+            errors
+                .iter()
+                .all(|(field, _)| field != "any_taxes_withheld" && field != "category_of_agent")
+        );
+        assert_eq!(draft.taxes_withheld_answer(), Some(false));
+    }
+
+    #[test]
+    fn drafts_saved_before_the_unanswered_state_load_answered() {
+        let draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        let mut json = serde_json::to_value(&draft).unwrap();
+        assert!(json.get("any_taxes_withheld_unanswered").is_none());
+        json.as_object_mut()
+            .unwrap()
+            .remove("any_taxes_withheld_unanswered");
+        let loaded: Form1601CDraft = serde_json::from_value(json).unwrap();
+        assert_eq!(loaded.taxes_withheld_answer(), Some(true));
+        assert_eq!(loaded.category_of_agent, "P");
     }
 
     #[test]

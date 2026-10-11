@@ -2284,6 +2284,43 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_2200a_fills_shared_combs_and_others_rows() {
+        use bir_core::forms::form_2200a::{Form2200ADraft, Form2200APlace};
+        let mut draft = Form2200ADraft::new_from_profile(&fixture_profile("2200A"), 2025, 6);
+        draft.contact_number = "09171234567".into();
+        draft.email = "Me@Example.ph".into();
+        draft.place_of_production = Form2200APlace {
+            region: "010000000".into(),
+            province: "012800000".into(),
+            city: "012801000".into(),
+        };
+        let row = draft.other_mut(1).expect("Others row 2");
+        row.atc_digits = "123".into();
+        row.description = "Fruit wine".into();
+        row.bracket = "per liter".into();
+        row.rate = "52.00".into();
+        let html = filled_document("2200a-2020", &draft.to_print_field_map()).unwrap();
+        // Items 8-9 share comb p1c34: contact from slot 0, email (as typed) from slot 12.
+        assert_eq!(comb_text(&html, "p1c34"), "09171234567 Me@Example.ph");
+        // Item 10 comb p1c39: region from slot 0, province from 10, city from 24.
+        assert_eq!(
+            comb_text(&html, "p1c39"),
+            "010000000 012800000     012801000"
+        );
+        assert_eq!(comb_text(&html, "p1c44"), "");
+        // Others row 2: ATC p3c103, description p3c104, bracket p3c105, rate p3c106
+        // (the sheet prints in capitals; only the email stays as typed).
+        for (cell, value) in [
+            ("p3c103", "123"),
+            ("p3c104", "FRUIT WINE"),
+            ("p3c105", "PER LITER"),
+            ("p3c106", "52.00"),
+        ] {
+            assert_eq!(named_values(&html, cell), vec![value.to_string()], "{cell}");
+        }
+    }
+
+    #[test]
     fn filled_document_2200c_fills_item_6_and_schedule_1_rows() {
         use bir_core::forms::form_2200c::{Form2200CDraft, Form2200CManner, Form2200CRow};
         let mut draft = Form2200CDraft::new_from_profile(&fixture_profile("2200C"), 2025);

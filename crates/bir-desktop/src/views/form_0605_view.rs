@@ -345,6 +345,11 @@ impl Form0605View {
             ("period", 7, &mut draft.return_period),
         ] {
             let text = self.input_text(key, cx);
+            // A blank date clears the item; validate() reports it.
+            if text.trim().is_empty() {
+                *slot = None;
+                continue;
+            }
             // The official alert for the branch the typed date fails.
             match form_0605_typed_date_alert(item, &text) {
                 Some(alert) => errors.push((key.to_string(), alert.to_string())),
