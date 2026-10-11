@@ -10,7 +10,8 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1601fq::{
-    FORM_1601FQ_FIRST_ITEM, FORM_1601FQ_MAIN_ROWS, FORM_1601FQ_SCHEDULE1_ROWS,
+    FORM_1601FQ_FIRST_ITEM, FORM_1601FQ_GOVERNMENT_ATCS, FORM_1601FQ_MAIN_ROWS,
+    FORM_1601FQ_NOT_APPLICABLE, FORM_1601FQ_PRIVATE_ATCS, FORM_1601FQ_SCHEDULE1_ROWS,
     FORM_1601FQ_TREATIES, Form1601FqAtcOption, Form1601FqCategory, Form1601FqDraft,
     Form1601FqScheduleRow, Form1601FqTaxRelief,
 };
@@ -23,8 +24,13 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
+use std::rc::Rc;
 
+use crate::components::combobox::{ComboboxEvent, ComboboxState};
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, MultiChange, messages_for, multi_select_field, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -79,9 +85,6 @@ const MONEY_INPUTS: &[(&str, &str)] = &[
     ("comp", "30 — Compromise"),
 ];
 
-/// How many popup matches the ATC finder shows at once.
-const ATC_MATCHES_SHOWN: usize = 12;
-
 fn base_key(popup_index: usize) -> String {
     format!("base_{popup_index}")
 }
@@ -103,18 +106,81 @@ fn parse_amount(value: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
-/// Popup options matching a filter on code or description, in popup order.
-fn atc_matches(options: &[Form1601FqAtcOption], filter: &str) -> Vec<usize> {
-    let needle = filter.trim().to_uppercase();
+/// The popup list as `(popup index, "CODE (rate%) — description")`. The
+/// picker searches the whole label; the index is the stored value because a
+/// code can be listed twice with different rates.
+///
+/// The official popup lists a few entries twice with identical code, rate and
+/// description (private list: WI202 at popup rows 29 and 37). Only those get a
+/// " (popup row N)" suffix, N being the 1-based row of the popup the official
+/// page itself indexes (`txtRate<i>`), so the labels stay distinct.
+fn atc_pairs(options: &[Form1601FqAtcOption]) -> Vec<(String, String)> {
+    let label = |option: &Form1601FqAtcOption| {
+        format!(
+            "{} ({}%) — {}",
+            option.code, option.rate_text, option.description
+        )
+    };
     options
         .iter()
         .enumerate()
-        .filter(|(_, option)| {
-            needle.is_empty()
-                || option.code.contains(&needle)
-                || option.description.contains(&needle)
+        .map(|(index, option)| {
+            let mut text = label(option);
+            if options.iter().filter(|other| label(other) == text).count() > 1 {
+                text.push_str(&format!(" (popup row {})", index + 1));
+            }
+            (index.to_string(), text)
         })
-        .map(|(index, _)| index)
+        .collect()
+}
+
+/// Schedule 1 column C: `NA`, then every ATC code of either list once.
+fn schedule1_atc_pairs() -> Vec<(String, String)> {
+    let mut pairs = vec![(
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+    )];
+    for option in FORM_1601FQ_PRIVATE_ATCS
+        .iter()
+        .chain(FORM_1601FQ_GOVERNMENT_ATCS)
+    {
+        if !pairs.iter().any(|(code, _)| code == option.code) {
+            pairs.push((
+                option.code.to_string(),
+                format!("{} — {}", option.code, option.description),
+            ));
+        }
+    }
+    pairs
+}
+
+/// Schedule 1 column B: `NA`, then every treaty code.
+fn treaty_pairs() -> Vec<(String, String)> {
+    let mut pairs = vec![(
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+    )];
+    pairs.extend(
+        FORM_1601FQ_TREATIES
+            .iter()
+            .map(|(code, name)| (code.to_string(), format!("{code} — {name}"))),
+    );
+    pairs
+}
+
+fn as_refs(pairs: &[(String, String)]) -> Vec<(&str, &str)> {
+    pairs
+        .iter()
+        .map(|(v, l)| (v.as_str(), l.as_str()))
+        .collect()
+}
+
+/// The ticked ATCs as popup indices.
+fn selected_atc_values(draft: &Form1601FqDraft) -> Vec<String> {
+    draft
+        .schedule
+        .iter()
+        .map(|row| row.popup_index.to_string())
         .collect()
 }
 
@@ -135,6 +201,12 @@ pub struct Form1601FqView {
     /// Schedule 1 editors to reload from the draft on the next render (a new
     /// ATC brings its own rate, like `getATCdrpTaxRate`).
     refresh_schedule1: bool,
+    /// Searchable multi-select for the Part II ATCs (values are popup indices).
+    atc_select: Entity<ComboboxState>,
+    /// Schedule 1 column B / C selects, one per row. They write into the
+    /// hidden `s1_treaty_<row>` / `s1_atc_<row>` editors.
+    treaty_selects: Vec<Entity<ComboboxState>>,
+    s1_atc_selects: Vec<Entity<ComboboxState>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -163,7 +235,6 @@ impl Form1601FqView {
             "sur" => money(draft.surcharge),
             "int" => money(draft.interest),
             "comp" => money(draft.compromise),
-            "atc_filter" => String::new(),
             _ => {
                 if let Some(index) = key
                     .strip_prefix("base_")
@@ -222,17 +293,12 @@ impl Form1601FqView {
         let placeholder = placeholder.to_string();
         let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
         input.update(cx, |state, cx| state.set_value(value, window, cx));
-        let filter = key == "atc_filter";
         self._subscriptions.push(cx.subscribe_in(
             &input,
             window,
             move |this: &mut Self, _, event: &InputEvent, _, cx| {
                 if matches!(event, InputEvent::Change) {
-                    if filter {
-                        cx.notify();
-                    } else {
-                        this.sync_from_inputs(cx);
-                    }
+                    this.sync_from_inputs(cx);
                 }
             },
         ));
@@ -350,6 +416,48 @@ impl Form1601FqView {
                 cx.notify();
             }
         }
+    }
+
+    /// Apply a new ATC list from the picker: untick what left, tick what
+    /// arrived, through the model's own `remove_atc` / `add_atc`.
+    fn apply_atc_selection(
+        &mut self,
+        next: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let current = selected_atc_values(&self.draft);
+        for value in current.iter().filter(|v| !next.contains(v)) {
+            if let Ok(index) = value.parse::<usize>() {
+                self.remove_atc(index, window, cx);
+            }
+        }
+        for value in next.iter().filter(|v| !current.contains(v)) {
+            if let Ok(index) = value.parse::<usize>() {
+                self.add_atc(index, window, cx);
+            }
+        }
+    }
+
+    /// Write a Schedule 1 select's choice into its editor and re-read the page.
+    fn set_s1_choice(
+        &mut self,
+        key: String,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        if let Some(input) = self.inputs.get(&key) {
+            let value = value.to_string();
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
     }
 
     fn remove_atc(&mut self, popup_index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -518,21 +626,19 @@ impl Form1601FqView {
             return div().into_any_element();
         };
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let keys = self.error_keys(key);
+        let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let error = self.error_for(&key_refs);
         let label = div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if error {
+        let label = if error.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -548,7 +654,67 @@ impl Form1601FqView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, error)
+    }
+
+    /// The model error keys an editor key feeds (plus the key itself, which
+    /// carries the "not a number" parse error).
+    fn error_keys(&self, key: &str) -> Vec<String> {
+        let model = match key {
+            "year" => "taxable_year",
+            "sheets" => "number_of_attached_sheets",
+            "name" => "taxpayer_name",
+            "address" => "registered_address",
+            "zip" => "zip_code",
+            "phone" => "contact_number",
+            "email" => "email",
+            "lob" => "line_of_business",
+            "rem1" => "remittance_first_month",
+            "rem2" => "remittance_second_month",
+            "prev" => "tax_remitted_previous",
+            "sur" => "surcharge",
+            "int" => "interest",
+            "comp" => "compromise",
+            _ => "",
+        };
+        let mut keys = vec![key.to_string()];
+        if !model.is_empty() {
+            keys.push(model.to_string());
+        } else if let Some(popup) = key
+            .strip_prefix("base_")
+            .and_then(|n| n.parse::<usize>().ok())
+            && let Some(index) = self
+                .draft
+                .schedule
+                .iter()
+                .position(|r| r.popup_index == popup)
+        {
+            keys.push(format!("schedule[{index}].tax_base"));
+        } else if let Some(rest) = key.strip_prefix("s1_") {
+            // `s1_<field>_<row>`
+            if let Some((field, row)) = rest.split_once('_') {
+                let model = match field {
+                    "treaty" => "treaty_code",
+                    "atc" => "atc_code",
+                    "amt" => "income_payment",
+                    _ => "tax_rate",
+                };
+                keys.push(format!("schedule1[{row}].{model}"));
+            }
+        }
+        keys
+    }
+
+    /// Messages recorded for any of `keys` (validation and parse errors),
+    /// joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
     }
 
     /// Two columns on desktop, one otherwise.
@@ -610,8 +776,15 @@ impl Form1601FqView {
         button.disabled(disabled)
     }
 
-    fn labelled_row(label: &str, choices: Vec<AnyElement>) -> AnyElement {
-        div()
+    /// A labelled row of choice buttons with its validation message (for
+    /// `error_keys`) directly underneath.
+    fn labelled_row(
+        &self,
+        label: &str,
+        error_keys: &[&str],
+        choices: Vec<AnyElement>,
+    ) -> AnyElement {
+        let row = div()
             .flex()
             .flex_wrap()
             .items_center()
@@ -626,17 +799,25 @@ impl Form1601FqView {
                     .child(label.to_string()),
             )
             .children(choices)
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
-    /// Plain label + value for an item the library tile decides.
-    fn read_only_row(layout: Layout, label: &str, value: String) -> AnyElement {
+    /// Plain label + value for an item the library tile decides, with its
+    /// validation message (for `error_keys`) underneath.
+    fn read_only_row(
+        &self,
+        layout: Layout,
+        label: &str,
+        value: String,
+        error_keys: &[&str],
+    ) -> AnyElement {
         let label = div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
         let value = div().font_weight(FontWeight::BOLD).child(value);
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -652,7 +833,8 @@ impl Form1601FqView {
                 .child(label.w(relative(0.45)))
                 .child(value.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -660,18 +842,21 @@ impl Form1601FqView {
         let amended = self.draft.is_amended;
         let withheld = self.draft.any_tax_withheld;
         let children = vec![
-            Self::read_only_row(
+            self.read_only_row(
                 layout,
                 "Item 1 — For the Year",
                 self.draft.taxable_year.to_string(),
+                &["taxable_year"],
             ),
-            Self::read_only_row(
+            self.read_only_row(
                 layout,
                 "Item 2 — Quarter",
                 format!("Q{}", self.draft.quarter),
+                &["quarter"],
             ),
-            Self::labelled_row(
+            self.labelled_row(
                 "Item 3 — Amended return?",
+                &["is_amended"],
                 vec![
                     Self::choice("1601fq_amended_yes", "Yes", amended, !editable)
                         .on_click(
@@ -685,8 +870,9 @@ impl Form1601FqView {
                         .into_any_element(),
                 ],
             ),
-            Self::labelled_row(
+            self.labelled_row(
                 "Item 4 — Any taxes withheld?",
+                &["any_tax_withheld"],
                 vec![
                     Self::choice(
                         "1601fq_withheld_yes",
@@ -729,45 +915,35 @@ impl Form1601FqView {
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let category = self.draft.category;
+        let tile = |label: &str, value: String, keys: &[&str]| {
+            let row = div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(label.to_string()),
+                )
+                .child(div().font_weight(FontWeight::BOLD).child(value))
+                .into_any_element();
+            with_field_error(row, self.error_for(keys))
+        };
         let mut fields = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — TIN"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(format_tin(&self.draft.tin)),
-                )
-                .into_any_element(),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 7 — RDO Code"),
-                )
-                .child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(self.draft.rdo_code.clone()),
-                )
-                .into_any_element(),
+            tile("Item 6 — TIN", format_tin(&self.draft.tin), &["tin"]),
+            tile(
+                "Item 7 — RDO Code",
+                self.draft.rdo_code.clone(),
+                &["rdo_code"],
+            ),
         ];
         for (key, label, _) in TEXT_INPUTS.iter().skip(2) {
             fields.push(self.field(key, label, layout, !editable));
         }
-        let category_row = Self::labelled_row(
+        let category_row = self.labelled_row(
             "Item 11 — Category of withholding agent",
+            &["category"],
             vec![
                 Self::choice(
                     "1601fq_category_private",
@@ -842,7 +1018,12 @@ impl Form1601FqView {
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.remove_atc(popup_index, window, cx)
                     })),
-            );
+            )
+            .into_any_element();
+        let heading = with_field_error(
+            heading,
+            self.error_for(&[format!("schedule[{index}].atc_code").as_str()]),
+        );
         let base = self.field(
             &base_key(popup_index),
             "Tax base (consolidated for the quarter)",
@@ -873,70 +1054,40 @@ impl Form1601FqView {
             .into_any_element()
     }
 
-    fn render_schedule(&self, layout: Layout, view: &Context<Self>) -> AnyElement {
+    fn render_schedule(&self, layout: Layout, view: &mut Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let mut children: Vec<AnyElement> = (0..self.draft.schedule.len())
             .map(|row| self.render_atc_row(row, layout, view))
             .collect();
         let can_add =
             editable && self.draft.any_tax_withheld == Some(true) && self.draft.category.is_some();
+        let atc_error = self.error_for(&["schedule"]);
         if can_add {
-            let filter = self.input_text("atc_filter", view);
-            let options = self.draft.atc_options();
-            let matches = atc_matches(options, &filter);
-            let mut picks = div().flex().flex_col().gap_1();
-            for index in matches.iter().copied().take(ATC_MATCHES_SHOWN) {
-                let option = &options[index];
-                let taken = self
-                    .draft
-                    .schedule
-                    .iter()
-                    .any(|row| row.popup_index == index);
-                picks =
-                    picks.child(
-                        Button::new(("1601fq_add_atc", index))
-                            .label(format!(
-                                "{} ({}%) — {}",
-                                option.code, option.rate_text, option.description
-                            ))
-                            .outline()
-                            .small()
-                            .disabled(taken)
-                            .on_click(view.listener(move |this, _, window, cx| {
-                                this.add_atc(index, window, cx)
-                            })),
-                    );
-            }
-            let more = matches.len().saturating_sub(ATC_MATCHES_SHOWN);
-            children.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child("Add an ATC (search by code or nature of payment)"),
-                    )
-                    .child(self.field("atc_filter", "Search ATC", layout, false))
-                    .child(picks)
-                    .when(more > 0, |col| {
-                        col.child(
-                            div()
-                                .text_sm()
-                                .child(format!("{more} more — refine the search to see them.")),
-                        )
-                    })
-                    .into_any_element(),
-            );
+            let pairs = atc_pairs(self.draft.atc_options());
+            let selected = selected_atc_values(&self.draft);
+            let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
+            children.push(multi_select_field(
+                "1601fq_atc",
+                "Add ATCs (search by code or nature of payment)",
+                &self.atc_select,
+                &as_refs(&pairs),
+                &selected,
+                pairs.len(),
+                !editable,
+                atc_error.as_deref(),
+                on_change,
+                view,
+            ));
         } else if editable && self.draft.any_tax_withheld != Some(true) {
-            children.push(
+            children.push(with_field_error(
                 div()
                     .text_sm()
                     .child("Answer Item 4 \"Yes\" and Item 11 to add ATCs.")
                     .into_any_element(),
-            );
+                atc_error,
+            ));
+        } else if atc_error.is_some() {
+            children.push(with_field_error(div().into_any_element(), atc_error));
         }
         if self.draft.schedule.len() > FORM_1601FQ_MAIN_ROWS {
             children.push(self.computed(
@@ -981,10 +1132,13 @@ impl Form1601FqView {
             self.field("int", MONEY_INPUTS[4].1, layout, !editable),
             self.field("comp", MONEY_INPUTS[5].1, layout, !editable),
             self.computed("31 — Total penalties", d.total_penalties, cx),
-            self.computed(
-                "32 — Total amount still due/(over-remittance)",
-                d.total_amount_due,
-                cx,
+            with_field_error(
+                self.computed(
+                    "32 — Total amount still due/(over-remittance)",
+                    d.total_amount_due,
+                    cx,
+                ),
+                self.error_for(&["total_amount_due"]),
             ),
         ];
         self.section(
@@ -1004,8 +1158,9 @@ impl Form1601FqView {
                 )
                 .into_any_element()
         };
-        let mut children = vec![Self::labelled_row(
+        let mut children = vec![self.labelled_row(
             "Item 13 — Payees availing of tax relief under a Special Law or Tax Treaty?",
+            &["schedule1"],
             vec![
                 pick("1601fq_relief_yes", "Yes", Some(relief.unwrap_or_default())),
                 pick("1601fq_relief_no", "No", None),
@@ -1019,8 +1174,9 @@ impl Form1601FqView {
                     }))
                     .into_any_element()
             };
-            children.push(Self::labelled_row(
+            children.push(self.labelled_row(
                 "Item 13A — If yes, specify",
+                &["tax_relief"],
                 vec![
                     kind(
                         "1601fq_relief_special",
@@ -1038,27 +1194,43 @@ impl Form1601FqView {
             children.push(
                 div()
                     .text_sm()
-                    .child(format!(
-                        "Schedule 1 — treaty codes: NA or {}. ATC: NA or a 1601-FQ ATC; picking one fills its rate.",
-                        FORM_1601FQ_TREATIES
-                            .iter()
-                            .map(|(code, _)| *code)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ))
+                    .child("Schedule 1 — treaty code: NA or a treaty. ATC: NA or a 1601-FQ ATC; picking one fills its rate.")
                     .into_any_element(),
             );
+            let treaty_options = treaty_pairs();
+            let atc_options = schedule1_atc_pairs();
             for (index, row) in self.draft.schedule1.iter().enumerate() {
                 let item = index + 1;
                 let nature = self.draft.schedule1_nature(row);
-                let fields = vec![
-                    self.field(
-                        &s1_key("treaty", index),
+                let treaty_keys = self.error_keys(&s1_key("treaty", index));
+                let treaty_keys: Vec<&str> = treaty_keys.iter().map(String::as_str).collect();
+                let atc_keys = self.error_keys(&s1_key("atc", index));
+                let atc_keys: Vec<&str> = atc_keys.iter().map(String::as_str).collect();
+                let mut fields = Vec::new();
+                if let (Some(treaty_state), Some(atc_state)) = (
+                    self.treaty_selects.get(index),
+                    self.s1_atc_selects.get(index),
+                ) {
+                    fields.push(select_field(
                         "B — Treaty code",
-                        layout,
+                        treaty_state,
+                        &as_refs(&treaty_options),
+                        Some(row.treaty_code.as_str()),
                         !editable,
-                    ),
-                    self.field(&s1_key("atc", index), "C — ATC", layout, !editable),
+                        self.error_for(&treaty_keys).as_deref(),
+                        cx,
+                    ));
+                    fields.push(select_field(
+                        "C — ATC",
+                        atc_state,
+                        &as_refs(&atc_options),
+                        Some(row.atc_code.as_str()),
+                        !editable,
+                        self.error_for(&atc_keys).as_deref(),
+                        cx,
+                    ));
+                }
+                fields.extend([
                     self.field(
                         &s1_key("amt", index),
                         "E — Amount of income payment",
@@ -1071,7 +1243,7 @@ impl Form1601FqView {
                         layout,
                         !editable,
                     ),
-                ];
+                ]);
                 children.push(
                     div()
                         .flex()
@@ -1117,6 +1289,62 @@ impl QueueableFormView for Form1601FqView {
     ) -> Self {
         let validation_errors = draft.validate();
         let rows: Vec<usize> = draft.schedule.iter().map(|row| row.popup_index).collect();
+        let mut subscriptions = Vec::new();
+
+        // Part II ATC picker. The list depends on Item 11, so the handler
+        // resolves the chosen label against the current category's list.
+        let atc_list = atc_pairs(draft.atc_options());
+        let atc_select = form_controls::new_select_state(&as_refs(&atc_list), window, cx);
+        subscriptions.push(cx.subscribe_in(
+            &atc_select,
+            window,
+            |this: &mut Self, _, event: &ComboboxEvent, window, cx| {
+                let Some(label) = event.selected.as_deref() else {
+                    return;
+                };
+                let pairs = atc_pairs(this.draft.atc_options());
+                let Some((value, _)) = pairs.iter().find(|(_, l)| l == label) else {
+                    return;
+                };
+                let mut next = selected_atc_values(&this.draft);
+                if next.contains(value) {
+                    return;
+                }
+                next.push(value.clone());
+                this.apply_atc_selection(next, window, cx);
+            },
+        ));
+
+        // Schedule 1 treaty / ATC selects, one pair per row.
+        let treaty_list = treaty_pairs();
+        let s1_atc_list = schedule1_atc_pairs();
+        let mut treaty_selects = Vec::new();
+        let mut s1_atc_selects = Vec::new();
+        for row in 0..FORM_1601FQ_SCHEDULE1_ROWS {
+            let treaty = form_controls::new_select_state(&as_refs(&treaty_list), window, cx);
+            subscriptions.push(form_controls::on_select(
+                &treaty,
+                &as_refs(&treaty_list),
+                window,
+                cx,
+                move |this: &mut Self, value, window, cx| {
+                    this.set_s1_choice(s1_key("treaty", row), &value, window, cx)
+                },
+            ));
+            treaty_selects.push(treaty);
+            let atc = form_controls::new_select_state(&as_refs(&s1_atc_list), window, cx);
+            subscriptions.push(form_controls::on_select(
+                &atc,
+                &as_refs(&s1_atc_list),
+                window,
+                cx,
+                move |this: &mut Self, value, window, cx| {
+                    this.set_s1_choice(s1_key("atc", row), &value, window, cx)
+                },
+            ));
+            s1_atc_selects.push(atc);
+        }
+
         let mut view = Self {
             draft,
             db,
@@ -1128,7 +1356,10 @@ impl QueueableFormView for Form1601FqView {
             release_claim_confirm_open: false,
             withheld_no_pending: false,
             refresh_schedule1: false,
-            _subscriptions: Vec::new(),
+            atc_select,
+            treaty_selects,
+            s1_atc_selects,
+            _subscriptions: subscriptions,
         };
         for (key, _, placeholder) in TEXT_INPUTS {
             view.ensure_input(key.to_string(), placeholder, window, cx);
@@ -1136,7 +1367,6 @@ impl QueueableFormView for Form1601FqView {
         for (key, _) in MONEY_INPUTS {
             view.ensure_input(key.to_string(), "0.00", window, cx);
         }
-        view.ensure_input("atc_filter".into(), "e.g. WI330 or ROYALTY", window, cx);
         for index in rows {
             view.ensure_input(base_key(index), "0.00", window, cx);
         }
@@ -1385,6 +1615,37 @@ impl Render for Form1601FqView {
         if std::mem::take(&mut self.refresh_schedule1) {
             self.reload_schedule1_inputs(window, cx);
         }
+        let atc_list = atc_pairs(self.draft.atc_options());
+        form_controls::sync_multi_select(
+            &self.atc_select,
+            &as_refs(&atc_list),
+            &selected_atc_values(&self.draft),
+            window,
+            cx,
+        );
+        let treaty_list = treaty_pairs();
+        let s1_atc_list = schedule1_atc_pairs();
+        for (row, entry) in self.draft.schedule1.iter().enumerate() {
+            if let Some(state) = self.treaty_selects.get(row) {
+                form_controls::sync_select(
+                    state,
+                    &as_refs(&treaty_list),
+                    Some(entry.treaty_code.as_str()),
+                    window,
+                    cx,
+                );
+            }
+            if let Some(state) = self.s1_atc_selects.get(row) {
+                form_controls::sync_select(
+                    state,
+                    &as_refs(&s1_atc_list),
+                    Some(entry.atc_code.as_str()),
+                    window,
+                    cx,
+                );
+            }
+        }
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1392,7 +1653,7 @@ impl Render for Form1601FqView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let mut issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -1402,6 +1663,15 @@ impl Render for Form1601FqView {
                     .into_any_element()
             })
             .collect();
+        if error_count > issues.len() {
+            issues.push(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().danger)
+                    .child(format!("and {} more", error_count - issues.len()))
+                    .into_any_element(),
+            );
+        }
 
         let toolbar =
             div()
@@ -1449,6 +1719,11 @@ impl Render for Form1601FqView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {error_count} item(s) under Needs review to queue."
+                            )))
                         })
                         .child(
                             Button::new("1601fq_submit")
@@ -1550,7 +1825,7 @@ impl Render for Form1601FqView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, atc_matches, format_tin, parse_amount};
+    use super::{Layout, atc_pairs, format_tin, parse_amount, schedule1_atc_pairs, treaty_pairs};
     use bir_core::forms::form_1601fq::FORM_1601FQ_PRIVATE_ATCS;
     use gpui::px;
 
@@ -1570,11 +1845,35 @@ mod tests {
     }
 
     #[test]
-    fn atc_finder_matches_code_and_description() {
-        let options = FORM_1601FQ_PRIVATE_ATCS;
-        assert_eq!(atc_matches(options, "wi226"), vec![0]);
-        // WC212 is listed twice (30% and 25%).
-        assert_eq!(atc_matches(options, "WC212").len(), 2);
-        assert_eq!(atc_matches(options, "").len(), 40);
+    fn atc_picker_lists_the_whole_popup_with_unique_labels() {
+        let pairs = atc_pairs(FORM_1601FQ_PRIVATE_ATCS);
+        assert_eq!(pairs.len(), 40);
+        assert_eq!(pairs[0].0, "0");
+        assert!(pairs[0].1.starts_with("WI226 ("));
+        // WC212 is listed twice (30% and 25%); the labels still differ.
+        assert_eq!(
+            pairs
+                .iter()
+                .filter(|(_, l)| l.starts_with("WC212 "))
+                .count(),
+            2
+        );
+        let mut labels: Vec<&String> = pairs.iter().map(|(_, l)| l).collect();
+        labels.sort();
+        labels.dedup();
+        assert_eq!(labels.len(), 40);
+    }
+
+    #[test]
+    fn schedule1_selects_start_with_na_and_have_unique_codes() {
+        let treaties = treaty_pairs();
+        assert_eq!(treaties[0].0, "NA");
+        assert_eq!(treaties.len(), 1 + 43);
+        let atcs = schedule1_atc_pairs();
+        assert_eq!(atcs[0].0, "NA");
+        let mut codes: Vec<&String> = atcs.iter().map(|(c, _)| c).collect();
+        codes.sort();
+        codes.dedup();
+        assert_eq!(codes.len(), atcs.len());
     }
 }
