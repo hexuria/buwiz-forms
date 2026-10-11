@@ -94,3 +94,50 @@ fn form_1707a_sample_with_popup_is_current() {
         "a1ca2c78434fb131a887020bcf6b5f78c7b3e065bbeb22a887b2a98bb4d00191",
     );
 }
+
+/// More than ten rows in both schedules: the pop-ups have no row limit.
+fn sample_1707a_many_rows() -> Form1707ADraft {
+    let mut draft = sample_1707a();
+    draft.year_end_year = 2023;
+    for row in draft.gains.iter_mut().chain(draft.losses.iter_mut()) {
+        row.date = row.date.replace("/2025", "/2023");
+    }
+    for k in 3..=14u32 {
+        let month = (k - 3) % 12 + 1;
+        draft.gains.push(row(
+            &format!("{month:02}/10/2023"),
+            &format!("Gain Co {k}"),
+            f64::from(k) * 2_000.509,
+            f64::from(k) * 1_000.0,
+            f64::from(k) * 10.0,
+        ));
+    }
+    for k in 2..=12u32 {
+        let month = (k - 2) % 12 + 1;
+        draft.losses.push(row(
+            &format!("{month:02}/20/2023"),
+            &format!("Loss Co {k}"),
+            f64::from(k) * 500.0,
+            f64::from(k) * 750.25,
+            0.0,
+        ));
+    }
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1707a_sample_with_many_rows_is_current() {
+    let draft = sample_1707a_many_rows();
+    assert_eq!((draft.gains.len(), draft.losses.len()), (14, 12));
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1707A must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1707A-12312023",
+        &layout,
+        &payload,
+        "84d47ec4db11f76eda439d651a93b591bd42d3b09599b8b84b05ad1d8c264d56",
+    );
+}

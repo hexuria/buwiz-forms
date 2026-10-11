@@ -36,9 +36,6 @@ pub const FORM_1707_FORM_ID: &str = "1707-v2021";
 pub const FORM_1707_PARTY_ROWS: usize = 3;
 /// Rows A–D of Schedules 2 and 3.
 pub const FORM_1707_SCHEDULE_ROWS: usize = 4;
-/// Rows a schedule may hold here (rows D onwards beyond four go to the
-/// official pop-up, which has no limit).
-pub const FORM_1707_MAX_SCHEDULE_ROWS: usize = 40;
 /// `transactionType` puts 15 in Item 13 / Schedule 1 Item 6.
 pub const FORM_1707_TAX_RATE: f64 = 15.0;
 
@@ -1030,12 +1027,6 @@ impl Form1707Draft {
 
         // checkPartIVSched2Fields / checkPartIVSched3Fields on rows A–D, then
         // CheckEmptyDesc / CheckEmptyDesc2 on the pop-up rows (D.1 onwards).
-        if self.shares.len() > FORM_1707_MAX_SCHEDULE_ROWS {
-            err(
-                "shares",
-                &format!("Schedule 2 holds at most {FORM_1707_MAX_SCHEDULE_ROWS} rows here."),
-            );
-        }
         let main_shares = if self.shares_popup() {
             FORM_1707_SCHEDULE_ROWS - 1
         } else {
@@ -1087,12 +1078,6 @@ impl Form1707Draft {
                     "Enter a non-negative number of shares below 1,000,000,000,000.",
                 );
             }
-        }
-        if self.expenses.len() > FORM_1707_MAX_SCHEDULE_ROWS {
-            err(
-                "expenses",
-                &format!("Schedule 3 holds at most {FORM_1707_MAX_SCHEDULE_ROWS} rows here."),
-            );
         }
         let main_expenses = if self.expenses_popup() {
             FORM_1707_SCHEDULE_ROWS - 1

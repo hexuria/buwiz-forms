@@ -9,11 +9,13 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
 use bir_core::forms::form_1707::{
-    FORM_1707_PARTY_ROWS, Form1707Atc, Form1707Draft, Form1707Expense, Form1707Party,
-    Form1707Shares, Form1707TransactionType,
+    FORM_1707_PARTY_ROWS, FORM_1707_SCHEDULE_ROWS, Form1707Atc, Form1707Draft, Form1707Expense,
+    Form1707Party, Form1707Shares, Form1707TransactionType,
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
+use gpui_component::Disableable;
+use gpui_component::button::Button;
 
 use super::event_form_kit::{
     self as kit, EditorState, InputReader, InputSpec, KitView, Layout, choice, choice_row,
@@ -74,9 +76,9 @@ const SHARE_FIELDS: [(&str, &str); 4] = [
     ("cert", "Stock certificate no."),
     ("price", "Taxable base / selling price"),
 ];
-/// Schedule 2/3 rows offered: A–C, then D and the official "More" list
-/// (D.1, D.2, …) once a schedule passes four rows.
-const SCHEDULE_UI_ROWS: usize = 10;
+/// Schedule 2/3 rows always shown: A–D. "Add row" appends the official
+/// "More" list (D.1, D.2, …), which has no row limit.
+const SCHEDULE_MIN_ROWS: usize = FORM_1707_SCHEDULE_ROWS;
 
 fn row_label(row: usize) -> String {
     match row {
@@ -102,6 +104,9 @@ pub struct Form1707View {
     draft: Form1707Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// Schedule 2 / 3 rows on screen: never fewer than the draft holds.
+    share_rows: usize,
+    expense_rows: usize,
 }
 
 impl EventEmitter<QueueableFormEvent> for Form1707View {}
@@ -155,7 +160,7 @@ impl Form1707View {
                 }
             }
         }
-        for row in 0..SCHEDULE_UI_ROWS {
+        for row in 0..d.shares.len().max(d.expenses.len()) {
             let shares = d.shares.get(row).cloned().unwrap_or_default();
             let expense = d.expenses.get(row).cloned().unwrap_or_default();
             let values = [
@@ -181,7 +186,11 @@ impl Form1707View {
         String::new()
     }
 
-    fn input_specs(d: &Form1707Draft) -> Vec<InputSpec> {
+    fn specs(&self) -> Vec<InputSpec> {
+        Self::input_specs(&self.draft, self.share_rows, self.expense_rows)
+    }
+
+    fn input_specs(d: &Form1707Draft, share_rows: usize, expense_rows: usize) -> Vec<InputSpec> {
         let mut keys: Vec<(String, String)> = TEXT_INPUTS
             .iter()
             .map(|(k, _, p)| (k.to_string(), p.to_string()))
@@ -198,10 +207,12 @@ impl Form1707View {
                 }
             }
         }
-        for row in 0..SCHEDULE_UI_ROWS {
+        for row in 0..share_rows {
             for (part, _) in SHARE_FIELDS {
                 keys.push((share_key(row, part), String::new()));
             }
+        }
+        for row in 0..expense_rows {
             keys.push((expense_key(row, "part"), String::new()));
             keys.push((expense_key(row, "amount"), "0.00".to_string()));
         }
@@ -397,6 +408,64 @@ impl Form1707View {
         section("Tax relief and transaction (Items 8–9)", children, cx)
     }
 
+    /// Row caption with "Remove"; removing never drops another row.
+    fn row_heading(
+        &self,
+        schedule: &'static str,
+        row: usize,
+        letter: &str,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable();
+        let remove = Button::new((SharedString::from(format!("1707_{schedule}_remove")), row))
+            .disabled(disabled)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                kit::edit_rows(
+                    this,
+                    window,
+                    cx,
+                    |v| v.remove_row(schedule, row),
+                    Self::specs,
+                )
+            }));
+        kit::row_heading(&format!("Row {letter}"), remove)
+    }
+
+    fn add_row(&self, schedule: &'static str, cx: &Context<Self>) -> AnyElement {
+        let disabled = !self.draft.lifecycle.is_editable();
+        kit::add_row_button(SharedString::from(format!("1707_{schedule}_add")), disabled)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                kit::edit_rows(
+                    this,
+                    window,
+                    cx,
+                    |v| {
+                        if schedule == "s2" {
+                            v.share_rows += 1;
+                        } else {
+                            v.expense_rows += 1;
+                        }
+                    },
+                    Self::specs,
+                )
+            }))
+            .into_any_element()
+    }
+
+    fn remove_row(&mut self, schedule: &str, row: usize) {
+        if schedule == "s2" {
+            if row < self.draft.shares.len() {
+                self.draft.shares.remove(row);
+            }
+            self.share_rows = self.share_rows.saturating_sub(1).max(SCHEDULE_MIN_ROWS);
+        } else {
+            if row < self.draft.expenses.len() {
+                self.draft.expenses.remove(row);
+            }
+            self.expense_rows = self.expense_rows.saturating_sub(1).max(SCHEDULE_MIN_ROWS);
+        }
+    }
+
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let disabled = !self.draft.lifecycle.is_editable();
         let d = &self.draft;
@@ -429,7 +498,8 @@ impl Form1707View {
                 children.push(
                     kit::label("Schedule 2 — Description of shares of stock").into_any_element(),
                 );
-                for (row, letter) in (0..SCHEDULE_UI_ROWS).map(|row| (row, row_label(row))) {
+                for (row, letter) in (0..self.share_rows).map(|row| (row, row_label(row))) {
+                    children.push(self.row_heading("s2", row, &letter, cx));
                     let cells = SHARE_FIELDS
                         .iter()
                         .map(|(part, caption)| {
@@ -444,11 +514,13 @@ impl Form1707View {
                         .collect();
                     children.push(grid(layout, cells));
                 }
+                children.push(self.add_row("s2", cx));
                 children.push(computed("Total taxable base", d.total_selling_price, cx));
                 children.push(
                     kit::label("Schedule 3 — Cost and other allowable expenses").into_any_element(),
                 );
-                for (row, letter) in (0..SCHEDULE_UI_ROWS).map(|row| (row, row_label(row))) {
+                for (row, letter) in (0..self.expense_rows).map(|row| (row, row_label(row))) {
+                    children.push(self.row_heading("s3", row, &letter, cx));
                     let cells = vec![
                         field(
                             &self.kit,
@@ -467,6 +539,7 @@ impl Form1707View {
                     ];
                     children.push(grid(layout, cells));
                 }
+                children.push(self.add_row("s3", cx));
                 children.push(computed("Total cost and expenses", d.total_expenses, cx));
             }
             None => children.push(
@@ -616,7 +689,7 @@ impl KitView for Form1707View {
         {
             let mut shares = Vec::new();
             let mut expenses = Vec::new();
-            for (row, letter) in (0..SCHEDULE_UI_ROWS).map(|row| (row, row_label(row))) {
+            for (row, letter) in (0..self.share_rows).map(|row| (row, row_label(row))) {
                 let number = r
                     .optional_amount(
                         &share_key(row, "shares"),
@@ -635,6 +708,8 @@ impl KitView for Form1707View {
                     certificate_number: r.trimmed(&share_key(row, "cert")),
                     selling_price: price,
                 });
+            }
+            for (row, letter) in (0..self.expense_rows).map(|row| (row, row_label(row))) {
                 let amount = r
                     .amount(
                         &expense_key(row, "amount"),
@@ -677,8 +752,21 @@ impl QueueableFormView for Form1707View {
         cx: &mut Context<Self>,
     ) -> Self {
         let errors = bir_core::forms::queueable::QueueableForm::validate(&draft);
-        let kit = EditorState::new(Self::input_specs(&draft), errors, window, cx);
-        Self { draft, db, kit }
+        let share_rows = draft.shares.len().max(SCHEDULE_MIN_ROWS);
+        let expense_rows = draft.expenses.len().max(SCHEDULE_MIN_ROWS);
+        let kit = EditorState::new(
+            Self::input_specs(&draft, share_rows, expense_rows),
+            errors,
+            window,
+            cx,
+        );
+        Self {
+            draft,
+            db,
+            kit,
+            share_rows,
+            expense_rows,
+        }
     }
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1707Draft {
@@ -741,7 +829,44 @@ impl Render for Form1707View {
 
 #[cfg(test)]
 mod tests {
-    use super::{AMOUNTS, Form1707View, TEXT_INPUTS};
+    use super::{AMOUNTS, Form1707Expense, Form1707View, TEXT_INPUTS, expense_key};
+    use bir_core::forms::form_1707::Form1707Draft;
+
+    /// Every stored row gets an editor holding its value, so read-back keeps
+    /// rows past the first ten.
+    #[test]
+    fn every_stored_row_has_an_editor() {
+        let profile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Sample Taxpayer",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "789", "branch": "00000"},
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09170000000",
+            "email": "sample@example.com",
+            "default_form_type": "1707v2021",
+            "taxpayer_type": "Individual",
+            "withholds_compensation": false,
+            "has_employees": false
+        }))
+        .expect("profile");
+        let mut draft = Form1707Draft::new_from_profile(&profile, 2025, 1);
+        draft.expenses = (0..14)
+            .map(|k| Form1707Expense {
+                particulars: format!("Expense {k}"),
+                amount: 0.0,
+            })
+            .collect();
+        let specs = Form1707View::input_specs(&draft, 4, 14);
+        let last = expense_key(13, "part");
+        let spec = specs
+            .iter()
+            .find(|(key, _, _)| *key == last)
+            .expect("row 14");
+        assert_eq!(spec.2, "Expense 13");
+    }
 
     #[test]
     fn every_input_has_a_label() {

@@ -33,8 +33,6 @@ use crate::profile::TaxpayerProfile;
 pub const FORM_1707A_FORM_ID: &str = "1707a-v2021";
 /// Rows 1–4 of Schedules 1 and 2.
 pub const FORM_1707A_SCHEDULE_ROWS: usize = 4;
-/// Rows a schedule may hold here (the pop-up has no limit).
-pub const FORM_1707A_MAX_SCHEDULE_ROWS: usize = 40;
 /// Item 16 applicable tax rate (`txtI16ApplicableTaxRate`).
 pub const FORM_1707A_TAX_RATE: f64 = 15.0;
 
@@ -858,15 +856,6 @@ impl Form1707ADraft {
                 FORM_1707A_SCHEDULE_ROWS - 1,
             ),
         ] {
-            if !is_modal && rows.len() > FORM_1707A_MAX_SCHEDULE_ROWS {
-                err(
-                    field,
-                    &format!(
-                        "{} holds at most {FORM_1707A_MAX_SCHEDULE_ROWS} rows here.",
-                        schedule.trim()
-                    ),
-                );
-            }
             for (index, row) in rows.iter().enumerate() {
                 let n = index + 1;
                 let index = index + offset;
