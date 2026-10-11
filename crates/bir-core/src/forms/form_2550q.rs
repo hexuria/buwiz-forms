@@ -2495,6 +2495,12 @@ impl super::queueable::QueueableForm for Form2550QDraft {
     fn lifecycle_mut(&mut self) -> &mut SubmissionLifecycle {
         &mut self.lifecycle
     }
+    fn draft_id(&self) -> Option<i64> {
+        self.id
+    }
+    fn set_draft_id(&mut self, id: Option<i64>) {
+        self.id = id;
+    }
     fn tin(&self) -> &str {
         &self.tin
     }
