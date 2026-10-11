@@ -340,6 +340,8 @@ impl Form1604fView {
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -399,8 +401,8 @@ impl Form1604fView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -441,8 +443,10 @@ impl Form1604fView {
         button.disabled(disabled)
     }
 
-    fn choice_row(label: &str, error: bool, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(layout: Layout, label: &str, error: bool, buttons: Vec<Button>) -> AnyElement {
         let caption = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -451,12 +455,22 @@ impl Form1604fView {
         } else {
             caption
         };
+        if layout == Layout::Phone {
+            return div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(caption)
+                .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+                .into_any_element();
+        }
         div()
             .flex()
             .flex_wrap()
             .items_center()
             .gap_2()
-            .child(caption)
+            .child(caption.flex_1())
             .children(buttons)
             .into_any_element()
     }
@@ -467,6 +481,7 @@ impl Form1604fView {
         let children = vec![
             self.field("year", TEXT_INPUTS[0].1, "taxable_year", layout, !editable),
             Self::choice_row(
+                layout,
                 "Item 2 — Amended return?",
                 false,
                 vec![
@@ -508,6 +523,7 @@ impl Form1604fView {
         }
         let category = d.agent_category;
         let category_row = Self::choice_row(
+            layout,
             "Item 8 — Category of withholding agent",
             self.has_error("agent_category"),
             vec![
@@ -536,6 +552,7 @@ impl Form1604fView {
         let top = d.top_withholding_agent;
         let top_row =
             Self::choice_row(
+                layout,
                 "Item 8A — If private, top withholding agent?",
                 false,
                 vec![
@@ -549,6 +566,7 @@ impl Form1604fView {
             );
         let relief = d.tax_relief;
         let relief_row = Self::choice_row(
+            layout,
             "Item 11 — Payees availing of tax relief under a Special Law or International Tax Treaty?",
             false,
             vec![

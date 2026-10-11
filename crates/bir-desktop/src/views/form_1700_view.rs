@@ -775,6 +775,8 @@ impl Form1700View {
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -805,8 +807,8 @@ impl Form1700View {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -837,13 +839,16 @@ impl Form1700View {
             .flex()
             .flex_col()
             .gap_1()
+            .w_full()
             .child(
                 div()
+                    .min_w_0()
+                    .max_w_full()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),
             )
-            .child(div().flex().flex_wrap().gap_2().children(buttons))
+            .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
             .into_any_element()
     }
 

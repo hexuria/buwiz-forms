@@ -497,6 +497,8 @@ impl Form1606View {
         let mut keys = vec![key];
         keys.extend_from_slice(Self::draft_fields(key));
         let label = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -577,12 +579,15 @@ impl Form1606View {
             .rounded_md()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .child(label.to_string()),
             )
             .child(
                 div()
+                    .flex_none()
                     .text_right()
                     .font_weight(FontWeight::BOLD)
                     .child(official_amount(value)),
@@ -628,6 +633,8 @@ impl Form1606View {
     /// A labelled row of choice buttons.
     fn choice_row(&self, label: &str, error_keys: &[&str], buttons: Vec<Button>) -> AnyElement {
         let title = div()
+            .min_w_0()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
