@@ -1100,6 +1100,9 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             );
             crate::notification::send_notification(&notice_title, &notice_body);
             let submitted_file = filename.clone();
+            // Keep the exact bytes that were encrypted for PUT, so an
+            // amendment can later snapshot what BIR received.
+            draft.lifecycle_mut().submitted_payload = Some(payload);
             draft.lifecycle_mut().transition_to_submitted(filename);
             if let Ok(db_guard) = db.lock() {
                 match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {

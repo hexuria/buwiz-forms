@@ -6,6 +6,9 @@
 
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
+use super::amendment_snapshots::{
+    NewAmendmentSnapshot, SnapshotPayloadSource, insert_amendment_snapshot,
+};
 use super::drafts::{
     AbandonedClaimRelease, abandoned_claim_audit, claim_fields_partial, claim_fields_present,
     filing_status_to_db, require_abandoned_release_reason,
@@ -26,6 +29,34 @@ pub enum ClaimQueueableResult<F> {
         errors: Vec<(String, String)>,
     },
     Superseded,
+}
+
+/// Result of [`Database::revert_queueable_for_amendment`].
+#[derive(Debug, Clone)]
+pub struct RevertedForAmendment<F> {
+    /// The editable Draft now stored under the same key.
+    pub draft: F,
+    pub previous_status: FilingStatus,
+    /// `amendment_snapshots.id` when the return had reached BIR.
+    pub snapshot_id: Option<i64>,
+    /// True when the form's "Amended Return?" item was set to Yes.
+    pub marked_amended: bool,
+}
+
+/// The plaintext BIR received for `draft`: the stored bytes when present,
+/// else a rebuild from its frozen field map (returns queued before the
+/// plaintext was stored), else nothing.
+fn sent_payload<F: QueueableForm>(draft: &F) -> (Option<String>, SnapshotPayloadSource) {
+    if let Some(payload) = &draft.lifecycle().submitted_payload {
+        return (Some(payload.clone()), SnapshotPayloadSource::Stored);
+    }
+    let rebuilt = crate::official_xml::layout(F::LAYOUT_ID)
+        .ok()
+        .and_then(|layout| crate::official_xml::write(layout, &draft.field_map()).ok());
+    match rebuilt {
+        Some(xml) => (Some(xml), SnapshotPayloadSource::Regenerated),
+        None => (None, SnapshotPayloadSource::Unavailable),
+    }
 }
 
 fn errors_summary(errors: &[(String, String)]) -> String {
@@ -411,6 +442,110 @@ impl Database {
             )));
         }
         Ok(draft)
+    }
+
+    /// The user's "Revert to Draft" (D7A + D8A). One editable record per
+    /// period remains.
+    ///
+    /// - Queued (unclaimed): plain revert; nothing reached BIR.
+    /// - Submitted or Confirmed: keep a read-only snapshot of what BIR
+    ///   received, revert, set "Amended Return?" to Yes, and save the Draft
+    ///   under the same key.
+    /// - Paid or Draft: refused.
+    ///
+    /// Everything happens in one transaction; on any error nothing changes.
+    pub fn revert_queueable_for_amendment<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        period: i64,
+    ) -> Result<RevertedForAmendment<F>, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) =
+            select_row(&tx, F::FORM_CODE, tin, taxable_year, period)?
+        else {
+            return Err(DbError::Other(format!(
+                "No {} return exists for this period",
+                F::FORM_CODE
+            )));
+        };
+        let current: F = serde_json::from_str(&raw_json)?;
+        let previous_status = current.lifecycle().status.clone();
+        if db_status != filing_status_to_db(&previous_status) {
+            return Err(DbError::Other(format!(
+                "{} return status is inconsistent ({db_status} row, {previous_status:?} data); refusing to revert",
+                F::FORM_CODE
+            )));
+        }
+        if !crate::forms::queueable::can_user_revert(&previous_status) {
+            return Err(DbError::Other(match previous_status {
+                FilingStatus::Paid => {
+                    format!("A Paid {} return cannot be reverted to Draft", F::FORM_CODE)
+                }
+                _ => format!("This {} return is already a Draft", F::FORM_CODE),
+            }));
+        }
+        if !current.lifecycle().is_unclaimed() {
+            return Err(DbError::Other(format!(
+                "{} submission is in progress; wait for it to finish before reverting",
+                F::FORM_CODE
+            )));
+        }
+
+        let mut draft = current.clone();
+        let mut snapshot_id = None;
+        let mut marked_amended = false;
+        if matches!(
+            previous_status,
+            FilingStatus::Submitted | FilingStatus::Confirmed
+        ) {
+            let lifecycle = current.lifecycle();
+            let (xml, source) = sent_payload(&current);
+            let period_key = current.filing_period().to_period_key();
+            snapshot_id = Some(insert_amendment_snapshot(
+                &tx,
+                &NewAmendmentSnapshot {
+                    form_code: F::FORM_CODE,
+                    tin: current.tin(),
+                    taxable_year: current.taxable_year(),
+                    period_key: &period_key,
+                    status_at_revert: filing_status_to_db(&previous_status),
+                    submitted_at: lifecycle.submitted_at.as_deref(),
+                    confirmed_at: lifecycle.confirmed_at.as_deref(),
+                    receipt_id: lifecycle.receipt_id,
+                    submission_filename: lifecycle.submission_filename.as_deref(),
+                    submitted_xml: xml.as_deref(),
+                    payload_source: source,
+                    draft_json: &raw_json,
+                },
+            )?);
+            draft.lifecycle_mut().revert_to_draft();
+            marked_amended = draft.mark_amended();
+        } else {
+            draft.lifecycle_mut().revert_to_draft();
+        }
+        draft.set_draft_id(Some(id));
+
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = ?3 AND data_json = ?4",
+            params![json, id, db_status, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(format!(
+                "{} return changed before the revert completed",
+                F::FORM_CODE
+            )));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(RevertedForAmendment {
+            draft,
+            previous_status,
+            snapshot_id,
+            marked_amended,
+        })
     }
 
     /// Human-confirmed release of a claimed queue snapshot back to Draft.
@@ -1008,5 +1143,212 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(kept.amount, 20.0);
+    }
+
+    const TIN: &str = "123-456-788-00000";
+
+    /// Store `form` directly with its own status, as the worker would.
+    fn store(db: &Database, form: &TestForm) -> i64 {
+        let id = db
+            .save_queueable_draft(&TestForm::new(form.month, 0.0))
+            .unwrap();
+        let mut stamped = form.clone();
+        stamped.id = Some(id);
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = ?3",
+                params![
+                    filing_status_to_db(&form.lifecycle.status),
+                    serde_json::to_string(&stamped).unwrap(),
+                    id
+                ],
+            )
+            .unwrap();
+        id
+    }
+
+    fn queued() -> TestForm {
+        let mut form = TestForm::new(6, 10.0);
+        form.queue(crate::filing_queue::QueueAuthSource::Gui)
+            .unwrap();
+        form
+    }
+
+    fn submitted() -> TestForm {
+        let mut form = queued();
+        let filename = form.submission_filename();
+        form.lifecycle.transition_to_submitted(filename);
+        form
+    }
+
+    fn confirmed() -> TestForm {
+        let mut form = submitted();
+        form.lifecycle
+            .transition_to_confirmed("2025-07-01T08:00:00".to_string(), Some(42), None);
+        form
+    }
+
+    fn snapshots(db: &Database) -> Vec<crate::db::AmendmentSnapshot> {
+        db.list_amendment_snapshots(TestForm::CODE, TIN, 2025, "M06")
+            .unwrap()
+    }
+
+    #[test]
+    fn reverting_a_queued_return_is_a_plain_revert() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let id = store(&db, &queued());
+        let result = db
+            .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap();
+        assert_eq!(result.previous_status, FilingStatus::Queued);
+        assert_eq!(result.snapshot_id, None);
+        assert!(!result.marked_amended);
+        assert!(!result.draft.is_amended);
+        assert_eq!(rows(&db), vec![(id, 6, "Draft".to_string())]);
+        let stored = db
+            .get_queueable_draft::<TestForm>(TIN, 2025, 6)
+            .unwrap()
+            .unwrap();
+        assert!(stored.lifecycle.is_editable());
+        assert!(stored.lifecycle.submitted_payload.is_none());
+        assert!(snapshots(&db).is_empty());
+    }
+
+    #[test]
+    fn reverting_a_submitted_return_snapshots_it_and_marks_an_amendment() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let form = submitted();
+        let id = store(&db, &form);
+        let result = db
+            .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap();
+        assert_eq!(result.previous_status, FilingStatus::Submitted);
+        assert!(result.marked_amended);
+        assert_eq!(rows(&db), vec![(id, 6, "Draft".to_string())]);
+        let stored = db
+            .get_queueable_draft::<TestForm>(TIN, 2025, 6)
+            .unwrap()
+            .unwrap();
+        assert!(stored.is_amended);
+        assert!(stored.lifecycle.is_editable());
+        assert_eq!(stored.id, Some(id));
+
+        let kept = snapshots(&db);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(Some(kept[0].id), result.snapshot_id);
+        assert_eq!(kept[0].status_at_revert, "Submitted");
+        assert_eq!(kept[0].submitted_at, form.lifecycle.submitted_at);
+        assert_eq!(kept[0].confirmed_at, None);
+        assert_eq!(
+            kept[0].submission_filename,
+            form.lifecycle.submission_filename
+        );
+        assert_eq!(kept[0].payload_source, SnapshotPayloadSource::Stored);
+        assert_eq!(kept[0].submitted_xml, form.lifecycle.submitted_payload);
+        assert_eq!(kept[0].period_key, "M06");
+    }
+
+    #[test]
+    fn reverting_a_confirmed_return_keeps_its_receipt_and_every_earlier_snapshot() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        store(&db, &confirmed());
+        db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap();
+
+        // File the amendment, then revert it again: both snapshots remain.
+        let mut amended = db
+            .get_queueable_draft::<TestForm>(TIN, 2025, 6)
+            .unwrap()
+            .unwrap();
+        amended.amount = 12.0;
+        amended
+            .queue(crate::filing_queue::QueueAuthSource::Gui)
+            .unwrap();
+        let filename = amended.submission_filename();
+        amended.lifecycle.transition_to_submitted(filename);
+        let json = serde_json::to_string(&amended).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Submitted', data_json = ?1",
+                params![json],
+            )
+            .unwrap();
+        db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap();
+
+        let kept = snapshots(&db);
+        assert_eq!(kept.len(), 2);
+        assert_eq!(kept[0].status_at_revert, "Confirmed");
+        assert_eq!(kept[0].receipt_id, Some(42));
+        assert_eq!(kept[0].confirmed_at.as_deref(), Some("2025-07-01T08:00:00"));
+        assert!(
+            kept[0]
+                .submitted_xml
+                .as_deref()
+                .unwrap()
+                .contains("txtTax14=10.00")
+        );
+        assert!(
+            kept[1]
+                .submitted_xml
+                .as_deref()
+                .unwrap()
+                .contains("txtTax14=12.00")
+        );
+        assert_eq!(rows(&db).len(), 1);
+    }
+
+    #[test]
+    fn an_older_return_without_stored_plaintext_gets_a_regenerated_copy() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let mut form = confirmed();
+        form.lifecycle.submitted_payload = None;
+        store(&db, &form);
+        db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap();
+        let kept = snapshots(&db);
+        assert_eq!(kept[0].payload_source, SnapshotPayloadSource::Regenerated);
+        assert_eq!(
+            kept[0].submitted_xml.as_deref(),
+            Some(form.official_payload().unwrap().as_str())
+        );
+    }
+
+    #[test]
+    fn a_paid_or_draft_return_is_refused_and_nothing_changes() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let mut paid = confirmed();
+        paid.lifecycle.status = FilingStatus::Paid;
+        let id = store(&db, &paid);
+        let error = db
+            .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap_err();
+        assert!(error.to_string().contains("Paid"), "{error}");
+        assert_eq!(rows(&db), vec![(id, 6, "Paid".to_string())]);
+        assert!(snapshots(&db).is_empty());
+
+        db.save_queueable_draft(&TestForm::new(7, 1.0)).unwrap();
+        assert!(
+            db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 7)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_failed_save_rolls_back_the_snapshot() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let id = store(&db, &submitted());
+        db.conn
+            .execute_batch(
+                "CREATE TRIGGER block_revert BEFORE UPDATE ON form_drafts
+                 BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+            )
+            .unwrap();
+        assert!(
+            db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+                .is_err()
+        );
+        assert!(snapshots(&db).is_empty());
+        assert_eq!(rows(&db), vec![(id, 6, "Submitted".to_string())]);
     }
 }

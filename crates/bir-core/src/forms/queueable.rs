@@ -31,6 +31,12 @@ pub struct SubmissionLifecycle {
     pub submission_filename: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_id: Option<i64>,
+    /// The exact plaintext XML of this generation: written at queue time and
+    /// replaced with the bytes actually encrypted for PUT at submission. Kept
+    /// so a later amendment can snapshot what BIR received. Absent on returns
+    /// queued before this field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitted_payload: Option<String>,
 
     /// SHA-256 over the exact reviewed field map when the user queued the
     /// return. Every later step must reproduce it.
@@ -70,6 +76,7 @@ impl Default for SubmissionLifecycle {
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
+            submitted_payload: None,
             queued_submission_fingerprint: None,
             queue_authorization: None,
             submission_claim_token: None,
@@ -170,6 +177,7 @@ impl SubmissionLifecycle {
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;
+        self.submitted_payload = None;
         self.queued_submission_fingerprint = None;
         self.queue_authorization = None;
         self.clear_claim();
@@ -208,6 +216,7 @@ impl SubmissionLifecycle {
             self.next_retry_at = None;
             self.queued_submission_fingerprint = None;
             self.queue_authorization = None;
+            self.submitted_payload = None;
         } else {
             let delay_minutes = 2i64.pow(self.submission_attempts - 1);
             self.next_retry_at =
@@ -269,6 +278,12 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
     /// Official control ids and values (see [`crate::official_xml::write`]).
     fn field_map(&self) -> BTreeMap<String, String>;
 
+    /// Set the form's "Amended Return?" item to Yes the way its own editor
+    /// does. Returns false for a form that has no such item.
+    fn mark_amended(&mut self) -> bool {
+        false
+    }
+
     /// `form_drafts.quarter` value: month, quarter, 0 for annual returns.
     fn period_column(&self) -> i64 {
         period_column(&self.filing_period())
@@ -319,7 +334,7 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
             )]);
         }
         self.compute();
-        self.official_payload()?;
+        let payload = self.official_payload()?;
         let fingerprint = self.submission_fingerprint();
         let authorization = QueueAuthorization::new(
             Self::FORM_CODE,
@@ -328,6 +343,7 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
             source,
         );
         self.lifecycle_mut().mark_queued(fingerprint, authorization);
+        self.lifecycle_mut().submitted_payload = Some(payload);
         Ok(())
     }
 
@@ -383,6 +399,16 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
         ));
         Err(errors)
     }
+}
+
+/// Whether the user may "Revert to Draft" a return in `status` (D7A):
+/// Queued, Submitted and Confirmed may be reverted; Draft has nothing to
+/// revert and Paid never reverts.
+pub fn can_user_revert(status: &FilingStatus) -> bool {
+    matches!(
+        status,
+        FilingStatus::Queued | FilingStatus::Submitted | FilingStatus::Confirmed
+    )
 }
 
 /// `form_drafts.quarter` value for a filing period.
@@ -714,6 +740,8 @@ pub(crate) mod test_support {
         pub doubled: f64,
         #[serde(default)]
         pub id: Option<i64>,
+        #[serde(default)]
+        pub is_amended: bool,
         #[serde(flatten)]
         pub lifecycle: SubmissionLifecycle,
     }
@@ -731,6 +759,7 @@ pub(crate) mod test_support {
                 amount,
                 doubled: 0.0,
                 id: None,
+                is_amended: false,
                 lifecycle: SubmissionLifecycle::default(),
             }
         }
@@ -752,6 +781,10 @@ pub(crate) mod test_support {
         }
         fn set_draft_id(&mut self, id: Option<i64>) {
             self.id = id;
+        }
+        fn mark_amended(&mut self) -> bool {
+            self.is_amended = true;
+            true
         }
         fn tin(&self) -> &str {
             &self.tin
@@ -828,6 +861,27 @@ mod tests {
             assert!(json.get(key).is_some(), "{key}");
         }
         assert!(json.get("lifecycle").is_none());
+    }
+
+    #[test]
+    fn only_queued_submitted_and_confirmed_returns_may_be_reverted_by_the_user() {
+        assert!(!can_user_revert(&FilingStatus::Draft));
+        assert!(can_user_revert(&FilingStatus::Queued));
+        assert!(can_user_revert(&FilingStatus::Submitted));
+        assert!(can_user_revert(&FilingStatus::Confirmed));
+        assert!(!can_user_revert(&FilingStatus::Paid));
+    }
+
+    #[test]
+    fn queue_keeps_the_exact_payload_and_revert_clears_it() {
+        let mut form = TestForm::new(6, 10.0);
+        form.queue(QueueAuthSource::Gui).unwrap();
+        assert_eq!(
+            form.lifecycle.submitted_payload.as_deref(),
+            Some(form.official_payload().unwrap().as_str())
+        );
+        form.lifecycle.revert_to_draft();
+        assert!(form.lifecycle.submitted_payload.is_none());
     }
 
     #[test]
