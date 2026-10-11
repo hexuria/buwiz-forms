@@ -100,14 +100,18 @@ impl Form0605TypeOfPayment {
     }
 }
 
-/// The reviewed XML exposes two BIR-approval flags, but neither sample selects
-/// one and the official printable form does not label them. Preserve the exact
-/// flags without inventing Yes/No semantics.
+/// Item 17 approval radio `frm0605:itemApprovedYN` (BIR-Form0605.hta:944-947).
+/// Filer-settable: `enableDefTax()` enables it when Item 17 is Preliminary/Final
+/// Assessment/Deficiency Tax or Accounts Receivable/Delinquent Account
+/// (`itemMannerOfPaymentB:_1/_2`); `disableDefTax()` clears and disables it otherwise.
+/// Variant names are kept for stored-draft compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Form0605ApprovalSelection {
     #[default]
     None,
+    /// `frm0605:itemApprovedYN:_1` (value `Y`): "Pre-approved by Investigating Office".
     XmlOption1,
+    /// `frm0605:itemApprovedYN:_2` (value `N`): "Not approved by Investigating Office".
     XmlOption2,
 }
 
@@ -547,8 +551,6 @@ impl Form0605Draft {
             "Only FP010↔AtcCode1, II011↔AtcCode24, DO↔TaxTypeCode4, and IT↔TaxTypeCode9 are source-proven editable mappings. Other imported pairs are retained but not certified."
                 .to_string(),
             "Item 22 signatures and Part III payment details are backed by the official PDF and persist in the app draft, but the two reviewed 235-field saves contain no corresponding XML keys; they are omitted from editable-save export."
-                .to_string(),
-            "The meaning of frm0605:itemApprovedYN options 1 and 2 is not established because both reviewed saves leave both flags false."
                 .to_string(),
         ];
         if self

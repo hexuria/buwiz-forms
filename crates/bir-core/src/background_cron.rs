@@ -695,10 +695,22 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         .await
     {
         Ok(()) => {
-            info!("Cron: Successfully submitted queued 1601C {}", filename);
+            if skip_email_poll {
+                info!(
+                    "Cron: dry run: simulated submission of queued 1601C {} (nothing sent to BIR)",
+                    filename
+                );
+            } else {
+                info!("Cron: Successfully submitted queued 1601C {}", filename);
+            }
             let period_label = monthly_period_label(draft.taxable_year, draft.month);
-            let (notice_title, notice_body) =
-                submission_notice(profile, "1601C", &period_label, &chrono::Local::now());
+            let (notice_title, notice_body) = submission_notice(
+                profile,
+                "1601C",
+                &period_label,
+                &chrono::Local::now(),
+                skip_email_poll,
+            );
             crate::notification::send_notification(&notice_title, &notice_body);
             let submitted_file = filename.clone();
             draft.transition_to_submitted(filename);
@@ -1065,14 +1077,27 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
         .await
     {
         Ok(()) => {
-            info!(
-                "Cron: Successfully submitted queued {} {}",
-                F::FORM_CODE,
-                filename
-            );
+            if skip_email_poll {
+                info!(
+                    "Cron: dry run: simulated submission of queued {} {} (nothing sent to BIR)",
+                    F::FORM_CODE,
+                    filename
+                );
+            } else {
+                info!(
+                    "Cron: Successfully submitted queued {} {}",
+                    F::FORM_CODE,
+                    filename
+                );
+            }
             let period_label = queueable_period_label(&draft);
-            let (notice_title, notice_body) =
-                submission_notice(profile, F::FORM_CODE, &period_label, &chrono::Local::now());
+            let (notice_title, notice_body) = submission_notice(
+                profile,
+                F::FORM_CODE,
+                &period_label,
+                &chrono::Local::now(),
+                skip_email_poll,
+            );
             crate::notification::send_notification(&notice_title, &notice_body);
             let submitted_file = filename.clone();
             draft.lifecycle_mut().transition_to_submitted(filename);
@@ -1466,7 +1491,14 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 }
                 match session.store(&filename, &encrypted).await {
                     Ok(_) => {
-                        info!("Cron: Successfully submitted queued form {}", filename);
+                        if session_source.is_dry_run() {
+                            info!(
+                                "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
+                                filename
+                            );
+                        } else {
+                            info!("Cron: Successfully submitted queued form {}", filename);
+                        }
                         let period_label =
                             quarterly_period_label(draft.taxable_year, draft.quarter);
                         let (notice_title, notice_body) = submission_notice(
@@ -1474,6 +1506,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             "2551Q",
                             &period_label,
                             &chrono::Local::now(),
+                            session_source.is_dry_run(),
                         );
                         crate::notification::send_notification(&notice_title, &notice_body);
                         draft.transition_to_submitted(filename.clone());
@@ -1557,25 +1590,35 @@ pub fn quarterly_period_label(taxable_year: u16, quarter: u8) -> String {
 
 /// Desktop banner for a successful PUT: who, which return, when — not the
 /// IAF filename, which says none of that at a glance. Returns `(title, body)`.
+/// Appended to the submission notice title and body when the SFTP transport
+/// was the `BIR_SFTP_DRY_RUN` simulator.
+pub const DRY_RUN_NOTICE_SUFFIX: &str = " (dry run \u{2014} nothing was sent to BIR)";
+
 pub fn submission_notice<Tz: chrono::TimeZone>(
     profile: &TaxpayerProfile,
     form_code: &str,
     period_label: &str,
     sent_at: &chrono::DateTime<Tz>,
+    dry_run: bool,
 ) -> (String, String)
 where
     Tz::Offset: std::fmt::Display,
 {
-    let title = format!(
+    let mut title = format!(
         "{form_code} {period_label} submitted \u{2014} {}",
         profile.full_name
     );
-    let body = format!(
+    let mut body = format!(
         "TIN {}\nSent {}\nFiled under {}",
         profile.tin.formatted(),
         sent_at.format("%I:%M %p, %-d %b %Y"),
         profile.inbox_email()
     );
+    if dry_run {
+        title.push_str(DRY_RUN_NOTICE_SUFFIX);
+        body.push('\n');
+        body.push_str(DRY_RUN_NOTICE_SUFFIX.trim_start());
+    }
     (title, body)
 }
 
@@ -2016,13 +2059,31 @@ mod tests {
     }
 
     #[test]
+    fn submission_notice_marks_dry_run_in_title_and_body() {
+        let profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
+        assert_eq!(
+            title,
+            "1601C 09/26 submitted \u{2014} Juan Dela Cruz (dry run \u{2014} nothing was sent to BIR)"
+        );
+        assert_eq!(
+            body,
+            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com\n(dry run \u{2014} nothing was sent to BIR)"
+        );
+    }
+
+    #[test]
     fn submission_notice_names_taxpayer_tin_form_period_and_time() {
         let profile = crate::filing_queue::mandatory_lab_1601c_profile();
         let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
             .unwrap()
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
-        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at);
+        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, false);
         assert_eq!(title, "1601C 09/26 submitted \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,

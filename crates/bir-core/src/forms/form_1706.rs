@@ -394,13 +394,22 @@ fn format_nan(value: f64) -> f64 {
 impl Form1706Draft {
     pub const FORM_CODE: &'static str = "1706";
 
+    /// Dated today when `year` is the current year (the official `init()`
+    /// fills today's date), else January 1 -- same rule as 1606.
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
+        use chrono::Datelike;
+        let today = chrono::Local::now().date_naive();
+        let (month, day) = if i32::from(year) == today.year() {
+            (today.month() as u8, today.day() as u8)
+        } else {
+            (1, 1)
+        };
         let mut draft = Self {
             id: None,
             filing_year: year,
             open_ended_key,
-            transaction_month: 1,
-            transaction_day: 1,
+            transaction_month: month,
+            transaction_day: day,
             transaction_year: year,
             is_amended: false,
             number_of_attached_sheets: 0,
