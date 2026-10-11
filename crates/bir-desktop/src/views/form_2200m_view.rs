@@ -612,6 +612,7 @@ impl Form2200MView {
 
     fn label(&self, text: &str, error: bool) -> Div {
         let label = div()
+            .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(text.to_string());
@@ -689,8 +690,8 @@ impl Form2200MView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -716,15 +717,34 @@ impl Form2200MView {
         button.disabled(disabled)
     }
 
-    fn choice_row(&self, label: &str, error: bool, buttons: Vec<Button>) -> AnyElement {
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(self.label(label, error))
-            .children(buttons)
-            .into_any_element()
+    /// Phone stacks the label above a full-width wrapping chip row; other
+    /// layouts keep one wrapping row with the label taking the free space.
+    fn choice_row(
+        &self,
+        label: &str,
+        error: bool,
+        layout: Layout,
+        buttons: Vec<Button>,
+    ) -> AnyElement {
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(self.label(label, error).max_w_full())
+                .child(div().flex().flex_wrap().gap_2().w_full().children(buttons))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(self.label(label, error).flex_1().max_w_full())
+                .children(buttons)
+                .into_any_element()
+        }
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -757,6 +777,7 @@ impl Form2200MView {
             self.choice_row(
                 "Item 2 — Amended return?",
                 false,
+                layout,
                 vec![
                     Self::choice("2200m_amended_yes", "Yes", amended, !editable).on_click(
                         cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
@@ -831,6 +852,7 @@ impl Form2200MView {
         let relief_row = self.choice_row(
             "Item 12 — Availing of tax relief under a Special Law or International Tax Treaty?",
             self.has_error("tax_relief"),
+            layout,
             vec![
                 Self::choice("2200m_relief_yes", "Yes", relief == Some(true), !editable).on_click(
                     cx.listener(|this, _, _, cx| this.edit(cx, |d| d.tax_relief = Some(true))),
@@ -858,6 +880,7 @@ impl Form2200MView {
         let mut children = vec![self.choice_row(
             "Manner of payment",
             self.has_error("manner_of_payment"),
+            layout,
             vec![
                 Self::choice(
                     "2200m_mop_actual",
