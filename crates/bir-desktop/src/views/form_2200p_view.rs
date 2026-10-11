@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_2200p::{
-    FORM_2200P_FIRST_OTHER_ROW, FORM_2200P_FIXED_ROWS, FORM_2200P_OTHER_ATC_PREFIX,
-    FORM_2200P_SCHEDULE_ROWS, Form2200PDraft, Form2200PPayment, Form2200PPlace, Form2200PRow,
+    FORM_2200P_FIRST_OTHER_ROW, FORM_2200P_FIXED_ROWS, FORM_2200P_MAX_ROWS,
+    FORM_2200P_OTHER_ATC_PREFIX, FORM_2200P_SCHEDULE_ROWS, Form2200PDraft, Form2200PPayment,
+    Form2200PPlace, Form2200PRow,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -23,6 +24,7 @@ use gpui_component::select::{SearchableVec, Select, SelectEvent, SelectItem, Sel
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
@@ -107,6 +109,10 @@ fn is_text_column(column: &str) -> bool {
 
 fn row_key(row: usize, column: &str) -> String {
     format!("r{row}_{column}")
+}
+
+fn row_text_column(column: &str) -> bool {
+    is_text_column(column)
 }
 
 fn column_exists(row: usize, column: &str) -> bool {
@@ -253,6 +259,10 @@ enum GeoLevel {
 
 pub struct Form2200PView {
     draft: Form2200PDraft,
+    /// Schedule 1 rows on screen: the page's 27 plus every row added with
+    /// "Add row" (`addRowSched1` has no limit), never fewer than the draft
+    /// holds.
+    rows: usize,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
@@ -370,7 +380,7 @@ impl Form2200PView {
                 }
             }
         }
-        for row in 0..FORM_2200P_SCHEDULE_ROWS {
+        for row in 0..self.rows {
             let mut entry = draft.row(row);
             for (column, label) in ROW_COLUMNS {
                 if !column_exists(row, column) {
@@ -392,7 +402,9 @@ impl Form2200PView {
                     },
                 }
             }
-            if !entry.is_blank() || row < draft.schedule.len() {
+            // An added row stays on the page (and is checked whole) until
+            // it is removed.
+            if !entry.is_blank() || row < draft.schedule.len() || row >= FORM_2200P_SCHEDULE_ROWS {
                 if let Some(slot) = draft.row_mut(row) {
                     *slot = entry;
                 }
@@ -411,6 +423,100 @@ impl Form2200PView {
         self.parse_errors = parse_errors;
         self.draft = draft;
         cx.notify();
+    }
+
+    /// Input keys and placeholders of one Schedule 1 row.
+    fn row_inputs(row: usize) -> Vec<(String, String)> {
+        ROW_COLUMNS
+            .iter()
+            .filter(|(column, _)| column_exists(row, column))
+            .map(|(column, _)| {
+                let placeholder = if row_text_column(column) { "" } else { "blank" };
+                (row_key(row, column), placeholder.to_string())
+            })
+            .collect()
+    }
+
+    fn new_input(
+        draft: &Form2200PDraft,
+        key: &str,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<InputState>, Subscription) {
+        let value = Self::initial(draft, key);
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.sync_from_inputs(cx);
+                }
+            },
+        );
+        (input, subscription)
+    }
+
+    /// Add row / Remove (`addRowSched1` / `delRowSched1`): read the page,
+    /// change the rows, create editors for new rows, then show every row
+    /// again from the draft so nothing shifts into the wrong row.
+    fn edit_rows(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Self),
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.sync_from_inputs(cx);
+        change(self);
+        for row in 0..self.rows {
+            for (key, placeholder) in Self::row_inputs(row) {
+                if self.inputs.contains_key(&key) {
+                    continue;
+                }
+                let (input, subscription) =
+                    Self::new_input(&self.draft, &key, &placeholder, window, cx);
+                self.inputs.insert(key, input);
+                self._subscriptions.push(subscription);
+            }
+        }
+        self.draft.recompute();
+        let updates: Vec<(Entity<InputState>, String)> = self
+            .inputs
+            .iter()
+            .map(|(key, input)| (input.clone(), Self::initial(&self.draft, key)))
+            .collect();
+        for (input, value) in updates {
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
+        self.status_message = None;
+    }
+
+    fn add_row(&mut self) {
+        if self.rows < FORM_2200P_MAX_ROWS {
+            self.rows += 1;
+            if let Some(row) = self.draft.row_mut(self.rows - 1) {
+                // A fresh added row starts blank, like `rowTemplate`.
+                *row = Default::default();
+            }
+        }
+    }
+
+    /// Only added rows can be removed; the page's own rows stay.
+    fn remove_row(&mut self, row: usize) {
+        if row < FORM_2200P_SCHEDULE_ROWS || row >= self.rows {
+            return;
+        }
+        if row < self.draft.schedule.len() {
+            self.draft.schedule.remove(row);
+        }
+        self.rows -= 1;
     }
 
     fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form2200PDraft)) {
@@ -926,14 +1032,24 @@ impl Form2200PView {
                 None,
             ),
         };
+        let caption = format!("Row #{} — {atc}", row + 1);
+        let title = if row >= FORM_2200P_SCHEDULE_ROWS {
+            let remove = Button::new(("2200p_row_remove", row))
+                .disabled(!editable)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.edit_rows(window, cx, |v| v.remove_row(row))
+                }));
+            kit::row_heading(&caption, remove)
+        } else {
+            div()
+                .font_weight(FontWeight::BOLD)
+                .child(caption)
+                .into_any_element()
+        };
         let heading = div()
             .flex()
             .flex_col()
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child(format!("Row #{} — {atc}", row + 1)),
-            )
+            .child(title)
             .child(div().min_w_0().text_sm().child(description))
             .when_some(rate, |d, rate| {
                 d.child(div().min_w_0().text_sm().child(format!("Rate: {rate}")))
@@ -978,9 +1094,18 @@ impl Form2200PView {
                 )
                 .into_any_element(),
         ];
-        for row in 0..FORM_2200P_SCHEDULE_ROWS {
+        for row in 0..self.rows {
             children.push(self.render_row(row, layout, cx));
         }
+        let editable = self.draft.lifecycle.is_editable();
+        children.push(
+            kit::add_row_button(
+                "2200p_row_add",
+                !editable || self.rows >= FORM_2200P_MAX_ROWS,
+            )
+            .on_click(cx.listener(|this, _, window, cx| this.edit_rows(window, cx, Self::add_row)))
+            .into_any_element(),
+        );
         children.push(self.computed(
             "TOTAL TAX DUE (To Part III, Item 16)",
             self.draft.schedule_total,
@@ -1053,27 +1178,13 @@ impl QueueableFormView for Form2200PView {
         for (key, _) in MONEY_INPUTS {
             keys.push((key.to_string(), "0.00".into()));
         }
-        for row in 0..FORM_2200P_SCHEDULE_ROWS {
-            for (column, _) in ROW_COLUMNS {
-                if column_exists(row, column) {
-                    let placeholder = if is_text_column(column) { "" } else { "blank" };
-                    keys.push((row_key(row, column), placeholder.into()));
-                }
-            }
+        let rows = draft.row_count();
+        for row in 0..rows {
+            keys.extend(Self::row_inputs(row));
         }
         for (key, placeholder) in keys {
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
+            let (input, subscription) = Self::new_input(&draft, &key, &placeholder, window, cx);
+            subscriptions.push(subscription);
             inputs.insert(key, input);
         }
         let production = Self::new_place_selects(
@@ -1093,6 +1204,7 @@ impl QueueableFormView for Form2200PView {
         let validation_errors = draft.validate();
         Self {
             draft,
+            rows,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,

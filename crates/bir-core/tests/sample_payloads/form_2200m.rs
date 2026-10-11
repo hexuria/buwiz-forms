@@ -86,3 +86,39 @@ fn form_2200m_sample_payload_is_current() {
         "2f76621a8578a8c47dadc7b5045916e0531383662d32da15647e2e0c209af521",
     );
 }
+
+/// Six rows past the page's ten: `addRowSched1` has no row limit, and each
+/// added row's controls follow the previous row's in every column table.
+fn sample_2200m_many_rows() -> Form2200MDraft {
+    let mut draft = sample_2200m();
+    draft.day = 13;
+    for (k, index) in (13..=16u32).zip(12usize..) {
+        let row = draft.row_mut(index).unwrap();
+        row.description = format!("Added mineral {k}");
+        row.place_of_removal = format!("Site {k}");
+        row.volume_taxable = Some(f64::from(k) * 1.5);
+        row.local_rate = Some(4.0);
+        row.local_tax_due = Some(f64::from(k) * 100.0 + 0.25);
+        row.total_tax_due = Some(f64::from(k) * 100.0);
+    }
+    draft.recompute();
+    draft.tax_deposit = draft.tax_still_due + 100.0;
+    draft.recompute();
+    draft
+}
+
+#[test]
+fn form_2200m_sample_with_many_rows_is_current() {
+    let draft = sample_2200m_many_rows();
+    assert_eq!(draft.row_count(), 16);
+    let payload = draft
+        .to_bir_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 2200M must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "2200M-03132025",
+        &layout,
+        &payload,
+        "3e68f97ca2c240fd596325bfea7318f657d708c68e33adb331c30b8d720b1f74",
+    );
+}

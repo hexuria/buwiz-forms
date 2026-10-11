@@ -28,8 +28,29 @@ use crate::profile::TaxpayerProfile;
 
 /// Rule-package id of the official layout.
 pub const FORM_2200P_FORM_ID: &str = "2200p-v2020";
-/// Official Schedule 1 rows in the submit layout.
+/// Schedule 1 rows the page loads with; `addRowSched1` appends more.
 pub const FORM_2200P_SCHEDULE_ROWS: usize = 27;
+/// Upper bound on rows the editor lets the filer add (the page has none).
+pub const FORM_2200P_MAX_ROWS: usize = 200;
+/// Controls of a Schedule 1 row in page order; `rowTemplate` appends an
+/// added row's controls after the previous row's.
+const SCHEDULE_COLUMNS: [&str; 15] = [
+    "chkBoxSched1ATC",
+    "txtSched1ATC",
+    "txtSched1Description",
+    "txtSched1UnitOfMeasure",
+    "txtSched1ApplicableRate",
+    "txtSched1PlaceOfRemoval",
+    "txtSched1LocalManuProd",
+    "txtSched1Imported",
+    "txtSched1TotTaxRemovals",
+    "txtSched1TaxPaidImported",
+    "txtSched1UnderBond",
+    "txtSched1Exports",
+    "txtSched1Others",
+    "txtSched1TotTaxPaid",
+    "txtSched1BasicExciseTaxDue",
+];
 /// Rows 26 and 27 (index 25 and 26) take filer ATC, description, unit and rate.
 pub const FORM_2200P_FIRST_OTHER_ROW: usize = 25;
 
@@ -444,7 +465,7 @@ impl Form2200PDraft {
 
     /// Row `index` (0-based), growing the schedule to reach it.
     pub fn row_mut(&mut self, index: usize) -> Option<&mut Form2200PRow> {
-        if index >= FORM_2200P_SCHEDULE_ROWS {
+        if index >= FORM_2200P_MAX_ROWS {
             return None;
         }
         if self.schedule.len() <= index {
@@ -622,7 +643,7 @@ impl Form2200PDraft {
             put(key, official_amount(value));
         }
 
-        for index in 0..FORM_2200P_SCHEDULE_ROWS {
+        for index in 0..self.row_count() {
             let n = index + 1;
             let row = self.row(index);
             put(
@@ -670,11 +691,39 @@ impl Form2200PDraft {
                 String::new()
             },
         );
-        put("sched1AddedRowCount", "0".to_string());
+        // addRowSched1 counts the rows it adds.
+        put(
+            "sched1AddedRowCount",
+            (self.row_count() - FORM_2200P_SCHEDULE_ROWS).to_string(),
+        );
         put("txtLOB", self.line_of_business.clone());
         // sleeptime() sets the pager to page 1 at load.
         put("txtCurrentPage", "1".to_string());
         fields
+    }
+
+    /// Rows on the page: the 27 it loads with plus any the filer added.
+    pub fn row_count(&self) -> usize {
+        self.schedule.len().max(FORM_2200P_SCHEDULE_ROWS)
+    }
+
+    /// The generated layout with every added row's controls spliced in after
+    /// the previous row's last control, as `rowTemplate` appends them.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        let base = crate::official_xml::layout(FORM_2200P_FORM_ID).map_err(|e| e.to_string())?;
+        let key = |column: &str, n: usize| format!("frm2200P:{column}{n}");
+        let last = FORM_2200P_SCHEDULE_ROWS;
+        let insertions: Vec<RowInsertion> = ((last + 1)..=self.row_count())
+            .map(|n| RowInsertion {
+                after: key("txtSched1BasicExciseTaxDue", n - 1),
+                copies: SCHEDULE_COLUMNS
+                    .iter()
+                    .map(|column| (key(column, last), key(column, n)))
+                    .collect(),
+            })
+            .collect();
+        extend_layout(base, &insertions)
     }
 
     /// The exact official submit plaintext.
@@ -873,21 +922,19 @@ impl Form2200PDraft {
         }
 
         // checkPartVFields, row by row.
-        if self.schedule.len() > FORM_2200P_SCHEDULE_ROWS {
+        if self.schedule.len() > FORM_2200P_MAX_ROWS {
             err(
                 "schedule",
-                "Schedule 1 has 27 rows on the official submit layout.",
+                "Schedule 1 takes at most 200 rows in this editor.",
             );
         }
-        for (index, row) in self
-            .schedule
-            .iter()
-            .enumerate()
-            .take(FORM_2200P_SCHEDULE_ROWS)
-        {
+        for (index, row) in self.schedule.iter().enumerate() {
             let n = index + 1;
             let other_row = index >= FORM_2200P_FIRST_OTHER_ROW;
-            let used = !row.place_of_removal.trim().is_empty()
+            // checkPartVFields checks every added row (28 onwards) whole.
+            let added_row = index >= FORM_2200P_SCHEDULE_ROWS;
+            let used = added_row
+                || !row.place_of_removal.trim().is_empty()
                 || row.amount_cells().iter().any(Option::is_some);
             if !used && !(other_row && row.has_identity()) {
                 continue;
@@ -1057,6 +1104,19 @@ impl QueueableForm for Form2200PDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
+    }
+    /// Added rows extend the page, so the plaintext follows
+    /// [`Form2200PDraft::official_layout`].
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 }
 
@@ -1280,6 +1340,23 @@ mod tests {
         check(
             &|d| d.row_mut(2).unwrap().place_of_removal = "Bataan".into(),
             "Input at least 1 more column in row #3",
+        );
+        // An added row (28 onwards) is checked whole, even when blank.
+        check(
+            &|d| {
+                d.row_mut(27).unwrap().atc_digits.clear();
+            },
+            "ATC in row #28 is required.",
+        );
+        check(
+            &|d| {
+                let row = d.row_mut(27).unwrap();
+                row.atc_digits = "990".into();
+                row.description = "Added".into();
+                row.unit_of_measure = "Per kg".into();
+                row.applicable_rate = Some(1.0);
+            },
+            "Place of Removal in row #28 is required.",
         );
     }
 
