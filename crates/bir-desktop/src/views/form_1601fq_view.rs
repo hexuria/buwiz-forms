@@ -12,7 +12,7 @@ use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1601fq::{
     FORM_1601FQ_FIRST_ITEM, FORM_1601FQ_MAIN_ROWS, FORM_1601FQ_SCHEDULE1_ROWS,
     FORM_1601FQ_TREATIES, Form1601FqAtcOption, Form1601FqCategory, Form1601FqDraft,
-    Form1601FqTaxRelief,
+    Form1601FqScheduleRow, Form1601FqTaxRelief,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -118,8 +118,13 @@ fn atc_matches(options: &[Form1601FqAtcOption], filter: &str) -> Vec<usize> {
         .collect()
 }
 
+/// Official confirm text from the BIR page (`cancelAllCompute`), verbatim.
+const WITHHELD_NO_QUESTION: &str = "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II. ";
+
 pub struct Form1601FqView {
     draft: Form1601FqDraft,
+    /// Item 4 "No" waiting for the user's answer in the inline confirmation.
+    withheld_no_pending: bool,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
@@ -353,6 +358,65 @@ impl Form1601FqView {
             input.update(cx, |state, cx| state.set_value("", window, cx));
         }
         self.sync_from_inputs(cx);
+    }
+
+    /// Item 4 "No": apply now when no entered row would be lost, else ask first.
+    fn request_withheld_no(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let blank = Form1601FqScheduleRow::default();
+        let loses_rows = !self.draft.schedule.is_empty()
+            || (self.draft.tax_relief.is_some()
+                && self.draft.schedule1.iter().any(|row| *row != blank));
+        if loses_rows {
+            self.withheld_no_pending = true;
+            cx.notify();
+        } else {
+            self.apply_withheld_no(window, cx);
+        }
+    }
+
+    fn apply_withheld_no(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.withheld_no_pending = false;
+        self.edit(cx, |d| d.set_any_tax_withheld(false));
+        self.reload_schedule1_inputs(window, cx);
+    }
+
+    /// Inline official question with "Yes, remove" and "Cancel".
+    fn withheld_no_confirm(&self, cx: &Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .rounded_md()
+            .bg(cx.theme().muted)
+            .child(div().text_sm().child(WITHHELD_NO_QUESTION))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        Button::new("1601fq_wipe_yes")
+                            .label("Yes, remove")
+                            .danger()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.apply_withheld_no(window, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new("1601fq_wipe_cancel")
+                            .label("Cancel")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.withheld_no_pending = false;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
     }
 
     /// Reload the Schedule 1 editors from the draft.
@@ -642,9 +706,9 @@ impl Form1601FqView {
                         withheld == Some(false),
                         !editable,
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| d.set_any_tax_withheld(false))
-                    }))
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.request_withheld_no(window, cx)),
+                    )
                     .into_any_element(),
                 ],
             ),
@@ -655,7 +719,11 @@ impl Form1601FqView {
                 !editable,
             ),
         ];
-        self.section("Return period", vec![self.grid(layout, children)], cx)
+        let mut body = vec![self.grid(layout, children)];
+        if self.withheld_no_pending {
+            body.push(self.withheld_no_confirm(cx));
+        }
+        self.section("Return period", body, cx)
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -1058,6 +1126,7 @@ impl QueueableFormView for Form1601FqView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            withheld_no_pending: false,
             refresh_schedule1: false,
             _subscriptions: Vec::new(),
         };

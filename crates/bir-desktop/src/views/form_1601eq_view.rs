@@ -116,8 +116,32 @@ fn atc_matches(filter: &str) -> Vec<usize> {
         .collect()
 }
 
+/// A change that would remove entered ATC rows and waits for confirmation.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PendingWipe {
+    /// Item 4 set to "No".
+    WithheldNo,
+    /// Item 11 switched to another category.
+    Category(Form1601EqCategory),
+}
+
+impl PendingWipe {
+    /// Official confirm text from the BIR page (`changeTaxWithheldNO`,
+    /// `changeCategory`).
+    fn question(self) -> &'static str {
+        match self {
+            Self::WithheldNo => {
+                "You are about to change the value . Doing this will clear all \n computation fields Do you wish to proceed?"
+            }
+            Self::Category(_) => "By changing Category your selected ATC will be remove.",
+        }
+    }
+}
+
 pub struct Form1601EqView {
     draft: Form1601EqDraft,
+    /// Change waiting for the user's answer in the inline confirmation.
+    pending_wipe: Option<PendingWipe>,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
@@ -270,6 +294,73 @@ impl Form1601EqView {
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// Apply `wipe` now when no entered row would be lost, else ask first.
+    fn request_wipe(&mut self, wipe: PendingWipe, cx: &mut Context<Self>) {
+        let loses_rows = match wipe {
+            PendingWipe::WithheldNo => !self.draft.schedule.is_empty(),
+            PendingWipe::Category(category) => {
+                self.draft.category != Some(category) && !self.draft.schedule.is_empty()
+            }
+        };
+        if loses_rows && self.draft.lifecycle.is_editable() {
+            self.pending_wipe = Some(wipe);
+            cx.notify();
+        } else {
+            self.apply_wipe(wipe, cx);
+        }
+    }
+
+    fn apply_wipe(&mut self, wipe: PendingWipe, cx: &mut Context<Self>) {
+        self.pending_wipe = None;
+        self.edit(cx, |d| match wipe {
+            PendingWipe::WithheldNo => d.set_any_tax_withheld(false),
+            PendingWipe::Category(category) => d.set_category(category),
+        });
+    }
+
+    /// Inline "official question + Yes/Cancel" box, shown only for `matches`.
+    fn wipe_confirm(
+        &self,
+        matches: fn(PendingWipe) -> bool,
+        cx: &Context<Self>,
+    ) -> Option<AnyElement> {
+        let wipe = self.pending_wipe.filter(|wipe| matches(*wipe))?;
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_3()
+                .rounded_md()
+                .bg(cx.theme().muted)
+                .child(div().text_sm().child(wipe.question()))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            Button::new("1601eq_wipe_yes")
+                                .label("Yes, remove")
+                                .danger()
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.apply_wipe(wipe, cx)),
+                                ),
+                        )
+                        .child(
+                            Button::new("1601eq_wipe_cancel")
+                                .label("Cancel")
+                                .outline()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.pending_wipe = None;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .into_any_element(),
+        )
     }
 
     fn add_atc(&mut self, option: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -558,9 +649,11 @@ impl Form1601EqView {
                         withheld == Some(false),
                         !editable,
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| d.set_any_tax_withheld(false))
-                    }))
+                    .on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.request_wipe(PendingWipe::WithheldNo, cx)
+                        }),
+                    )
                     .into_any_element(),
                 ],
             ),
@@ -571,7 +664,9 @@ impl Form1601EqView {
                 !editable,
             ),
         ];
-        self.section("Return period", vec![self.grid(layout, children)], cx)
+        let mut body = vec![self.grid(layout, children)];
+        body.extend(self.wipe_confirm(|w| w == PendingWipe::WithheldNo, cx));
+        self.section("Return period", body, cx)
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -624,7 +719,7 @@ impl Form1601EqView {
                     !editable,
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.set_category(Form1601EqCategory::Private))
+                    this.request_wipe(PendingWipe::Category(Form1601EqCategory::Private), cx)
                 }))
                 .into_any_element(),
                 Self::choice(
@@ -634,16 +729,14 @@ impl Form1601EqView {
                     !editable,
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.edit(cx, |d| d.set_category(Form1601EqCategory::Government))
+                    this.request_wipe(PendingWipe::Category(Form1601EqCategory::Government), cx)
                 }))
                 .into_any_element(),
             ],
         );
-        self.section(
-            "Part I — Background Information",
-            vec![self.grid(layout, fields), category_row],
-            cx,
-        )
+        let mut body = vec![self.grid(layout, fields), category_row];
+        body.extend(self.wipe_confirm(|w| matches!(w, PendingWipe::Category(_)), cx));
+        self.section("Part I — Background Information", body, cx)
     }
 
     fn render_atc_row(&self, index: usize, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -888,6 +981,7 @@ impl QueueableFormView for Form1601EqView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            pending_wipe: None,
             _subscriptions: Vec::new(),
         };
         for (key, _, placeholder) in TEXT_INPUTS {

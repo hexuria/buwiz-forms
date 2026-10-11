@@ -49,10 +49,6 @@ impl Layout {
     }
 }
 
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 /// Text inputs: (key, label, placeholder, validation field).
 const TEXT_INPUTS: &[(&str, &str, &str, &str)] = &[
     ("year", "Item 1 — Year", "YYYY", "taxable_year"),
@@ -733,13 +729,7 @@ impl Form2550MView {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
+        // The period is fixed by the library tile; keep the draft's year.
         if let Some(sheets) = number("sheets", "Item 3", cx) {
             draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
                 sheets as u16
@@ -1121,38 +1111,28 @@ impl Form2550MView {
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("2550m_month", index),
-                    *name,
-                    self.draft.month == month,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.edit(window, cx, |d| d.month = month)
-                })),
-            );
-        }
+        const FULL_MONTHS: [&str; 12] = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        let month_name = FULL_MONTHS
+            .get(usize::from(self.draft.month).wrapping_sub(1))
+            .copied()
+            .unwrap_or("-");
         let amended = self.draft.is_amended;
         let children = vec![
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 1 — For the month of"),
-                )
-                .child(months)
-                .into_any_element(),
-            self.text_field("year", layout),
+            Self::info("Item 1 — For the month of", month_name.to_string()),
+            Self::info("Item 1 — Year", self.draft.taxable_year.to_string()),
             Self::choice_row(
                 "Item 2 — Amended return?",
                 layout,
