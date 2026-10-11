@@ -22,7 +22,13 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 
+use std::rc::Rc;
+
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, MultiChange, messages_for, multi_select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form1600PtView {}
@@ -152,7 +158,52 @@ pub struct Form1600PtView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// Searchable ATC picker for Part II (values are indices into
+    /// `FORM_1600PT_ATC_OPTIONS`).
+    atc_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
+}
+
+/// Every ATC the official popup knows, as `(index, "CODE (rate%)")`.
+fn atc_option_pairs() -> Vec<(String, String)> {
+    bir_core::forms::form_1600pt::FORM_1600PT_ATC_OPTIONS
+        .iter()
+        .enumerate()
+        .map(|(index, option)| {
+            (
+                index.to_string(),
+                format!("{} ({}%)", option.code, option.rate_text),
+            )
+        })
+        .collect()
+}
+
+/// The pairs offered to one withholding-agent category.
+fn atc_offered_pairs(category: Option<Form1600PtAgentCategory>) -> Vec<(String, String)> {
+    let all = atc_option_pairs();
+    match category {
+        None => Vec::new(),
+        Some(category) => form_1600pt_popup(category)
+            .map(|(index, _)| all[index].clone())
+            .collect(),
+    }
+}
+
+fn as_refs(pairs: &[(String, String)]) -> Vec<(&str, &str)> {
+    pairs
+        .iter()
+        .map(|(v, l)| (v.as_str(), l.as_str()))
+        .collect()
+}
+
+/// The ticked ATCs as option indices.
+fn selected_atc_values(draft: &Form1600PtDraft) -> Vec<String> {
+    draft
+        .atc_rows
+        .iter()
+        .filter_map(|row| form_1600pt_atc_index(&row.atc_code, &row.rate_text))
+        .map(|index| index.to_string())
+        .collect()
 }
 
 impl Form1600PtView {
@@ -364,6 +415,29 @@ impl Form1600PtView {
         }
     }
 
+    /// Apply a new ATC list from the picker by toggling each ATC that was
+    /// added or removed, through the model's own `toggle_atc`.
+    fn apply_atc_selection(
+        &mut self,
+        next: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current = selected_atc_values(&self.draft);
+        let changed: Vec<usize> = current
+            .iter()
+            .filter(|v| !next.contains(v))
+            .chain(next.iter().filter(|v| !current.contains(v)))
+            .filter_map(|v| v.parse::<usize>().ok())
+            .collect();
+        self.edit_rows(window, cx, |d| {
+            for index in changed {
+                d.toggle_atc(index)?;
+            }
+            Ok(())
+        });
+    }
+
     fn notify(
         &self,
         kind: notification::NotificationType,
@@ -466,7 +540,7 @@ impl Form1600PtView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -482,7 +556,19 @@ impl Form1600PtView {
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, self.error_for(&keys))
+    }
+
+    /// Messages recorded for any of `keys` (validation and parse errors),
+    /// joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
     }
 
     fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
@@ -538,8 +624,10 @@ impl Form1600PtView {
             .into_any_element()
     }
 
-    fn readonly(&self, label: &str, value: String) -> AnyElement {
-        div()
+    /// A read-only value with its validation message (for `error_keys`)
+    /// directly underneath.
+    fn readonly(&self, label: &str, value: String, error_keys: &[&str]) -> AnyElement {
+        let row = div()
             .flex()
             .flex_col()
             .gap_1()
@@ -550,7 +638,8 @@ impl Form1600PtView {
                     .child(label.to_string()),
             )
             .child(div().font_weight(FontWeight::BOLD).child(value))
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
     fn choice(
@@ -584,13 +673,14 @@ impl Form1600PtView {
         } else {
             title
         };
-        div()
+        let row = div()
             .flex()
             .flex_col()
             .gap_1()
             .child(title)
             .child(div().flex().flex_wrap().gap_2().children(buttons))
-            .into_any_element()
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
     }
 
     fn yes_no(
@@ -677,8 +767,8 @@ impl Form1600PtView {
             .unwrap_or("—");
         let withheld = self.draft.taxes_withheld;
         let children = vec![
-            self.readonly("Item 1 — Month", month_name.to_string()),
-            self.readonly("Item 1 — Year", self.draft.year.to_string()),
+            self.readonly("Item 1 — Month", month_name.to_string(), &["month"]),
+            self.readonly("Item 1 — Year", self.draft.year.to_string(), &["year"]),
             self.yes_no(
                 "1600pt_amended",
                 "Item 2 — Amended return?",
@@ -743,8 +833,8 @@ impl Form1600PtView {
         })
         .collect();
         let children = vec![
-            self.readonly("Item 5 — TIN", format_tin(&d.tin)),
-            self.readonly("Item 6 — RDO Code", d.rdo_code.clone()),
+            self.readonly("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
+            self.readonly("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
             self.text_field("name", layout, !editable),
             self.text_field("address", layout, !editable),
             self.text_field("zip", layout, !editable),
@@ -772,33 +862,33 @@ impl Form1600PtView {
         )
     }
 
-    fn render_part_two(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    fn render_part_two(&self, layout: Layout, cx: &mut Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let mut children = Vec::new();
-        if let Some(category) = d.agent_category.filter(|_| d.taxes_withheld) {
-            let picks = form_1600pt_popup(category)
-                .map(|(index, option)| {
-                    let ticked = d
-                        .atc_rows
-                        .iter()
-                        .any(|r| r.atc_code == option.code && r.rate_text == option.rate_text);
-                    Self::choice(
-                        ("1600pt_atc", index),
-                        format!("{} ({}%)", option.code, option.rate_text),
-                        ticked,
-                        !editable,
-                    )
-                    .small()
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.edit_rows(window, cx, |d| d.toggle_atc(index))
-                    }))
-                })
+        if d.agent_category.is_some() && d.taxes_withheld {
+            // The model allows five ATCs today; a sixth needs the separate
+            // other-taxes table (model change, out of scope here).
+            let all = atc_option_pairs();
+            let selected = selected_atc_values(d);
+            let row_keys: Vec<String> = (0..d.atc_rows.len().max(FORM_1600PT_ATC_ROWS))
+                .map(|i| format!("atc_rows[{i}].atc_code"))
                 .collect();
-            children.push(self.choice_row(
-                "ATCs (tap to add or remove, at most five)",
-                &["atc_rows"],
-                picks,
+            let mut keys: Vec<&str> = vec!["atc_rows"];
+            keys.extend(row_keys.iter().map(String::as_str));
+            let error = self.error_for(&keys);
+            let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
+            children.push(multi_select_field(
+                "1600pt_atc",
+                "ATCs (search, at most five)",
+                &self.atc_select,
+                &as_refs(&all),
+                &selected,
+                FORM_1600PT_ATC_ROWS,
+                !editable,
+                error.as_deref(),
+                on_change,
+                cx,
             ));
         } else {
             children.push(
@@ -931,6 +1021,19 @@ impl QueueableFormView for Form1600PtView {
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();
+        let atc_pairs = atc_option_pairs();
+        let atc_refs = as_refs(&atc_pairs);
+        let atc_select = form_controls::new_select_state(&atc_refs, window, cx);
+        let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
+        subscriptions.push(form_controls::on_multi_select(
+            &atc_select,
+            &atc_refs,
+            FORM_1600PT_ATC_ROWS,
+            window,
+            cx,
+            |this: &Self| selected_atc_values(&this.draft),
+            on_change,
+        ));
         Self {
             draft,
             db,
@@ -940,6 +1043,7 @@ impl QueueableFormView for Form1600PtView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            atc_select,
             _subscriptions: subscriptions,
         }
     }
@@ -1158,6 +1262,15 @@ impl Render for Form1600PtView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
         let phone = layout == Layout::Phone;
+        let offered = atc_offered_pairs(self.draft.agent_category);
+        form_controls::sync_multi_select(
+            &self.atc_select,
+            &as_refs(&offered),
+            &selected_atc_values(&self.draft),
+            window,
+            cx,
+        );
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1165,7 +1278,7 @@ impl Render for Form1600PtView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let mut issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -1178,6 +1291,15 @@ impl Render for Form1600PtView {
                     .into_any_element()
             })
             .collect();
+        if error_count > issues.len() {
+            issues.push(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().danger)
+                    .child(format!("and {} more", error_count - issues.len()))
+                    .into_any_element(),
+            );
+        }
 
         let toolbar = div()
             .flex()
@@ -1234,6 +1356,11 @@ impl Render for Form1600PtView {
                                     this.revert_to_draft(window, cx)
                                 })),
                         )
+                    })
+                    .when(is_draft && error_count > 0, |row| {
+                        row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                            "Fix {error_count} item(s) under Needs review to queue."
+                        )))
                     })
                     .child(
                         Button::new("1600pt_submit")

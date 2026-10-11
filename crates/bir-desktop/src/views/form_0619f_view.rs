@@ -24,6 +24,7 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form0619FView {}
@@ -284,7 +285,7 @@ impl Form0619FView {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -300,7 +301,54 @@ impl Form0619FView {
                 .child(label.w(relative(0.5)))
                 .child(body.w(relative(0.5))),
         }
-        .into_any_element()
+        .into_any_element();
+        with_field_error(row, self.error_for(Self::error_keys(key)))
+    }
+
+    /// Model error keys that belong to an editor input key.
+    fn error_keys(key: &str) -> &'static [&'static str] {
+        match key {
+            "due_day" => &["due_day"],
+            "name" => &["taxpayer_name"],
+            "lob" => &["line_of_business"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "phone" => &["contact_number"],
+            "email" => &["email"],
+            "i13" => &["item_13_interest_final_tax_withheld"],
+            "i14" => &["item_14_other_final_tax_withheld"],
+            "i16" => &["item_16_remitted_previously"],
+            "i18a" => &["item_18a_surcharge"],
+            "i18b" => &["item_18b_interest"],
+            "i18c" => &["item_18c_compromise"],
+            _ => &[],
+        }
+    }
+
+    /// Messages for `keys` from the parse and validation errors, as one line.
+    /// Parse errors are recorded under the input key, validation under the
+    /// model key, so both are searched.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        let parse_keys: Vec<&str> = [
+            ("due_day", "due_day"),
+            ("name", "taxpayer_name"),
+            ("i13", "item_13_interest_final_tax_withheld"),
+            ("i14", "item_14_other_final_tax_withheld"),
+            ("i16", "item_16_remitted_previously"),
+            ("i18a", "item_18a_surcharge"),
+            ("i18b", "item_18b_interest"),
+            ("i18c", "item_18c_compromise"),
+        ]
+        .iter()
+        .filter(|(_, model)| keys.contains(model))
+        .map(|(input, _)| *input)
+        .collect();
+        let parse = messages_for(&self.parse_errors, &parse_keys);
+        let validation = messages_for(&self.validation_errors, keys);
+        match (parse, validation) {
+            (Some(p), Some(v)) => Some(format!("{p} {v}")),
+            (p, v) => p.or(v),
+        }
     }
 
     /// Two columns on desktop, one otherwise.
@@ -396,10 +444,13 @@ impl Form0619FView {
         let amended = d.is_amended;
         let withheld = d.any_taxes_withheld;
         let children = vec![
-            self.fixed(
-                "Item 1 — For the month",
-                format!("{month_name} {}", d.taxable_year),
-                cx,
+            with_field_error(
+                self.fixed(
+                    "Item 1 — For the month",
+                    format!("{month_name} {}", d.taxable_year),
+                    cx,
+                ),
+                self.error_for(&["month", "taxable_year"]),
             ),
             self.fixed(
                 "Item 2 — Due month / year",
@@ -441,7 +492,10 @@ impl Form0619FView {
                     .map(|(index, tax_type)| {
                         Self::choice(
                             ("0619f_tax_type", index),
-                            tax_type.code(),
+                            match tax_type {
+                                Form0619FTaxType::WB => format!("{} — Item 13", tax_type.code()),
+                                Form0619FTaxType::WF => format!("{} — Item 14", tax_type.code()),
+                            },
                             d.tax_type == tax_type,
                             !editable || !withheld,
                         )
@@ -460,8 +514,14 @@ impl Form0619FView {
         let d = &self.draft;
         let government = d.withholding_agent_category == WithholdingAgentCategory::Government;
         let fields = vec![
-            self.fixed("Item 6 — TIN", format_tin(&d.tin), cx),
-            self.fixed("Item 7 — RDO Code", d.rdo_code.clone(), cx),
+            with_field_error(
+                self.fixed("Item 6 — TIN", format_tin(&d.tin), cx),
+                self.error_for(&["tin"]),
+            ),
+            with_field_error(
+                self.fixed("Item 7 — RDO Code", d.rdo_code.clone(), cx),
+                self.error_for(&["rdo_code"]),
+            ),
             self.field("name", layout, false),
             self.field("lob", layout, false),
             self.field("address", layout, false),
@@ -501,7 +561,10 @@ impl Form0619FView {
         let children = vec![
             self.field("i13", layout, !d.any_taxes_withheld || !wb),
             self.field("i14", layout, !d.any_taxes_withheld || wb),
-            self.computed("15 — Total", d.item_15_total, cx),
+            with_field_error(
+                self.computed("15 — Total", d.item_15_total, cx),
+                self.error_for(&["item_15_total"]),
+            ),
             self.field("i16", layout, !d.is_amended),
             self.computed(
                 "17 — Net amount of remittance",
@@ -512,10 +575,13 @@ impl Form0619FView {
             self.field("i18b", layout, false),
             self.field("i18c", layout, false),
             self.computed("18D — Total penalties", d.item_18d_total_penalties, cx),
-            self.computed(
-                "19 — Total amount of remittance",
-                d.item_19_total_amount_of_remittance,
-                cx,
+            with_field_error(
+                self.computed(
+                    "19 — Total amount of remittance",
+                    d.item_19_total_amount_of_remittance,
+                    cx,
+                ),
+                self.error_for(&["item_19_total_amount_of_remittance"]),
             ),
             self.fixed(
                 "ATC",
@@ -814,6 +880,7 @@ impl Render for Form0619FView {
             })
             .collect();
 
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let toolbar =
             div()
                 .flex()
@@ -860,6 +927,11 @@ impl Render for Form0619FView {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {error_count} item(s) under Needs review to queue."
+                            )))
                         })
                         .child(
                             Button::new("0619f_submit")
