@@ -148,6 +148,9 @@ impl Form2552View {
     /// Editor text for one input from the draft.
     fn initial(draft: &Form2552Draft, key: &str) -> String {
         match key {
+            // A blank month/day (0) shows an empty box, as the official page opens.
+            "month" if draft.transaction_month == 0 => String::new(),
+            "day" if draft.transaction_day == 0 => String::new(),
             "month" => format!("{:02}", draft.transaction_month),
             "day" => format!("{:02}", draft.transaction_day),
             "year" => draft.transaction_year.to_string(),
@@ -1146,16 +1149,10 @@ impl QueueableFormView for Form2552View {
         }
     }
 
-    /// Today's date in the current year; 31 December for a past year.
+    /// The tile's year with a blank month and day: the official page opens
+    /// Item 1 as `00` / empty and alerts until the taxpayer enters the date.
     fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2552Draft {
-        use chrono::Datelike;
-        let today = chrono::Local::now().date_naive();
-        let (month, day) = if i32::from(year) == today.year() {
-            (today.month() as u8, today.day() as u8)
-        } else {
-            (12, 31)
-        };
-        Form2552Draft::new_from_profile(profile, year, month, day)
+        Form2552Draft::new_from_profile(profile, year, 0, 0)
     }
 
     /// 2552 is keyed by its Item 1 date, not the dashboard's event counter.
@@ -1167,8 +1164,10 @@ impl QueueableFormView for Form2552View {
         period: u8,
     ) -> Form2552Draft {
         let tin = profile.tin.full();
-        (1..=12i64)
-            .flat_map(|month| (1..=31i64).map(move |day| month * 100 + day))
+        // Month/day 0 is a blank component, so a return saved before its
+        // date was entered (key `MMDD` with 00s) is reopened too.
+        (0..=12i64)
+            .flat_map(|month| (0..=31i64).map(move |day| month * 100 + day))
             .filter_map(|key| {
                 db.get_queueable_draft::<Form2552Draft>(&tin, year, key)
                     .ok()
