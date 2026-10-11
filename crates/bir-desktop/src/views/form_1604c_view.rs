@@ -59,7 +59,8 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("zip", "Item 7A — ZIP code", ""),
     ("phone", "Item 9 — Contact number", ""),
     ("email", "Item 10 — Email address (BIR confirmation)", ""),
-    ("refund_date", "Item 11A — Date of refund", "MM/DD/YYYY"),
+    ("refund_day", "Item 11A — Day of refund", "DD"),
+    ("refund_year", "Item 11A — Year of refund", "YYYY"),
     (
         "overremittance",
         "Item 12 — Total amount of overremittance",
@@ -92,6 +93,47 @@ const MONTH_OPTIONS: &[(&str, &str)] = &[
     ("11", "November"),
     ("12", "December"),
 ];
+
+/// Item 11A month (`txtRefMonth`): (stored MM, label).
+const REFUND_MONTH_OPTIONS: &[(&str, &str)] = &[
+    ("01", "01"),
+    ("02", "02"),
+    ("03", "03"),
+    ("04", "04"),
+    ("05", "05"),
+    ("06", "06"),
+    ("07", "07"),
+    ("08", "08"),
+    ("09", "09"),
+    ("10", "10"),
+    ("11", "11"),
+    ("12", "12"),
+];
+
+/// Item 11A `MM/DD/YYYY` split into month, day and year (blank parts empty).
+fn refund_parts(date: &str) -> (String, String, String) {
+    let mut parts = date.trim().splitn(3, '/');
+    let mut next = || parts.next().unwrap_or("").trim().to_string();
+    let month = next();
+    let day = next();
+    let year = next();
+    let month = if REFUND_MONTH_OPTIONS.iter().any(|(v, _)| *v == month) {
+        month
+    } else {
+        String::new()
+    };
+    (month, day, year)
+}
+
+/// Join Item 11A's parts the way the official page does
+/// (`mm + "/" + dd + "/" + yyyy`, an unpicked month being "00").
+fn refund_join(month: &str, day: &str, year: &str) -> String {
+    if month.is_empty() && day.is_empty() && year.is_empty() {
+        return String::new();
+    }
+    let month = if month.is_empty() { "00" } else { month };
+    format!("{month}/{day}/{year}")
+}
 
 fn row_key(month: usize, field: &str) -> String {
     format!("m{month}_{field}")
@@ -128,6 +170,7 @@ pub struct Form1604cView {
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
     month_select: Entity<ComboboxState>,
+    refund_month_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -153,7 +196,8 @@ impl Form1604cView {
             "zip" => draft.zip_code.clone(),
             "phone" => draft.contact_number.clone(),
             "email" => draft.email.clone(),
-            "refund_date" => draft.refund_date.clone(),
+            "refund_day" => refund_parts(&draft.refund_date).1,
+            "refund_year" => refund_parts(&draft.refund_date).2,
             "overremittance" => money(draft.overremittance),
             _ => {
                 for (m, row) in draft.months.iter().enumerate() {
@@ -236,7 +280,12 @@ impl Form1604cView {
         draft.contact_number = self.input_text("phone", cx).trim().to_string();
         draft.email = self.input_text("email", cx).trim().to_string();
         if draft.refunds_released {
-            draft.refund_date = self.input_text("refund_date", cx).trim().to_string();
+            let (month, _, _) = refund_parts(&self.draft.refund_date);
+            draft.refund_date = refund_join(
+                &month,
+                self.input_text("refund_day", cx).trim(),
+                self.input_text("refund_year", cx).trim(),
+            );
         }
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
@@ -265,7 +314,7 @@ impl Form1604cView {
         }
         self.draft.refunds_released = on;
         if !on {
-            for key in ["refund_date", "overremittance"] {
+            for key in ["refund_day", "refund_year", "overremittance"] {
                 if let Some(input) = self.inputs.get(key) {
                     input.update(cx, |state, cx| state.set_value("", window, cx));
                 }
@@ -638,16 +687,10 @@ impl Form1604cView {
             children.push(self.grid(
                 layout,
                 vec![
-                    self.field(
-                        "refund_date",
-                        TEXT_INPUTS[7].1,
-                        "refund_date",
-                        layout,
-                        !editable,
-                    ),
+                    self.render_refund_date(layout, cx),
                     self.field(
                         "overremittance",
-                        TEXT_INPUTS[8].1,
+                        TEXT_INPUTS[9].1,
                         "overremittance",
                         layout,
                         !editable,
@@ -665,6 +708,67 @@ impl Form1604cView {
             ));
         }
         self.section("Part I — Background Information", children, cx)
+    }
+
+    /// Item 11A as the official month select plus day and year boxes
+    /// (`txtRefMonth`, `txtRefDate`, `txtRefYear`).
+    fn render_refund_date(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let (month, _, _) = refund_parts(&self.draft.refund_date);
+        let month = (!month.is_empty()).then_some(month.as_str());
+        let input = |key: &str| {
+            let state = self
+                .inputs
+                .get(key)
+                .expect("editor input registry is complete");
+            div()
+                .flex_1()
+                .child(Input::new(state).disabled(!editable))
+                .into_any_element()
+        };
+        let parts = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .w_full()
+            .child(div().flex_1().child(select_field(
+                "Month",
+                &self.refund_month_select,
+                REFUND_MONTH_OPTIONS,
+                month,
+                !editable,
+                None,
+                cx,
+            )))
+            .child(input("refund_day"))
+            .child(input("refund_year"));
+        let mut label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child("Item 11A — Date of refund (MM/DD/YYYY)");
+        if self.has_error("refund_date") {
+            label = label.text_color(gpui::red());
+        }
+        let row = match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(parts),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.45)))
+                .child(parts.w(relative(0.55))),
+        };
+        self.with_errors(
+            row.into_any_element(),
+            &["refund_date", "refund_day", "refund_year"],
+        )
     }
 
     fn render_row(&self, m: usize, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -797,6 +901,22 @@ impl QueueableFormView for Form1604cView {
                 }
             },
         ));
+        let refund_month_select = form_controls::new_select_state(REFUND_MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &refund_month_select,
+            REFUND_MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                let day = this.input_text("refund_day", cx).trim().to_string();
+                let year = this.input_text("refund_year", cx).trim().to_string();
+                this.edit(cx, |d| {
+                    if d.refunds_released {
+                        d.refund_date = refund_join(&value, &day, &year);
+                    }
+                });
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -804,6 +924,7 @@ impl QueueableFormView for Form1604cView {
             scroll_handle: ScrollHandle::new(),
             inputs,
             month_select,
+            refund_month_select,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1048,11 +1169,19 @@ impl Render for Form1604cView {
         let shown_month = self.draft.first_crediting_month.to_string();
         let shown_month = (self.draft.first_crediting_month != 0).then_some(shown_month.as_str());
         form_controls::sync_select(&self.month_select, MONTH_OPTIONS, shown_month, window, cx);
+        let (refund_month, _, _) = refund_parts(&self.draft.refund_date);
+        let refund_month = (!refund_month.is_empty()).then_some(refund_month.as_str());
+        form_controls::sync_select(
+            &self.refund_month_select,
+            REFUND_MONTH_OPTIONS,
+            refund_month,
+            window,
+            cx,
+        );
         let issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1172,13 +1301,14 @@ impl Render for Form1604cView {
                                 })),
                         ),
                 )
-            })
-            .child(self.render_period(layout, cx))
-            .child(self.render_part_one(layout, cx));
-        body = body.child(self.render_part_two(layout, cx));
+            });
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
+        body = body
+            .child(self.render_period(layout, cx))
+            .child(self.render_part_one(layout, cx));
+        body = body.child(self.render_part_two(layout, cx));
 
         div()
             .flex()

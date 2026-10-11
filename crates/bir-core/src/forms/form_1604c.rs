@@ -224,6 +224,23 @@ fn date_problem(value: &str, today: chrono::NaiveDate) -> Option<&'static str> {
     }
 }
 
+/// Item 7 over the sheet's two comb lines (40 + 31 slots). Up to 71
+/// characters fill the boxes; a longer address (the input allows 150) is
+/// split in the same 40:31 proportion and each `derived:line:` value prints
+/// whole across its comb, so no character is dropped from the print.
+fn print_address_lines(address: &str) -> (String, String) {
+    let chars: Vec<char> = address.trim().chars().collect();
+    let first = if chars.len() <= 71 {
+        40.min(chars.len())
+    } else {
+        (chars.len() * 40).div_ceil(71)
+    };
+    (
+        chars[..first].iter().collect(),
+        chars[first..].iter().collect(),
+    )
+}
+
 impl Form1604cDraft {
     pub const FORM_CODE: &'static str = "1604C";
 
@@ -392,19 +409,13 @@ impl Form1604cDraft {
 
     /// The field map plus print-only values the frozen 2018 sheet needs
     /// (`derived:` keys, never submitted): Item 7 over its two comb lines
-    /// (40 + 31 slots), and Items 11A-13, which print blank unless Item 11
+    /// (40 + 31 slots; a longer address prints whole, shrunk across both), and Items 11A-13, which print blank unless Item 11
     /// is "Yes" (the submitted controls hold `00` / `0.00` then).
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
-        let address: Vec<char> = self.registered_address.trim().chars().collect();
-        fields.insert(
-            "derived:address1".to_string(),
-            address.iter().take(40).collect(),
-        );
-        fields.insert(
-            "derived:address2".to_string(),
-            address.iter().skip(40).take(31).collect(),
-        );
+        let (line1, line2) = print_address_lines(&self.registered_address);
+        fields.insert("derived:line:address1".to_string(), line1);
+        fields.insert("derived:line:address2".to_string(), line2);
         let (month, day, year) = self.refund_parts();
         let released = self.refunds_released;
         let blank_unless = |value: String| if released { value } else { String::new() };
@@ -726,6 +737,17 @@ mod tests {
             penalties: penalty,
             total_remitted: 0.0,
         }
+    }
+
+    #[test]
+    fn long_address_prints_every_character() {
+        let short: String = "A".repeat(60);
+        let (l1, l2) = print_address_lines(&short);
+        assert_eq!((l1.len(), l2.len()), (40, 20));
+        let long: String = ('a'..='z').cycle().take(150).collect();
+        let (l1, l2) = print_address_lines(&long);
+        assert_eq!(format!("{l1}{l2}"), long);
+        assert_eq!(l1.len(), 85);
     }
 
     pub(crate) fn sample() -> Form1604cDraft {

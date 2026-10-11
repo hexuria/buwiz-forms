@@ -52,13 +52,13 @@
    "reason": "geometry: the fillable cell under/next to this printed caption on the frozen sheet's text layer"
   },
   {
-   "writer_key": "derived:address1",
+   "writer_key": "derived:line:address1",
    "html_id": "p1c24",
    "printed": "7 Registered Address (first line)",
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
   },
   {
-   "writer_key": "derived:address2",
+   "writer_key": "derived:line:address2",
    "html_id": "p1c25",
    "printed": "7 Registered Address (second line)",
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"

@@ -249,15 +249,35 @@ impl Form1603QView {
         cx.notify();
     }
 
-    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1603QDraft)) {
+    fn edit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1603QDraft),
+    ) {
         if !self.draft.lifecycle.is_editable() {
             return;
         }
         change(&mut self.draft);
         self.draft.recompute();
+        self.write_back_amounts(window, cx);
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// Put each recomputed amount back into its editor when the editor no
+    /// longer holds it (an Item 3 toggle zeroed a now-disabled box).
+    fn write_back_amounts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for (key, _) in MONEY_INPUTS {
+            let value = Self::initial(&self.draft, key);
+            let current = self.input_text(key, cx);
+            if parse_amount(&current) != parse_amount(&value) {
+                if let Some(input) = self.inputs.get(*key) {
+                    input.update(cx, |state, cx| state.set_value(value, window, cx));
+                }
+            }
+        }
     }
 
     /// Item 4: like `changeTaxWitheld`, a new answer clears every amount, so
@@ -545,14 +565,14 @@ impl Form1603QView {
                 "Item 3 — Amended return?",
                 vec![
                     Self::choice("1603q_amended_yes", "Yes", amended, !editable)
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
-                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = true)
+                        }))
                         .into_any_element(),
                     Self::choice("1603q_amended_no", "No", !amended, !editable)
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
-                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.edit(window, cx, |d| d.is_amended = false)
+                        }))
                         .into_any_element(),
                 ],
             ),
@@ -652,8 +672,10 @@ impl Form1603QView {
                         category == Some(Form1603QCategory::Private),
                         !editable,
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| d.category = Some(Form1603QCategory::Private))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| {
+                            d.category = Some(Form1603QCategory::Private)
+                        })
                     }))
                     .into_any_element(),
                     Self::choice(
@@ -662,8 +684,10 @@ impl Form1603QView {
                         category == Some(Form1603QCategory::Government),
                         !editable,
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| d.category = Some(Form1603QCategory::Government))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.edit(window, cx, |d| {
+                            d.category = Some(Form1603QCategory::Government)
+                        })
                     }))
                     .into_any_element(),
                 ],
@@ -673,9 +697,9 @@ impl Form1603QView {
         let relief = self.draft.tax_relief;
         let pick = |id: &'static str, label: &'static str, value: Option<Form1603QTaxRelief>| {
             Self::choice(id, label, relief == value, !editable)
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.tax_relief = value)),
-                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.edit(window, cx, |d| d.tax_relief = value)
+                }))
                 .into_any_element()
         };
         let mut relief_rows = vec![Self::labelled_row(
@@ -1077,7 +1101,6 @@ impl Render for Form1603QView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -1197,14 +1220,15 @@ impl Render for Form1603QView {
                                 })),
                         ),
                 )
-            })
+            });
+        if !issues.is_empty() {
+            body = body.child(self.section("Needs review", issues, cx));
+        }
+        body = body
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_totals(layout, cx));
         body = body.child(self.render_schedule(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
