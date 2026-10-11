@@ -519,12 +519,8 @@ impl Form1702RTView {
                 }
             };
             match key.as_str() {
-                "year" => match text.trim().parse::<u16>() {
-                    Ok(year) => draft.taxable_year = year,
-                    Err(_) => {
-                        parse_errors.push((key.clone(), "Item 2: enter a four-digit year.".into()))
-                    }
-                },
+                // Year is locked to the library tile; keep the draft's value.
+                "year" => {}
                 "rate" => match text.trim().parse::<u8>() {
                     Ok(rate) => draft.part_iv.item_40_income_tax_rate_percent = rate,
                     Err(_) if text.trim().is_empty() => {
@@ -746,6 +742,39 @@ impl Form1702RTView {
         button.disabled(disabled).min_w_0().max_w_full()
     }
 
+    /// Label then bold value; stacks on phone.
+    fn read_only_row(layout: Layout, label: &str, value: &str) -> AnyElement {
+        let label = div()
+            .min_w_0()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div()
+            .text_sm()
+            .font_weight(FontWeight::BOLD)
+            .child(value.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value)
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(label)
+                .child(value)
+                .into_any_element()
+        }
+    }
+
     fn choice_row(title: &str, buttons: Vec<Button>, layout: Layout) -> AnyElement {
         let text = div()
             .min_w_0()
@@ -869,7 +898,11 @@ impl Form1702RTView {
                 )
                 .child(months)
                 .into_any_element(),
-            self.input("year", layout, false),
+            Self::read_only_row(
+                layout,
+                "Item 2 — Year ended (YYYY)",
+                &d.taxable_year.to_string(),
+            ),
             Self::choice_row(
                 "Item 3 — Amended return?",
                 vec![
