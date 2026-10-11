@@ -16,9 +16,10 @@ use bir_core::form_rules::{
     prepare_form_2550q_live_row_identities,
 };
 use bir_core::forms::form_2550q::{
-    FORM_CODE, FORM_VERSION_LABEL, Form2550QAdvanceVatRow, Form2550QCapitalGoodRow,
-    Form2550QCreditableVatRow, Form2550QDate, Form2550QDraft, Form2550QFilingBasis,
-    Form2550QQuarter, Form2550QRowFamily, Form2550QTaxpayerClassification,
+    FORM_CODE, FORM_VERSION_LABEL, Form2550QAdditionalItemRow, Form2550QAdvanceVatRow,
+    Form2550QCapitalGoodRow, Form2550QCreditableVatRow, Form2550QDate, Form2550QDraft,
+    Form2550QFilingBasis, Form2550QQuarter, Form2550QRowFamily, Form2550QTaxpayerClassification,
+    specify_add_row_alert,
 };
 use bir_core::forms::{FilingPeriod, FilingStatus, FormValidator};
 use gpui::prelude::FluentBuilder;
@@ -256,6 +257,135 @@ impl AdvanceVatInputs {
     }
 }
 
+/// One row of an item 19, 42, 47 or 56 "(Add more...)" popup.
+#[derive(Clone)]
+struct SpecifyRowInputs {
+    family: Form2550QRowFamily,
+    instance_id: StableInstanceId,
+    description: Entity<InputState>,
+    amount: Entity<InputState>,
+}
+
+impl SpecifyRowInputs {
+    fn bound_inputs(&self) -> Vec<(Entity<InputState>, RawControlBinding)> {
+        let (description, amount) = specify_members(self.family);
+        vec![
+            self.bound(&self.description, description),
+            self.bound(&self.amount, amount),
+        ]
+    }
+
+    fn bound(
+        &self,
+        input: &Entity<InputState>,
+        member_key: &'static str,
+    ) -> (Entity<InputState>, RawControlBinding) {
+        (
+            input.clone(),
+            RawControlBinding::Repeated {
+                family: self.family,
+                instance_id: self.instance_id.clone(),
+                member_key,
+            },
+        )
+    }
+}
+
+/// The four popup families, their official item number and the static
+/// line's controls (description, amount, and for item 47 the computed 47B).
+const SPECIFY_ITEMS: [(Form2550QRowFamily, u8, &str, &str); 4] = [
+    (
+        Form2550QRowFamily::Item19Additional,
+        19,
+        ITEM_19_DESCRIPTION,
+        ITEM_19,
+    ),
+    (
+        Form2550QRowFamily::Item42Additional,
+        42,
+        ITEM_42_DESCRIPTION,
+        ITEM_42B,
+    ),
+    (
+        Form2550QRowFamily::Item47Additional,
+        47,
+        ITEM_47_DESCRIPTION,
+        ITEM_47A,
+    ),
+    (
+        Form2550QRowFamily::Item56Additional,
+        56,
+        ITEM_56_DESCRIPTION,
+        ITEM_56B,
+    ),
+];
+
+/// The popup row controls `frm2550qv2024:totalTaxPayableNo<item>Description`
+/// and `...Amount` (the row index follows on the official page).
+fn specify_members(family: Form2550QRowFamily) -> (&'static str, &'static str) {
+    match family {
+        Form2550QRowFamily::Item42Additional => (
+            "frm2550qv2024:totalTaxPayableNo42Description",
+            "frm2550qv2024:totalTaxPayableNo42Amount",
+        ),
+        Form2550QRowFamily::Item47Additional => (
+            "frm2550qv2024:totalTaxPayableNo47Description",
+            "frm2550qv2024:totalTaxPayableNo47Amount",
+        ),
+        Form2550QRowFamily::Item56Additional => (
+            "frm2550qv2024:totalTaxPayableNo56Description",
+            "frm2550qv2024:totalTaxPayableNo56Amount",
+        ),
+        _ => (
+            "frm2550qv2024:totalTaxPayableNo19Description",
+            "frm2550qv2024:totalTaxPayableNo19Amount",
+        ),
+    }
+}
+
+fn specify_rows(
+    draft: &Form2550QDraft,
+    family: Form2550QRowFamily,
+) -> &[Form2550QAdditionalItemRow] {
+    match family {
+        Form2550QRowFamily::Item19Additional => &draft.item_19_additional_rows,
+        Form2550QRowFamily::Item42Additional => &draft.item_42_additional_rows,
+        Form2550QRowFamily::Item47Additional => &draft.item_47_additional_rows,
+        Form2550QRowFamily::Item56Additional => &draft.item_56_additional_rows,
+        _ => &[],
+    }
+}
+
+fn specify_rows_mut(
+    draft: &mut Form2550QDraft,
+    family: Form2550QRowFamily,
+) -> Option<&mut Vec<Form2550QAdditionalItemRow>> {
+    match family {
+        Form2550QRowFamily::Item19Additional => Some(&mut draft.item_19_additional_rows),
+        Form2550QRowFamily::Item42Additional => Some(&mut draft.item_42_additional_rows),
+        Form2550QRowFamily::Item47Additional => Some(&mut draft.item_47_additional_rows),
+        Form2550QRowFamily::Item56Additional => Some(&mut draft.item_56_additional_rows),
+        _ => None,
+    }
+}
+
+fn specify_row_inputs(
+    family: Form2550QRowFamily,
+    row: &Form2550QAdditionalItemRow,
+    window: &mut Window,
+    cx: &mut Context<Form2550QV2View>,
+) -> SpecifyRowInputs {
+    SpecifyRowInputs {
+        family,
+        instance_id: row
+            .instance_id
+            .clone()
+            .expect("validated popup row must retain its stable ID"),
+        description: text_input(cx, &row.description, "Description", window),
+        amount: money_input(cx, row.amount, window),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum RawControlBinding {
     Singleton {
@@ -323,6 +453,7 @@ pub struct Form2550QV2View {
     schedule_1_inputs: Vec<CapitalGoodInputs>,
     schedule_3_inputs: Vec<CreditableVatInputs>,
     schedule_4_inputs: Vec<AdvanceVatInputs>,
+    specify_inputs: Vec<SpecifyRowInputs>,
     validation_setup: Form2550QRepoDiagnosticSetupOutcome,
     validation_state: Form2550QDiagnosticState,
     validation_input_revision: InputRevision,
@@ -621,6 +752,20 @@ impl Form2550QV2View {
             } else {
                 (Vec::new(), Vec::new(), Vec::new())
             };
+        let specify_inputs: Vec<SpecifyRowInputs> = if editor_state_error.is_none() {
+            SPECIFY_ITEMS
+                .iter()
+                .flat_map(|(family, ..)| {
+                    specify_rows(&draft, *family)
+                        .iter()
+                        .map(|row| (*family, row.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .map(|(family, row)| specify_row_inputs(family, &row, window, cx))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         if editor_state_error.is_none() {
             restore_singleton_raw_values(&fields, &draft.raw_editor_state, window, cx);
@@ -644,6 +789,14 @@ impl Form2550QV2View {
                 window,
                 cx,
             );
+            restore_bound_raw_values(
+                specify_inputs
+                    .iter()
+                    .flat_map(SpecifyRowInputs::bound_inputs),
+                &draft.raw_editor_state,
+                window,
+                cx,
+            );
         }
 
         let mut subscribed_inputs = if editor_state_error.is_none() {
@@ -660,6 +813,9 @@ impl Form2550QV2View {
             subscribed_inputs.extend(row.bound_inputs());
         }
         for row in &schedule_4_inputs {
+            subscribed_inputs.extend(row.bound_inputs());
+        }
+        for row in &specify_inputs {
             subscribed_inputs.extend(row.bound_inputs());
         }
 
@@ -715,6 +871,7 @@ impl Form2550QV2View {
             schedule_1_inputs,
             schedule_3_inputs,
             schedule_4_inputs,
+            specify_inputs,
             validation_setup,
             validation_state,
             validation_input_revision: InputRevision::default(),
@@ -726,8 +883,250 @@ impl Form2550QV2View {
         if view.editor_state_error.is_none() {
             view.sync_from_inputs(None, cx);
             view.refresh_schedule_1_derived(window, cx);
+            view.refresh_specify_static_lines(window, cx);
         }
         view
+    }
+
+    /// `closeModalNo19/42/47/56`: an item with popup rows shows `VARIOUS` (or
+    /// the one row's description) and the rows' total on its static line,
+    /// which is then read-only; item 47B follows as 12% of 47A. Any captured
+    /// raw text of those controls follows too, so it stays coherent.
+    fn refresh_specify_static_lines(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let p2 = &self.draft.part_ii;
+        let p4 = &self.draft.part_iv;
+        let derived = [
+            (
+                Form2550QRowFamily::Item19Additional,
+                vec![
+                    (ITEM_19_DESCRIPTION, p2.item_19_description.clone()),
+                    (ITEM_19, money_text(p2.item_19_other_credit_or_payment)),
+                ],
+            ),
+            (
+                Form2550QRowFamily::Item42Additional,
+                vec![
+                    (ITEM_42_DESCRIPTION, p4.item_42_description.clone()),
+                    (ITEM_42B, money_text(p4.item_42b_other_input_tax)),
+                ],
+            ),
+            (
+                Form2550QRowFamily::Item47Additional,
+                vec![
+                    (ITEM_47_DESCRIPTION, p4.item_47_description.clone()),
+                    (ITEM_47A, money_text(p4.item_47a_other_purchases)),
+                    (ITEM_47B, money_text(p4.item_47b_other_input_tax)),
+                ],
+            ),
+            (
+                Form2550QRowFamily::Item56Additional,
+                vec![
+                    (ITEM_56_DESCRIPTION, p4.item_56_description.clone()),
+                    (ITEM_56B, money_text(p4.item_56b_other_deduction)),
+                ],
+            ),
+        ];
+        for (family, lines) in derived {
+            if specify_rows(&self.draft, family).is_empty() {
+                continue;
+            }
+            for (ui_key, text) in lines {
+                let input = field(&self.fields, ui_key).clone();
+                if input_text(&input, cx) != text {
+                    set_input_value(&input, &text, window, cx);
+                }
+                let raw_key = singleton_raw_key(ui_key);
+                if matches!(
+                    self.draft.raw_editor_state.singleton_value(raw_key),
+                    Some(RawValue::Text(_))
+                ) {
+                    self.draft
+                        .raw_editor_state
+                        .set_singleton(raw_key, RawValue::Text(text));
+                }
+            }
+        }
+        self.validation_errors = self.input_errors.clone();
+        self.validation_errors.extend(self.draft.validate());
+    }
+
+    /// The official `addColNo19/42/47/56` ("Add Row" in the popup): refused
+    /// with "Empty fields are not allowed" while a row is incomplete. The
+    /// first click turns the static line into row 1 and adds row 2.
+    fn add_specify_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        if let Some(alert) = specify_add_row_alert(specify_rows(&self.draft, family)) {
+            self.status_message = Some(alert.to_string());
+            cx.notify();
+            return;
+        }
+        let Some((_, _, description_key, amount_key)) = SPECIFY_ITEMS
+            .iter()
+            .copied()
+            .find(|(candidate, ..)| *candidate == family)
+        else {
+            return;
+        };
+        let seed =
+            specify_rows(&self.draft, family)
+                .is_empty()
+                .then(|| Form2550QAdditionalItemRow {
+                    instance_id: None,
+                    description: input_text(field(&self.fields, description_key), cx),
+                    amount: parse_optional_money(field(&self.fields, amount_key), amount_key, cx)
+                        .ok()
+                        .flatten(),
+                });
+        let Some(rows) = specify_rows_mut(&mut self.draft, family) else {
+            return;
+        };
+        let before = rows.len();
+        rows.extend(seed);
+        rows.push(Form2550QAdditionalItemRow::default());
+        if let Err(error) = prepare_form_2550q_live_row_identities(&mut self.draft) {
+            if let Some(rows) = specify_rows_mut(&mut self.draft, family) {
+                rows.truncate(before);
+            }
+            self.status_message = Some(format!(
+                "The new row could not get a stable identity: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+        let added: Vec<Form2550QAdditionalItemRow> =
+            specify_rows(&self.draft, family)[before..].to_vec();
+        for row in &added {
+            let inputs = specify_row_inputs(family, row, window, cx);
+            for (input, binding) in inputs.bound_inputs() {
+                let subscription = subscribe_bound_input(&input, binding, window, cx);
+                self._subscriptions.push(subscription);
+            }
+            self.specify_inputs.push(inputs);
+        }
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+        self.refresh_specify_static_lines(window, cx);
+    }
+
+    /// The official `deleteRowNo19/42/47/56`. Removing the last row leaves
+    /// the static line empty, as `closeModalNo19/42/47/56` does.
+    fn remove_specify_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        instance_id: StableInstanceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        self.specify_inputs
+            .retain(|inputs| inputs.instance_id != instance_id);
+        let Some(rows) = specify_rows_mut(&mut self.draft, family) else {
+            return;
+        };
+        rows.retain(|row| row.instance_id.as_ref() != Some(&instance_id));
+        let now_empty = rows.is_empty();
+        self.draft
+            .raw_editor_state
+            .remove_repeated_row(family, &instance_id);
+        if now_empty
+            && let Some((_, _, description_key, amount_key)) = SPECIFY_ITEMS
+                .iter()
+                .copied()
+                .find(|(candidate, ..)| *candidate == family)
+        {
+            set_input_value(field(&self.fields, description_key), "", window, cx);
+            set_input_value(field(&self.fields, amount_key), "0.00", window, cx);
+        }
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+        self.refresh_specify_static_lines(window, cx);
+    }
+
+    /// One item's static line, then its popup rows and "Add Row".
+    fn render_specify_item(
+        &self,
+        family: Form2550QRowFamily,
+        lines: &[(&str, &'static str)],
+        cx: &Context<Self>,
+    ) -> Div {
+        let item = SPECIFY_ITEMS
+            .iter()
+            .find(|(candidate, ..)| *candidate == family)
+            .map_or(0, |(_, item, ..)| *item);
+        let has_rows = !specify_rows(&self.draft, family).is_empty();
+        let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let mut block = div().flex().flex_col().gap_1();
+        for (label, key) in lines {
+            let row =
+                pair_row(layout)
+                    .child(half(layout).text_sm().child((*label).to_string()))
+                    .child(half(layout).child(
+                        Input::new(field(&self.fields, key)).disabled(!editable || has_rows),
+                    ))
+                    .into_any_element();
+            block = block.child(with_field_error(row, self.input_error(key)));
+        }
+        let field_name = match family {
+            Form2550QRowFamily::Item19Additional => "item_19_additional_rows",
+            Form2550QRowFamily::Item42Additional => "item_42_additional_rows",
+            Form2550QRowFamily::Item47Additional => "item_47_additional_rows",
+            _ => "item_56_additional_rows",
+        };
+        let rows: Vec<&SpecifyRowInputs> = self
+            .specify_inputs
+            .iter()
+            .filter(|inputs| inputs.family == family)
+            .collect();
+        for (index, inputs) in rows.into_iter().enumerate() {
+            let instance_id = inputs.instance_id.clone();
+            let card = row_card(cx, &format!("{item}.{}", index + 1))
+                .child(input_pair(
+                    layout,
+                    "Description",
+                    &inputs.description,
+                    editable,
+                ))
+                .child(input_pair(layout, "Amount", &inputs.amount, editable))
+                .child(
+                    gpui_component::button::Button::new((
+                        SharedString::from(format!("2550q_specify_{item}_remove")),
+                        index,
+                    ))
+                    .label("Remove")
+                    .outline()
+                    .disabled(!editable)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.remove_specify_row(family, instance_id.clone(), window, cx);
+                    })),
+                );
+            block = block.child(with_field_error(
+                card.into_any_element(),
+                self.row_error(&format!("{field_name}[{index}]")),
+            ));
+        }
+        block.child(
+            gpui_component::button::Button::new(SharedString::from(format!(
+                "2550q_specify_{item}_add"
+            )))
+            .label(format!("Add item {item} row"))
+            .outline()
+            .disabled(!editable)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.add_specify_row(family, window, cx);
+            })),
+        )
     }
 
     /// Show Schedule 1's computed allowable input tax and balance (disabled
@@ -949,6 +1348,9 @@ impl Form2550QV2View {
             inputs.extend(row.bound_inputs());
         }
         for row in &self.schedule_4_inputs {
+            inputs.extend(row.bound_inputs());
+        }
+        for row in &self.specify_inputs {
             inputs.extend(row.bound_inputs());
         }
         inputs
@@ -1341,6 +1743,37 @@ impl Form2550QV2View {
             } else {
                 self.input_errors.push((
                     format!("schedule-4/{}", inputs.instance_id),
+                    "Persisted row identity disappeared while the editor was open".to_string(),
+                ));
+            }
+        }
+
+        for inputs in &self.specify_inputs {
+            let (_, amount_member) = specify_members(inputs.family);
+            let path = Form2550QRawFieldKey::try_repeated(
+                inputs.family,
+                inputs.instance_id.clone(),
+                amount_member,
+            )
+            .map_or_else(
+                |_| format!("{}/{amount_member}", inputs.instance_id),
+                |key| key.stable_path(),
+            );
+            if let Some(row) = specify_rows_mut(&mut self.draft, inputs.family).and_then(|rows| {
+                rows.iter_mut()
+                    .find(|row| row.instance_id.as_ref() == Some(&inputs.instance_id))
+            }) {
+                row.description = input_text(&inputs.description, cx);
+                assign_money(
+                    &mut row.amount,
+                    &inputs.amount,
+                    &path,
+                    cx,
+                    &mut self.input_errors,
+                );
+            } else {
+                self.input_errors.push((
+                    format!("{:?}/{}", inputs.family, inputs.instance_id),
                     "Persisted row identity disappeared while the editor was open".to_string(),
                 ));
             }
@@ -2431,9 +2864,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_computed_row("39B Deferred input tax from Schedule 1", self.draft.part_iv.item_39b_input_tax_deferred, cx))
                     .child(self.render_input_row("40B Transitional input tax", ITEM_40B))
                     .child(self.render_input_row("41B Presumptive input tax", ITEM_41B))
-                    .child(self.render_input_row("42 Specify other input tax", ITEM_42_DESCRIPTION))
-                    .child(self.render_input_row("42B Other input tax", ITEM_42B))
-                    .child(specify_limit_note(cx))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item42Additional, &[("42 Specify other input tax", ITEM_42_DESCRIPTION), ("42B Other input tax", ITEM_42B)], cx))
                     .child(self.render_computed_row("43B Total prior-period input tax", self.draft.part_iv.item_43b_total_prior_input_tax, cx)),
             )
             .child(
@@ -2444,10 +2875,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("45B Non-resident service input tax", ITEM_45B))
                     .child(self.render_input_row("46A Importations", ITEM_46A))
                     .child(self.render_input_row("46B Import input tax", ITEM_46B))
-                    .child(self.render_input_row("47 Specify other purchases", ITEM_47_DESCRIPTION))
-                    .child(self.render_input_row("47A Other purchases", ITEM_47A))
-                    .child(self.render_input_row("47B Other input tax", ITEM_47B))
-                    .child(specify_limit_note(cx))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item47Additional, &[("47 Specify other purchases", ITEM_47_DESCRIPTION), ("47A Other purchases", ITEM_47A), ("47B Other input tax", ITEM_47B)], cx))
                     .child(self.render_input_row("48A Domestic purchases without input tax", ITEM_48A))
                     .child(self.render_input_row("49A VAT-exempt importations", ITEM_49A))
                     .child(self.render_computed_row("50A Total current purchases", self.draft.part_iv.item_50a_total_current_purchases, cx))
@@ -2457,9 +2885,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_computed_row("53B Input tax attributable to exempt sales", self.draft.part_iv.item_53b_input_tax_attributable_to_exempt_sales, cx))
                     .child(self.render_input_row("54B VAT refund/TCC claimed", ITEM_54B))
                     .child(self.render_input_row("55B Input VAT on unpaid payables", ITEM_55B))
-                    .child(self.render_input_row("56 Specify other deduction", ITEM_56_DESCRIPTION))
-                    .child(self.render_input_row("56B Other deduction", ITEM_56B))
-                    .child(specify_limit_note(cx))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item56Additional, &[("56 Specify other deduction", ITEM_56_DESCRIPTION), ("56B Other deduction", ITEM_56B)], cx))
                     .child(self.render_computed_row("57B Total deductions", self.draft.part_iv.item_57b_total_deductions, cx))
                     .child(self.render_input_row("58B Input VAT on settled payables", ITEM_58B))
                     .child(self.render_computed_row("59B Adjusted deductions", self.draft.part_iv.item_59b_adjusted_deductions, cx))
@@ -2484,9 +2910,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_computed_row("16 Creditable VAT withheld (Schedule 3)", self.draft.part_ii.item_16_creditable_vat_withheld, cx))
                     .child(self.render_computed_row("17 Advance VAT payments (Schedule 4)", self.draft.part_ii.item_17_advance_vat_payments, cx))
                     .child(self.render_input_row("18 Paid on previous return (amended only)", ITEM_18))
-                    .child(self.render_input_row("19 Specify other credit/payment", ITEM_19_DESCRIPTION))
-                    .child(self.render_input_row("19 Other credit/payment", ITEM_19))
-                    .child(specify_limit_note(cx))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item19Additional, &[("19 Specify other credit/payment", ITEM_19_DESCRIPTION), ("19 Other credit/payment", ITEM_19)], cx))
                     .child(self.render_computed_row("20 Total credits/payments", self.draft.part_ii.item_20_total_credits_or_payments, cx))
                     .child(self.render_computed_row("21 Tax payable/(excess credits)", self.draft.part_ii.item_21_tax_payable_or_excess_credits, cx))
                     .child(self.render_input_row("22 Surcharge (manual)", ITEM_22))
@@ -2589,6 +3013,7 @@ fn subscribe_bound_input(
                 this.raw_control_changed();
                 this.sync_from_inputs(Some(std::slice::from_ref(&binding)), cx);
                 this.refresh_schedule_1_derived(window, cx);
+                this.refresh_specify_static_lines(window, cx);
             }
         },
     )
@@ -2985,6 +3410,34 @@ fn restore_repeated_raw_values(
     }
 }
 
+fn restore_bound_raw_values(
+    bindings: impl Iterator<Item = (Entity<InputState>, RawControlBinding)>,
+    raw_state: &bir_core::forms::form_2550q::Form2550QRawEditorState,
+    window: &mut Window,
+    cx: &mut Context<Form2550QV2View>,
+) {
+    for (input, binding) in bindings {
+        let RawControlBinding::Repeated {
+            family,
+            instance_id,
+            member_key,
+        } = binding
+        else {
+            continue;
+        };
+        if let Some(value) =
+            raw_text_override(raw_state.repeated_value(family, &instance_id, member_key))
+        {
+            set_input_value(&input, value, window, cx);
+        }
+    }
+}
+
+/// An amount as the editor's money inputs show it (`1234.50`).
+fn money_text(value: Option<f64>) -> String {
+    value.map(|value| format!("{value:.2}")).unwrap_or_default()
+}
+
 /// The validator's field names that belong to one input, so its message can be
 /// shown directly under it. Parse errors use the input's raw key instead.
 fn model_error_keys(ui_key: &str) -> &'static [&'static str] {
@@ -3231,6 +3684,10 @@ fn repeated_member_is_parsed(member_key: &str) -> bool {
         "txtNameOfMiller4",
         "txtNameOfTaxpayer4",
         "txtOfficialReceiptNumber4",
+        "frm2550qv2024:totalTaxPayableNo19Description",
+        "frm2550qv2024:totalTaxPayableNo42Description",
+        "frm2550qv2024:totalTaxPayableNo47Description",
+        "frm2550qv2024:totalTaxPayableNo56Description",
     ]
     .contains(&member_key)
 }
@@ -3573,16 +4030,6 @@ fn format_optional_money(value: Option<f64>) -> String {
         || "—".to_string(),
         |amount| format!("₱ {}", bir_core::official_xml::official_amount(amount)),
     )
-}
-
-/// Items 19, 42, 47 and 56 hold one specify line here; the official page's
-/// add-row popups (`addTblSpecifyNo19/42/47/56`) are not ported yet.
-fn specify_limit_note(cx: &Context<Form2550QV2View>) -> AnyElement {
-    div()
-        .text_xs()
-        .text_color(cx.theme().muted_foreground)
-        .child("One specify line here. More lines need the official form's add-row popup.")
-        .into_any_element()
 }
 
 /// Toolbar label for the generic queue action.

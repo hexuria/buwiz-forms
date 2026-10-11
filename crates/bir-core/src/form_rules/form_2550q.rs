@@ -160,25 +160,25 @@ const GROUP_BINDINGS: [Form2550QGroupBinding; 7] = [
         Form2550QRowFamily::Item19Additional,
         "item-19-additional-row",
         &ITEM_19_ADDITIONAL_MEMBERS,
-        false,
+        true,
     ),
     group(
         Form2550QRowFamily::Item42Additional,
         "item-42-additional-row",
         &ITEM_42_ADDITIONAL_MEMBERS,
-        false,
+        true,
     ),
     group(
         Form2550QRowFamily::Item47Additional,
         "item-47-additional-row",
         &ITEM_47_ADDITIONAL_MEMBERS,
-        false,
+        true,
     ),
     group(
         Form2550QRowFamily::Item56Additional,
         "item-56-additional-row",
         &ITEM_56_ADDITIONAL_MEMBERS,
-        false,
+        true,
     ),
 ];
 
@@ -1793,11 +1793,9 @@ mod live_validation_tests {
         );
     }
 
-    /// Four of the seven repeated families have no editor controls, and that
-    /// is still reported — it is true and worth knowing. It no longer prevents
-    /// evaluation, because every family is `min_occurs: 0` and no rule in the
-    /// reviewed set is group-scoped, so contributing zero rows is a complete
-    /// capture rather than a missing one.
+    /// Every repeated family has editor controls now: Schedules 1, 3 and 4
+    /// and the item 19/42/47/56 "(Add more...)" popup rows. A controlless
+    /// family would still be reported as a non-blocking capture gap.
     ///
     /// This test pins the set. If a family gains or loses controls, or the
     /// blocking classification changes, the seam's behaviour changed and the
@@ -1810,15 +1808,9 @@ mod live_validation_tests {
             .map(|binding| binding.group_id)
             .collect();
 
-        assert_eq!(
-            without_controls,
-            [
-                "item-19-additional-row",
-                "item-42-additional-row",
-                "item-47-additional-row",
-                "item-56-additional-row",
-            ],
-            "the set of families lacking editor controls changed; the seam blocker moved"
+        assert!(
+            without_controls.is_empty(),
+            "the set of families lacking editor controls changed; the seam blocker moved: {without_controls:?}"
         );
 
         let source =
