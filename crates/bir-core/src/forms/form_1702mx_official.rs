@@ -7,18 +7,18 @@
 //! `saveXMLsubmit` through [`crate::official_xml`] (numbertext amounts with
 //! the official numbertext normalization).
 //!
-//! Every amount is a whole peso, as on the official page. Only the four base
-//! pages are supported: the mandatory attachments (Instruction B, one copy
-//! per exempt or special-rate activity) and the "add more" modal rows are
-//! cloned into the official form at run time, so a return that needs them
-//! does not validate here.
+//! Every amount is a whole peso, as on the official page. The four base
+//! pages and Schedule 6 Item 4's "(Add more...)" rows are supported; the
+//! mandatory attachments (Instruction B, one copy per exempt or special-rate
+//! activity) and the other "add more" modals are cloned into the official
+//! form at run time, so a return that needs them does not validate here.
 
 use std::collections::BTreeMap;
 
 use super::form_1702mx::{
     Form1702MXDeductionMethod, Form1702MXDraft, Form1702MXFilingBasis, Form1702MXNolcoTable,
-    Form1702MXOverpaymentDisposition, Form1702MXRegimeAmounts, PercentInput, WholePeso,
-    WholePesoInput,
+    Form1702MXOverpaymentDisposition, Form1702MXRegimeAmounts, Form1702MXSchedule6, PercentInput,
+    WholePeso, WholePesoInput,
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
@@ -103,6 +103,49 @@ fn column_sums(rows: &[Form1702MXRegimeAmounts], into: &mut Form1702MXRegimeAmou
     for column in 0..4 {
         let total = rows.iter().map(|row| v(column_ref(row, column))).sum();
         set(column_mut(into, column), total);
+    }
+}
+
+impl Form1702MXSchedule6 {
+    /// `summationmodalTablePg3Sc6`: the modal's column subtotals
+    /// (`txtPg6Sc6_SubTotalCA` to `CD`).
+    pub fn modal_subtotal(&self) -> Form1702MXRegimeAmounts {
+        let rows: Vec<Form1702MXRegimeAmounts> = self
+            .more_rows
+            .iter()
+            .map(|row| row.amounts.clone())
+            .collect();
+        let mut subtotal = Form1702MXRegimeAmounts::default();
+        column_sums(&rows, &mut subtotal);
+        subtotal
+    }
+
+    /// The modal's controls in DOM order, keyed by element id: rows 4.1,
+    /// 4.2, ... (`txtPg6Sc6_<n>Col1` to `Col6`), written while Item 4 is
+    /// folded.
+    pub fn modal_controls(&self) -> Vec<(String, String)> {
+        if !self.is_folded() {
+            return Vec::new();
+        }
+        let mut controls = Vec::new();
+        for (index, row) in self.more_rows.iter().enumerate() {
+            let n = index + 1;
+            controls.push((
+                format!("frm1702MX:txtPg6Sc6_{n}Col1"),
+                row.description.trim().to_string(),
+            ));
+            controls.push((
+                format!("frm1702MX:txtPg6Sc6_{n}Col2"),
+                row.legal_basis.trim().to_string(),
+            ));
+            for column in 0..4 {
+                controls.push((
+                    format!("frm1702MX:txtPg6Sc6_{n}Col{}", column + 3),
+                    v(column_ref(&row.amounts, column)).to_string(),
+                ));
+            }
+        }
+        controls
     }
 }
 
@@ -223,7 +266,12 @@ impl Form1702MXDraft {
             for row in self.schedule_5.amounts.iter_mut().take(25) {
                 set(&mut row.regular, 0);
             }
-            for row in &mut self.schedule_6.rows {
+            for row in self
+                .schedule_6
+                .rows
+                .iter_mut()
+                .chain(self.schedule_6.more_rows.iter_mut())
+            {
                 set(&mut row.amounts.regular, 0);
             }
             for row in self.schedule_7_1.rows.iter_mut().take(3) {
@@ -253,6 +301,18 @@ impl Form1702MXDraft {
         }
         let (body, total) = self.schedule_5.amounts.split_at_mut(25);
         column_sums(body, &mut total[0]);
+        // Item 4 "(Add more...)": each modal row's column D, then Item 4
+        // reads OTHERS and the modal subtotals.
+        for row in &mut self.schedule_6.more_rows {
+            row_total(&mut row.amounts);
+        }
+        if self.schedule_6.is_folded() {
+            let modal = self.schedule_6.modal_subtotal();
+            let item_4 = &mut self.schedule_6.rows[3];
+            item_4.description = "OTHERS".to_string();
+            item_4.legal_basis = "OTHERS".to_string();
+            item_4.amounts = modal;
+        }
         for row in &mut self.schedule_6.rows {
             row_total(&mut row.amounts);
         }
@@ -835,6 +895,33 @@ impl Form1702MXDraft {
             }
         }
 
+        // Item 4 "(Add more...)" (`SaveChecking_ModalTable2`, init 0).
+        let modal = &self.schedule_6.more_rows;
+        if modal.len() == 1 {
+            err(
+                "schedule_6.more_rows",
+                "The Schedule 6 Item 4 (Add more...) list needs two or more rows; enter a single row on Item 4.".to_string(),
+            );
+        }
+        if modal.iter().any(|row| {
+            row.description.trim().is_empty()
+                || row.legal_basis.trim().is_empty()
+                || v(&row.amounts.total) == 0
+        }) {
+            err(
+                "schedule_6.more_rows",
+                "Please fill up Description and Legal Basis and Amount for A or B or C before you can save".to_string(),
+            );
+        }
+        if modal.iter().any(|row| {
+            row.description.trim().chars().count() > 8 || row.legal_basis.trim().chars().count() > 8
+        }) {
+            err(
+                "schedule_6.more_rows",
+                "Schedule 6 Item 4 (Add more...) Description and Legal Basis hold at most 8 characters each.".to_string(),
+            );
+        }
+
         if self.deduction_method == Form1702MXDeductionMethod::Unresolved {
             err(
                 "deduction_method",
@@ -1022,6 +1109,7 @@ impl Form1702MXDraft {
                 .schedule_6
                 .rows
                 .iter()
+                .chain(self.schedule_6.more_rows.iter())
                 .any(|row| abc_negative(&row.amounts))
             || [1usize, 2, 4, 5, 6, 7]
                 .iter()
@@ -1321,6 +1409,23 @@ impl Form1702MXDraft {
                 amount(v(column_ref(&self.schedule_6.item_5_total, column))),
             );
         }
+        // Item 4 "(Add more...)": the saved rows, their count and subtotals.
+        if self.schedule_6.is_folded() {
+            let subtotal = self.schedule_6.modal_subtotal();
+            put!(
+                "txtCtrmodalPg6Sc6",
+                self.schedule_6.more_rows.len().to_string()
+            );
+            for (column, letter) in cols.iter().enumerate() {
+                put!(
+                    &format!("txtPg6Sc6_SubTotalC{letter}"),
+                    amount(v(column_ref(&subtotal, column))),
+                );
+            }
+            for (key, value) in self.schedule_6.modal_controls() {
+                fields.insert(key, value);
+            }
+        }
         // Schedules 7 and 8 (NOLCO).
         let rn = &self.regular_nolco;
         put!("txtPg6Sc7I1", amount(v(&rn.item_1_gross_income)));
@@ -1450,6 +1555,48 @@ impl Form1702MXDraft {
     pub fn to_official_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
     }
+
+    /// The generated layout with Schedule 6 Item 4's modal rows spliced in
+    /// ahead of the subtotal box `txtPg6Sc6_SubTotalCA`, where the page's
+    /// `modalTablePg3Sc6` puts them.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use crate::official_xml::Entry;
+        let base = crate::official_xml::layout(FORM_1702MX_LAYOUT_ID).map_err(|e| e.to_string())?;
+        let controls = self.schedule_6.modal_controls();
+        if controls.is_empty() {
+            return Ok(base.clone());
+        }
+        let key_of = |entry: &Entry| match entry {
+            Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+        };
+        let subtotal = "frm1702MX:txtPg6Sc6_SubTotalCA";
+        let at = base
+            .entries
+            .iter()
+            .position(|entry| key_of(entry) == subtotal)
+            .filter(|&at| at > 0)
+            .ok_or_else(|| format!("no entry ahead of {subtotal}"))?;
+        let copies = controls
+            .into_iter()
+            .map(|(id, _)| {
+                // Description and legal basis are text (uppercased), the
+                // rest numbertext.
+                let template = if id.ends_with("Col1") || id.ends_with("Col2") {
+                    "frm1702MX:txtPg3Sc6I4description"
+                } else {
+                    subtotal
+                };
+                (template.to_string(), id)
+            })
+            .collect();
+        crate::forms::official_inputs::extend_layout(
+            base,
+            &[crate::forms::official_inputs::RowInsertion {
+                after: key_of(&base.entries[at - 1]),
+                copies,
+            }],
+        )
+    }
 }
 
 impl QueueableForm for Form1702MXDraft {
@@ -1497,6 +1644,17 @@ impl QueueableForm for Form1702MXDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
+    }
+    /// The upload with Schedule 6 Item 4's modal rows in their DOM place.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as QueueableForm>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let xml_error = |error: String| vec![("xml".to_string(), error)];
+        let layout = self.official_layout().map_err(xml_error)?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| xml_error(error.to_string()))
     }
 }
 
@@ -1736,6 +1894,23 @@ mod tests {
         check(
             &|d| d.rdo_code = "000".into(),
             "Please select an RDO Code (Part I Item 7).",
+        );
+        // Schedule 6 Item 4 "(Add more...)": a blank added row is refused
+        // on Save, like `SaveChecking_ModalTable2`.
+        check(
+            &|d| {
+                let row = crate::forms::form_1702mx::Form1702MXSpecialDeductionRow {
+                    description: "Seminar".into(),
+                    legal_basis: "Rr 2-98".into(),
+                    amounts: Form1702MXRegimeAmounts {
+                        exempt: peso(1_000),
+                        ..Default::default()
+                    },
+                };
+                d.schedule_6.more_rows = vec![row, Default::default()];
+                d.recompute();
+            },
+            "Please fill up Description and Legal Basis and Amount for A or B or C before you can save",
         );
         check(
             &|d| d.taxpayer_name.clear(),

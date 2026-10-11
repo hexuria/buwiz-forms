@@ -1515,6 +1515,7 @@ impl Form1702RTDraft {
             schedule_3: parse_schedule_3(fields, &mut errors),
             schedule_4: parse_schedule_4(fields, &mut errors),
             schedule_5: parse_schedule_5(fields, &mut errors),
+            more_rows: Default::default(),
             president_signature: field(fields, "frm1702RT:txtSignaturePresident").to_string(),
             treasurer_signature: field(fields, "frm1702RT:txtSignatureTreasurer").to_string(),
             president_signatory_title: field(fields, "frm1702RT:txtPg1Pt2Signatory1").to_string(),

@@ -12,7 +12,7 @@ use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Databa
 use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::form_1701a::{
     Form1701AAtc, Form1701ACivilStatus, Form1701AColumn, Form1701ADraft, Form1701AFilerType,
-    Form1701AFilingStatus, Form1701AOverpayment,
+    Form1701AFilingStatus, Form1701AMoreRow, Form1701AOverpayment,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
@@ -24,6 +24,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
@@ -619,6 +620,82 @@ fn all_money() -> impl Iterator<Item = &'static Money> {
         .chain(PART_II)
 }
 
+/// The "(add more...)" modal columns: description, taxpayer, spouse.
+const MORE_COLUMNS: [&str; 3] = ["desc", "tp", "sp"];
+
+/// Editor key of one modal cell (`part_b`: Item 51's modal, else Item 42's).
+fn more_key(part_b: bool, index: usize, column: &str) -> String {
+    format!("more_{}:{index}:{column}", if part_b { "b" } else { "a" })
+}
+
+fn parse_more_key(key: &str) -> Option<(bool, usize, &str)> {
+    let rest = key.strip_prefix("more_")?;
+    let (part, rest) = rest.split_once(':')?;
+    let (index, column) = rest.split_once(':')?;
+    let part_b = match part {
+        "a" => false,
+        "b" => true,
+        _ => return None,
+    };
+    Some((part_b, index.parse().ok()?, column))
+}
+
+fn more_rows(draft: &Form1701ADraft, part_b: bool) -> &Vec<Form1701AMoreRow> {
+    if part_b {
+        &draft.eight_other_income_more
+    } else {
+        &draft.other_income_more
+    }
+}
+
+fn more_rows_mut(draft: &mut Form1701ADraft, part_b: bool) -> &mut Vec<Form1701AMoreRow> {
+    if part_b {
+        &mut draft.eight_other_income_more
+    } else {
+        &mut draft.other_income_more
+    }
+}
+
+/// Item 42 / 51 (amount or description) while its modal holds the rows:
+/// the page shows OTHERS and the modal subtotal there, read-only.
+fn folded_item(draft: &Form1701ADraft, id: &str) -> bool {
+    match id {
+        "other_income_42" | "desc42" => draft.other_income_is_folded(),
+        "eight_other_income_51" | "desc51" => draft.eight_other_income_is_folded(),
+        _ => false,
+    }
+}
+
+/// `transferToModal`: Item 42/51's entry becomes row 1 of the modal.
+fn item_as_row(draft: &Form1701ADraft, part_b: bool) -> Form1701AMoreRow {
+    if part_b {
+        Form1701AMoreRow {
+            description: draft.eight_other_income_51_description.clone(),
+            taxpayer: draft.taxpayer.eight_other_income_51,
+            spouse: draft.spouse_column.eight_other_income_51,
+        }
+    } else {
+        Form1701AMoreRow {
+            description: draft.other_income_42_description.clone(),
+            taxpayer: draft.taxpayer.other_income_42,
+            spouse: draft.spouse_column.other_income_42,
+        }
+    }
+}
+
+/// The last modal row goes back to Item 42/51 once the others are removed.
+fn row_into_item(draft: &mut Form1701ADraft, part_b: bool, row: Form1701AMoreRow) {
+    if part_b {
+        draft.eight_other_income_51_description = row.description;
+        draft.taxpayer.eight_other_income_51 = row.taxpayer;
+        draft.spouse_column.eight_other_income_51 = row.spouse;
+    } else {
+        draft.other_income_42_description = row.description;
+        draft.taxpayer.other_income_42 = row.taxpayer;
+        draft.spouse_column.other_income_42 = row.spouse;
+    }
+}
+
 pub struct Form1701AView {
     draft: Form1701ADraft,
     db: Arc<Mutex<Database>>,
@@ -642,6 +719,16 @@ impl Form1701AView {
 
     /// Editor text for one input from the draft.
     fn initial(draft: &Form1701ADraft, key: &str) -> String {
+        if let Some((part_b, index, column)) = parse_more_key(key) {
+            let Some(row) = more_rows(draft, part_b).get(index) else {
+                return String::new();
+            };
+            return match column {
+                "desc" => row.description.clone(),
+                "tp" => Self::money_text(row.taxpayer),
+                _ => Self::money_text(row.spouse),
+            };
+        }
         for who in [Who::Taxpayer, Who::Spouse] {
             let Some(id) = key.strip_prefix(&format!("{}:", who.prefix())) else {
                 continue;
@@ -669,6 +756,43 @@ impl Form1701AView {
             }
         }
         keys
+    }
+
+    /// Editor keys of every "(add more...)" row the draft holds.
+    fn more_keys(draft: &Form1701ADraft) -> Vec<(String, String)> {
+        let mut keys = Vec::new();
+        for part_b in [false, true] {
+            for index in 0..more_rows(draft, part_b).len() {
+                for column in MORE_COLUMNS {
+                    let placeholder = if column == "desc" { "" } else { "0.00" };
+                    keys.push((more_key(part_b, index, column), placeholder.to_string()));
+                }
+            }
+        }
+        keys
+    }
+
+    fn new_input(
+        draft: &Form1701ADraft,
+        key: &str,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<InputState>, Subscription) {
+        let value = Self::initial(draft, key);
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.sync_from_inputs(cx);
+                }
+            },
+        );
+        (input, subscription)
     }
 
     fn input_text(&self, key: &str, cx: &App) -> String {
@@ -706,6 +830,31 @@ impl Form1701AView {
                 }
             }
         }
+        for part_b in [false, true] {
+            for index in 0..more_rows(&draft, part_b).len() {
+                let description = self.input_text(&more_key(part_b, index, "desc"), cx);
+                let mut amounts = [0.0; 2];
+                for (slot, column) in amounts.iter_mut().zip(["tp", "sp"]) {
+                    let key = more_key(part_b, index, column);
+                    let text = self.input_text(&key, cx);
+                    match parse_amount(&text) {
+                        Some(value) => *slot = value,
+                        None => parse_errors.push((
+                            key,
+                            format!(
+                                "Item {} (add more...) row {}: \"{text}\" is not a number.",
+                                if part_b { 51 } else { 42 },
+                                index + 1
+                            ),
+                        )),
+                    }
+                }
+                let row = &mut more_rows_mut(&mut draft, part_b)[index];
+                row.description = description;
+                row.taxpayer = amounts[0];
+                row.spouse = amounts[1];
+            }
+        }
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -727,7 +876,10 @@ impl Form1701AView {
         self.sync_from_inputs(cx);
         change(&mut self.draft);
         self.draft.recompute();
-        for (key, _) in Self::all_keys() {
+        for (key, _) in Self::all_keys()
+            .into_iter()
+            .chain(Self::more_keys(&self.draft))
+        {
             if let Some(input) = self.inputs.get(&key) {
                 let value = Self::initial(&self.draft, &key);
                 if input.read(cx).value() != value.as_str() {
@@ -738,6 +890,67 @@ impl Form1701AView {
         self.validation_errors = self.draft.validate();
         self.status_message = None;
         cx.notify();
+    }
+
+    /// "(add more...)" ADD ROW / remove: read the page, change the rows,
+    /// create editors for new rows, then show every row again from the
+    /// draft so nothing shifts into the wrong row.
+    fn edit_rows(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut Form1701ADraft),
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.sync_from_inputs(cx);
+        change(&mut self.draft);
+        self.draft.recompute();
+        for (key, placeholder) in Self::more_keys(&self.draft) {
+            if self.inputs.contains_key(&key) {
+                continue;
+            }
+            let (input, subscription) =
+                Self::new_input(&self.draft, &key, &placeholder, window, cx);
+            self.inputs.insert(key, input);
+            self._subscriptions.push(subscription);
+        }
+        let updates: Vec<(Entity<InputState>, String)> = self
+            .inputs
+            .iter()
+            .map(|(key, input)| (input.clone(), Self::initial(&self.draft, key)))
+            .collect();
+        for (input, value) in updates {
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
+        self.status_message = None;
+    }
+
+    /// ADD ROW: the first click opens the modal with Item 42/51 as row 1
+    /// (`transferToModal`) and adds row 2; later clicks add one blank row.
+    /// The official modal has no row limit.
+    fn add_more_row(draft: &mut Form1701ADraft, part_b: bool) {
+        if more_rows(draft, part_b).is_empty() {
+            let first = item_as_row(draft, part_b);
+            more_rows_mut(draft, part_b).push(first);
+        }
+        more_rows_mut(draft, part_b).push(Form1701AMoreRow::default());
+    }
+
+    /// Remove one modal row (`deleteRow`, rows renumber). A single row left
+    /// returns to Item 42/51, since a saved modal holds two or more rows.
+    fn remove_more_row(draft: &mut Form1701ADraft, part_b: bool, index: usize) {
+        let rows = more_rows_mut(draft, part_b);
+        if index >= rows.len() {
+            return;
+        }
+        rows.remove(index);
+        if rows.len() == 1 {
+            let last = rows.remove(0);
+            row_into_item(draft, part_b, last);
+        }
     }
 
     fn notify(
@@ -1017,6 +1230,12 @@ impl Form1701AView {
         let mut rows: Vec<(u32, AnyElement)> = moneys
             .iter()
             .map(|money| {
+                if folded_item(&self.draft, money.id) {
+                    return (
+                        item_no(money.label),
+                        self.computed(money.label, (money.get)(column), cx),
+                    );
+                }
                 let key = money_key(who, money.id);
                 let error_key = format!(
                     "{}.{}",
@@ -1046,6 +1265,12 @@ impl Form1701AView {
         }));
         if who == Who::Taxpayer {
             rows.extend(notes.iter().map(|note| {
+                if folded_item(&self.draft, note.key) {
+                    return (
+                        note.after,
+                        self.static_value(text(note.key).label, (text(note.key).get)(&self.draft)),
+                    );
+                }
                 (
                     note.after,
                     self.text_field(
@@ -1386,6 +1611,97 @@ impl Form1701AView {
         self.section("Part V — Background information on spouse", children, cx)
     }
 
+    /// Item 42 / 51 "(add more...)": every modal row with its Remove, then
+    /// ADD ROW. With two or more rows Item 42/51 reads OTHERS and the
+    /// subtotal.
+    fn render_more(&self, part_b: bool, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let item = if part_b { 51 } else { 42 };
+        let tag = if part_b { "b" } else { "a" };
+        let open = |who: Who| {
+            if part_b {
+                eight_percent(&self.draft, who)
+            } else {
+                graduated(&self.draft, who)
+            }
+        };
+        let mut children = vec![
+            div()
+                .font_weight(FontWeight::BOLD)
+                .child(format!("Item {item} — (add more...)"))
+                .into_any_element(),
+        ];
+        for index in 0..more_rows(&self.draft, part_b).len() {
+            let remove = Button::new((
+                SharedString::from(format!("1701a_more_{tag}_remove")),
+                index,
+            ))
+            .disabled(!editable)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.edit_rows(window, cx, |d| Self::remove_more_row(d, part_b, index))
+            }));
+            children.push(kit::row_heading(&format!("{item}.{}", index + 1), remove));
+            children.push(self.field(
+                &more_key(part_b, index, "desc"),
+                "",
+                "Description",
+                layout,
+                !editable,
+            ));
+            children.push(self.field(
+                &more_key(part_b, index, "tp"),
+                "",
+                "A) Taxpayer/Filer",
+                layout,
+                !editable || !open(Who::Taxpayer),
+            ));
+            if self.draft.is_joint() {
+                children.push(self.field(
+                    &more_key(part_b, index, "sp"),
+                    "",
+                    "B) Spouse",
+                    layout,
+                    !editable || !open(Who::Spouse),
+                ));
+            }
+        }
+        let field = if part_b {
+            "eight_other_income_more"
+        } else {
+            "other_income_more"
+        };
+        let disabled = !editable || !self.draft.more_link_available(part_b);
+        children.push(
+            kit::add_row_button(
+                SharedString::from(format!("1701a_more_{tag}_add")),
+                disabled,
+            )
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.edit_rows(window, cx, |d| Self::add_more_row(d, part_b))
+            }))
+            .into_any_element(),
+        );
+        if self.has_error(field) {
+            children[0] = div()
+                .font_weight(FontWeight::BOLD)
+                .text_color(gpui::red())
+                .child(format!("Item {item} — (add more...)"))
+                .into_any_element();
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .children(children)
+            .when(editable && disabled, |d| {
+                d.child(div().text_sm().child(format!(
+                    "Complete Items {} and {item} to add more rows.",
+                    item - 1
+                )))
+            })
+            .into_any_element()
+    }
+
     fn render_schedules(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let whos = self.joint_whos();
         let block = |moneys: &[Money], computed: &[Computed], notes: &[Note]| {
@@ -1401,20 +1717,26 @@ impl Form1701AView {
         let sections = vec![
             self.section(
                 "Part IV.A — Graduated rates with OSD",
-                vec![self.columns(
-                    layout,
-                    block(PART_IVA, PART_IVA_COMPUTED, PART_IVA_NOTES),
-                    cx,
-                )],
+                vec![
+                    self.columns(
+                        layout,
+                        block(PART_IVA, PART_IVA_COMPUTED, PART_IVA_NOTES),
+                        cx,
+                    ),
+                    self.render_more(false, layout, cx),
+                ],
                 cx,
             ),
             self.section(
                 "Part IV.B — 8% income tax rate",
-                vec![self.columns(
-                    layout,
-                    block(PART_IVB, PART_IVB_COMPUTED, PART_IVB_NOTES),
-                    cx,
-                )],
+                vec![
+                    self.columns(
+                        layout,
+                        block(PART_IVB, PART_IVB_COMPUTED, PART_IVB_NOTES),
+                        cx,
+                    ),
+                    self.render_more(true, layout, cx),
+                ],
                 cx,
             ),
             self.section(
@@ -1497,19 +1819,9 @@ impl QueueableFormView for Form1701AView {
     ) -> Self {
         let mut inputs = BTreeMap::new();
         let mut subscriptions = Vec::new();
-        for (key, placeholder) in Self::all_keys() {
-            let value = Self::initial(&draft, &key);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            input.update(cx, |state, cx| state.set_value(value, window, cx));
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.sync_from_inputs(cx);
-                    }
-                },
-            ));
+        for (key, placeholder) in Self::all_keys().into_iter().chain(Self::more_keys(&draft)) {
+            let (input, subscription) = Self::new_input(&draft, &key, &placeholder, window, cx);
+            subscriptions.push(subscription);
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();

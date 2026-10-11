@@ -154,3 +154,69 @@ fn form_1702mx_fiscal_sample_payload_is_current() {
         "93d6ee49a729f9208ca162327c71a94ebbbb8632ef9bae9f753f86fb6dd5e7ea",
     );
 }
+
+fn special_row(
+    description: &str,
+    legal_basis: &str,
+    column: usize,
+    value: i64,
+) -> bir_core::forms::form_1702mx::Form1702MXSpecialDeductionRow {
+    let mut row = bir_core::forms::form_1702mx::Form1702MXSpecialDeductionRow {
+        description: description.into(),
+        legal_basis: legal_basis.into(),
+        ..Default::default()
+    };
+    match column {
+        0 => row.amounts.exempt = peso(value),
+        1 => row.amounts.special = peso(value),
+        _ => row.amounts.regular = peso(value),
+    }
+    row
+}
+
+/// Schedule 6 with all four page rows and seven Item 4 "(Add more...)"
+/// rows: the first is the Item 4 entry the link transfers, the rest are
+/// added with Add Row (`AddRow_modalTablePg3Sc6` has no limit).
+pub(crate) fn sample_1702mx_schedule_6_rows() -> Form1702MXDraft {
+    let mut d = sample_1702mx();
+    d.schedule_6.rows[1] = special_row("Fringe", "Ra 8424", 2, 20_000);
+    d.schedule_6.rows[2] = special_row("Rd cost", "Ra 9999", 2, 15_000);
+    d.schedule_6.rows[3] = special_row("Seminar", "Rr 2-98", 2, 4_000);
+    d.schedule_6.more_rows = vec![d.schedule_6.rows[3].clone()];
+    for n in 2..=7i64 {
+        d.schedule_6.more_rows.push(special_row(
+            &format!("Item {n}"),
+            &format!("Rr {n}"),
+            ((n % 2) * 2) as usize,
+            1_000 * n + 250,
+        ));
+    }
+    // Schedule 4 Item 2C: Schedule 6 now has regular-rate deductions.
+    d.schedule_4.items[1].regular = peso(2_000);
+    d.recompute();
+    for column in 0..3 {
+        let item_13 = &d.schedule_2.items[12];
+        let value = [&item_13.exempt, &item_13.special, &item_13.regular][column].clone();
+        let target = &mut d.schedule_10.items[0];
+        *[&mut target.exempt, &mut target.special, &mut target.regular][column] = value;
+    }
+    d.recompute();
+    d
+}
+
+#[test]
+fn form_1702mx_schedule_6_rows_sample_payload_is_current() {
+    let draft = sample_1702mx_schedule_6_rows();
+    assert_eq!(draft.schedule_6.rows[3].description, "OTHERS");
+    assert_eq!(draft.schedule_6.more_rows.len(), 7);
+    let payload = draft
+        .to_official_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1702MX must validate: {errors:?}"));
+    let layout = draft.official_layout().expect("extended layout");
+    crate::check_sample_with_layout(
+        "1702MX-1225-sched6",
+        &layout,
+        &payload,
+        "f20652d58465bd2ca969ed947c33e5a9e801e1a165374605b9664372827aba72",
+    );
+}

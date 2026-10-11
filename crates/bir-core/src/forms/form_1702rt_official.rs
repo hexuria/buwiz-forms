@@ -17,14 +17,18 @@
 //! branch: Item 40 (rate), Item 42 (MCIT) and Part V Item 57 are entered by
 //! the filer, and Item 41 is Item 39 times the rate.
 //!
-//! The "Add more..." modals (Items 54, 17i, Schedule II Item 4, Schedule
-//! IIIA Item 7, Schedule V Items 3, 6 and 8) are not modelled; the fixed
-//! rows of the page are.
+//! The "(Add more...)" modals of Items 54, 17i, Schedule II Item 4 and
+//! Schedule V Items 3, 6 and 8 are modelled ([`Form1702RTModal`]): their
+//! rows are written into the modal tables the upload loop reads, with the
+//! counter and subtotal. Schedule IIIA Item 7's button is left out: its
+//! counter control is commented out of the page, so its `saveModalTable`
+//! fails there and the page never reloads those rows.
 
 use std::collections::BTreeMap;
 
 use super::form_1702rt::{
-    Form1702RTDeductionMethod, Form1702RTDraft, Form1702RTFilingBasis, WholePeso,
+    FORM_1702RT_MODALS, Form1702RTDeductionMethod, Form1702RTDraft, Form1702RTFilingBasis,
+    Form1702RTModal, WholePeso,
 };
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
@@ -52,6 +56,105 @@ fn capital(value: &str) -> String {
 }
 
 impl Form1702RTDraft {
+    /// The item an "(Add more...)" modal folds into: description, legal
+    /// basis (Schedule II only) and amount.
+    pub fn modal_item_mut(
+        &mut self,
+        modal: Form1702RTModal,
+    ) -> (&mut String, Option<&mut String>, &mut WholePeso) {
+        match modal {
+            Form1702RTModal::Item54 => {
+                let item = &mut self.part_iv.tax_credits.item_54_other;
+                (&mut item.description, None, &mut item.amount)
+            }
+            Form1702RTModal::Schedule1Item17i => {
+                let item = &mut self.schedule_1.other[5];
+                (&mut item.description, None, &mut item.amount)
+            }
+            Form1702RTModal::Schedule2Item4 => {
+                let item = &mut self.schedule_2.rows[3];
+                (
+                    &mut item.description,
+                    Some(&mut item.legal_basis),
+                    &mut item.amount,
+                )
+            }
+            Form1702RTModal::Schedule5Item3 => {
+                let item = &mut self.schedule_5.additions[1];
+                (&mut item.description, None, &mut item.amount)
+            }
+            Form1702RTModal::Schedule5Item6 => {
+                let item = &mut self.schedule_5.non_taxable_income[1];
+                (&mut item.description, None, &mut item.amount)
+            }
+            Form1702RTModal::Schedule5Item8 => {
+                let item = &mut self.schedule_5.special_deductions[1];
+                (&mut item.description, None, &mut item.amount)
+            }
+        }
+    }
+
+    /// The modal's controls in DOM order, keyed by element id
+    /// (`<rowName>.<n>C1`…), written while the item is folded.
+    pub fn modal_controls(&self, modal: Form1702RTModal) -> Vec<(String, String)> {
+        if !self.more_rows.is_folded(modal) {
+            return Vec::new();
+        }
+        let row_name = modal.row_name();
+        let mut controls = Vec::new();
+        for (index, row) in self.more_rows.saved(modal).into_iter().enumerate() {
+            let n = index + 1;
+            controls.push((format!("{P}{row_name}.{n}C1"), capital(&row.description)));
+            let mut column = 2;
+            if modal.has_legal_basis() {
+                controls.push((format!("{P}{row_name}.{n}C2"), capital(&row.legal_basis)));
+                column = 3;
+            }
+            controls.push((
+                format!("{P}{row_name}.{n}C{column}"),
+                row.amount.format_bir(),
+            ));
+        }
+        controls
+    }
+
+    /// The generated layout with each folded modal's rows spliced in ahead
+    /// of its subtotal box (`<rowName>Subtotal`), where the page's modal
+    /// table puts them.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use crate::forms::official_inputs::{RowInsertion, extend_layout};
+        use crate::official_xml::Entry;
+        let base = crate::official_xml::layout(FORM_1702RT_LAYOUT_ID).map_err(|e| e.to_string())?;
+        let key_of = |entry: &Entry| match entry {
+            Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+        };
+        let mut insertions = Vec::new();
+        for modal in FORM_1702RT_MODALS {
+            let controls = self.modal_controls(modal);
+            if controls.is_empty() {
+                continue;
+            }
+            let row_name = modal.row_name();
+            let subtotal = format!("{P}{row_name}Subtotal");
+            let at = base
+                .entries
+                .iter()
+                .position(|entry| key_of(entry) == subtotal)
+                .filter(|&at| at > 0)
+                .ok_or_else(|| format!("no entry ahead of {subtotal}"))?;
+            // Every modal control is a raw text box, like the item's own.
+            let template = format!("{P}{row_name}C1");
+            insertions.push(RowInsertion {
+                after: key_of(&base.entries[at - 1]),
+                copies: controls
+                    .into_iter()
+                    .map(|(id, _)| (template.clone(), id))
+                    .collect(),
+            });
+        }
+        extend_layout(base, &insertions)
+    }
+
     pub fn is_itemized(&self) -> bool {
         self.deduction_method == Form1702RTDeductionMethod::Itemized
     }
@@ -109,7 +212,23 @@ impl Form1702RTDraft {
             for row in &mut self.schedule_3.rows {
                 *row = Default::default();
             }
+            self.more_rows.schedule_1_item_17i.clear();
+            self.more_rows.schedule_2_item_4.clear();
             self.part_v.item_57_special_allowable_deductions_tax_effect = ZERO;
+        }
+        // "(Add more...)": with two or more saved rows the item reads
+        // OTHERS and the modal subtotal (saveModalTable, othersSubtotal).
+        for modal in FORM_1702RT_MODALS {
+            if !self.more_rows.is_folded(modal) {
+                continue;
+            }
+            let subtotal = self.more_rows.subtotal(modal);
+            let (description, legal_basis, amount) = self.modal_item_mut(modal);
+            *description = "OTHERS".to_string();
+            if let Some(legal_basis) = legal_basis {
+                *legal_basis = "OTHERS".to_string();
+            }
+            *amount = subtotal;
         }
         if !mcit {
             // enableMCITFields(false)
@@ -793,6 +912,68 @@ impl Form1702RTDraft {
             );
         }
 
+        // "(Add more...)" modals (addRowModalTable / saveModalTable).
+        for modal in FORM_1702RT_MODALS {
+            let rows = self.more_rows.rows(modal);
+            if rows.is_empty() {
+                continue;
+            }
+            let field = format!("more_rows.{}", modal.row_name());
+            let label = |n: usize| format!("Page {} Item {}.{n}", modal.page(), modal.item());
+            for (index, row) in rows.iter().enumerate() {
+                let n = index + 1;
+                let described = !row.description.is_empty();
+                let legal = !row.legal_basis.is_empty();
+                let touched = described || row.amount.0 != 0 || modal.has_legal_basis() && legal;
+                if !touched {
+                    continue;
+                }
+                let message = if !described {
+                    Some("Description should not be blank.")
+                } else if modal.has_legal_basis() && !legal {
+                    Some("Legal Basis should not be blank.")
+                } else if row.amount.0 == 0 {
+                    Some("Amount should not be zero.")
+                } else {
+                    None
+                };
+                if let Some(message) = message {
+                    err(&field, &format!("{} {message}", label(n)));
+                    break;
+                }
+            }
+            if self.more_rows.saved(modal).len() == 1 {
+                err(
+                    &field,
+                    &format!(
+                        "{}: the (Add more...) list needs two or more rows; enter a single row on the item.",
+                        modal.title()
+                    ),
+                );
+            }
+            if rows.iter().any(|row| {
+                row.description.chars().count() > modal.description_limit()
+                    || row.legal_basis.chars().count() > 15
+            }) {
+                err(
+                    &field,
+                    &format!(
+                        "{}: a description holds at most {} characters{}.",
+                        modal.title(),
+                        modal.description_limit(),
+                        if modal.has_legal_basis() {
+                            " and a legal basis 15"
+                        } else {
+                            ""
+                        }
+                    ),
+                );
+            }
+            if rows.iter().any(|row| row.amount.0 < 0) {
+                err("amounts", "Amounts are whole pesos and cannot be negative.");
+            }
+        }
+
         // Derived items must be what the official compute chain produces.
         let mut expected = self.clone();
         expected.official_recompute();
@@ -867,6 +1048,25 @@ impl Form1702RTDraft {
         // getRdo() builds this select inside div#rdoContainer at load; the
         // packaged layout (generated from the static page) lacks it.
         put("drpPg1Pt1I7RDOCode", self.rdo_code.trim().to_string());
+        // "(Add more...)": the saved rows, their count and subtotal.
+        for modal in FORM_1702RT_MODALS {
+            let controls = self.modal_controls(modal);
+            if controls.is_empty() {
+                continue;
+            }
+            let row_name = modal.row_name();
+            put(
+                &format!("{row_name}CtrModal"),
+                self.more_rows.saved(modal).len().to_string(),
+            );
+            put(
+                &format!("{row_name}Subtotal"),
+                self.more_rows.subtotal(modal).format_bir(),
+            );
+            for (key, value) in controls {
+                put(key.trim_start_matches(P), value);
+            }
+        }
         fields
     }
 
@@ -956,6 +1156,17 @@ impl QueueableForm for Form1702RTDraft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
+    }
+    /// The upload with the "(Add more...)" rows in their DOM place.
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as QueueableForm>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let xml_error = |error: String| vec![("xml".to_string(), error)];
+        let layout = self.official_layout().map_err(xml_error)?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| xml_error(error.to_string()))
     }
 }
 
@@ -1111,6 +1322,36 @@ mod tests {
         check(
             &|d| d.month = 0,
             "Please provide a valid Year Ended on Page 1 Item 2",
+        );
+        // "(Add more...)" rows (addRowModalTable / saveModalTable).
+        let modal_row = |description: &str, legal_basis: &str, amount: i64| {
+            crate::forms::form_1702rt::Form1702RTSpecialDeductionRow {
+                description: description.into(),
+                legal_basis: legal_basis.into(),
+                amount: WholePeso(amount),
+            }
+        };
+        check(
+            &|d| {
+                d.more_rows.item_54 = vec![modal_row("Credit", "", 100), modal_row("", "", 50)];
+            },
+            "Page 2 Item 54.2 Description should not be blank.",
+        );
+        check(
+            &|d| {
+                d.more_rows.schedule_2_item_4 = vec![
+                    modal_row("Deduction", "RA 1", 100),
+                    modal_row("Other", "", 50),
+                ];
+            },
+            "Page 3 Item 4.2 Legal Basis should not be blank.",
+        );
+        check(
+            &|d| {
+                d.more_rows.schedule_1_item_17i =
+                    vec![modal_row("Expense", "", 100), modal_row("Other", "", 0)];
+            },
+            "Page 3 Item i.2 Amount should not be zero.",
         );
         check(
             &|d| d.taxable_year = 2017,

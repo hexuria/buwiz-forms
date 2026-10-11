@@ -202,11 +202,25 @@ pub struct Form1702MXSpecialDeductionRow {
     pub amounts: Form1702MXRegimeAmounts,
 }
 
-/// Schedule 6 has exactly four input rows and one printed total.
+/// Schedule 6 has four input rows and one printed total. Item 4's
+/// "(Add more...)" modal (`modalTablePg3Sc6`) adds rows 4.1, 4.2, ... without
+/// a limit; with two or more saved rows Item 4 reads OTHERS and the modal
+/// subtotals (`Save_modalTablePg3Sc6`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Form1702MXSchedule6 {
     pub rows: [Form1702MXSpecialDeductionRow; 4],
     pub item_5_total: Form1702MXRegimeAmounts,
+    /// The modal's rows in page order; row 1 is the Item 4 entry the link
+    /// transfers. Empty when the modal is not used.
+    #[serde(default)]
+    pub more_rows: Vec<Form1702MXSpecialDeductionRow>,
+}
+
+impl Form1702MXSchedule6 {
+    /// Two or more saved modal rows: Item 4 holds OTHERS and the subtotals.
+    pub fn is_folded(&self) -> bool {
+        self.more_rows.len() >= 2
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
