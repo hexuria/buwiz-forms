@@ -3,7 +3,8 @@ use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200s::{Form2200SDraft, Form2200SManner, Form2200SOtherRow};
 
 fn sample_2200s() -> Form2200SDraft {
-    let mut draft = Form2200SDraft::new_from_profile(&dummy_profile("2200S", "Corporation"), 2025);
+    let mut draft =
+        Form2200SDraft::new_from_profile(&dummy_profile("2200S", "Corporation"), 2025, 6);
     draft.month = 6;
     draft.day = 30;
     draft.psic = "1104".into();
