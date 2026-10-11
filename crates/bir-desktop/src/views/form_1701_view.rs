@@ -1109,14 +1109,23 @@ impl Form1701View {
     fn render_background(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let fixed = |label: &str, value: String| {
-            div()
+        // Item 4/5 come from the profile; their validation messages show
+        // under the value since there is no editor to attach them to.
+        let fixed = |label: &str, value: String, key: &str| {
+            let message = self.message_for(&[key]);
+            let caption = if message.is_some() {
+                Self::label(label).text_color(gpui::red())
+            } else {
+                Self::label(label)
+            };
+            let row = div()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(Self::label(label))
+                .child(caption)
                 .child(div().font_weight(FontWeight::BOLD).child(value))
-                .into_any_element()
+                .into_any_element();
+            with_field_error(row, message)
         };
         let type_options = taxpayer_type_options();
         let type_select = select_field(
@@ -1160,8 +1169,8 @@ impl Form1701View {
             self.grid(
                 layout,
                 vec![
-                    fixed("Item 4 — TIN", format_tin(&d.tin)),
-                    fixed("Item 5 — RDO Code", d.rdo_code.clone()),
+                    fixed("Item 4 — TIN", format_tin(&d.tin), "tin"),
+                    fixed("Item 5 — RDO Code", d.rdo_code.clone(), "rdo_code"),
                 ],
             ),
             type_select,
