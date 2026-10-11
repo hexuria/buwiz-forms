@@ -59,8 +59,6 @@ const TEXT_INPUTS: &[(&str, &str)] = &[
     ("email", "Item 12 — Email Address"),
     ("citizenship", "Item 13 — Citizenship"),
     ("ftn", "Item 14 — Foreign Tax Number"),
-    ("lob", "Line of Business"),
-    ("phone", "Telephone Number"),
     ("spouse_tin", "Item 17 — Spouse's TIN"),
     ("spouse_rdo", "Item 18 — Spouse's RDO Code"),
     ("spouse_name", "Item 21 — Spouse's Name"),
@@ -160,8 +158,6 @@ impl Form1701QView {
             "email" => draft.email.clone(),
             "citizenship" => draft.citizenship.clone(),
             "ftn" => draft.foreign_tax_number.clone(),
-            "lob" => draft.line_of_business.clone(),
-            "phone" => draft.contact_number.clone(),
             "spouse_tin" => draft.spouse_tin.clone(),
             "spouse_rdo" => draft.spouse_rdo_code.clone(),
             "spouse_name" => draft.spouse_name.clone(),
@@ -249,8 +245,8 @@ impl Form1701QView {
         draft.email = self.input_text("email", cx).trim().to_string();
         draft.citizenship = self.input_text("citizenship", cx);
         draft.foreign_tax_number = self.input_text("ftn", cx).trim().to_string();
-        draft.line_of_business = self.input_text("lob", cx);
-        draft.contact_number = self.input_text("phone", cx).trim().to_string();
+        // Line of business and telephone are not rendered; they keep the
+        // profile values already in the draft.
         draft.spouse_tin = self.input_text("spouse_tin", cx).trim().to_string();
         draft.spouse_rdo_code = self.input_text("spouse_rdo", cx).trim().to_string();
         draft.spouse_name = self.input_text("spouse_name", cx);
@@ -570,8 +566,6 @@ impl Form1701QView {
             self.text("email", layout),
             self.text("citizenship", layout),
             self.text("ftn", layout),
-            self.text("lob", layout),
-            self.text("phone", layout),
         ];
         let filer: Vec<Button> = Form1701QFilerType::ALL
             .into_iter()

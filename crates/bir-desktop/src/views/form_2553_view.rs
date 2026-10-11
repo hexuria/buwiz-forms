@@ -483,6 +483,13 @@ impl Form2553View {
         }
     }
 
+    /// True when the Item 2 year-ended month/year is after the current local
+    /// month/year. Display only; never feeds validation.
+    fn item_2_in_future(&self) -> bool {
+        let today = chrono::Local::now().date_naive();
+        i32::from(self.draft.taxable_year) > chrono::Datelike::year(&today)
+    }
+
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let basis = self.draft.tax_period_basis;
@@ -528,7 +535,7 @@ impl Form2553View {
             })
             .collect();
         let amended = self.draft.is_amended;
-        let children = vec![
+        let mut children = vec![
             Self::choice_row(
                 layout,
                 "Item 1 — For the (Calendar or Fiscal)",
@@ -588,6 +595,17 @@ impl Form2553View {
                 !editable,
             ),
         ];
+        if self.item_2_in_future() {
+            // Non-blocking: not part of `validate()` or the parse errors.
+            children.insert(
+                3,
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().warning)
+                    .child("This year is in the future. Check Item 2 before filing.")
+                    .into_any_element(),
+            );
+        }
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
 
