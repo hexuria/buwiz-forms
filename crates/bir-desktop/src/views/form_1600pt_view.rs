@@ -262,13 +262,8 @@ impl Form1600PtView {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number("year", cx) {
-            draft.year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
+        // Year is fixed by the library tile (read-only); "year" stays in
+        // TEXT_INPUTS for indices but is never parsed.
         if let Some(sheets) = number("sheets", cx) {
             draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
                 sheets as u16
@@ -676,25 +671,14 @@ impl Form1600PtView {
 
     fn render_return_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let months = MONTHS
-            .iter()
-            .enumerate()
-            .map(|(index, name)| {
-                let month = index as u8 + 1;
-                Self::choice(
-                    ("1600pt_month", index),
-                    *name,
-                    self.draft.month == month,
-                    !editable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.month = month)))
-            })
-            .collect();
+        let month_name = MONTHS
+            .get(usize::from(self.draft.month).wrapping_sub(1))
+            .copied()
+            .unwrap_or("—");
         let withheld = self.draft.taxes_withheld;
         let children = vec![
-            self.choice_row("Item 1 — Month", &["month"], months),
-            self.text_field("year", layout, !editable),
+            self.readonly("Item 1 — Month", month_name.to_string()),
+            self.readonly("Item 1 — Year", self.draft.year.to_string()),
             self.yes_no(
                 "1600pt_amended",
                 "Item 2 — Amended return?",
