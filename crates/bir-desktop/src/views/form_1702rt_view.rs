@@ -5,6 +5,7 @@
 //! (`bir_core::forms::form_1702rt_official`); this view only edits source
 //! values. The layout reflows for desktop, tablet and phone widths.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -238,6 +239,9 @@ const PAYMENT_ROWS: [(usize, &str, bool, bool); 4] = [
 ];
 
 /// Whole pesos: digits with optional commas, `-` or `(x)` for a negative.
+/// The official page only lets digits be typed (`wholenumber` on
+/// keypress); typed centavos are rounded half-up to whole pesos, the same
+/// rule as the 1702-MX page.
 fn parse_peso(value: &str) -> Option<WholePeso> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -251,10 +255,22 @@ fn parse_peso(value: &str) -> Option<WholePeso> {
         },
     };
     let digits: String = body.chars().filter(|c| *c != ',').collect();
-    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+    let (whole, cents) = match digits.split_once('.') {
+        Some((whole, cents)) => (whole, cents),
+        None => (digits.as_str(), ""),
+    };
+    let all_digits = |part: &str| part.bytes().all(|b| b.is_ascii_digit());
+    if whole.is_empty() && cents.is_empty() || !all_digits(whole) || !all_digits(cents) {
         return None;
     }
-    let value: i64 = digits.parse().ok()?;
+    let mut value: i64 = if whole.is_empty() {
+        0
+    } else {
+        whole.parse().ok()?
+    };
+    if cents.bytes().next().is_some_and(|b| b >= b'5') {
+        value = value.checked_add(1)?;
+    }
     Some(WholePeso(if negative { -value } else { value }))
 }
 
@@ -585,6 +601,9 @@ pub struct Form1702RTView {
     atc_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
+    /// On-screen label of each input, recorded as it renders, so a parse
+    /// message can name its field.
+    field_labels: RefCell<BTreeMap<String, String>>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
     _subscriptions: Vec<Subscription>,
@@ -688,10 +707,13 @@ impl Form1702RTView {
             if let Some(slot) = money_slot(&mut draft, &key) {
                 match parse_peso(&text) {
                     Some(value) => *slot = value,
-                    None => parse_errors.push((
-                        key.clone(),
-                        format!("\"{text}\" is not a whole-peso amount."),
-                    )),
+                    None => {
+                        let label = self.field_label(&key);
+                        parse_errors.push((
+                            key.clone(),
+                            format!("{label}: \"{text}\" is not a whole-peso amount."),
+                        ))
+                    }
                 }
                 continue;
             }
@@ -1002,7 +1024,23 @@ impl Form1702RTView {
     }
 
     /// A labelled input. On phones the label sits above the field.
+    /// The label recorded for `key` (or its `FIELDS` label before the first
+    /// render).
+    fn field_label(&self, key: &str) -> String {
+        if let Some(label) = self.field_labels.borrow().get(key) {
+            return label.clone();
+        }
+        FIELDS
+            .iter()
+            .find(|(k, _, _)| *k == key)
+            .map(|(_, label, _)| (*label).to_string())
+            .unwrap_or_else(|| "Amount".to_string())
+    }
+
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
+        self.field_labels
+            .borrow_mut()
+            .insert(key.to_string(), label.to_string());
         let input = self
             .inputs
             .get(key)
@@ -1880,6 +1918,7 @@ impl QueueableFormView for Form1702RTView {
             atc_select,
             validation_errors,
             parse_errors: Vec::new(),
+            field_labels: RefCell::default(),
             status_message: None,
             release_claim_confirm_open: false,
             _subscriptions: subscriptions,
@@ -1953,15 +1992,9 @@ impl FormViewTrait for Form1702RTView {
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if !self.parse_errors.is_empty() {
-            self.notify(
-                notification::NotificationType::Error,
-                "Fix the highlighted entries before saving.".into(),
-                window,
-                cx,
-            );
-            return;
-        }
+        // Save what parses; unreadable amounts keep their text in the box
+        // and stay listed under Needs review, which keeps Queue blocked.
+        let unreadable = !self.parse_errors.is_empty();
         let result = match self.db.lock() {
             Ok(db) => db
                 .save_queueable_draft(&self.draft)
@@ -1971,12 +2004,18 @@ impl FormViewTrait for Form1702RTView {
         match result {
             Ok(id) => {
                 self.draft.id = Some(id);
-                self.notify(
-                    notification::NotificationType::Success,
-                    "1702-RT draft saved.".into(),
-                    window,
-                    cx,
-                );
+                let (kind, message) = if unreadable {
+                    (
+                        notification::NotificationType::Warning,
+                        "1702-RT draft saved. Entries that are not amounts were not saved; fix them under Needs review.",
+                    )
+                } else {
+                    (
+                        notification::NotificationType::Success,
+                        "1702-RT draft saved.",
+                    )
+                };
+                self.notify(kind, message.into(), window, cx);
                 cx.emit(QueueableFormEvent::Saved);
             }
             Err(error) => cx.emit(QueueableFormEvent::PushNotification(
@@ -2366,7 +2405,12 @@ mod tests {
         assert_eq!(parse_peso("1,234"), Some(WholePeso(1234)));
         assert_eq!(parse_peso("(5,000)"), Some(WholePeso(-5000)));
         assert_eq!(parse_peso(""), Some(WholePeso(0)));
-        assert_eq!(parse_peso("12.50"), None);
+        assert_eq!(parse_peso("12.50"), Some(WholePeso(13)));
+        assert_eq!(parse_peso("1,234.49"), Some(WholePeso(1234)));
+        assert_eq!(parse_peso("1,234.50"), Some(WholePeso(1235)));
+        assert_eq!(parse_peso("(0.5)"), Some(WholePeso(-1)));
+        assert_eq!(parse_peso("1.234.567"), None);
+        assert_eq!(parse_peso("."), None);
         assert_eq!(format_tin("12345678800000"), "123-456-788-00000");
         let keys = all_keys();
         let unique: std::collections::BTreeSet<_> = keys.iter().collect();

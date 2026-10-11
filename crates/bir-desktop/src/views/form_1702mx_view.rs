@@ -4,6 +4,7 @@
 //! plaintext (`bir_core::forms::form_1702mx_official`); this view only edits
 //! source values. The layout reflows for desktop, tablet and phone widths.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -177,6 +178,17 @@ fn parse_percent(value: &str) -> Option<Option<i32>> {
         return None;
     }
     Some(Some((parsed * 100.0).round() as i32))
+}
+
+/// Schedule 1 Item 4B as shown: one decimal like the page, but a stored
+/// second decimal is kept so reopening never changes the value.
+fn rate34_text(hundredths: i32) -> String {
+    let value = f64::from(hundredths) / 100.0;
+    if hundredths % 10 == 0 {
+        format!("{value:.1}")
+    } else {
+        format!("{value:.2}")
+    }
 }
 
 fn peso_text(input: &WholePesoInput) -> String {
@@ -390,6 +402,9 @@ pub struct Form1702MXView {
     atc_select: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
+    /// On-screen label of each input, recorded as it renders, so a parse
+    /// message can name its field.
+    field_labels: RefCell<BTreeMap<String, String>>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
     _subscriptions: Vec<Subscription>,
@@ -408,7 +423,7 @@ impl Form1702MXView {
                 .special_tax_rate
                 .hundredths
                 .filter(|h| *h != 0)
-                .map(|h| format!("{:.1}", f64::from(h) / 100.0))
+                .map(rate34_text)
                 .unwrap_or_default(),
             "rate14b" => percent_text(&draft.schedule_2.item_14_special_rate),
             "rate14c" => percent_text(&draft.schedule_2.item_14_regular_rate),
@@ -447,7 +462,13 @@ impl Form1702MXView {
                         slot.set(WholePeso(value));
                     }
                 }
-                None => parse_errors.push((key.clone(), format!("\"{text}\" is not an amount."))),
+                None => {
+                    let label = self.field_label(&key);
+                    parse_errors.push((
+                        key.clone(),
+                        format!("{label}: \"{text}\" is not an amount."),
+                    ))
+                }
             }
         }
         for key in [
@@ -787,7 +808,20 @@ impl Form1702MXView {
     }
 
     /// A labelled input. On phones the label sits above the field.
+    /// The label recorded for `key`, or a plain fallback before first render.
+    fn field_label(&self, key: &str) -> String {
+        self.field_labels
+            .borrow()
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| "Amount".to_string())
+    }
+
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
+        self.field_labels
+            .borrow_mut()
+            .entry(key.to_string())
+            .or_insert_with(|| label.to_string());
         let input = self
             .inputs
             .get(key)
@@ -970,6 +1004,10 @@ impl Form1702MXView {
     ) -> AnyElement {
         let fields: Vec<AnyElement> = (0..3)
             .map(|column| {
+                self.field_labels.borrow_mut().insert(
+                    format!("{group}.{row}.{column}"),
+                    format!("{label} — {}", COLUMNS[column]),
+                );
                 self.field(
                     &format!("{group}.{row}.{column}"),
                     COLUMNS[column],
@@ -1905,6 +1943,7 @@ impl QueueableFormView for Form1702MXView {
             atc_select,
             validation_errors,
             parse_errors: Vec::new(),
+            field_labels: RefCell::default(),
             status_message: None,
             release_claim_confirm_open: false,
             _subscriptions: subscriptions,
@@ -1975,15 +2014,9 @@ impl FormViewTrait for Form1702MXView {
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if !self.parse_errors.is_empty() {
-            self.notify(
-                notification::NotificationType::Error,
-                "Fix the highlighted entries before saving.".into(),
-                window,
-                cx,
-            );
-            return;
-        }
+        // Save what parses; unreadable amounts keep their text in the box
+        // and stay listed under Needs review, which keeps Queue blocked.
+        let unreadable = !self.parse_errors.is_empty();
         let result = match self.db.lock() {
             Ok(db) => db
                 .save_queueable_draft(&self.draft)
@@ -1993,12 +2026,18 @@ impl FormViewTrait for Form1702MXView {
         match result {
             Ok(id) => {
                 self.draft.id = Some(id);
-                self.notify(
-                    notification::NotificationType::Success,
-                    "1702-MX draft saved.".into(),
-                    window,
-                    cx,
-                );
+                let (kind, message) = if unreadable {
+                    (
+                        notification::NotificationType::Warning,
+                        "1702-MX draft saved. Entries that are not amounts were not saved; fix them under Needs review.",
+                    )
+                } else {
+                    (
+                        notification::NotificationType::Success,
+                        "1702-MX draft saved.",
+                    )
+                };
+                self.notify(kind, message.into(), window, cx);
                 cx.emit(QueueableFormEvent::Saved);
             }
             Err(error) => cx.emit(QueueableFormEvent::PushNotification(
