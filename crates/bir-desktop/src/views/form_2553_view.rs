@@ -500,9 +500,15 @@ impl Form2553View {
                     !editable || unavailable,
                 )
                 .small()
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.year_end_month = month)),
-                ),
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let mut notice = None;
+                    this.edit(cx, |d| {
+                        notice = d.set_year_end_month(month);
+                    });
+                    if let Some(notice) = notice {
+                        this.status_message = Some(notice.to_string());
+                    }
+                })),
             );
         }
         let quarters: Vec<Button> = (1..=4u8)
