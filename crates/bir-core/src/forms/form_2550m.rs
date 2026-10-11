@@ -461,6 +461,66 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
     (part(0..3), part(3..6), part(6..9), format!("{branch:0>5}"))
 }
 
+/// Element-id stems of the schedule row controls the official page builds
+/// in script (`'<stem>' + row`). Each stem appears quoted in
+/// `BIR-Form2550M.hta`; the row keys are not in the generated layout, so
+/// `official_payload` checks them against this list instead.
+const SCHEDULE_ROW_KEY_STEMS: &[&str] = &[
+    "frm2550m:txtAtcCde",
+    "frm2550m:txtAmountSales",
+    "frm2550m:txtOutputTax",
+    "chxSched2",
+    "txtDatePurchased",
+    "txtDescription",
+    "txtAmt",
+    "txtInputTax",
+    "chxSched3A",
+    "chxSched3B",
+    "txtDatePurchased3A",
+    "txtDatePurchased3B",
+    "txtDescription3A",
+    "txtDescription3B",
+    "txtAmt3A",
+    "txtAmt3B",
+    "txtInputTax3A",
+    "txtBalInputTaxPrevious3B",
+    "txtEstLife3A",
+    "txtEstLife3B",
+    "txtRecogLife3A",
+    "txtRecogLife3B",
+    "txtAllowInputTax3A",
+    "txtAllowInputTax3B",
+    "txtBalInputTax3A",
+    "txtBalInputTax3B",
+    "chxSched6",
+    "chxSched8",
+    "txtPeriodCovered",
+    "txtPeriodCoveredSch8",
+    "txtNameAgent",
+    "txtNameAgentSch8",
+    "txtIncomePayment",
+    "txtIncomePaymentSch8",
+    "txtTotalWithheld",
+    "txtTotalWithheldSch8",
+    "txtAppliedCurr",
+    "txtAppliedCurrSch8",
+    "chxSched7",
+    "txtPeriodCoveredSch7",
+    "txtNameMillerSch7",
+    "txtNameTaxPayerSch7",
+    "txtORNumSch7",
+    "txtAmountPaidSch7",
+    "txtAppliedCurrSch7",
+];
+
+/// True when `id` is a known row stem followed by the row number.
+fn is_schedule_row_key(id: &str) -> bool {
+    SCHEDULE_ROW_KEY_STEMS.iter().any(|stem| {
+        id.strip_prefix(stem)
+            .is_some_and(|row| !row.is_empty() && row.bytes().all(|b| b.is_ascii_digit()))
+    })
+}
+
 impl Form2550MDraft {
     pub const FORM_CODE: &'static str = "2550M";
 
@@ -1547,6 +1607,8 @@ impl Form2550MDraft {
                 "Item 3 holds at most two digits.",
             );
         }
+        // App rule, not an official alert: BIR-Form2550M.hta has no email
+        // check, but the confirmation email needs a usable address.
         let email = self.email.trim();
         if email.is_empty()
             || !email.contains('@')
@@ -1864,6 +1926,11 @@ impl QueueableForm for Form2550MDraft {
             let at = payload
                 .find(&anchor)
                 .ok_or_else(|| xml_error(format!("{anchor} is missing from the layout")))?;
+            if let Some((id, _)) = rows.iter().find(|(id, _)| !is_schedule_row_key(id)) {
+                return Err(xml_error(format!(
+                    "{id} is not an official schedule row control"
+                )));
+            }
             let controls: String = rows
                 .iter()
                 .map(|(id, value)| format!("<div>{id}={value}{id}=</div>{separator}"))
@@ -2270,5 +2337,26 @@ mod tests {
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
         assert!(d.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn every_schedule_row_key_is_an_official_row_control() {
+        let mut d = sample();
+        d.sales_schedule.push(Form2550MSalesRow::default());
+        d.schedule_2.push(Form2550MCapitalGoodsRow::default());
+        d.schedule_3a.push(Form2550MAmortizedRow::default());
+        d.schedule_3b.push(Form2550MAmortizedRow::default());
+        d.schedule_6.push(Form2550MWithholdingRow::default());
+        d.schedule_7.push(Form2550MAdvancePaymentRow::default());
+        d.schedule_8.push(Form2550MWithholdingRow::default());
+        let groups = d.schedule_row_controls();
+        assert!(groups.iter().all(|(_, rows)| !rows.is_empty()));
+        for (_, rows) in groups {
+            for (id, _) in rows {
+                assert!(is_schedule_row_key(&id), "{id}");
+            }
+        }
+        assert!(!is_schedule_row_key("txtDescription"));
+        assert!(!is_schedule_row_key("txtDescriptionX0"));
     }
 }

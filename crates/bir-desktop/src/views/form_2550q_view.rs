@@ -328,6 +328,9 @@ pub struct Form2550QV2View {
     validation_input_revision: InputRevision,
     semantic_field_targets: SemanticFieldTargets<Entity<InputState>>,
     semantic_focus_error: Option<String>,
+    /// The raw identity controls sit behind an "Advanced" toggle; they open
+    /// by themselves when the draft already carries raw text.
+    show_raw_identity: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -695,6 +698,8 @@ impl Form2550QV2View {
             "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before queuing it for submission."
                 .to_string()
         }));
+        let show_raw_identity = draft.raw_editor_state
+            != bir_core::forms::form_2550q::Form2550QRawEditorState::default();
         let mut view = Self {
             draft,
             db,
@@ -715,6 +720,7 @@ impl Form2550QV2View {
             validation_input_revision: InputRevision::default(),
             semantic_field_targets,
             semantic_focus_error,
+            show_raw_identity,
             _subscriptions: subscriptions,
         };
         if view.editor_state_error.is_none() {
@@ -1607,6 +1613,75 @@ impl Form2550QV2View {
         self.error_for(&keys)
     }
 
+    /// Advanced: the eleven raw identity controls, collapsed by default.
+    fn render_raw_identity_block(&self, cx: &mut Context<Self>) -> AnyElement {
+        let open = self.show_raw_identity;
+        let toggle = gpui_component::button::Button::new("2550q_raw_identity_toggle")
+            .label(if open {
+                "Hide advanced raw identity controls"
+            } else {
+                "Show advanced raw identity controls"
+            })
+            .ghost()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.show_raw_identity = !this.show_raw_identity;
+                cx.notify();
+            }));
+        if !open {
+            return div().child(toggle).into_any_element();
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(toggle)
+                    .child(div().text_sm().child(
+                    "These controls are blank on profile-derived drafts; the return uses the profile values above unless exact text is entered here.",
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 TIN segment 1 (raw)",
+                    RAW_TIN_1,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 TIN segment 2 (raw)",
+                    RAW_TIN_2,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 TIN segment 3 (raw)",
+                    RAW_TIN_3,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 branch code (raw)",
+                    RAW_BRANCH_CODE,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 7 RDO code (raw)",
+                    RAW_RDO_CODE,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 8 taxpayer name (raw)",
+                    RAW_TAXPAYER_NAME,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 10 registered address (raw)",
+                    RAW_TAXPAYER_ADDRESS,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 10A ZIP code (raw)",
+                    RAW_TAXPAYER_ZIP,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 11 contact number (raw)",
+                    RAW_TAXPAYER_CONTACT_NUMBER,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 12 email address (raw)",
+                    RAW_TAXPAYER_EMAIL_ADDRESS,
+                ))
+                .child(self.render_input_row("Item 2 taxable year (raw)", RAW_TAXABLE_YEAR))
+            .into_any_element()
+    }
+
     fn render_input_row(&self, label: &str, key: &'static str) -> AnyElement {
         let layout = self.layout.get();
         let row =
@@ -2323,53 +2398,10 @@ impl Render for Form2550QV2View {
                         self.draft.contact_number,
                         self.draft.email
                     )))
-                    .child(div().text_sm().child(
-                        "Candidate raw identity/profile controls are blank on profile-derived drafts and restore only exact reviewed-import or explicitly captured text.",
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 TIN segment 1 (raw)",
-                        RAW_TIN_1,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 TIN segment 2 (raw)",
-                        RAW_TIN_2,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 TIN segment 3 (raw)",
-                        RAW_TIN_3,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 branch code (raw)",
-                        RAW_BRANCH_CODE,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 7 RDO code (raw)",
-                        RAW_RDO_CODE,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 8 taxpayer name (raw)",
-                        RAW_TAXPAYER_NAME,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 10 registered address (raw)",
-                        RAW_TAXPAYER_ADDRESS,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 10A ZIP code (raw)",
-                        RAW_TAXPAYER_ZIP,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 11 contact number (raw)",
-                        RAW_TAXPAYER_CONTACT_NUMBER,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 12 email address (raw)",
-                        RAW_TAXPAYER_EMAIL_ADDRESS,
-                    ))
+                    .child(self.render_raw_identity_block(cx))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Filing basis"))
                     .child(basis_choices)
                     .child(self.render_input_row("Year-end month", YEAR_END_MONTH))
-                    .child(self.render_input_row("Item 2 taxable year (raw)", RAW_TAXABLE_YEAR))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Quarter"))
                     .child(with_field_error(quarter_choices.into_any_element(), self.error_for(&["quarter"])))
                     .child(self.render_input_row("Return period from", RETURN_PERIOD_FROM))
@@ -2401,6 +2433,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("41B Presumptive input tax", ITEM_41B))
                     .child(self.render_input_row("42 Specify other input tax", ITEM_42_DESCRIPTION))
                     .child(self.render_input_row("42B Other input tax", ITEM_42B))
+                    .child(specify_limit_note(cx))
                     .child(self.render_computed_row("43B Total prior-period input tax", self.draft.part_iv.item_43b_total_prior_input_tax, cx)),
             )
             .child(
@@ -2414,6 +2447,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("47 Specify other purchases", ITEM_47_DESCRIPTION))
                     .child(self.render_input_row("47A Other purchases", ITEM_47A))
                     .child(self.render_input_row("47B Other input tax", ITEM_47B))
+                    .child(specify_limit_note(cx))
                     .child(self.render_input_row("48A Domestic purchases without input tax", ITEM_48A))
                     .child(self.render_input_row("49A VAT-exempt importations", ITEM_49A))
                     .child(self.render_computed_row("50A Total current purchases", self.draft.part_iv.item_50a_total_current_purchases, cx))
@@ -2425,6 +2459,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("55B Input VAT on unpaid payables", ITEM_55B))
                     .child(self.render_input_row("56 Specify other deduction", ITEM_56_DESCRIPTION))
                     .child(self.render_input_row("56B Other deduction", ITEM_56B))
+                    .child(specify_limit_note(cx))
                     .child(self.render_computed_row("57B Total deductions", self.draft.part_iv.item_57b_total_deductions, cx))
                     .child(self.render_input_row("58B Input VAT on settled payables", ITEM_58B))
                     .child(self.render_computed_row("59B Adjusted deductions", self.draft.part_iv.item_59b_adjusted_deductions, cx))
@@ -2451,6 +2486,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("18 Paid on previous return (amended only)", ITEM_18))
                     .child(self.render_input_row("19 Specify other credit/payment", ITEM_19_DESCRIPTION))
                     .child(self.render_input_row("19 Other credit/payment", ITEM_19))
+                    .child(specify_limit_note(cx))
                     .child(self.render_computed_row("20 Total credits/payments", self.draft.part_ii.item_20_total_credits_or_payments, cx))
                     .child(self.render_computed_row("21 Tax payable/(excess credits)", self.draft.part_ii.item_21_tax_payable_or_excess_credits, cx))
                     .child(self.render_input_row("22 Surcharge (manual)", ITEM_22))
@@ -3532,7 +3568,21 @@ fn sync_advance_vat_row(
 }
 
 fn format_optional_money(value: Option<f64>) -> String {
-    value.map_or_else(|| "—".to_string(), |amount| format!("₱ {amount:.2}"))
+    // Displayed as the official `formatCurrency` shows it (thousands commas).
+    value.map_or_else(
+        || "—".to_string(),
+        |amount| format!("₱ {}", bir_core::official_xml::official_amount(amount)),
+    )
+}
+
+/// Items 19, 42, 47 and 56 hold one specify line here; the official page's
+/// add-row popups (`addTblSpecifyNo19/42/47/56`) are not ported yet.
+fn specify_limit_note(cx: &Context<Form2550QV2View>) -> AnyElement {
+    div()
+        .text_xs()
+        .text_color(cx.theme().muted_foreground)
+        .child("One specify line here. More lines need the official form's add-row popup.")
+        .into_any_element()
 }
 
 /// Toolbar label for the generic queue action.

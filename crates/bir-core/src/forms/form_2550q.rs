@@ -2241,6 +2241,53 @@ fn validate_required_non_negative_money(
     }
 }
 
+/// Schedule 1/3/4 `checkInputField*`: any blank field in a used row (the
+/// official text ends with a space).
+const OFFICIAL_EMPTY_FIELDS_MESSAGE: &str = "Empty fields are not allowed ";
+/// Schedule 1 date blur.
+const OFFICIAL_DATE_PURCHASE_EMPTY_MESSAGE: &str = "Date Purchase cannot be an empty field.";
+/// `validateSourceCode`: two alerts, "Invalid input" then this one.
+const OFFICIAL_SOURCE_CODE_MESSAGE: &str = "Invalid input\nAccept only I and D ";
+/// `showNewSched3` (the double space is official).
+const OFFICIAL_RETURN_PERIOD_YEAR_MESSAGE: &str = "Please  enter a valid year for the Return Period. Only values 2000 and beyond will be accepted.";
+/// Schedules 3 and 4: "From" after "To".
+const OFFICIAL_FROM_AFTER_TO_MESSAGE: &str = "'From' date cannot be after 'To' date.";
+
+/// Schedules 3 and 4 date checks: both dates inside Items 4 (return period),
+/// then From not after To, in the official order.
+fn validate_row_period(
+    draft: &Form2550QDraft,
+    field: &str,
+    from: Option<Form2550QDate>,
+    to: Option<Form2550QDate>,
+    errors: &mut Vec<(String, String)>,
+) {
+    let (Some(from), Some(to)) = (from, to) else {
+        return;
+    };
+    if let (Some(start), Some(end)) = (draft.return_period_from, draft.return_period_to) {
+        let inside = |date: Form2550QDate| {
+            matches!(
+                (date.as_naive(), start.as_naive(), end.as_naive()),
+                (Some(date), Some(start), Some(end)) if date >= start && date <= end
+            )
+        };
+        if !inside(from) || !inside(to) {
+            errors.push((
+                format!("{field}.period"),
+                format!("Dates must fall within the Return Period: {start} to {end}"),
+            ));
+            return;
+        }
+    }
+    if from.as_naive() > to.as_naive() {
+        errors.push((
+            format!("{field}.period"),
+            OFFICIAL_FROM_AFTER_TO_MESSAGE.to_string(),
+        ));
+    }
+}
+
 fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, String)>) {
     // Schedules 1, 3 and 4 are the official `addlistSched1/3/4` lists: any
     // number of rows, no limit on the official page.
@@ -2249,17 +2296,19 @@ fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, Stri
             continue;
         }
         let field = format!("schedule_1[{index}]");
+        if row.purchase_or_import_date.is_none() {
+            errors.push((
+                format!("{field}.purchase_or_import_date"),
+                OFFICIAL_DATE_PURCHASE_EMPTY_MESSAGE.to_string(),
+            ));
+        }
         if row.purchase_or_import_date.is_none()
             || row.source_code.trim().is_empty()
             || row.description.trim().is_empty()
             || row.estimated_life_months.is_none()
             || row.recognized_life_months.is_none()
         {
-            errors.push((
-                field.clone(),
-                "A used Schedule 1 row requires date, source code, description, and useful-life fields"
-                    .to_string(),
-            ));
+            errors.push((field.clone(), OFFICIAL_EMPTY_FIELDS_MESSAGE.to_string()));
         }
         // Official `computeSched1` / `validateEstimatedLife` alerts.
         if row
@@ -2285,7 +2334,7 @@ fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, Stri
         {
             errors.push((
                 format!("{field}.source_code"),
-                "Schedule 1 source code must be D (domestic) or I (importation)".to_string(),
+                OFFICIAL_SOURCE_CODE_MESSAGE.to_string(),
             ));
         }
         for (suffix, value) in [
@@ -2300,6 +2349,14 @@ fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, Stri
             validate_required_non_negative_money(&format!("{field}.{suffix}"), value, errors);
         }
     }
+    // `showNewSched3`: the Schedule 3 popup refuses a return year of 2000
+    // or earlier (`year <= 2000 && year <= 2020` reduces to `year <= 2000`).
+    if draft.taxable_year <= 2000 && draft.schedule_3.iter().any(|row| !row.is_empty()) {
+        errors.push((
+            "schedule_3".to_string(),
+            OFFICIAL_RETURN_PERIOD_YEAR_MESSAGE.to_string(),
+        ));
+    }
     for (index, row) in draft.schedule_3.iter().enumerate() {
         if row.is_empty() {
             continue;
@@ -2309,20 +2366,9 @@ fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, Stri
             || row.period_to.is_none()
             || row.withholding_agent_name.trim().is_empty()
         {
-            errors.push((
-                field.clone(),
-                "A used Schedule 3 row requires period and withholding-agent name".to_string(),
-            ));
+            errors.push((field.clone(), OFFICIAL_EMPTY_FIELDS_MESSAGE.to_string()));
         }
-        if matches!(
-            (row.period_from, row.period_to),
-            (Some(from), Some(to)) if from.as_naive() > to.as_naive()
-        ) {
-            errors.push((
-                format!("{field}.period"),
-                "Schedule 3 period-from date must not be after period-to date".to_string(),
-            ));
-        }
+        validate_row_period(draft, &field, row.period_from, row.period_to, errors);
         validate_required_non_negative_money(
             &format!("{field}.income_payment"),
             row.income_payment,
@@ -2345,21 +2391,9 @@ fn validate_schedule_rows(draft: &Form2550QDraft, errors: &mut Vec<(String, Stri
             || row.taxpayer_name.trim().is_empty()
             || matches!(row.official_receipt_number.trim(), "" | "0.00")
         {
-            errors.push((
-                field.clone(),
-                "A used Schedule 4 row requires period, miller, taxpayer, and receipt number"
-                    .to_string(),
-            ));
+            errors.push((field.clone(), OFFICIAL_EMPTY_FIELDS_MESSAGE.to_string()));
         }
-        if matches!(
-            (row.period_from, row.period_to),
-            (Some(from), Some(to)) if from.as_naive() > to.as_naive()
-        ) {
-            errors.push((
-                format!("{field}.period"),
-                "Schedule 4 period-from date must not be after period-to date".to_string(),
-            ));
-        }
+        validate_row_period(draft, &field, row.period_from, row.period_to, errors);
         validate_required_non_negative_money(
             &format!("{field}.amount_paid"),
             row.amount_paid,
@@ -3634,6 +3668,100 @@ mod tests {
         assert_eq!(
             errors_for(&draft, "schedule_1[0].estimated_life_months"),
             vec!["Invalid Input it should be 1 to 60".to_string()]
+        );
+    }
+
+    #[test]
+    fn schedule_1_blank_date_uses_the_official_alerts() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let mut row = capital_row(2021, 1_200.0, 60);
+        row.purchase_or_import_date = None;
+        draft.schedule_1 = vec![row];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "schedule_1[0].purchase_or_import_date"),
+            vec!["Date Purchase cannot be an empty field.".to_string()]
+        );
+        assert_eq!(
+            errors_for(&draft, "schedule_1[0]"),
+            vec!["Empty fields are not allowed ".to_string()]
+        );
+    }
+
+    #[test]
+    fn schedule_1_source_code_uses_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let mut row = capital_row(2021, 1_200.0, 60);
+        row.source_code = "X".to_string();
+        draft.schedule_1 = vec![row];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "schedule_1[0].source_code"),
+            vec!["Invalid input\nAccept only I and D ".to_string()]
+        );
+    }
+
+    fn creditable_row(from: Form2550QDate, to: Form2550QDate) -> Form2550QCreditableVatRow {
+        Form2550QCreditableVatRow {
+            period_from: Some(from),
+            period_to: Some(to),
+            withholding_agent_name: "AGENT".to_string(),
+            income_payment: Some(1_000.0),
+            tax_withheld: Some(50.0),
+            ..Form2550QCreditableVatRow::default()
+        }
+    }
+
+    #[test]
+    fn schedule_3_dates_outside_the_return_period_use_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let start = draft.return_period_from.unwrap();
+        let end = draft.return_period_to.unwrap();
+        draft.schedule_3 = vec![creditable_row(
+            Form2550QDate::new(2025, 12, 1).unwrap(),
+            end,
+        )];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "schedule_3[0].period"),
+            vec![format!(
+                "Dates must fall within the Return Period: {start} to {end}"
+            )]
+        );
+    }
+
+    #[test]
+    fn schedule_3_from_after_to_uses_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let start = draft.return_period_from.unwrap();
+        let end = draft.return_period_to.unwrap();
+        draft.schedule_3 = vec![creditable_row(end, start)];
+        draft.ensure_repeating_row_ids().unwrap();
+        draft.recompute();
+        assert_eq!(
+            errors_for(&draft, "schedule_3[0].period"),
+            vec!["'From' date cannot be after 'To' date.".to_string()]
+        );
+    }
+
+    #[test]
+    fn schedule_3_year_2000_or_earlier_uses_the_official_alert() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let (start, end) = (
+            draft.return_period_from.unwrap(),
+            draft.return_period_to.unwrap(),
+        );
+        draft.schedule_3 = vec![creditable_row(start, end)];
+        draft.taxable_year = 2000;
+        assert_eq!(
+            errors_for(&draft, "schedule_3"),
+            vec![
+                "Please  enter a valid year for the Return Period. Only values 2000 and beyond will be accepted."
+                    .to_string()
+            ]
         );
     }
 

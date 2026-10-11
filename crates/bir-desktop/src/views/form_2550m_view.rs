@@ -2036,7 +2036,6 @@ impl Render for Form2550MView {
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
-            .take(20)
             .map(|(_, message)| {
                 rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
                     .into_any_element()
@@ -2110,7 +2109,7 @@ impl Render for Form2550MView {
                         ),
                 );
 
-        let mut body = div()
+        let body = div()
             .w_full()
             .max_w(px(1180.))
             .mx_auto()
@@ -2152,6 +2151,9 @@ impl Render for Form2550MView {
                         ),
                 )
             })
+            .when(!issues.is_empty(), |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_part_two(layout, cx))
@@ -2164,9 +2166,6 @@ impl Render for Form2550MView {
             .child(self.render_table(Table::S6, layout, cx))
             .child(self.render_table(Table::S7, layout, cx))
             .child(self.render_table(Table::S8, layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()

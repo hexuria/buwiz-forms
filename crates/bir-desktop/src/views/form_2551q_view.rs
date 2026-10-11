@@ -20,8 +20,8 @@ use bir_core::db::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database, ReceiptConfirmationOutcome,
 };
 use bir_core::forms::form_2551q::{
-    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election, OverpaymentDisposition,
-    Schedule1Row, TaxPeriodBasis,
+    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election,
+    OFFICIAL_YEAR_ENDED_MONTH_MESSAGE, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
 };
 use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus, FormValidator};
 use bir_core::parse_bir_receipt_email;
@@ -88,10 +88,10 @@ impl SelectItem for AtcOption {
     }
 }
 
-// Schedule rows are ATC aggregates, not business identities. Allow every
-// distinct code in the canonical registry while the domain keeps the verified
-// six-row XML submission boundary separate from saved/printable attachments.
-const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = ATC_TABLE_2551Q.len();
+// Schedule rows are ATC aggregates, not business identities. The official
+// layout has six ATC slots, so new lines stop at six; older drafts holding
+// more still load, warn, and are blocked from queueing by the model.
+const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY;
 
 fn available_atc_options(rows: &[Schedule1Row]) -> SearchableVec<AtcOption> {
     let used_codes = rows
@@ -1221,7 +1221,7 @@ impl Form2551QView {
             {
                 errors.push((
                     "year_end_month".to_string(),
-                    "Fiscal year-end month must be a whole number from 1 to 12".to_string(),
+                    OFFICIAL_YEAR_ENDED_MONTH_MESSAGE.to_string(),
                 ));
             }
         }
@@ -1673,6 +1673,26 @@ impl Form2551QView {
         }
     }
 
+    /// Labelled choice button, as on the 2552 and 2550Q pages.
+    fn choice(
+        id: impl Into<ElementId>,
+        label: &str,
+        selected: bool,
+        disabled: bool,
+    ) -> gpui_component::button::Button {
+        let button = gpui_component::button::Button::new(id).label(if selected {
+            format!("✓ {label}")
+        } else {
+            label.to_string()
+        });
+        let button = if selected {
+            button.primary()
+        } else {
+            button.outline()
+        };
+        button.disabled(disabled).min_w_0().max_w_full()
+    }
+
     fn field_label(label: &str, cx: &Context<Self>) -> gpui::Div {
         crate::components::form_parts::field_label(label, cx)
     }
@@ -1869,13 +1889,8 @@ impl Render for Form2551QView {
             <div flex flex_col gap_2>
                 {Self::field_label("1. Taxable-period basis", cx)}
                 <div flex flex_wrap gap_5>
-                    <div
-                        id={"tax_period_calendar"}
-                        flex
-                        items_center
-                        gap_2
-                        when={(is_editable, |el| el.cursor_pointer())}
-                        on_click={cx.listener(|this, _, window, cx| {
+                    {Self::choice("tax_period_calendar", "Calendar", is_calendar, !is_editable)
+                        .on_click(cx.listener(|this, _, window, cx| {
                             if !this.is_editable() {
                                 return;
                             }
@@ -1886,51 +1901,16 @@ impl Render for Form2551QView {
                             });
                             this.is_validated = false;
                             this.sync_from_inputs(cx);
-                        })}
-                    >
-                        <div
-                            w_4
-                            h_4
-                            rounded_full
-                            border_1
-                            border_color={cx.theme().border}
-                            bg={if is_calendar {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            }}
-                        />
-                        <div text_sm>{"Calendar"}</div>
-                    </div>
-                    <div
-                        id={"tax_period_fiscal"}
-                        flex
-                        items_center
-                        gap_2
-                        when={(is_editable, |el| el.cursor_pointer())}
-                        on_click={cx.listener(|this, _, _, cx| {
+                        }))}
+                    {Self::choice("tax_period_fiscal", "Fiscal", !is_calendar, !is_editable)
+                        .on_click(cx.listener(|this, _, _, cx| {
                             if !this.is_editable() {
                                 return;
                             }
                             this.draft.tax_period_basis = TaxPeriodBasis::Fiscal;
                             this.is_validated = false;
                             this.sync_from_inputs(cx);
-                        })}
-                    >
-                        <div
-                            w_4
-                            h_4
-                            rounded_full
-                            border_1
-                            border_color={cx.theme().border}
-                            bg={if !is_calendar {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            }}
-                        />
-                        <div text_sm>{"Fiscal"}</div>
-                    </div>
+                        }))}
                 </div>
             </div>
         };
@@ -2196,37 +2176,16 @@ impl Render for Form2551QView {
                     .into_iter()
                     .map(|(id, label, election)| {
                         let selected = item_13_election == election;
-                        rsx! {
-                            <div
-                                id={id}
-                                flex
-                                items_center
-                                gap_2
-                                when={(is_editable, |el| el.cursor_pointer())}
-                                on_click={cx.listener(move |this, _, _, cx| {
-                                    if !this.is_editable() {
-                                        return;
-                                    }
-                                    this.draft.item_13_election = election;
-                                    this.is_validated = false;
-                                    this.sync_from_inputs(cx);
-                                })}
-                            >
-                                <div
-                                    w_4
-                                    h_4
-                                    rounded_full
-                                    border_1
-                                    border_color={cx.theme().border}
-                                    bg={if selected {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    }}
-                                />
-                                <div text_sm>{label}</div>
-                            </div>
-                        }
+                        Self::choice(id, label, selected, !is_editable).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.item_13_election = election;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            },
+                        ))
                     })}
                 </div>
                 <div text_xs text_color={cx.theme().muted_foreground}>
@@ -2528,11 +2487,6 @@ impl Render for Form2551QView {
             })
             .child(Self::field_label("Item 24 overpayment disposition", cx))
             .child(rsx! {
-                <div text_xs text_color={cx.theme().muted_foreground}>
-                    {"Select exactly one disposition for this overpayment."}
-                </div>
-            })
-            .child(rsx! {
                 <div flex flex_wrap gap_5>
                     {...[
                         (
@@ -2549,37 +2503,16 @@ impl Render for Form2551QView {
                     .into_iter()
                     .map(|(id, label, disposition)| {
                         let selected = overpayment_disposition == disposition;
-                        rsx! {
-                            <div
-                                id={id}
-                                flex
-                                items_center
-                                gap_2
-                                when={(is_editable, |el| el.cursor_pointer())}
-                                on_click={cx.listener(move |this, _, _, cx| {
-                                    if !this.is_editable() {
-                                        return;
-                                    }
-                                    this.draft.overpayment_disposition = disposition;
-                                    this.is_validated = false;
-                                    this.sync_from_inputs(cx);
-                                })}
-                            >
-                                <div
-                                    w_4
-                                    h_4
-                                    rounded_full
-                                    border_1
-                                    border_color={cx.theme().border}
-                                    bg={if selected {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    }}
-                                />
-                                <div text_sm>{label}</div>
-                            </div>
-                        }
+                        Self::choice(id, label, selected, !is_editable).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.overpayment_disposition = disposition;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            },
+                        ))
                     })}
                 </div>
             })
@@ -2921,7 +2854,7 @@ impl Render for Form2551QView {
                                 );
                                 toolbar = toolbar.child(
                                     gpui_component::button::Button::new("submit_btn")
-                                        .label("Submit")
+                                        .label("Queue for submission")
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.sync_from_inputs(cx);
                                             this.validation_errors = this.validate_for_submit(cx);
@@ -3137,7 +3070,7 @@ impl Render for Form2551QView {
                             let errors_text = self
                                 .validation_errors
                                 .iter()
-                                .map(|(field, message)| format!("{field}: {message}"))
+                                .map(|(_, message)| message.clone())
                                 .collect::<Vec<_>>()
                                 .join("\n");
                             toolbar = toolbar.child(
