@@ -1087,7 +1087,7 @@ fn null_description(amount: WholePeso, filled: &[bool]) -> bool {
 }
 
 /// `validateEmail`: `/\b[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,4}\b/`.
-fn email_matches_official_format(email: &str) -> bool {
+pub(crate) fn email_matches_official_format(email: &str) -> bool {
     let Some((local, domain)) = email.split_once('@') else {
         return false;
     };

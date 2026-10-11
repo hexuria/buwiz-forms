@@ -153,9 +153,21 @@ fn schedule_key(index: usize) -> String {
     format!("sched{index}")
 }
 
-/// Item 15 classes as `(value, label)`; the printed label is the value.
+/// Official radio-id order of the classes (`j_id391:_1` .. `_6`, then `_8`).
+const CLASS_RADIO_ORDER: [Form1706PropertyClass; 7] = [
+    Form1706PropertyClass::Residential,
+    Form1706PropertyClass::Agricultural,
+    Form1706PropertyClass::Commercial,
+    Form1706PropertyClass::Industrial,
+    Form1706PropertyClass::CondominiumResidential,
+    Form1706PropertyClass::CondominiumCommercial,
+    Form1706PropertyClass::Others,
+];
+
+/// Classification classes as `(value, label)` in official radio-id order;
+/// the printed label is the value.
 fn class_options() -> Vec<(&'static str, &'static str)> {
-    Form1706PropertyClass::ALL
+    CLASS_RADIO_ORDER
         .iter()
         .map(|c| (c.label(), c.label()))
         .collect()
@@ -1046,7 +1058,24 @@ impl Render for Form1706View {
 
 #[cfg(test)]
 mod tests {
-    use super::{Form1706View, OPTIONAL_AMOUNTS, TEXT_INPUTS};
+    use super::{Form1706View, OPTIONAL_AMOUNTS, TEXT_INPUTS, class_options};
+
+    #[test]
+    fn classes_follow_official_radio_order() {
+        let labels: Vec<&str> = class_options().iter().map(|(_, l)| *l).collect();
+        assert_eq!(
+            labels,
+            [
+                "Residential",
+                "Agricultural",
+                "Commercial",
+                "Industrial",
+                "Condominium Residential",
+                "Condominium Commercial",
+                "Others (specify)",
+            ]
+        );
+    }
 
     #[test]
     fn every_input_has_a_label() {

@@ -588,9 +588,19 @@ impl Form1702MXDraft {
 
         // validateBasistTaxtRelief: each column with amounts needs its Part IV details.
         if self.relief_basis.instruction_multiple_activities {
+            // validateAttachments: Instruction B files through attachments,
+            // and this port holds no attachment Schedule A, so Item 1 is
+            // blank. The special-rate loop is an else-if, so exempt wins.
+            let special_only =
+                !s2.iter().any(|row| nonzero(row, 0)) && s2.iter().any(|row| nonzero(row, 1));
             err(
                 "relief_basis",
-                "Instruction B (more than one exempt or special-rate activity) needs the mandatory attachments, which cannot be filed electronically here yet.".to_string(),
+                if special_only {
+                    "Please provide value on Special Rate Attachment Page 1 Schedule A Item 1."
+                } else {
+                    "Please provide value on Exempt Attachment Page 1 Schedule A Item 1."
+                }
+                .to_string(),
             );
         } else {
             let rd = &self.relief_details;
@@ -662,6 +672,12 @@ impl Form1702MXDraft {
             err(
                 "email",
                 "Please provide an Email Address (Part I Item 12).".to_string(),
+            );
+        } else if !super::form_1702rt_official::email_matches_official_format(self.email.trim()) {
+            // validateEmail (onblur on txtPg1Pt1I12Email).
+            err(
+                "email",
+                "You have entered an invalid email address format!".to_string(),
             );
         }
 
@@ -2000,7 +2016,20 @@ mod tests {
         );
         check(
             &|d| d.relief_basis.instruction_multiple_activities = true,
-            "Instruction B (more than one exempt or special-rate activity) needs the mandatory attachments, which cannot be filed electronically here yet.",
+            "Please provide value on Exempt Attachment Page 1 Schedule A Item 1.",
+        );
+        check(
+            &|d| {
+                d.relief_basis.instruction_multiple_activities = true;
+                for row in d.schedule_2.items.iter_mut() {
+                    row.exempt = peso(0);
+                }
+            },
+            "Please provide value on Special Rate Attachment Page 1 Schedule A Item 1.",
+        );
+        check(
+            &|d| d.email = "abc".into(),
+            "You have entered an invalid email address format!",
         );
         check(
             &|d| d.schedule_2.items[0].regular = peso(1),
