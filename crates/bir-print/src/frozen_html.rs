@@ -80,7 +80,8 @@ fn fill_by_name_with_cells(
         };
         // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
         // TIN/branch (`via_cell` false) keep the writer map as-is.
-        let print_value = via_cell.then(|| value.to_ascii_uppercase());
+        // Like the official capital(), email inputs keep their typed casing.
+        let print_value = (via_cell && !is_email_key(name)).then(|| value.to_ascii_uppercase());
         let print = print_value.as_deref().unwrap_or(value.as_str());
         let comb = indices.iter().any(|&index| tags[index].slot.is_some());
         if comb {
@@ -1170,6 +1171,12 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// Email inputs (`txtEmail`, `txtI11Email`, `txtPg1Pt1I12Email`, ...) are
+/// never uppercased on print; matched case-insensitively on "email".
+fn is_email_key(name: &str) -> bool {
+    name.to_ascii_lowercase().contains("email")
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1660,15 +1667,38 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_keeps_mixed_case_email_but_uppercases_name() {
+        let mut fields = identity_map(
+            "frm1601c:txtTaxpayerName",
+            "Andrea Mae Galang",
+            "frm1601c:txtAddress",
+            "42 Banahaw Street",
+        );
+        fields.insert(
+            "txtEmail".to_string(),
+            "Andrea.Galang@Example.com".to_string(),
+        );
+        let html = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c48"), "Andrea.Galang@Example.com");
+        assert!(html.contains("data-writer-value=\"Andrea.Galang@Example.com\""));
+        assert!(!html.contains("ANDREA.GALANG@EXAMPLE.COM"));
+        assert_eq!(comb_text(&html, "p1c36"), "ANDREA MAE GALANG");
+        assert!(!html.contains("Andrea Mae Galang"));
+        assert!(is_email_key("txtEmail"));
+        assert!(is_email_key("frm1700:txtI11Email"));
+        assert!(!is_email_key("txtTaxpayerName"));
+    }
+
+    #[test]
     fn filled_document_1601c_fills_email_and_splits_tax_money() {
         let mut fields = BTreeMap::new();
         fields.insert("txtEmail".to_string(), "juan@example.com".to_string());
         fields.insert("frm1601c:txtTax14".to_string(), "8888.88".to_string());
         fields.insert("frm1601c:txtTax25".to_string(), "7777.77".to_string());
         let html = filled_document("1601c-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c48"), "JUAN@EXAMPLE.COM");
-        assert!(html.contains("JUAN@EXAMPLE.COM"));
-        assert!(!html.contains("juan@example.com"));
+        assert_eq!(comb_text(&html, "p1c48"), "juan@example.com");
+        assert!(html.contains("juan@example.com"));
+        assert!(!html.contains("JUAN@EXAMPLE.COM"));
         assert_eq!(comb_text(&html, "p1c56"), "8888");
         assert_eq!(comb_text(&html, "p1c58"), "88");
         assert_eq!(comb_text(&html, "p1c101"), "7777");
@@ -1738,7 +1768,7 @@ mod tests {
         assert_eq!(draft.taxpayer_name, "Frozen Html Fixture");
         assert_eq!(comb_text(&html, "p1c30"), "FROZEN HTML FIXTURE");
         assert_eq!(comb_text(&html, "p1c32"), "NEW CABALAN");
-        assert_eq!(comb_text(&html, "p1c39"), "TAX@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p1c39"), "tax@example.com");
         assert_eq!(comb_text(&html, "p1c9"), "12");
         assert_eq!(comb_text(&html, "p1c10"), "2026");
         assert_eq!(named_values(&html, "p1c7"), vec!["X".to_string()]);
@@ -1747,10 +1777,10 @@ mod tests {
         assert!(html.contains("FROZEN HTML FIXTURE"));
         assert!(html.contains("data-writer-value=\"FROZEN HTML FIXTURE\""));
         assert!(html.contains("NEW CABALAN"));
-        assert!(html.contains("TAX@EXAMPLE.COM"));
+        assert!(html.contains("tax@example.com"));
         assert!(!html.contains("Frozen Html Fixture"));
         assert!(!html.contains("New Cabalan"));
-        assert!(!html.contains("tax@example.com"));
+        assert!(!html.contains("TAX@EXAMPLE.COM"));
         assert!(html.contains("2026"));
         let stamped: std::collections::BTreeSet<String> = input_tags(&html)
             .into_iter()
@@ -1773,9 +1803,9 @@ mod tests {
         fields.insert("frm2551Qv2018:txt14".to_string(), "1643.10".to_string());
         fields.insert("txtATCAmt1".to_string(), "54770.00".to_string());
         let html = filled_document("2551q-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c39"), "ANDREA@EXAMPLE.COM");
-        assert!(html.contains("ANDREA@EXAMPLE.COM"));
-        assert!(!html.contains("andrea@example.com"));
+        assert_eq!(comb_text(&html, "p1c39"), "andrea@example.com");
+        assert!(html.contains("andrea@example.com"));
+        assert!(!html.contains("ANDREA@EXAMPLE.COM"));
         assert_eq!(comb_text(&html, "p1c50"), "1643");
         assert_eq!(comb_text(&html, "p1c52"), "10");
         assert_eq!(comb_text(&html, "p2c15"), "54770");
@@ -2362,7 +2392,7 @@ mod tests {
             "123 SAMPLE STREET, BARANGAY EXAMPLE, Q"
         );
         assert_eq!(comb_text(&html, "p1c41"), "UEZON CITY");
-        assert_eq!(comb_text(&html, "p1c47"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p1c47"), "sample@example.com");
         assert_eq!(comb_text(&html, "p2c5"), "123456788");
         assert_eq!(comb_text(&html, "p2c55"), "5,000,001.00");
         assert_eq!(comb_text(&html, "p2c57"), "1,200,000.00");
@@ -2429,7 +2459,7 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c35"), "QUEZON CITY");
         assert_eq!(comb_text(&html, "p1c40"), "01");
         assert_eq!(comb_text(&html, "p1c42"), "1980");
-        assert_eq!(comb_text(&html, "p1c43"), "SAMPLE@EXAMPLE.COM");
+        assert_eq!(comb_text(&html, "p1c43"), "sample@example.com");
         assert_eq!(comb_text(&html, "p1c47"), "FILIPINO");
         assert_eq!(comb_text(&html, "p2c5"), "123456788");
         assert_eq!(comb_text(&html, "p2c6"), "DUMMY");
