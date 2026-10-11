@@ -210,10 +210,25 @@ mod tests {
             );
             assert_eq!(spec_for_slug(spec.slug).map(|s| s.kind), Some(spec.kind));
         }
+        // Kinds on the generic path that keep a bespoke page (routed in
+        // app.rs before the spec lookup) and so have no FORM_VIEW_SPECS row.
+        const BESPOKE: &[&str] = &["2550Q"];
+        for code in BESPOKE {
+            assert!(
+                bir_core::forms::queueable::QueueableKind::ALL
+                    .iter()
+                    .any(|k| k.form_code() == *code),
+                "bespoke form {code} is not a queueable kind"
+            );
+            assert!(
+                spec_for_code(code).is_none(),
+                "bespoke form {code} must not also have a generic spec"
+            );
+        }
         assert_eq!(
-            seen.len(),
+            seen.len() + BESPOKE.len(),
             bir_core::forms::queueable::QueueableKind::ALL.len(),
-            "every queueable form needs a desktop view spec"
+            "every queueable form needs a desktop view spec or a bespoke page"
         );
     }
 }

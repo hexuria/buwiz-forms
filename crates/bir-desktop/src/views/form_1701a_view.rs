@@ -598,12 +598,13 @@ fn money_key(who: Who, id: &str) -> String {
     format!("{}:{id}", who.prefix())
 }
 
-/// Accepts `1,234.56`, `1234.5`, blank (zero).
+/// Accepts `1,234.56`, `1234.5`, `5%` (rate), blank (zero).
 fn parse_amount(value: &str) -> Option<f64> {
     let cleaned: String = value
         .chars()
         .filter(|c| *c != ',' && !c.is_whitespace())
         .collect();
+    let cleaned = cleaned.strip_suffix('%').unwrap_or(&cleaned);
     if cleaned.is_empty() {
         return Some(0.0);
     }
