@@ -2222,7 +2222,7 @@ impl Render for Form2550QV2View {
                     </div>
                 </div>
                 <div p={pad} border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
-                    {self.render_header(cx)}
+                    {self.render_header_with_preview(cx)}
                     <div mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>
                 <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p={pad}>

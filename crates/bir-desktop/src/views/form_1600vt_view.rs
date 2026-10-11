@@ -1173,6 +1173,7 @@ impl FormViewTrait for Form1600VtView {
 impl Render for Form1600VtView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let phone = layout == Layout::Phone;
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1194,67 +1195,77 @@ impl Render for Form1600VtView {
             })
             .collect();
 
-        let toolbar =
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .px(pad)
-                .py_3()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(Button::new("1600vt_back").label("← Back").on_click(
-                    cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
-                ))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("1600vt_preview")
-                                .label("Print preview")
+        let toolbar = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .when(phone, |d| d.gap_1().py_2())
+            .when(!phone, |d| d.gap_2().py_3())
+            .px(pad)
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(
+                Button::new("1600vt_back")
+                    .label("← Back")
+                    .when(phone, |b| b.small())
+                    .on_click(
+                        cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .when(phone, |d| d.gap_1())
+                    .when(!phone, |d| d.gap_2())
+                    .child(
+                        // The only "Print preview" control on the page.
+                        Button::new("1600vt_preview")
+                            .label("Print preview")
+                            .outline()
+                            .when(phone, |b| b.small())
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("1600vt_save")
+                            .label("Save draft")
+                            .outline()
+                            .when(phone, |b| b.small())
+                            .disabled(!is_draft)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
+                            ),
+                    )
+                    .when(is_queued, |row| {
+                        row.child(
+                            Button::new("1600vt_cancel")
+                                .label("Cancel queue")
                                 .outline()
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("1600vt_save")
-                                .label("Save draft")
-                                .outline()
-                                .disabled(!is_draft)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                                ),
-                        )
-                        .when(is_queued, |row| {
-                            row.child(
-                                Button::new("1600vt_cancel")
-                                    .label("Cancel queue")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx)
-                                    })),
-                            )
-                        })
-                        .child(
-                            Button::new("1600vt_submit")
-                                .label("Queue for submission")
-                                .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
+                                .when(phone, |b| b.small())
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
+                                    this.revert_to_draft(window, cx)
                                 })),
-                        ),
-                );
+                        )
+                    })
+                    .child(
+                        Button::new("1600vt_submit")
+                            .label("Queue for submission")
+                            .primary()
+                            .when(phone, |b| b.small())
+                            .disabled(
+                                !is_draft
+                                    || !self.validation_errors.is_empty()
+                                    || !self.parse_errors.is_empty(),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.mark_submitted(window, cx)),
+                            ),
+                    ),
+            );
 
         let mut body = div()
             .w_full()
@@ -1313,17 +1324,17 @@ impl Render for Form1600VtView {
             .h_full()
             .bg(cx.theme().background)
             .child(toolbar)
-            .child(
-                div()
-                    .px(pad)
-                    .py_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(self.render_header(cx))
-                    .when(layout != Layout::Phone, |d| {
-                        d.child(div().mt_4().child(self.render_status_pipeline(cx)))
-                    }),
-            )
+            .when(!phone, |d| {
+                d.child(
+                    div()
+                        .px(pad)
+                        .py_4()
+                        .border_b_1()
+                        .border_color(cx.theme().border)
+                        .child(self.render_header_titles(cx))
+                        .child(div().mt_4().child(self.render_status_pipeline(cx))),
+                )
+            })
             .child(
                 div()
                     .id("1600vt_scroll")
@@ -1332,6 +1343,10 @@ impl Render for Form1600VtView {
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
                     .p(pad)
+                    // Phone: only the toolbar is sticky.
+                    .when(phone, |d| {
+                        d.child(div().pb_3().child(self.render_header_titles(cx)))
+                    })
                     .child(body),
             )
     }

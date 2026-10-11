@@ -745,6 +745,7 @@ pub fn render_page<V: KitView>(
     cx: &mut Context<V>,
 ) -> Div {
     let layout = Layout::for_width(window.viewport_size().width);
+    let phone = layout == Layout::Phone;
     let slug = V::SLUG;
     let kit = this.kit();
     let is_draft = this.draft().lifecycle().is_editable();
@@ -774,14 +775,15 @@ pub fn render_page<V: KitView>(
         .flex_wrap()
         .items_center()
         .justify_between()
-        .gap_2()
+        .when(phone, |d| d.gap_1().py_2())
+        .when(!phone, |d| d.gap_2().py_3())
         .px(pad)
-        .py_3()
         .border_b_1()
         .border_color(cx.theme().border)
         .child(
             Button::new(element_id(slug, "back"))
                 .label("← Back")
+                .when(phone, |b| b.small())
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard))),
         )
         .child(
@@ -789,11 +791,15 @@ pub fn render_page<V: KitView>(
                 .flex()
                 .flex_wrap()
                 .items_center()
-                .gap_2()
+                .when(phone, |d| d.gap_1())
+                .when(!phone, |d| d.gap_2())
                 .child(
+                    // The only "Print preview" control on the page; the header
+                    // below shows titles only.
                     Button::new(element_id(slug, "preview"))
                         .label("Print preview")
                         .outline()
+                        .when(phone, |b| b.small())
                         .on_click(
                             cx.listener(|this: &mut V, _, window, cx| this.preview_pdf(window, cx)),
                         ),
@@ -802,6 +808,7 @@ pub fn render_page<V: KitView>(
                     Button::new(element_id(slug, "save"))
                         .label("Save draft")
                         .outline()
+                        .when(phone, |b| b.small())
                         .disabled(!is_draft)
                         .on_click(
                             cx.listener(|this: &mut V, _, window, cx| this.save_draft(window, cx)),
@@ -812,6 +819,7 @@ pub fn render_page<V: KitView>(
                         Button::new(element_id(slug, "cancel"))
                             .label("Cancel queue")
                             .outline()
+                            .when(phone, |b| b.small())
                             .on_click(cx.listener(|this: &mut V, _, window, cx| {
                                 this.revert_to_draft(window, cx)
                             })),
@@ -821,6 +829,7 @@ pub fn render_page<V: KitView>(
                     Button::new(element_id(slug, "submit"))
                         .label("Queue for submission")
                         .primary()
+                        .when(phone, |b| b.small())
                         .disabled(!can_submit)
                         .on_click(cx.listener(|this: &mut V, _, window, cx| {
                             this.mark_submitted(window, cx)
@@ -882,17 +891,18 @@ pub fn render_page<V: KitView>(
         .h_full()
         .bg(cx.theme().background)
         .child(toolbar)
-        .child(
-            div()
-                .px(pad)
-                .py_4()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(this.render_header(cx))
-                .when(layout != Layout::Phone, |d| {
-                    d.child(div().mt_4().child(this.render_status_pipeline(cx)))
-                }),
-        )
+        // Tablet and Desktop: the header stays pinned under the toolbar.
+        .when(!phone, |d| {
+            d.child(
+                div()
+                    .px(pad)
+                    .py_4()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(this.render_header_titles(cx))
+                    .child(div().mt_4().child(this.render_status_pipeline(cx))),
+            )
+        })
         .child(
             div()
                 .id(element_id(slug, "scroll"))
@@ -901,6 +911,10 @@ pub fn render_page<V: KitView>(
                 .overflow_y_scroll()
                 .track_scroll(&kit.scroll_handle)
                 .p(pad)
+                // Phone: only the toolbar is sticky; the header scrolls away.
+                .when(phone, |d| {
+                    d.child(div().pb_3().child(this.render_header_titles(cx)))
+                })
                 .child(body),
         )
 }

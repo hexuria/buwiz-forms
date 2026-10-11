@@ -1268,7 +1268,7 @@ impl Render for Form1601CView {
                 <div p={pad} border_b_1
                     border_color={cx.theme().border}
                     bg={cx.theme().background}>
-                    {self.render_header(cx)}
+                    {self.render_header_with_preview(cx)}
                     <div id={crate::agent::ids::FORM_1601C_STATUS} mt_6>{self.render_status_pipeline(cx)}</div>
                 </div>
             })
