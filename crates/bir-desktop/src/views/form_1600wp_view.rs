@@ -255,18 +255,11 @@ impl Form1600WpView {
                 max + 1.0
             }
         };
-        if let Some(value) = number("month", cx) {
-            draft.month = small(value, 99.0) as u8;
-        }
+        // Month and year are fixed by the library tile and shown read-only;
+        // the "month"/"year" entries stay in TEXT_INPUTS (indices) but are
+        // never parsed, so the draft keeps its period.
         if let Some(value) = number("day", cx) {
             draft.day = small(value, 99.0) as u8;
-        }
-        if let Some(value) = number("year", cx) {
-            draft.year = if (0.0..=9999.0).contains(&value) {
-                value as u16
-            } else {
-                0
-            };
         }
         if let Some(value) = number("sheets", cx) {
             draft.number_of_attached_sheets = small(value, 999.0) as u16;
@@ -663,9 +656,9 @@ impl Form1600WpView {
         let editable = self.draft.lifecycle.is_editable();
         let withheld = self.draft.taxes_withheld;
         let children = vec![
-            self.text_field("month", layout, !editable),
+            self.readonly("Item 1 — Month", format!("{:02}", self.draft.month)),
             self.text_field("day", layout, !editable),
-            self.text_field("year", layout, !editable),
+            self.readonly("Item 1 — Year", self.draft.year.to_string()),
             self.yes_no(
                 "1600wp_amended",
                 "Item 2 — Amended return?",
