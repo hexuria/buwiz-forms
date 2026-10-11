@@ -1979,7 +1979,7 @@ impl Render for Form2550QV2View {
                     .bg(cx.theme().warning.opacity(0.1))
                     .child(div().font_weight(FontWeight::BOLD).child("Evidence boundary"))
                     .child(div().mt_1().text_sm().child(
-                        "The April 2024 official form, guidelines, and two 160-field saves prove local draft/XML behavior. Queueing, submission transport, HTML parity, additional schedule sheets, and native PDF output remain disabled until separately certified.",
+                        "The April 2024 official form, guidelines, and two 160-field saves prove local draft/XML behavior. Valid returns can be queued for background submission; HTML parity, additional schedule sheets, and native PDF output remain disabled until separately certified.",
                     )),
             );
         if let Some(error) = &self.editor_state_error {
@@ -2215,10 +2215,16 @@ impl Render for Form2550QV2View {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.revert_to_draft(window, cx);
                             }))}
-                        {gpui_component::button::Button::new("2550q_manual")
-                            .label("Manual / External Filing")
+                        {gpui_component::button::Button::new("2550q_queue")
+                            .label(QUEUE_BUTTON_LABEL)
                             .primary()
-                            .disabled(true)}
+                            .disabled(!queue_button_enabled(
+                                editor_is_editable,
+                                !self.validation_errors.is_empty(),
+                            ))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.mark_submitted(window, cx);
+                            }))}
                     </div>
                 </div>
                 <div p={pad} border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
@@ -3123,6 +3129,15 @@ fn format_optional_money(value: Option<f64>) -> String {
     value.map_or_else(|| "—".to_string(), |amount| format!("₱ {amount:.2}"))
 }
 
+/// Toolbar label for the generic queue action.
+const QUEUE_BUTTON_LABEL: &str = "Queue for submission";
+
+/// The queue button is enabled only for an editable draft with no blocking
+/// validation errors, matching the 2551Q and 1601-C pages.
+fn queue_button_enabled(editor_is_editable: bool, has_blocking_errors: bool) -> bool {
+    editor_is_editable && !has_blocking_errors
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -3131,16 +3146,27 @@ mod tests {
         FILING_BASIS_FISCAL, Form2550QDiagnosticState, Form2550QFilingBasis,
         Form2550QLiveValidationFacade, Form2550QQuarter, Form2550QRawFieldKey, Form2550QRowFamily,
         Form2550QTaxpayerClassification, ITEM_18, ITEM_19_DESCRIPTION, ITEM_31A, ITEM_47B,
-        InputRevision, QUARTER_1, QUARTER_2, QUARTER_3, QUARTER_4, RAW_BRANCH_CODE, RAW_RDO_CODE,
-        RAW_TAXABLE_YEAR, RAW_TAXPAYER_ADDRESS, RAW_TAXPAYER_CONTACT_NUMBER,
-        RAW_TAXPAYER_EMAIL_ADDRESS, RAW_TAXPAYER_NAME, RAW_TAXPAYER_ZIP, RAW_TIN_1, RAW_TIN_2,
-        RAW_TIN_3, RETURN_PERIOD_FROM, RawControlBinding, RawValue, SHORT_PERIOD_NO,
-        SHORT_PERIOD_YES, SIGNATORY, StableInstanceId, TAX_RELIEF_NO, TAX_RELIEF_YES,
-        YEAR_END_MONTH, advance_input_revision, candidate_radio_raw_is_selected,
+        InputRevision, QUARTER_1, QUARTER_2, QUARTER_3, QUARTER_4, QUEUE_BUTTON_LABEL,
+        RAW_BRANCH_CODE, RAW_RDO_CODE, RAW_TAXABLE_YEAR, RAW_TAXPAYER_ADDRESS,
+        RAW_TAXPAYER_CONTACT_NUMBER, RAW_TAXPAYER_EMAIL_ADDRESS, RAW_TAXPAYER_NAME,
+        RAW_TAXPAYER_ZIP, RAW_TIN_1, RAW_TIN_2, RAW_TIN_3, RETURN_PERIOD_FROM, RawControlBinding,
+        RawValue, SHORT_PERIOD_NO, SHORT_PERIOD_YES, SIGNATORY, StableInstanceId, TAX_RELIEF_NO,
+        TAX_RELIEF_YES, YEAR_END_MONTH, advance_input_revision, candidate_radio_raw_is_selected,
         candidate_radio_ui_key, candidate_radio_values, diagnostic_state_from_setup,
-        raw_text_override, repeated_member_is_parsed, should_capture_raw, singleton_is_parsed,
-        singleton_raw_key, stable_parse_path,
+        queue_button_enabled, raw_text_override, repeated_member_is_parsed, should_capture_raw,
+        singleton_is_parsed, singleton_raw_key, stable_parse_path,
     };
+
+    #[test]
+    fn toolbar_offers_enabled_queue_action_instead_of_external_filing() {
+        assert_eq!(QUEUE_BUTTON_LABEL, "Queue for submission");
+        let src = include_str!("form_2550q_view.rs");
+        assert!(!src.contains(concat!("Manual / External", " Filing")));
+        assert!(src.contains(concat!("this.mark_", "submitted(window, cx)")));
+        assert!(queue_button_enabled(true, false));
+        assert!(!queue_button_enabled(true, true));
+        assert!(!queue_button_enabled(false, false));
+    }
 
     #[test]
     fn raw_restore_distinguishes_missing_absent_blank_and_text() {
