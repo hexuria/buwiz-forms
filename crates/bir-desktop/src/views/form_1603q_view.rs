@@ -399,8 +399,8 @@ impl Form1603QView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 max_w_full text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -426,20 +426,41 @@ impl Form1603QView {
         button.disabled(disabled)
     }
 
-    fn labelled_row(label: &str, choices: Vec<AnyElement>) -> AnyElement {
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
-            .children(choices)
-            .into_any_element()
+    fn labelled_row(layout: Layout, label: &str, choices: Vec<AnyElement>) -> AnyElement {
+        let label = div()
+            .min_w_0()
+            .flex_1()
+            .max_w_full()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(label.w_full().flex_none())
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .w_full()
+                        .children(choices),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(label)
+                .children(choices)
+                .into_any_element()
+        }
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -460,8 +481,9 @@ impl Form1603QView {
         let withheld = self.draft.any_tax_withheld;
         let children = vec![
             self.field("year", "Item 1 — For the Year", layout, !editable),
-            Self::labelled_row("Item 2 — Quarter", quarters),
+            Self::labelled_row(layout, "Item 2 — Quarter", quarters),
             Self::labelled_row(
+                layout,
                 "Item 3 — Amended return?",
                 vec![
                     Self::choice("1603q_amended_yes", "Yes", amended, !editable)
@@ -477,6 +499,7 @@ impl Form1603QView {
                 ],
             ),
             Self::labelled_row(
+                layout,
                 "Item 4 — Any taxes withheld?",
                 vec![
                     Self::choice(
@@ -552,6 +575,7 @@ impl Form1603QView {
             fields.push(self.field(key, label, layout, !editable));
         }
         let category_row = Self::labelled_row(
+            layout,
             "Item 11 — Category of withholding agent",
             vec![
                 Self::choice(
@@ -585,6 +609,7 @@ impl Form1603QView {
                 .into_any_element()
         };
         let mut relief_rows = vec![Self::labelled_row(
+            layout,
             "Item 13 — Availing of tax relief under a Special Law or Tax Treaty?",
             vec![
                 pick("1603q_relief_yes", "Yes", Some(relief.unwrap_or_default())),
@@ -593,6 +618,7 @@ impl Form1603QView {
         )];
         if relief.is_some() {
             relief_rows.push(Self::labelled_row(
+                layout,
                 "Item 13A — If yes, specify",
                 vec![
                     pick(
@@ -671,13 +697,17 @@ impl Form1603QView {
     fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let children = vec![
-            self.field(
-                "prev",
-                MONEY_INPUTS[2].1,
-                layout,
-                !editable || !d.is_amended,
-            ),
+        let mut children = vec![self.field(
+            "prev",
+            MONEY_INPUTS[2].1,
+            layout,
+            !editable || !d.is_amended,
+        )];
+        if layout == Layout::Desktop {
+            // Keep item 15 on its own row so item 16's "(specify)" pairs with its amount.
+            children.push(div().into_any_element());
+        }
+        children.extend([
             self.field("other_specify", TEXT_INPUTS[8].1, layout, !editable),
             self.field("other", MONEY_INPUTS[3].1, layout, !editable),
             self.computed("17 — Total remittances made", d.total_remittances, cx),
@@ -687,7 +717,7 @@ impl Form1603QView {
             self.field("comp", MONEY_INPUTS[6].1, layout, !editable),
             self.computed("22 — Total penalties", d.total_penalties, cx),
             self.computed("23 — Total amount still due", d.total_amount_due, cx),
-        ];
+        ]);
         self.section(
             "Part II — Computation of Tax (Items 14–23)",
             vec![self.grid(layout, children)],
@@ -1083,8 +1113,8 @@ impl Render for Form1603QView {
             })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
-            .child(self.render_schedule(layout, cx));
-        body = body.child(self.render_totals(layout, cx));
+            .child(self.render_totals(layout, cx));
+        body = body.child(self.render_schedule(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

@@ -446,8 +446,8 @@ impl Form1604eView {
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
         rsx! {
             <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
-                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
-                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+                <div min_w_0 flex_1 max_w_full text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div flex_none text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
             </div>
         }
         .into_any_element()
@@ -488,8 +488,11 @@ impl Form1604eView {
         button.disabled(disabled)
     }
 
-    fn choice_row(label: &str, error: bool, buttons: Vec<Button>) -> AnyElement {
+    fn choice_row(layout: Layout, label: &str, error: bool, buttons: Vec<Button>) -> AnyElement {
         let caption = div()
+            .min_w_0()
+            .flex_1()
+            .max_w_full()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
@@ -498,14 +501,33 @@ impl Form1604eView {
         } else {
             caption
         };
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(caption)
-            .children(buttons)
-            .into_any_element()
+        if layout == Layout::Phone {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .w_full()
+                .child(caption.w_full().flex_none())
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .w_full()
+                        .children(buttons),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(caption)
+                .children(buttons)
+                .into_any_element()
+        }
     }
 
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -514,6 +536,7 @@ impl Form1604eView {
         let children = vec![
             self.field("year", TEXT_INPUTS[0].1, "taxable_year", layout, !editable),
             Self::choice_row(
+                layout,
                 "Item 2 — Amended return?",
                 false,
                 vec![
@@ -555,6 +578,7 @@ impl Form1604eView {
         }
         let category = d.agent_category;
         let category_row = Self::choice_row(
+            layout,
             "Item 8 — Category of withholding agent",
             self.has_error("agent_category"),
             vec![
@@ -582,6 +606,7 @@ impl Form1604eView {
         );
         let top = d.top_withholding_agent;
         let top_row = Self::choice_row(
+            layout,
             "Item 8A — If private, top withholding agent?",
             false,
             vec![
@@ -636,9 +661,11 @@ impl Form1604eView {
             let mut grid = div().flex().flex_col().gap_2();
             while let Some(left) = iter.next() {
                 let mut line = div().flex().gap_4().child(div().flex_1().child(left));
-                if let Some(right) = iter.next() {
-                    line = line.child(div().flex_1().child(right));
-                }
+                line = match iter.next() {
+                    Some(right) => line.child(div().flex_1().child(right)),
+                    // Odd last cell keeps a normal half-width, left-aligned slot.
+                    None => line.child(div().flex_1()),
+                };
                 grid = grid.child(line);
             }
             grid.child(total)
